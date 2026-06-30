@@ -53,23 +53,25 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-334 — Attach receipt photo(s) to a shopping list (record-keeping)
-- **Raised:** 2026-06-30 (ad-hoc user ask)
-- **Type:** deferred job (new feature, scoped + planned)
-- **What:** Allow the user to attach one or more real receipt photos to a
-  `shopping` or `done` shopping list as a record. View-only after attach —
-  no OCR, no parsing, no auto-matching to lines. Multi-photo, no captions.
-  Mirror the `RecipeStepImage` storage shape (data-URL bytes + dedicated
-  bytes endpoint) and reuse the centralised `processImageFile` upload
-  pipeline (R-003).
-- **Why deferred:** Not a Phase-1 blocker; pure additive record-keeping. The
-  Phase-2 ingestion / OCR path is a separate concern and must not get
-  confused with this. Slotting now would steal time from the active shop
-  loop / assistant work.
-- **Plan:** [`docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md`](docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md)
-  — decisions locked, backend + frontend chunks scoped (~2 days total).
-- **Recommended resolution:** opportunistic, post Phase-1 shopping polish —
-  or sooner if the user wants the paper trail before next big shop.
+## [OPEN] FU-335 — Migrate StoresSettings logo upload to ImageSourcePicker
+- **Raised:** 2026-06-30 (FU-334 follow-on — image-source-picker rollout)
+- **Type:** leftover
+- **What:** [`web_app/src/pages/settings/StoresSettings.vue`](web_app/src/pages/settings/StoresSettings.vue)
+  still uses Quasar `q-file` for its store-logo upload. Every other
+  image-upload site now routes through the shared `ImageSourcePicker`
+  primitive (R-0NN), which gives users the **Take photo** vs **Choose
+  image** split. Migrating means dropping `q-file` (loses its drag-drop
+  visual + clearable affordance, gains the consistent UX). The store-logo
+  surface also has its own bespoke chrome (preview + max-file-size hint +
+  reject toast wiring) that needs careful re-housing.
+- **Why deferred:** the `q-file` → custom-buttons swap is the only
+  bespoke part of the chrome; the rest (preview + clear) belongs in
+  `ImageUploadField` if we want it. Doing it right is a 30-line
+  refactor with one cross-cutting concern (drag-drop equivalent), not
+  trivial enough to slip into the FU-334 sweep. Charts as a quality
+  follow-on, not a blocker.
+- **Recommended resolution:** opportunistic, next time settings is
+  touched OR when a second store-logo bug forces us into that file.
 
 ---
 
@@ -715,41 +717,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   DoraSegmented overflow shape.
 - **Recommended resolution:** later during Phase 5 (mobile pass).
 
-## [OPEN] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
-- **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
-- **Type:** finding.
-- **What:** the Phase E `merchant → store` rename missed several test files. Failing tests
-  consistently fail with `unexpected keyword argument 'purchased_merchant_id'` /
-  `'merchant' Extra inputs are not permitted` (Pydantic `extra="forbid"` on the renamed
-  models). Affected (non-exhaustive):
-  - `tests/test_shopping_list_totals.py` (~8 tests; the `_line()` helper builds
-    `ShoppingListLineDto(... purchased_merchant_id=...)`)
-  - `tests/e2e/dora_api/test_product_router.py` (~6 tests for `update_product` /
-    extra-attrs / price-now-without-price-was — all using the old `merchant` shape)
-  - `tests/e2e/dora_api/test_ingest_batch.py::test__ingest__unknown_store_quarantines`
-    (uses `merchant: 'MysteryStore'` in the ingest payload — renamed to `store`)
-  - plus other product-router cases (53 total failures observed; not all itemised).
-- **Why deferred:** R-007 scope discipline. Chunk 1 of FU-227 is a unit-conversion
-  refactor; sweeping a rename across all test files belongs in a dedicated tidy-up unit.
-- **Confirmed pre-existing** by `git stash`-then-run — baseline = 54 failed; mine = 53
-  failed (one deselected). My changes introduced **zero** new failures.
-- **Recommended resolution:** opportunistic during the next backend pytest pass on a
-  Python-equipped env. The fix is mechanical (s/`purchased_merchant_id`/`purchased_store_id`/g,
-  s/`merchant=`/`store=`/g, s/`'merchant': /'store': /g) — but should be verified test-by-test
-  in case any case depends on the surrounding context. A single PR titled "Phase E rename:
-  finish the test-suite update" would be clean.
-- **2026-06-22 (chunk 6) update — full pytest now runs (real Python 3.11.9 on this box).**
-  Confirmed baseline 55 failed / 7 errors at pristine HEAD; current 54 failed / 0 errors.
-  The 54 remaining are all this rename rot, in: `test_merchant_router` (16),
-  `test_product_router` (18), `test_shopping_list_totals` (8), `test_ingest_batch` (6),
-  `test_ingestion_store_mappings` (4), `test_preferred_buys` (2). **Separately**, the
-  7 errors + 1 failure at baseline were *chunk-5* fallout (NOT rename rot): the
-  `PATCH status=done` removal broke `test_finish_harvest::test__patch_status_done`
-  (asserted 400, handler returns 422) and `test_primary_target_inference`'s `fresh_state`
-  fixture + hint-invalid test (archived lists via `status=done`). Those are **fixed** in
-  chunk 6 (test-only). So this FU-228 backlog is now purely the rename rot above.
-
-
 ## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
 - **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)
 - **Type:** finding (UX policy — needs user judgement)
@@ -858,19 +825,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** opportunistic — fold in next time a theming/styling pass
   comes around, or after FU-046 (theme-token compliance) gets another round.
 
-## [OPEN] FU-189a — `create_product` still auto-creates a Store when the name is unknown
-- **Raised:** 2026-06-18 (Phase E rename)
-- **Type:** finding — known carve-out
-- **What:** `dora_api/features/products/create_product.py` retains the
-  legacy auto-create-when-missing behaviour for `Store` (the manual product-add
-  path's existing posture). The runbook's strict "no auto-create" rule was
-  tagged for FU-190 (the ingestion path enforces it; ingestion correctly
-  quarantines unknown store names). For consistency the manual path should
-  eventually require an existing `Store` too.
-- **Recommended resolution:** later — pair with FU-190 (ingestion store-mapping)
-  so the whole "stores are user-curated, never auto-created" rule lands in one
-  pass and the SPA's product-create UI gets a store picker at the same time.
-
 ## [OPEN] FU-220 — Repurpose `OnboardingLoop` in Help + consider menu re-ordering
 - **Raised:** 2026-06-17 (FU-210 revisit — user direction)
 - **Type:** follow-up (UX + IA)
@@ -921,18 +875,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   CLAUDE.md mandate: only flip to RESOLVED once the click-through has been
   exercised in a running browser.** Folds into the next stock / products
   smoke session.
-
-## [OPEN] FU-200 — Admin bootstrap is a fiction: first registrant becomes self-verified admin
-- **Raised:** 2026-06-16 (senior/tech-lead review)
-- **Type:** finding (security, HIGH)
-- **What:** `register_user.py:159` `is_first_user = repo.get(User).count() == 0` → `:166-167`
-  `is_admin=is_first_user, email_verified=is_first_user`. On a fresh public deploy whoever hits
-  `/register` first becomes a self-verified admin. Masked by a false assurance: `profile.py:72` lists
-  `ADMIN_BOOTSTRAP_EMAIL` as production-required, but it is **never read** anywhere else in the code.
-- **Why deferred:** read-only review; new finding (not in the prior security investigation).
-- **Recommended resolution:** **now / before any internet-facing deploy** — honor
-  `ADMIN_BOOTSTRAP_EMAIL` (only that email becomes admin) or gate first-user via a one-time setup token;
-  remove the dead var from the required set if not honored. **Confirm in a running app.**
 
 ## [OPEN] FU-199 — SSRF in recipe import-from-URL
 - **Raised:** 2026-06-16 (senior/tech-lead review)
@@ -1171,49 +1113,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   + post-mapping roundtrip) + `test_ingestion_store_mappings.py` (CRUD + invalid merchant rejected).
   **Move to RESOLVED once the FU-218 browser pass confirms the pending → assign flow in the UI.**
 
-## [OPEN] FU-189 — Rename Merchants → Stores, add management page + user-uploaded logos
-> **Resequenced to LAST 2026-06-17 — blocked on FU-186.** A blind Merchant→Store rename is ~550 refs
-> AND entangled: "merchant" = the `Merchant` entity AND the `merchant_api` companion (`ApiBackend
-> 'merchant'`, MerchantApiService/Management, MerchantsSettings, `VITE_MERCHANT_API_*`). Renaming
-> blind corrupts the companion wiring + splits the FE/BE contract → won't boot. **Do this only after
-> FU-186 removes `merchant_api` from the Dora repo** — then "merchant" = entity only and the rename
-> is mechanical. (Companion scaffolded 2026-06-17 at `../dora-companion`; ingestion API is the next
-> in-repo step.) `usual_store_id` + the user-curated Stores management page land with this.
-- **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
-- **Type:** refactor + small feature
-- **What:** Three coupled changes:
-  1. **Entity + UI rename `Merchant` → `Store`** app-wide. Plain-language
-     ("Coles is a store, not a merchant"). Pre-release → no compat shims,
-     one migration, one mechanical pass. Sanity-check first that no
-     existing `Store` symbol in the codebase already means something else
-     (Pinia store, etc.); locations is adjacent but unambiguous.
-  2. **Single management page in settings.** User-curated list. **No
-     prefilled stores** (sidesteps locale-coupling + the legal-logos
-     issue). **No auto-create** from any other code path — notably the
-     ingestion API must respect this (see FU-190). Edit / disable /
-     delete with referential safety against existing offers + shopping
-     lines.
-  3. **Per-store image upload.** Reuse the existing image-upload infra
-     (recipes/stock items already use it from C-cross §2.8). **Dora
-     ships zero logos** — legal safety. Fallback when no image: the
-     existing hash-swatch + initial pattern from `ProductSearchCard`
-     (referenced in ENGINEERING_STANDARDS.md).
-  Full rationale in `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`
-  §4. Note: a `StockItem.usual_merchant_id` (rename → `usual_store_id`)
-  nullable field also lands here — see FU-182's brainstorm scratch §3 for
-  the shopping-list grouping use case.
-- **Why deferred:** Cross-cutting refactor + new image-upload consumer +
-  ingestion implication. Needs scheduling alongside the simple-mode sweep
-  (FU-182) since they share data-model territory.
-- **Recommended resolution:** schedule as a dedicated work unit before
-  FU-182's per-surface sweep, since simple mode's shopping-list grouping
-  depends on `usual_store_id` existing. Earlier still if the C-cross §2.6
-  feature-flag panel work picks up first.
-- **Update 2026-06-17:** confirmed by the products-as-overlay pivot — `usual_store_id` is part of
-  the everyday stock-item model (`docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3),
-  always-available (no products/money gating). The stale "before FU-182's sweep" now reads "before
-  the FU-209/210/211 build chunks." Still a prerequisite; stays open.
-
 ## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
 - **Raised:** 2026-06-14 (C-2.J sequential builder)
 - **Type:** follow-up (deferred sub-feature)
@@ -1234,21 +1133,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   broader email/INV-4 effort; the `meals_per_week` pref with the next
   settings/onboarding touch (C-5 seeds it).
 
-## [OPEN] FU-177 — Pre-existing ESLint errors block `npm run build`
-- **Raised:** 2026-06-14 (surfaced by C-2.A adversarial review)
-- **Type:** finding (pre-existing debt)
-- **What:** 5 ESLint errors exist on the current tree, **unrelated to C-2.A**
-  (verified identical on a stashed clean tree): `useFeatureFlags.ts:31`,
-  `useStockFilters.ts:75` + `:92`, `RecipeDetailPage.vue` (~`:1117`),
-  `AboutSettings.vue:82`. `npm run build` runs ESLint first and **aborts on
-  these before reaching `vue-tsc`**, so a production `quasar build` currently
-  fails. `vue-tsc --noEmit` itself is clean.
-- **Why deferred:** out of C-2.A scope (R-007); they live in unrelated files.
-- **Recommended resolution:** **soon** — a focused cleanup before the
-  end-of-build browser-verification pass (a broken `build` blocks shipping the
-  polished page). Investigate each (likely `no-unused-vars` /
-  `no-explicit-any`-class); fix or justify per the lint config.
-
 ## [OPEN] FU-176 — Apply R-014 (reveal-and-disable) app-wide
 - **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; new rule R-014 / ADR-009)
 - **Type:** follow-up
@@ -1267,20 +1151,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** opportunistic / a focused small sweep — pair with
   the next touch of each gated surface, and update ADR-002's note to point at
   R-014 for the presentation of the off state.
-
-## [OPEN] FU-175 — Assess a purpose-built "bulk edit the week" meal-plan action
-- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; C-2.E retires MealPlanEditDialog)
-- **Type:** follow-up
-- **What:** C-2.E deletes `MealPlanEditDialog` — inline servings/slot edit on
-  the carousel + implicit create-on-tap cover its jobs. The user wants a
-  *purpose-built* bulk-week action assessed separately (it "may not even need a
-  modal"): e.g. select multiple entries on the canvas and bump servings /
-  reslot / remove in one go, or a compact week-table editor. Assess the real
-  need (does inline editing already make this unnecessary?) before building.
-- **Why deferred:** the canvas inline-edit (C-2.C) may already satisfy the need;
-  building a bulk surface now would be speculative (Anti-creep).
-- **Recommended resolution:** after C-2.C/E land and the inline-edit UX has
-  been used — assess whether a bulk action earns its place; design a brief if so.
 
 ## [OPEN] FU-173 — Slot-vocabulary "remap legacy entries" UI — deferred
 - **Raised:** 2026-06-14 (authoring IMPL_PLAN_MEAL_PLANS — C-2.A scope call)

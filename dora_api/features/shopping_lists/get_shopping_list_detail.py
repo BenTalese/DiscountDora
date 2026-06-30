@@ -20,6 +20,8 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.shopping_lists.shopping_list_attachment_access import (
+    get_attachment_metadata_for_list)
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
@@ -163,6 +165,14 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
     )
 
 
+# FU-334 — receipt-photo attachment metadata. Bytes never inlined; the SPA
+# loads each via `GET /shopping-lists/<list_id>/attachments/<id>`.
+@dataclass(frozen=True, slots=True)
+class ShoppingListAttachmentDto:
+    attachment_id: UUID
+    sequence: int
+
+
 @dataclass(frozen=True, slots=True)
 class ShoppingListDetailDto:
     shopping_list_id: UUID
@@ -176,6 +186,8 @@ class ShoppingListDetailDto:
     totals: ShoppingListTotalsDto
     planned_shop_date: date | None = None
     lines: List[ShoppingListLineDto] = field(default_factory=list)
+    # FU-334 — empty list when the list is a draft or has no attachments yet.
+    attachments: List[ShoppingListAttachmentDto] = field(default_factory=list)
 
 
 class GetShoppingListDetailHandler:
@@ -392,6 +404,18 @@ class GetShoppingListDetailHandler:
                 ),
             ))
 
+        # FU-334 — receipt-photo metadata. Only fetched for non-draft lists
+        # (the UI hides the section on drafts anyway; saves a query for
+        # the common case).
+        _Attachments: List[ShoppingListAttachmentDto] = []
+        if _List.status != "draft":
+            _Attachments = [
+                ShoppingListAttachmentDto(
+                    attachment_id=row["id"], sequence=row["sequence"],
+                )
+                for row in get_attachment_metadata_for_list(_List.id)
+            ]
+
         return ShoppingListDetailDto(
             shopping_list_id = _List.id,
             name = _List.name,
@@ -402,6 +426,7 @@ class GetShoppingListDetailHandler:
             planned_shop_date = _List.planned_shop_date,
             totals = compute_list_totals(_LineDtos),
             lines = _LineDtos,
+            attachments = _Attachments,
         )
 
 

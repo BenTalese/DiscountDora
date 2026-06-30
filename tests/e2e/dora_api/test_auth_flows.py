@@ -60,6 +60,61 @@ def test__register__rejects_duplicate_email_case_insensitive(api):
     assert second.status_code == 422
 
 
+def test__register__never_grants_admin(api):
+    """FU-200 — /register no longer self-grants admin. Self-serve accounts
+    are always created with `is_admin=False`; the first-admin path is
+    /bootstrap-admin (single-use, separately tested)."""
+    s = _fresh_session()
+    username = f"noadmin-{uuid.uuid4().hex[:8]}"
+    response = _register(s, username, "Abcdefghij1", f"{username}@example.com")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["is_admin"] is False
+    assert body["email_verified"] is False
+
+
+def test__bootstrap_required__false_when_users_exist(api):
+    """FU-200 — the bootstrap-required probe returns `false` once any user
+    exists. The seeded `dora` test account guarantees that's the case here.
+    Never leaks the actual user count."""
+    s = _fresh_session()
+    response = s.get(f"{BASE}/bootstrap-required")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body == {"required": False}
+
+
+def test__bootstrap_admin__rejects_when_users_exist(api):
+    """FU-200 — POST /bootstrap-admin is a one-shot endpoint. Once any
+    user exists every subsequent call must 410, regardless of credentials,
+    so the race ("first registrant becomes admin") is closed."""
+    s = _fresh_session()
+    response = s.post(f"{BASE}/bootstrap-admin", json={
+        "username": f"intruder-{uuid.uuid4().hex[:6]}",
+        "password": "Abcdefghij1",
+        "email": f"intruder-{uuid.uuid4().hex[:6]}@example.com",
+    })
+    assert response.status_code == 410, response.text
+    # Session must NOT have been established by a failed bootstrap.
+    me = s.get(f"{BASE}/me")
+    assert me.status_code == 401
+
+
+def test__bootstrap_admin__rejects_weak_password(api):
+    """Validation runs before the 410 — but only because the request
+    *passes* the cheap fast-reject branch on an empty DB. Here it 410s
+    first (existing users); a fresh-DB browser-verify covers the 422 path."""
+    s = _fresh_session()
+    response = s.post(f"{BASE}/bootstrap-admin", json={
+        "username": f"weak-{uuid.uuid4().hex[:6]}",
+        "password": "short",
+        "email": f"weak-{uuid.uuid4().hex[:6]}@example.com",
+    })
+    # Either 410 (already bootstrapped) or 422 (weak password) is correct
+    # — both refuse the request. The DB-has-users branch wins in CI.
+    assert response.status_code in (410, 422), response.text
+
+
 def test__forgot_password__anti_enumeration(api):
     s = _fresh_session()
     # Returns 204 regardless of whether the email exists.

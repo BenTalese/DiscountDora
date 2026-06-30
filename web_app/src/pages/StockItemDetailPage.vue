@@ -156,10 +156,9 @@
                                                 class="dora-level-picker"
                                             >
                                                 <template #label>
-                                                    <q-avatar
-                                                        :color="detailLevelColour ?? undefined"
-                                                        :class="['q-mr-sm', { 'dora-bg-sunken': !detailLevelColour }]"
-                                                        size="16px"
+                                                    <StockLevelDot
+                                                        :sequence="detailLevelSequence"
+                                                        dot-class="q-mr-sm"
                                                     />
                                                     {{ detail.stock_level_name ?? '—' }}
                                                 </template>
@@ -172,11 +171,7 @@
                                                         @click="onChangeStockLevel(level.stock_level_id)"
                                                     >
                                                         <q-item-section avatar>
-                                                            <q-avatar
-                                                                :color="colourForSequence(level.sequence) ?? undefined"
-                                                                :class="{ 'dora-bg-sunken': !colourForSequence(level.sequence) }"
-                                                                size="16px"
-                                                            />
+                                                            <StockLevelDot :sequence="level.sequence" />
                                                         </q-item-section>
                                                         <q-item-section>{{ level.name }}</q-item-section>
                                                     </q-item>
@@ -999,6 +994,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -1202,14 +1198,15 @@
     // form's Save button. Cache-bust is owned by the store now (FU-125
     // `imageVersionOf`) so a save here reactively refreshes every row /
     // surface displaying the same item, not just this detail page.
-    // FU-050 — resolve the level-dot colour from the level's *sequence*,
-    // not by name-matching. Untracked items (no level_id) get null →
-    // muted bg via the `dora-bg-sunken` fallback in the template.
-    const detailLevelColour = computed<string | null>(() => {
+    // FU-050 — resolve the level *sequence* (StockLevelDot maps it to a
+    // colour, or the sunken fallback when null). Untracked items (no
+    // level_id) get null → muted bg via the component's internal
+    // fallback.
+    const detailLevelSequence = computed<number | null>(() => {
         const levelId = detail.value?.stock_level_id;
         if (!levelId) return null;
         const seq = stockLevelStore.stockLevels.find((l) => l.stock_level_id === levelId)?.sequence;
-        return typeof seq === 'number' ? colourForSequence(seq) : null;
+        return typeof seq === 'number' ? seq : null;
     });
 
     const pendingImage = ref<string | null>(null);

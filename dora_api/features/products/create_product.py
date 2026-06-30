@@ -13,7 +13,7 @@ from dora_api.features.ingestion.offer_mapping import (OfferOutcome,
                                                        apply_offer_to_product)
 from dora_api.features.products.get_products import get_products
 from dora_api.features.routers import PRODUCT_ROUTER
-from dora_api.infrastructure.api_response import created
+from dora_api.infrastructure.api_response import business_rule_violation, created
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.field import EntityField
@@ -58,6 +58,7 @@ class CreateProductResponse:
     product_id: UUID = EMPTY_UUID
     created: bool = False
     offer_appended: bool = False
+    store_not_found: bool = False
 
 
 class CreateProductHandler:
@@ -69,13 +70,28 @@ class CreateProductHandler:
         _ProductName = EntityField(Product, Product.Fields.NAME)
         _ProductStockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
 
+        # FU-189a — strict no-auto-create. Stores are user-curated (managed
+        # in Settings → Stores); the manual product-add path must reject
+        # unknown store names, mirroring what `/api/ingest` already does via
+        # the quarantine queue (FU-190). Case-insensitive trimmed match to
+        # mirror `CreateStoreHandler`'s duplicate-detection semantics so
+        # callers aren't surprised by casing.
+        _NormalisedName = request.store_name.strip().lower()
+        _Store: Store | None = next(
+            (s for s in self.repository.get(Store).all()
+             if s.name.strip().lower() == _NormalisedName),
+            None,
+        )
+        if _Store is None:
+            return CreateProductResponse(store_not_found=True)
+
         _ExistingProduct: Product | None = (
             self.repository
             .get(Product)
             .include(Product.Fields.STORE)
             .include(Product.Fields.CURRENT_OFFER)
             .one(_ProductStockcode.eq(request.merchant_stockcode)
-                 & _StoreName.eq(request.store_name)
+                 & _StoreName.eq(_Store.name)
                  & _ProductName.eq(request.name))
         )
 
@@ -96,16 +112,6 @@ class CreateProductHandler:
                 created=False,
                 offer_appended=outcome.outcome == OfferOutcome.APPENDED,
             )
-
-        # FU-189 finding: the manual product-add path still auto-creates a
-        # Store row when none matches the name. The runbook ties strict
-        # no-auto-create to FU-190 (ingestion); keeping the manual creator's
-        # current behaviour here pending that follow-up. Logged as FU-189a
-        # in DORA_FOLLOWUPS.md.
-        _Store = self.repository.get(Store).one(_StoreName.eq(request.store_name))
-        if not _Store:
-            _Store = Store(name=request.store_name)
-            self.repository.add(_Store)
 
         _Offer = ProductOffer(
             offered_on=observed_at,
@@ -146,6 +152,15 @@ def create_product():
     _Handler = get_container().inject(CreateProductHandler)
     _Request: CreateProductRequest = get_request_body()
     _Response = _Handler.handle(_Request)
+
+    if _Response.store_not_found:
+        _Logger.warning(
+            f"Rejected product create — unknown store '{_Request.store_name}'."
+        )
+        return business_rule_violation(
+            f"Store '{_Request.store_name}' does not exist. "
+            "Create it in Settings → Stores first."
+        )
 
     if _Response.created:
         _Logger.info(f"Created product {_Response.product_id}")

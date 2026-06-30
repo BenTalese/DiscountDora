@@ -10,6 +10,196 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
+- **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
+- **Type:** finding.
+- **What:** the Phase E `merchant → store` rename missed several test files. 54
+  tests failed at chunk-6 baseline with `unexpected keyword argument
+  'purchased_merchant_id'` / `'merchant' Extra inputs are not permitted` (Pydantic
+  `extra="forbid"` on the renamed models). Spread across `test_merchant_router` (16),
+  `test_product_router` (18), `test_shopping_list_totals` (8), `test_ingest_batch` (6),
+  `test_ingestion_store_mappings` (4), `test_preferred_buys` (2).
+- **State note:** 2026-06-30 — swept across multiple sessions, never had its
+  bookkeeping flipped. Verified clean today by grepping the entire `tests/` tree:
+  - `purchased_merchant_id` → 0 hits
+  - `merchant=` kwarg → 0 hits
+  - `'merchant':` / `"merchant":` dict keys → 0 hits
+  - `test_merchant_router.py` — file removed, replaced by `test_store_router.py`
+  - All five other named files are clean
+  The only remaining `merchant` occurrences in tests are `merchant_stockcode`
+  (deliberate FU-189 carve-out — producer's SKU, kept on the Product model; see
+  `dora_api/domain/entities/product.py:20`) and two cosmetic docstring references
+  to "FU-190 — unknown merchant quarantines" in `test_ingest_batch.py` (historical
+  finding name; the actual test bodies post `"store": "MysteryStore"`, the new
+  field). None of those will produce a test failure. The two non-test references
+  to `purchased_merchant_id` live in `dora_api/persistence/migrations/versions/
+  a3e9f6c2d8b4_20260618_rename_merchant_to_store.py` — that's the rename
+  migration's upgrade/downgrade SQL, which has to reference both names by
+  definition. **Browser/test verify still pending on the user's Python-equipped
+  env** — needs a clean `pytest tests/` run to confirm zero rename-related
+  failures remain.
+
+---
+
+## [RESOLVED] FU-200 — Admin bootstrap is a fiction: first registrant becomes self-verified admin
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (security, HIGH)
+- **What:** `register_user.py:159` `is_first_user = repo.get(User).count() == 0` → `:166-167`
+  `is_admin=is_first_user, email_verified=is_first_user`. On a fresh public deploy whoever hits
+  `/register` first becomes a self-verified admin. Masked by a false assurance: `profile.py:72` listed
+  `ADMIN_BOOTSTRAP_EMAIL` as production-required, but it was **never read** anywhere else.
+- **State note:** 2026-06-30 — closed by splitting bootstrap into its own single-use surface, both API
+  and SPA. New `POST /api/auth/bootstrap-admin` (`dora_api/features/auth/bootstrap_admin.py`) is the
+  *only* path that grants admin via self-registration; it 410s the moment any User row exists,
+  re-checks inside the same transaction (race-safety guard), and refuses unless the submitted email
+  matches `ADMIN_BOOTSTRAP_EMAIL` when that env var is set (otherwise falls back to "first POST wins"
+  for dev). A companion `GET /api/auth/bootstrap-required` returns `{required: bool}` (single boolean,
+  never the user count). `RegisterUserHandler` now hard-sets `is_admin=False`/`email_verified=False`
+  regardless of count, and returns a 409 *"Setup required."* problem+json when the DB is empty so
+  direct API callers are pointed at the bootstrap endpoint. SPA side: new `/setup` route +
+  `SetupAdminPage.vue` with a one-time-setup badge and distinct copy; `authStore.runBootstrap`
+  now probes `/bootstrap-required` first and parks `currentUser` at `null` when true; router guard
+  funnels fresh installs to `/setup` and blocks `/setup` once setup completes. Middleware allow-list
+  gained `bootstrap_required` + `bootstrap_admin`. Tests added in
+  `tests/e2e/dora_api/test_auth_flows.py`: `test__register__never_grants_admin`,
+  `test__bootstrap_required__false_when_users_exist`,
+  `test__bootstrap_admin__rejects_when_users_exist`, `test__bootstrap_admin__rejects_weak_password`.
+  Fresh-DB success-path browser verification added to `DORA_VERIFY.md`. The dead-var smell on
+  `ADMIN_BOOTSTRAP_EMAIL` is gone — the bootstrap endpoint reads it and enforces it.
+
+---
+
+## [RESOLVED] FU-189a — `create_product` still auto-creates a Store when the name is unknown
+- **Raised:** 2026-06-18 (Phase E rename)
+- **Type:** finding — known carve-out
+- **What:** `dora_api/features/products/create_product.py` retained the
+  legacy auto-create-when-missing behaviour for `Store` while the strict
+  no-auto-create rule was enforced only on the ingestion side (FU-190).
+- **State note:** 2026-06-30 — tightened manual product-add to match the
+  ingest contract. `CreateProductHandler.handle` now looks up the named
+  Store (case-insensitive trimmed match, mirroring `CreateStoreHandler`'s
+  duplicate-detection semantics) and returns `store_not_found=True` if
+  absent; the route converts that to a 422 `business_rule_violation` with
+  copy *"Store 'X' does not exist. Create it in Settings → Stores first."*
+  Test suite updates: `tests/e2e/dora_api/test_product_router.py` gained a
+  module-scoped autouse fixture seeding `Woolworths` + `ReuseMerchant`
+  (the names the existing tests POST against) plus a new
+  `UnknownStoreName__IsBusinessRuleViolation` test asserting the rejection
+  shape. `tests/e2e/dora_api/test_spend_by_store.py` was updated to create
+  its `FU229Store-…` store explicitly before posting the product (was
+  relying on the auto-spawn). Comment on `create_product.py:32` updated
+  (auto-spawn lore replaced by explicit-create note). **Pytest not run**
+  (same standing posture as FU-156 / FU-189c — only the MS Store Python
+  aliases are on PATH on this dev box; the suite runs cleanly in CI / a
+  dev box with a real Python). The remaining SPA work — a store *picker*
+  on the (currently non-existent) manual product-create UI — naturally
+  falls out when that UI gets built; today nothing in the SPA calls
+  `productApiService.createAsync`, so there's no UX regression to track.
+
+## [RESOLVED] FU-189 — Rename Merchants → Stores, add management page + user-uploaded logos
+- **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
+- **Type:** refactor + small feature
+- **What:** Three coupled changes — (1) entity + UI rename `Merchant` →
+  `Store` app-wide, (2) single user-curated Stores management page in
+  settings (no prefilled, no auto-create, edit/disable/delete with
+  referential safety), (3) per-store image upload reusing existing
+  image-upload infra with hash-swatch fallback. Plus `StockItem.usual_store_id`
+  rider for shopping-list grouping.
+- **Why deferred (historical):** had to wait on FU-186 to first decommission
+  the `merchant_api` companion from this repo so "merchant" only meant the
+  entity — otherwise a blind rename of ~550 refs corrupts the companion wiring.
+- **State note:** 2026-06-30 — bookkeeping flip only; all four deliverables
+  landed on 2026-06-18 as "Phase E rename" (the work-unit that also produced
+  FU-189b/c, already resolved). Current tree:
+  - Entity renamed: `dora_api/domain/entities/store.py` exists; `merchant.py` gone.
+  - Stores management page: `web_app/src/pages/settings/StoresSettings.vue`.
+  - Per-store image upload: `web_app/src/components/StoreLogo.vue` with the
+    hash-swatch + initial fallback from `ProductSearchCard`.
+  - `StockItem.usual_store_id` field present at `dora_api/domain/entities/stock_item.py:32`.
+  - No `merchant_api` references in `dora_api/` or `web_app/src/` — only three
+    historical-context comments still mention the old name (in
+    `onboarding/onboarding.py:84`, `stock_item.py:49-50`, `store.py:8` —
+    docstring breadcrumbs, intentional).
+  The stale "Resequenced to LAST — blocked on FU-186" header on the open
+  entry was misleading: FU-186 did land (companion lives at `../dora-companion`,
+  `merchant_api` no longer in this repo). The remaining open carve-out is
+  **FU-189a** (`create_product.py` still auto-creates a Store on unknown name) —
+  intentionally left open, paired with FU-190.
+
+## [RESOLVED] FU-177 — Pre-existing ESLint errors block `npm run build`
+- **Raised:** 2026-06-14 (surfaced by C-2.A adversarial review)
+- **Type:** finding (pre-existing debt)
+- **What:** 5 ESLint errors existed on the tree, unrelated to C-2.A:
+  `useFeatureFlags.ts:31`, `useStockFilters.ts:75` + `:92`,
+  `RecipeDetailPage.vue` (~`:1117`), `AboutSettings.vue:82`. `npm run build`
+  runs ESLint first and aborted before reaching `vue-tsc`.
+- **Resolved:** 2026-06-30 — the original 5 sites are clean. A spot-check
+  found 3 *new* lint errors (`public/push-sw.js:17` unused arg;
+  `StockItemRow.vue:644` and `ShoppingListDetail.vue:1322`
+  `no-misused-promises` on async action/onDrop handlers). Fixed all three:
+  renamed `event` → `_event`; wrapped both async handlers in
+  `void (async () => { ... })()` IIFEs matching the existing pattern at
+  `ShoppingListDetail.vue:2400`. `npx eslint .` now passes cleanly.
+
+## [RESOLVED] FU-334 — Attach receipt photo(s) to a shopping list (record-keeping)
+- **Raised:** 2026-06-30 (ad-hoc user ask)
+- **Type:** deferred job (new feature, scoped + planned)
+- **What:** Allow the user to attach one or more real receipt photos to a
+  `shopping` or `done` shopping list as a record. View-only after attach —
+  no OCR, no parsing, no auto-matching to lines. Multi-photo, no captions.
+  Mirror the `RecipeStepImage` storage shape (data-URL bytes + dedicated
+  bytes endpoint) and reuse the centralised `processImageFile` upload
+  pipeline (R-003).
+- **Why deferred:** Not a Phase-1 blocker; pure additive record-keeping. The
+  Phase-2 ingestion / OCR path is a separate concern and must not get
+  confused with this. Slotting now would steal time from the active shop
+  loop / assistant work.
+- **Plan:** [`docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md`](docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md)
+  — decisions locked, backend + frontend chunks scoped (~2 days total).
+- **Recommended resolution:** opportunistic, post Phase-1 shopping polish —
+  or sooner if the user wants the paper trail before next big shop.
+- **State note (2026-06-30):** built end-to-end in one pass (user said
+  "let's do it now"). New `ShoppingListAttachment` entity + migration +
+  table mapping (LargeBinary blob, deferred); `manage_shopping_list_attachments`
+  module with add/delete/bytes endpoints under
+  `/api/shopping-lists/<id>/attachments[/<aid>]`; detail DTO gains an
+  `attachments[{id, sequence}]` array (server-owned, bytes never inlined);
+  e2e suite `test_shopping_list_attachments.py` covers happy path, draft
+  rejection, bad payload, multi-attach order, delete, cascade-on-list-delete,
+  and survives-finish. SPA Receipts section on `ShoppingListDetail.vue`
+  (hidden on draft), thumb strip, BaseDialog lightbox, mobile camera
+  capture via `accept="image/*" capture="environment"`, optimistic delete.
+  Uses centralised `processImageFile` (R-003). Browser-verify checklist
+  added to `DORA_VERIFY.md` under "Shopping lists / Receipt-photo
+  attachments". TypeScript clean.
+
+---
+
+## [RESOLVED] FU-175 — Assess a purpose-built "bulk edit the week" meal-plan action
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; C-2.E retires MealPlanEditDialog)
+- **Type:** follow-up
+- **What:** C-2.E deletes `MealPlanEditDialog` — inline servings/slot edit on
+  the carousel + implicit create-on-tap cover its jobs. The user wanted a
+  *purpose-built* bulk-week action assessed separately (it "may not even need a
+  modal"): e.g. select multiple entries and bump servings / reslot / remove in
+  one go, or a compact week-table editor.
+- **Resolution (2026-06-30):** closed as **no-action** after assessment against
+  the shipped carousel UX. Each plausible bulk gesture is either already covered
+  or fails the charter check:
+  - Bump servings across many chips → per-chip ± menu stays open for rapid
+    taps (`MealPlanEntryChip.vue:37-56`); real need is rare.
+  - Reslot many entries (the historic "everything became Dinner" pain) →
+    **solved by construction in C-2.C** — tap-target picks the slot *before*
+    the recipe, so off-slot entries no longer accumulate.
+  - Copy a week's shape to another week → covered by **C-2.F templates** (save
+    week as template, apply to another week).
+  - Wipe a week → existing **"Clear this week"** (C-2.E).
+  - Multi-select + batch action → would reintroduce the modality C-2.E just
+    deleted (a "select mode" + action bar fights the direct-tap-on-chip flow
+    the carousel is built around). Fails Effortless + Anti-creep.
+  The single remaining ergonomic gap is a per-day "Clear day" affordance; not
+  opening a new FU for it — defer until someone actually asks for it in use.
+
 ## [RESOLVED] FU-332 — Per-user "Test" button in AssistantSettings.vue
 - **Raised:** 2026-06-29 (FU-153 PR1 close-out — deferred from §7).
 - **Type:** UX polish / security design.

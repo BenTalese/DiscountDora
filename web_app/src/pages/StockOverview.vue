@@ -118,12 +118,15 @@
             <div class="row q-gutter-sm items-center">
             <!-- C-1 Chunk 2 / L97 — single dropdown defaults to "Any level".
                  Per-level chips with count badges retired; counts live in
-                 the sticky footer now (PageCountsFooter). -->
+                 the sticky footer now (PageCountsFooter).
+                 Feedback (2026-06-30): the option list and trigger both
+                 render the level colour-dot, matching the detail-page
+                 picker so the three surfaces look identical. -->
             <q-select
                 v-model="filters.levelFilter.value"
-                :options="levelFilterOptions"
-                option-value="value"
-                option-label="label"
+                :options="stockLevels"
+                :option-label="(o: StockLevel) => o.name"
+                :option-value="(o: StockLevel) => o.stock_level_id"
                 emit-value
                 map-options
                 dense
@@ -131,7 +134,25 @@
                 clearable
                 label="Any level"
                 style="min-width: 180px"
-            />
+            >
+                <template #selected-item="scope">
+                    <span class="row items-center no-wrap">
+                        <StockLevelDot
+                            :sequence="filterLevelSequence"
+                            dot-class="q-mr-sm"
+                        />
+                        {{ scope.opt.name }}
+                    </span>
+                </template>
+                <template #option="scope">
+                    <q-item v-bind="scope.itemProps">
+                        <q-item-section avatar>
+                            <StockLevelDot :sequence="scope.opt.sequence" />
+                        </q-item-section>
+                        <q-item-section>{{ scope.opt.name }}</q-item-section>
+                    </q-item>
+                </template>
+            </q-select>
 
             <q-separator vertical class="q-mx-sm" />
 
@@ -446,6 +467,7 @@
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -454,6 +476,7 @@
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import type { Membership } from 'src/models/shoppingList';
     import type { StockGroup } from 'src/models/stockGroup';
+    import type { StockLevel } from 'src/models/stockLevel';
     import { useStockOverviewExport } from 'src/composables/useStockOverviewExport';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
@@ -591,14 +614,15 @@
     }
     watch(() => route.query.recipe, applyRecipeQuery, { immediate: true });
 
-    // C-1 Chunk 2 / L97 — options for the level dropdown. Built off the
-    // stockLevelStore so order matches the rest of the app.
-    const levelFilterOptions = computed(() =>
-        stockLevels.value.map((l) => ({
-            value: l.stock_level_id,
-            label: l.name,
-        })),
-    );
+    // Sequence of the currently-selected level filter — drives the
+    // colour-dot rendered inside the q-select trigger. `null` when "Any
+    // level" is active (StockLevelDot falls back to the sunken bg).
+    const filterLevelSequence = computed<number | null>(() => {
+        const id = filters.levelFilter.value;
+        if (!id) return null;
+        const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
+        return typeof seq === 'number' ? seq : null;
+    });
 
     // C-1 Chunk 1 / L67 — id list passed to the export endpoint when ANY
     // filter (text, level, location, …) is active. `undefined` keeps the

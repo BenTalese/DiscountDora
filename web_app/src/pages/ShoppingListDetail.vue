@@ -775,6 +775,75 @@
                         </div>
                     </template>
 
+                    <!-- FU-334 — receipt-photo record-keeping. Visible only
+                         once the list is being shopped or finished; pure
+                         record-keeping (no OCR, no parsing). Multi-photo;
+                         tap to zoom, trash to remove. Source-pick UX
+                         (Take photo vs Choose image) is delegated to the
+                         shared ImageSourcePicker primitive (R-0NN). -->
+                    <div
+                        v-if="attachmentSectionVisible"
+                        class="sld-receipts q-mt-lg"
+                    >
+                        <div class="row items-center q-mb-sm">
+                            <div class="text-subtitle2 text-weight-medium">
+                                Receipts
+                            </div>
+                            <q-space />
+                            <ImageSourcePicker
+                                variant="ghost"
+                                take-photo-label="Take photo"
+                                pick-label="Choose receipt"
+                                :loading="attachmentUploading"
+                                @pick="onAttachmentPicked"
+                                @error="onAttachmentError"
+                            />
+                        </div>
+                        <div
+                            v-if="(detail.attachments?.length ?? 0) === 0"
+                            class="text-caption dora-text-muted"
+                        >
+                            No receipts yet. Snap one (or pick one you've already taken) — no OCR, just kept on the list.
+                        </div>
+                        <div v-else class="sld-receipt-strip row q-gutter-sm">
+                            <div
+                                v-for="att in detail.attachments"
+                                :key="att.attachment_id"
+                                class="sld-receipt-thumb"
+                            >
+                                <img
+                                    :src="attachmentSrc(att.attachment_id)"
+                                    alt="Receipt"
+                                    @click="attachmentZoomId = att.attachment_id"
+                                />
+                                <BaseButton
+                                    variant="ghost"
+                                    :icon="ICONS.delete"
+                                    class="sld-receipt-delete"
+                                    dense
+                                    @click="onDeleteAttachment(att.attachment_id)"
+                                >
+                                    <q-tooltip>Remove receipt</q-tooltip>
+                                </BaseButton>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Full-screen receipt viewer (lightbox). Tap thumb to
+                         open; tap the dialog backdrop or hit Esc to close. -->
+                    <BaseDialog
+                        :model-value="attachmentZoomId !== null"
+                        max-width="900px"
+                        @update:model-value="(v) => { if (!v) attachmentZoomId = null }"
+                    >
+                        <img
+                            v-if="attachmentZoomId"
+                            :src="attachmentSrc(attachmentZoomId)"
+                            alt="Receipt"
+                            class="sld-receipt-zoom"
+                        />
+                    </BaseDialog>
+
                     <!-- Mid-shop sticky footer (M10–M12): live progress +
                          remaining spend + the finish CTA, always in reach. -->
                     <div
@@ -1009,7 +1078,10 @@
     import type { Substitute } from 'src/models/stockItemDetail';
     import ShoppingListApiService, {
         type FinishLevelOverride,
+        shoppingListAttachmentUrl,
     } from 'src/services/api/shoppingListApiService';
+    import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
+    import type { ProcessedImage } from 'src/services/files/imageService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useProductStore } from 'src/stores/productStore';
@@ -1243,7 +1315,7 @@
         mime: 'application/x-dora-shopping-line',
         getId: (line) => line.line_id,
         canDragStart: () => canReorder.value,
-        onDrop: async ({ id: draggedId }, { id: targetLineId }) => {
+        onDrop: ({ id: draggedId }, { id: targetLineId }) => {
             if (!detail.value) return;
             const lines = detail.value.lines;
             const ids = lines.map((l) => l.line_id);
@@ -1266,17 +1338,19 @@
                 .filter((l): l is NonNullable<typeof l> => l !== null);
             detail.value.lines = reordered;
 
-            try {
-                await api.reorderLinesAsync(listId.value, ids);
-            } catch (err) {
-                await load();
-                $q.notify({
-                    type: 'negative',
-                    position: 'bottom-right',
-                    message: 'Could not reorder.',
-                    caption: toastCaption(err),
-                });
-            }
+            void (async () => {
+                try {
+                    await api.reorderLinesAsync(listId.value, ids);
+                } catch (err) {
+                    await load();
+                    $q.notify({
+                        type: 'negative',
+                        position: 'bottom-right',
+                        message: 'Could not reorder.',
+                        caption: toastCaption(err),
+                    });
+                }
+            })();
         },
     });
 
@@ -2402,6 +2476,78 @@
         }
     }
 
+    // ── Receipt attachments (FU-334) ────────────────────────────────────
+    // Pure record-keeping: attach 1..N receipt photos to a `shopping` or
+    // `done` list; tap to zoom; trash to remove. No OCR. ImageSourcePicker
+    // owns the source-pick UX (Take photo vs Choose image) AND the
+    // `processImageFile` chokepoint (R-003) — this handler just receives
+    // a `ProcessedImage` and POSTs the data URL.
+    const attachmentUploading = ref(false);
+    const attachmentZoomId = ref<string | null>(null);
+
+    const attachmentSectionVisible = computed(
+        () => !!detail.value && detail.value.status !== 'draft',
+    );
+
+    function attachmentSrc(attachmentId: string): string {
+        if (!listId.value) return '';
+        return shoppingListAttachmentUrl(listId.value, attachmentId);
+    }
+
+    async function onAttachmentPicked(image: ProcessedImage) {
+        if (!detail.value || !listId.value) return;
+        attachmentUploading.value = true;
+        try {
+            await api.addAttachmentAsync(listId.value, image.dataUrl);
+            // Re-fetch to pick up the server-assigned id + sequence.
+            await load();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not attach receipt.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            attachmentUploading.value = false;
+        }
+    }
+
+    function onAttachmentError(message: string) {
+        // ImageSourcePicker has already surfaced the inline error caption;
+        // mirror it as a toast so the failure is visible even if the user
+        // scrolled past the picker.
+        $q.notify({
+            type: 'negative',
+            position: 'bottom-right',
+            message: 'Could not read that image.',
+            caption: message,
+        });
+    }
+
+    async function onDeleteAttachment(attachmentId: string) {
+        if (!detail.value) return;
+        try {
+            await api.deleteAttachmentAsync(listId.value, attachmentId);
+            // Optimistic local removal so the strip updates without a re-fetch
+            // round-trip; load() runs anyway to stay authoritative.
+            detail.value.attachments = (detail.value.attachments ?? []).filter(
+                (a) => a.attachment_id !== attachmentId,
+            );
+            if (attachmentZoomId.value === attachmentId) {
+                attachmentZoomId.value = null;
+            }
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not remove receipt.',
+                caption: toastCaption(err),
+            });
+            await load();
+        }
+    }
+
     onMounted(async () => {
         await stockItemStore.ensureLoadedAsync();
         // Levels power the StockLevelDot and the restock-review modal.
@@ -2450,6 +2596,39 @@
         background: var(--surface-component);
         border-radius: 8px;
         box-shadow: 0 2px 8px var(--overlay-pressed, rgba(0, 0, 0, 0.2));
+    }
+    /* FU-334 — receipt thumb strip + lightbox viewer. */
+    .sld-receipt-strip {
+        flex-wrap: wrap;
+    }
+    .sld-receipt-thumb {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--surface-component);
+        box-shadow: 0 1px 3px var(--overlay-pressed, rgba(0, 0, 0, 0.15));
+    }
+    .sld-receipt-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        cursor: zoom-in;
+        display: block;
+    }
+    .sld-receipt-delete {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        background: var(--surface-component);
+        border-radius: 50%;
+    }
+    .sld-receipt-zoom {
+        max-width: 100%;
+        max-height: 80vh;
+        display: block;
+        margin: 0 auto;
     }
     .sld-price-btn {
         min-width: 96px;

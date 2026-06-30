@@ -23,6 +23,13 @@ export type RegisterCommand = {
     password: string;
     email: string | null;
 };
+/** FU-200 — first-admin bootstrap. Email is required (not optional like
+ *  /register) so password reset works on a fresh install. */
+export type BootstrapAdminCommand = {
+    username: string;
+    password: string;
+    email: string;
+};
 export type UpdateMeCommand = {
     send_deals_on_day?: number;
     email?: string | null;
@@ -105,6 +112,28 @@ export default class AuthApiService {
 
     registerAsync = async (command: RegisterCommand): Promise<AuthenticatedUser> =>
         await this.httpClient.post<AuthenticatedUser, RegisterCommand>('/auth/register', command);
+
+    /** FU-200 — fresh-install probe. Returns `{ required: true }` when the
+     *  DB has no users yet; the router uses this to route to /setup
+     *  instead of /login. Never throws on a 401 (unauthenticated probes
+     *  are explicitly allowed by the middleware). */
+    bootstrapRequiredAsync = async (): Promise<boolean> => {
+        const result = await this.httpClient.get<{ required: boolean }>(
+            '/auth/bootstrap-required',
+        );
+        return result.required;
+    };
+
+    /** FU-200 — single-use first-admin creation. The server 410s once any
+     *  user exists, so the SPA should only call this when
+     *  bootstrapRequiredAsync() returned true. Success auto-logs the new
+     *  admin in (session cookie set server-side). */
+    bootstrapAdminAsync = async (
+        command: BootstrapAdminCommand,
+    ): Promise<AuthenticatedUser> =>
+        await this.httpClient.post<AuthenticatedUser, BootstrapAdminCommand>(
+            '/auth/bootstrap-admin', command,
+        );
 
     logoutAsync = async (): Promise<void> =>
         await this.httpClient.post<void, Record<string, never>>('/auth/logout', {});

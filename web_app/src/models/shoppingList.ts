@@ -113,6 +113,13 @@ export type ShoppingListTotals = {
     line_count: number;
 };
 
+/** FU-334 — receipt-photo attachment metadata. Bytes are never inlined;
+ *  the SPA loads each via `shoppingListAttachmentUrl(listId, id)`. */
+export type ShoppingListAttachment = {
+    attachment_id: string;
+    sequence: number;
+};
+
 export type ShoppingListDetail = {
     shopping_list_id: string;
     /** Custom name (`null` = self-labelled) — see ShoppingListSummary. */
@@ -126,6 +133,9 @@ export type ShoppingListDetail = {
     planned_shop_date: string | null;
     totals: ShoppingListTotals;
     lines: ShoppingListLine[];
+    /** FU-334 — receipt-photo attachments, ordered by sequence. Empty array
+     *  on draft lists or lists with no attachments yet. */
+    attachments: ShoppingListAttachment[];
 };
 
 export type ActiveListInfo = {

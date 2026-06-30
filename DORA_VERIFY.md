@@ -234,6 +234,27 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Shopping lists
 
+### Receipt-photo attachments — origin FU-334 + R-024 follow-on
+- [ ] Open a `draft` list → no Receipts section visible (correct — must Start shopping first)
+- [ ] Start shopping → Receipts section appears with empty-state copy "No receipts yet…" and the **two-button picker**: *Take photo* + *Choose receipt* (mobile) or just *Choose receipt* (desktop)
+- [ ] On mobile (Android Chrome / iOS Safari): tap *Take photo* → rear camera opens directly; capture → thumb appears in the strip
+- [ ] On mobile: tap *Choose receipt* → OS picker offers Photos / Files / (iOS) Scan Documents — pick an existing photo → thumb appears
+- [ ] On desktop: the *Take photo* button is hidden (no camera affordance); *Choose receipt* opens the file picker
+- [ ] Pick a >12MB image → inline error caption AND toast "Could not read that image…" fires, nothing added
+- [ ] Pick a non-image (e.g. PDF) → same error path, nothing added
+- [ ] Tap a thumbnail → full-screen lightbox opens with the receipt rendered ≤80vh; backdrop click + Esc both close it
+- [ ] Tap the trash icon on a thumb → it disappears optimistically; reload the page → still gone (server confirms)
+- [ ] Add 3+ receipts → they render left-to-right in upload order; reload → same order
+- [ ] Finish & restock the list → list becomes `done` → Receipts section *stays visible* with all attached photos (record-keeping survives finish)
+- [ ] Delete the whole list → no orphaned attachment rows (DB cascade) — the bytes endpoint 404s on a former attachment id
+
+### Image-source picker — sanity sweep across surfaces — origin R-024
+- [ ] Recipe **hero image** edit (recipe edit dialog): shows *Add (camera)* + *Add (file)* on mobile, just *Add (file)* on desktop. Both routes process via `processImageFile` (resize visible in payload size)
+- [ ] Recipe **step images** editor: *Add images (camera)* + *Add images (files)* — files variant accepts multiple, camera captures one then returns
+- [ ] **Stock item image** edit (stock item detail): same split, *Change* verb when an image is set, *Add* when empty
+- [ ] **User avatar** (Account Settings): same split, behaves like stock item
+- [ ] **Store logo** (Stores Settings): still uses `q-file` (FU-335 carve-out; do not regress)
+
 ### Shopping list UX v2 — origin FU-165
 - [ ] Rail order + auto-scroll + next-up marker works
 - [ ] Mobile dropdown opens + picks
@@ -353,6 +374,13 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Stock
+
+### Stock pickers + Log Waste — overview/dialog/detail consistency — origin 2026-06-30 feedback
+- [ ] Stock Overview → expand the filter panel → **Any level** dropdown trigger shows a coloured dot to the left of the picked level (or the muted sunken-bg dot when "Any level" is cleared). Open the dropdown → every option row has the same dot styling, matching the Stock Item detail page's Level picker pixel-for-pixel
+- [ ] Click "Add stock item" on the overview → in the dialog the **Stock level** q-select shows the picked level's dot in the trigger, and each option in the dropdown has the same dot. Pick a different level → trigger dot updates instantly
+- [ ] On a row's expiry-menu (the calendar-icon kebab), the entry under **Clear expiry** now reads **Log waste** and renders in destructive-red (icon + label both red), visually matching Clear expiry. Click it → the existing waste-reason tile dialog still opens unchanged
+- [ ] Stock Item detail page → Level picker still works (the refactor swapped inline avatars for the shared `StockLevelDot` component); changing level updates the dot's colour, "Updated just now" stamp refreshes
+- [ ] No console warnings about missing slot props / undefined sequences when the level filter is cleared (the sunken-bg fallback should kick in silently)
 
 ### Recipe-ingredients deep-link filter — origin FU-109 close-out
 - [ ] Open a stock-item detail page → Recipes-using-this tab. Every recipe card carries a filter icon between the favourite heart and the cook button. Hover tooltip: "Filter stock to this recipe's ingredients"
@@ -696,6 +724,18 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Build / install / desktop
+
+### Fresh-install first-admin bootstrap — origin FU-200
+*Requires a clean DB — delete `data/dora.db` (or point `DORA_DB_PATH` at a fresh file) and restart the API.*
+- [ ] Cold-load the SPA → lands on `/setup` (NOT `/login`); page shows the "One-time setup" pill, "Create the first admin account" copy, and an **Email** field that's required (not optional like /register)
+- [ ] Type a username + email + a weak password (e.g. "short") → submit → 422 with the password-rules error inline; no admin created
+- [ ] Submit a valid username + email + 10-char letter+digit password → success toast, auto-logged-in, lands on `/` (dashboard); `/me` shows `is_admin: true`, `email_verified: true`
+- [ ] Refresh the browser → goes straight to the dashboard (NOT `/setup` again); `/auth/bootstrap-required` returns `{required: false}`
+- [ ] Manually navigate to `/setup` → bounced to `/` (already-authed) or `/login` (after logout); page is single-use
+- [ ] `POST /api/auth/bootstrap-admin` directly with curl → 410 Gone with problem+json body *"An admin account already exists. Sign in instead."*
+- [ ] Log out, then register a normal account via `/login` → toggle to register → submit → new user has `is_admin: false`, `email_verified: false` (verify via DB or `/me`), and the verification email is queued (or visible in dev logs)
+- [ ] **With ADMIN_BOOTSTRAP_EMAIL set:** wipe DB, set `ADMIN_BOOTSTRAP_EMAIL=admin@example.com` in env, restart → `/setup` accepts only that email; submitting a different email returns a 410 *"This installation is locked to a pre-configured admin email."* (generic — does NOT leak the configured email back); submitting the matching email succeeds as above
+- [ ] No regression: existing single-tenant install still loads `/login` first; existing users sign in normally; `bootstrap_required` audit event NOT emitted on subsequent registrations
 
 ### Docker + desktop builds bundle the default voice — origin FU-286
 - [ ] Next Docker image build: `GET /api/tts/voices` returns Amy with `status: "ready"` on first boot, before any user touches Settings → Voice

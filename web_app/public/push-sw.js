@@ -14,7 +14,7 @@
  * `_payload_for`; see that function before changing field reads here.
  */
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (_event) => {
     // Skip waiting so an updated SW activates on the next page load
     // rather than waiting for every Dora tab to close.
     self.skipWaiting();

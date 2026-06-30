@@ -4,7 +4,19 @@ import type {
     ShoppingListStatus,
     ShoppingListSummary
 } from 'src/models/shoppingList';
-import AxiosHttpClient from './axiosHttpClient';
+import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
+
+/** FU-334 — URL for a single receipt attachment (raw bytes). Pass a
+ *  `version` (e.g. a counter bumped after upload) to bust the browser cache. */
+export function shoppingListAttachmentUrl(
+    listId: string,
+    attachmentId: string,
+    version?: number | string,
+): string {
+    const base = resolveBaseURL();
+    const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
+    return `${base}/shopping-lists/${listId}/attachments/${attachmentId}${suffix}`;
+}
 
 export type CreateShoppingListCommand = {
     name?: string;
@@ -292,5 +304,27 @@ export default class ShoppingListApiService {
     getFrequentlyAddedAsync = async (limit = 12): Promise<FrequentlyAddedItem[]> =>
         await this.httpClient.get<FrequentlyAddedItem[]>(
             `/shopping-lists/frequently-added?limit=${limit}`,
+        );
+
+    // FU-334 — receipt-photo record-keeping. The image is sent as a
+    // `data:image/...;base64,...` string produced by `processImageFile`
+    // (R-003 centralised pipeline) — DO NOT bypass that helper.
+    addAttachmentAsync = async (
+        listId: string,
+        imageDataUrl: string,
+    ): Promise<{ attachment_id: string }> =>
+        await this.httpClient.post<
+            { attachment_id: string },
+            { image_data_url: string }
+        >(`/shopping-lists/${listId}/attachments`, {
+            image_data_url: imageDataUrl,
+        });
+
+    deleteAttachmentAsync = async (
+        listId: string,
+        attachmentId: string,
+    ): Promise<void> =>
+        await this.httpClient.delete<void>(
+            `/shopping-lists/${listId}/attachments/${attachmentId}`,
         );
 }

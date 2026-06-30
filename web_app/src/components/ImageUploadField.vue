@@ -1,23 +1,29 @@
 <template>
     <!--
         Generic image upload field. Owns the preview/placeholder render and
-        reads a picked file into a data URL. The parent owns the value
-        (preview URL + whether it changed) and the commit semantics — this
-        component only emits `pick` (data URL ready) and `clear`. Originally
-        built for recipes (RecipeImageField), generalised when the stock-item
-        detail surface adopted it (FU-126 / R-001 second-consumer threshold).
+        the Remove button; the source-pick UX (Take photo vs Choose image)
+        is delegated to the shared `ImageSourcePicker` primitive (FU-334 /
+        R-0NN) so the camera-vs-gallery story stays one decision instead of
+        per-site.
+
+        The parent owns the value (preview URL + whether it changed) and the
+        commit semantics — this component only emits `pick` (data URL ready)
+        and `clear`. Originally built for recipes (RecipeImageField),
+        generalised when the stock-item detail surface adopted it (FU-126 /
+        R-001 second-consumer threshold).
     -->
     <div class="image-upload-field">
         <div class="image-upload-field__preview" :style="previewUrl ? '' : placeholderStyle">
             <img v-if="previewUrl" :src="previewUrl" :alt="altText" />
             <span v-else class="image-upload-field__placeholder">{{ initial }}</span>
         </div>
-        <div class="row q-gutter-sm q-mt-sm">
-            <BaseButton
+        <div class="row q-gutter-sm q-mt-sm items-center">
+            <ImageSourcePicker
                 variant="secondary"
-                :icon="ICONS.image"
-                :label="addLabel"
-                @click="trigger"
+                :take-photo-label="`${actionVerb} (camera)`"
+                :pick-label="`${actionVerb} (file)`"
+                @pick="onPick"
+                @error="onError"
             />
             <BaseButton
                 v-if="canClear"
@@ -27,13 +33,6 @@
                 @click="emit('clear')"
             />
         </div>
-        <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="onFile"
-        />
         <div v-if="error" class="text-caption text-negative q-mt-xs">{{ error }}</div>
     </div>
 </template>
@@ -42,7 +41,8 @@
     import { computed, ref } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
-    import { processImageFile } from 'src/services/files/imageService';
+    import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
+    import type { ProcessedImage } from 'src/services/files/imageService';
 
     const props = defineProps<{
         previewUrl: string | null;
@@ -61,7 +61,6 @@
         (e: 'clear'): void;
     }>();
 
-    const fileInput = ref<HTMLInputElement | null>(null);
     const error = ref<string | null>(null);
 
     const initial = computed(() => (props.name?.trim()[0] ?? '?').toUpperCase());
@@ -74,25 +73,14 @@
     const canClear = computed(() =>
         props.canClear !== undefined ? props.canClear : !!props.previewUrl,
     );
-    const addLabel = computed(() => (canClear.value ? 'Change image' : 'Add image'));
+    const actionVerb = computed(() => (canClear.value ? 'Change' : 'Add'));
 
-    function trigger() {
+    function onPick(image: ProcessedImage) {
         error.value = null;
-        fileInput.value?.click();
+        emit('pick', image.dataUrl);
     }
-
-    async function onFile(ev: Event) {
-        const input = ev.target as HTMLInputElement;
-        const file = input.files?.[0];
-        input.value = '';
-        if (!file) return;
-        try {
-            const processed = await processImageFile(file);
-            emit('pick', processed.dataUrl);
-        }
-        catch (err) {
-            error.value = err instanceof Error ? err.message : 'Could not read that file.';
-        }
+    function onError(message: string) {
+        error.value = message;
     }
 </script>
 
@@ -115,8 +103,5 @@
         font-size: 3rem;
         font-weight: 700;
         color: rgba(255, 255, 255, 0.92);
-    }
-    .hidden {
-        display: none;
     }
 </style>

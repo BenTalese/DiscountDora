@@ -204,14 +204,14 @@
                         <q-item clickable @click="clearExpiry">
                             <q-item-section class="text-negative">Clear expiry</q-item-section>
                         </q-item>
-                        <q-item clickable @click="openMarkAsWasted">
+                        <q-item clickable class="text-negative" @click="openMarkAsWasted">
                             <q-item-section
                                 avatar
                                 style="min-width: 0; padding-right: 8px"
                             >
-                                <q-icon :name="ICONS.wasted" size="20px" />
+                                <q-icon :name="ICONS.wasted" size="20px" color="negative" />
                             </q-item-section>
-                            <q-item-section>Mark as wasted</q-item-section>
+                            <q-item-section>Log waste</q-item-section>
                         </q-item>
                     </q-list>
                 </q-menu>
@@ -641,28 +641,30 @@
                     {
                         label: 'Undo',
                         color: 'white',
-                        handler: async () => {
-                            try {
-                                await wasteApi.deleteEventAsync(event_id);
-                                if (originalExpiry) {
-                                    await stockItemStore.updateStockItemAsync({
-                                        stock_item_id: stockItemId,
-                                        expiry_date: originalExpiry,
+                        handler: () => {
+                            void (async () => {
+                                try {
+                                    await wasteApi.deleteEventAsync(event_id);
+                                    if (originalExpiry) {
+                                        await stockItemStore.updateStockItemAsync({
+                                            stock_item_id: stockItemId,
+                                            expiry_date: originalExpiry,
+                                        });
+                                    }
+                                    $q.notify({
+                                        type: 'positive',
+                                        position: 'bottom-right',
+                                        message: 'Undone.',
+                                    });
+                                } catch (err) {
+                                    $q.notify({
+                                        type: 'negative',
+                                        position: 'bottom-right',
+                                        message: 'Could not undo.',
+                                        caption: toastCaption(err),
                                     });
                                 }
-                                $q.notify({
-                                    type: 'positive',
-                                    position: 'bottom-right',
-                                    message: 'Undone.',
-                                });
-                            } catch (err) {
-                                $q.notify({
-                                    type: 'negative',
-                                    position: 'bottom-right',
-                                    message: 'Could not undo.',
-                                    caption: toastCaption(err),
-                                });
-                            }
+                            })();
                         },
                     },
                 ],

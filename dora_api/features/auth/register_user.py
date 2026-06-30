@@ -4,10 +4,15 @@ Strengthened in A1 to:
   - Enforce password rules (min 10 chars, ≥1 letter + ≥1 digit).
   - Validate email format and case-insensitively reject duplicates.
   - Mark new accounts `email_verified=false` and send a verification
-    email; first-user-is-admin still applies AND auto-verifies the
-    admin so a fresh install without SMTP isn't locked out.
+    email.
   - Stamp `password_changed_at` for the session-staleness check.
   - Audit + rate limit.
+
+FU-200: /register no longer grants admin to the first registrant. The
+first-admin bootstrap lives at POST /api/auth/bootstrap-admin (a
+single-use endpoint that 410s once any user exists). Regular signups
+created here are always `is_admin=False` and `email_verified=False`
+until they click the verification link.
 """
 import dataclasses
 import logging
@@ -183,8 +188,11 @@ class RegisterUserResponse:
     new_user_id: UUID = EMPTY_UUID
     username_taken: bool = False
     email_taken: bool = False
-    is_admin: bool = False
-    is_first_user: bool = False
+    # FU-200: bootstrap_required is True when there's no admin yet — the
+    # SPA shouldn't even reach /register in that case; we return a 409 at
+    # the handler level so a direct API caller is told to use the
+    # bootstrap endpoint instead.
+    bootstrap_required: bool = False
     verify_token: str | None = None
     verify_user_email: str | None = None
     verify_username: str | None = None
@@ -195,6 +203,12 @@ class RegisterUserHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: RegisterUserRequest) -> RegisterUserResponse:
+        # FU-200: refuse self-serve registration until an admin exists.
+        # The fresh-install surface is /bootstrap-admin (single-use),
+        # not /register.
+        if self.repository.get(User).count() == 0:
+            return RegisterUserResponse(bootstrap_required=True)
+
         username_field = EntityField(User, User.Fields.USERNAME)
         if self.repository.get(User).one(username_field.eq(request.username)):
             return RegisterUserResponse(username_taken=True)
@@ -206,30 +220,30 @@ class RegisterUserHandler:
             if existing_by_email is not None:
                 return RegisterUserResponse(email_taken=True)
 
-        is_first_user = self.repository.get(User).count() == 0
         now = datetime.now(timezone.utc)
         new_user = User(
             email=email_norm,
             password_hash=generate_password_hash(request.password),
             send_deals_on_day=0,
             username=request.username,
-            is_admin=is_first_user,
-            email_verified=is_first_user,  # sysadmin self-verifies
+            # FU-200: /register never grants admin. The bootstrap endpoint
+            # owns that path, and admin promotion otherwise goes through
+            # the Users admin page.
+            is_admin=False,
+            email_verified=False,
             password_changed_at=now,
         )
         self.repository.add(new_user)
         self.repository.save_changes()
 
         verify_token = None
-        if email_norm and not is_first_user:
+        if email_norm:
             verify_token = issue_token(
                 new_user.id, PURPOSE_VERIFY_EMAIL, VERIFY_EMAIL_TTL,
             )
 
         return RegisterUserResponse(
             new_user_id=new_user.id,
-            is_admin=is_first_user,
-            is_first_user=is_first_user,
             verify_token=verify_token,
             verify_user_email=email_norm,
             verify_username=request.username,
@@ -266,6 +280,31 @@ def register_user():
     handler = get_container().inject(RegisterUserHandler)
     response = handler.handle(request_body)
 
+    if response.bootstrap_required:
+        # FU-200: empty DB → /register is closed. Force the caller through
+        # /bootstrap-admin instead. 409 (Conflict) signals "the system is
+        # in a state that disallows this request"; the SPA's router guard
+        # already redirects to /setup, so this branch is only reachable
+        # via direct API calls.
+        _Logger.warning(
+            "Registration rejected — no admin exists yet; "
+            "/bootstrap-admin is the correct endpoint"
+        )
+        from flask import jsonify
+        from http.client import CONFLICT
+        body = jsonify(ProblemDetails(
+            detail=(
+                "This installation has no admin account yet. "
+                "POST to /api/auth/bootstrap-admin to create the first "
+                "admin."
+            ),
+            errors={}, status=CONFLICT,
+            title="Setup required.",
+            type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
+        ))
+        body.content_type = "application/problem+json"
+        body.status_code = CONFLICT
+        return body
     if response.username_taken:
         _Logger.warning(f"Registration rejected — username taken: {request_body.username}")
         return business_rule_violation(f"Username '{request_body.username}' is already taken.")
@@ -303,7 +342,7 @@ def register_user():
         severity=SEVERITY_AUDIT,
         actor_user_id=response.new_user_id,
         entity_type="User", entity_id=response.new_user_id,
-        payload={"username": request_body.username, "first_user": response.is_first_user},
+        payload={"username": request_body.username},
     )
 
     _Logger.info(f"Registered user {request_body.username} ({response.new_user_id})")

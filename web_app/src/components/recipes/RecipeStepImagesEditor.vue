@@ -57,27 +57,21 @@
         </div>
 
         <div class="row q-gutter-sm q-mt-sm items-center">
-            <BaseButton
+            <ImageSourcePicker
                 variant="secondary"
-                :icon="ICONS.image"
-                :label="addLabel"
-                :disabled="atCap || busy"
-                @click="trigger"
+                :take-photo-label="`${addVerb} (camera)`"
+                :pick-label="`${addVerb} (files)`"
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                :loading="busy"
+                :disabled="atCap"
+                @pick="onPick"
+                @error="onError"
             />
-            <div v-if="busy" class="text-caption dora-text-muted">Processing…</div>
             <div v-if="atCap" class="text-caption dora-text-muted">
                 Image cap reached ({{ MAX_IMAGES }}). Remove one to add another.
             </div>
         </div>
-        <input
-            ref="fileInput"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            capture="environment"
-            class="hidden"
-            @change="onFiles"
-        />
         <div v-if="error" class="text-caption text-negative q-mt-xs">{{ error }}</div>
     </div>
 </template>
@@ -86,7 +80,8 @@
     import { computed, ref } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
-    import { processImageFile } from 'src/services/files/imageService';
+    import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
+    import type { ProcessedImage } from 'src/services/files/imageService';
     import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
 
     const props = defineProps<{
@@ -100,12 +95,11 @@
     // Soft cap mirrored from the server (recipe_step_image_access.MAX_…).
     const MAX_IMAGES = 20;
 
-    const fileInput = ref<HTMLInputElement | null>(null);
     const error = ref<string | null>(null);
     const busy = ref(false);
 
     const atCap = computed(() => props.modelValue.length >= MAX_IMAGES);
-    const addLabel = computed(() =>
+    const addVerb = computed(() =>
         props.modelValue.length === 0 ? 'Add images' : 'Add more',
     );
 
@@ -116,44 +110,43 @@
         return `tmp-${Math.random().toString(36).slice(2)}-${Date.now()}`;
     }
 
-    function trigger() {
+    // ImageSourcePicker emits one `pick` per file in order, so we buffer
+    // into a transient queue and flush after processing settles. The cap
+    // check happens here (the primitive is cap-agnostic).
+    const pickQueue = ref<EditableStepImage[]>([]);
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function onPick(image: ProcessedImage) {
         error.value = null;
-        fileInput.value?.click();
+        if (props.modelValue.length + pickQueue.value.length >= MAX_IMAGES) {
+            error.value = `Image cap is ${MAX_IMAGES}. Some files were skipped.`;
+            return;
+        }
+        busy.value = true;
+        pickQueue.value.push({
+            client_id: newClientId(),
+            existing_image_id: null,
+            preview_url: image.dataUrl,
+            data_url: image.dataUrl,
+        });
+        // Coalesce a burst of `pick` events into one update so the parent
+        // sees one append, not N. Settles a tick after the last emit.
+        if (flushTimer) clearTimeout(flushTimer);
+        flushTimer = setTimeout(flushQueue, 0);
     }
 
-    async function onFiles(ev: Event) {
-        const input = ev.target as HTMLInputElement;
-        const files = Array.from(input.files ?? []);
-        input.value = '';
-        if (files.length === 0) return;
-
-        const remaining = MAX_IMAGES - props.modelValue.length;
-        const accepted = files.slice(0, Math.max(0, remaining));
-        if (accepted.length < files.length) {
-            error.value = `Only added the first ${accepted.length} — cap is ${MAX_IMAGES}.`;
-        }
-
-        busy.value = true;
-        const newRows: EditableStepImage[] = [];
-        for (const file of accepted) {
-            try {
-                const processed = await processImageFile(file);
-                newRows.push({
-                    client_id: newClientId(),
-                    existing_image_id: null,
-                    preview_url: processed.dataUrl,
-                    data_url: processed.dataUrl,
-                });
-            }
-            catch (err) {
-                error.value = err instanceof Error ? err.message : 'Could not read that file.';
-            }
-        }
+    function flushQueue() {
+        flushTimer = null;
+        const queued = pickQueue.value;
+        pickQueue.value = [];
         busy.value = false;
+        if (queued.length === 0) return;
+        emit('update:modelValue', [...props.modelValue, ...queued]);
+    }
 
-        if (newRows.length > 0) {
-            emit('update:modelValue', [...props.modelValue, ...newRows]);
-        }
+    function onError(message: string) {
+        error.value = message;
+        busy.value = false;
     }
 
     function onRemove(clientId: string) {
@@ -209,8 +202,5 @@
         object-fit: cover;
         border-radius: var(--radius-sm);
         flex: 0 0 auto;
-    }
-    .hidden {
-        display: none;
     }
 </style>

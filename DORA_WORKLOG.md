@@ -9,6 +9,459 @@ next.
 
 ---
 
+## 2026-06-30 — Stock overview tweaks: Log Waste in red + consistent level-dot pickers
+
+**Why:** user feedback on the Stock Overview surface. Two asks:
+1. "Mark as wasted" row action → rename to "Log waste" and paint it
+   red to match the existing **Clear expiry** treatment in the same
+   menu.
+2. The detail-page level picker (coloured dot to the left of the
+   level name) is the visual the user likes; adopt it on the
+   Stock Overview filter and the Add-stock-item dialog so all three
+   pickers look identical.
+
+**Changes:**
+- `web_app/src/components/stock/StockItemRow.vue` — the expiry-menu
+  q-item that opened the waste dialog now reads "Log waste" and
+  carries `class="text-negative"` on the whole row plus
+  `color="negative"` on its leading icon. Sits directly under
+  Clear expiry; both render in the destructive-red colour.
+- `web_app/src/components/stock/StockLevelDot.vue` — **new**
+  R-001 component encapsulating the level-colour avatar pattern
+  (`<q-avatar :color="colourForSequence(seq)…">` with the
+  `dora-bg-sunken` fallback when sequence resolves to `null`).
+  Single prop `sequence: number | null | undefined`, optional
+  `size` (default 16px) and `dotClass` (extra layout class for
+  trigger placements like `q-mr-sm`). Replaces three inline copies
+  across the detail page, overview filter, and create dialog.
+- `web_app/src/pages/StockItemDetailPage.vue` — the BaseDropdown
+  picker now uses `<StockLevelDot>` for both its trigger and each
+  menu row. Renamed the local `detailLevelColour` computed →
+  `detailLevelSequence` (returning the sequence number; the
+  component owns the colour mapping). `colourForSequence` import
+  still needed for the substitutes section.
+- `web_app/src/components/stock/CreateStockItemDialog.vue` — the
+  q-select already had a `#option` slot rendering the dot; added a
+  matching `#selected-item` slot so the *picked* level also shows
+  the dot inside the trigger. Introduced a `selectedLevelSequence`
+  computed (q-select `emit-value` strips the option object, so the
+  trigger has to derive sequence from the id-keyed form value).
+  Inline `colourForSequence` usage removed in favour of the
+  component.
+- `web_app/src/pages/StockOverview.vue` — the level filter q-select
+  now passes `stockLevels` directly (with `option-label`/
+  `option-value` mappers) instead of a pre-mapped
+  `{value,label}[]` list, so the option object carries `sequence`.
+  New `#option` + `#selected-item` slots render the dot via
+  `<StockLevelDot>`; a `filterLevelSequence` computed derives the
+  trigger sequence from the active id. Dropped the now-unused
+  `levelFilterOptions` computed.
+
+**R-001 alignment:** the new component is the canonical place to
+tweak the level palette / fallback colour / dot size in future.
+Eliminates the temptation to drift the three pickers apart again.
+
+**Files modified:** `web_app/src/components/stock/StockItemRow.vue`,
+`web_app/src/components/stock/StockLevelDot.vue` (new),
+`web_app/src/components/stock/CreateStockItemDialog.vue`,
+`web_app/src/pages/StockItemDetailPage.vue`,
+`web_app/src/pages/StockOverview.vue`,
+`DORA_VERIFY.md`.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+The refactor is a textbook R-001 extraction (three inline copies →
+one component); no R-003 / R-005 / R-007 implications. No new ADR —
+this is a single-component componentisation, not a recurring
+decision worth promoting. Linted (`npx eslint .` on touched files)
++ typechecked (`npx vue-tsc --noEmit`) clean.
+
+**Next up:** browser-verify the three picker surfaces look identical
+(new DORA_VERIFY entry covers the steps) and the row menu's
+Log waste action reads in negative-red. Then back to whichever
+direction the user picks — FU-181 split-vs-do-both is still paused.
+
+---
+
+## 2026-06-30 — FU-200 closed (first-admin bootstrap split out of /register)
+
+**Why:** user surfaced the idea of a dedicated first-admin page on a
+fresh install. FU-200 (HIGH severity, 2026-06-16 senior review) was
+that "whoever POSTs `/api/auth/register` first on a fresh box becomes a
+self-verified admin," compounded by `ADMIN_BOOTSTRAP_EMAIL` being
+listed as production-required while never being read.
+
+**Backend changes:**
+- New `dora_api/features/auth/bootstrap_admin.py`. Exposes
+  `GET /api/auth/bootstrap-required` (returns `{required: bool}` —
+  single boolean, never leaks the user count) and
+  `POST /api/auth/bootstrap-admin`. The POST is single-use: 410s the
+  moment any User row exists (fast-rejects up front, re-checks inside
+  the same transaction as the insert for race safety), auto-verifies
+  the new admin (no SMTP dependency on a fresh install), and
+  auto-logs them in (parity with the historical `/register` UX).
+  Honours `ADMIN_BOOTSTRAP_EMAIL` when set — only that exact (case-
+  folded) email can bootstrap; mismatched requests return a generic
+  410 that doesn't leak the configured email back.
+- `dora_api/features/auth/register_user.py` — stripped `is_first_user`
+  admin/verified escalation. Public `/register` now hard-sets
+  `is_admin=False` / `email_verified=False` regardless of DB state,
+  and returns a 409 `Setup required.` problem+json when the DB is
+  empty so direct API callers are pointed at the bootstrap endpoint.
+  Module docstring + audit payload updated.
+- `dora_api/infrastructure/middleware.py` — added `bootstrap_required`
+  + `bootstrap_admin` to `PUBLIC_ENDPOINTS` (they're called pre-auth
+  by definition).
+
+**SPA changes:**
+- New `web_app/src/pages/SetupAdminPage.vue`. Mirrors LoginPage's mesh-
+  gradient design + locally-scoped colour tokens (so dark-theme tokens
+  can't bleed in pre-auth) but with a "One-time setup" pill, distinct
+  copy, and Email as a required (not optional) field.
+- `web_app/src/services/api/authApiService.ts` — added
+  `bootstrapRequiredAsync()` + `bootstrapAdminAsync()` plus the
+  `BootstrapAdminCommand` type.
+- `web_app/src/stores/authStore.ts` — added `bootstrapRequired`
+  readonly ref (true when no admin exists yet) and `setupAdminAsync`
+  action. `runBootstrap` now probes `/bootstrap-required` first; on
+  true it skips the `/me` probe and parks `currentUser` at null.
+- `web_app/src/router/index.ts` — added `/setup` to `PUBLIC_ROUTES`
+  and a fresh-install gate in `beforeEach`: while
+  `bootstrapRequired`, every nav funnels to `/setup`; once it's
+  false, `/setup` itself becomes a redirect (to `/` for authed users,
+  `/login` otherwise) so a stashed `/setup` tab can never re-open the
+  setup surface.
+- `web_app/src/router/routes.ts` — registered the new route outside
+  `MainLayout`.
+
+**Tests:** added four cases to `tests/e2e/dora_api/test_auth_flows.py`:
+`test__register__never_grants_admin` (the core safety regression — the
+registered account is `is_admin=False`),
+`test__bootstrap_required__false_when_users_exist`,
+`test__bootstrap_admin__rejects_when_users_exist` (410 + session
+verified-not-set), and `test__bootstrap_admin__rejects_weak_password`
+(accepts either 410 or 422 because the DB-has-users branch wins in CI
+— the 422 path is exercised via the fresh-DB browser-verify entry).
+Could not run pytest from this session (no Python on PATH for the
+shell tool); the suite still needs the user's local `pytest tests/e2e`
+to confirm.
+
+**Browser-verify entry:** added a comprehensive fresh-install checklist
+to `DORA_VERIFY.md` under *Build / install / desktop* — wipe DB →
+`/setup` flow → success → refresh idempotence → /setup-after-setup
+bounces → `ADMIN_BOOTSTRAP_EMAIL` mismatch & match paths → regression
+check that `/register` self-serve accounts are non-admin.
+
+**Files modified:** `dora_api/features/auth/bootstrap_admin.py` (new),
+`dora_api/features/auth/register_user.py`,
+`dora_api/infrastructure/middleware.py`,
+`tests/e2e/dora_api/test_auth_flows.py`,
+`web_app/src/pages/SetupAdminPage.vue` (new),
+`web_app/src/services/api/authApiService.ts`,
+`web_app/src/stores/authStore.ts`,
+`web_app/src/router/index.ts`, `web_app/src/router/routes.ts`,
+`CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`,
+`DORA_VERIFY.md`.
+
+**Engineering-standards close-gate:** no new rule violations. Followed
+existing patterns: feature module under `dora_api/features/auth/`
+auto-registered via `get_attributes_ending_with('router', …)` so no
+manual wiring; SPA page reuses `useFormErrors` + `FormErrorSummary` +
+`BaseButton` (R-001); auth store stays the single source of truth for
+`bootstrapRequired` (R-003 / state-ownership — the router guard reads
+from the store, never probes the API directly). No new ADR — this
+isn't a recurring decision, it's a one-off security carve-out for the
+fresh-install path. The `R-005` distribution-posture checklist still
+holds: env-var-driven (`ADMIN_BOOTSTRAP_EMAIL`), no managed-only
+behaviour, identical artefact for SaaS-vs-self-host, no `tenant_id`
+added. Linted (`npx eslint .` on touched files) + typechecked
+(`npx vue-tsc --noEmit`) clean.
+
+**Next up:** user-side `pytest tests/e2e/dora_api/test_auth_flows.py`
+to confirm the four new tests pass, then walk the fresh-install
+DORA_VERIFY entry. After that, either return to FU-181 (the
+split-vs-do-both decision paused before the FU-189 detour) or take
+the next direction.
+
+---
+
+## 2026-06-30 — FU-189a resolved (manual product-add: no more store auto-spawn)
+
+**Why:** with FU-189 just flipped to resolved, the remaining open carve-out
+in that neighbourhood was FU-189a — `POST /api/products` still
+auto-creates a `Store` row when the named store doesn't exist, contradicting
+the strict "stores are user-curated" rule the ingestion API enforces
+(FU-190). User asked to do it.
+
+**Change:** `CreateProductHandler.handle` now loads stores once
+(`self.repository.get(Store).all()`) and matches `request.store_name`
+case-insensitive + trimmed (mirrors `CreateStoreHandler`'s duplicate
+detection — keeps the contract callable from a hand-typed source without
+casing surprises). Missing store → `CreateProductResponse(store_not_found=True)`;
+the route converts that to a 422 `business_rule_violation` with copy
+*"Store 'X' does not exist. Create it in Settings → Stores first."* The
+old `if not _Store: _Store = Store(name=...); self.repository.add(_Store)`
+branch is gone. Existing-product lookup keys off the resolved store's
+canonical name so a case variant still hits the same product.
+
+**Tests:** new module-scoped autouse fixture in `test_product_router.py`
+seeds the two store names the suite POSTs against (`Woolworths` +
+`ReuseMerchant`) — idempotent because the test DB drops at session start.
+Added `UnknownStoreName__IsBusinessRuleViolation` asserting the new 422 +
+domain-error shape. `test_spend_by_store.py` (the only other suite POSTing
+to `/api/products`) now creates its `FU229Store-…` store explicitly before
+the product post; the stale "auto-spawned" comment is gone.
+
+**Files modified:**
+- `dora_api/features/products/create_product.py` — handler logic, route
+  gate, `business_rule_violation` import added, response gained
+  `store_not_found: bool`.
+- `tests/e2e/dora_api/test_product_router.py` — module-scoped store-seed
+  fixture, new unknown-store rejection test, `pytest` import.
+- `tests/e2e/dora_api/test_spend_by_store.py` — explicit store create
+  before product post.
+- `CHANGELOG.md` — Unreleased / Changed entry.
+- `DORA_FOLLOWUPS.md` / `DORA_FOLLOWUPS_RESOLVED.md` — FU-189a moved.
+
+**Pytest not run** — same standing posture as FU-156 / FU-189c: only the
+MS Store Python aliases are on PATH on this dev box, so no real
+interpreter is reachable from the shell. Static reasoning across the
+handler + the three impacted tests is the verification basis. The new
+test exercises the new branch; the existing tests' deps are met by the
+seeded stores.
+
+**Engineering-standards close-gate:**
+- **R-007 (scope discipline):** scope held to FU-189a (auto-create branch
+  + tests). The case-insensitive lookup is a small consistency win
+  mirroring `CreateStoreHandler` — comment in `create_product.py:76`
+  documents why; not a stealth feature.
+- **R-003 (single-source-of-truth):** the "stores are user-curated"
+  invariant is now one rule across `/api/products` and `/api/ingest`;
+  the manual path no longer has its own carve-out.
+- No new ADR — this resolves a rule violation, doesn't introduce one.
+
+**Next up:** FU-181 (plan-emailing + `meals_per_week`) is still paused
+mid-question — user redirected to FU-189/189a. Split decision pending.
+
+---
+
+## 2026-06-30 — FU-189 bookkeeping flip (Merchant→Store rename was done)
+
+**Why:** user asked to discuss FU-189 + chase the "ahead of FU-189"
+breadcrumb. Static read of the tree showed all four FU-189 deliverables
+already in code (rename, Stores admin page, StoreLogo upload + fallback,
+`StockItem.usual_store_id`), shipped 2026-06-18 as the "Phase E rename"
+work-unit that also produced the already-resolved FU-189b/c entries. Just
+never had its own bookkeeping flipped.
+
+The "now the ACTIVE track, ahead of FU-189" note on FU-186 (decommission
+`merchant_api`) is also stale — FU-186 landed (companion repo lives at
+`../dora-companion`; no `merchant_api` refs left in `dora_api/` or
+`web_app/src/`, only three historical-context docstring breadcrumbs).
+FU-186 itself is still marked `[OPEN]` — left alone; that's a separate
+flip and the user didn't ask for it.
+
+**Files modified:** `DORA_FOLLOWUPS.md` (removed FU-189 block),
+`DORA_FOLLOWUPS_RESOLVED.md` (added FU-189 with state note pointing at
+the four landed deliverables + the FU-189a carve-out that stays open).
+No code changes.
+
+**Engineering-standards close-gate:** N/A — bookkeeping only.
+
+**Next up:** FU-181 discussion was paused mid-question; user redirected
+to FU-189. Either resume FU-181 (split vs. do-both decision pending) or
+take the next direction.
+
+---
+
+## 2026-06-30 — FU-177 closed (ESLint clean again)
+
+**Why:** user asked "double check no errors currently to resolve" on FU-177.
+
+The original 5 ESLint errors (useFeatureFlags / useStockFilters /
+RecipeDetailPage / AboutSettings) are gone — likely cleared by previous
+sessions. `npx eslint .` surfaced 3 *new* errors instead:
+- `public/push-sw.js:17` — unused `event` arg on install handler.
+- `src/components/stock/StockItemRow.vue:644` — Quasar notify
+  action `handler: async () => {…}` flagged as `no-misused-promises`.
+- `src/pages/ShoppingListDetail.vue:1322` — `useDragDropList` `onDrop`
+  declared `async`, same lint rule.
+
+**Fixes:** renamed `event` → `_event`; wrapped both async handlers in
+`void (async () => { ... })()` IIFEs matching the existing pattern at
+`ShoppingListDetail.vue:2400`. `npx eslint .` now passes cleanly — no
+errors, no warnings. FU-177 moved to resolved.
+
+**Files modified:** `web_app/public/push-sw.js`,
+`web_app/src/components/stock/StockItemRow.vue`,
+`web_app/src/pages/ShoppingListDetail.vue`,
+`DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Engineering-standards close-gate:** no rule violations introduced;
+followed existing void-IIFE pattern already in the codebase. No new ADR.
+
+**Next up:** continue with whatever was in flight before this detour
+(receipt-attachments feature appears uncommitted on the working tree).
+
+---
+
+## 2026-06-30 — Image-source picker promoted to R-024 (FU-334 follow-on)
+
+**Why:** user pointed out that the FU-334 receipt-upload button — a
+single `<input accept="image/*" capture="environment">` — was
+camera-biased and didn't cleanly support picking an existing photo. On
+Android Chrome the `capture` hint typically forces the camera with no
+gallery option, defeating the second-most-common use case. The fix is
+two CTAs (Take photo + Choose image) — and applied consistently across
+every upload site, not just receipts.
+
+**What ran:**
+- Audited every image-upload site. Found three different shapes
+  (`ImageUploadField` shared by 4 consumers, hand-rolled `<input>` in
+  `RecipeStepImagesEditor`, `q-file` in `StoresSettings`, plus the new
+  receipts code). None offered the Take-photo / Choose-image split.
+- Built `web_app/src/components/ImageSourcePicker.vue` — a small
+  primitive that owns the two-button picker, the touch-device
+  detection (`pointer: coarse`), the hidden inputs (with/without
+  `capture="environment"`), and the `processImageFile` chokepoint
+  call. Emits `pick(ProcessedImage)` or `error(message)`.
+- Refactored `ImageUploadField.vue` to compose the primitive — this
+  uplifts the 4 sites that already used it (recipe hero, stock item,
+  recipe edit dialog, user avatar) with no per-site change.
+- Migrated `RecipeStepImagesEditor.vue` directly to the primitive
+  (with `multiple`). Coalesces the per-file `pick` emits into one
+  parent update via a microtask flush.
+- Migrated the new `ShoppingListDetail.vue` Receipts section to the
+  primitive — replaced the inline single-button picker.
+- `StoresSettings.vue` still uses Quasar `q-file`; migrating means
+  unpacking drag-drop + clearable + max-file-size rejection wiring.
+  Logged as FU-335, recommended resolution "opportunistic".
+
+**Standards close-gate:**
+- Promoted to **R-024 — Image upload UX goes through
+  `ImageSourcePicker`** + **ADR-020** in
+  `docs/01_charter/ENGINEERING_STANDARDS.md`. The reasoning trail (why
+  one primitive, where it composes vs replaces, how it relates to
+  R-003) is captured there.
+- TypeScript `vue-tsc --noEmit` passed clean across the refactor.
+
+**Files added:**
+- `web_app/src/components/ImageSourcePicker.vue`
+
+**Files modified:**
+- `web_app/src/components/ImageUploadField.vue` — composes the
+  primitive.
+- `web_app/src/components/recipes/RecipeStepImagesEditor.vue` —
+  uses the primitive directly with `multiple`.
+- `web_app/src/pages/ShoppingListDetail.vue` — Receipts section now
+  uses the primitive.
+- `docs/01_charter/ENGINEERING_STANDARDS.md` — R-024 + ADR-020.
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-335), `DORA_VERIFY.md`.
+
+**Next up:** FU-335 (StoresSettings q-file migration), opportunistic.
+
+---
+
+## 2026-06-30 — FU-334 built (receipt-photo attachments on shopping lists)
+
+**Why:** user asked "ability to attach a real receipt photo to a shopping
+list, just for record keeping". Scoped (multi-photo, no captions, no
+OCR, no per-store linkage) → impl plan
+[`docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md`](docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md)
+→ logged as FU-334 → user said "let's do it now". Built end-to-end in
+one pass per the build-to-plan-verify-later memory.
+
+**Pattern lifted from RecipeStepImage end-to-end** (entity → table
+mapping with `deferred()` blob → migration → access helpers → bytes
+endpoint → client URL builder). Deviation: receipts are mutated *one
+at a time* (POST one, DELETE one), not wholesale-replaced like step
+images — the natural UX for "tap to add a photo, tap trash to delete".
+
+**Files added:**
+- `dora_api/domain/entities/shopping_list_attachment.py`
+- `dora_api/features/shopping_lists/shopping_list_attachment_access.py`
+- `dora_api/features/shopping_lists/manage_shopping_list_attachments.py`
+- `dora_api/persistence/migrations/versions/a4c8f2e1b9d3_20260630_shopping_list_attachment.py`
+- `tests/e2e/dora_api/test_shopping_list_attachments.py`
+
+**Files modified:**
+- `dora_api/persistence/table_mappings.py` — register table + mapper
+  (`image` deferred so detail JSON never drags bytes).
+- `dora_api/features/shopping_lists/get_shopping_list_detail.py` —
+  `ShoppingListAttachmentDto` + `attachments` field on the detail DTO
+  (server-owned id/sequence; URL built client-side from
+  `shoppingListAttachmentUrl`).
+- `web_app/src/models/shoppingList.ts` — `ShoppingListAttachment` type
+  + `attachments` field on `ShoppingListDetail`.
+- `web_app/src/services/api/shoppingListApiService.ts` —
+  `addAttachmentAsync`, `deleteAttachmentAsync`,
+  `shoppingListAttachmentUrl` exported.
+- `web_app/src/pages/ShoppingListDetail.vue` — Receipts section
+  (hidden on draft), thumb strip, full-screen lightbox via
+  `BaseDialog`, optimistic delete with rollback toast. Uses
+  `processImageFile` (R-003) before POST — does NOT bypass the
+  centralised pipeline.
+- `CHANGELOG.md` — Unreleased entry.
+- `DORA_VERIFY.md` — new Shopping lists / Receipts checklist.
+- `DORA_FOLLOWUPS.md` / `DORA_FOLLOWUPS_RESOLVED.md` — moved FU-334 to
+  resolved with state note.
+
+**Engineering-standards close-gate (R-001..R-022):**
+- **R-003 (centralised image upload):** reused `processImageFile`;
+  no parallel resize/encode path introduced.
+- **R-003 (server-owned domain facts):** `attachment_id` + `sequence`
+  are server-owned; client only renders. The bytes URL is *routing*,
+  not a domain fact — built client-side via a helper, mirroring the
+  `recipeStepImageUrl` precedent.
+- **R-005 (portable data access):** `sa.LargeBinary` + `UUIDType`
+  work on both SQLite and Postgres (mirrors `RecipeStepImage`).
+- **R-021 (display formatters):** no new server-side display logic.
+- **State-ownership:** UI lifecycle gate (hidden on `draft`) is a
+  cosmetic mirror; the handler enforces the rule authoritatively.
+
+No new ADR opened — the feature reuses an established pattern; no
+recurring decision to promote.
+
+**Verification posture:** TypeScript `vue-tsc --noEmit` passed clean.
+Python lacks a venv on this machine; the e2e suite at
+`tests/e2e/dora_api/test_shopping_list_attachments.py` is the
+authoritative behaviour gate and will run against the dev API next
+time it's started. Browser-verify items added to `DORA_VERIFY.md`.
+
+**Next up:** nothing queued. User may want to walk the verify list.
+
+---
+
+## 2026-06-30 — FU-175 closed (no-action, bulk meal-plan edit)
+
+**Why:** user asked to discuss/plan/action FU-175 (assess a purpose-built
+"bulk edit the week" meal-plan action). Both prerequisite chunks shipped —
+C-2.C (vertical week carousel + tap-target slot + inline ± servings menu)
+and C-2.E (retired `MealPlanEditDialog`, nameless plans, implicit
+create-on-tap, "Clear this week") — so the assessment is unblocked.
+
+**Assessment:** mapped each plausible bulk gesture to today's surface:
+- bump servings across many chips → per-chip ± menu stays open for rapid
+  taps (`MealPlanEntryChip.vue:37-56`); real demand is rare.
+- reslot many entries (historic "everything became Dinner" pain) →
+  solved by construction in C-2.C — tap-target picks slot *before* recipe.
+- copy a week's shape to another week → covered by C-2.F templates.
+- wipe a week → existing "Clear this week" (C-2.E).
+- multi-select + batch action bar → would reintroduce the modal-ish
+  posture C-2.E just deleted. Fails Effortless + Anti-creep.
+
+**Outcome:** closed as no-action. Single remaining ergonomic gap is a
+per-day "Clear day" affordance; not opening a new FU — defer until
+someone hits it in use.
+
+**Files touched:**
+- `DORA_FOLLOWUPS.md` — removed FU-175 block.
+- `DORA_FOLLOWUPS_RESOLVED.md` — appended FU-175 block (flipped to
+  `[RESOLVED]`, added resolution note).
+
+**Next up:** nothing queued from this thread.
+
+---
+
 ## 2026-06-29 — FU-229 closed (spend-by-store ladder)
 
 **Why:** user asked to "do FU-229 keeping current logic for pricing

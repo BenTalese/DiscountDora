@@ -839,6 +839,51 @@ exceptions, which still must be commented) · **Source** (where it was establish
   problem-detail assertions were both surfaced during FU-166's
   test-client conversion.
 
+### R-024 — Image upload UX goes through `ImageSourcePicker`
+- **Rule:** Every site that lets the user upload an image renders its
+  source-pick affordance via the shared
+  [`web_app/src/components/ImageSourcePicker.vue`](../../web_app/src/components/ImageSourcePicker.vue)
+  primitive. The picker owns the **Take photo / Choose image** split,
+  the touch-device detection that decides whether to show the camera
+  button, the hidden `<input type="file">` elements (with/without
+  `capture="environment"`), and the call into `processImageFile` (R-003).
+  Consumers receive a `ProcessedImage` (or an `error` message) and only
+  decide what to do with the data URL. No bespoke `<input type="file">`
+  or `<q-file>` in feature code.
+- **Why:** The first cut of receipt-photo upload (FU-334) used a single
+  `<input accept="image/*" capture="environment">`. That biased Android
+  Chrome straight to the camera with no gallery option — exactly the
+  opposite of "let me also pick a photo I already took". The audit that
+  followed found three different upload shapes across the SPA
+  (`ImageUploadField`, `RecipeStepImagesEditor`, `StoresSettings`,
+  `ShoppingListDetail`), each making its own camera-vs-gallery choice
+  silently. R-003 already centralised resize/encode; the *pick UX* needs
+  the same chokepoint or the same bug appears N times.
+- **Apply:**
+  - New upload sites: drop `ImageSourcePicker` in directly, listen for
+    `@pick="(image) => ..."` (a `ProcessedImage`) and `@error`.
+  - Sites with chrome around the picker (preview + Remove button):
+    compose `ImageUploadField` (which now delegates to the picker
+    internally) rather than reinventing the wrapper.
+  - Bulk-upload (recipe step images, receipt batches if it ever
+    arrives) pass `multiple` — the picker emits one `pick` per file in
+    order; coalesce in the parent if needed.
+  - Don't pass `capture="environment"` on a bespoke input — that's the
+    primitive's job and it varies by platform.
+- **Violation signal:**
+  - A new `<input type="file" accept="image/*">` in feature code.
+  - A new `<q-file>` for image upload.
+  - A handler that calls `processImageFile` directly from a bespoke
+    `change` listener.
+  - A site that has *only* a camera button or *only* a file button when
+    both make sense.
+- **Carve-outs (must be commented):**
+  - `StoresSettings.vue` retains its `q-file` until FU-335 migrates it
+    (drag-drop visual + clearable affordance need a measured swap).
+- **Source:** FU-334 follow-on (2026-06-30). The single-`capture`
+  receipt-upload button surfaced the gap; the standards rule turns the
+  fix into a one-time decision.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1423,6 +1468,46 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   candidate page is now a five-minute "which category does this fit?"
   check, not a 30-minute file-by-file read.
 - **Promotes rule:** R-020.
+
+### ADR-020 — One image-source picker for the SPA (Take photo / Choose image)
+- **Date / task:** 2026-06-30 (FU-334 follow-on).
+- **Status:** accepted
+- **Context:** The first cut of receipt-photo upload for shopping lists
+  used a single `<input accept="image/*" capture="environment">` button.
+  On Android Chrome that biases straight to the rear camera with no
+  gallery option, defeating the common "let me pick a receipt photo my
+  partner already took" path. An audit of the existing image-upload
+  surfaces (recipe hero, recipe step images, stock item image, user
+  avatar, store logo, product image, recipes detail) found three
+  different upload shapes: `ImageUploadField` (4 consumers), a bespoke
+  `<input>` in `RecipeStepImagesEditor`, and a Quasar `q-file` in
+  `StoresSettings` — each made its own camera-vs-gallery choice
+  silently, and none offered both consistently. R-003 already pinned the
+  resize/encode chokepoint at `processImageFile`; the *pick UX* was the
+  matching gap.
+- **Decision:** Adopt R-024. A single SPA-wide
+  `ImageSourcePicker.vue` primitive renders the two-affordance
+  picker (Take photo + Choose image), detects touch-primary devices via
+  `pointer: coarse` to decide whether to surface the camera button, owns
+  the hidden inputs (one with `capture="environment"`, one without), and
+  calls `processImageFile` internally. Consumers receive a
+  `ProcessedImage` via `@pick`. `ImageUploadField` composes the
+  primitive internally so its 4 existing consumers (stock item, recipe
+  edit, recipe detail, user avatar) gain the camera affordance with no
+  per-site change. `RecipeStepImagesEditor` and the new receipts UI use
+  the primitive directly.
+- **Consequences:** Camera-vs-gallery becomes one platform-aware
+  decision instead of N per-site decisions. The "Take photo" button
+  appears only where it makes sense (mobile / touch tablet), so desktop
+  isn't cluttered with a no-op control. Multi-file flows compose the
+  primitive with `multiple` — each file emits its own `pick` in order;
+  the parent decides batching. Cost: one indirection layer; the
+  primitive is ~100 lines and small enough to read end-to-end. The
+  scanning case (iOS Files → Scan Documents) reaches users via the
+  Choose-image path on iOS — no dedicated scan button needed.
+  `StoresSettings.q-file` stays as a single carve-out tracked under
+  FU-335.
+- **Promotes rule:** R-024.
 
 ---
 

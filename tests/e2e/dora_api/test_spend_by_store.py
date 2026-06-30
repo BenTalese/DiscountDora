@@ -29,7 +29,11 @@ def test__spend_by_store__honours_actual_unit_price_over_picked(api):
     suffix = uuid.uuid4().hex[:8]
     store_name = f"FU229Store-{suffix}"
 
-    # Product create auto-creates the Store by name (see create_product.py:106).
+    # FU-189a — product create no longer auto-spawns a Store; stores are
+    # user-curated. Create the store explicitly first.
+    store_resp = requests.post(STORES, json={"name": store_name})
+    assert store_resp.status_code == 201, store_resp.text
+
     product_resp = requests.post(PRODUCTS, json={
         "name": f"FU229Product-{suffix}",
         "store_name": store_name,
@@ -47,8 +51,8 @@ def test__spend_by_store__honours_actual_unit_price_over_picked(api):
     # Location header shape: /api/products?filter=product_id:eq:<uuid>
     product_id = product_resp.headers["location"].rsplit(":", 1)[-1]
 
-    # Find the store the create-handler auto-spawned (so we can find our
-    # row in the spend-by-store response).
+    # Resolve the store id (created above) so we can find our row in the
+    # spend-by-store response.
     stores_body = requests.get(STORES).json()
     stores = stores_body["items"] if isinstance(stores_body, dict) else stores_body
     store_id = next(s["store_id"] for s in stores if s["name"] == store_name)

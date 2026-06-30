@@ -33,6 +33,7 @@ from dora_api.domain.entities.recipe_section import RecipeSection
 from dora_api.domain.entities.recipe_step import RecipeStep
 from dora_api.domain.entities.recipe_step_image import RecipeStepImage
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list_attachment import ShoppingListAttachment
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine,
 )
@@ -301,6 +302,25 @@ def configure_mappings(db: SQLAlchemy):
         # FU-178 breakage; SQLite doesn't enforce FKs anyway, and a dangling
         # id after a PreferredBuy delete is tolerated (the SPA shows no hint).
         Column("preferred_buy_id", UUIDType, nullable=True),
+    )
+
+    # FU-334 — receipt-photo record-keeping. One row per attached photo on a
+    # shopping list (status='shopping' or 'done'). Image blob is the same
+    # `data:image/...;base64,...` UTF-8 bytes shape as Recipe.image /
+    # RecipeStepImage (so processImageFile → server → bytes endpoint stays
+    # identical across upload sites). Deferred at the mapper so detail reads
+    # never inline blob bytes.
+    shopping_list_attachment_table = Table(
+        "ShoppingListAttachment", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column(
+            "shopping_list_id", UUIDType,
+            ForeignKey("ShoppingList.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("image", LargeBinary, nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
     shopping_list_template_table = Table(
@@ -1243,6 +1263,21 @@ def configure_mappings(db: SQLAlchemy):
             lazy="noload",
         ),
     })
+
+    # FU-334 — receipt attachments. Bytes deferred so list/detail JSON never
+    # drags blob payloads; the dedicated
+    # `/shopping-lists/<id>/attachments/<attachment_id>` route triggers the
+    # load on attribute access.
+    _mapper_registry.map_imperatively(
+        ShoppingListAttachment, shopping_list_attachment_table, properties={
+            "_id_col": shopping_list_attachment_table.c.id,
+            "id": shopping_list_attachment_table.c.id,
+            "shopping_list_id": shopping_list_attachment_table.c.shopping_list_id,
+            "sequence": shopping_list_attachment_table.c.sequence,
+            "image": deferred(shopping_list_attachment_table.c.image),
+            "created_at": shopping_list_attachment_table.c.created_at,
+        }
+    )
 
     # Template line — same pattern as ShoppingListLine. FK columns map by
     # name (template_id, stock_item_id); only `id` needs the explicit alias.

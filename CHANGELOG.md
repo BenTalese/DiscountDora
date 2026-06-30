@@ -5,7 +5,60 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Security
+- **Fresh-install bootstrap is now an explicit, single-use setup page —
+  FU-200 (2026-06-30).** On a brand-new install the first visitor lands
+  on a dedicated `/setup` "Create the first admin account" page instead
+  of `/login`. The page is single-use: after one admin exists, the
+  backend `POST /api/auth/bootstrap-admin` endpoint 410s on every
+  subsequent call and the SPA router refuses to render `/setup` (anyone
+  who saved that tab gets bounced to `/login` or the dashboard). At the
+  same time, `POST /api/auth/register` no longer self-grants admin to
+  the first registrant — every self-serve signup is `is_admin=false`
+  and `email_verified=false` regardless of database state. The
+  `ADMIN_BOOTSTRAP_EMAIL` env var (previously listed as production-
+  required but never read) is now honoured: when set, only that exact
+  email can bootstrap, closing the "first stranger to hit the box on a
+  public IP" race.
+
 ### Added
+- **Receipt photos on shopping lists — FU-334 (2026-06-30).** Once a
+  list moves out of `draft` (Start shopping → Finish & restock), a new
+  **Receipts** section appears on the list detail. The picker offers
+  **Take photo** *and* **Choose receipt** — on mobile you can snap a
+  fresh photo or pick one already on the phone; on desktop just the file
+  picker. Multi-photo by design (long till rolls, two-store shops); no
+  captions, no OCR, no reconciliation with line prices. Pure
+  record-keeping that survives Finish — the receipts stick to the `done`
+  list as evidence. Storage reuses the centralised `processImageFile`
+  pipeline (R-003): 1600px long-edge JPEG q0.85, 12MB input cap, served
+  raw via a dedicated bytes endpoint so detail JSON never inlines blobs.
+  Deleting the list cascades the receipts.
+
+### Changed
+- **Manual product-add: no more auto-spawned stores — FU-189a
+  (2026-06-30).** `POST /api/products` no longer silently creates a
+  `Store` row when the named store doesn't exist; the request is
+  rejected with a 422 *"Store 'X' does not exist. Create it in
+  Settings → Stores first."* This matches the strict no-auto-create
+  posture the ingestion API has enforced since FU-190 — stores stay
+  user-curated everywhere. Existing stores match case-insensitively
+  (trimmed), mirroring `CreateStoreHandler`'s duplicate-detection
+  rule. No SPA UI exercises this path today, so there's no visible
+  product-side change; future product-create UIs will surface a
+  store picker instead of typing names.
+
+- **Image upload UX consistency — R-024 (2026-06-30).** Image-upload
+  surfaces across the SPA now share the same picker UX: **Take photo**
+  (mobile only, opens the rear camera) and **Choose image** (gallery /
+  files / desktop disk). The new `ImageSourcePicker` primitive is the
+  single source of truth for the camera-vs-gallery question and is
+  composed by `ImageUploadField` (uplifting recipe hero, stock item
+  image, user avatar, recipe edit dialog) and used directly by
+  `RecipeStepImagesEditor` and the new Receipts section.
+  `StoresSettings` store-logo upload still uses `q-file` (tracked under
+  FU-335) — that's the only carve-out.
+
 - **AI assistant — finalised: probe banner, "Test connection" button,
   topology docs — FU-330 + FU-331 + FU-332 (2026-06-29).** Same-day
   PR2 over the per-user assistant work. **Banner**: the chat panel now

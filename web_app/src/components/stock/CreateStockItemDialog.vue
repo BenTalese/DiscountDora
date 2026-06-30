@@ -35,14 +35,23 @@
                         @update:model-value="clearField('stock_level_id')"
                         :rules="[(v: string) => !!v || 'Pick a stock level']"
                     >
+                        <!-- Feedback (stock overview): show the level
+                             colour-dot on the *trigger* too, not just in
+                             the dropdown list — keeps this picker
+                             consistent with the detail-page picker. -->
+                        <template #selected-item="scope">
+                            <span class="row items-center no-wrap">
+                                <StockLevelDot
+                                    :sequence="selectedLevelSequence"
+                                    dot-class="q-mr-sm"
+                                />
+                                {{ scope.opt.name }}
+                            </span>
+                        </template>
                         <template #option="scope">
                             <q-item v-bind="scope.itemProps">
                                 <q-item-section avatar>
-                                    <q-avatar
-                                        :color="colourForSequence(scope.opt.sequence) ?? undefined"
-                                        :class="{ 'dora-bg-sunken': !colourForSequence(scope.opt.sequence) }"
-                                        size="16px"
-                                    />
+                                    <StockLevelDot :sequence="scope.opt.sequence" />
                                 </q-item-section>
                                 <q-item-section>{{ scope.opt.name }}</q-item-section>
                             </q-item>
@@ -86,7 +95,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
@@ -142,6 +151,17 @@
 
     const form: CreateStockItemCommand = reactive(defaultForm());
     const saving = ref(false);
+    // Sequence of the currently-picked level — drives the trigger dot.
+    // q-select with `emit-value` only hands `#selected-item` the resolved
+    // option object, but we still need to derive sequence here because
+    // the form holds the id. Recomputed reactively so the dot updates
+    // the instant the user picks a new level.
+    const selectedLevelSequence = computed<number | null>(() => {
+        const id = form.stock_level_id;
+        if (!id) return null;
+        const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
+        return typeof seq === 'number' ? seq : null;
+    });
     // FU-099 — R-001 form-error plumbing.
     const { fieldErrors, generalError, handleSaveError, reset: resetFormErrors } = useFormErrors();
 

@@ -7,6 +7,9 @@ import routes from './routes';
 
 const PUBLIC_ROUTES = new Set<string>([
     '/login',
+    // FU-200 — fresh-install first-admin setup. Reachable without a
+    // session by definition.
+    '/setup',
     // A1 out-of-band auth surfaces — reachable from email links without
     // an existing session.
     '/verify-email',
@@ -76,6 +79,20 @@ export default defineRouter(function (/* { store, ssrContext } */) {
         const authStore = useAuthStore();
         if (!authStore.isBootstrapped) {
             await authStore.bootstrapAsync();
+        }
+
+        // FU-200 — fresh-install gate. While no admin exists, every route
+        // funnels to /setup; conversely, an installed system never serves
+        // /setup (the operator who saved a /setup tab from earlier doesn't
+        // get a second-admin foothold). These checks sit ahead of the
+        // login redirect so an unauthed visit on a fresh box lands on the
+        // setup wizard, not a useless login page.
+        if (authStore.bootstrapRequired) {
+            if (to.path !== '/setup') return { path: '/setup' };
+            return true;
+        }
+        if (to.path === '/setup') {
+            return { path: authStore.isAuthenticated() ? '/' : '/login' };
         }
 
         const isPublic = PUBLIC_ROUTES.has(to.path);

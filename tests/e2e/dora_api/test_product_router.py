@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import ANY
 
+import pytest
 import requests
 
 from dora_api.features.products.create_product import CreateProductRequest
@@ -11,6 +12,18 @@ from tests.support import is_valid_uuid
 #region ---------------- setup ----------------
 
 base_route = 'http://localhost:5170/api/products'
+_STORE_ROUTE = 'http://localhost:5170/api/stores'
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _seed_stores(api):
+    # FU-189a: `/api/products` no longer auto-creates stores on an unknown
+    # name. The legacy tests POST products against fixed names ("Woolworths"
+    # + "ReuseMerchant"); seed those once so the strict no-auto-create
+    # contract is exercised without each test having to set up the store
+    # itself. Idempotent because the test DB is dropped at session startup.
+    for _Name in ("Woolworths", "ReuseMerchant"):
+        requests.post(_STORE_ROUTE, json={"name": _Name})
 
 #endregion setup
 
@@ -258,6 +271,41 @@ def test__create_product__MerchantAlreadyExists__MerchantIsReused(api):
     assert _FirstProduct['store_id'] == _SecondProduct['store_id']
     assert _FirstProduct['store_name'] == 'ReuseMerchant'
     assert _SecondProduct['store_name'] == 'ReuseMerchant'
+
+
+def test__create_product__UnknownStoreName__IsBusinessRuleViolation(api):
+    """FU-189a — manual product-add no longer auto-creates a Store. An
+    unknown `store_name` is rejected with a 422 + a "create it in
+    Settings → Stores first" hint, matching the strict no-auto-create
+    posture the ingestion API enforces (FU-190)."""
+    _ProductRequest = CreateProductRequest(
+        is_active=True,
+        is_available=True,
+        store_name="NoSuchStoreXYZ",
+        name="Unknown-Store Product",
+        price_now=4.5,
+        price_was=10.5,
+        size="500g",
+        size_unit="g",
+        size_value=5.0,
+    )
+
+    _Response = requests.post(base_route, json=_ProductRequest.model_dump())
+
+    assert _Response.status_code == 422
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            "": [domain_err(
+                "Store 'NoSuchStoreXYZ' does not exist. "
+                "Create it in Settings → Stores first."
+            )]
+        },
+        "status": 422,
+        "title": "Business rule violation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
+    }
 
 
 def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):

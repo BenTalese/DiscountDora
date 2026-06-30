@@ -1,6 +1,7 @@
 # Implementation Plan — Receipt-photo attachments on shopping lists
 
-**Status:** Plan for review · **Date:** 2026-06-30 · **No code yet.**
+**Status:** Built 2026-06-30 (see `DORA_WORKLOG.md` and FU-334 in
+`DORA_FOLLOWUPS_RESOLVED.md`) · **Date:** 2026-06-30.
 **Origin:** ad-hoc user request, 2026-06-30 — "ability to attach a real
 receipt photo to a shopping list, just for record keeping."
 **Tracked as:** `DORA_FOLLOWUPS.md` FU-334.
@@ -37,9 +38,12 @@ separation clean.
   ([web_app/src/services/files/imageService.ts:60](../../web_app/src/services/files/imageService.ts))
   — 1600px long-edge, JPEG q0.85, 12MB input cap, MIME allow-list. Do **not**
   add a parallel resize/encode path.
-- **R-003 (server-owned display strings):** The detail payload exposes a
-  `url` for each attachment (pointing at the bytes endpoint). Client never
-  constructs the URL by hand.
+- **R-003 alignment (URL construction):** The detail payload exposes
+  `{attachment_id, sequence}` only — bytes URLs are built client-side via
+  a `shoppingListAttachmentUrl(listId, attachmentId)` helper, mirroring
+  the established `recipeStepImageUrl` precedent. R-003 governs *domain
+  facts* (ids, sequences, display names) — those are server-owned. The
+  bytes URL is a routing concern, not a domain fact.
 - **R-005 (portable data access):** Bytes column must work on SQLite (BLOB)
   and Postgres (BYTEA). Mirror the existing `recipe_step_image.image`
   mapping exactly.
@@ -91,9 +95,11 @@ needs id + sequence.
   ([get_recipes.py](../../dora_api/features/recipes/get_recipes.py)).
 
 ### 4.5 Detail payload
-`get_shopping_list_detail` adds an `attachments: [{id, sequence, url}]`
-array. `url` points at the bytes endpoint, never inlines base64 — keeps the
-JSON small and lets the browser cache per-image.
+`get_shopping_list_detail` adds an `attachments: [{attachment_id, sequence}]`
+array (server-owned domain facts). No `url` field — the SPA builds the bytes
+URL from the id via a `shoppingListAttachmentUrl(listId, attachmentId)`
+helper, mirroring the established `recipeStepImageUrl` precedent. Bytes are
+never inlined; the JSON stays small and the browser caches per-image.
 
 ### 4.6 Tests
 - e2e: attach → list detail returns the attachment → bytes endpoint serves

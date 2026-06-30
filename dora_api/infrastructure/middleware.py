@@ -24,6 +24,11 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 PUBLIC_ENDPOINTS = frozenset({
     "login",
     "register_user",
+    # FU-200 — first-admin bootstrap. `bootstrap_required` is the cheap
+    # GET the SPA hits on cold-start to decide login-vs-setup; the POST
+    # creates the first admin and 410s once any user exists.
+    "bootstrap_required",
+    "bootstrap_admin",
     "health_check",            # health probes must not require auth (used by container orchestrators)
     "submit_client_log",       # the SPA may need to ship errors before login completes
     # ── A1 out-of-band auth flows; reached from email links + login screen ──

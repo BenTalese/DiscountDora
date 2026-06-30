@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { AuthenticatedUser } from 'src/models/auth';
 import type {
+    BootstrapAdminCommand,
     ChangePasswordCommand,
     LoginCommand,
     RegisterCommand,
@@ -20,6 +21,11 @@ export const useAuthStore = defineStore('auth', () => {
     // Set when the boot probe fails to reach the backend. The splash screen
     // watches this and surfaces a retry button instead of hanging silently.
     const bootstrapError = ref<string | null>(null);
+    // FU-200 — fresh-install flag. True when no user exists yet; the
+    // router uses this to route to /setup instead of /login. Cleared once
+    // setupAdminAsync() succeeds (so refresh-after-setup falls through to
+    // the normal login-or-authed path).
+    const bootstrapRequired = ref(false);
 
     // Resolver for the in-flight bootstrap waiter: when bootstrap fails we
     // park the loop on a promise, then the splash's Retry button resolves it
@@ -52,7 +58,16 @@ export const useAuthStore = defineStore('auth', () => {
     const runBootstrap = async () => {
         while (!isBootstrapped.value) {
             try {
-                currentUser.value = await authApiService.getMeAsync();
+                // FU-200 — check fresh-install state first. If no admin
+                // exists yet, skip the /me probe (it'll 401) and let the
+                // router send the user to /setup. The probe is cheap
+                // (single COUNT) and explicitly public.
+                bootstrapRequired.value = await authApiService.bootstrapRequiredAsync();
+                if (bootstrapRequired.value) {
+                    currentUser.value = null;
+                } else {
+                    currentUser.value = await authApiService.getMeAsync();
+                }
                 isBootstrapped.value = true;
                 bootstrapError.value = null;
             } catch (error) {
@@ -94,6 +109,16 @@ export const useAuthStore = defineStore('auth', () => {
         currentUser.value = await authApiService.registerAsync(command);
     };
 
+    /** FU-200 — create the first admin and auto-login. The server 410s
+     *  once any user exists, so this should only be invoked from the
+     *  /setup page (the router guards that). Clears `bootstrapRequired`
+     *  on success so a refresh-after-setup lands on the normal authed
+     *  routes. */
+    const setupAdminAsync = async (command: BootstrapAdminCommand) => {
+        currentUser.value = await authApiService.bootstrapAdminAsync(command);
+        bootstrapRequired.value = false;
+    };
+
     const updateMeAsync = async (command: UpdateMeCommand) => {
         const touchedImage = 'image' in command || 'clear_image' in command;
         currentUser.value = await authApiService.updateMeAsync(command);
@@ -127,6 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
         currentUser: readonly(currentUser),
         isBootstrapped: readonly(isBootstrapped),
         bootstrapError: readonly(bootstrapError),
+        bootstrapRequired: readonly(bootstrapRequired),
         isAdmin,
         isAuthenticated,
         imageVersionOf,
@@ -136,6 +162,7 @@ export const useAuthStore = defineStore('auth', () => {
         refreshAsync,
         loginAsync,
         registerAsync,
+        setupAdminAsync,
         updateMeAsync,
         changePasswordAsync,
         logoutAsync

@@ -19,6 +19,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/LoginPage.vue'),
         meta: { title: 'Sign in' }
     },
+    // FU-200 — fresh-install first-admin setup. Lives outside MainLayout
+    // for the same reason as /login. The router guard sends visitors here
+    // when bootstrapRequired is true, and bounces them away once an admin
+    // exists.
+    {
+        path: '/setup',
+        component: () => import('pages/SetupAdminPage.vue'),
+        meta: { title: 'Set up Dashy Dora' },
+    },
     // ── A1 out-of-band auth flows. Each one lives outside MainLayout so
     // signed-out users (or someone clicking a verify link in a fresh
     // browser) doesn't see the nav chrome.

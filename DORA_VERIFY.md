@@ -510,6 +510,50 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Settings
 
+### Assistant — banner, Test connection, docs (PR2 finalisation) — origin FU-330 + FU-331 + FU-332
+- [ ] **AI-unavailable banner (FU-330):**
+  - [ ] User with AI mode ON but pointing at a deliberately-bad URL (e.g. `http://localhost:9` for Ollama) → open the chat panel → banner renders at the top with red icon + the reason ("Couldn't reach Ollama" / "Your LLM didn't respond." etc.) + Retry + Settings buttons
+  - [ ] Fix the URL → click Retry → banner disappears once the probe succeeds (mid-session recovery)
+  - [ ] User with AI mode OFF (plain Basic) → banner never renders regardless of master flag or anything else (Basic isn't a failure)
+  - [ ] Admin flips master kill-switch off → user's chat shows the banner with the master-off reason
+  - [ ] DevTools → `/api/assistant/status` returns `{ai_available: bool, reason: string|null}` — reason is null when AI is up, populated when down
+- [ ] **Test connection button (FU-332):**
+  - [ ] Settings → Assistant → Ollama provider → enter a valid URL + model → click Test → inline green tick + "Connected. N models detected."
+  - [ ] Enter a deliberately-bad URL → Test → inline red mark + reason
+  - [ ] Edit the URL after a green tick → status clears (no stale tick next to wrong URL)
+  - [ ] Switch to OpenAI/Anthropic/Gemini → enter a model + valid API key → Test → green tick. Wrong key → red mark + reason
+  - [ ] **Without re-typing the saved key**: after saving a paid-provider key, leave the masked field empty, click Test → still works (server falls back to the saved encrypted blob)
+  - [ ] **Rate limit**: hammer Test ~11 times in a minute → 11th call returns the "Too many probes — try again in Xs" message
+  - [ ] **Audit trail**: Settings → Admin → Audit log shows an `assistant.probe` event per call with the actor + provider + target host + outcome (host only, no full URL or key)
+- [ ] **Docs (FU-331):**
+  - [ ] Help → "Dora itself" tab shows the new entries: "Set up AI mode (per account)", "AI mode says unavailable — why?", "Network topology: who reaches the LLM?", "Admin: install-wide AI master switch + API-key encryption"
+  - [ ] README's "AI assistant" bullet describes the per-user pattern, all four providers, the `DORA_LLM_KEY_ENCRYPTION_KEY` env var, and the backend-reaches-LLM network topology
+  - [ ] AssistantSettings.vue's inline page-level help blurb still renders (didn't accidentally get removed)
+
+### Assistant per-user config (PR1: schema + 4 providers + master kill-switch) — origin FU-153
+- [ ] `flask db upgrade head` (or `alembic upgrade head`) applies migration `e5b9d3c7a8f2_20260629_per_user_llm_config` on SQLite **and** Postgres; `verify_mappings()` passes
+- [ ] `pytest -q` green (or remaining failures are pre-existing FU-328 ones, not introduced by this work)
+- [ ] Backend boots — no `ImportError` from `dora_api.infrastructure.llm`
+- [ ] **Settings → Assistant** (the new page) appears in the sidebar between *Nutrition* and *About*. URL is `/settings/assistant`. Reload → still shows.
+- [ ] **Ollama path** (no env-var needed):
+  - [ ] Pick `Ollama (local)`. Save base URL + model. AI toggle stays disabled until both are present; once saved, toggle enables AI mode → assistant replies route through the configured Ollama.
+  - [ ] Old `AdminSystemAssistantSettings.vue` (now stripped) only shows the master kill-switch + a pointer to per-user settings.
+- [ ] **Master kill-switch (admin)**: System → AI assistant. Toggle off → every user's Settings → Assistant page shows the "AI mode is disabled install-wide" banner + the per-user toggle is forced off / disabled. Toggle back on → user toggles re-enable.
+- [ ] **Paid-provider flow (OpenAI / Anthropic / Gemini)** without `DORA_LLM_KEY_ENCRYPTION_KEY` set:
+  - [ ] Try to save an API key → 422 with caption "`DORA_LLM_KEY_ENCRYPTION_KEY` isn't configured — paid-provider API keys can't be saved." (Or the friendly form via the error toast.)
+  - [ ] Ollama saves still work.
+- [ ] **Paid-provider flow with the env var set** (generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`, set in API server's env, restart):
+  - [ ] Save API key → toast "API key saved." → page shows "••••••••• (saved)" placeholder. Refresh: still shows saved.
+  - [ ] Save model name. Toggle AI on. Send a chat message → routes to the chosen paid provider (verify via outbound network log or by using a deliberately-wrong key and seeing the LlmUnavailable fallback fire).
+  - [ ] "Remove saved key" button clears the key (server: `has_llm_api_key` flips false). AI toggle disables again with "Save an API key first" hint.
+- [ ] **Per-user isolation**: User A configures Ollama + enables. User B configures OpenAI + enables. Both can chat at once; A's request hits Ollama, B's hits OpenAI. (Logs or outbound network confirm.)
+- [ ] **GET /auth/me** never returns the plaintext API key — `has_llm_api_key: true|false` is what the SPA sees. (Browser DevTools → /auth/me response → no `llm_api_key` field.)
+- [ ] **Cross-field validation**: try to PATCH `/auth/me` with `{llm_enabled: true, llm_provider: 'openai'}` without a saved key → 422 with "openai needs an API key — save the key before enabling AI mode."
+- [ ] **Health endpoint** `/api/health` — `features.assistant` reflects `master_llm_enabled` (not per-user).
+- [ ] **Anthropic + Gemini smoke**: configure one of each with a valid key, send a chat that triggers a tool call (e.g. "what's low?"). The response shows the data — confirming the tool-call adapter round-tripped through `ask_assistant`.
+- [ ] **Backup → restore** round-trips the new User columns + `master_llm_enabled` (the api-key ciphertext should survive a backup/restore — it's stored as a `LargeBinary` blob like `User.image`).
+- [ ] **Engineering hygiene**: grep for old field references — `grep -rn "llm_enabled\|llm_base_url\|llm_model" web_app/src` should only hit per-user identifiers (User.llm_*, UpdateMe, AuthenticatedUser); no `AppSetting.llm_*` references anywhere except migrations / comments.
+
 ### Visual rebuild Phase 3 — cross-theme walk — origin FU-283
 - [ ] Walk every settings page in Pesto Light + Pesto Dark + Cherry Cola Dark
 - [ ] Confirm: sticky nav, dropped card chrome, DoraSegmented in sunken-fill mode, theme card 2px accent border + check_circle badge, page padding breath all read

@@ -53,6 +53,154 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-334 — Attach receipt photo(s) to a shopping list (record-keeping)
+- **Raised:** 2026-06-30 (ad-hoc user ask)
+- **Type:** deferred job (new feature, scoped + planned)
+- **What:** Allow the user to attach one or more real receipt photos to a
+  `shopping` or `done` shopping list as a record. View-only after attach —
+  no OCR, no parsing, no auto-matching to lines. Multi-photo, no captions.
+  Mirror the `RecipeStepImage` storage shape (data-URL bytes + dedicated
+  bytes endpoint) and reuse the centralised `processImageFile` upload
+  pipeline (R-003).
+- **Why deferred:** Not a Phase-1 blocker; pure additive record-keeping. The
+  Phase-2 ingestion / OCR path is a separate concern and must not get
+  confused with this. Slotting now would steal time from the active shop
+  loop / assistant work.
+- **Plan:** [`docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md`](docs/04_proposals/IMPL_PLAN_SHOPPING_LIST_RECEIPTS.md)
+  — decisions locked, backend + frontend chunks scoped (~2 days total).
+- **Recommended resolution:** opportunistic, post Phase-1 shopping polish —
+  or sooner if the user wants the paper trail before next big shop.
+
+---
+
+## [OPEN] FU-333 — Env-var sprawl: promote operational config to AppSetting + first-run wizard for desktop
+- **Raised:** 2026-06-29 (user concern raised after the FU-153 / FU-330–332
+  AI-assistant sweep added `DORA_LLM_KEY_ENCRYPTION_KEY` to an already
+  long env-var list).
+- **Type:** design + audit + implementation. Best-practice cleanup; UX
+  unlock for desktop installs.
+
+### The problem
+
+Dora reads **19 `DORA_*` env vars** at boot. The mix isn't *bad* per se —
+every individual var has a reason — but the result is a self-host
+operator (and especially a desktop user) wading through a long
+environment table to stand up the app. The user flagged this as
+"perhaps difficult to manage" and asked whether an admin UI for the
+vars would help.
+
+**An "admin UI for env vars" is the wrong shape** (well-known
+anti-pattern when the vars are secrets — you can't read the DB to
+get the key that decrypts the DB). The *right* shape is to identify
+which env vars genuinely need to stay env, promote the rest, and
+hide what's left behind a setup wizard for the desktop path.
+
+### Current env-var inventory (audit done 2026-06-29)
+
+Each `DORA_*` env var sorted into one of three buckets:
+
+#### Bucket A — must stay env (bootstrap / chicken-and-egg)
+
+These are read **before** the DB is reachable, OR are the root key
+that decrypts everything else in the DB. Cannot be moved.
+
+| Env var | Read in | Why it's bootstrap |
+|---|---|---|
+| `DORA_SECRET_KEY` | `app.py:74` | Validates session cookies before any DB call. Required for the first request to even reach the auth layer. |
+| `DORA_ENV` | `infrastructure/profile.py:43` | Decides debug vs prod mode — controls whether the DB seeds, whether destructive ops are allowed, etc. Read at process boot. |
+| `DORA_LLM_KEY_ENCRYPTION_KEY` | `infrastructure/llm/key_encryption.py` | Root key for the Fernet ciphertext stored in `User.llm_api_key_encrypted`. If this lived in the DB, decrypting it would need... a different key. Chicken-and-egg. |
+| `DORA_SECURE_COOKIES` | `app.py:90` | Set on `app.config` at startup; applies to *every* session cookie issued, including the one validating the admin's incoming request. |
+| `DORA_SPA_DIR` | `features/spa/serve_spa.py:39` | Static-file root for the Quasar bundle. Read once at boot; needed before any route resolves. |
+| `DORA_SKIP_PROD_VALIDATION` | `infrastructure/profile.py:92` | Dev/CI escape hatch; only meaningful at startup. |
+| `DORA_ALLOW_DESTRUCTIVE` | `infrastructure/configuration_manager.py:239` | Gates `db.drop_all()` on dev boot. Read pre-DB by definition. |
+
+**Verdict:** 7 vars genuinely stay in env. Documentation can make them less scary, but they don't move.
+
+#### Bucket B — should move to AppSetting (operational config, not secrets)
+
+These are not secrets and not bootstrap; they're values an admin would tweak operationally. They're env today purely by historic convenience. They belong in `AppSetting` rows with admin-UI editing — exactly the pattern Dora already uses for `master_llm_enabled`, `scanning_enabled`, `timezone`, `expiring_soon_window_days`, `product_search_url`, `unit_pricing_locale`, etc.
+
+| Env var | Read in | Notes |
+|---|---|---|
+| `DORA_EMAIL_ENABLED` | `health_check.py:63` | Pure feature flag — exactly the shape of `meal_planning_enabled` / `money_enabled`. Move. |
+| `DORA_AUDIT_RETENTION_DAYS` | `infrastructure/audit_retention.py:24` | Admin-configurable retention window. Move. |
+| `DORA_PUBLIC_URL` | `infrastructure/auth_helpers.py:188` | Used for verification / password-reset email links. Operational; can be edited at any time. Move. |
+| `DORA_SMTP_HOST` | `infrastructure/email_sender.py:56` | Operational config. Move. |
+| `DORA_SMTP_PORT` | `infrastructure/email_sender.py:57` | Operational config. Move. |
+| `DORA_SMTP_USERNAME` | `infrastructure/email_sender.py:54` | Not a secret on its own. Move. |
+| `DORA_SMTP_FROM` | `infrastructure/email_sender.py:60` | Sender address. Move. |
+| `DORA_SMTP_USE_TLS` | `infrastructure/email_sender.py:61` | TLS toggle. Move. |
+| `DORA_VAPID_PUBLIC_KEY` | `infrastructure/push_sender.py:51` | Public key — by definition not secret. Move. |
+| `DORA_VAPID_SUBJECT` | `infrastructure/push_sender.py:53` | Operator contact URL for the push service. Move. |
+| `DORA_PIPER_BIN` | `features/tts/tts_synthesize.py:61` | Filesystem path. Operational. Move. |
+| `DORA_PIPER_BUNDLED_VOICE_DIR` | `features/tts/voice_provision.py:81` | Filesystem path. Operational. Move. |
+| `DORA_PIPER_VOICE` | `features/tts/tts_synthesize.py:70` | Default voice id. Move (or fold into an existing voice-catalog setting). |
+
+**Verdict:** **12 vars** become 12 columns on `AppSetting` (or get folded into existing settings columns where the shape matches), edited via the existing admin Settings pages. Pure win — zero new security surface; reduces operator-onboarding from "configure 19 env vars" to "configure 7".
+
+#### Bucket C — secrets that *could* move to encrypted DB (judgement call)
+
+These are real secrets, but we now have the Fernet helper from FU-153 (`infrastructure/llm/key_encryption.py`) — so they *could* live in the DB encrypted at rest, using `DORA_LLM_KEY_ENCRYPTION_KEY` as the bootstrap key.
+
+| Env var | Read in | Notes |
+|---|---|---|
+| `DORA_SMTP_PASSWORD` | `infrastructure/email_sender.py:59` | Real secret. Today: env. Could be: encrypted `AppSetting.smtp_password_encrypted` column. |
+| `DORA_VAPID_PRIVATE_KEY` | `infrastructure/push_sender.py:52` | Real secret. Same shape. |
+
+**Trade-off** to weigh before moving Bucket C:
+- **Pro:** the operator's env footprint shrinks to **two** vars (`DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY`); the admin Settings UI can drive everything else end-to-end.
+- **Pro:** matches the pattern we already shipped for per-user LLM keys. R-001 win.
+- **Con:** `DORA_LLM_KEY_ENCRYPTION_KEY` becomes a *meta-key* — rotating it invalidates SMTP + VAPID + every user's LLM key in one stroke. Operator needs to know that.
+- **Con:** the SMTP password is needed by a background job (the alerts-email digest) that may run on a worker process with a different code path; verify it can read `AppSetting` cleanly.
+
+**Recommendation:** ship Bucket C *after* Bucket B has bedded in. The high-value move is Bucket B (12 vars promoted, no security trade-off). Bucket C is a nice-to-have that needs slightly more thought.
+
+#### Bucket D — desktop UX (orthogonal but related)
+
+Even after Buckets B + C land, a fresh desktop install still presents the user with at-minimum 2 env vars to set (`DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY`). For a household user who just double-clicked an AppImage / `.exe` / `.dmg`, that's still too much.
+
+The right pattern (matches Bitwarden Desktop, Mattermost Desktop, etc.):
+- The desktop wrapper (Electron / Tauri main process) owns a per-install JSON config at the OS's user-data path.
+- **First-run wizard** on the Electron side auto-generates both bootstrap keys (`Fernet.generate_key()` for the encryption key; `secrets.token_urlsafe(48)` for the session key) and writes them to the config file.
+- The wrapper's launcher reads that file and sets the env vars on the Python backend spawn. The user never sees an env var.
+- Subsequent launches are silent — config exists, keys already generated.
+
+This is **distinct from the server self-host path** (where env vars / systemd `EnvironmentFile=` / Docker `--env` are the right tool — operators have their own config management already and prefer it). The desktop bundle should *layer over* the env-var system, not replace it.
+
+**Coordination:** the existing desktop-bundle work (FU-327 — Windows + macOS desktop build scripts for the Piper bundle) is the natural home for the wrapper-side setup wizard. Don't ship the wizard before the Linux AppImage / Windows / macOS bundles are wired; pair them.
+
+### Sequencing recommendation
+
+1. **Bucket B promotion** (~half-day, pure win). New migration adds 12 columns to `AppSetting` (or extends existing settings rows); update `get_app_settings.py` + `update_app_settings.py` DTOs; remove the env reads from the 7 named modules and replace with `AppSetting.x` lookups. Admin Settings UI gets new sections (Email, Push, Voice/TTS, Audit retention). Old env vars become **deprecated fallbacks** (read if set, but the AppSetting wins) for one release, then dropped. **No security surface change** — these were never secrets.
+
+2. **Bucket C encryption** (~half-day, optional). New `AppSetting.{smtp_password_encrypted, vapid_private_key_encrypted}` columns. SMTP send path + push send path call `decrypt_api_key()` on use; SMTP-settings + push-settings admin UI accepts the plaintext on save and encrypts. Document the meta-key rotation impact. Env vars deprecated → dropped.
+
+3. **Desktop wrapper first-run wizard** (paired with FU-327, ~1 day). Per-install JSON config under the OS user-data path; auto-generate both bootstrap keys on first run; launcher reads + sets env. Skip the wizard entirely for the server self-host path (operator-managed env stays the recommended pattern there).
+
+### Why this is good engineering practice (not bikeshedding)
+
+- **Bootstrap vs runtime config is the canonical split** in every well-built self-hosted app (GitLab `gitlab.rb` vs application_settings; Discourse env vs site_settings; Mattermost `config.json` vs admin UI). Dora today blurs the line; the audit cleans it up.
+- **R-005 (distribution posture):** the same code runs as self-host single instance + managed instance + future SaaS. Today's env-heavy posture is fine for the first two; SaaS would need the runtime-config-in-DB pattern anyway. Doing it now means Path A doesn't need a re-architecture later.
+- **Operator-onboarding reduction is real UX value.** Going from "edit 19 env vars correctly" → "set 2 bootstrap vars, configure the rest in Settings" is the kind of friction reduction that decides whether someone actually self-hosts vs gives up.
+- **Aligns with the existing `AppSetting` pattern.** We already moved scanning, meal-planning, money, nutrition, etc. into per-install rows with admin-UI editing. SMTP / push / TTS / audit-retention are the same shape; they just got grandfathered into env earlier.
+
+### Out of scope (for clarity)
+
+- This FU does NOT propose touching the per-user `User.llm_*` columns shipped in FU-153 — those are the user's own config, not install config.
+- This FU does NOT propose moving `DORA_SECRET_KEY` or `DORA_LLM_KEY_ENCRYPTION_KEY` into the DB — those are the bootstrap pair and stay env-only.
+- This FU does NOT propose a "set arbitrary env vars from the admin UI" feature. That's the anti-pattern this FU exists to *avoid*.
+
+### Recommended resolution
+
+- **Step 1 (Bucket B)** — opportunistic, before the next self-hosted release. Highest leverage, smallest risk.
+- **Step 2 (Bucket C)** — only after Step 1 has shipped + bedded in. Optional unless the operator-onboarding metric is a priority.
+- **Step 3 (Desktop wizard)** — pair with FU-327 when the desktop-bundle work resumes. Don't ship in isolation.
+
+### Engineering-standards note
+
+This is large enough to warrant its own ADR when it lands (recommended title: "Operational config lives in `AppSetting`, not env"). The R-005 ("Portable data access & distribution posture") rule already implies this — explicitly calling it out in an ADR would put the principle in scope for every future "where should this config live?" call.
+
+
 ## [OPEN] FU-328 — Four pre-existing pytest failures (data_router / household_tz / product / recipe_is_planned)
 - **Raised:** 2026-06-29 (FU-288 resolution — full-suite run uncovered a
   *different* set of failures than FU-288 originally named).
@@ -1276,128 +1424,6 @@ long session summary. Distinct from the other logs:
   next needs Aldi pricing data, or as a focused session in the
   companion repo.
 
-## [OPEN] FU-153 — Assistant LLM config: per-user, reachability probe, multi-provider
-- **Raised:** 2026-06-12 (user feedback during FU-085 verify)
-- **Type:** design / proposal addition (no code yet)
-- **What:** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md §7` (new
-  section, this session) captures four interlocking changes to
-  the LLM client + config side, distinct from the §1–6 routing
-  refactor:
-  1. **§7.1 Per-user LLM config** — drop the singleton
-     `AppSetting.llm_*` and move it to `User.llm_*` (+ a
-     `master_llm_enabled` install-wide kill switch on
-     AppSetting). Households with two desktops each running
-     their own LLM stop sharing one URL.
-  2. **§7.2 Reachability probe** — new `GET
-     /api/assistant/ping` hit **once per chat open** (not per
-     message, not on a poll). Visible "AI mode unavailable —
-     using basic mode" banner + Retry when the user's
-     `llm_enabled` is true but their LLM doesn't answer.
-  3. **§7.3 Network-topology constraint** — document that the
-     backend (not the device) reaches the LLM URL. Operator
-     concern for household / remote-LLM setups; pure
-     documentation, no code.
-  4. **§7.4 Multi-provider** — abstract `LlmClient` with
-     `OllamaClient` (existing, moved) + `OpenAiClient` +
-     `AnthropicClient` + `GeminiClient`. Per-user
-     `llm_provider` enum + encrypted-at-rest API key column.
-     Different tool-call schemas adapt to a shared shape
-     before reaching `tools.py`.
-- **Sequencing (§7.5):** one migration ships §7.1 + §7.4
-  schema columns; provider implementations follow per-PR;
-  §7.2 probe lands last (cheap once per-user config is
-  available); §7.3 is docs only.
-- **Existing DORA-BOT feedback cross-ref (§7.6):** the
-  per-user mode toggle / "turn the bot off completely" /
-  "disabled if unavailable" items in `Feedback _ Fixes - as
-  of [06-Jun-2026].md` lines 452-460 pair directly with §7.1
-  + §7.2 — the toggle UI visibly reflects the probe result.
-- **Recommended resolution:** treat as the next chunked
-  IMPL plan after the FU-152 routing redesign (or before;
-  they're orthogonal but the per-user config is a
-  pre-requisite for the rules-router-per-user too). Pair
-  with the AI-mode design pass.
-- **State note 2026-06-12:** **user signed off** on §7.1–§7.4
-  as written, with one refinement folded into §7.1: the
-  per-user Assistant config lives in
-  `PreferencesSettings.vue` next to the existing C-cross
-  per-user toggles (`money_features_enabled`, etc.) — not a
-  net-new settings page. §7.3 (network-topology docs) was
-  explicitly accepted as "same connectivity story as the rest
-  of the app, nothing special". Next step: draft an IMPL plan
-  from §7 when this work is sequenced.
-
----
-
-## [RESOLVED-MINIMAL] FU-150 — Assistant chat-mode doesn't recognise dietary/cuisine queries
-- **Raised:** 2026-06-12
-- **Resolved (step 1, this session):** rule-based first-match-wins
-  matcher kept, but the `find_recipe` intent's trigger list now
-  catches the bare-noun cases ("i need a recipe", "any breakfast
-  ideas", "show me a vegetarian recipe", etc.) — and the handler
-  was rewritten to **stop yanking "the bit after a preposition"**
-  and instead tokenise the whole message (minus stopwords) and
-  substring-match each token against name + cuisine + category +
-  timeOfDay + dietaryTagNames. Vocab arrives via the extended
-  `RecipeSnapshot` (`dietaryTagNames`, `timeOfDay`) hydrated in
-  `DoraChat.vue` from the existing Pinia stores; vocab preload
-  was added to `ensureRecipeData()`. Net effect: "i need a
-  vegetarian recipe" → routes to find_recipe, filters by the
-  'vegetarian' dietary tag, lists the top matches. "Asian
-  breakfast recipe" → both 'asian' + 'breakfast' must hit
-  (cuisine + timeOfDay). Reply echoes the tokens it filtered on
-  so the user sees what was matched.
-  **Limitations of step 1 (kept as the structural follow-up FU-152):**
-  the matcher is still keyword-list + token-substring, with no
-  proper slot extraction or query parser. Stopword list is
-  hand-coded; synonyms ("veggie" → "vegetarian") aren't resolved;
-  composite phrases ("gluten free" survives because the tag name
-  matches, but two-word tags + free-text terms in the same
-  message can produce surprising AND-filters). The redesign in
-  FU-152 spec's the real fix; this RESOLVED-MINIMAL fixes the
-  user-visible "vegetarian"/"asian" failure mode now.
-
-## [OPEN] FU-152 — Chat-mode design: tokenise → slot-extract → filter (structural)
-- **Raised:** 2026-06-12 (offshoot of FU-150's minimal fix)
-- **Type:** design / structural improvement
-- **What:** The current chat is a "first-match-wins keyword
-  matcher" with hand-curated `matches[]` per intent + a handler
-  that pulls "the noun after a preposition" and substring-searches
-  recipe fields. FU-150 step 1 broadened the trigger list +
-  switched the handler to whole-message tokenisation, which is
-  enough for the dietary/cuisine cases but still scales linearly
-  in keyword count and produces brittle behaviour for compound
-  queries.
-- **Proposed redesign (two axes):**
-  1. **Vocab-derived triggers.** Load Cuisine + DietaryTag +
-     Tool catalogues at chat init. Each catalogue contributes
-     its names to a "term → intent" prior so the matcher knows
-     "vegetarian"/"asian"/"slow cooker" all route to
-     `find_recipe`. Auto-updates when the user adds new vocab.
-  2. **Slot extraction**, separate from intent detection. After
-     the intent fires, walk the message once and capture
-     `slots: {cuisines[], dietaryTags[], timeOfDay?,
-     stockItems[], freeText}`. Handlers consume slots
-     declaratively — `filterRecipes({ dietary: ['vegetarian'],
-     cuisine: 'asian' })` — instead of doing ad-hoc substring
-     searches.
-  3. **Intent scoring (optional)**: replace first-match-wins
-     with a scoring pass per intent (each contributes keyword
-     hits + vocab hits + structural cues). Highest-score intent
-     wins, tie → fallback. Catches "i'm hungry, what veggie
-     thing can I make?" routing to `whats_for_dinner` with a
-     dietary slot, rather than tripping `find_recipe` because
-     "recipe"-ish keyword fired first.
-  4. **Reply transparency**: show the slots the handler
-     applied ("Filtering by: vegetarian + asian"). Already
-     present in FU-150 step 1 via `queryDisplay`.
-- **Why deferred:** step 1 covers the immediate UX failure; the
-  full slot-extraction redesign is a separate, focused work
-  unit. Pair with the AI-mode sweep — the slot extractor is the
-  same shape of work whether the route resolves into the
-  rule-engine handler or the LLM handler.
-- **Recommended resolution:** later — pair with AI-mode design.
-
 ## [OPEN] FU-146 — Sweep external GitHub-issues references — DONE
 - **Raised:** 2026-06-12 (user browser verify of FU-085: "should
   remove any mention of github issues as the repo is now private")
@@ -1597,10 +1623,13 @@ long session summary. Distinct from the other logs:
   - **FU-149** — Cookbook overview missing "# ingredients"
     filter + sort axis.
   - **FU-150** — assistant chat-mode doesn't recognise dietary
-    or cuisine queries (item 9 partial fail).
+    or cuisine queries (item 9 partial fail). RESOLVED 2026-06-12
+    (minimal fix shipped). The structural redesign is folded into
+    `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` §2.2.1
+    rather than tracked as its own FU.
   FU-085 itself stays OPEN until items 3 (selectin), 5 (filters
   end-to-end), 6 (FU-147 fix verified), 8 (backup), 9 (FU-150
-  fix verified) are all green.
+  minimal fix verified in-browser) are all green.
 
 ## [OPEN] FU-312 — Pre-existing eslint error in `StockItemRow.vue` waste-undo handler
 - **Raised:** 2026-06-26 (surfaced during FU-209 verification)

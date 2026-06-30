@@ -58,6 +58,46 @@
 
         <q-separator />
 
+        <!-- FU-330 — AI-unavailable banner. Shows ONLY when the user has
+             configured AI mode (`llm_enabled=true`) but it's currently
+             unreachable / mis-configured. Plain Basic-mode users (no LLM
+             configured) never see this — Basic isn't a failure, it's a
+             valid baseline. -->
+        <q-banner
+            v-if="props.currentUser?.llm_enabled && aiActive === false"
+            class="dora-bg-negative-soft text-negative dora-chat-status-banner"
+            dense
+            rounded
+        >
+            <template #avatar>
+                <q-icon :name="ICONS.warning" size="18px" />
+            </template>
+            <div class="text-caption">
+                <strong>AI mode unavailable — using basic mode.</strong>
+                <div v-if="aiUnavailableReason" class="dora-text-secondary">
+                    {{ aiUnavailableReason }}
+                </div>
+            </div>
+            <template #action>
+                <BaseButton
+                    variant="ghost"
+                    dense
+                    size="sm"
+                    :loading="aiProbing"
+                    :icon="ICONS.refresh"
+                    label="Retry"
+                    @click="refreshAiStatus"
+                />
+                <BaseButton
+                    variant="ghost"
+                    dense
+                    size="sm"
+                    label="Settings"
+                    to="/settings/assistant"
+                />
+            </template>
+        </q-banner>
+
         <q-scroll-area
             ref="messagesScrollEl"
             class="col dora-chat-scroll"
@@ -380,6 +420,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { DoraMood } from 'src/components/dora/doraTypes';
@@ -828,6 +869,13 @@
     // A single timed-out chat call shouldn't downgrade the badge if the
     // model is still actually reachable; that caused visible flickering.
     const aiActive = ref<boolean | null>(null);
+    // FU-330 — reason string surfaced when the user has `llm_enabled=true`
+    // but `ai_available=false`. Drives the "AI mode unavailable" banner
+    // at the top of the chat panel + a Retry affordance. Null when AI is
+    // available (banner hidden) or when the user is in plain Basic mode
+    // (`llm_enabled=false`, no banner — Basic isn't an error).
+    const aiUnavailableReason = ref<string | null>(null);
+    const aiProbing = ref(false);
 
     // Tracks whether AI has been confirmed reachable at least once in this
     // session. Used to gate the "offline" face — without this, anyone who
@@ -836,9 +884,11 @@
     let aiEverAvailable = false;
 
     async function refreshAiStatus() {
+        aiProbing.value = true;
         try {
             const s = await assistantApi.getStatusAsync();
             aiActive.value = s.ai_available;
+            aiUnavailableReason.value = s.ai_available ? null : (s.reason ?? null);
             if (s.ai_available) {
                 aiEverAvailable = true;
                 emit('ai-offline', false);
@@ -847,7 +897,10 @@
             }
         } catch {
             aiActive.value = false;
+            aiUnavailableReason.value = "Couldn't reach the server to check AI status.";
             if (aiEverAvailable) emit('ai-offline', true);
+        } finally {
+            aiProbing.value = false;
         }
     }
 

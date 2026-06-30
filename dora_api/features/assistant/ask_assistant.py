@@ -21,15 +21,18 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 from uuid import UUID
 
+from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.assistant import (app_knowledge, confirm_actions,
                                           shopping_actions, tools)
+from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.routers import ASSISTANT_ROUTER
-from dora_api.infrastructure.api_response import ok
+from dora_api.infrastructure.api_response import ok, unauthorized
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.llm import LlmUnavailable, OllamaClient
+from dora_api.infrastructure.llm import LlmClient, LlmUnavailable, build_assistant_client
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -123,22 +126,37 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _build_assistant_client() -> OllamaClient:
-    """Build the LLM client from the admin's install-wide config. The assistant
-    is opt-in and bring-your-own-LLM; disabled or half-configured -> the client
-    reports unavailable -> the frontend uses its rule-based fallback."""
-    setting = get_or_create_app_setting(SqlAlchemyRepository())
-    return OllamaClient(
-        base_url=setting.llm_base_url,
-        model=setting.llm_model,
-        timeout_seconds=_LLM_TIMEOUT_SECONDS,
-        enabled=bool(setting.llm_enabled) and bool(setting.llm_base_url) and bool(setting.llm_model),
-    )
+def _build_client_for_current_user() -> LlmClient:
+    """FU-153 §7.1 — build the LLM client from the *current user's*
+    per-user config (provider + URL/model/API key), layered with the
+    install-wide ``AppSetting.master_llm_enabled`` kill-switch. Returns
+    an "unavailable" sentinel client when any prerequisite is missing
+    so the assistant handler's fallback path stays in charge of UX."""
+    user_id_raw = session.get(SESSION_USER_ID_KEY)
+    if not user_id_raw:
+        # Unauthenticated callers can't talk to the assistant (route-
+        # level check still applies); returning unavailable here is
+        # belt-and-braces.
+        from dora_api.infrastructure.llm.factory import _UnavailableClient
+        return _UnavailableClient("Not signed in.")
+    try:
+        user_id = UUID(user_id_raw)
+    except (ValueError, TypeError):
+        from dora_api.infrastructure.llm.factory import _UnavailableClient
+        return _UnavailableClient("Not signed in.")
+
+    repo = SqlAlchemyRepository()
+    user = repo.get(User).by_id(user_id)
+    if user is None:
+        from dora_api.infrastructure.llm.factory import _UnavailableClient
+        return _UnavailableClient("User not found.")
+    setting = get_or_create_app_setting(repo)
+    return build_assistant_client(user, master_enabled=bool(setting.master_llm_enabled))
 
 
 class AskAssistantHandler:
     def __init__(self):
-        self._llm = _build_assistant_client()
+        self._llm = _build_client_for_current_user()
 
     def handle(self, request: AskAssistantRequest) -> AssistantReplyDto:
         if not self._llm.is_available():
@@ -322,8 +340,27 @@ def _describe_add_plan(plan: dict) -> str:
 @ASSISTANT_ROUTER.route("/status", methods=["GET"])
 def assistant_status():
     """Whether the assistant will actually use AI right now (enabled, configured
-    and reachable). Drives the AI/Basic indicator in the chat UI."""
-    return ok({"ai_available": _build_assistant_client().is_available()})
+    and reachable). Drives the AI/Basic indicator in the chat UI.
+
+    FU-330 — when AI mode isn't available, return a human-readable
+    `reason` so the chat banner can explain what's wrong rather than
+    silently degrading ("Your LLM at <host> didn't respond" beats no
+    signal). The reason string comes from `_UnavailableClient.reason`
+    (factory-built sentinel) for config-shape failures; for live
+    reachability failures it asks the real client to probe."""
+    client = _build_client_for_current_user()
+    available = client.is_available()
+    reason: str | None = None
+    if not available:
+        # Factory sentinels carry their reason verbatim; real clients
+        # ran a network probe inside `is_available()` and don't expose
+        # a structured reason — fall back to a generic "didn't respond"
+        # so the SPA can still render a useful banner.
+        if hasattr(client, "reason"):
+            reason = getattr(client, "reason")
+        else:
+            reason = "Your LLM didn't respond. Check the URL/model on Settings → Assistant."
+    return ok({"ai_available": available, "reason": reason})
 
 
 @ASSISTANT_ROUTER.route("/ask", methods=["POST"])

@@ -232,6 +232,15 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Nutrition' }
                     },
                     {
+                        // FU-153 §7.1 — per-user Assistant config (provider +
+                        // URL/model/API key). Sibling to MoneySettings /
+                        // NutritionSettings; the install-wide master flag lives
+                        // separately on AdminSystemAssistantSettings.
+                        path: 'assistant',
+                        component: () => import('pages/settings/AssistantSettings.vue'),
+                        meta: { title: 'Assistant' }
+                    },
+                    {
                         path: 'about',
                         component: () => import('pages/settings/AboutSettings.vue'),
                         meta: { title: 'About' }

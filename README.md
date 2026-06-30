@@ -197,7 +197,15 @@ Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs
      `DORA_VAPID_SUBJECT` is the contact URL the push service uses to reach you if delivery breaks (`mailto:` or `https://`). Omitting any of the three leaves the sender in dry-run.
   3. Restart the API. The frontend's **Settings → Notifications → Push** toggle becomes enabled; subscribing happens browser-side and is bound to the configured public key.
 
-- **AI assistant (optional, bring-your-own-LLM):** Dora's chat can be backed by a language model you host yourself. It's off by default and falls back to a rule-based helper. Dora does **not** bundle, download, or dictate a model. To turn it on: (1) run an OpenAI-compatible LLM server that supports tool-calling — [Ollama](https://ollama.com) is the easy option: `ollama pull qwen2.5:7b` then `ollama serve`; (2) sign in as an admin and go to **Settings → System → AI assistant**; (3) enable it and enter your server's base URL (e.g. `http://localhost:11434`) and model name (e.g. `qwen2.5:7b`), then save. The model must be tool-capable (qwen2.5, llama3.1, etc.). The LLM runs wherever you host it (a desktop/home server); other devices reach Dora over the network as usual.
+- **AI assistant (optional, bring-your-own-LLM, per-user):** Dora's chat can be backed by a language model — Ollama you host yourself, or OpenAI / Anthropic / Google Gemini via your own API key. AI mode is configured **per account** (two people in a household can pick different providers), and it's off by default. Setup: (1) admin confirms the master switch is on at **Settings → System → AI assistant** (defence-in-depth kill-switch — on by default on new installs); (2) each account that wants AI goes to **Settings → Assistant**, picks a provider, fills in URL/model (Ollama) or API key + model (paid), and turns the AI-mode toggle on. The page has a **Test connection** button (rate-limited, audit-logged) so you can verify before flipping the toggle. For Ollama, `ollama pull qwen2.5:7b` + `ollama serve` is the canonical setup; the model must be tool-capable (qwen2.5, llama3.1, gpt-oss, etc.).
+
+  **Paid providers (one operator step):** the install needs the environment variable `DORA_LLM_KEY_ENCRYPTION_KEY` set so per-user API keys can be stored encrypted at rest. Ollama doesn't need this. Generate a key once with:
+  ```bash
+  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  ```
+  Put the output into the API server's environment (env file, systemd `EnvironmentFile=`, k8s Secret, whatever fits the deploy). Rotating the key invalidates every saved API key — users re-enter their key on next save.
+
+  **Network topology — important on multi-machine setups:** the Dora **backend** reaches the LLM, not your browser. On a single-laptop install (backend + LLM on the same box), the base URL is just `http://localhost:11434`. On a household setup with the backend on a NAS/Pi and an LLM on a different desktop, the backend has to be able to reach that desktop (LAN routing, Tailscale, or a port forward) — the URL you save in Settings is from the *backend's* point of view, not your phone's.
 
 ### Desktop bundle (Linux AppImage)
 

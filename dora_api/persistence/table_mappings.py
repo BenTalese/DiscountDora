@@ -79,9 +79,9 @@ def configure_mappings(db: SQLAlchemy):
     app_setting_table = Table(
         "AppSetting", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("llm_enabled", Boolean, nullable=False),
-        Column("llm_base_url", String(500), nullable=False),
-        Column("llm_model", String(255), nullable=False),
+        # FU-153 §7.1 — install-wide master kill-switch. Per-user URL /
+        # model / provider / API key live on the User table.
+        Column("master_llm_enabled", Boolean, nullable=False, server_default=true()),
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
@@ -787,6 +787,17 @@ def configure_mappings(db: SQLAlchemy):
         # Postgres/SQLite portability (R-005/006). Not deferred — it's tiny and
         # read on the /me path; never selected on user-list rows in practice.
         Column("dashboard_layout", Text, nullable=True),
+        # FU-153 §7.1 / §7.4 — per-user assistant config. `llm_provider`
+        # is a closed-set sentinel ('ollama' | 'openai' | 'anthropic' |
+        # 'gemini') validated at update_me. API key blob is Fernet
+        # ciphertext (see infrastructure/llm/key_encryption.py); deferred
+        # below so list endpoints never haul the bytes per row, same shape
+        # as `image`.
+        Column("llm_enabled", Boolean, nullable=False, server_default=false()),
+        Column("llm_provider", String(16), nullable=True),
+        Column("llm_base_url", String(500), nullable=True),
+        Column("llm_model", String(255), nullable=True),
+        Column("llm_api_key_encrypted", LargeBinary, nullable=True),
     )
 
     # C-10.1 — admin-minted bearer credential for `POST /api/ingest`. The
@@ -895,6 +906,10 @@ def configure_mappings(db: SQLAlchemy):
         # `has_image`. The `/users/<id>/image` route loads it on access;
         # list `has_image` is hydrated via a separate IS-NOT-NULL select.
         "image": deferred(user_table.c.image),
+        # FU-153 — defer the api-key ciphertext too; only the assistant
+        # request path needs the bytes. The /me DTO surfaces a derived
+        # `has_llm_api_key: bool` instead.
+        "llm_api_key_encrypted": deferred(user_table.c.llm_api_key_encrypted),
     })
 
     _mapper_registry.map_imperatively(ProductOffer, product_offer_table, properties={

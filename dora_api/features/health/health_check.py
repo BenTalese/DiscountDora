@@ -109,7 +109,11 @@ def _feature_flags() -> dict[str, bool]:
             SqlAlchemyRepository
         repo = SqlAlchemyRepository()
         setting = get_or_create_app_setting(repo)
-        flags["assistant"] = bool(setting.llm_enabled)
+        # FU-153 §7.1 — install-wide assistant gate is now just the
+        # master kill-switch. Per-user enable + provider config layers on
+        # top (see auth/update_me); useFeatureFlags wires the master flag
+        # as the "feature is available here at all" signal.
+        flags["assistant"] = bool(setting.master_llm_enabled)
         flags["scanning"] = bool(setting.scanning_enabled)
         flags["meal_planning"] = bool(setting.meal_planning_enabled)
         flags["money"] = bool(setting.money_enabled)

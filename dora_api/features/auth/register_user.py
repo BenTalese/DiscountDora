@@ -106,6 +106,17 @@ class AuthenticatedUserDto:
     # hidden set), or None when the user hasn't customised. The SPA parses it
     # to seed the dashboard; the backend treats it as an opaque string.
     dashboard_layout: str | None
+    # FU-153 §7.1 / §7.4 — per-user assistant config. Plaintext API key
+    # is never echoed back — the wire-side carries a derived
+    # `has_llm_api_key: bool` (same shape as `has_image`). The other
+    # four fields round-trip directly so the Settings page can show /
+    # edit them; the actual provider client is built server-side per
+    # request (factory.build_assistant_client).
+    llm_enabled: bool
+    llm_provider: str | None
+    llm_base_url: str | None
+    llm_model: str | None
+    has_llm_api_key: bool
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -151,6 +162,11 @@ class AuthenticatedUserDto:
             alerts_email_day=int(user.alerts_email_day),
             has_image=user.image is not None,
             dashboard_layout=user.dashboard_layout,
+            llm_enabled=bool(user.llm_enabled),
+            llm_provider=user.llm_provider,
+            llm_base_url=user.llm_base_url,
+            llm_model=user.llm_model,
+            has_llm_api_key=user.llm_api_key_encrypted is not None,
         )
 
 

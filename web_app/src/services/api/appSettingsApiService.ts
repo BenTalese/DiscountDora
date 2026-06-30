@@ -1,9 +1,10 @@
 import AxiosHttpClient from './axiosHttpClient';
 
 export type AppSettings = {
-    llm_enabled: boolean;
-    llm_base_url: string;
-    llm_model: string;
+    // FU-153 §7.1 — single install-wide master kill-switch for the
+    // assistant feature. Per-user LLM URL/model/provider/API key live
+    // on the User row (see authStore.currentUser.llm_*).
+    master_llm_enabled: boolean;
     scanning_enabled: boolean;
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: boolean;

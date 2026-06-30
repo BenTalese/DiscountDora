@@ -76,8 +76,23 @@ export type CommitResult = {
 export default class AssistantApiService {
     private httpClient = new AxiosHttpClient();
 
-    getStatusAsync = async (): Promise<{ ai_available: boolean }> =>
-        await this.httpClient.get<{ ai_available: boolean }>('/assistant/status');
+    getStatusAsync = async (): Promise<{ ai_available: boolean; reason: string | null }> =>
+        await this.httpClient.get<{ ai_available: boolean; reason: string | null }>('/assistant/status');
+
+    /** FU-332 — per-user "Test connection" probe. `api_key === null`
+     *  (or omitted) falls back to the user's saved encrypted key for
+     *  paid providers — lets the SPA probe without forcing the user
+     *  to re-type the masked field. */
+    probeAsync = async (command: {
+        provider: 'ollama' | 'openai' | 'anthropic' | 'gemini';
+        base_url?: string | null;
+        model?: string | null;
+        api_key?: string | null;
+    }): Promise<{ available: boolean; reason: string | null; models: string[] | null }> =>
+        await this.httpClient.post<
+            { available: boolean; reason: string | null; models: string[] | null },
+            typeof command
+        >('/assistant/probe', command);
 
     askAsync = async (message: string, currentPath: string): Promise<AssistantReply> =>
         await this.httpClient.post<AssistantReply>('/assistant/ask', {

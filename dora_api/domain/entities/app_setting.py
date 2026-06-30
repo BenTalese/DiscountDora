@@ -17,9 +17,12 @@ class AppSetting(BaseEntity):
     install-wide flag, off by default. Scanning is navigation-only — it never
     does live deal lookup.
     """
-    llm_enabled: bool = False
-    llm_base_url: str = ""
-    llm_model: str = ""
+    # FU-153 §7.1 — single install-wide kill-switch for the whole assistant
+    # feature. Defence in depth: a user can configure their own LLM per
+    # §7.1, but the admin keeps a master toggle that forces every user's
+    # AI mode off regardless. Per-user URL / model / provider / API key
+    # live on User (see entity below).
+    master_llm_enabled: bool = True
     scanning_enabled: bool = False
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6). Surface
     # via `/api/health features.*` + admin-only `PATCH /api/admin/feature-
@@ -77,9 +80,7 @@ class AppSetting(BaseEntity):
     unit_pricing_locale: str = "AU"
 
     class Fields(BaseEntity.Fields):
-        LLM_ENABLED = "llm_enabled"
-        LLM_BASE_URL = "llm_base_url"
-        LLM_MODEL = "llm_model"
+        MASTER_LLM_ENABLED = "master_llm_enabled"
         SCANNING_ENABLED = "scanning_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"

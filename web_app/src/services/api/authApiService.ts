@@ -77,6 +77,16 @@ export type UpdateMeCommand = {
      *  hidden set). A string sets it; `null` clears it back to the default
      *  layout. Omitting it leaves it untouched. */
     dashboard_layout?: string | null;
+    /** FU-153 §7.1 / §7.4 — per-user assistant config. `llm_provider` is one
+     *  of `'ollama' | 'openai' | 'anthropic' | 'gemini'`; URL/model are the
+     *  per-provider fields; `llm_api_key` is write-only (server encrypts on
+     *  save), `clear_llm_api_key: true` removes the saved key. */
+    llm_enabled?: boolean;
+    llm_provider?: 'ollama' | 'openai' | 'anthropic' | 'gemini' | null;
+    llm_base_url?: string | null;
+    llm_model?: string | null;
+    llm_api_key?: string | null;
+    clear_llm_api_key?: boolean;
 };
 export type ChangePasswordCommand = {
     current_password: string;

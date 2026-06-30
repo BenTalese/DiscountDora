@@ -15,9 +15,9 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 @dataclass(frozen=True, slots=True)
 class AppSettingsDto:
-    llm_enabled: bool
-    llm_base_url: str
-    llm_model: str
+    # FU-153 §7.1 — install-wide master kill-switch (replaces the
+    # per-install LLM URL/model/enabled config, which moved to User).
+    master_llm_enabled: bool
     scanning_enabled: bool
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
@@ -41,9 +41,7 @@ class AppSettingsDto:
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
     return AppSettingsDto(
-        llm_enabled=bool(setting.llm_enabled),
-        llm_base_url=setting.llm_base_url or "",
-        llm_model=setting.llm_model or "",
+        master_llm_enabled=bool(setting.master_llm_enabled),
         scanning_enabled=bool(setting.scanning_enabled),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
@@ -66,5 +64,5 @@ def get_app_settings():
     if err is not None:
         return err
     setting = get_or_create_app_setting(SqlAlchemyRepository())
-    _Logger.debug("Served app settings (llm_enabled=%s)", setting.llm_enabled)
+    _Logger.debug("Served app settings (master_llm_enabled=%s)", setting.master_llm_enabled)
     return ok(_to_dto(setting))

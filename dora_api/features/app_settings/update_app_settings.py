@@ -22,9 +22,10 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    llm_enabled: bool | None = None
-    llm_base_url: str | None = Field(default=None, max_length=500)
-    llm_model: str | None = Field(default=None, max_length=255)
+    # FU-153 §7.1 — single install-wide master kill-switch for the
+    # assistant feature. Per-user LLM URL/model/provider/API key live on
+    # the User row now (see auth/update_me).
+    master_llm_enabled: bool | None = None
     scanning_enabled: bool | None = None
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool | None = None
@@ -66,12 +67,8 @@ class UpdateAppSettingsHandler:
         setting = get_or_create_app_setting(self.repository)
         set_fields = request.model_fields_set
 
-        if "llm_base_url" in set_fields:
-            setting.llm_base_url = (request.llm_base_url or "").strip()
-        if "llm_model" in set_fields:
-            setting.llm_model = (request.llm_model or "").strip()
-        if "llm_enabled" in set_fields and request.llm_enabled is not None:
-            setting.llm_enabled = request.llm_enabled
+        if "master_llm_enabled" in set_fields and request.master_llm_enabled is not None:
+            setting.master_llm_enabled = request.master_llm_enabled
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
         # C-cross Chunk 1 — install feature flags. Partial-update semantics
@@ -139,12 +136,9 @@ class UpdateAppSettingsHandler:
                 )
             setting.product_search_url = _Url
 
-        # Enabling without a connection is a misconfiguration — the assistant
-        # would just silently fall back. Reject it so the admin gets told.
-        if setting.llm_enabled and (not setting.llm_base_url or not setting.llm_model):
-            return UpdateAppSettingsResponse(
-                invalid_reason="Set both the LLM base URL and model before enabling the assistant."
-            )
+        # FU-153 §7.1 — the install-wide setting is now a master kill-
+        # switch only; the per-user "have you finished setting up?"
+        # validation moved to auth/update_me.py.
 
         self.repository.save_changes()
         return UpdateAppSettingsResponse(dto=_to_dto(setting))
@@ -161,5 +155,5 @@ def update_app_settings():
     _Response = UpdateAppSettingsHandler().handle(_Request)
     if _Response.invalid_reason is not None:
         return bad_request("Invalid settings.", detail=_Response.invalid_reason)
-    _Logger.info("Admin updated app settings (llm_enabled=%s)", _Response.dto.llm_enabled)
+    _Logger.info("Admin updated app settings (master_llm_enabled=%s)", _Response.dto.master_llm_enabled)
     return ok(_Response.dto)

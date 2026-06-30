@@ -129,6 +129,29 @@ ALERTS_EMAIL_CADENCE_VALUES = (
     ALERTS_EMAIL_CADENCE_WEEKLY,
 )
 
+# FU-153 §7.4 — per-user LLM provider. Closed set validated at the
+# update_me boundary (R-010 carve-out, same shape as nutrition_mode /
+# alerts_email_cadence). Ollama is the local/free path; OpenAI /
+# Anthropic / Gemini are paid API providers that additionally require
+# an encrypted API key.
+LLM_PROVIDER_OLLAMA = "ollama"
+LLM_PROVIDER_OPENAI = "openai"
+LLM_PROVIDER_ANTHROPIC = "anthropic"
+LLM_PROVIDER_GEMINI = "gemini"
+ALLOWED_LLM_PROVIDERS = (
+    LLM_PROVIDER_OLLAMA,
+    LLM_PROVIDER_OPENAI,
+    LLM_PROVIDER_ANTHROPIC,
+    LLM_PROVIDER_GEMINI,
+)
+# Subset that needs an API key — used by update_me to decide when to
+# fail-fast if the install hasn't configured key encryption.
+LLM_PROVIDERS_REQUIRING_API_KEY = (
+    LLM_PROVIDER_OPENAI,
+    LLM_PROVIDER_ANTHROPIC,
+    LLM_PROVIDER_GEMINI,
+)
+
 
 @dataclass
 class User(BaseEntity):
@@ -243,6 +266,22 @@ class User(BaseEntity):
     # presentation belongs to the client) — we persist it verbatim so it
     # survives a cache clear and follows the user across devices.
     dashboard_layout: str | None = None
+    # FU-153 §7.1 / §7.4 — per-user assistant config. Replaces the
+    # singleton AppSetting.llm_* row. `llm_enabled` is the user's own
+    # opt-in; the install-wide `AppSetting.master_llm_enabled` is layered
+    # on top (both must be True for AI mode to fire). `llm_provider` is a
+    # closed-set sentinel (R-010, ALLOWED_LLM_PROVIDERS). For Ollama,
+    # `llm_base_url` + `llm_model` are required; for OpenAI / Anthropic /
+    # Gemini, `llm_api_key_encrypted` + `llm_model` are required and the
+    # base URL is optional (only used to point at a self-hosted relay).
+    # The api-key blob is Fernet ciphertext — see
+    # `infrastructure/llm/key_encryption.py`. Plaintext never leaves the
+    # handler that writes it; reads return `has_llm_api_key: bool`.
+    llm_enabled: bool = False
+    llm_provider: str | None = None
+    llm_base_url: str | None = None
+    llm_model: str | None = None
+    llm_api_key_encrypted: bytes | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -277,3 +316,8 @@ class User(BaseEntity):
         ALERTS_EMAIL_DAY = "alerts_email_day"
         IMAGE = "image"
         DASHBOARD_LAYOUT = "dashboard_layout"
+        LLM_ENABLED = "llm_enabled"
+        LLM_PROVIDER = "llm_provider"
+        LLM_BASE_URL = "llm_base_url"
+        LLM_MODEL = "llm_model"
+        LLM_API_KEY_ENCRYPTED = "llm_api_key_encrypted"

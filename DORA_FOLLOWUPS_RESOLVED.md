@@ -10,6 +10,228 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-332 — Per-user "Test" button in AssistantSettings.vue
+- **Raised:** 2026-06-29 (FU-153 PR1 close-out — deferred from §7).
+- **Type:** UX polish / security design.
+- **Resolution (2026-06-29):** shipped same day as PR1 in a PR2 sweep.
+  New `POST /api/assistant/probe` endpoint at
+  `dora_api/features/assistant/probe_assistant.py`. Threat model
+  documented in the module docstring (SSRF surface — gated by per-user
+  rate-limit `assistant.probe` at 10/min via the existing
+  `infrastructure/auth_helpers.rate_limit`, and an `audit_emit(
+  'assistant.probe', payload={provider, target_host, available})` row
+  per call). Request body: `{provider, base_url?, model, api_key?}`.
+  Key resolution: plaintext from the body wins (lets the user test a
+  freshly-typed key); falls back to the saved encrypted blob via
+  `decrypt_api_key` so the SPA doesn't have to round-trip the
+  masked field every probe. For Ollama, a successful probe also
+  returns the detected model list (the SPA shows the count). Frontend:
+  `AssistantSettings.vue` renders a "Test connection" button under
+  each provider's fields with inline success/failure status; result
+  is cleared whenever any field changes so a stale green tick can't
+  mislead. **No host allowlist** — household installs legitimately
+  probe loopback + LAN URLs (the audit log + rate cap are the
+  deliberate trade-off, called out in the module docstring).
+
+---
+
+## [RESOLVED] FU-331 — §7.3 network-topology docs sweep (HelpPage + admin docs)
+- **Raised:** 2026-06-29 (FU-153 PR1 close-out — §7.3 deferred).
+- **Type:** documentation.
+- **Resolution (2026-06-29):** shipped same day as PR1.
+  **HelpPage** ("Dora itself" guide group): the existing
+  `Set up the AI assistant (admin)` entry rewritten for the new
+  per-user shape (provider matrix, Test connection affordance, per-
+  account flow); two new entries — *AI mode says "unavailable" — why?*
+  (links the §7.2 banner to common causes), *Network topology: who
+  reaches the LLM?* (the backend, not the browser; what that means
+  for NAS/Pi installs); a fifth, *Admin: install-wide AI master
+  switch + API-key encryption*, documents the
+  `DORA_LLM_KEY_ENCRYPTION_KEY` env var with a Fernet generator
+  one-liner. **README** assistant bullet rewritten end-to-end:
+  the per-user pattern, all four providers, the encryption-key
+  env var, and the multi-machine network-topology gotcha.
+  `AssistantSettings.vue`'s inline blurb kept (the page-local hint
+  is still useful at the point of edit; HelpPage carries the
+  longer-form material now).
+- **Notably NOT done:** `docs/01_charter/RECONCILED_FINISHING_PLAN.md`
+  wasn't touched — the only references there are bullet line items
+  that point at the proposal file (which is now the canonical
+  source). No drift to fix.
+
+---
+
+## [RESOLVED] FU-330 — §7.2 reachability probe + AI-unavailable banner
+- **Raised:** 2026-06-29 (FU-153 PR1 close-out — §7.2 deferred).
+- **Type:** UX polish.
+- **Resolution (2026-06-29):** shipped same day as PR1.
+  **Backend**: `_UnavailableClient` (factory sentinel in
+  `infrastructure/llm/factory.py`) exposes its `reason` as a public
+  property. `GET /api/assistant/status` extended to return
+  `{ai_available, reason}` — factory sentinels surface their own
+  reason verbatim (config-shape failures: missing provider, missing
+  key, encryption unconfigured, master flag off, …); live-probe
+  failures fall back to a generic "Your LLM didn't respond. Check
+  the URL/model on Settings → Assistant." copy so the banner is
+  still useful.
+  **Frontend**: `DoraChat.vue` already probed `/assistant/status`
+  on chat-panel mount + after a failed `/ask`; the existing
+  `refreshAiStatus()` now also captures `reason` + an `aiProbing`
+  ref. A new `q-banner` renders at the top of the chat panel —
+  between the header and the message scroll area — when
+  `currentUser.llm_enabled === true && aiActive === false`. Banner
+  carries the reason as a secondary line + a **Retry** affordance
+  (re-runs `refreshAiStatus()`) and a quick link to
+  **/settings/assistant**. **Plain Basic-mode users
+  (`llm_enabled === false`) never see the banner** — Basic isn't a
+  failure, it's the valid baseline.
+  **Per the proposal:** probe-once-per-open, never on a timer; the
+  existing per-request `LlmUnavailable` fallback in
+  `AssistantHandler` stays as the safety net for "LLM died
+  mid-conversation" (the banner appears on that fall-through too
+  because the next `refreshAiStatus()` call after a failed `/ask`
+  picks it up).
+
+---
+
+## [RESOLVED] FU-153 — Assistant LLM config: per-user, reachability probe, multi-provider
+- **Raised:** 2026-06-12 (user feedback during FU-085 verify).
+- **Type:** design / proposal addition → implementation.
+- **Resolution (2026-06-29):** §7.1 + §7.4 + §7.6 of
+  `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`
+  implemented in one PR. §7.2 + §7.3 deferred to focused follow-ups
+  (FU-330 / FU-331 / FU-332 in the open ledger).
+  - **Schema (migration `e5b9d3c7a8f2_20260629_per_user_llm_config`):**
+    drop `AppSetting.{llm_enabled,llm_base_url,llm_model}`; add
+    `AppSetting.master_llm_enabled` (defence-in-depth kill switch);
+    add `User.{llm_enabled, llm_provider, llm_base_url, llm_model,
+    llm_api_key_encrypted}` with `llm_provider` as a closed-set
+    sentinel (R-010, ALLOWED_LLM_PROVIDERS).
+  - **Encryption (`infrastructure/llm/key_encryption.py`):** Fernet
+    via the `DORA_LLM_KEY_ENCRYPTION_KEY` env var (R-005 distribution
+    posture — env-driven config). `EncryptionUnavailable` /
+    `EncryptionFailed` typed exceptions translate to friendly 422
+    responses; Ollama saves work without the env var (no key
+    needed). API-key column is `deferred()` in the mapping so list
+    endpoints never haul bytes per row (same shape as `image`).
+  - **Providers:** `openai_client.py`, `anthropic_client.py`,
+    `gemini_client.py` as siblings to the existing
+    `ollama_client.py`. Each `chat()` normalises its native
+    response to the OpenAI-style `{role, content, tool_calls?}`
+    shape `ask_assistant._parse_tool_call` already consumes —
+    Anthropic flattens its `content[]` `tool_use` blocks, Gemini
+    flattens its `parts[].functionCall`. Tool *schemas* are
+    converted per-provider too (OpenAI's `{type:'function',
+    function:{name,description,parameters}}` → Anthropic's
+    `{name,description,input_schema}`, → Gemini's
+    `functionDeclarations`).
+  - **Factory (`infrastructure/llm/factory.py`):**
+    `build_assistant_client(user, master_enabled=...)` dispatches
+    on `user.llm_provider`, decrypts the API key on demand, and
+    returns an `_UnavailableClient` sentinel whenever any
+    prerequisite is missing (master flag off, user opt-out, no
+    provider, missing key, encryption unconfigured, decryption
+    failure) — same shape as the previous `_build_assistant_client`,
+    just per-user. `ask_assistant.py:_build_client_for_current_user`
+    reads the Flask session for the current user.
+  - **API surface:** `PATCH /auth/me` accepts `llm_enabled`,
+    `llm_provider`, `llm_base_url`, `llm_model`, `llm_api_key`
+    (write-only, encrypted on save), `clear_llm_api_key`. Cross-
+    field validation: enabling AI with a paid provider requires
+    a saved API key. `GET /auth/me` returns `has_llm_api_key:
+    bool`, never the plaintext. `PATCH /api/app-settings` accepts
+    `master_llm_enabled` (admin-only via existing `_require_admin`).
+  - **Frontend (`AssistantSettings.vue`):** new sibling to
+    MoneySettings / NutritionSettings (R-007: didn't fold into
+    PreferencesSettings as the original §7.1 said — that page is
+    Appearance-only; the per-user opt-in pattern is one page per
+    family). Provider segmented control + conditional fields per
+    provider. Save-on-blur (R-020 carve-out). Sidebar entry +
+    route added (`/settings/assistant`).
+  - **Frontend (`AdminSystemAssistantSettings.vue`):** stripped
+    to a single master_llm_enabled toggle + a pointer to where
+    per-user config lives. Save-on-change (no draft window,
+    matches the other install-wide toggles).
+  - **`AuthenticatedUser` DTO (frontend + backend):** five new
+    fields (`llm_enabled`, `llm_provider`, `llm_base_url`,
+    `llm_model`, `has_llm_api_key`). Type-checks green
+    (`vue-tsc --noEmit`).
+- **Deferred to follow-ups:** §7.2 probe + banner → FU-330;
+  §7.3 docs sweep → FU-331; per-user Test button → FU-332.
+- **Pre-release breaking change:** the install-wide
+  `AppSetting.llm_*` columns are dropped (no production data to
+  preserve per the memory). Existing self-hosters re-enter their
+  config per-user on the new page.
+- **Operator action required:** to use any paid provider, set
+  `DORA_LLM_KEY_ENCRYPTION_KEY` in the API server's environment.
+  Generate with: `python -c "from cryptography.fernet import
+  Fernet; print(Fernet.generate_key().decode())"`. Ollama works
+  without it; the env var is only checked on paid-provider saves.
+
+---
+
+## [RESOLVED] FU-152 — Chat-mode design: tokenise → slot-extract → filter (structural)
+- **Raised:** 2026-06-12 (offshoot of FU-150's minimal fix).
+- **Type:** design / structural improvement.
+- **Resolution (2026-06-29):** folded into the existing assistant
+  rework doc rather than kept as a free-standing follow-up.
+  `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` now
+  carries a new **§2.2.1 — Rules-router mechanism (tokenise →
+  slot-extract → filter)** that owns the four-layer pipeline this FU
+  spec'd (vocab-derived triggers, slot extraction, optional intent
+  scoring, reply transparency), the synonym-table notes
+  ("veggie"/"gf"/"crockpot"), the `web_app/src/composables/
+  useChatRouter.ts` placement, and the **why this is paired with the
+  LLM-mode work** rationale (both routers want the same slot
+  extractor over the same vocab map). §5 sequencing was updated to
+  point at §2.2.1 from bullet 4 (the "rules router rebuild" step) and
+  to note that step 1 of the mechanism — vocab triggers + whole-
+  message tokenisation for `find_recipe` — is the *already-shipped*
+  FU-150 minimal fix. **Why the doc-merge, not just leaving the
+  FU:** the structural redesign isn't a "leftover deferred job", it's
+  the canonical design for one specific layer of the assistant
+  rework; keeping it as an FU duplicates a design call between two
+  homes and lets the proposal drift from the chosen mechanism. One
+  source of truth wins.
+- **Forward-pointing follow-ups (none new):** the existing FU-085
+  index entry was updated to note that FU-150's structural arm now
+  lives in the proposal, not as its own FU. The §7 IMPL-plan
+  follow-up (the per-user LLM config work) got a one-line cross-ref
+  to §2.2.1 so the next session knows the rules-router rebuild and
+  the per-user config work are orthogonal but share the vocab-map
+  hydration.
+
+---
+
+## [RESOLVED] FU-150 — Assistant chat-mode doesn't recognise dietary/cuisine queries
+- **Raised:** 2026-06-12.
+- **Type:** finding / chat-mode bug.
+- **Resolution (2026-06-12, formalised 2026-06-29):** the user-visible
+  failure mode ("vegetarian recipe" / "asian breakfast" not routing to
+  `find_recipe`) was fixed in-session 2026-06-12: trigger list
+  broadened to catch bare-noun cases, handler rewritten to **stop
+  yanking "the noun after a preposition"** in favour of whole-message
+  tokenisation against the user's own vocab (`name + cuisine +
+  category + timeOfDay + dietaryTagNames`). Vocab hydrated via the
+  extended `RecipeSnapshot` in `DoraChat.vue` from existing Pinia
+  stores; vocab preload added to `ensureRecipeData()`. Reply echoes
+  the matched tokens via `queryDisplay`. Net effect: "i need a
+  vegetarian recipe" routes to `find_recipe` + filters by the
+  'vegetarian' tag; "asian breakfast recipe" requires both 'asian'
+  (cuisine) + 'breakfast' (timeOfDay) to hit. The known limitations
+  of this step 1 (synonyms, two-word vocab, first-match-wins ordering
+  bias) are documented in
+  `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` §2.2.1
+  — the four-layer redesign that supersedes the minimal fix lives
+  there, not as a follow-up FU. Previously marked
+  `[RESOLVED-MINIMAL]` with a forward pointer to FU-152; both arms
+  now consolidated into the proposal, so the status flips to plain
+  `[RESOLVED]`.
+- **Browser-verify pending** under FU-085 (item 9 — same verify
+  dependency as the rest of the cookbook Wave-C work).
+
+---
+
 ## [RESOLVED] FU-229 — reports.py spend-by-store ignores `actual_unit_price` (ladder divergence)
 - **Raised:** 2026-06-22 (FU-227 chunk 5 — K2 ladder extract).
 - **Type:** finding (behaviour inconsistency).

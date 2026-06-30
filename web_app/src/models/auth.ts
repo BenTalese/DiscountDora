@@ -121,4 +121,15 @@ export type AuthenticatedUser = {
     // dashboard to seed card order/visibility; persisted via PATCH /auth/me so
     // it survives a cache clear and follows the user across devices.
     dashboard_layout: string | null;
+    // FU-153 §7.1 / §7.4 — per-user assistant config. `llm_provider` picks
+    // which client family to build server-side; the relevant of
+    // {`llm_base_url`, `llm_model`, `has_llm_api_key`} are required per
+    // provider. `has_llm_api_key` is derived server-side from whether an
+    // encrypted blob exists — the plaintext key never travels back.
+    llm_enabled: boolean;
+    llm_provider: 'ollama' | 'openai' | 'anthropic' | 'gemini' | null;
+    llm_base_url: string | null;
+    llm_model: string | null;
+    has_llm_api_key: boolean;
 };
+export type LlmProvider = NonNullable<AuthenticatedUser['llm_provider']>;

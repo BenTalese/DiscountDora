@@ -328,12 +328,28 @@
                 {
                     title: 'Can Dora do free-form questions?',
                     summary:
-                        "Only when an admin has connected the AI assistant (Settings > System). With it on, I understand plain-language questions about your data, suggest recipes, and add to your shopping list. With it off, I'm a simpler rule-based helper that matches keywords.",
+                        "Only when you've configured AI mode for your account (Settings > Assistant). With it on, I understand plain-language questions about your data, suggest recipes, and add to your shopping list. With it off, I'm a simpler rule-based helper that matches keywords. AI mode is per-account, so two people in the same household can use different providers.",
                 },
                 {
-                    title: 'Set up the AI assistant (admin)',
+                    title: 'Set up AI mode (per account)',
                     summary:
-                        "The assistant is opt-in and uses a language model you host yourself (e.g. Ollama). Install Ollama on a machine on your network, pull a tool-capable model like qwen2.5:7b, then in Settings > System > AI assistant enter its base URL (e.g. http://localhost:11434) and model name, enable, and save. Nothing is downloaded or enabled by default.",
+                        "Go to Settings > Assistant. Pick a provider — Ollama (local LLM you run yourself, no API key), or OpenAI / Anthropic / Google Gemini (paid hosted APIs, bring your own key). For Ollama: enter the base URL (e.g. http://localhost:11434) + a tool-capable model like qwen2.5:7b. For paid providers: paste your API key + pick a model. Use Test connection to verify before turning AI mode on. Off by default.",
+                    path: '/settings/assistant',
+                },
+                {
+                    title: 'AI mode says "unavailable" — why?',
+                    summary:
+                        "The chat panel shows an \"AI mode unavailable\" banner when you've turned AI on but the configured LLM didn't respond. Common causes: your Ollama server isn't running; the API key is wrong; the model name is mistyped; or the backend can't reach the URL (see network topology below). Click Retry on the banner after fixing it, or hit Test connection in Settings > Assistant first to find the issue before turning AI on.",
+                },
+                {
+                    title: "Network topology: who reaches the LLM?",
+                    summary:
+                        "The Dora backend reaches your LLM, not your browser. That means the backend's network has to see your LLM's URL. On a single-laptop install (backend + LLM on the same box) this is just localhost. On a household setup with the backend on a NAS/Pi and an LLM on a different desktop, the backend needs to be able to reach that desktop (LAN routing, Tailscale, or a port forward). The base URL you save in Settings is from the *backend's* point of view.",
+                },
+                {
+                    title: "Admin: install-wide AI master switch + API-key encryption",
+                    summary:
+                        "Admins get a single master kill-switch at Settings > System > AI assistant: when off, every account's AI mode is forced off regardless of personal setting (defence in depth). For paid providers, the install needs the environment variable DORA_LLM_KEY_ENCRYPTION_KEY set so user API keys can be stored encrypted at rest. Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
                     path: '/settings/admin/system/assistant',
                 },
             ],

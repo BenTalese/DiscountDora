@@ -48,6 +48,7 @@
         { path: '/settings/money', label: 'Money', icon: ICONS.savings },
         { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
         { path: '/settings/nutrition', label: 'Nutrition', icon: ICONS.restaurant },
+        { path: '/settings/assistant', label: 'Assistant', icon: ICONS.smart_toy },
         { path: '/settings/about', label: 'About', icon: ICONS.info },
     ];
 

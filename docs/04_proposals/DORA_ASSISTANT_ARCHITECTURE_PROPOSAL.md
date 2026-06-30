@@ -59,6 +59,135 @@ The only legitimate difference between AI and Basic mode is **how user text maps
 
 Crucially, the **rules router calls the same server capabilities** the LLM does. Basic mode stops being a separate, impoverished feature set — it's a dumber *router* over the *same* abilities. "What's the cliff?" disappears: Basic mode can do everything AI mode can *that it can successfully parse*; it just parses less cleverly. A capability is never silently unavailable.
 
+### 2.2.1 Rules-router mechanism — tokenise → slot-extract → filter
+
+> **Status:** the FU-150 *minimal* fix already shipped (2026-06-12) —
+> broadened the `find_recipe` trigger list to catch bare-noun cases
+> ("i need a recipe", "any breakfast ideas", "show me a vegetarian
+> recipe") and rewrote the handler to **stop yanking "the noun after
+> a preposition"** in favour of tokenising the whole message (minus
+> stopwords) and substring-matching each token against `name +
+> cuisine + category + timeOfDay + dietaryTagNames`. Vocab arrives
+> via the extended `RecipeSnapshot` (`dietaryTagNames`, `timeOfDay`)
+> hydrated in `DoraChat.vue` from the existing Pinia stores. Net
+> effect: "i need a vegetarian recipe" routes to `find_recipe` +
+> filters by the 'vegetarian' tag; "asian breakfast recipe" requires
+> both 'asian' (cuisine) + 'breakfast' (timeOfDay) to hit. Reply
+> echoes the matched tokens via `queryDisplay`.
+>
+> What lands here in §2.2.1 is the **structural redesign** that
+> replaces that minimal fix once the registry from §2.1 + the
+> sequencing from §5 are in place. Keyword-list + token-substring
+> with a hand-coded stopword list doesn't scale — synonyms ("veggie"
+> → "vegetarian") aren't resolved, two-word tags + free-text in the
+> same message can produce surprising AND-filters, and the first-
+> match-wins matcher prefers whichever intent's keyword appears
+> first in the trigger list. The redesign below replaces that with
+> a four-layer pipeline so the rules router is a maintainable
+> equal-citizen alongside the LLM router, not a perpetually-leaky
+> keyword bag.
+
+The rules router runs the user's message through four layers, in
+order. Each layer is the consumer of the previous layer's output —
+no layer reaches back upstream.
+
+**Layer 1 — Vocab-derived triggers.** At chat init, load the Cuisine,
+DietaryTag, Category, MealSlot, and Tool catalogues (all already
+available via existing Pinia stores). Each catalogue name contributes
+a `term → intent-prior` entry into a single trigger map. The matcher
+now knows out of the box that "vegetarian"/"asian"/"slow cooker"/
+"breakfast" all route to `find_recipe`, *because the user added
+them as their own household vocab*. New vocab the user creates
+becomes a new trigger the next session over with no developer
+involvement.
+
+**Layer 2 — Slot extraction, separate from intent detection.** After
+the intent fires, walk the message once and capture slots
+declaratively:
+
+```ts
+type ChatSlots = {
+    cuisines: string[];      // Cuisine ids matched
+    dietaryTags: string[];   // DietaryTag ids matched
+    categories: string[];    // Category ids matched
+    timeOfDay: string | null;
+    tools: string[];
+    stockItems: string[];    // by stock_item_id
+    freeText: string;        // residue — non-vocab tokens
+};
+```
+
+Slot extraction uses the *same* vocab map as Layer 1 (one source of
+truth — feedback term-by-term is wasteful), augmented with a small
+synonym table (`veggie → vegetarian`, `gf → gluten-free`, `crockpot
+→ slow cooker`). Synonyms live on the server alongside the
+catalogues so a household admin could in principle curate them
+(out of scope for the initial drop; build the column).
+
+Handlers consume slots **declaratively**: `filterRecipes({
+dietary: ['vegetarian'], cuisine: 'asian' })`. No more ad-hoc
+substring searches inside the handler, no more "did this token
+come from a preposition?" parsing.
+
+**Layer 3 — Intent scoring (optional, post-shipment).** First-match-
+wins is brittle: "i'm hungry, what veggie thing can I make?" trips
+`find_recipe` because "recipe" appears in its trigger list, even
+though the message *means* "what's for dinner?". Replace with a
+score per intent — each intent contributes:
+
+- keyword hits (current heuristic);
+- vocab hits (cuisine/dietary/timeOfDay/etc.);
+- structural cues (does the message end in a question mark, does it
+  contain `?`-words like "what/which/should", does it contain an
+  action verb like "add/remove/plan"?).
+
+Highest-score intent wins; tie → the lower-confidence fallback that
+explains the ambiguity. Worth deferring until the data tools and
+slot extractor are in place so the scoring layer has something
+useful to score over.
+
+**Layer 4 — Reply transparency.** Already half-shipped in the FU-150
+minimal fix (`queryDisplay`). After the redesign: show the user the
+*slots the handler applied*, not just the raw token list —
+"Filtering by: vegetarian + asian breakfast" reads cleaner than
+"Matched tokens: vegetarian, asian, breakfast" and gives the user
+a way to spot misclassification ("I said *no* asian"). When the
+extractor *thinks* a token meant a slot but the intent didn't
+consume it, surface the residue in the same line ("Ignored: spicy
+— I don't have a 'spicy' filter") so the user learns the vocab
+shape.
+
+**Where this lives in the codebase:**
+
+- The vocab-trigger build runs alongside `ensureRecipeData()` in
+  `DoraChat.vue`, sharing the same Pinia hydration the FU-150 fix
+  already does.
+- The extractor + scorer live in `web_app/src/composables/
+  useChatRouter.ts` (new) — a single composable so the LLM router
+  can also call into the slot extractor for "the LLM said
+  `find_recipe(text='vegetarian asian dinner')`, resolve the
+  slots" cases. Two routers, one extractor.
+- The handler-side `filterRecipes({...})` is the **same shape** as a
+  capability call — slots in, capability args out — so this layer
+  drops cleanly into the §2.1 registry once the registry is
+  formalised.
+
+**What this fixes that FU-150's minimal patch left open:**
+
+- Synonyms / aliases (`veggie`, `gf`, `crockpot`).
+- Two-word vocab + free-text co-existing in one message.
+- First-match-wins ordering bias on the intent table.
+- "Filtered by" reply line that maps to *slots*, not raw tokens.
+
+**Why this is paired with the LLM-mode work.** Slot extraction is
+the same code path whether the route resolves to a rule-engine
+handler or the LLM handler — when the LLM says
+`find_recipe(text='vegetarian asian')`, the server still wants
+those resolved to `{ dietaryTags: ['vegetarian-id'], cuisines:
+['asian-id'] }` before hitting the recipe filter. Building the
+extractor once, shared between routers, is cheaper than building
+it twice and is the natural moment to do the structural work.
+
 ### 2.3 Contextual chips become pre-filled capability calls
 `doraContextualActions.ts` chips ("Add to list", "Find substitutes" on a stock page) stop being a third execution path. A chip becomes **a capability invocation with args pre-filled from page context** — routed through the *same* execution + gate as everything else. The "Add to list" chip then gets the same confirmation as the LLM's add-to-list, killing the no-confirmation third behavior.
 
@@ -97,7 +226,7 @@ The client-side "missing ingredients" recompute in `DoraChat.vue` is deleted —
 1. **Formalize the registry** — make `tools.py` capabilities self-describing (data/action, arg schema) as the single contract.
 2. **One confirmation renderer** — merge the two cards; drive from the capability shape.
 3. **Chips → capability calls** — route `doraContextualActions.ts` through execution + gate; delete the direct composable path.
-4. **Rules router over real capabilities** — rebuild Basic mode as a parser that resolves to registry capabilities; retire the canned `doraIntents.ts` responses.
+4. **Rules router over real capabilities** — rebuild Basic mode as a parser that resolves to registry capabilities; retire the canned `doraIntents.ts` responses. **The mechanism is specified in §2.2.1 (tokenise → slot-extract → filter, four layers).** Step 1 of that mechanism — vocab-derived triggers + whole-message tokenisation for `find_recipe` — already shipped on 2026-06-12 as the FU-150 minimal fix. The §2.2.1 redesign replaces that minimal version with the layered pipeline, sharing the slot extractor with the LLM router.
 5. **Delete client-derived logic** — remove the `DoraChat.vue` missing-ingredients recompute; consume server fields.
 
 ---
@@ -123,6 +252,66 @@ client + config** side, not the routing/registry side above.
 > connectivity story as the rest of the app — frontend needs the
 > backend, backend needs the LLM, no special case. Ready for an
 > IMPL plan to be drafted from this section.
+>
+> **PR1 shipped 2026-06-29 (FU-153):** §7.1 + §7.4 + §7.6 landed in
+> one PR, with two adjustments to what §7.1/§7.4 originally said.
+>
+> - **Settings home: not `PreferencesSettings.vue`.** That page
+>   ships Appearance only (theme + font + text-size); the actual
+>   per-user opt-in pattern in the codebase is *one page per
+>   family* (`MoneySettings.vue`, `NutritionSettings.vue`,
+>   `VoiceSettings.vue`). PR1 added a sibling
+>   `AssistantSettings.vue` instead of grafting an "AI" block onto
+>   Appearance. The sidebar entry sits between *Nutrition* and
+>   *About*.
+> - **Provider client location: kept in `infrastructure/llm/`,
+>   not moved to `features/assistant/llm/`.** The `LlmClient` ABC
+>   already lived under `infrastructure/llm/`; the three new
+>   provider classes (OpenAI, Anthropic, Gemini) ship as siblings
+>   to `OllamaClient` there. The factory (`factory.py`) and the
+>   key-encryption helper (`key_encryption.py`) sit in the same
+>   package. Less file motion (R-007); the abstraction already
+>   had the right home.
+>
+> **PR2 shipped same day 2026-06-29 (FU-330 + FU-331 + FU-332):**
+> the three §7 follow-ups also landed, finalising the feature.
+>
+> - **FU-330 — §7.2 probe + banner.** `/api/assistant/status` now
+>   returns `{ai_available, reason}` (factory sentinels surface
+>   their own reason; live-probe failures fall back to a generic
+>   "didn't respond" copy). `DoraChat.vue` renders a removable
+>   negative-soft banner at the top of the chat panel when the
+>   user has `llm_enabled=true` but `ai_available=false`,
+>   with a **Retry** affordance (re-runs `refreshAiStatus`) and
+>   a quick link to **Settings → Assistant**. Plain Basic-mode
+>   users (`llm_enabled=false`) never see it — Basic isn't a
+>   failure mode. Per the proposal: probe-once-per-open, no
+>   background polling.
+> - **FU-331 — §7.3 docs sweep.** HelpPage's "Dora itself" guide
+>   group gained two new entries explaining the
+>   backend-reaches-LLM network topology and the
+>   `DORA_LLM_KEY_ENCRYPTION_KEY` env var for paid providers
+>   (with a generator one-liner). README's AI-assistant
+>   bullet rewritten end-to-end: per-user pattern, all four
+>   providers, encryption-key setup, network topology gotcha.
+>   AssistantSettings.vue's inline help text kept (the page-
+>   local hint stays useful; the HelpPage now carries the
+>   longer-form coverage).
+> - **FU-332 — per-user probe / Test connection.** New
+>   `POST /api/assistant/probe` endpoint (separate from the
+>   admin `/api/app-settings/probe` — that one stays admin-only
+>   as the historic SSRF gate; the per-user version layers
+>   per-user rate-limiting at 10/min + audit logging via
+>   `audit_emit('assistant.probe', ...)` capturing actor +
+>   provider + target host + outcome). Request body falls back
+>   to the saved encrypted key when `api_key` is null so the
+>   SPA doesn't force the user to re-type the masked field for
+>   every probe. AssistantSettings.vue renders a **Test
+>   connection** button next to each provider's fields, with
+>   inline success/failure status (cleared on any field edit
+>   so a stale green tick can't mislead). For Ollama, a
+>   successful probe also reports how many models the endpoint
+>   advertises.
 
 ### 7.1 Per-user LLM config (replaces install-wide)
 

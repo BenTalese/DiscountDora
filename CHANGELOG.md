@@ -5,6 +5,55 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **AI assistant — finalised: probe banner, "Test connection" button,
+  topology docs — FU-330 + FU-331 + FU-332 (2026-06-29).** Same-day
+  PR2 over the per-user assistant work. **Banner**: the chat panel now
+  surfaces an inline *"AI mode unavailable — using basic mode"*
+  banner with a Retry button whenever a user who's turned AI mode on
+  finds their LLM unreachable (wrong URL, expired key, server down,
+  rotated encryption key). Plain Basic-mode users — who haven't
+  configured AI — don't see it. **Test connection**: Settings →
+  Assistant gains a *Test connection* button per provider that
+  probes the saved config (or freshly-typed draft values) without
+  forcing the user to commit. Rate-limited at 10/min per user,
+  every probe is audit-logged. **Docs**: HelpPage gets four new
+  "Dora itself" entries (provider matrix, unavailable-banner causes,
+  network topology — backend reaches the LLM not your browser,
+  admin master switch + key-encryption env var). README's
+  AI-assistant section rewritten for the per-user pattern, all four
+  providers, and the multi-machine topology gotcha.
+
+- **AI assistant — per-user config + four providers — FU-153 PR1
+  (2026-06-29).** The assistant's LLM config is now per-user instead
+  of install-wide. A new **Settings → Assistant** page lets each
+  household member pick a provider (Ollama, OpenAI, Anthropic, or
+  Google Gemini), enter the URL/model or API key it needs, and turn
+  AI mode on for *their own* account. The old install-wide
+  AppSetting.llm_* row is gone; in its place is a single admin
+  **master kill-switch** at System → AI assistant. The assistant
+  handler picks the current user's provider per request, so a
+  household with two desktops each running their own LLM can have
+  each user pointed at their own. API keys are encrypted at rest
+  with Fernet via the `DORA_LLM_KEY_ENCRYPTION_KEY` env var
+  (operator sets it once; Ollama works without it). The probe +
+  "AI unavailable" banner from proposal §7.2 + the broader help
+  docs from §7.3 + a per-user "Test connection" button are
+  deferred to FU-330/FU-331/FU-332.
+
+### Changed (process / non-product)
+- **Assistant chat-mode redesign folded into the existing proposal —
+  FU-152 + FU-150 retired (2026-06-29).**
+  `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` gained a
+  new **§2.2.1 — Rules-router mechanism (tokenise → slot-extract →
+  filter)** that owns the four-layer pipeline (vocab-derived triggers
+  → slot extractor → optional intent scoring → reply transparency)
+  previously spec'd in FU-152, plus a status note tying step 1 to the
+  already-shipped FU-150 minimal fix. §5 sequencing bullet 4 ("Rules
+  router over real capabilities") now points at §2.2.1 for the
+  mechanism. Both FUs flipped to `[RESOLVED]` and moved to
+  `DORA_FOLLOWUPS_RESOLVED.md`. No product code change.
+
 ### Fixed
 - **Spend-by-store report now honours `actual_unit_price` overrides —
   FU-229 (2026-06-29).** The Money-zone "Spend by store" widget

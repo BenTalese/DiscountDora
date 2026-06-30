@@ -11,8 +11,12 @@ def get_or_create_app_setting(repository: SqlAlchemyRepository) -> AppSetting:
     existing = repository.get(AppSetting).all()
     if existing:
         return existing[0]
+    # FU-153: install-wide LLM URL/model/enabled fields moved to the User
+    # row (per-user); only the master kill-switch lives here now (defaults
+    # to True so a fresh install allows users to opt in to AI mode
+    # individually).
     setting = AppSetting(
-        llm_enabled=False, llm_base_url="", llm_model="", scanning_enabled=False,
+        master_llm_enabled=True, scanning_enabled=False,
     )
     repository.add(setting)
     repository.save_changes()

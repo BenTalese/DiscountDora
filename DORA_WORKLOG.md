@@ -9,6 +9,75 @@ next.
 
 ---
 
+## 2026-07-01 — Header dropdown retired; Help + Account become peer icon buttons with shared active ring
+
+**Why:** user asked to turn the profile button into a normal clickable
+button (direct nav, no dropdown), move "Help & guides" up to be a
+peer of the profile button with the same active-ring affordance, and
+drop "Sign out" from the header entirely (already reachable from
+Settings → Account).
+
+**Changes:**
+- [`web_app/src/layouts/MainLayout.vue`](web_app/src/layouts/MainLayout.vue):
+  - **Dropdown killed.** The entire `<q-menu>` (Settings / Help &
+    guides / Sign out list) gone. The avatar's `BaseButton` now
+    carries `to="/settings/account"` — single click → direct nav. The
+    user's name/email block, the q-separator, and the three q-items
+    all retired with it.
+  - **Help icon button added as a peer**, between AlertsBell and the
+    avatar. Same `BaseButton variant="icon"` shell as the avatar,
+    `to="/help"`, content is a `<q-icon :name="ICONS.help_outline"
+    size="24px" />` wrapped in the shared active-ring span. Tooltip
+    reads "Help & guides".
+  - **Active predicate split.** The single `isAvatarSectionActive`
+    (which previously matched both `/settings` and `/help`) became
+    two separate computeds: `isAvatarActive` (matches `/settings*`)
+    and `isHelpActive` (matches `/help*`). New local
+    `matchesPrefix(prefix)` helper mirrors the
+    [`useMenuLinkActive`](web_app/src/components/menu/useMenuLinkActive.ts:18)
+    rule (`path === prefix || path.startsWith(prefix + '/')`). Each
+    button reads its own predicate so only the relevant ring lights
+    up on each section.
+  - **Ring class renamed** `dora-avatarRing` →
+    `dora-headerActiveRing` and its keyframes
+    `dora-avatarRing-pulse` → `dora-headerActiveRing-pulse`. Reflects
+    that the ring is no longer avatar-specific. CSS body unchanged
+    (same 3px outline, same flash → accent pulse keyframes, same
+    reduced-motion suppression).
+  - **`onLogout` removed** — only consumer was the dropdown's
+    Sign-out item. `authStore` and `router` imports stay (still used
+    by `currentUser` + `isAdmin` reads and the global keyboard
+    shortcuts).
+  - **Tooltips added** to both header buttons — username on avatar,
+    "Help & guides" on Help — so the loss of the dropdown labels
+    doesn't strand users hovering over icon-only buttons.
+
+**Layout (header right side, left → right):**
+`AlertsBell` · `Help (?)` · `Profile avatar`
+
+Sign-out destination unchanged — still on the Settings → Account
+page, in the existing "Sign out" red button section.
+
+**Engineering-standards close-gate:** no rule violations. The ring
+class rename + the `matchesPrefix` helper extraction both fall under
+R-019 (explicit/verbose over clever). No new ADR — the layout is a
+focused header reshuffle, not a recurring architectural decision.
+[`vue-tsc --noEmit`](web_app) + `eslint` clean.
+
+**Files modified:**
+[`web_app/src/layouts/MainLayout.vue`](web_app/src/layouts/MainLayout.vue),
+[`DORA_VERIFY.md`](DORA_VERIFY.md).
+
+**Next up:** browser-verify the 13 new DORA_VERIFY items under
+"Header peer buttons (Help + Account) with active ring." Particular
+attention to: (a) tooltip discoverability now that the dropdown's
+labels are gone, (b) the Sign-out path on Settings → Account is the
+only remaining sign-out surface, (c) keyboard `g h` shortcut still
+navigates to `/help` (route unchanged) and triggers the Help ring's
+pulse animation just like a click would.
+
+---
+
 ## 2026-06-30 — Avatar accent ring on Settings + Help & guides routes
 
 **Why:** follow-on to the main-menu stuck-indicator fix. User asked

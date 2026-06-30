@@ -782,14 +782,20 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] On any of the above pages, navigate to a different top-level (e.g. Cookbook → Stock) and back — flash colour briefly appears during the slide, then settles to accent on the new active button each time
 - [ ] No regression to the slide animation when clicking between top-level buttons — the indicator still slides smoothly across with the flash colour during the transition
 
-### Avatar accent ring for Settings + Help & guides — feature (2026-06-30)
-- [ ] Navigate to `/settings/account` (via avatar → Settings) — the avatar **pulses**: briefly appears in the "moving" colour (hot-pink in the default theme; matches the main-menu strip's slide-flash) at ~5px thick, then settles to the **3px accent ring** with a soft glow in ~550ms
-- [ ] Same pulse-then-settle on `/help` and `/help/dora`
-- [ ] Switch between Settings sub-pages (`/settings/account` → `/settings/preferences` → `/settings/notifications`) — ring stays lit throughout, **no re-pulse** between sub-pages (the class doesn't re-apply, so the keyframes don't re-fire)
-- [ ] Navigate from `/settings/account` → `/cookbook` — ring fades out smoothly (~320ms), main-menu Cookbook underline fades in. Reverse navigation pulses again on entry
-- [ ] Theme switch (default / Lemon / Pesto / etc.) — both the **flash** colour (pulse start) and the **accent** colour (resting) follow the theme's `--nav-slide-flash` + `--brand-accent` tokens
-- [ ] Mobile (`<md`): avatar still rings (header shown on mobile, just with hamburger swap)
-- [ ] **Reduced-motion** (DevTools → Rendering → "Emulate CSS prefers-reduced-motion: reduce"): the ring appears in the resting accent colour **without** the pulse beat; static activation only
+### Header peer buttons (Help + Account) with active ring — feature (2026-07-01)
+- [ ] Header right side shows three icons in order: AlertsBell · **Help & guides** (?) · **Profile avatar**. No dropdown chevron / menu anywhere
+- [ ] Click the Help icon → navigates to `/help` (no dropdown opens). Tooltip on hover reads "Help & guides"
+- [ ] Click the avatar → navigates to `/settings/account` (no dropdown opens). Tooltip on hover reads the current username
+- [ ] No Sign-out anywhere in the header — Sign-out lives only on Settings → Account (the existing red "Sign out" button on that page is still present and works)
+- [ ] On `/help` or `/help/dora`: **Help icon pulses** in the slide-flash colour, then settles into the 3px accent ring. Avatar stays inactive (no ring)
+- [ ] On any `/settings/*` page: **avatar pulses + settles** to the accent ring. Help icon stays inactive
+- [ ] Switching between Settings sub-pages (`/settings/account` → `/settings/preferences` → `/settings/notifications`) — avatar ring stays lit, **no re-pulse**
+- [ ] Switching between `/help` and `/help/dora` — Help ring stays lit, **no re-pulse**
+- [ ] Cross between sections (`/settings/account` → `/help`): avatar ring fades out (~320ms), Help ring pulses + settles. Reverse direction also smooth
+- [ ] Navigating between Help/Settings and the main menu (e.g. `/help` → `/cookbook`): header ring fades out, main-menu Cookbook underline fades in. No stuck flash colour
+- [ ] Theme switch — both buttons' flash + resting colours follow the active theme's `--nav-slide-flash` + `--brand-accent` tokens
+- [ ] Mobile (`<md`): both buttons render in the header (next to the AlertsBell), rings still work
+- [ ] **Reduced-motion** (DevTools → Rendering → "Emulate CSS prefers-reduced-motion: reduce"): rings appear in the resting accent colour **without** the pulse beat on either button
 
 ### R-016 lazy hydration sweep — five pages — origin FU-221
 - [ ] Cold-load each of `/recipes`, `/recipes/<id>`, `/stock`, `/stock/<id>` — page renders normally (stock items + stock levels populate, no blank pickers / missing names)

@@ -25,24 +25,43 @@
 
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
+                <!-- Help & guides — peer of the profile button.
+                     Direct nav to `/help`; carries the same active-ring
+                     affordance as the avatar so the header advertises
+                     "you're somewhere reachable from here" when on a
+                     /help/* route. -->
                 <BaseButton
                     v-if="currentUser"
                     variant="icon"
-                    aria-label="Account menu"
+                    aria-label="Help & guides"
+                    to="/help"
+                >
+                    <span
+                        class="dora-headerActiveRing"
+                        :class="{ 'is-active': isHelpActive }"
+                    >
+                        <q-icon :name="ICONS.help_outline" size="24px" />
+                    </span>
+                    <q-tooltip>Help &amp; guides</q-tooltip>
+                </BaseButton>
+
+                <!-- Account / settings — direct nav, no dropdown.
+                     Sign-out lives on the Account settings page; the
+                     header dropdown was a duplicate path that mostly
+                     hid the destination behind an extra click. -->
+                <BaseButton
+                    v-if="currentUser"
+                    variant="icon"
+                    aria-label="Account settings"
+                    to="/settings/account"
                 >
                     <!-- Settings rebuild Phase 4: profile picture when set,
-                         else the original account-circle icon (preserved per
-                         the feedback).
-                         The accent ring around the avatar mirrors the main-
-                         menu strip's underline indicator: when the user is on
-                         a route that's reached from the avatar dropdown
-                         (Settings + Help & guides), the avatar becomes the
-                         "active" hint. Wrapping span gets the box-shadow ring
-                         since q-avatar's own shadow would clip against its
-                         circular mask. -->
+                         else the original account-circle icon. Wrapping
+                         span carries the box-shadow ring since q-avatar's
+                         circular mask would clip its own shadow. -->
                     <span
-                        class="dora-avatarRing"
-                        :class="{ 'is-active': isAvatarSectionActive }"
+                        class="dora-headerActiveRing"
+                        :class="{ 'is-active': isAvatarActive }"
                     >
                         <UserAvatar
                             :user-id="currentUser.user_id"
@@ -53,39 +72,7 @@
                             :username="currentUser.username"
                         />
                     </span>
-                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
-                        <q-list dense style="min-width: 200px">
-                            <q-item>
-                                <q-item-section>
-                                    <q-item-label class="text-weight-bold">
-                                        {{ currentUser.username }}
-                                    </q-item-label>
-                                    <q-item-label caption v-if="currentUser.email">
-                                        {{ currentUser.email }}
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                            <q-separator />
-                            <q-item clickable v-close-popup to="/settings/account">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.settings" />
-                                </q-item-section>
-                                <q-item-section>Settings</q-item-section>
-                            </q-item>
-                            <q-item clickable v-close-popup to="/help">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.help_outline" />
-                                </q-item-section>
-                                <q-item-section>Help & guides</q-item-section>
-                            </q-item>
-                            <q-item clickable @click="onLogout">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.logout" />
-                                </q-item-section>
-                                <q-item-section>Sign out</q-item-section>
-                            </q-item>
-                        </q-list>
-                    </q-menu>
+                    <q-tooltip>{{ currentUser.username }}</q-tooltip>
                 </BaseButton>
             </q-toolbar>
         </q-header>
@@ -263,17 +250,15 @@
         return base;
     });
 
-    // Routes reachable from the avatar dropdown (Settings + Help & guides).
-    // When the current route falls under one of these prefixes, the avatar
-    // gets the accent ring so the header still shows "you're somewhere" —
-    // mirrors the main-menu strip's underline indicator for top-level
-    // sections. Same prefix-match style as `useMenuLinkActive`.
-    const AVATAR_SECTION_PREFIXES = ['/settings', '/help'];
-    const isAvatarSectionActive = computed(() =>
-        AVATAR_SECTION_PREFIXES.some(
-            (p) => route.path === p || route.path.startsWith(p + '/'),
-        ),
-    );
+    // Two peer header buttons (Help + Account) each carry the active-ring
+    // affordance that mirrors the main-menu strip's underline indicator.
+    // Avatar lights up under `/settings/*`; Help lights up under `/help`
+    // / `/help/*`. Same prefix-match style as `useMenuLinkActive`.
+    function matchesPrefix(prefix: string): boolean {
+        return route.path === prefix || route.path.startsWith(prefix + '/');
+    }
+    const isAvatarActive = computed(() => matchesPrefix('/settings'));
+    const isHelpActive = computed(() => matchesPrefix('/help'));
 
     const leftDrawerOpen = ref(false);
 
@@ -281,10 +266,6 @@
         leftDrawerOpen.value = !leftDrawerOpen.value;
     }
 
-    async function onLogout() {
-        await authStore.logoutAsync();
-        void router.push('/login');
-    }
 </script>
 
 <style scoped lang="scss">
@@ -302,21 +283,23 @@
         padding: 0 12px;
     }
 
-    /* Avatar ring — the avatar's parallel to the main-menu strip's
-       underline indicator. Sits around the circular q-avatar via
-       box-shadow so we don't have to wrap the avatar in a padded box
-       that would shift layout. Two shadows: a 3px ring in the accent
-       colour (matches the strip's slide indicator's 3px height) plus a
-       soft glow (same `color-mix` shape as the strip's box-shadow).
-       Transition transparent → accent on activation and back on leave.
+    /* Shared active-ring for header peer buttons (Help + Account).
+       Each button's inner content (avatar or icon) is wrapped in a
+       `.dora-headerActiveRing` span that takes an `is-active` class
+       from the route. Box-shadow puts the ring outside the circular
+       click target without shifting layout — the avatar's mask would
+       have clipped its own shadow, hence the wrapping span (the icon
+       button gets the same wrap for visual consistency).
 
-       Activation also fires a one-shot pulse that starts in the
-       "moving" colour (`--nav-slide-flash`) and settles into the
-       resting accent — the avatar doesn't translate position the way
+       Two shadows: a 3px ring in the accent colour (matches the main-
+       menu strip's slide indicator height) + a soft glow (same
+       `color-mix` shape as the strip's box-shadow). Activation also
+       fires a one-shot pulse that starts in the strip's "moving"
+       colour (`--nav-slide-flash`) and settles into the resting
+       accent — the header button doesn't translate position the way
        the strip indicator does, so the colour transition IS the
-       motion. Mirrors the strip's slide-flash → accent settle even
-       though the avatar stays put. */
-    .dora-avatarRing {
+       motion. */
+    .dora-headerActiveRing {
         display: inline-flex;
         border-radius: 50%;
         box-shadow:
@@ -324,14 +307,14 @@
             0 0 10px transparent;
         transition: box-shadow var(--motion-slow) var(--motion-ease);
     }
-    .dora-avatarRing.is-active {
+    .dora-headerActiveRing.is-active {
         box-shadow:
             0 0 0 3px var(--q-accent),
             0 0 10px color-mix(in srgb, var(--brand-accent) 55%, transparent);
-        animation: dora-avatarRing-pulse 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: dora-headerActiveRing-pulse 0.55s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    @keyframes dora-avatarRing-pulse {
+    @keyframes dora-headerActiveRing-pulse {
         0% {
             box-shadow:
                 0 0 0 5px var(--nav-slide-flash),
@@ -353,7 +336,7 @@
        entirely and let the static accent ring appear without the
        flash-coloured beat. Resting state still applies. */
     @media (prefers-reduced-motion: reduce) {
-        .dora-avatarRing.is-active {
+        .dora-headerActiveRing.is-active {
             animation: none;
         }
     }

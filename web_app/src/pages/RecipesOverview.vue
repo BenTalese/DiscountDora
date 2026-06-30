@@ -391,6 +391,7 @@
         TriStateOption,
         TriStateSort,
     } from 'src/components/filters/triStateFilterTypes';
+    import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
@@ -464,7 +465,8 @@
     const loading = ref(false);
 
     // ── Filter state ────────────────────────────────────────────────
-    const filtersExpanded = ref(false);
+    // FU-121: persisted per-page (mobile always starts hidden).
+    const filtersExpanded = useFilterPanelExpanded('cookbook-overview');
     const searchText = ref('');
     const favouritesOnly = ref(false);
     const cookableNowOnly = ref(false);

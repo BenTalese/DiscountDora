@@ -32,7 +32,10 @@ export type BootstrapAdminCommand = {
 };
 export type UpdateMeCommand = {
     send_deals_on_day?: number;
-    email?: string | null;
+    // FU-197 — `email` removed from this command. Email changes flow
+    // through `requestEmailChangeAsync` (password proof + confirmation
+    // link); sending it via `updateMeAsync` is now a 400 from the
+    // backend's `extra="forbid"` model.
     username?: string;
     deals_email_enabled?: boolean;
     deals_email_compact?: boolean;
@@ -159,9 +162,17 @@ export default class AuthApiService {
             '/auth/reset-password', { token, new_password: newPassword },
         );
 
-    requestEmailChangeAsync = async (newEmail: string): Promise<void> =>
-        await this.httpClient.post<void, { new_email: string }>(
-            '/auth/me/email', { new_email: newEmail },
+    /** FU-197 — verified change-email flow. Requires the current
+     *  password as proof-of-possession; on success the server emails a
+     *  confirmation link to the NEW address and a heads-up notice to
+     *  the OLD one. Nothing actually changes until the link is
+     *  clicked. */
+    requestEmailChangeAsync = async (
+        newEmail: string,
+        currentPassword: string,
+    ): Promise<void> =>
+        await this.httpClient.post<void, { new_email: string; current_password: string }>(
+            '/auth/me/email', { new_email: newEmail, current_password: currentPassword },
         );
 
     confirmEmailChangeAsync = async (token: string): Promise<void> =>

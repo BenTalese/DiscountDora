@@ -6,6 +6,32 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Security
+- **Account-takeover chain closed: CSRF defence + verified email change
+  with password proof — FU-197 (2026-06-30).** Three coupled gaps fixed
+  together. (1) **CSRF double-submit defence** on every mutating API
+  call: the backend mints a non-HttpOnly `dora_csrf` cookie on the
+  first response a client makes without one (SameSite=Lax, Secure
+  mirrors `SESSION_COOKIE_SECURE`); every `POST/PATCH/PUT/DELETE` on a
+  non-public endpoint must echo it as `X-CSRF-Token` or 403s, with a
+  constant-time compare so timing attacks can't tease out the cookie.
+  Login / register / forgot-password / reset / verify / bootstrap-admin
+  stay exempt so a cold client can authenticate; the bearer-authenticated
+  ingestion endpoint stays exempt because Bearer tokens aren't
+  browser-ambient. The SPA's axios client reads the cookie and attaches
+  the header automatically. (2) **Email change now requires the current
+  password** (matching the existing change-password flow) and emails a
+  heads-up notice to the **old** address **before** sending the
+  confirmation link to the new one — so even if a future hole lets an
+  attacker through both prior gates, the legitimate owner sees the
+  notice at the address they currently control. (3) **`PATCH /api/auth/me`
+  no longer accepts the `email` field** at all: the SPA was silently
+  using this unverified path; it now hard-rejects with 400, and Settings
+  → Account → Email is rebuilt around the verified flow with an
+  in-form Current password input + "Send confirmation" button +
+  explanatory copy. Codified as **R-025** (session-mutating writes need
+  both proof-of-possession and CSRF) and **ADR-021** in
+  `ENGINEERING_STANDARDS.md` so the asymmetry between sensitive flows
+  becomes a violation rather than a judgement call.
 - **Fresh-install bootstrap is now an explicit, single-use setup page —
   FU-200 (2026-06-30).** On a brand-new install the first visitor lands
   on a dedicated `/setup` "Create the first admin account" page instead

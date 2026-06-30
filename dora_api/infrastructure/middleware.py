@@ -1,14 +1,19 @@
 import logging
+import os
 import time
 from uuid import uuid4
 
-from flask import Blueprint, g, request, session
+from flask import Blueprint, current_app, g, request, session
 from pydantic import ValidationError
 
 from dora_api.infrastructure.api_response import (ErrorEntry, bad_request,
                                                   endpoint_not_found,
+                                                  forbidden,
                                                   unauthorized)
 from dora_api.infrastructure.audit import auto_audit_after_request
+from dora_api.infrastructure.csrf import (csrf_check_passed, ensure_cookie,
+                                          request_is_mutating,
+                                          request_under_api)
 from dora_api.infrastructure.decorators import REQUEST_BODYS_BY_ENDPOINT
 from dora_api.infrastructure.error_translation import translate_pydantic_error
 from dora_api.infrastructure.log_context import (reset_context, set_request_id,
@@ -77,14 +82,25 @@ def handle_incoming_request():
     if not request.endpoint:
         return endpoint_not_found()
 
+    _EndpointName = request.endpoint.split(".")[-1]
+
     # Auth gate runs before body deserialisation so unauthenticated callers
     # don't waste cycles having their payloads parsed.
-    _AuthFailure = require_auth_if_protected(request.endpoint.split(".")[-1])
+    _AuthFailure = require_auth_if_protected(_EndpointName)
     if _AuthFailure is not None:
         return _AuthFailure
 
-    if request.method.upper() in ["POST", "PATCH", "PUT"]:
-        return deserialise_web_request(request.endpoint.split(".")[-1])
+    # FU-197 — CSRF double-submit check. Runs after the auth gate so we
+    # only enforce on session-authenticated, mutating, non-public
+    # endpoints. The cookie itself is minted in `attach_csrf_cookie` on
+    # the response, so cold-load GETs seed the pair before the SPA
+    # tries its first POST.
+    _CsrfFailure = require_csrf_if_protected(_EndpointName)
+    if _CsrfFailure is not None:
+        return _CsrfFailure
+
+    if request.method.upper() in ["POST", "PATCH", "PUT", "DELETE"]:
+        return deserialise_web_request(_EndpointName)
 
     return
 
@@ -95,6 +111,21 @@ def emit_audit_event(response):
     `stamp_request_id` so the audit row already has `request_id` from
     contextvars. Never raises."""
     return auto_audit_after_request(response)
+
+
+@MIDDLEWARE.after_app_request
+def attach_csrf_cookie(response):
+    """FU-197 — seed the `dora_csrf` cookie on any response when the
+    incoming request didn't carry one. This makes the cookie present
+    after the SPA's first GET so the follow-up POST has both halves of
+    the double-submit pair. Secure flag mirrors the session cookie
+    (`SESSION_COOKIE_SECURE`) so dev (HTTP) and prod (HTTPS) behave
+    consistently."""
+    if not request_under_api():
+        return response
+    secure = bool(current_app.config.get("SESSION_COOKIE_SECURE", False))
+    ensure_cookie(response, secure=secure)
+    return response
 
 
 @MIDDLEWARE.after_app_request
@@ -135,6 +166,41 @@ def require_auth_if_protected(endpoint_name: str):
     if "user_id" in session:
         return None
     return unauthorized()
+
+
+# FU-197 — endpoints exempt from the CSRF double-submit check. Mirrors
+# PUBLIC_ENDPOINTS (anything pre-session is exempt since the cookie may
+# not exist yet) plus the bearer-authenticated ingestion endpoint
+# (Bearer tokens can't be replayed CSRF-style — no ambient cookie auth).
+CSRF_EXEMPT_ENDPOINTS = PUBLIC_ENDPOINTS | frozenset({
+    # Bearer-auth ingestion: the long-lived API key is the proof; the
+    # browser never holds it ambient, so there's no CSRF surface.
+    "submit_ingestion_batch",
+})
+
+
+def require_csrf_if_protected(endpoint_name: str):
+    """Return a 403 if the request is a mutating call on a protected
+    endpoint and the CSRF cookie / header pair is missing or mismatched.
+    Returns None when the request may proceed."""
+    if not request_under_api():
+        return None
+    if not request_is_mutating():
+        return None
+    if endpoint_name in CSRF_EXEMPT_ENDPOINTS:
+        return None
+    # FU-197 — dev-only escape hatch for ad-hoc curl / shell drivers
+    # that can't easily echo the cookie as a header. Refused outside
+    # the development profile so it cannot weaken a production deploy.
+    if os.environ.get("DORA_CSRF_DISABLED", "").lower() in ("1", "true", "yes"):
+        from dora_api.infrastructure.profile import is_production
+        if not is_production():
+            return None
+    if csrf_check_passed():
+        return None
+    return forbidden(
+        "Missing or invalid CSRF token. Reload the page and try again."
+    )
 
 
 def audit_incoming_request():

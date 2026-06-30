@@ -35,7 +35,11 @@ class UpdateMeRequest(BaseModel):
 
     # Day of the week (0 = Mon … 6 = Sun) the weekly deals email should be sent.
     send_deals_on_day: int | None = Field(default=None, ge=0, le=6)
-    email: str | None = Field(default=None, max_length=255)
+    # FU-197 — `email` is intentionally absent. Email changes only flow
+    # through the verified `POST /auth/me/email` path (password proof +
+    # confirmation link + old-address notice). `extra="forbid"` on this
+    # model means a stray `{"email": …}` payload now hard-rejects with
+    # 400, closing the legacy unverified-write path the SPA used to use.
     username: str | None = Field(default=None, min_length=1, max_length=255)
     deals_email_enabled: bool | None = None
     deals_email_compact: bool | None = None
@@ -135,9 +139,6 @@ class UpdateMeHandler:
 
         if "send_deals_on_day" in _SetFields and request.send_deals_on_day is not None:
             _User.send_deals_on_day = request.send_deals_on_day
-
-        if "email" in _SetFields:
-            _User.email = request.email
 
         if "deals_email_enabled" in _SetFields and request.deals_email_enabled is not None:
             _User.deals_email_enabled = request.deals_email_enabled

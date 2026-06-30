@@ -137,6 +137,19 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// FU-197 — double-submit CSRF cookie reader. The backend mints
+// `dora_csrf` (non-HttpOnly) on the first response that doesn't carry
+// it, so this returns null until the SPA has made at least one request
+// (the cold-load `getMe` GET happens before any mutating call).
+function readCsrfCookie(): string | null {
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    for (const part of document.cookie.split(';')) {
+        const [name, ...rest] = part.trim().split('=');
+        if (name === 'dora_csrf') return rest.join('=') || null;
+    }
+    return null;
+}
+
 // Augment axios's request config with our retry / correlation-id state
 // so the interceptors can pass it across attempts.
 type DoraRequestConfig = InternalAxiosRequestConfig & {
@@ -156,11 +169,23 @@ export default class AxiosHttpClient implements HttpClient {
             withCredentials: true
         });
 
-        // ── Request interceptor: correlation id ─────────────────────
+        // ── Request interceptor: correlation id + CSRF token ───────
         this.axios.interceptors.request.use((config) => {
             const cfg = config as DoraRequestConfig;
             if (!cfg.__correlationId) cfg.__correlationId = newCorrelationId();
             cfg.headers.set?.('X-Request-Id', cfg.__correlationId);
+
+            // FU-197 — double-submit CSRF. The backend mints the
+            // `dora_csrf` cookie on the first response that doesn't
+            // carry one (cold-load GETs seed it), and rejects any
+            // mutating request whose `X-CSRF-Token` header doesn't
+            // match the cookie. The cookie is non-HttpOnly by design
+            // so we can read it here.
+            const method = (cfg.method ?? 'get').toLowerCase();
+            if (['post', 'put', 'patch', 'delete'].includes(method)) {
+                const token = readCsrfCookie();
+                if (token) cfg.headers.set?.('X-CSRF-Token', token);
+            }
             return cfg;
         });
 

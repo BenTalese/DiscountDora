@@ -10,6 +10,61 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-197 — CSRF absent + email-change needs no password proof (account-takeover chain)
+- **Raised:** 2026-06-16 (senior/tech-lead review; confirms prior-art A.1/A.2 in
+  `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md`)
+- **Type:** finding (security, HIGH — combine into account-takeover chain)
+- **What:** No CSRF token / Origin check on any mutation (`app.py` `SameSite=Lax`;
+  `middleware.py` checked only session presence). `email_flows.py:request_email_change`
+  required no `current_password`, unlike `change_password.py`. And the SPA's
+  Settings → Email "Save" hit `PATCH /auth/me` with `{"email": …}`, which the
+  backend silently accepted with no verification flow at all — broader than
+  the original finding noted.
+- **State note 2026-06-30:** **Fixed** via three coordinated changes plus full
+  CSRF defence:
+  1. **`UpdateMeRequest.email` field removed** (`dora_api/features/auth/update_me.py`).
+     With `extra="forbid"`, any `PATCH /auth/me` carrying `email` now 400s, closing
+     the unverified-write path the SPA was actually using.
+  2. **`ChangeEmailRequest` now requires `current_password`** + the handler
+     verifies it via `check_password_hash` before issuing a token, and sends a
+     "change requested" notice to the **old** address via the new
+     `email_change_notice.html` template **before** the confirmation email to the
+     new one (`dora_api/features/auth/email_flows.py`). Audit emits
+     `auth.email_change.requested` (success) and `auth.email_change.password_failed`
+     (wrong-password warn).
+  3. **Double-submit CSRF defence** (`dora_api/infrastructure/csrf.py` + the new
+     middleware hooks). Every API response that comes in without the
+     `dora_csrf` cookie gets one minted in `after_app_request` (non-HttpOnly so
+     the SPA can read it, SameSite=Lax, Secure when `SESSION_COOKIE_SECURE`).
+     Every mutating call (POST/PATCH/PUT/DELETE) under `/api/*` on a
+     non-public, non-bearer endpoint must carry an `X-CSRF-Token` header whose
+     value `hmac.compare_digest`-matches the cookie or it 403s. Public
+     endpoints (login/register/verify/reset/forgot/bootstrap) are exempt so a
+     cold client can authenticate; the bearer-auth `submit_ingestion_batch`
+     endpoint is exempt because Bearer-auth isn't replayable CSRF-style. Dev-only
+     `DORA_CSRF_DISABLED=1` env escape hatch refuses to weaken production.
+  4. **SPA side:** `axiosHttpClient.ts` reads the cookie and attaches the header
+     on every mutating request automatically. `AccountSettings.vue` rebuilt the
+     Email row around the verified flow: current-password input + "Send
+     confirmation" button + explanatory description that the change only takes
+     effect after clicking the link in the new inbox. `requestEmailChangeAsync`
+     in the api service + `authStore` carry the new shape
+     `(newEmail, currentPassword) → Promise<void>`.
+  5. **Tests:** new e2e coverage in `test_auth_flows.py` for `PATCH /me` 400
+     when `email` is sent, the password-gating behaviour of the change-email
+     flow (400 missing / 422 wrong / 204 happy), and the CSRF 403 when the
+     header is absent. Test conftest mirrors the axios interceptor by auto-
+     attaching the header from the test client's cookie jar so the rest of the
+     suite stays transparent. Alerts-digest suite migrated from `PATCH /auth/me
+     {email}` to a repo-level `_set_seed_user_email` helper since the API path
+     is now correctly closed.
+  6. **CORS allow-list extended** in `startup.py` for `X-CSRF-Token`.
+  `npx vue-tsc --noEmit` clean, eslint clean, e2e suite returns the same 3
+  pre-existing failures as the baseline (no new regressions).
+- **Confirm in a running app:** see `DORA_VERIFY.md` — new entries cover the
+  full verified email-change UX, the old-address heads-up email, the
+  `PATCH /me {email}` 400 rejection, and the CSRF cookie/header pairing.
+
 ## [RESOLVED] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
 - **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
 - **Type:** finding.

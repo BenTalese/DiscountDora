@@ -53,6 +53,336 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-345 — App-wide image quality / compression setting for power-user disk reduction
+- **Raised:** 2026-06-30 (FU-198 discussion follow-up — user clarified the image-quality knob is app-wide, not backup-specific).
+- **Type:** feature (admin setting + pipeline change).
+- **What:** Power users accumulate hundreds of stock/recipe/product
+  images at full resolution; over time the data dir grows. An admin
+  setting that lowers the JPEG/WebP quality (or caps max dimension)
+  applied **at upload time** to every image surface — stock items,
+  recipes (hero + steps), products, profile pictures, receipt
+  photos, store logos — gives the user one knob to reclaim disk
+  without per-surface work. R-003 already centralises resize/encode
+  through the
+  [`processImageFile`](web_app/src/helpers/processImageFile.ts) /
+  R-024 [`ImageSourcePicker`](web_app/src/components/ImageSourcePicker.vue)
+  chokepoint, so the change touches one helper plus the new setting
+  read.
+  - **Setting shape (`AppSetting`):**
+    - `image_quality` (int, default 85, range 30–100). Feeds the JPEG
+      `quality` parameter (and the WebP `quality` if/when we migrate).
+    - `image_max_dimension` (int, default e.g. 1920, optional cap
+      for the longest edge). Already pseudo-enforced today by the
+      hard size cap on the request schema; this is a per-install
+      tighter floor.
+  - **Where it lives:** `Settings → Admin → Data` next to the backup
+    library (close to where the user goes to think about disk
+    usage); cross-linked from any onboarding/help copy that mentions
+    image storage.
+  - **Backup library inheritance:** [[FU-342]] backups inherit
+    whatever quality the images already have — no re-encode needed
+    on backup write. That's a deliberate simplification: one setting,
+    one pipeline.
+  - **Out of scope for first cut:** **re-encoding *existing* images**
+    in the DB to the new quality. That's a heavier admin job (DB
+    walk, rewrite, must handle partial failure) and the user's
+    concern is mostly forward-looking. Log a follow-up if they ask
+    for it later.
+  - **Power-user posture:** default (85) leaves images visibly
+    indistinguishable from "original"; the admin can drop to 60–70
+    if they care more about disk than perfect-fidelity images. Not a
+    silent default-lower (won't surprise non-power-users who'd
+    notice quality loss).
+- **Why deferred:** new AppSetting columns + new pipeline touch +
+  new admin UI; warrants its own focused chunk rather than slipping
+  into the backup-library proposal.
+- **Recommended resolution:** sequence after [[FU-341]] (so the new
+  setting lands in its proper Settings → Admin → Data home). Single
+  chunk: (1) AppSetting migration, (2) `processImageFile` reads the
+  setting, (3) admin UI row with a slider + a tiny "this affects new
+  uploads only" caption. Cross-ref [[FU-342]]: backups simply
+  inherit; no re-encode logic on the backup path.
+
+## [OPEN] FU-344 — Import page UI polish: fix label alignment, spacing, use cards-with-checkboxes
+- **Raised:** 2026-06-30 (FU-198 discussion — user's original feedback on the Import page UX).
+- **Type:** UX cleanup.
+- **What:** [`web_app/src/pages/data/DataImport.vue`](web_app/src/pages/data/DataImport.vue)
+  reads as unprofessional: no margins on some elements, weird spacing,
+  and the **worst offender — the section labels are not inline with
+  their checkboxes**. Horizontal space underused. Rebuild the section
+  picker as a grid of cards-with-checkboxes (one card per importable
+  section, internal padding, checkbox top-left, label + caption to its
+  right, optional sample-row preview underneath). Same data, modern
+  layout. Apply consistent margins via the existing
+  [`SettingsSection`](web_app/src/components/settings/SettingsSection.vue)
+  / `SettingsRow` primitives so the page sits flush with the rest of
+  Settings after [[FU-341]] moves it there.
+- **Why deferred:** scope is purely visual polish; doesn't change the
+  importer's behaviour. Fits naturally after [[FU-341]] (relocates the
+  page) and ideally pairs with [[FU-343]] (template-sheet picker),
+  since both touch the same page chrome.
+- **Recommended resolution:** opportunistic — bundle with FU-341 or
+  FU-343 when either fires. Should not ship before [[FU-341]] (the
+  relocate would re-touch this surface anyway).
+
+## [OPEN] FU-343 — Import: generated template sheets from live schema
+- **Raised:** 2026-06-30 (FU-198 discussion — user's original feedback on the Import page UX).
+- **Type:** feature.
+- **What:** Today's importer assumes the user already has a file in
+  the right shape. That's brittle for new users — they don't know the
+  schema. Generate **per-section template sheets** from the live
+  schema so the user can pick "I want to import stock items" → click
+  → download a blank template with the right columns + header row,
+  fill it in, upload. Format question: **CSV** is the obvious default
+  (universal, opens in Excel/Sheets/Numbers), but `.xlsx` adds
+  dropdown validation for enum columns (stock level names, etc.)
+  which is genuinely valuable. Lean: **ship CSV first, add .xlsx
+  later** if users actually ask for dropdown-validated templates.
+  Server emits the template directly from the Pydantic / SQLAlchemy
+  model so the template can never drift from the API shape.
+- **Why deferred:** new backend endpoint + new UI affordance + new
+  decision (CSV vs .xlsx). Worth its own focused chunk rather than a
+  passing addition.
+- **Recommended resolution:** after [[FU-341]] (so the Import page is
+  already in its admin home). Sequence: (1) backend
+  `GET /data/import/templates` index lists every importable section
+  with row count + caption, (2) `GET /data/import/templates/<section>.csv`
+  emits the headers, (3) UI: a "Download template" affordance next to
+  each importable section. Pair with [[FU-344]]'s visual polish.
+
+## [OPEN] FU-342 — Backup library (Shape A): persist backups, list/download/delete, retention, custom location, image quality
+- **Raised:** 2026-06-30 (FU-198 discussion — current download-only flow doesn't scale).
+- **Type:** feature (medium-large; proposal-first).
+- **What:** Replace the current download-only backup with a real
+  **backup library**. Generate → store → list → download / restore /
+  delete. The current `GET /data/backup` stream-the-file path goes
+  away entirely (user decision in discussion: no fast-path; every
+  backup goes through the library).
+  - **Schema:** new `Backup` table — `(backup_id, created_at,
+    created_by, size_bytes, sections JSON, sha256, status,
+    trigger_kind, storage_path)`. `trigger_kind` is forward-looking
+    for [[FU-NEW-future]] scheduled backups but Shape A always sets
+    `'manual'`.
+  - **Endpoints (admin-gated, see [[FU-341]]):**
+    - `POST /data/backups` → kicks off the generate; returns the
+      created row.
+    - `GET /data/backups` → paginated list (date, size, sections,
+      created_by).
+    - `GET /data/backups/<id>/download` → streams the saved file.
+    - `POST /data/backups/<id>/restore` → server already has the
+      file; skips the upload + inspect-from-staging round-trip used
+      by external files.
+    - `DELETE /data/backups/<id>` → removes the row + file.
+  - **Retention:** `AppSetting.backup_retention_count` (default
+    **5**, not 10 — disk-conscious for Pi self-host). Oldest above
+    cap auto-dropped on each new write.
+  - **Custom backup location:** `AppSetting.backup_storage_path`
+    (default `$DORA_DATA_DIR/backups/`). Admin can point at an
+    external mount / NAS path. Validate writeability on save.
+  - **Image size — handled upstream by [[FU-345]], not here.** The
+    discussion clarified that image quality is an **app-wide** power-
+    user concern, not backup-specific. Backups simply inherit
+    whatever bytes the images already have, so when the user lowers
+    `AppSetting.image_quality` via FU-345, future uploads land
+    smaller and subsequent backups are naturally smaller too. No
+    re-encode logic on the backup path. One setting, one pipeline.
+  - **Sensitive-data warning:** when the user ticks any of the
+    Optional sections (`users`, `app_settings`,
+    `product_historic_offers`), surface an inline warning chip:
+    "This backup will include user accounts / system settings /
+    historic offers — handle the file accordingly." Don't block;
+    just make the choice visible.
+  - **External-file restore stays** — users restoring someone else's
+    backup, or one downloaded ages ago, still goes through the
+    existing upload → inspect → tree → commit flow. The "Restore"
+    button on a library row is the **new** path (skip upload, use
+    server-side file).
+- **Why deferred:** non-trivial backend + UI; warrants a proposal doc
+  before code lands so the schema + retention semantics + storage-
+  path validation are fixed before implementation.
+- **Recommended resolution:** sequence:
+  1. **Proposal first** (`docs/04_proposals/PROPOSAL_BACKUP_LIBRARY.md`)
+     covering schema, retention, storage path, image-quality re-encode,
+     sensitive-data warning, restore semantics, and the migration
+     story for users who have nothing saved yet.
+  2. **Implementation chunks** keyed to the proposal:
+     C1 — `Backup` table + alembic migration + the four endpoints +
+          admin gate (depends on [[FU-341]]).
+     C2 — `Backup_*` AppSettings columns + Settings → Admin UI for
+          retention + storage path.
+     C3 — Library list UI + restore-from-saved button + delete with
+          confirm.
+     C4 — Sensitive-data warning chip on the Optional sections.
+  3. **Scheduled backups deferred** to its own FU after Shape A has
+     bedded in (user decision; APScheduler is already in the stack).
+- **Cross-ref:** depends on [[FU-341]] (admin-gates the endpoints +
+  hosts the UI). Loosely coupled to [[FU-333]]'s Bucket B work
+  (AppSetting columns proliferating — fit consistently with that
+  audit's pattern).
+
+## [OPEN] FU-341 — Collapse /data area; relocate Backup + Import under Settings → Admin → Data
+- **Raised:** 2026-06-30 (FU-198 discussion — IA cleanup, admin gating).
+- **Type:** refactor + security close-out.
+- **What:** The `/data` shell has lost three of its four reasons to
+  exist by the time [[FU-339]] and [[FU-340]] land. Kill it:
+  - **Backup + Restore** moves to **Settings → Admin → Data → Backup
+    & restore** (two pages, mirroring the existing Settings shell
+    shape per user decision). Admin-only via the existing
+    SettingsShell `isAdmin` filter
+    ([SettingsShell.vue:86](web_app/src/pages/SettingsShell.vue:86))
+    AND the backend endpoints get the shared admin dependency
+    introduced for [[FU-198]] — this is FU-198's intended closure
+    path. The `/data/upload/*` chunked-upload chain gets the same
+    gate.
+  - **Import** moves to **Settings → Admin → Data → Import** as its
+    own page in the same Settings shell so its chrome (margins,
+    padding, label alignment) is automatically consistent with every
+    other Settings page. Sets up [[FU-344]]'s visual polish.
+  - **`DataManagement.vue` shell + `/data/*` routes** removed
+    entirely. Direct routes (`/data/backup`, `/data/import`,
+    `/data/export`, `/data/barcodes`) all relocate or die.
+- **Why deferred:** depends on [[FU-339]] (kill ExportPrint) and
+  [[FU-340]] (relocate Barcodes) so it never leaves a half-empty
+  shell mid-sweep. Closes [[FU-198]] — same-pass admin-gate on
+  restore + chunked-upload routes is the security half.
+- **Recommended resolution:** sequence after FU-339 + FU-340 land.
+  Pair the relocate + the shared `@require_admin` dependency in one
+  PR so FU-198's HIGH-severity gap closes at the same moment the UI
+  moves. Don't leave the un-gated endpoints reachable while the new
+  Settings pages are being built — gate them on day one of this FU.
+
+## [OPEN] FU-340 — Replace /data/barcodes with a "QR labels" page under Settings → Kitchen setup; drop the Scan tab and the page's barcode-management premise
+- **Raised:** 2026-06-30 (FU-198 discussion — confirmed in follow-up).
+- **Type:** IA refactor + dead-code removal.
+- **What:** Audit confirms today's
+  [`web_app/src/pages/data/BarcodesQR.vue`](web_app/src/pages/data/BarcodesQR.vue)
+  doesn't actually manage barcodes — it just has two tabs:
+  1. **Scan tab** — a one-button "Open camera" affordance that's
+     duplicative. Every page that needs scan already has its own
+     scan button (Stock Overview toolbar, Add-to-list flows, etc.).
+     **Delete this tab.**
+  2. **Print labels tab** — the genuinely useful workflow: pick
+     items + choose a sheet layout + open a printable QR-code sheet.
+     This is what survives.
+  Barcode add/remove (the only "management" Dora actually does) is
+  already on the stock item detail page
+  ([StockItemDetailPage.vue:779-836](web_app/src/pages/StockItemDetailPage.vue:779) —
+  FU-056 work). The current "Data → Barcodes" page's title misleads
+  about its scope; the stale comment at
+  [StockItemDetailPage.vue:29](web_app/src/pages/StockItemDetailPage.vue:29)
+  (`"that's managed on Data → Barcodes"`) needs the same update —
+  barcodes are managed *here* on the stock item, never on a central
+  page.
+  **Outcome:**
+  - New page **`Settings → Kitchen setup → QR labels`** owning the
+    Print labels surface only. Rename file to `QrLabels.vue` to
+    match. Stays gated by `scanning_enabled` (the install-wide
+    flag — same as today).
+  - Scan tab + the page's barcode-suggestive chrome (banner copy,
+    title "Barcodes & QR") all go away.
+  - Update the stale `StockItemDetailPage.vue:29` comment to drop
+    the "Data → Barcodes" pointer.
+  - Old `/data/barcodes` route deleted in the same pass as
+    [[FU-341]]'s `/data` shell collapse.
+- **Why deferred:** ties to [[FU-341]]'s shell collapse — should
+  land in the same IA-shuffle prompt to keep the URL break window
+  small. Does not need its own user confirmation any more (received).
+- **Recommended resolution:** bundle with [[FU-341]] (same prompt;
+  shared IA work). Small enough on its own that a separate PR would
+  be over-ceremonial.
+
+## [OPEN] FU-339 — Kill the Export & Print page; rely on in-context Print/CSV affordances
+- **Raised:** 2026-06-30 (FU-198 discussion — "I print where I need to, I don't need a central print management area").
+- **Type:** dead-code removal + IA cleanup.
+- **What:** Delete [`web_app/src/pages/data/ExportPrint.vue`](web_app/src/pages/data/ExportPrint.vue)
+  (~325 lines) and its `/data/export` route. Audit confirms every
+  export action is **already reachable in-context** except meal-plan
+  print (covered by [[FU-338]]):
+  - Stock overview — already in toolbar
+    ([StockOverview.vue:46](web_app/src/pages/StockOverview.vue:46))
+  - Recipe detail — already on the page
+    ([RecipeDetailPage.vue:1141](web_app/src/pages/RecipeDetailPage.vue:1141))
+  - Shopping list detail — already on the page
+    ([ShoppingListDetail.vue:2310](web_app/src/pages/ShoppingListDetail.vue:2310))
+  - Meal plan — closed by [[FU-338]]
+  The four export composables (`useShoppingListExport`,
+  `useRecipeExport`, `useMealPlanExport`, `useStockOverviewExport`)
+  stay — they're the right shape; deletion only removes the central
+  page that duplicated their callers.
+- **Why deferred:** the user decision matters more than the
+  effort. Confirmed in discussion.
+- **Recommended resolution:** sequence **after** [[FU-338]] so the
+  meal-plan Print gap closes the same moment the central page goes
+  away. Pair both in one PR — never a window where meal-plan print
+  is unreachable. Bonus: this also delays a chunk of [[FU-341]]'s
+  shell-collapse work to a smaller, more reviewable change.
+
+## [OPEN] FU-338 — Add in-context Print action to meal-plan surfaces
+- **Raised:** 2026-06-30 (FU-198 discussion — pre-req to killing the central Print page).
+- **Type:** small UX gap.
+- **What:** Meal plans is the **only** surface where the printable
+  view is reachable solely from the central
+  [`ExportPrint.vue`](web_app/src/pages/data/ExportPrint.vue) page.
+  Every other printable surface (stock overview, recipes, shopping
+  lists) already has a Print action on its own page. Add the same
+  affordance to [`MealPlansBoardPage.vue`](web_app/src/pages/MealPlansBoardPage.vue)
+  (and possibly [`MealPlansOverview.vue`](web_app/src/pages/MealPlansOverview.vue))
+  using the existing
+  [`useMealPlanExport`](web_app/src/composables/useMealPlanExport.ts)
+  composable.
+- **Why deferred:** small as it is, must land before [[FU-339]]
+  deletes the central page — otherwise meal-plan print disappears.
+- **Recommended resolution:** pair with FU-339 in one PR.
+
+## [OPEN] FU-337 — Platform deliverables docs reference artifacts that don't actually ship
+- **Raised:** 2026-06-30 (FU-327 audit — `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`).
+- **Type:** finding / leftover.
+- **What:** README + the FU-333 Bucket D copy reference AppImage *and*
+  `.exe` *and* `.dmg` as if all three exist today. Only the AppImage
+  actually does. A user reading the current docs would expect a
+  Windows / macOS installer link in a release and find none. Either
+  build the other two (paired with [[FU-327]]) or correct the docs
+  to set expectations.
+- **Why deferred:** docs-only sweep that's only worth doing once the
+  build-script decision is made — the right copy depends on which
+  targets actually ship.
+- **Recommended resolution:** pair with [[FU-327]]. If FU-327 ships
+  Windows + macOS scripts, the docs already-write themselves. If
+  FU-327 defers further, this FU does the doc-correction pass so the
+  README stops over-promising.
+
+## [OPEN] FU-336 — PWA build mode never actually selected — Workbox/manifest config emits nothing
+- **Raised:** 2026-06-30 (FU-327 audit — `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`).
+- **Type:** finding (config wired, build step skips it).
+- **What:** `web_app/quasar.config.ts` lines ~226–347 define a
+  complete PWA: Workbox `GenerateSW`, manifest with 4 app shortcuts
+  (primary list, shop-now, scan, add-item), NetworkFirst on `/api/`,
+  CacheFirst on stock/merchant images, offline.html fallback.
+  Client-side lifecycle + push subscription wiring are already
+  shipped ([usePwaLifecycle.ts](web_app/src/composables/usePwaLifecycle.ts),
+  [usePushSubscription.ts](web_app/src/composables/usePushSubscription.ts)),
+  and the backend has Web Push end-to-end
+  ([push_sender.py](dora_api/infrastructure/push_sender.py)). But
+  `npm run build` runs `quasar build` (SPA mode), **not**
+  `quasar build -m pwa`. The SW + manifest + offline.html therefore
+  never land in shipped artifacts. The same is true of the
+  PyInstaller bundle (it consumes whatever `web_app/dist/spa/`
+  contains — which today is the SPA-mode build).
+- **Why deferred:** out of scope of the audit prompt; the audit was
+  recon-only.
+- **Recommended resolution:** ~1 hour fix. Two options:
+  1. Change `web_app/package.json`'s `build` script to
+     `quasar build -m pwa`, or
+  2. Add a sibling `build:pwa` script and update consumers
+     (`packaging/build-linux.sh`, `Dockerfile`) accordingly.
+  Then verify the manifest + SW are present in `dist/pwa/` (or
+  `dist/spa/`, depending on what Quasar v2 emits today) and that
+  the PyInstaller spec's `("web_app/dist/spa", "web_app/dist/spa")`
+  data tuple still points at the right output path. **Highest-ROI
+  platform move in the audit** — install-to-home-screen on every
+  modern mobile + desktop with zero new code. Tagged "now" for the
+  next platform-targeted session.
+
 ## [OPEN] FU-335 — Migrate StoresSettings logo upload to ImageSourcePicker
 - **Raised:** 2026-06-30 (FU-334 follow-on — image-source-picker rollout)
 - **Type:** leftover
@@ -655,6 +985,35 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** opportunistic — first time a Windows or macOS
   release is needed. Until then the Linux + Docker artifacts are the shipped
   paths and they're complete.
+- **Update 2026-06-30 — full audit done, scope reframed.** Output:
+  [docs/05_investigations/PLATFORM_BUILDS_AUDIT.md](docs/05_investigations/PLATFORM_BUILDS_AUDIT.md).
+  The audit confirms FU-327's named scripts are still the right
+  Tier-2 work, but two higher-leverage moves came out of it and are
+  tracked separately:
+  - [[FU-336]] — PWA build mode is never actually selected
+    (`npm run build` runs SPA mode, not `quasar build -m pwa`), so
+    the Workbox SW + manifest config is fully wired but emits
+    nothing. ~1-hour fix; highest ROI in the audit.
+  - [[FU-337]] — README + FU-333 Bucket D copy reference
+    AppImage/`.exe`/`.dmg` as if all three exist. Only AppImage
+    does. Pair with this FU.
+  Mobile (iOS/Android via Capacitor) and Electron are
+  **deliberately deferred** per the audit's matrix — ship PWA
+  first; revisit Capacitor only if PWA proves insufficient on
+  Android (iOS-PWA via Add-to-Home-Screen plus the FU-287
+  autoplay-primer fix covers iOS adequately).
+- **CI status (explicit user policy):** both
+  `.github/workflows/ci.yml` and `release.yml` are intentionally
+  commented out to preserve the GitHub Actions free-tier
+  allowance during rapid Claude-driven development. **They must
+  stay disabled while that cadence continues.** A CI matrix
+  exercising any Windows/macOS build script is therefore deferred
+  with them — the audit recommends pairing the script work with
+  CI revival ([[FU-169]]) when the user decides to spend the
+  minutes, since untested cross-platform scripts bit-rot fast.
+  Until then the Linux + Docker artifacts remain the only
+  CI-validated paths (and even those aren't currently CI-built —
+  they're hand-built on the dev box).
 
 ## [OPEN] FU-287 — iOS / WKWebView autoplay across an `await` for Piper synth
 - **Raised:** 2026-06-24 (Piper platform audit).
@@ -898,19 +1257,15 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Why deferred:** read-only review; new finding.
 - **Recommended resolution:** **now** — introduce one shared admin dependency, audit every mutating
   route for it, gate restore + uploads. **Confirm in a running app.**
-
-## [OPEN] FU-197 — CSRF absent + email-change needs no password proof (confirms prior art)
-- **Raised:** 2026-06-16 (senior/tech-lead review; confirms prior-art A.1/A.2 in
-  `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md`)
-- **Type:** finding (security, HIGH — combine into account-takeover chain)
-- **What:** No CSRF token / Origin check on any mutation (`app.py:60-64` `SameSite=Lax`;
-  `middleware.py:115-125` checks only session presence). And `email_flows.py:260-304`
-  (`request_email_change`) requires no `current_password`, unlike `change_password.py:41,60`. CSRF +
-  email-change-without-proof = full account takeover.
-- **Why deferred:** prior-art items confirmed still-open against current code; read-only review.
-- **Recommended resolution:** **before internet-facing deploy** — double-submit CSRF token enforced in
-  middleware (or SameSite=Strict + Origin allow-list); require `current_password` re-proof on email
-  change + notify old address. **Confirm in a running app.**
+- **Update 2026-06-30 — closure path identified.** Discussion (this
+  session) decided to **relocate** the entire Backup/Restore + Import
+  UX under `Settings → Admin → Data` rather than bolt a gate onto the
+  current `/data/*` routes. The shared `@require_admin` dependency
+  lands as part of [[FU-341]] alongside the relocate; the chunked-
+  upload chain (`/data/upload/*`) gets the same gate in the same
+  pass. FU-198 closes the moment FU-341 ships, not before. Don't
+  resolve this FU in a separate prompt — the relocate and the gate
+  are intentionally coupled.
 
 ## [OPEN] FU-196 — Review's lower-severity hardening batch
 - **Raised:** 2026-06-16 (senior/tech-lead review)
@@ -1212,6 +1567,15 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 ## [OPEN] FU-169 — Implement the test-suite improvements proposal
 - **Raised:** 2026-06-13 (post-FU-166 proposal)
 - **Type:** deferred job
+- **⚠️ CI policy (2026-06-30):** the entire contents of
+  `.github/workflows/ci.yml` and `release.yml` are intentionally
+  commented out to preserve the user's GitHub Actions free-tier
+  allowance during rapid Claude-driven development. **They must stay
+  disabled while that cadence continues.** Do not un-comment them as
+  part of any other prompt without an explicit user decision; the cost
+  is per-push minutes on a free-tier account. When the user is ready
+  to spend the minutes, this FU is the natural home for the revival —
+  see also [[FU-327]] which depends on CI for its Windows/macOS matrix.
 - **What:** `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` — phased
   plan to make the suite a trustworthy net: **Phase 1 (P0)** CI runs all tests
   (not just `tests/e2e/dora_api`) + pytest config (`xfail_strict`,

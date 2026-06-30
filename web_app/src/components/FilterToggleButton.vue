@@ -9,8 +9,19 @@
         on its own line. Pages with their own toolbar row got two rows of
         chrome instead of one. Splitting the toggle out lets it sit flush
         with the rest of the page's toolbar buttons.
+
+        FU-121: Clear sits to the LEFT of Filters so the Filters button
+        doesn't shift sideways when the Clear button appears/disappears.
     -->
     <div class="row items-center q-gutter-sm no-wrap">
+        <BaseButton
+            v-if="(activeCount ?? 0) > 0"
+            variant="ghost"
+            :icon="ICONS.filter_alt_off"
+            label="Clear"
+            @click="$emit('clear')"
+        />
+
         <BaseButton
             :variant="expanded ? 'secondary' : 'ghost'"
             :icon="ICONS.tune"
@@ -21,14 +32,6 @@
                 {{ activeCount }}
             </q-badge>
         </BaseButton>
-
-        <BaseButton
-            v-if="(activeCount ?? 0) > 0"
-            variant="ghost"
-            :icon="ICONS.filter_alt_off"
-            label="Clear"
-            @click="$emit('clear')"
-        />
     </div>
 </template>
 

@@ -153,11 +153,25 @@ export function useStockItemActions() {
         }
     }
 
-    /** Push the expiry date forward by `days` from today. */
+    /** Push the expiry date forward by `days`. FU-123: pushes from
+     *  `max(today, current expiry)` so the natural read of "+1 day" on
+     *  an existing expiry actually shifts that expiry by a day, while
+     *  long-stale items don't end up with a "+1 = yesterday" result.
+     *  When no expiry is set yet, falls back to today + days. */
     async function pushExpiry(stockItemId: string, days = 7) {
-        const next = new Date();
-        next.setDate(next.getDate() + days);
-        const iso = next.toISOString().slice(0, 10);
+        const current = stockItemStore.stockItems.find(
+            (si) => si.stock_item_id === stockItemId,
+        )?.expiry_date ?? null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const base = (() => {
+            if (!current) return today;
+            const parsed = new Date(`${current}T00:00:00`);
+            if (Number.isNaN(parsed.getTime())) return today;
+            return parsed.getTime() > today.getTime() ? parsed : today;
+        })();
+        base.setDate(base.getDate() + days);
+        const iso = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
         try {
             await stockItemStore.updateStockItemAsync({
                 stock_item_id: stockItemId,

@@ -78,6 +78,12 @@
 
         <SettingsSection>
             <template #title>Email</template>
+            <template #description>
+                Changing your email requires your current password. We'll
+                send a confirmation link to the new address — the change
+                only takes effect once you click it. A heads-up notice
+                goes to your current address too.
+            </template>
             <SettingsRow stacked>
                 <div class="row q-col-gutter-sm items-end">
                     <q-input
@@ -85,16 +91,26 @@
                         outlined
                         dense
                         placeholder="you@example.com"
-                        class="col-12 col-sm-8"
-                        :disable="saving"
+                        class="col-12 col-sm-5"
+                        :disable="savingEmail"
                         autocomplete="email"
+                    />
+                    <q-input
+                        v-model="emailChangePassword"
+                        outlined
+                        dense
+                        type="password"
+                        label="Current password"
+                        class="col-12 col-sm-4"
+                        :disable="savingEmail || emailUnchanged"
+                        autocomplete="current-password"
                     />
                     <BaseButton
                         :icon="ICONS.save"
-                        label="Save"
+                        label="Send confirmation"
                         :loading="savingEmail"
-                        :disable="emailUnchanged"
-                        @click="onSaveEmail"
+                        :disable="!canRequestEmailChange"
+                        @click="onRequestEmailChange"
                     />
                 </div>
             </SettingsRow>
@@ -226,6 +242,10 @@
 
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
+    // FU-197 — proof-of-possession for the verified change-email flow.
+    // Kept separate from the change-password input below so the two
+    // forms don't accidentally share state.
+    const emailChangePassword = ref('');
     const currentPassword = ref('');
     const newPassword = ref('');
     const confirmPassword = ref('');
@@ -262,6 +282,12 @@
             newPassword.value.length >= 4 &&
             confirmPassword.value === newPassword.value
     );
+    const canRequestEmailChange = computed(
+        () =>
+            !emailUnchanged.value &&
+            emailDraft.value.trim().length > 0 &&
+            emailChangePassword.value.length > 0,
+    );
 
     function notifySuccess(message: string) {
         $q.notify({ type: 'positive', position: 'bottom-right', message });
@@ -275,15 +301,24 @@
         });
     }
 
-    async function onSaveEmail() {
+    async function onRequestEmailChange() {
+        if (!canRequestEmailChange.value) return;
         savingEmail.value = true;
         try {
-            await authStore.updateMeAsync({
-                email: emailDraft.value.trim() === '' ? null : emailDraft.value.trim()
-            });
-            notifySuccess('Email saved.');
+            await authStore.requestEmailChangeAsync(
+                emailDraft.value.trim(),
+                emailChangePassword.value,
+            );
+            notifySuccess(
+                'Confirmation link sent. Check your new inbox to finish the change.',
+            );
+            emailChangePassword.value = '';
+            // Leave emailDraft as the entered value so the UI shows
+            // what's pending; the displayed email above (currentUser)
+            // doesn't update until the user clicks the confirmation
+            // link and the next /auth/me refresh sees the new value.
         } catch (err) {
-            notifyError('Could not save email.', err);
+            notifyError('Could not request email change.', err);
         } finally {
             savingEmail.value = false;
         }

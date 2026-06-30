@@ -32,15 +32,27 @@
                 >
                     <!-- Settings rebuild Phase 4: profile picture when set,
                          else the original account-circle icon (preserved per
-                         the feedback). -->
-                    <UserAvatar
-                        :user-id="currentUser.user_id"
-                        :has-image="currentUser.has_image"
-                        size="30px"
-                        fallback="icon"
-                        :fallback-icon="ICONS.account_circle"
-                        :username="currentUser.username"
-                    />
+                         the feedback).
+                         The accent ring around the avatar mirrors the main-
+                         menu strip's underline indicator: when the user is on
+                         a route that's reached from the avatar dropdown
+                         (Settings + Help & guides), the avatar becomes the
+                         "active" hint. Wrapping span gets the box-shadow ring
+                         since q-avatar's own shadow would clip against its
+                         circular mask. -->
+                    <span
+                        class="dora-avatarRing"
+                        :class="{ 'is-active': isAvatarSectionActive }"
+                    >
+                        <UserAvatar
+                            :user-id="currentUser.user_id"
+                            :has-image="currentUser.has_image"
+                            size="30px"
+                            fallback="icon"
+                            :fallback-icon="ICONS.account_circle"
+                            :username="currentUser.username"
+                        />
+                    </span>
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 200px">
                             <q-item>
@@ -251,6 +263,18 @@
         return base;
     });
 
+    // Routes reachable from the avatar dropdown (Settings + Help & guides).
+    // When the current route falls under one of these prefixes, the avatar
+    // gets the accent ring so the header still shows "you're somewhere" —
+    // mirrors the main-menu strip's underline indicator for top-level
+    // sections. Same prefix-match style as `useMenuLinkActive`.
+    const AVATAR_SECTION_PREFIXES = ['/settings', '/help'];
+    const isAvatarSectionActive = computed(() =>
+        AVATAR_SECTION_PREFIXES.some(
+            (p) => route.path === p || route.path.startsWith(p + '/'),
+        ),
+    );
+
     const leftDrawerOpen = ref(false);
 
     function toggleLeftDrawer() {
@@ -276,5 +300,61 @@
         height: 64px;
         gap: 8px;
         padding: 0 12px;
+    }
+
+    /* Avatar ring — the avatar's parallel to the main-menu strip's
+       underline indicator. Sits around the circular q-avatar via
+       box-shadow so we don't have to wrap the avatar in a padded box
+       that would shift layout. Two shadows: a 3px ring in the accent
+       colour (matches the strip's slide indicator's 3px height) plus a
+       soft glow (same `color-mix` shape as the strip's box-shadow).
+       Transition transparent → accent on activation and back on leave.
+
+       Activation also fires a one-shot pulse that starts in the
+       "moving" colour (`--nav-slide-flash`) and settles into the
+       resting accent — the avatar doesn't translate position the way
+       the strip indicator does, so the colour transition IS the
+       motion. Mirrors the strip's slide-flash → accent settle even
+       though the avatar stays put. */
+    .dora-avatarRing {
+        display: inline-flex;
+        border-radius: 50%;
+        box-shadow:
+            0 0 0 3px transparent,
+            0 0 10px transparent;
+        transition: box-shadow var(--motion-slow) var(--motion-ease);
+    }
+    .dora-avatarRing.is-active {
+        box-shadow:
+            0 0 0 3px var(--q-accent),
+            0 0 10px color-mix(in srgb, var(--brand-accent) 55%, transparent);
+        animation: dora-avatarRing-pulse 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes dora-avatarRing-pulse {
+        0% {
+            box-shadow:
+                0 0 0 5px var(--nav-slide-flash),
+                0 0 18px color-mix(in srgb, var(--nav-slide-flash) 70%, transparent);
+        }
+        55% {
+            box-shadow:
+                0 0 0 4px color-mix(in srgb, var(--nav-slide-flash) 60%, var(--q-accent)),
+                0 0 14px color-mix(in srgb, var(--nav-slide-flash) 35%, transparent);
+        }
+        100% {
+            box-shadow:
+                0 0 0 3px var(--q-accent),
+                0 0 10px color-mix(in srgb, var(--brand-accent) 55%, transparent);
+        }
+    }
+
+    /* Reduced-motion users: the pulse IS the motion, so suppress it
+       entirely and let the static accent ring appear without the
+       flash-coloured beat. Resting state still applies. */
+    @media (prefers-reduced-motion: reduce) {
+        .dora-avatarRing.is-active {
+            animation: none;
+        }
     }
 </style>

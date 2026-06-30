@@ -133,6 +133,17 @@ export const useAuthStore = defineStore('auth', () => {
         await authApiService.changePasswordAsync(command);
     };
 
+    // FU-197 — verified change-email flow. Doesn't mutate `currentUser`
+    // here: the address only flips after the user clicks the
+    // confirmation link in their new inbox, at which point the next
+    // `/auth/me` refresh picks it up.
+    const requestEmailChangeAsync = async (
+        newEmail: string,
+        currentPassword: string,
+    ) => {
+        await authApiService.requestEmailChangeAsync(newEmail, currentPassword);
+    };
+
     const logoutAsync = async () => {
         try {
             await authApiService.logoutAsync();
@@ -165,6 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
         setupAdminAsync,
         updateMeAsync,
         changePasswordAsync,
+        requestEmailChangeAsync,
         logoutAsync
     };
 });

@@ -55,13 +55,27 @@
         if (!active) {
             indicator.width = 0;
             indicator.ready = false;
+            indicator.sliding = false;
             return;
         }
         const stripRect = strip.getBoundingClientRect();
         const activeRect = active.getBoundingClientRect();
-        indicator.left = activeRect.left - stripRect.left;
-        indicator.width = activeRect.width;
+        const nextLeft = activeRect.left - stripRect.left;
+        const nextWidth = activeRect.width;
+        // If the active button hasn't moved (sub-route nav under the
+        // same section — e.g. /cookbook → /cookbook/<id>),
+        // `transitionend` for `translate` will never fire because the
+        // CSS transition no-ops on an unchanged value. The route-change
+        // watcher below sets `sliding = true` preemptively, so without
+        // this clear the slide-flash colour sticks until the next real
+        // movement. Same microtask as the preemptive set → no visible
+        // flash on no-move navigations.
+        const moved = indicator.ready
+            && (nextLeft !== indicator.left || nextWidth !== indicator.width);
+        indicator.left = nextLeft;
+        indicator.width = nextWidth;
         indicator.ready = true;
+        if (!moved) indicator.sliding = false;
     }
 
     let resizeObserver: ResizeObserver | null = null;

@@ -15,11 +15,27 @@ import requests
 
 from dora_api.app import app
 from dora_api.domain.entities.alert_interaction import AlertInteraction
+from dora_api.domain.entities.user import User
 from dora_api.features.alerts.send_alerts_digest import send_alerts_digest
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 BASE = "http://localhost:5170/api"
+
+
+def _set_seed_user_email(email: str | None) -> None:
+    """FU-197 — `PATCH /auth/me` no longer accepts the `email` field
+    (the only supported path is the verified change-email flow with
+    confirmation token). Tests that need to put a specific address on
+    the seed user without exercising the email-change UX flip it
+    directly via the repo."""
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        usernameField = EntityField(User, User.Fields.USERNAME)
+        user = repo.get(User).one(usernameField.eq("dora"))
+        assert user is not None, "expected seeded dora user"
+        user.email = email
+        repo.save_changes()
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +44,7 @@ def _restore_user_state():
     tests. Other suites assert the seed user's email + a flag-off state,
     so restore both after every test in this module."""
     yield
-    requests.patch(f"{BASE}/auth/me", json={"email": "ben.talese@gmail.com"})
+    _set_seed_user_email("ben.talese@gmail.com")
     requests.patch(f"{BASE}/auth/me", json={
         "alerts_email_enabled": False,
         "alerts_email_cadence": "off",
@@ -64,9 +80,9 @@ def _delete_item(item_id: str) -> None:
 def _opt_in(*, email: str, cadence: str = "daily", day: int = 0) -> UUID:
     # The seed user has no email by default; setting it here is part of the
     # opt-in (the digest skips users without an email regardless of
-    # `alerts_email_enabled`).
-    me = requests.patch(f"{BASE}/auth/me", json={"email": email})
-    assert me.status_code == 200, me.text
+    # `alerts_email_enabled`). FU-197 — go through the repo, not the
+    # API, since the API no longer accepts unverified email writes.
+    _set_seed_user_email(email)
     me = requests.patch(f"{BASE}/auth/me", json={
         "alerts_email_enabled": True,
         "alerts_email_cadence": cadence,
@@ -208,9 +224,8 @@ def test__digest__skips_user_without_email(api):
     name = f"digest-noemail-{uuid.uuid4().hex[:8]}"
     _create_expired_item(name)
     # Opt the user in but clear their email — the candidate filter drops
-    # them silently (no error).
-    me = requests.patch(f"{BASE}/auth/me", json={"email": None})
-    assert me.status_code == 200, me.text
+    # them silently (no error). FU-197: email field is repo-only now.
+    _set_seed_user_email(None)
     me = requests.patch(f"{BASE}/auth/me", json={
         "alerts_email_enabled": True,
         "alerts_email_cadence": "daily",

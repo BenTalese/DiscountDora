@@ -9,6 +9,563 @@ next.
 
 ---
 
+## 2026-06-30 — Avatar accent ring on Settings + Help & guides routes
+
+**Why:** follow-on to the main-menu stuck-indicator fix. User asked
+that when the current route is reached from the avatar dropdown
+(Settings or Help & guides), the avatar itself shows an "active"
+treatment that parallels the main-menu strip's underline indicator —
+since those routes don't live in the main menu, the header would
+otherwise have no "you're somewhere" hint.
+
+**Interpretation:** treated "the underline moves to an outline around
+the profile image" as a parallel visual treatment (avatar gets its
+own ring), not a literal animation of the strip's indicator
+detaching, sliding across the AlertsBell, and reforming as a ring
+around the avatar. The literal version is several days of cross-
+component coordination work (the indicator currently lives inside
+`MainMenuButtonStrip` and is positioned via DOM measurement relative
+to that strip — relocating it to wrap an avatar in `MainLayout`
+needs a global indicator controller, position handshakes between the
+strip and the avatar, and overflow plumbing). Confirmed inline that
+the parallel-treatment reading is what fits the user's rapid-Claude-
+dev cadence; the dramatic version is available as a future ask.
+
+**Changes:**
+- [`web_app/src/layouts/MainLayout.vue`](web_app/src/layouts/MainLayout.vue)
+  - New `AVATAR_SECTION_PREFIXES = ['/settings', '/help']` + an
+    `isAvatarSectionActive` computed using the same prefix-match
+    style as
+    [`useMenuLinkActive`](web_app/src/components/menu/useMenuLinkActive.ts:18)
+    (`route.path === p || route.path.startsWith(p + '/')`).
+    Covers `/help`, `/help/dora`, and every `/settings/*` page.
+  - Wrapped the existing `<UserAvatar>` in a `<span class="dora-avatarRing">`
+    that takes an `is-active` class from the computed. The ring sits
+    on a wrapping span rather than the avatar itself because
+    q-avatar's circular mask would clip its own box-shadow.
+  - Scoped CSS for `.dora-avatarRing` — two box-shadows: a tight 2px
+    accent-coloured ring (`var(--q-accent)`) plus an 8px soft glow
+    using the same `color-mix(in srgb, var(--brand-accent) 55%,
+    transparent)` shape as the strip's slide indicator
+    ([MainMenuButtonStrip.vue:120](web_app/src/components/menu/MainMenuButtonStrip.vue)).
+    Transitions transparent → accent over 0.3s for a clean fade on
+    activation and deactivation. No layout shift (box-shadow is
+    non-layout).
+- [`DORA_VERIFY.md`](DORA_VERIFY.md) — new Cross-cutting section "Avatar
+  accent ring for Settings + Help & guides — feature" with six
+  checks: Settings activation, Help activation, sub-page persistence,
+  cross-section fade, theme follow-through, mobile chrome.
+
+**Notes for posterity:**
+- The avatar ring picks up the active theme automatically because
+  it reads `--brand-accent` / `--q-accent` rather than hardcoding a
+  colour. Same wins as the main-menu strip.
+- The CSS does NOT carry a `is-sliding` flash like the strip does —
+  the avatar doesn't move position between routes, so there's no
+  "I'm moving" signal to paint. The fade-in alone reads correctly
+  for a single-position indicator.
+- `vue-tsc --noEmit` + `eslint` clean on the touched file.
+
+**Engineering-standards close-gate:** no rule violations. R-001
+(componentisation) intentionally not promoted here — the ring is
+specific to the menu-bar avatar's role as an active-section hint;
+other UserAvatar instances (admin user rows, etc.) should NOT carry
+this treatment, so it stays scoped to the layout.
+
+**Files modified:**
+[`web_app/src/layouts/MainLayout.vue`](web_app/src/layouts/MainLayout.vue),
+[`DORA_VERIFY.md`](DORA_VERIFY.md).
+
+**Next up:** browser-verify the six new DORA_VERIFY items.
+Particular attention to: (a) ring colour follows theme; (b) no flash/
+jump when switching between Settings sub-pages; (c) clean fade in
+both directions when crossing the boundary into / out of Settings or
+Help.
+
+---
+
+## 2026-06-30 — Bug fix: main-menu slide indicator stuck on `--nav-slide-flash` after sub-route nav
+
+**Why:** user reported that the main-menu indicator's "move" colour
+activates and stays after navigating sub-pages (e.g. /cookbook →
+/cookbook/<id>); only clears when a different main-menu button is
+clicked. Said it "gets stuck sometimes in general."
+
+**Diagnosis:**
+[MainMenuButtonStrip.vue:83](web_app/src/components/menu/MainMenuButtonStrip.vue)'s
+route-change watcher unconditionally sets `indicator.sliding = true`,
+which applies the `--nav-slide-flash` colour (a hot-pink/lime/etc.
+hue noticeably distinct from `--brand-accent` in every theme — see
+[tokens.scss:120](web_app/src/css/tokens.scss:120) +
+[themes.scss](web_app/src/css/themes.scss)). The flash is cleared by
+`onIndicatorTransitionEnd` listening for `transitionend` on the
+`translate` property.
+
+Walk: `/cookbook` → `/cookbook/<id>`:
+1. Cookbook button stays active because
+   [useMenuLinkActive.ts:18](web_app/src/components/menu/useMenuLinkActive.ts:18)
+   prefix-matches `/cookbook/` (this is correct UX).
+2. `measure()` computes the same `left/width` as before.
+3. The CSS `transition: translate 0.55s` **no-ops** because the
+   value didn't change.
+4. `transitionend` therefore never fires for `translate`.
+5. `indicator.sliding` stuck `true` forever; the `.is-sliding`
+   background-colour override persists.
+6. Only resolved when the user clicks a different main-menu button —
+   `translate` actually changes, transition fires, `transitionend`
+   fires, `sliding = false`.
+
+"Gets stuck sometimes in general" = any sub-route navigation under
+the same active section hits the same path
+(stock → stock detail, lists → list detail, settings → sub-page,
+etc.).
+
+**Fix:**
+[MainMenuButtonStrip.vue:51](web_app/src/components/menu/MainMenuButtonStrip.vue) —
+`measure()` now compares old vs new `left/width`. When the active
+button hasn't moved, it clears `indicator.sliding = false`
+immediately. Same microtask as the watcher's preemptive
+`sliding = true` set, so Vue's render batching means the
+`.is-sliding` class never paints on no-move navigations (one render
+flush, final state only). Also clears `sliding` in the "no active
+button" early-return branch as a defensive fallback.
+
+Behaviour after fix:
+- /cookbook → /cookbook/<id>: indicator stays accent-coloured, no
+  flash. Correct.
+- /cookbook → /stock: indicator slides from Cookbook to Stock with
+  the flash colour, then settles to accent. Same as before.
+- /stock → /stock-overview → /stock/<id> in rapid succession: each
+  same-section hop skips the flash; cross-section hops still flash.
+  Stuck-state cleared on every measure.
+
+**Engineering-standards close-gate:** no rule violations.
+[`vue-tsc --noEmit`](web_app) + `eslint` clean on the touched file.
+No new ADR — surgical state-machine bug fix, not a recurring
+decision.
+
+**Files modified:** [`web_app/src/components/menu/MainMenuButtonStrip.vue`](web_app/src/components/menu/MainMenuButtonStrip.vue),
+[`DORA_VERIFY.md`](DORA_VERIFY.md).
+
+**Next up:** browser-verify the four new DORA_VERIFY items under
+Cross-cutting → "Main-menu indicator stuck colour after sub-route
+nav". Particular attention to: (a) the no-flash case actually shows
+no flash, (b) the cross-section case still flashes during the slide,
+(c) no regression on initial mount.
+
+---
+
+## 2026-06-30 — FU-198 discussion: data area reshape + backup-library design — 7 new FUs opened
+
+**Why:** user asked to discuss moving Data/Restore to the admin
+Settings area, kill the "Export & Print" page (print is contextual,
+not central), address the awkward IA where Backup+Restore lives on one
+page and Import on a half-empty other, and propose a more scalable
+backup model — current download-only flow won't survive routine use.
+
+**Discussion notes (no code this turn):**
+- Audited the `/data` shell: four sub-pages, only one (`DataImport.vue`)
+  is structurally unique — every other Print/CSV action is already
+  reachable in-context on its native surface (stock overview toolbar,
+  recipe detail, shopping list detail). Meal plans is the only print
+  surface that's *only* reachable from the central page.
+- Audited the security half: `data/restore_backup.py:358-363` +
+  `uploads.py` chunk chain are only session-gated (HIGH-severity
+  finding [[FU-198]]). The clean closure isn't to bolt a gate on the
+  current routes — it's to **relocate** the whole UX under
+  `Settings → Admin` and admin-gate the endpoints in the same pass.
+  Bundling makes both halves ship together.
+- Audited the backup flow: current `GET /data/backup` streams the file
+  in the response, never persists. Doesn't scale — no history, no
+  ability to restore from a saved point, no retention.
+
+**Decisions captured from the user:**
+- **IA shape:** **Option A** but **adopt Settings-shell shape** —
+  Backup + Import each become a separate page under
+  `Settings → Admin → Data`. Barcodes & QR **possibly** belong under
+  `Settings → Kitchen setup` as separate pages (one per concept —
+  barcode registration is consumption, QR labels are generation;
+  flagged tentative). The top-level `/data` namespace goes away.
+- **Backup library:** **Shape A** (library only, no schedule). Every
+  backup generates → stores → appears in a list. Restore from saved
+  skips the upload/inspect round-trip. External-file restore stays as
+  a secondary affordance.
+- **No fast-path:** the current "stream-and-forget" download flow goes
+  away entirely. Every backup goes through the library. User decision
+  — simpler mental model wins over the one-click ergonomics.
+- **Additional features in the same FU:**
+  - **Configurable backup location** (`AppSetting.backup_storage_path`,
+    default `$DORA_DATA_DIR/backups/`) so admin can point at a NAS /
+    external mount.
+  - **Image quality / compression setting** in admin area to address
+    the "50 MB × N retained = Pi disk gone" risk surfaced in
+    discussion (re-encode embedded images at chosen quality before
+    writing the backup).
+  - **Sensitive-data warning** when ticking the Optional sections
+    (`users`, `app_settings`, `product_historic_offers`) so the user
+    can see what's about to leave the box.
+- **Retention default:** **5** backups, not 10 — disk-conscious
+  for Pi self-host.
+- **From original-spec notes on Import (raised in user's reply):**
+  - Importer should offer **generated template sheets** from the
+    live schema — pick "I want to import X" → download a blank
+    template with the right columns → fill → upload. Format question:
+    **CSV first, .xlsx (with dropdown validation) later** if asked.
+  - Current Import page UI reads as unprofessional — no margins,
+    weird spacing, **worst offender: section labels not inline with
+    their checkboxes**. Rebuild as cards-with-checkboxes layout using
+    the existing `SettingsSection` / `SettingsRow` primitives (free
+    once the page lives in the Settings shell post-FU-341).
+- **Sequencing agreed:** small → medium → medium → large, with
+  meal-plan Print landing the same PR as the Export & Print page
+  deletion (so there's never a window where meal-plan print is
+  unreachable).
+
+**Follow-ups opened (7 new):**
+- **[FU-338](DORA_FOLLOWUPS.md)** (small) — Add in-context Print to
+  meal-plan surfaces. Pre-req to FU-339.
+- **[FU-339](DORA_FOLLOWUPS.md)** (small) — Kill the central Export
+  & Print page + `/data/export` route. Pairs with FU-338 in one PR.
+- **[FU-340](DORA_FOLLOWUPS.md)** (small/medium, tentative) —
+  Relocate Barcodes & QR to `Settings → Kitchen setup`, possibly as
+  separate pages. Confirm with user before splitting.
+- **[FU-341](DORA_FOLLOWUPS.md)** (medium) — Collapse `/data` shell;
+  relocate Backup + Import under `Settings → Admin → Data`.
+  **Closes [[FU-198]]** in the same PR — shared `@require_admin`
+  dependency on the relocated endpoints + the chunked-upload chain.
+- **[FU-342](DORA_FOLLOWUPS.md)** (large, proposal-first) — Backup
+  library (Shape A): new `Backup` table, four endpoints, retention
+  cap, custom storage path, image-quality re-encode, sensitive-data
+  warning. Proposal doc first
+  (`docs/04_proposals/PROPOSAL_BACKUP_LIBRARY.md`), then four
+  implementation chunks. Depends on FU-341 for the admin gate.
+- **[FU-343](DORA_FOLLOWUPS.md)** (medium) — Generated import
+  templates from live schema. CSV first; .xlsx with dropdown
+  validation if asked. New `GET /data/import/templates/<section>.csv`
+  endpoint. After FU-341.
+- **[FU-344](DORA_FOLLOWUPS.md)** (small) — Import page UI polish:
+  cards-with-checkboxes layout, fix label/checkbox alignment, spacing.
+  Bundle with FU-341 or FU-343.
+
+**FU-198 updated** with a closure-path note pointing at FU-341 — do
+not resolve in isolation; the relocate and the admin gate are
+intentionally coupled.
+
+**Engineering-standards close-gate:** N/A (discussion + ledger writes
+only; no code touched).
+
+**Files modified:** [`DORA_FOLLOWUPS.md`](DORA_FOLLOWUPS.md),
+[`DORA_WORKLOG.md`](DORA_WORKLOG.md).
+
+**Next up:** the user owns the sequencing now. Natural starting point
+when the work begins is the FU-338 + FU-339 pair (small, immediate
+visible win, no design lock-in). FU-342 wants the proposal doc first
+before any backend changes.
+
+**Amendment (same session):** user refined two of the new FUs:
+- **Image quality is app-wide, not backup-specific.** Spun out as new
+  **[FU-345](DORA_FOLLOWUPS.md)** — power-user disk-reduction knob
+  applied at upload time via the existing R-003 `processImageFile`
+  chokepoint. Affects every image surface (stock, recipe, product,
+  profile, receipt, store logo). Default 85; admin can drop to 60–70
+  if they care more about disk than perfect fidelity.
+  [[FU-342]] trimmed accordingly: removed the backup-specific
+  re-encode chunk (C4 in the old plan) and noted that backups
+  simply inherit whatever bytes the new uploads land at. One
+  setting, one pipeline.
+- **[FU-340](DORA_FOLLOWUPS.md) reframed.** Audit of
+  `BarcodesQR.vue` confirmed the page never actually managed
+  barcodes — barcode add/remove already lives on
+  [`StockItemDetailPage.vue:779-836`](web_app/src/pages/StockItemDetailPage.vue:779)
+  (FU-056). The page is two tabs: a redundant "Scan" tab (every
+  caller already has its own scan button) and a "Print labels" tab
+  that does the genuinely useful QR-sheet workflow. FU-340 now
+  scoped to **rename to `Settings → Kitchen setup → QR labels`,
+  keep only the Print-labels tab, delete the Scan tab and the
+  page's misleading "barcodes" title chrome**. Stale
+  `StockItemDetailPage.vue:29` comment that points back at
+  "Data → Barcodes" gets the same sweep. No longer tentative;
+  bundles with FU-341.
+
+---
+
+## 2026-06-30 — FU-197 close: CSRF defence + verified email-change + ADR-021 / R-025
+
+**Why:** the user asked for the proper long-term fix to FU-197 (CSRF
+absent + email-change had no password proof = account-takeover chain).
+Investigation surfaced a third gap the original write-up missed: the
+SPA's Settings → Email "Save" was actually calling `PATCH /auth/me`
+with `{"email": …}`, which the backend silently accepted with **no**
+verification flow at all. The verified `POST /auth/me/email` endpoint
+existed but was never reached from the UI. Fixed all three asymmetries
+together.
+
+**Changes — backend security:**
+- `dora_api/infrastructure/csrf.py` — **new** module. Double-submit
+  defence: `issue_token()` (32 random bytes hex), `ensure_cookie()`
+  (mints `dora_csrf` cookie when the request didn't carry one — non-
+  HttpOnly so the SPA can read it, SameSite=Lax, Secure mirrors
+  `SESSION_COOKIE_SECURE`), `csrf_check_passed()` (constant-time
+  `hmac.compare_digest` against the `X-CSRF-Token` header).
+- `dora_api/infrastructure/middleware.py` — `before_app_request` hook
+  gains `require_csrf_if_protected(endpoint)` which fires on mutating
+  methods (`POST/PATCH/PUT/DELETE`) inside `/api/*` for any endpoint
+  not in `PUBLIC_ENDPOINTS` or the new `CSRF_EXEMPT_ENDPOINTS`
+  (currently just `submit_ingestion_batch` — bearer-auth, no ambient
+  cookie). `after_app_request` hook `attach_csrf_cookie` mints the
+  cookie on every API response that came in without one, so cold-load
+  GETs seed the pair before the SPA tries its first POST. Dev-only
+  `DORA_CSRF_DISABLED=1` env escape hatch refuses to weaken production
+  (gated by `is_production()` check).
+- `dora_api/features/auth/email_flows.py` — `ChangeEmailRequest` now
+  requires `current_password`; the handler verifies with
+  `check_password_hash` and returns `business_rule_violation` on
+  mismatch (audit `auth.email_change.password_failed`, WARN severity).
+  On success: sends the new `email_change_notice.html` notice to the
+  **old** address **before** issuing the token + emailing the
+  confirmation link to the **new** address. Audit
+  `auth.email_change.requested` on success.
+- `dora_api/email_templates/email_change_notice.html` — **new**
+  template, mirrors `password_changed.html` shape.
+- `dora_api/features/auth/update_me.py` — `email` field **removed**
+  from `UpdateMeRequest`. With the model's existing `extra="forbid"`,
+  any payload carrying `email` now 400s, closing the unverified-write
+  path the SPA actually used.
+- `dora_api/startup.py` — added `X-CSRF-Token` to the CORS
+  `allow_headers` list so the browser preflight allows the header.
+
+**Changes — frontend:**
+- `web_app/src/services/api/axiosHttpClient.ts` — request interceptor
+  reads `dora_csrf` from `document.cookie` and attaches `X-CSRF-Token`
+  on every mutating call. New `readCsrfCookie()` helper kept tiny +
+  framework-free (no js-cookie dep).
+- `web_app/src/services/api/authApiService.ts` — `requestEmailChangeAsync`
+  signature is now `(newEmail, currentPassword)`. `UpdateMeCommand`
+  loses `email` (matching the backend's schema close-out).
+- `web_app/src/stores/authStore.ts` — adds `requestEmailChangeAsync`
+  with the new signature; deliberately doesn't mutate `currentUser`
+  (the address only flips on the user clicking the confirmation link;
+  the next `/auth/me` refresh picks it up).
+- `web_app/src/pages/settings/AccountSettings.vue` — Email row
+  rebuilt around the verified flow: a `Current password` input next to
+  the address field, a "Send confirmation" button (the old "Save" was
+  misleading — nothing saves until the user confirms in the new
+  inbox), description text spelling out the UX. `onSaveEmail` → 
+  `onRequestEmailChange`. `canRequestEmailChange` computed gates the
+  button on email-changed + password-typed.
+
+**Changes — tests + dev infra:**
+- `tests/e2e/dora_api/conftest.py` — the test-client wrapper auto-
+  attaches the `X-CSRF-Token` header on mutating verbs by reading from
+  the test client's cookie jar (mirrors the axios interceptor). New
+  `_read_csrf_cookie()` handles both Werkzeug 3 (`_cookies` dict) and
+  older shapes. Existing tests didn't need touching.
+- `tests/e2e/dora_api/test_auth_flows.py` — new coverage:
+  `test__update_me__rejects_email_field` (PATCH /me with email is 400),
+  `test__request_email_change__current_password_gates_the_call` (400
+  missing → 422 wrong → 204 right), `test__csrf__mutation_without_header_is_403`
+  (the gate fires when the header is empty). All three reuse the `api`
+  fixture rather than registering fresh users so they don't burn
+  through the shared `auth.register` rate-limit bucket (10/min/IP).
+- `tests/e2e/dora_api/test_alerts_digest.py` — migrated the suite's
+  email-mutation helpers from `PATCH /auth/me {email}` to a new
+  repo-level `_set_seed_user_email()` helper (the API path is now
+  correctly closed). Three tests + the fixture autorestore touched.
+
+**Docs:**
+- `docs/01_charter/ENGINEERING_STANDARDS.md` — added rule **R-025**
+  (session-mutating writes need both password re-proof AND CSRF) and
+  ADR-021 documenting the FU-197 decision. The asymmetry between
+  `change_password` (had proof) and `request_email_change` (didn't) is
+  the recurrence pattern R-025 exists to make impossible to ship.
+- `DORA_FOLLOWUPS.md` — FU-197 block removed.
+- `DORA_FOLLOWUPS_RESOLVED.md` — FU-197 archived with the full
+  resolution detail.
+- `DORA_VERIFY.md` — added "Account — verified email change + CSRF
+  defence" section under Settings: 10 browser-verify checkboxes
+  covering the verified UX, both email notices, the `PATCH /me` 400,
+  the cookie/header pairing, the DevTools 403 probe, the audit events,
+  and the cold-load public-endpoint exemption.
+
+**Engineering-standards close-gate:** the change *promotes* a new rule
+(R-025) rather than violates anything. R-019 (no magic — explicit,
+verbose) honoured throughout: the CSRF module is ~80 lines of plain
+code (no framework, no decorators), the middleware hook is two
+explicit branches, the email-flow change reuses
+`check_password_hash` directly the same way `change_password.py`
+does. R-003 (server owns derived facts) honoured by routing email
+changes through the token table rather than letting the client mutate
+the address. Lint + typecheck clean; e2e suite returns the same 3
+pre-existing failures as the baseline (no new regressions).
+
+**Files modified:** `dora_api/infrastructure/csrf.py` (new),
+`dora_api/infrastructure/middleware.py`,
+`dora_api/features/auth/email_flows.py`,
+`dora_api/features/auth/update_me.py`,
+`dora_api/email_templates/email_change_notice.html` (new),
+`dora_api/startup.py`,
+`web_app/src/services/api/axiosHttpClient.ts`,
+`web_app/src/services/api/authApiService.ts`,
+`web_app/src/stores/authStore.ts`,
+`web_app/src/pages/settings/AccountSettings.vue`,
+`tests/e2e/dora_api/conftest.py`,
+`tests/e2e/dora_api/test_auth_flows.py`,
+`tests/e2e/dora_api/test_alerts_digest.py`,
+`docs/01_charter/ENGINEERING_STANDARDS.md`,
+`DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`,
+`DORA_VERIFY.md`, `CHANGELOG.md`.
+
+**Next up:** browser-verify the 10 new DORA_VERIFY checkboxes under
+"Account — verified email change + CSRF defence", with SMTP up so the
+two notice emails actually arrive. The FU-196 `(e)` security-headers
+sweep + `SESSION_COOKIE_SECURE` default flip is the natural follow-on
+(R-025 doesn't cover XSS; that's its own surface).
+
+---
+
+## 2026-06-30 — FU-123 follow-on: +X expiry pushes from current, detail-panel syncs row edits
+
+**Why:** two user-flagged behaviours on the Stock Overview expiry
+control:
+1. The `+1 / +7 / +14 day` menu items computed `today + X` instead of
+   pushing the existing expiry by X. With the menu only appearing
+   once an expiry is set, the natural read of "Push expiry +1 day" is
+   shift-by-one — current behaviour felt wrong (and the toast text
+   "Expiry pushed to …" already implied push-from-current).
+2. When the desktop peek (`StockItemDetailPage` embedded) was open
+   and the user mutated the row from outside (expiry +X, toggle
+   open, toggle essential, change level), the peek didn't reflect the
+   change because `detail.value` is a one-shot fetch.
+
+**Decisions taken with the user:**
+- Past-expiry edge for "+X": push from `max(today, currentExpiry)` so
+  a long-stale item doesn't end up with a `+1 day = yesterday`
+  result. Future expiry behaves as the literal label suggests
+  (current + X).
+- Sync scope: patch every overlapping field the row can mutate, not
+  just `expiry_date` — same staleness affects open / flag / level
+  changes too, fixing all together is the same shape of code.
+
+**Changes:**
+- `web_app/src/composables/useStockItemActions.ts` — `pushExpiry()`
+  now looks up the current `expiry_date` in `stockItemStore.stockItems`,
+  takes `max(today, current)`, adds `days`, and formats the ISO date
+  in **local time** (not via `toISOString()`'s UTC slice — the old
+  code was off-by-one in non-UTC timezones; preserved that latent
+  bug would have been silly to leave behind while explicitly working
+  on date math). Falls back to `today + days` when no expiry is
+  set yet (so callers from contexts other than the existing menu —
+  bulk actions, Dora quick actions — still behave sensibly).
+- `web_app/src/pages/StockItemDetailPage.vue` — new `storeItem`
+  computed (lookup by id in `stockItems`) + a `watch(storeItem, …,
+  { deep: true })` that patches `expiry_date`, `is_open`,
+  `opened_on`, `is_flagged`, `stock_level_id`, `stock_level_name`,
+  `has_image` from the store version onto `detail.value` when they
+  differ. The store always re-fetches the canonical row after a
+  mutation (`updateStockItemAsync` / `updateStockLevelAsync` both
+  re-`getAsync` and assign), so the synced values are authoritative.
+  Self-triggered edits from within the detail page also flow through
+  the store, but the value already matches by the time the watcher
+  fires — the assignment is a no-op, not a loop.
+- `DORA_VERIFY.md` — added two checks under the FU-123 Stock
+  Overview Chunk 4 section: the new +X semantics (with the
+  past-expiry edge) and the peek-syncs-row-edits behaviour.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+The watcher is explicit/verbose (R-019) — each field assigned
+individually with an `undefined` guard, no `Object.assign` magic,
+no field-list config. The `pushExpiry` lookup uses
+`stockItemStore.stockItems.find(…)` directly (R-003 — server-derived
+list lives in the store, single source of truth). No new ADR — these
+are scoped behavioural fixes, not a recurring architectural decision.
+Linted (`npx eslint` on touched files) + typechecked
+(`npx vue-tsc --noEmit`) clean.
+
+**Files modified:**
+`web_app/src/composables/useStockItemActions.ts`,
+`web_app/src/pages/StockItemDetailPage.vue`,
+`DORA_VERIFY.md`.
+
+**Next up:** browser-verify the two new DORA_VERIFY items under
+FU-123 Chunk 4 — +X push semantics (including past-expiry edge) and
+peek-syncs-row-edits across expiry / open / flag / level. Then back
+to the FU-121 verify backlog.
+
+---
+
+## 2026-06-30 — FU-121 follow-on: toolbar order, persisted filter panel, Clear-on-left
+
+**Why:** user direction on FU-121:
+1. Preferred Stock Overview toolbar order is `New item · Scan ·
+   Stocktake · Bulk select · Export` (Export demoted to the end of the
+   action cluster; Scan + Stocktake promoted next to New item).
+2. Filter-panel open/closed state should be **remembered per page**
+   across reloads. Mobile always starts hidden regardless of saved
+   state (toolbar real estate is too tight to default-open there).
+3. The **Clear filters** button must sit to the **LEFT** of the
+   Filters toggle on every page so the Filters button doesn't shift
+   sideways when Clear appears/disappears. This applies to every
+   filterable page, not just Stock Overview.
+
+**Changes:**
+- `web_app/src/pages/StockOverview.vue` — toolbar order rebuilt to
+  `New item · Scan · Stocktake · Bulk select · Export`. The bulk-mode
+  "Cancel" button stays in the Bulk-select slot. Scan is still gated
+  by the `scanning_enabled` flag. Header comment updated to cite
+  FU-121.
+- `web_app/src/composables/useFilterPanelExpanded.ts` — **new**
+  composable. Returns a `ref<boolean>` for the filter-panel expanded
+  state, backed by `localStorage` under
+  `dora.filterPanel.expanded.<pageKey>`. Mobile (`$q.screen.lt.md`)
+  always seeds to `false` and toggles on mobile do **not** persist,
+  so a reload on phone always returns to the hidden state but the
+  user can still open the panel in-session.
+- `web_app/src/pages/StockOverview.vue`,
+  `web_app/src/pages/MyProductsPage.vue`,
+  `web_app/src/pages/RecipesOverview.vue` — swapped
+  `const filtersExpanded = ref(false)` for
+  `useFilterPanelExpanded('<page-key>')` with page-unique keys
+  (`stock-overview`, `my-products`, `cookbook-overview`).
+- `web_app/src/components/FilterToggleButton.vue` — swapped render
+  order: Clear button now renders **before** the Filters toggle so
+  the toggle's horizontal position is stable. Updated the header
+  comment to cite FU-121.
+- `web_app/src/components/FilterBar.vue` — same swap inside the
+  legacy `toolbar=true` mode (currently no pages use it but keeping
+  the two paths consistent so a future caller doesn't get the old
+  layout). Comment added.
+- `DORA_VERIFY.md` — FU-121 Chunk 2 verify entries refreshed: the
+  toolbar-order line now reads the new order, and three new
+  checkboxes cover per-page persistence, the mobile-always-hidden
+  override, and Clear-on-left stability.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+The new composable is a tight, single-purpose extraction (`R-019`
+explicit/verbose — no clever generic state-persistence framework;
+just `ref` + `watch` + try/catch around `localStorage`). The
+`FilterToggleButton` + `FilterBar` change is purely render-order; no
+prop or emit changes, so callers don't need to be touched beyond the
+three pages already using them. Linted (`npx eslint` on all six
+touched files) + typechecked (`npx vue-tsc --noEmit`) clean. No new
+ADR — this isn't a recurring decision worth promoting (it's a
+specific FU-121 ask, not a new architectural rule).
+
+**Files modified:**
+`web_app/src/composables/useFilterPanelExpanded.ts` (new),
+`web_app/src/components/FilterBar.vue`,
+`web_app/src/components/FilterToggleButton.vue`,
+`web_app/src/pages/StockOverview.vue`,
+`web_app/src/pages/MyProductsPage.vue`,
+`web_app/src/pages/RecipesOverview.vue`,
+`DORA_VERIFY.md`.
+
+**Next up:** browser-verify the four new DORA_VERIFY items under
+the FU-121 Chunk 2 section (toolbar order, per-page persistence,
+mobile-always-hidden, Clear-on-left stability) on Stock Overview /
+My Products / Cookbook overview.
+
+---
+
 ## 2026-06-30 — Stock overview tweaks: Log Waste in red + consistent level-dot pickers
 
 **Why:** user feedback on the Stock Overview surface. Two asks:

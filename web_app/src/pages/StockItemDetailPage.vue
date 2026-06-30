@@ -2013,6 +2013,45 @@
         if (stockItemId.value) void loadDetail();
     });
 
+    // FU-123: when the row's expiry / open / flag / level toggles fire
+    // while this page is open as a peek, the store's StockItem updates
+    // but `detail.value` (loaded as a one-shot) goes stale. Sync the
+    // handful of fields the row can mutate from the store version onto
+    // detail.value so the peek reflects external edits without a
+    // refresh. The store always re-fetches the canonical row after a
+    // mutation (stockItemStore.updateStockItemAsync /
+    // updateStockLevelAsync), so the assignments here are authoritative.
+    // Self-triggered edits on the detail page also flow through the
+    // store, but the value already matches by the time the watcher
+    // fires — the assignment is a no-op, not a loop.
+    const storeItem = computed(() =>
+        stockItems.value.find((si) => si.stock_item_id === stockItemId.value) ?? null,
+    );
+    watch(storeItem, (si) => {
+        if (!si || !detail.value || detail.value.stock_item_id !== si.stock_item_id) return;
+        if (si.expiry_date !== undefined && si.expiry_date !== detail.value.expiry_date) {
+            detail.value.expiry_date = si.expiry_date;
+        }
+        if (si.is_open !== undefined && si.is_open !== detail.value.is_open) {
+            detail.value.is_open = si.is_open;
+        }
+        if (si.opened_on !== undefined && si.opened_on !== detail.value.opened_on) {
+            detail.value.opened_on = si.opened_on;
+        }
+        if (si.is_flagged !== undefined && si.is_flagged !== detail.value.is_flagged) {
+            detail.value.is_flagged = si.is_flagged;
+        }
+        if (si.stock_level_id && si.stock_level_id !== detail.value.stock_level_id) {
+            detail.value.stock_level_id = si.stock_level_id;
+        }
+        if (si.stock_level_name !== undefined && si.stock_level_name !== detail.value.stock_level_name) {
+            detail.value.stock_level_name = si.stock_level_name;
+        }
+        if (si.has_image !== undefined && si.has_image !== detail.value.has_image) {
+            detail.value.has_image = si.has_image;
+        }
+    }, { deep: true });
+
     onMounted(async () => {
         // Stock groups are page-local (only consumer); load alongside the
         // other dropdowns so the inline picker has options on first paint.

@@ -85,6 +85,9 @@ def _to_path(url: str) -> str:
     return path
 
 
+_MUTATING = frozenset({"post", "put", "patch", "delete"})
+
+
 def _adapt(client, method_name: str):
     """Wrap one test-client verb so it accepts `requests`-style args and
     returns a `requests`-shaped response."""
@@ -97,9 +100,45 @@ def _adapt(client, method_name: str):
             kwargs["query_string"] = kwargs.pop("params")
         if "files" in kwargs:
             _translate_multipart(kwargs)
+        # FU-197 — auto-attach the double-submit CSRF header from the
+        # client's cookie jar so existing tests don't need to know CSRF
+        # exists. The browser equivalent lives in axiosHttpClient.ts;
+        # this mirrors it for the in-process test client. Tests that
+        # want to exercise the CSRF-missing path can pass a `headers=`
+        # dict that explicitly sets `X-CSRF-Token: ''` (or omit via a
+        # bespoke helper).
+        if method_name.lower() in _MUTATING:
+            csrf_cookie = _read_csrf_cookie(client)
+            if csrf_cookie:
+                headers = dict(kwargs.pop("headers", None) or {})
+                headers.setdefault("X-CSRF-Token", csrf_cookie)
+                kwargs["headers"] = headers
         return _TestClientResponse(client_method(_to_path(url), **kwargs))
 
     return _call
+
+
+def _read_csrf_cookie(client) -> str | None:
+    """Pull the `dora_csrf` value out of the test client's cookie jar.
+    Werkzeug's API surface for this has shifted across versions — handle
+    both the modern `_cookies` dict (Werkzeug 3) and the older list."""
+    jar = getattr(client, "_cookies", None)
+    if jar is None:
+        return None
+    if isinstance(jar, dict):
+        # Werkzeug ≥ 3: dict keyed by (domain, path, name) → cookie obj
+        for key, cookie in jar.items():
+            name = key[2] if isinstance(key, tuple) and len(key) >= 3 else getattr(cookie, "key", None)
+            if name == "dora_csrf":
+                value = getattr(cookie, "value", None)
+                if value:
+                    return value
+        return None
+    # Older Werkzeug: iterable of Cookie objects with .name + .value
+    for cookie in jar:
+        if getattr(cookie, "name", None) == "dora_csrf":
+            return getattr(cookie, "value", None) or None
+    return None
 
 
 def _translate_multipart(kwargs: dict) -> None:

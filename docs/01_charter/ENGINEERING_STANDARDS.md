@@ -839,6 +839,73 @@ exceptions, which still must be commented) · **Source** (where it was establish
   problem-detail assertions were both surfaced during FU-166's
   test-client conversion.
 
+### R-025 — Session-mutating writes need both proof-of-possession and CSRF
+- **Rule:** Any HTTP endpoint that mutates a session-bearing user's
+  authentication identity (password, email, MFA factors, primary
+  recovery channel) or that issues credentials usable to take over the
+  account (API key, recovery code, OAuth grant on behalf of the user)
+  must require **re-proof of the current password** in the request body
+  *and* be gated by the CSRF double-submit defence in
+  [`dora_api/infrastructure/csrf.py`](../../dora_api/infrastructure/csrf.py).
+  The two layers are independent — neither is sufficient alone, and
+  there is no asymmetry between sensitive flows (e.g. "change-password
+  needs the password, change-email doesn't" is the bug R-025 exists to
+  prevent).
+- **Why:** FU-197 found that the email-change endpoint required no
+  password proof while the password-change endpoint did. Combined with
+  the then-absent CSRF token, that was a complete account-takeover
+  chain: a victim browsing an attacker page while logged in could be
+  silently switched to the attacker's email + reset link, all without
+  the attacker knowing or guessing the victim's password. Both gaps
+  fixed at once; the rule keeps them fixed by making asymmetry between
+  sensitive flows a violation rather than a judgement call.
+- **Apply:**
+  - New auth-identity write endpoints: add `current_password: str` to
+    the request model, verify with `werkzeug.security.check_password_hash`
+    against the loaded `User.password_hash`, return
+    `business_rule_violation("Current password is incorrect.")` on
+    mismatch. Mirror the shape of
+    [`ChangePasswordRequest`](../../dora_api/features/auth/change_password.py)
+    /
+    [`ChangeEmailRequest`](../../dora_api/features/auth/email_flows.py).
+  - Side-effect notification: when the change is async (token-confirmed
+    email change, recovery-code regeneration), send a heads-up to the
+    address the user **currently** controls before kicking off the new
+    flow — see `email_change_notice.html`.
+  - CSRF is automatic: the middleware in
+    [`dora_api/infrastructure/middleware.py`](../../dora_api/infrastructure/middleware.py)
+    gates every mutating call on `/api/*` unless the endpoint name is
+    in `PUBLIC_ENDPOINTS` or `CSRF_EXEMPT_ENDPOINTS`. **Do not** add new
+    endpoints to those lists without a written rationale (bearer auth,
+    pre-session bootstrap, etc.).
+  - Audit emit on both success (`SEVERITY_AUDIT`) and password-mismatch
+    (`SEVERITY_WARN`) so a brute-force attempt against the password gate
+    is visible in the audit log.
+- **Violation signal:**
+  - A new `@AUTH_ROUTER.route(...)` mutator without `current_password`
+    in its request schema.
+  - A new endpoint added to `PUBLIC_ENDPOINTS` or `CSRF_EXEMPT_ENDPOINTS`
+    without a comment explaining why.
+  - SPA wiring that posts an auth-identity change without prompting for
+    the current password.
+  - An "admin-side" path that lets an authenticated user change their
+    own auth identity without re-prove (admin acting on **other** users
+    is a separate flow — those go through the audited admin endpoints,
+    which require admin role, not password re-prove).
+- **Carve-outs (must be commented):**
+  - The token-driven recovery flows (`reset-password`,
+    `confirm-email-change`, `verify-email`) are exempt because the
+    one-shot token IS the proof-of-possession; the user clicking the
+    link is the equivalent of re-prove.
+  - Bearer-authenticated machine endpoints (currently only
+    `submit_ingestion_batch`) skip CSRF because the long-lived API key
+    is never browser-ambient.
+- **Source:** FU-197 (2026-06-30). Promoted to a rule because the
+  asymmetry between password-change and email-change shipped without
+  triggering a review — the gap was invisible until a security pass
+  spotted it. Codifying "both sensitive flows or neither" makes the
+  next asymmetry impossible to ship silently.
+
 ### R-024 — Image upload UX goes through `ImageSourcePicker`
 - **Rule:** Every site that lets the user upload an image renders its
   source-pick affordance via the shared
@@ -1508,6 +1575,52 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   `StoresSettings.q-file` stays as a single carve-out tracked under
   FU-335.
 - **Promotes rule:** R-024.
+
+### ADR-021 — Session-mutating auth writes need password re-proof + CSRF
+- **Date / task:** 2026-06-30 (FU-197).
+- **Status:** accepted
+- **Context:** A senior security review flagged two coupled gaps in the
+  authentication surface that, together, formed a full account-takeover
+  chain: (a) `request_email_change` required no `current_password`
+  proof (asymmetric with `change_password`, which did) and (b) no CSRF
+  defence existed at all (`SameSite=Lax` alone, no token / Origin
+  check). Investigation surfaced a third gap: the SPA's
+  Settings → Email "Save" actually called `PATCH /auth/me` with
+  `{"email": …}`, which the backend silently accepted — the verified
+  flow at `POST /auth/me/email` existed but was never reached. Three
+  asymmetries (between flows, between defences, between intended and
+  actual code paths) compounding.
+- **Decision:** Adopt **R-025**. Close every asymmetry at once: remove
+  `email` from `UpdateMeRequest` (`extra="forbid"` then rejects the
+  legacy path with 400); require `current_password` on `ChangeEmailRequest`
+  and verify in the handler; notify the **old** address before issuing
+  the confirmation token to the new one; introduce double-submit CSRF
+  in `dora_api/infrastructure/csrf.py` + `middleware.py` (cookie
+  auto-issued on every response without one, header required on every
+  mutating call against a non-public, non-bearer endpoint, constant-time
+  compare). SPA axios interceptor reads the cookie and attaches the
+  header. Public endpoints (login/register/forgot/reset/verify/
+  bootstrap) are exempt so a cold client can authenticate; bearer-auth
+  `submit_ingestion_batch` exempt because Bearer tokens aren't
+  browser-ambient. Dev-only `DORA_CSRF_DISABLED=1` escape hatch refuses
+  to weaken production. Test conftest mirrors the axios interceptor so
+  the existing suite stays transparent; explicit CSRF tests bypass that
+  helper by passing `X-CSRF-Token: ""` to confirm the gate fires.
+- **Consequences:**
+  - Every future auth-identity write (password, email, recovery
+    channel, API key) is now expected to ship both halves of R-025.
+    Asymmetry between sensitive flows becomes a violation rather than
+    a judgement call.
+  - SPA `requestEmailChangeAsync(newEmail, currentPassword)` signature is
+    a breaking change for any caller — currently only `AccountSettings.vue`.
+  - The `dora_csrf` cookie's `httponly=False` is deliberate; the
+    defence relies on the SPA reading it. A future XSS would still let
+    an attacker read the token (the defence stops cross-site, not
+    in-page-script attacks). XSS-hardening is its own sweep (FU-196
+    security-headers / CSP item) — R-025 doesn't claim to fix that.
+  - `PUBLIC_ENDPOINTS` and `CSRF_EXEMPT_ENDPOINTS` are now load-bearing
+    lists; additions need a written rationale (R-025 violation signal).
+- **Promotes rule:** R-025.
 
 ---
 

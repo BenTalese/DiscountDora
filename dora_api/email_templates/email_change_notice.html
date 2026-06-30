@@ -1,0 +1,15 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <p>Hi {{ username }},</p>
+  <p>
+    Someone just requested to change the email address on your Dashy
+    Dora account to <strong>{{ new_email }}</strong>. A confirmation
+    link was sent to that new address; nothing changes until it's
+    clicked.
+  </p>
+  <p style="color:#666;font-size:13px;">
+    If this <strong>wasn't</strong> you, change your password
+    immediately — anyone who can request an email change already has
+    your current password.
+  </p>
+{% endblock %}

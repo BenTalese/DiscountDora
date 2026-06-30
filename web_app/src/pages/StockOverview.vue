@@ -1,11 +1,38 @@
 <template>
     <div class="q-pa-md">
-        <!-- Header bar — C-1 Chunk 2 / L94: one button group across the
-             top in this order: New item · Export · Bulk select · Scan ·
-             Stocktake. Search stays separate on the right (L99). -->
+        <!-- Header bar — FU-121: New item · Scan · Stocktake · Bulk select
+             · Export. Search stays separate on the right. -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
-            <!-- Feedback 2026-06-18 (round 3): Export now rides BaseButton
+            <BaseButton
+                v-if="scanningEnabled"
+                variant="secondary"
+                :icon="ICONS.qr_code_scanner"
+                label="Scan"
+                @click="overviewScanOpen = true"
+            />
+            <BaseButton
+                variant="secondary"
+                :icon="ICONS.fact_check"
+                :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
+                :attention="stocktakeOverdue > 0"
+                to="/stocktake"
+            />
+            <BaseButton
+                v-if="!bulkMode"
+                variant="secondary"
+                :icon="ICONS.checklist"
+                label="Bulk select"
+                @click="bulkMode = true"
+            />
+            <BaseButton
+                v-else
+                variant="secondary"
+                :icon="ICONS.close"
+                label="Cancel"
+                @click="cancelBulk"
+            />
+            <!-- Feedback 2026-06-18 (round 3): Export rides BaseButton
                  (secondary) so it sits flush with the other toolbar
                  buttons. The dropdown menu hangs off the BaseButton via
                  q-menu — same UX, consistent chrome. -->
@@ -31,34 +58,6 @@
                     </q-list>
                 </q-menu>
             </BaseButton>
-            <BaseButton
-                v-if="!bulkMode"
-                variant="secondary"
-                :icon="ICONS.checklist"
-                label="Bulk select"
-                @click="bulkMode = true"
-            />
-            <BaseButton
-                v-else
-                variant="secondary"
-                :icon="ICONS.close"
-                label="Cancel"
-                @click="cancelBulk"
-            />
-            <BaseButton
-                v-if="scanningEnabled"
-                variant="secondary"
-                :icon="ICONS.qr_code_scanner"
-                label="Scan"
-                @click="overviewScanOpen = true"
-            />
-            <BaseButton
-                variant="secondary"
-                :icon="ICONS.fact_check"
-                :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
-                :attention="stocktakeOverdue > 0"
-                to="/stocktake"
-            />
             <q-space />
             <!-- Feedback 2026-06-18: Filter toggle moved into the main
                  toolbar so the FilterBar doesn't get its own row of chrome
@@ -469,6 +468,7 @@
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
+    import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
@@ -571,7 +571,9 @@
 
     // Filter panel expanded state — shared between the toolbar's
     // FilterToggleButton and the FilterBar's collapsible panel.
-    const filtersExpanded = ref(false);
+    // FU-121: persisted per-page across reloads (mobile always starts
+    // hidden regardless of saved state).
+    const filtersExpanded = useFilterPanelExpanded('stock-overview');
 
     // ── Recipe-ingredients deep-link filter ─────────────────────────────
     // Triggered by the "filter to this recipe's ingredients" action on

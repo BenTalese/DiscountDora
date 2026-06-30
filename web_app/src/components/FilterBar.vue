@@ -22,6 +22,16 @@
             </div>
             <q-space v-else />
 
+            <!-- FU-121: Clear sits to the LEFT of Filters so the Filters
+                 button stays put when Clear appears/disappears. -->
+            <BaseButton
+                v-if="(activeCount ?? 0) > 0"
+                variant="ghost"
+                :icon="ICONS.filter_alt_off"
+                label="Clear filters"
+                @click="$emit('clear')"
+            />
+
             <BaseButton
                 v-if="$slots.filters"
                 :variant="expanded ? 'secondary' : 'ghost'"
@@ -33,14 +43,6 @@
                     {{ activeCount }}
                 </q-badge>
             </BaseButton>
-
-            <BaseButton
-                v-if="(activeCount ?? 0) > 0"
-                variant="ghost"
-                :icon="ICONS.filter_alt_off"
-                label="Clear filters"
-                @click="$emit('clear')"
-            />
 
             <slot name="actions" />
         </div>

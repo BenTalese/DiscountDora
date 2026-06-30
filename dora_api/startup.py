@@ -42,7 +42,7 @@ def startup(is_test_env: bool = False):
         app,
         resources={r'/api/*': {
             'origins': DORA_CONFIG.get_cors_origins(),
-            'allow_headers': ['Content-Type', 'X-Request-Id'],
+            'allow_headers': ['Content-Type', 'X-Request-Id', 'X-CSRF-Token'],
             'supports_credentials': True,
         }},
     )

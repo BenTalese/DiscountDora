@@ -17,7 +17,7 @@ from uuid import UUID
 
 from flask import jsonify, session
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT, SEVERITY_WARN
 from dora_api.domain.entities.auth_token import (
@@ -29,8 +29,8 @@ from dora_api.features.auth.register_user import (
 )
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import (
-    bad_request, no_content, ok, ProblemDetails, unauthorized,
-    unprocessable_entity,
+    bad_request, business_rule_violation, no_content, ok, ProblemDetails,
+    unauthorized, unprocessable_entity,
 )
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (
@@ -255,6 +255,10 @@ def reset_password():
 class ChangeEmailRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     new_email: str = Field(min_length=1, max_length=255)
+    # FU-197 — proof-of-possession. Matches the shape of
+    # ChangePasswordRequest so the two sensitive flows stay symmetric:
+    # neither succeeds without re-proving the current password.
+    current_password: str = Field(min_length=1, max_length=255)
 
 
 @AUTH_ROUTER.route("/me/email", methods=["POST"])
@@ -280,6 +284,21 @@ def request_email_change():
         session.clear()
         return unauthorized()
 
+    # FU-197 — re-prove the current password before letting the request
+    # proceed. Pairs with the new CSRF defence in middleware: even with
+    # both layers a remote attacker would still need the victim's
+    # password to flip their email.
+    if not user.password_hash or not check_password_hash(
+        user.password_hash, body.current_password,
+    ):
+        audit_emit(
+            "auth.email_change.password_failed",
+            severity=SEVERITY_WARN,
+            actor_user_id=user.id,
+            entity_type="User", entity_id=user.id,
+        )
+        return business_rule_violation("Current password is incorrect.")
+
     # Reject if another user already owns this email.
     other = repo.get(User).one(EntityField(User, User.Fields.EMAIL).eq(new_email))
     if other is not None and other.id != user.id:
@@ -289,6 +308,31 @@ def request_email_change():
         user.id, PURPOSE_CHANGE_EMAIL, CHANGE_EMAIL_TTL,
         payload=new_email,
     )
+
+    # FU-197 — notify the OLD address that a change was requested
+    # *before* sending the confirmation to the new one. Even if a
+    # future hole lets an attacker through both prior guards, the
+    # legitimate owner sees a heads-up at the address they currently
+    # control. Best-effort: a delivery failure on this notice must not
+    # block the confirmation email or the user-facing flow.
+    if user.email:
+        try_send(
+            send_email,
+            to=user.email,
+            subject="An email change was requested on your Dashy Dora account",
+            html_body=render_template(
+                "email_change_notice.html",
+                subject="An email change was requested",
+                username=user.username,
+                new_email=new_email,
+            ),
+            text_body=(
+                f"Hi {user.username}, someone (hopefully you) requested to "
+                f"change the email on your Dashy Dora account to {new_email}. "
+                "If this wasn't you, change your password immediately."
+            ),
+        )
+
     try_send(
         send_email,
         to=new_email,
@@ -300,6 +344,14 @@ def request_email_change():
             verify_url=f"{build_verify_url(raw_token).replace('/verify-email', '/confirm-email-change')}",
         ),
         text_body=f"Confirm: {build_verify_url(raw_token)}",
+    )
+
+    audit_emit(
+        "auth.email_change.requested",
+        severity=SEVERITY_AUDIT,
+        actor_user_id=user.id,
+        entity_type="User", entity_id=user.id,
+        payload={"new_email": new_email},
     )
     return no_content()
 

@@ -146,6 +146,74 @@ def test__reset_password__weak_password__is_422(api):
     assert response.status_code == 422
 
 
+# ── FU-197 — verified change-email flow + CSRF defence ────────────────
+#
+# These reuse the session-scoped `api` (the bootstrapped `dora`/`dora`
+# user) rather than registering fresh accounts so we don't burn through
+# the `auth.register` per-IP rate limit (10/min) — that bucket is shared
+# across every test in the file. None of these flows actually mutate
+# dora's address: the change-email request only issues an auth-token row
+# and queues an email; the address itself flips on confirmation, which
+# lives in a separate confirmation flow.
+
+
+def test__update_me__rejects_email_field(api):
+    """FU-197 — the legacy unverified email-write path on PATCH /auth/me
+    is closed; the field is now forbidden by the request model."""
+    import requests
+    response = requests.patch(
+        f"{BASE}/me",
+        json={"email": f"hijack-{uuid.uuid4().hex[:6]}@example.com"},
+    )
+    assert response.status_code == 400, response.text
+
+
+def test__request_email_change__current_password_gates_the_call(api):
+    """FU-197 — `current_password` is a required field (model-level 400
+    when missing) AND the value must match (business-rule 422 when
+    wrong, 204 when right)."""
+    import requests
+    new_email = f"dora-new-{uuid.uuid4().hex[:6]}@example.com"
+
+    # Missing current_password — model-level rejection.
+    missing = requests.post(f"{BASE}/me/email", json={"new_email": new_email})
+    assert missing.status_code == 400, missing.text
+
+    # Wrong current_password — business-rule rejection.
+    wrong = requests.post(f"{BASE}/me/email", json={
+        "new_email": new_email,
+        "current_password": "DefinitelyNotIt",
+    })
+    assert wrong.status_code == 422, wrong.text
+
+    # Right current_password — 204 (the actual swap is gated by clicking
+    # the confirmation link, which lives in a separate flow).
+    ok = requests.post(f"{BASE}/me/email", json={
+        "new_email": new_email,
+        "current_password": "dora",  # the bootstrap user's password
+    })
+    assert ok.status_code == 204, ok.text
+
+
+def test__csrf__mutation_without_header_is_403(api):
+    """FU-197 — the double-submit defence rejects an authenticated
+    mutating request that's missing the `X-CSRF-Token` header (the
+    cookie may still be set; the *match* is what gates the call)."""
+    import requests
+    # Bypass the conftest's auto-attach by passing an empty header
+    # explicitly; the wrapper sets it via `setdefault`, so a present-
+    # but-empty value wins and the server sees no valid token. PATCH
+    # the username back to its existing value so a future state-leak
+    # would be a no-op anyway — but expect the call to never reach the
+    # handler because the CSRF gate fires first.
+    response = requests.patch(
+        f"{BASE}/me",
+        json={"username": "dora"},
+        headers={"X-CSRF-Token": ""},
+    )
+    assert response.status_code == 403, response.text
+
+
 # Settings rebuild Phase 4 — profile picture round-trip.
 _PNG_DATA_URL = (
     "data:image/png;base64,"

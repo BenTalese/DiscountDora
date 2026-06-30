@@ -431,8 +431,10 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Filter toggle on Stock Overview, My Products, Cookbook overview: "Filters" button + badge + "Clear" all in main toolbar row; no second toolbar row above the filter panel
 
 ### Stock Overview Chunk 2 — top toolbar + filters + footer — origin FU-121
-- [ ] Top toolbar order: New item · Export · Bulk select · Scan · Stocktake · (spacer) · Search. Bulk select shows "Cancel" once on
-- [ ] Filter bar closed by default on every page using `FilterBar` (Stock Overview, Cookbook overview, anywhere else); click Filters → panel expands; click again → collapses; active-filter badge surfaces while collapsed
+- [ ] Top toolbar order: New item · Scan · Stocktake · Bulk select · Export · (spacer) · Search. Bulk select shows "Cancel" once on
+- [ ] Filter panel state remembered per page: toggle open on Stock Overview (desktop), reload — panel stays open. Toggle closed, reload — panel stays closed. Independent state across Stock Overview / My Products / Cookbook overview
+- [ ] Mobile (< md): every filterable page starts with the panel hidden regardless of the desktop-saved state. Can still open in-session via the Filters button, but a reload returns it to hidden
+- [ ] Clear filters button sits to the LEFT of the Filters button on every filterable page; toggling filters on/off makes Clear appear/disappear without the Filters button shifting position
 - [ ] Level filter is a single "Any level" dropdown; selecting filters; clearable; no floating count badges
 - [ ] "Used in a recipe" filter is gone
 - [ ] Search placeholder reads "Search" (no parenthesised hint)
@@ -444,6 +446,8 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Expiry set → tap → menu: **+1 day · +7 days · +14 days · Clear** (no +30). Each PATCH the right ISO; Clear nulls + button reverts to date-picker state
 - [ ] Tone outline flips: <7 days future → `stock-row--warn` (amber); past → `stock-row--alert` (red)
 - [ ] No regressions on right-cluster (#recipes, open/in-use, cart)
+- [ ] +X push semantics (FU-123 follow-on): item with future expiry (e.g. +5 days) → "+1 day" PATCHes to current+1 (not today+1); "+7 days" PATCHes to current+7. Item with past expiry → "+1 day" PATCHes to **tomorrow** (max(today, current) + 1), not yesterday
+- [ ] Detail-panel peek staleness (FU-123 follow-on): open the peek for an item, then in the row use the expiry menu (+1 day), the open-toggle, the flag-toggle, and the level dropdown. Peek's matching field updates **without** closing/reopening the peek. Same when the page is opened full-screen on mobile and the row mutation happens via a different surface
 
 ### Stock Overview Chunk 5 — responsive detail nav + long-press — origin FU-124
 - [ ] Desktop (≥ md): tap row → splitter peek opens with shared `StockItemDetailPage` embedded; tap again → closes
@@ -537,6 +541,19 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Settings
+
+### Account — verified email change + CSRF defence — origin FU-197
+- [ ] Settings → Account → Email row: enter a new address; the "Send confirmation" button stays disabled until you also fill the **Current password** input
+- [ ] Wrong current password → toast "Could not request email change." with the API's 422 reason caption ("Current password is incorrect.")
+- [ ] Right current password → toast "Confirmation link sent. Check your new inbox to finish the change.", the password field clears, the address shown above (currentUser) does **not** update yet
+- [ ] **Inbox A (new address):** "Confirm your new Dashy Dora email" with the confirmation link — click → /confirm-email-change → success → the next /auth/me probe surfaces the new address in the menu
+- [ ] **Inbox B (old address):** "An email change was requested on your Dashy Dora account" notice rendered from `email_change_notice.html` arrives **before** the confirmation in inbox A (same task; best-effort, but expected when SMTP is up). Old address never loses anything until the confirmation link is clicked
+- [ ] DevTools network: `PATCH /api/auth/me` with `{"email": "x@y.z"}` returns **400** (the field is now forbidden by the schema). The SPA never sends this — Settings always uses `POST /auth/me/email`
+- [ ] DevTools application → Cookies: a `dora_csrf` cookie is set after the first request, non-HttpOnly (so `document.cookie` shows it), SameSite=Lax. When `DORA_SECURE_COOKIES=1` is set on the server it's also Secure
+- [ ] DevTools network: every mutating SPA call carries an `X-CSRF-Token` request header whose value matches the `dora_csrf` cookie
+- [ ] DevTools console — paste `fetch('/api/auth/me', {method:'PATCH', credentials:'include', headers:{'Content-Type':'application/json'}, body:'{}'})` without the CSRF header → 403 with "Missing or invalid CSRF token."
+- [ ] Audit log: a successful change-email request emits `auth.email_change.requested`; a wrong-password attempt emits `auth.email_change.password_failed` (warn severity)
+- [ ] Login / register / forgot-password / reset-password / verify-email / bootstrap-admin still work cold (no CSRF cookie yet) — public endpoints are intentionally exempt
 
 ### Assistant — banner, Test connection, docs (PR2 finalisation) — origin FU-330 + FU-331 + FU-332
 - [ ] **AI-unavailable banner (FU-330):**
@@ -758,6 +775,21 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Cross-cutting
+
+### Main-menu indicator stuck colour after sub-route nav — bug fix (2026-06-30)
+- [ ] On `/cookbook` → click into a recipe → the underline indicator under Cookbook stays the **accent** colour (yellow in the default theme), **not** the hot-pink flash colour
+- [ ] Same check for: `/stock` → click into a stock item; `/shopping-lists` → click into a list; `/settings/account` → switch tabs within Settings
+- [ ] On any of the above pages, navigate to a different top-level (e.g. Cookbook → Stock) and back — flash colour briefly appears during the slide, then settles to accent on the new active button each time
+- [ ] No regression to the slide animation when clicking between top-level buttons — the indicator still slides smoothly across with the flash colour during the transition
+
+### Avatar accent ring for Settings + Help & guides — feature (2026-06-30)
+- [ ] Navigate to `/settings/account` (via avatar → Settings) — the avatar **pulses**: briefly appears in the "moving" colour (hot-pink in the default theme; matches the main-menu strip's slide-flash) at ~5px thick, then settles to the **3px accent ring** with a soft glow in ~550ms
+- [ ] Same pulse-then-settle on `/help` and `/help/dora`
+- [ ] Switch between Settings sub-pages (`/settings/account` → `/settings/preferences` → `/settings/notifications`) — ring stays lit throughout, **no re-pulse** between sub-pages (the class doesn't re-apply, so the keyframes don't re-fire)
+- [ ] Navigate from `/settings/account` → `/cookbook` — ring fades out smoothly (~320ms), main-menu Cookbook underline fades in. Reverse navigation pulses again on entry
+- [ ] Theme switch (default / Lemon / Pesto / etc.) — both the **flash** colour (pulse start) and the **accent** colour (resting) follow the theme's `--nav-slide-flash` + `--brand-accent` tokens
+- [ ] Mobile (`<md`): avatar still rings (header shown on mobile, just with hamburger swap)
+- [ ] **Reduced-motion** (DevTools → Rendering → "Emulate CSS prefers-reduced-motion: reduce"): the ring appears in the resting accent colour **without** the pulse beat; static activation only
 
 ### R-016 lazy hydration sweep — five pages — origin FU-221
 - [ ] Cold-load each of `/recipes`, `/recipes/<id>`, `/stock`, `/stock/<id>` — page renders normally (stock items + stock levels populate, no blank pickers / missing names)

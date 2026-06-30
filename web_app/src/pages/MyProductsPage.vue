@@ -570,6 +570,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
+    import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
@@ -624,7 +625,8 @@
     }
 
     // ── Filters ─────────────────────────────────────────────────────
-    const filtersExpanded = ref(false);
+    // FU-121: persisted per-page (mobile always starts hidden).
+    const filtersExpanded = useFilterPanelExpanded('my-products');
     const searchText = ref('');
     const onDealOnly = ref(false);
     const includeInactive = ref(false);

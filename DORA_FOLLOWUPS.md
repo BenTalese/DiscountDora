@@ -53,6 +53,510 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-428 — DOC_GRAPH.md is stale — 22 proposals/IMPL plans not indexed
+- **Raised:** 2026-07-01 (full-docs audit).
+- **Type:** finding (doc drift on the anti-drift spine).
+- **What:** `docs/00_DOC_GRAPH.md` is CLAUDE.md's "per-prompt required-reading map" — but 22 of 41 files under `04_proposals/` are not mentioned anywhere in it. Missing: `PROPOSAL_COOKBOOK_CARD_REVISION`, `PROPOSAL_PRODUCTS_AS_OVERLAY`, `PROPOSAL_RECIPE_IMAGE_STEPS`, `PROPOSAL_SHOPPING_LIST_UX_V2`, `PROPOSAL_SIMPLE_MODE`, `PROPOSAL_STOCK_ITEM_DETAIL`, `PROPOSAL_SUPPORT_CHANNEL`, `PROPOSAL_TEST_SUITE_IMPROVEMENTS`, `PROPOSAL_WASTE_MINIMISATION`, and all 13 `IMPL_PLAN_*.md` files. Prompts that would trigger these docs will not find them via the graph — silent under-reading.
+- **Why deferred:** each addition wants a real "who triggers it, which docs it cross-links to" pass; not a boilerplate append.
+- **Recommended resolution:** opportunistic — when a prompt in `03_prompts/` next fires against one of the missing docs, add its graph entry as part of that unit. If it drags on, do a dedicated sweep pass (~1 hour).
+
+## [OPEN] FU-427 — 99_scratch unstructured `.txt` files — triage
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** deferred job.
+- **What:** `docs/99_scratch/claude convo.txt`, `Finish task DS1.txt`, `prompt - up to speed.txt` sit outside the markdown convention and were never triaged. Either they contain something worth promoting into a proposal/FU, or they can be deleted.
+- **Why deferred:** unread; low signal-to-noise expected.
+- **Recommended resolution:** opportunistic — read each once, promote-or-delete, close this FU with the outcome.
+
+## [OPEN] FU-426 — Waste-page scratch assessment: confirm fully absorbed by C-waste
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** finding (audit trail).
+- **What:** `docs/99_scratch/WASTE_PAGE_ASSESSMENT_2026-06-24.md` became `PROPOSAL_WASTE_MINIMISATION.md` + `IMPL_PLAN_WASTE_MINIMISATION.md`. Confirm every keep-item from the scratch note is either in the shipped proposal, a landed FU, or explicitly-dropped-with-rationale. If clean, archive the scratch note.
+- **Why deferred:** low risk, just a delta-check.
+- **Recommended resolution:** opportunistic; also fold the archive step into it (move to `06_legacy_prompt_plans/` or delete).
+
+## [OPEN] FU-425 — Pricing reassessment handoff: confirm fully executed
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** finding.
+- **What:** `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` is marked "RATIFIED — READY FOR EXECUTION." Chunks landed via `IMPL_PLAN_YOUR_PRICES` (all 8 built per FU-227). Delta-check that every §6/§6a/§6b decision made it into shipped code + docs, then archive the handoff note.
+- **Why deferred:** verification only.
+- **Recommended resolution:** opportunistic delta-check; then move the note to `06_legacy_prompt_plans/`.
+
+## [OPEN] FU-424 — Senior review Tier-2 credibility gaps — confirm status
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** finding.
+- **What:** `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md` Tier-1 ship-blockers were closed (register-first-admin, CSRF, build). Tier-2 "credibility gaps" — ~237 prompt-ID comments in shipped source, half-finished base-component adoption, missing request-level transaction safety, unreachable Postgres posture — were not systematically verified this session. Postgres is closed (FU-045). The other three need a delta pass.
+- **Why deferred:** re-audit vs shipped code, not a fix.
+- **Recommended resolution:** before any commercialization gate — grep for prompt-ID comments (`P[0-9]-\|C-[0-9]\|B[0-9]`) in shipped source; count non-Base component usage; audit for missing `db.session.commit()` boundaries. Log a proper FU or plan per finding.
+
+## [OPEN] FU-423 — MINIMAL_USER_PRODUCTS_OFF_FRICTION scratch → promote or consolidate
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** deferred job.
+- **What:** `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` is scratch awaiting promotion; already tracked by [[FU-181]]. Overlap check: this new FU exists only because the docs-audit rule was "every open item becomes an FU" — but it's a duplicate. **Action: close as duplicate of FU-181** the next time FU-181 gets touched (or now).
+- **Why deferred:** duplicate; kept in the ledger for the audit trail.
+- **Recommended resolution:** immediate — close as duplicate of [[FU-181]] with a state note; no separate work.
+
+## [OPEN] FU-422 — Search: display which products already link to a stock item
+- **Raised:** 2026-07-01 (original-spec sweep).
+- **Type:** deferred job (dropped intent from original spec).
+- **What:** Original spec (`docs/00_original_spec/Unprocessed Ideas (from Google Docs).md`) asked that when searching for products, the UI should visibly mark ones **already linked to a stock item** so the user isn't tempted to re-link. Search now lives in the companion, but the *linkage-display* rule may still belong in Dora (the "Products" tab on a stock item) or become part of the companion's ingestion contract. Decide where it lives.
+- **Why deferred:** search moved to companion mid-flight; the rule was never re-homed.
+- **Recommended resolution:** during any companion↔Dora ingestion-boundary work — call whether Dora surfaces "already-linked" itself, or the companion queries a Dora endpoint. If the latter, add to the ingestion API's read-side.
+
+## [OPEN] FU-421 — "Remind me to use this" on opened items (use-by reminder)
+- **Raised:** 2026-07-01 (original-spec sweep).
+- **Type:** deferred job (dropped intent).
+- **What:** Original spec asked for a "remind me" affordance when an item is opened (e.g. "I opened this Thai curry paste, remind me in 2 months"). Distinct from expiry (expiry is intrinsic to the product; this is user-set per-open event). Not modelled today — `is_open` + `opened_at` exist, no reminder field/UI.
+- **Why deferred:** never made it into the finishing plan.
+- **Recommended resolution:** when P8-07 Zero-Input Pantry or the alerts refactor next opens — decide keep/cut; if keep, a `use_by_reminder_at` field on `StockItem` + one alert type + a modal on the "opened" toggle covers it.
+
+## [OPEN] FU-420 — Recipes: non-linked ingredients still fully accounted for (verify model)
+- **Raised:** 2026-07-01 (original-spec sweep).
+- **Type:** finding (verification).
+- **What:** Original spec required that not every recipe ingredient needs to be linked to a stock item, but **all** ingredients are still accounted for in the system (for shopping lists, cook mode, missing-count). Verify: does `RecipeIngredient` support a `stock_item_id`-null row cleanly through shopping-list generation, cook-mode, and `cookable`/`missing_count`? Or are unlinked ingredients silently skipped?
+- **Why deferred:** unverified in this audit.
+- **Recommended resolution:** during Cookbook C-4 next-touch or opportunistic — trace the null-`stock_item_id` path through `auto_generate.py`, cook-mode finish flow, and cookable derivation; fix any drop-offs.
+
+## [OPEN] FU-419 — Recipes: healthy/unhealthy rating + filter/sort
+- **Raised:** 2026-07-01 (original-spec sweep).
+- **Type:** deferred job (dropped intent).
+- **What:** Original spec proposed a 5-star healthiness rating on recipes with corresponding filter/sort. Never surfaced in Wave-C; nutrition mode does kcal only. Overlaps with the nutrition-off/simple/complex ladder but is a separate axis (perceived healthiness ≠ kcal).
+- **Why deferred:** de-emphasised when nutrition was scoped to off+simple.
+- **Recommended resolution:** discussion — decide whether this is (a) a distinct healthiness dimension, (b) subsumed by the nutrition-complex mode when eventually built, or (c) dropped. Not now; revisit when nutrition or Cookbook next opens.
+
+## [OPEN] FU-418 — Distribution Spec §4 open questions
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/Distribution Spec - Desktop App & Mobile Client.md` §4 has explicit open questions for the user. Not answered; overlaps with PLATFORM_BUILDS_AUDIT and P8-10 native.
+- **Why deferred:** Phase 3 / commercialization territory.
+- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens; answer the §4 questions inline there.
+
+## [OPEN] FU-417 — MAGIC_BEHAVIOUR_AUDIT verdicts — confirm each landed
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** finding (delta check).
+- **What:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` has a "Verdicts (2026-06-28)" section listing keep / clean-up calls on specific magic behaviours. Not all verdicts were verified against shipped code in this session.
+- **Why deferred:** delta-check only.
+- **Recommended resolution:** opportunistic — walk each verdict, confirm code state, close.
+
+## [OPEN] FU-416 — ORPHANED_FIELDS_AUDIT: confirm all placements acted on
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** finding (delta check).
+- **What:** `docs/05_investigations/ORPHANED_FIELDS_AUDIT.md` has a "Recommended placement in the prompt plan" section. Some fields were fixed via later work (e.g. `StockItem.barcode` dropped via P6-02); the full list wasn't re-verified this session.
+- **Why deferred:** delta-check only.
+- **Recommended resolution:** opportunistic — cross-reference each orphan against current schema; close-or-open per finding.
+
+## [OPEN] FU-415 — FEATURE_CLARIFICATIONS: expiry ↔ open interaction rule
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job (decision).
+- **What:** `docs/05_investigations/FEATURE_CLARIFICATIONS.md §(c)` asks whether expiry and "opened" state affect each other (e.g. opened item → shortened effective expiry). No decision recorded. Currently they're independent.
+- **Why deferred:** never resolved.
+- **Recommended resolution:** discussion — 5-minute call on the rule (independent / opened shortens expiry by X / prompt for reminder). If a rule is chosen, small code change; if independent, close as decided.
+
+## [OPEN] FU-414 — LOGGING_AND_DATA_LAYOUT investigation: delta-check
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** finding.
+- **What:** `docs/05_investigations/LOGGING_AND_DATA_LAYOUT.md` had recommendations around log rolling / `.local` layout. Some landed; comprehensive delta not confirmed.
+- **Why deferred:** verification only.
+- **Recommended resolution:** opportunistic; when next touching logging config or data-dir layout.
+
+## [OPEN] FU-413 — EMAIL_SETUP_FINDINGS: promote proposal to IMPL
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/EMAIL_SETUP_FINDINGS.md` produced a §"Proposal" section for the forgot-password / email-wiring path. No IMPL plan; nothing shipped. This is the managed-convenience-that-degrades-gracefully case from §7.5 discipline #6.
+- **Why deferred:** feature-absent when unconfigured is currently acceptable; only becomes a blocker at commercialization.
+- **Recommended resolution:** before Phase 4 / any hosted deployment — draft `IMPL_PLAN_EMAIL_SETUP.md`, wire SMTP config through `AppSetting` with a "degrades to feature-absent" default.
+
+## [OPEN] FU-412 — COMMERCIALIZATION_REPORT: dormant, not yet actioned
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/COMMERCIALIZATION_REPORT.md` is a Phase 4 planning input. Not translated into a plan or prompts.
+- **Why deferred:** Phase 4 territory.
+- **Recommended resolution:** at Phase 4 kick-off — read the report top-to-bottom, spawn per-recommendation FUs / plans.
+
+## [OPEN] FU-411 — PLATFORM_BUILDS_AUDIT target-matrix: not acted on
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md` recommends a target-matrix (which platforms to prioritise for native builds). Nothing acted on; overlaps with P8-10 native and P5-04 mobile field-test.
+- **Why deferred:** Phase 3 flagship-adjacent.
+- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens.
+
+## [OPEN] FU-410 — MULTI_USER_READINESS §5 open questions
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/MULTI_USER_READINESS.md §5` lists open questions gating Phase 4 tenancy work.
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** at Phase 4 tenancy kick-off; part of P7-A1 / P7-A2 (see [[FU-406]] / [[FU-407]]).
+
+## [OPEN] FU-409 — AUTH_ASSISTANT_SECURITY_FINDINGS: delta re-audit before commercialization
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** finding.
+- **What:** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` originally listed CSRF / email-change / register-first-admin issues. Most were resolved (per resolved-FUs trail). A comprehensive item-by-item confirmation vs shipped code was not re-run.
+- **Why deferred:** the delta itself is the work.
+- **Recommended resolution:** before any public deployment — walk every finding, tick "fixed" or reopen. Overlaps with [[FU-424]] (senior-review credibility gaps).
+
+## [OPEN] FU-408 — INV-8 substitute swap: cross-ref inside stock-item detail is stale
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** finding.
+- **What:** `IMPL_PLAN_STOCK_ITEM_DETAIL.md` line ~83 cross-refs INV-8's swap rework as "not built here." INV-8's target surface (Shop Mode) no longer exists as a separate page — merged into ShoppingListDetail per UX v2. The cross-ref is stale until [[FU-407]] re-scopes the rework.
+- **Why deferred:** blocked by [[FU-407]].
+- **Recommended resolution:** update the cross-ref when [[FU-407]] resolves; same session.
+
+## [OPEN] FU-407 — INV-8 substitute swap rework: re-scope for merged Shop Mode
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** finding (design call).
+- **What:** `docs/05_investigations/SUBSTITUTE_SWAP_ASSESSMENT.md` recommended surfacing the stock-item substitute swap **inside Shop Mode + disambiguating the two "Substitute" labels** (line stock-item swap vs merchant-offer swap). Shop Mode has since been merged into ShoppingListDetail (UX v2); the recommendation is stale as written. Currently the only surface is a buried "Swap … with" line-menu action at [ShoppingListDetail.vue:1890](web_app/src/pages/ShoppingListDetail.vue:1890).
+- **Why deferred:** the target surface changed mid-flight; nobody re-scoped the fix.
+- **Recommended resolution:** short design brief — decide (a) do the rework against the merged surface (a shopping-mode-active affordance surfaced when a line is marked out-of-stock), or (b) cut the list-level swap outright and rely on cook-mode swaps + manual edit. Address the two-"Substitute" collision either way.
+
+## [OPEN] FU-406 — P7-10 Launch readiness
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4 gate).
+- **What:** `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_7_COMMERCIALIZATION.md §P7-10` — final launch-readiness checklist (marketing, legal, incident channels, escalation, on-call). Nothing done.
+- **Why deferred:** last-mile.
+- **Recommended resolution:** at Phase 4 finish.
+
+## [OPEN] FU-405 — P7-09 Ops (observability, CI/CD deploy, staging, backups)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-09 — production ops. CI is deliberately disabled in this repo (`.github/workflows/*.yml` commented out to preserve GH free-tier — see memory `feedback_ci_disabled_policy`). Observability, staging, backups all unplanned. **Do not silently re-enable CI as part of this** — separate call.
+- **Why deferred:** Phase 4 + CI-cost policy.
+- **Recommended resolution:** Phase 4 — pair with billing (P7-06) so ops cost lands with revenue.
+
+## [OPEN] FU-404 — P7-08 Compliance (privacy policy, DSAR, deletion, security headers)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-08 — full compliance surface. Partial: some security-headers work has landed; the privacy-policy hooks + full data-export/deletion (DSAR) contract not confirmed. Overlaps with [[FU-401]] (P5-02 Privacy).
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit.
+
+## [OPEN] FU-403 — P7-07 Plan gating + usage limits
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-07 — feature/usage limits gated by plan tier once billing is in.
+- **Why deferred:** Phase 4, gated by [[FU-402]] Stripe billing.
+- **Recommended resolution:** immediately after Stripe lands.
+
+## [OPEN] FU-402 — P7-06 Stripe billing
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-06 — Stripe integration for the SaaS Path A + managed Path B.
+- **Why deferred:** Phase 4; only after tenancy ([[FU-400]] / [[FU-401]]).
+- **Recommended resolution:** Phase 4.
+
+## [OPEN] FU-401 — P7-A2 Repository-enforced tenant isolation + leak tests
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4, Path A).
+- **What:** P7-A2 — tenant scoping enforced at the repository layer + cross-tenant leak tests. §7.5 discipline #1 keeps this a one-layer change when the time comes.
+- **Why deferred:** Path A is Phase 4.
+- **Recommended resolution:** with [[FU-400]] (Households-as-tenant) as one work-unit.
+
+## [OPEN] FU-400 — P7-A1 Households-as-tenant + admin → owner / platform-admin split
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4, Path A).
+- **What:** P7-A1 — introduce households as the tenancy boundary; split "admin" into household-owner and platform-admin. Gated by [[FU-410]] (MULTI_USER_READINESS §5).
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** first Path-A work item once Phase 4 opens.
+
+## [OPEN] FU-399 — P7-B1 Provisioning control plane
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4, Path B).
+- **What:** P7-B1 — automated provisioning for managed single-tenant instances (Path B). Same artifact, different env per §7.5 discipline #3.
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** first Path-B work item when Phase 4 opens; can precede Path-A work.
+
+## [OPEN] FU-398 — P7-05 Redis + object storage for images
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-05 — Redis for sessions/cache/rate-limit + object storage (S3-ish) for uploaded images. Managed-convenience per §7.5 #6 — must degrade gracefully to "feature absent" (in-memory / local disk) on self-host.
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** with P7-04 as the "production stack" work-unit.
+
+## [OPEN] FU-397 — P7-04 Production WSGI + web/worker split
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4).
+- **What:** P7-04 — replace dev server with gunicorn/uwsgi, split web vs worker. Env-driven per §7.5 discipline #3.
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** paired with [[FU-398]] Redis + [[FU-405]] Ops as the production-stack work-unit.
+
+## [OPEN] FU-396 — P7-02 fuzzywuzzy → RapidFuzz (GPL dependency blocker)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (real blocker).
+- **What:** `fuzzywuzzy==0.18.0` still in [requirements.txt:20](requirements.txt) and used in [global_search.py:21](dora_api/features/search/global_search.py:21) + [import_recipe_from_url.py:26](dora_api/features/recipes/import_recipe_from_url.py:26). fuzzywuzzy is GPL — **blocks any commercial license path**. RapidFuzz is MIT-licensed drop-in.
+- **Why deferred:** hasn't been forced yet; small ~1-day task.
+- **Recommended resolution:** **before any commercialization** (Phase 4 kickoff at the latest, ideally sooner). Swap import + confirm score-scale compatibility (both return 0-100). No API change.
+
+## [OPEN] FU-395 — P5-11 Production readiness review
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (Phase 4 gate).
+- **What:** P5-11 — comprehensive pre-launch review sweep.
+- **Why deferred:** Phase 4.
+- **Recommended resolution:** at Phase 4 near-completion, before [[FU-406]] launch readiness.
+
+## [OPEN] FU-394 — P5-10 Merchant data quality & support bundle: confirm companion-scope only
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** finding.
+- **What:** P5-10 — merchant data quality is now companion-scope per Decision 1. Confirm nothing in the P5-10 spec landed in Dora-core, and formally mark the P5-10 prompt as "moved to companion project."
+- **Why deferred:** scoping-only.
+- **Recommended resolution:** doc edit — add a "moved to companion" banner to P5-10 in the legacy plan file; close.
+
+## [OPEN] FU-393 — P5-08 Data-model sanity review sweep
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-08 — comprehensive data-model sanity sweep. `ORPHANED_FIELDS_AUDIT` covered one slice; nullability audit, FK-consistency, index coverage, dead columns — not done as a single pass.
+- **Why deferred:** hasn't been forced.
+- **Recommended resolution:** opportunistic sweeps as touched (partial credit for [[FU-416]]); a single dedicated pass would be a good pre-Phase-4 gate.
+
+## [OPEN] FU-392 — P5-07 Demo & sellable showcase mode
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-07 — seed a "showcase" install with representative data + a toggleable demo mode for prospects. Seed system exists; showcase toggle + curated dataset don't.
+- **Why deferred:** Phase 4-ish; needed for sales conversations.
+- **Recommended resolution:** with commercialization prep (Phase 4 opening).
+
+## [OPEN] FU-391 — P5-06 first-week experience (post-onboarding nudges)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-06 — first-week experience: gentle nudges to complete profile, add first recipe, run first stocktake, etc. First-day onboarding shipped (C-5); first-week nudges not built. Overlaps with [[FU-352]] (P6-12 daily briefing card).
+- **Why deferred:** waiting on the alerts/dashboard-card model to firm up.
+- **Recommended resolution:** fold into the P8-08 Dora Score card brief when [[FU-352]] opens — the same launchpad-alerts model fits first-week nudges.
+
+## [OPEN] FU-390 — P5-05 Dora AI reliability + eval suite
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-05 — reliability tests + evaluation suite for the assistant. Assistant is currently being replaced by a local SLM (per memory `project_dora_slm_assistant`). Eval suite needs to be built against the SLM rather than the rule-based intent path.
+- **Why deferred:** SLM work in-flight; eval-first would test the wrong subject.
+- **Recommended resolution:** as the SLM lands — the eval suite is the acceptance gate. Reference the SLM work when picked up.
+
+## [OPEN] FU-389 — P5-04 Mobile / PWA field test
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-04 — real-device mobile / PWA testing pass. Overlaps with [[FU-411]] platform builds + P8-10 native.
+- **Why deferred:** Phase 3-adjacent.
+- **Recommended resolution:** fold into the P8-10 native-app brief; a device-lab pass is a natural gate before deciding native vs PWA-only.
+
+## [OPEN] FU-388 — P5-03 Performance & scale pass
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-03 — comprehensive perf sweep (query N+1s, bundle size, load-tests). Only `STOCK_OVERVIEW_PERF` investigation touched a slice. No app-wide pass.
+- **Why deferred:** hasn't been forced by user pain.
+- **Recommended resolution:** pre-Phase-4 gate — do one comprehensive pass with real seed data at pantry size 500+ items, catch N+1s + big-query issues before they hit paying users.
+
+## [OPEN] FU-387 — P5-01 Security & privacy hardening bundle sweep
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+- **What:** P5-01 — comprehensive security/privacy hardening sweep. Auth findings (CSRF, register-first-admin, email-change) resolved per resolved-FUs. The full P5-01 bundle (security headers, rate-limits, secrets management, dependency audit) not executed as a single sweep.
+- **Why deferred:** slices landed opportunistically.
+- **Recommended resolution:** pre-Phase-4 gate — one dedicated sweep before any public deploy. Overlaps with [[FU-409]] auth findings re-audit + [[FU-424]] senior-review Tier-2.
+
+## [OPEN] FU-386 — IMPL_PLAN_STATE_OWNERSHIP: dangling client-only `doraContextualActions.ts`
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** finding.
+- **What:** `IMPL_PLAN_STATE_OWNERSHIP.md:25` flags a client-side `doraContextualActions.ts` handle whose server-side counterpart was **not implemented** — a dangling contract. Either build the server side or delete the client handle.
+- **Why deferred:** noted in the plan doc, never actioned.
+- **Recommended resolution:** when the assistant/SLM work next touches contextual actions — decide direction + close.
+
+## [OPEN] FU-385 — Dashboard: DashboardCard extraction + "new low" signal
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `IMPL_PLAN_DASHBOARD_REBUILD.md:263` — DashboardCard extraction was **not** done; zones ship via CSS instead of a shared card component. `:320` — the "new low" server-side signal was **not built** (needed for the dashboard's "just went low" surface).
+- **Why deferred:** dashboard rebuild landed without them; not blocking.
+- **Recommended resolution:** when Dashboard next opens for change — extract the shared card component (R-002 componentisation) and add the server-side new-low signal. Feeds into [[FU-352]] Dora Score card too.
+
+## [OPEN] FU-384 — StockOverview collapse/expand button (deferred from C-cross)
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `IMPL_PLAN_CONFIG_AND_OPTINS.md:320` — the StockOverview collapse/expand button was explicitly **NOT built** in C-cross; row-geometry deferred to the next C-1 chunk which never happened.
+- **Why deferred:** owned by C-1 not C-cross; C-1 didn't include it.
+- **Recommended resolution:** next C-1 (Stock Overview) touch — decide keep/cut; if keep, build inline with any other row-geometry change.
+
+## [OPEN] FU-383 — Onboarding: "preferred stores/merchants" step not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_ONBOARDING.md:268` — the preferred-merchants step was **not built** ("same uncertain bucket as preferred-*product* removal, FU-180"). Onboarding currently skips it.
+- **Why deferred:** merchants layer is companion-scope and its onboarding value was unclear.
+- **Recommended resolution:** discussion — decide whether the everyday user needs a "preferred store" concept for `usual_store_id` (which does exist server-side). If yes, small onboarding step + settings mirror; if no, close as decided.
+
+## [OPEN] FU-382 — PROPOSAL_SHOPPING_LIST_UX_V2 §11 open questions
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** finding (unresolved decisions).
+- **What:** V2 shipped but §11 open questions were not all closed in-doc. Read the section and either resolve each against the shipped behaviour or turn each into its own FU.
+- **Why deferred:** end-of-implementation admin miss.
+- **Recommended resolution:** doc-only pass — walk §11, mark each RESOLVED (with the shipped behaviour) or spawn a per-question FU.
+
+## [OPEN] FU-381 — PROPOSAL_COOK_MODE §5 open decisions
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_COOK_MODE.md:166` — open decisions: ticking removal, sub-step model, quantity-unit inclusion list. Cook mode C-3 shipped but the doc's open-decision block was not closed.
+- **Why deferred:** built without fully resolving the doc's open calls.
+- **Recommended resolution:** doc-only walk — mark each against shipped behaviour or spawn per-question FUs.
+
+## [OPEN] FU-380 — PROPOSAL_CART_BUTTON §7 open decisions + swipe-right + success animation
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_CART_BUTTON.md:220` (§7 open decisions), plus §7.7 swipe-right affordance and success animation added as new open decisions. Cart button C-7 shipped; not all open decisions closed.
+- **Why deferred:** built without fully resolving.
+- **Recommended resolution:** walk §7 + §7.7 vs shipped, close or spawn.
+
+## [OPEN] FU-379 — PROPOSAL_ALERTS §7 open decisions + still-open deferred cluster
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_ALERTS.md:326` §7 open decisions + `:341` "still open (deferred to their phase, not blocking)" cluster. C-9 Phase A shipped; the deferred cluster survives.
+- **Why deferred:** flagged not-blocking.
+- **Recommended resolution:** revisit when alerts next opens (or fold into [[FU-352]] Dora Score card if the alerts-as-launchpads reframing subsumes them).
+
+## [OPEN] FU-378 — PROPOSAL_STOCK_OVERVIEW §2.3 detail navigation model + §7 open decisions
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job (design call).
+- **What:** `PROPOSAL_STOCK_OVERVIEW.md:84` — §2.3 is flagged as **"the #1 open decision"** (detail navigation model — desktop drawer vs mobile full-page, row-tap vs button-tap miss risk, L68/L71). §7 has additional open decisions. C-1 shipped but this call was not closed.
+- **Why deferred:** shipped without resolving the top-of-doc open decision.
+- **Recommended resolution:** discussion — resolve §2.3 vs shipped behaviour + user preference, then walk §7. Prerequisite for [[FU-384]].
+
+## [OPEN] FU-377 — PROPOSAL_COOKBOOK open decisions (cuisine-vs-category, versions UX, multi-part model)
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_COOKBOOK.md` has three named open decisions: cuisine-vs-category fate, versions UX (full snapshot vs branchable), multi-part model A vs B. C-4 shipped chunks 1–10; these calls were not all closed.
+- **Why deferred:** shipped what was clear, deferred what wasn't.
+- **Recommended resolution:** doc walk vs shipped state; the cuisine-vs-category call cascades into [[FU-XXX]] C-cross taxonomy editors ([[FU-372]]).
+
+## [OPEN] FU-376 — PROPOSAL_PRODUCTS_AS_OVERLAY §7 open decisions + GAP bucket
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_PRODUCTS_AS_OVERLAY.md:262` §7 build-time open decisions + `:391` "GAP = small, not yet built" bucket. IMPL landed but these residual bits were not swept.
+- **Why deferred:** small-slice residuals.
+- **Recommended resolution:** doc walk vs shipped; each GAP either becomes its own FU or gets closed with a state note.
+
+## [OPEN] FU-375 — PROPOSAL_MEAL_PLANS §11 smaller secondary open decisions
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_MEAL_PLANS.md:494` — §11 "smaller secondary open decisions" cluster. Meal-plans rebuild has an active IMPL (`IMPL_PLAN_MEAL_PLANS_REBUILD.md`); §11 not fully resolved.
+- **Why deferred:** secondary, not blocking the rebuild.
+- **Recommended resolution:** roll into the meal-plans rebuild close-gate — walk §11 vs shipped, close each.
+
+## [OPEN] FU-374 — PROPOSAL_SIMPLE_MODE: sweep non-spine parts (spine superseded)
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** finding (doc drift).
+- **What:** `PROPOSAL_SIMPLE_MODE.md` marked spine-superseded 2026-06-17 by PRODUCTS_AS_OVERLAY. The doc's non-spine parts (money opt-in framing, some UI notes) were not confirmed re-homed elsewhere.
+- **Why deferred:** doc admin.
+- **Recommended resolution:** doc walk — mark every non-spine section either "re-homed at X" or "dropped by pivot"; close.
+
+## [OPEN] FU-373 — PROPOSAL_BARCODE_SCANNING deferred slices (register-against-product + scan-unknown)
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_BARCODE_SCANNING.md` cleanup slice landed; **register-against-product UI + scan-unknown rework** deferred to Phase 2 (ingestion). Ingestion has landed but these barcode slices did not follow through. §6 "Scan tab under QR codes placement" also open.
+- **Why deferred:** waited on ingestion; ingestion landed without pulling these along.
+- **Recommended resolution:** next barcode-touch — build the register-against-product UI (unknown EAN → offer to link to an existing Product) + scan-unknown rework. Resolve §6 placement while there.
+
+## [OPEN] FU-372 — PROPOSAL_COOKBOOK_CARD_REVISION: not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Design-only sequel to Cookbook §2.10. Two open-decision sections (§3, §5). No IMPL plan.
+- **Why deferred:** Cookbook C-4 shipped without this revision.
+- **Recommended resolution:** when Cookbook next opens for change — resolve open decisions + spawn `IMPL_PLAN_COOKBOOK_CARD_REVISION.md` if kept.
+
+## [OPEN] FU-371 — PROPOSAL_TEST_SUITE_IMPROVEMENTS: not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Draft proposal, no IMPL, nothing shipped.
+- **Why deferred:** infra investment; hasn't been forced.
+- **Recommended resolution:** pre-Phase-4 gate; better test suite is a commercialization prerequisite for confident refactors.
+
+## [OPEN] FU-370 — PROPOSAL_SUPPORT_CHANNEL: not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Draft proposal for a user support channel; no IMPL, nothing shipped.
+- **Why deferred:** commercialization-adjacent; no users to support.
+- **Recommended resolution:** Phase 4 alongside [[FU-402]] Stripe + [[FU-404]] compliance.
+
+## [OPEN] FU-369 — PROPOSAL_RECIPE_IMAGE_STEPS: not built (draft for co-design)
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Draft 2026-06-25 with 3 open decisions (peer switch across payload types §5.1; vertical vs swipe carousel §5.2; client-side resize target + image cap §5.3). No IMPL.
+- **Why deferred:** waiting on co-design.
+- **Recommended resolution:** 30-minute co-design session on the 3 open decisions, then `IMPL_PLAN_RECIPE_IMAGE_STEPS.md`.
+
+## [OPEN] FU-368 — PROPOSAL_LOCALE_I18N: not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Draft proposal; §4 open decisions (`:140`); no IMPL. Currency + locale currently AUD-hardcoded in places.
+- **Why deferred:** single-locale is fine while personal-use.
+- **Recommended resolution:** before commercialization (Phase 4-adjacent) — many customers won't be AU-based. Overlaps with [[FU-402]] Stripe (multi-currency).
+
+## [OPEN] FU-367 — PROPOSAL_HELP_OVERLAY: not built
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** Proposal for a contextual help overlay; §4 open decisions (`:146`); no IMPL. Distinct from [[FU-366]] A-4 Help *content* — this is the UI shell.
+- **Why deferred:** noted but not scheduled.
+- **Recommended resolution:** discussion — decide whether overlay + content are one work-unit or two; if two, sequence overlay before content so content has a place to render into.
+
+## [OPEN] FU-366 — Deferred surfaces: Reports, Settings shell, Mobile view
+- **Raised:** 2026-07-01 (Wave-C audit).
+- **Type:** deferred job.
+- **What:** `C_big_rock_design_briefs.md` "do not redesign yet" list. Dashboard has been pulled forward and shipped. **Reports, Settings shell, Mobile view** remain officially deferred — no briefs. Feedback for Reports is empty; Settings has some deferred bullets (see [[FU-365]] A-5); Mobile view has no direct feedback.
+- **Why deferred:** deliberately parked.
+- **Recommended resolution:** discussion at some future point — decide whether each stays parked forever or gets a brief. Not on a critical path.
+
+## [OPEN] FU-365 — INV-10 Essential flag: row-level quick-toggle in Stock Overview
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `ESSENTIAL_FLAG_FINDINGS.md` rec #1 (rename to "Essential") is done in detail. **Rec #2 (row-level quick-toggle in stock-overview row context menu or multi-select) is NOT built.** Only Reports has bulk `markAllEssential`.
+- **Why deferred:** rec #1 alone resolved the "can't find it" complaint; #2 dropped off.
+- **Recommended resolution:** next C-1 (Stock Overview) touch — add "Mark essential" to the row three-dot menu + the multi-select bulk action bar. Small change.
+
+## [OPEN] FU-364 — Wave-C briefs: unresolved open-decision blocks across shipped proposals
+- **Raised:** 2026-07-01 (proposals audit meta-item).
+- **Type:** finding (meta).
+- **What:** Multiple Wave-C proposals shipped without closing their in-doc "Open decisions" sections. Individual FUs exist for each ([[FU-378]] Stock Overview, [[FU-377]] Cookbook, [[FU-379]] Alerts, [[FU-375]] Meal Plans §11, [[FU-380]] Cart Button, [[FU-381]] Cook Mode, [[FU-382]] Shopping List V2). This meta-FU exists so the pattern is visible: **going forward, add an "open decisions closed / spawned as FUs" step to every proposal close-gate**.
+- **Why deferred:** process gap surfaced only in aggregate.
+- **Recommended resolution:** adopt the close-gate step in CLAUDE.md's "on ending a work unit" section next time it's edited. Meanwhile, individual per-proposal FUs (above) carry the actual delta work.
+
+## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS)
+- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
+- **Type:** deferred job (bundle — 8 sub-items).
+- **What:** `COVERAGE_GAPS.md` Bucket C cross-cutting items with no per-surface home:
+  1. Full systems QA test doc (final regression walkthrough of every feature). User wants done LAST to capture the final product.
+  2. Usage analytics / telemetry — "I'd like to know how people are using my app." Privacy-conscious (Charter P8).
+  3. UI uniqueness / polish design pass — "looks just okay, not polished/unique."
+  4. Push notifications between users (share a shopping list via notify).
+  5. Kivy P2P sync branch — decide whether the user's prior experiment has a home here.
+  6. Main menu bottom border — micro polish.
+  7. Real ALDI / IGA logos — asset request.
+  8. General UI consistency — cross-cutting.
+- **Why deferred:** no per-surface home; several are Phase 3/4-timed or design-only.
+- **Recommended resolution:** split into per-item FUs *only when picked up*. Items 1 (QA test doc) and 3 (polish pass) are natural Phase 4 gates; item 2 (telemetry) is a Charter P8 decision + build; item 4 (push notifications) is a Phase 3-ish feature; items 5–8 are one-shots.
+
+## [OPEN] FU-362 — A-5 Settings: theme *type* separated from theme *identity*
+- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
+- **Type:** deferred job.
+- **What:** `COVERAGE_GAPS.md` A-5 — theme **type** (system / light / dark) should be separated from theme **identity** (pesto, lemon, …) — two dropdowns, not coloured light/dark buttons on each theme card.
+- **Why deferred:** Settings shell is a deferred surface ([[FU-366]]).
+- **Recommended resolution:** fold into any Settings polish pass — small self-contained change; can precede the full Settings shell redesign.
+
+## [OPEN] FU-361 — A-4 Help content overhaul
+- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
+- **Type:** deferred job (content task).
+- **What:** `COVERAGE_GAPS.md` A-4 — 5 feedback bullets all about **content**: detailed per-feature help, guides, FAQ, easy navigability, UI screenshots / diagrams. No brief.
+- **Why deferred:** content task typically deferred to post-launch.
+- **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. Distinct from [[FU-367]] (Help overlay shell).
+
+## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish
+- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
+- **Type:** deferred job (bundle — 6 sub-items).
+- **What:** `COVERAGE_GAPS.md` A-3 open bullets:
+  1. Text size not honouring user settings (bug).
+  2. Basic/AI chip squished/small.
+  3. Make basic/AI chip a toggle slider (slanted thick, glow on slide).
+  4. DS4 animation flashing on hover — regression to investigate.
+  5. Don't show "Hi I'm Dora, click me…" every login (once-per-user acknowledge).
+  6. Turn the bot off completely in settings.
+- **Why deferred:** scattered across owners; no bundle owner.
+- **Recommended resolution:** fold into the DORA_ASSISTANT_ARCHITECTURE polish appendix or a small Wave-C brief. Bug items (1, 4) are triage-first — can fix inline.
+
+## [OPEN] FU-359 — A-2 DATA page redesign
+- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
+- **Type:** deferred job (bundle — 7 sub-items).
+- **What:** `COVERAGE_GAPS.md` A-2 open bullets. No dedicated brief. Items: (1) move under Settings → "My Data" (not top-level); (2) multiple export formats (json, csv, …); (3) page formatting overhaul — margins, alignment, headings, font/type; (4) card + checkbox layout; (5) drop the breadcrumb fluff; (6) schema-driven import templates (partially addressed by FU-343/344 but still open); (7) Export & Print tab utility — drop or rework; plus decide whether the optional/collapsed section should be the main view. Barcode-tab items are already covered.
+- **Why deferred:** no owner brief.
+- **Recommended resolution:** new Wave-C brief `C-DATA — Data Management redesign`. Sequence early if Settings shell ([[FU-366]]) is also opened, since #1 depends on it.
+
 ## [OPEN] FU-356 — Gamification: revisit the "someday-list" verdict as a discussion task
 - **Raised:** 2026-07-01 (§7 decisions audit).
 - **Type:** deferred job (discussion / re-decision — not an implementation).
@@ -975,7 +1479,7 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   - Document the timer-narration limitation in `RecipeCookMode.vue` (it
     already half-acknowledges it at line 944).
 
-## [OPEN] FU-287 — Cross-app undo off after dashboard "push expiry"
+## [OPEN] FU-357 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
 - **Type:** finding.
 - **What:** feedback L480 — "Undo cross-app seems off, e.g. dashboard push
@@ -1522,7 +2026,7 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   running app (now part of the FU-165 checklist).
 - **Recommended resolution:** confirm in browser (FU-165).
 
-## [OPEN] FU-161 — Check / upgrade the Aldi scraper (site appears updated)
+## [OPEN] FU-358 — Check / upgrade the Aldi scraper (site appears updated)
 - **Raised:** 2026-06-12 (user note during Phase 1 wrap-up)
 - **Type:** deferred job
 - **What:** User flagged that Aldi's website appears to have

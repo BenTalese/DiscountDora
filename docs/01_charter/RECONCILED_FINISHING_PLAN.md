@@ -138,14 +138,17 @@ Order per the plan's own dependencies:
 - **State-ownership ↔ Dora-assistant:** both delete the *same* client-side missing-ingredients recompute (the 4th copy lives in `DoraChat.vue`). `STATE_OWNERSHIP` adds the server `cookable`/`missing_count` field; `DORA_ASSISTANT` deletes the client copy. **Sequence state-ownership first**, then the assistant refactor reads the server field.
 - **Shopping-list ↔ state-ownership:** the finish→restock path (P6-01) writes stock-level deltas server-side; land the state-ownership stock-status contract *before* implementing finish-restock so reopen/undo is reliable.
 
-## 6.6 Ingestion-API contract (new Dora-core work — Phase 2; sketch to firm up)
+## 6.6 Ingestion-API contract *(delivered — see the proposal + IMPL plan for authority)*
 
-The seam between Dora and the companion (and later P8-03 email + P8-04 crowd prices). One authenticated endpoint Dora **owns**; external sources push in.
+**Status (2026-07-01):** the sketch below was the plan-doc's original framing. It has been **superseded in detail** by `04_proposals/PROPOSAL_INGESTION_API.md` + `04_proposals/IMPL_PLAN_INGESTION_API.md`, and shipped as C-10.1 → C-10.4 (bearer auth + admin keys page, `POST /api/ingest` batched idempotent, observability, "your prices" intelligence layer). Read those proposals for the current contract; keep this section as the plan-level anchor only.
 
-- **Accepts** (batched, idempotent): `product {name, brand?, size?, source}`, `offer {product_ref, price_now, price_was?, valid_until?, source}`, `price_observation {product_ref|stock_item_ref, price, observed_at, source}`. The `source` field carries the merchant/provider label — this is where C-8's distinction lands.
-- **Dora maps to:** product/price data model (dedup by source+code), optional stock-item link, personal price history (feeds P6-01 costing, P6-03 intelligence).
+**Key deviation from the original sketch:** `price_observation` is **NOT accepted** by the ingestion endpoint. Per FU-227 chunk 7 (`PROPOSAL_PRODUCTS_AS_OVERLAY.md §2.5 "Idea A"`), price observations are in-app user input only; the ingest payload is `{ products[], offers[] }` and `extra="forbid"` rejects observations at the boundary. The offer append path feeds `ProductHistoricOffer` and unions with in-app observations inside `dora_api/features/stock_items/your_prices.py`.
+
+**Original sketch (kept for historical framing — do not build against this):**
+- **Accepts** (batched, idempotent): `product {name, brand?, size?, source}`, `offer {product_ref, price_now, price_was?, valid_until?, source}`. ~~`price_observation`~~ *(dropped per FU-227 J1)*. The `source` field carries the merchant/provider label — this is where C-8's distinction lands.
+- **Dora maps to:** product/price data model (dedup by source+code — implemented as `(store_id + stockcode)` else `(store_id + name)`), optional stock-item link, personal price history (feeds P6-01 costing, P6-03 intelligence).
 - **Out of scope for Dora:** scraping, merchant connections, search/comparison UI — all companion. Dora never calls the companion; the companion calls Dora.
-- **Task:** draft the formal contract (prompt-pack **C-10** → `PROPOSAL_INGESTION_API.md`) before Phase 2; reused by P8-03/04.
+- **Also added by implementation** (not in the original sketch): FU-190 store-mapping quarantine (stores are never auto-created); C-10.1 admin "API access" page for key CRUD + per-key observability.
 
 ---
 

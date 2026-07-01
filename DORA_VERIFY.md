@@ -878,6 +878,27 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Cross-cutting
 
+### P8-01 rename: no stray "Discount Dora" anywhere user-facing (2026-07-01)
+- [ ] Dashboard hero: mascot image alt text (inspect → "Dashy Dora"), any screen-reader announcement of the greeting says "Dashy Dora" nowhere in it (the label is only on the image alt now)
+- [ ] Help page → tab "About": header reads "Dashy Dora {version}"; the update-available banner (force it by mocking version if needed, or just eyeball it) reads "A newer version of Dashy Dora is available"
+- [ ] Assistant → ask "what's new" and "what version are you" — both replies begin "You're on Dashy Dora …" / "I'm Dashy Dora …" (never "Discount Dora")
+- [ ] Browser tab title on every route: `{page} | Dashy Dora`
+- [ ] PWA install prompt (Chrome address bar → install app) shows "Dashy Dora" as the app name (from productName in package.json)
+
+### D.O.R.A. bot rename + acronym easter egg (2026-07-01)
+- [ ] Chat header (open the burger-mascot chat): the bold label to the left of the AI/Basic chip reads **D.O.R.A.** (dots-and-all). Hover it → tooltip shows "Delicious Organised Restock Assistant"
+- [ ] Help page → "Meet D.O.R.A." button appears (the accent-coloured one with the smart-toy icon). Click it → lands on `/help/dora`
+- [ ] `/help/dora` header reads "Meet D.O.R.A." with the caption spelling the acronym (bolded initials) followed by "Sentient burger robot. Your in-app pantry buddy. Slightly chaotic."
+- [ ] Chat suggestion chips include "Thanks D.O.R.A." (not "Thanks DoraBot"). Clicking it replies with the sparkle/thanks flow the old chip triggered
+
+### Nav-state policy: filters survive navigate-back, reset on reload (A8 §3, 2026-07-01)
+- [ ] Stock Overview: type in the search box, tick a couple of filter chips, change the sort. Click into any stock item detail → hit browser back → search text, chip states, and sort are all preserved. Scroll position on Stock Overview is restored too
+- [ ] Cookbook: same drill — set search, toggle favourites-only + cookable-now-only, change sort axis + direction. Navigate to a recipe → back → all preserved, including expanding/dietary/tools filters
+- [ ] My Products: set search text + a store filter + the "On deal only" chip. Navigate to another route (Dashboard) → back → preserved
+- [ ] Hit F5 (full reload) on any of those three pages → all filters reset to defaults, scroll to top. This is the intended "clean slate" behaviour
+- [ ] Sign out and sign back in as the same user → filters reset (sign-out flow currently does a full reload; if it doesn't in future, FU-355 will wire an explicit clear)
+- [ ] Other list pages (MealPlans, ShoppingLists, Stocktake, admin settings) still reset on nav-back — they haven't been migrated yet (FU-354). That's expected, not a bug
+
 ### `/data/barcodes` redirects + shell shows two cards — origin FU-340 (2026-07-01)
 - [ ] Direct-navigate to `/data/barcodes` (via URL bar or a stale bookmark) → the router redirects you to `/settings/kitchen-setup/qr-labels`. No blank flash, no 404, no old page contents visible
 - [ ] `/data` shell now shows **two** nav cards: Backup & restore, Import. NO "Scanning & QR labels" card (regardless of the `scanning_enabled` flag state)

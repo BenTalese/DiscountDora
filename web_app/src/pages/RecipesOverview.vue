@@ -392,6 +392,7 @@
         TriStateSort,
     } from 'src/components/filters/triStateFilterTypes';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
+    import { useListState } from 'src/composables/useListState';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
@@ -465,55 +466,55 @@
     const loading = ref(false);
 
     // ── Filter state ────────────────────────────────────────────────
-    // FU-121: persisted per-page (mobile always starts hidden).
+    // FU-121: expanded state persisted per-page (mobile always starts hidden).
     const filtersExpanded = useFilterPanelExpanded('cookbook-overview');
-    const searchText = ref('');
-    const favouritesOnly = ref(false);
-    const cookableNowOnly = ref(false);
-    const inStockOnly = ref(false);
-    // FU-081 — tri-state: 'off' = no constraint; 'include' = only planned
-    // recipes (any future un-consumed MealPlanEntry); 'exclude' = only
-    // un-planned recipes. Cycles via TriStateFilterChip.
-    const plannedFilterState = ref<TriState>('off');
-    // C-waste W4 — when on, restricts the list to recipes using ≥1
-    // expiring-within-14-days in-stock ingredient AND force-sorts by
-    // count desc. The id→count map below is populated by a separate
-    // server fetch keyed off this ref's true edge.
-    const expiringOnly = ref(false);
+    // A8 §3 nav-state — filters/search/sort survive navigation within the
+    // session and reset on full reload. Non-persisted (fetch-in-flight,
+    // fetched-data caches) stay as their own refs below.
+    const cookbookState = useListState('cookbook-overview', () => ({
+        searchText: ref(''),
+        favouritesOnly: ref(false),
+        cookableNowOnly: ref(false),
+        inStockOnly: ref(false),
+        // FU-081 — tri-state: 'off' = no constraint; 'include' = only planned
+        // recipes (any future un-consumed MealPlanEntry); 'exclude' = only
+        // un-planned recipes. Cycles via TriStateFilterChip.
+        plannedFilterState: ref<TriState>('off'),
+        // C-waste W4 — when on, restricts the list to recipes using ≥1
+        // expiring-within-14-days in-stock ingredient AND force-sorts by
+        // count desc.
+        expiringOnly: ref(false),
+        // `null` means "no upper bound". Cleared inputs land as NaN via
+        // v-model.number; predicates guard on Number.isFinite.
+        missingMax: ref<number | null>(null),
+        mealCountMin: ref<number | null>(null),
+        // C-4 Chunk 9 — "Kcal ≤" filter (only renders when nutrition opt-in
+        // is on). Recipes with no kcal value pass through.
+        kcalMax: ref<number | null>(null),
+        collectionFilter: ref<string | null>(null),
+        // L235 — cuisine + category are distinct single-select id filters.
+        cuisineFilter: ref<string | null>(null),
+        categoryFilter: ref<string | null>(null),
+        // FU-148 — time-of-day single-select. Null = no filter.
+        timeOfDayFilter: ref<string | null>(null),
+        // §1.7 — difficulty single-select. Null = no filter.
+        difficultyFilter: ref<Difficulty | null>(null),
+        // FU-149 — "# ingredients ≤" cap.
+        ingredientsMax: ref<number | null>(null),
+        // Set via the "Uses ingredients" picker OR via `?usesStockItem=` query.
+        usesStockItemIds: ref<string[]>([]),
+        // FU-083 — "Doesn't use" pair. Combine with AND.
+        excludesStockItemIds: ref<string[]>([]),
+    }));
+    const {
+        searchText, favouritesOnly, cookableNowOnly, inStockOnly,
+        plannedFilterState, expiringOnly, missingMax, mealCountMin, kcalMax,
+        collectionFilter, cuisineFilter, categoryFilter, timeOfDayFilter,
+        difficultyFilter, ingredientsMax, usesStockItemIds, excludesStockItemIds,
+    } = cookbookState;
     const EXPIRING_FILTER_HORIZON_DAYS = 14;
     const expiringCountByRecipeId = ref<Map<string, number>>(new Map());
     const expiringFetchInFlight = ref(false);
-    // `null` means "no upper bound" — the input clears to null on backspace.
-    // Cleared inputs land as NaN via v-model.number; predicates and the
-    // hint string both guard on Number.isFinite so "blank == no filter".
-    const missingMax = ref<number | null>(null);
-    const mealCountMin = ref<number | null>(null);
-    // C-4 Chunk 9 — "Kcal ≤" filter (only renders when the nutrition
-    // opt-in is on). Recipes with no kcal value pass through; we don't
-    // hide them as "unknown" because that punishes recipes the user
-    // hasn't annotated yet.
-    const kcalMax = ref<number | null>(null);
-    const collectionFilter = ref<string | null>(null);
-    // L235 — cuisine + category are distinct single-select id filters.
-    const cuisineFilter = ref<string | null>(null);
-    const categoryFilter = ref<string | null>(null);
-    // FU-148 — time-of-day single-select. §1.12: vocabulary is the
-    // server's DEFAULT_MEAL_SLOTS. Null = no filter.
-    const timeOfDayFilter = ref<string | null>(null);
-    // §1.7 — difficulty single-select. Null = no filter.
-    const difficultyFilter = ref<Difficulty | null>(null);
-    // FU-149 — "# ingredients ≤" cap. Same blank-input / NaN guard as
-    // the other numeric inputs.
-    const ingredientsMax = ref<number | null>(null);
-    // Set via the "Uses ingredients" picker OR via `?usesStockItem=` query
-    // (deep-linked from the stock item detail screen — single id pre-fills
-    // a one-element array).
-    const usesStockItemIds = ref<string[]>([]);
-    // FU-083 — "Doesn't use" pair to "Uses ingredients". Both pick from
-    // stock items; combine with AND (must use all of include, must not
-    // use any of exclude). Replaces the old free-text "Free from
-    // ingredient(s)" path.
-    const excludesStockItemIds = ref<string[]>([]);
 
     type SortKey =
         | 'name'
@@ -553,19 +554,25 @@
         // §1.7 — difficulty ordinal (Easy < Medium < Hard; nulls sink).
         { label: 'Difficulty', value: 'difficulty' },
     ];
-    const sortBy = ref<SortKey>('name');
-    // FU-083 — explicit asc/desc toggle. Default per axis: name = asc,
-    // everything else = desc (the most-recent / largest / fastest hits
-    // first feel right for those).
-    const sortDir = ref<SortDir>('asc');
+    const cookbookSortState = useListState('cookbook-overview:sort', () => ({
+        sortBy: ref<SortKey>('name'),
+        // FU-083 — explicit asc/desc toggle. Default per axis: name = asc,
+        // everything else = desc.
+        sortDir: ref<SortDir>('asc'),
+    }));
+    const { sortBy, sortDir } = cookbookSortState;
 
-    // Dietary filter state — the tri-state control owns include/exclude id
-    // arrays. They combine with AND (must have all of include, none of
-    // exclude).
-    const dietaryTagsInclude = ref<string[]>([]);
-    const dietaryTagsExclude = ref<string[]>([]);
-    const toolsInclude = ref<string[]>([]);
-    const toolsExclude = ref<string[]>([]);
+    // Dietary + tools filter state — tri-state include/exclude id arrays
+    // (combine with AND). Persisted with the rest of the cookbook filters.
+    const cookbookTriStates = useListState('cookbook-overview:tri', () => ({
+        dietaryTagsInclude: ref<string[]>([]),
+        dietaryTagsExclude: ref<string[]>([]),
+        toolsInclude: ref<string[]>([]),
+        toolsExclude: ref<string[]>([]),
+    }));
+    const {
+        dietaryTagsInclude, dietaryTagsExclude, toolsInclude, toolsExclude,
+    } = cookbookTriStates;
     // Disclaimer text still comes from the recipe tag catalogue endpoint.
     const tagCatalogue = ref<RecipeTagCatalogue | null>(null);
 

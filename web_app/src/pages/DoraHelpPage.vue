@@ -4,8 +4,9 @@
         <div class="row items-center q-mb-md">
             <DoraMascot mood="cute" :size="96" />
             <div class="q-ml-md col">
-                <div class="text-h6">Meet Dora</div>
+                <div class="text-h6">Meet D.O.R.A.</div>
                 <div class="text-caption dora-text-muted">
+                    <strong>D</strong>elicious <strong>O</strong>rganised <strong>R</strong>estock <strong>A</strong>ssistant.
                     Sentient burger robot. Your in-app pantry buddy. Slightly chaotic.
                 </div>
             </div>

@@ -9,6 +9,171 @@ next.
 
 ---
 
+## 2026-07-01 — Phase 0 close-out: P8-01 rename + D.O.R.A. + A8 §2/§3
+
+Finishing Phase 0. Static audit found three items remaining vs the
+plan's Phase-0 scope: the P8-01 Dashy Dora rename sweep, the D.O.R.A.
+bot rename with an easter-egg surface, and A8 §3's nav-state policy
+(A8 §1 renames + §2 refresh audit were mostly done already). All
+three landed in this unit. User decisions locked in up front:
+
+- **Rename scope:** full sweep wherever "discount" appears; bare
+  "Dora" is fine to leave.
+- **Bot name:** D.O.R.A. with the full
+  "Delicious Organised Restock Assistant" surfaced as an easter
+  egg / joke.
+- **Nav-state rule:** persist within session, reset on full reload.
+
+### P8-01 rename sweep (FU-353 tracks the two external identifiers)
+
+Every in-repo occurrence of "Discount Dora" / "DiscountDora" /
+`discount-dora` / `discount_dora` / `discountdora` is now the
+Dashy-Dora equivalent, EXCEPT the two references in
+[CLAUDE.md](CLAUDE.md) + [AGENTS.md](AGENTS.md) that explicitly
+document the outstanding external rename. Notable touches:
+- UI copy: [`DashboardPage.vue:6`](web_app/src/pages/DashboardPage.vue),
+  [`HelpPage.vue:35,179`](web_app/src/pages/HelpPage.vue),
+  [`doraIntents.ts:897,918`](web_app/src/services/doraIntents.ts).
+- Build identifiers: [`web_app/package.json`](web_app/package.json)
+  `name`, [`web_app/quasar.config.ts`](web_app/quasar.config.ts)
+  `appId` + M1 comment, [`compose.yml`](compose.yml) service
+  name + container name + image comment.
+- Backend surface: User-Agents in
+  [`get_version.py:51`](dora_api/features/help/get_version.py) and
+  [`import_recipe_from_url.py:49`](dora_api/features/recipes/import_recipe_from_url.py);
+  release-check URL in `get_version.py:26`; the
+  `version_info.py` module docstring.
+- Docs: [`README.md`](README.md) badges + prose + clone URL +
+  ghcr image tag; [`web_app/README.md`](web_app/README.md);
+  the [release workflow comment](.github/workflows/release.yml)
+  (workflow stays commented per the CI-disabled memory);
+  motion.scss + routes.ts comments.
+- The router's `APP_NAME` was already `'Dashy Dora'` — the
+  runtime `document.title` template needed no code change, only
+  the stale comment.
+- **NOT touched:** DB columns / enums (no "discount" anywhere in
+  the schema), asset filenames under `assets/dora/dorabot-*.png`
+  ("dorabot" doesn't carry "discount"), and Pinia/Vue code
+  namespaces / class names.
+
+### D.O.R.A. bot rename
+
+- Chat header label ([`DoraChat.vue:5`](web_app/src/components/dora/DoraChat.vue))
+  reads **D.O.R.A.** with a bottom-anchored tooltip surfacing
+  "Delicious Organised Restock Assistant" — that's the easter
+  egg.
+- The [`/help/dora`](web_app/src/pages/DoraHelpPage.vue) landing's
+  page title reads "Meet D.O.R.A." and the caption below spells
+  out the acronym with bolded initials — a second, quieter
+  reveal for the user who clicks into Meet.
+- Suggestion chip "Thanks DoraBot" → "Thanks D.O.R.A.";
+  `HelpPage`'s "Meet DoraBot" button → "Meet D.O.R.A.".
+
+### A8 §3 nav-state policy
+
+New primitive
+[`useListState(scope, factory)`](web_app/src/composables/useListState.ts):
+module-level `Map<string, unknown>` keyed by page scope; the
+factory only runs on the first call per scope; subsequent calls
+return the cached refs. Full reload wipes it (fresh JS bundle,
+fresh closure). Scroll is handled by the router — the previous
+`scrollBehavior: () => ({left:0,top:0})` was replaced with
+`(_, _, savedPosition) => savedPosition ?? {left:0,top:0}` so
+browser back/forward restores scroll for free.
+
+Wired in:
+- `useStockFilters` gained an optional `persistScope`;
+  `StockOverview.vue:563` passes `'stock-overview'`. Eleven
+  filter refs (search / level / location / group / essentials /
+  open / hasAlert / autoAdd / cart / recipe / sort) survive
+  nav-away.
+- `RecipesOverview.vue` — the whole filter block (~17 refs)
+  wrapped in three scoped `useListState` calls
+  (`cookbook-overview`, `cookbook-overview:sort`,
+  `cookbook-overview:tri`).
+- `MyProductsPage.vue` — six filter/search refs wrapped as
+  `my-products`.
+
+Remaining list pages (MealPlansOverview, MealPlanTemplatesPage,
+ShoppingListsOverview, ShoppingListDetail line filters,
+Stocktake, the three settings-admin list pages) migrate
+opportunistically — tracked as FU-354. FU-355 tracks the
+`clearAllListState()` sign-out hook.
+
+### A8 §2 refresh-button audit
+
+Every remaining "Refresh" button was reviewed. Verdict: keep all
+of them. Each has an explicit purpose that's more than "the data
+already refreshes on mount":
+- **AlertsPage / StocktakePage / MyProductsPage** — long-lived
+  screens the user stays on; push-driven or slow-changing state
+  where an explicit re-check is worth a click.
+- **Settings → Users / Stores / API access** — admin surfaces
+  where the operator wants deterministic re-fetch (they've
+  usually just done something in another tab / via an API).
+- **AdminDataBackupRestore "Reload now"** — post-restore hard
+  reload of the whole app, not a data refresh.
+- **ShoppingListDetail "Refresh deals"** — an *action*
+  (re-price the linked offers), not a data-freshness button.
+- **HelpPage "Another, please"** on the food-fact — semantic
+  randomisation, not refresh.
+- **DashboardPage** — the manual refresh button had already
+  been removed (see the comment at line 18); the dashboard
+  reloads on every route entry.
+
+### Standards close-gate + ADR
+
+New rule **R-026** in
+[`docs/01_charter/ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md)
+codifies the nav-state pattern with violation signals and
+carve-outs for `useFilterPanelExpanded` (FU-121, ambient
+display preference — legit `localStorage`) and
+`useProductSearchUrl` (URL-mirrored for deep-linking).
+**ADR-022** captures the persist-in-session-only decision and
+the alternatives that were rejected (localStorage, `<keep-alive>`,
+Pinia slice). No other rules touched or bent by this unit.
+
+### Verification
+
+`vue-tsc --noEmit` clean for every file this unit touched. Two
+pre-existing errors in `AdminDataImport.vue` unrelated (confirmed
+by stash + rerun on `main`). No unit tests changed — the
+composable is thin and its behaviour is exercised by the pages
+that consume it. Browser-verify items logged to
+[DORA_VERIFY.md](DORA_VERIFY.md).
+
+### Phase 0 status after this unit
+
+Wave A (A1..A8, A1b) — done. Wave B (B1/B3/B4/B5/B7/B8/B9;
+B2/B6 subsumed by the meals→recipes merge) — done. INV (1..10;
+INV-9 palette retired) — done. STATUS re-baseline — obsolete per
+RECONCILED_FINISHING_PLAN §5. AUTH Phase-0 hardening (CSRF +
+email-change proof-of-possession) — done via FU-197. INV-6
+recipe-comparison — done. P8-01 rename + A8 §3 nav-state + A8 §2
+audit — done here.
+
+**Phase 0 is closed** modulo two external identifiers
+(GitHub repo + local checkout, FU-353) and the R-026 rollout to
+the remaining list pages (FU-354) — neither blocks moving on to
+Phase 1.
+
+### Next up
+
+Phase 1 begins — RECONCILED_FINISHING_PLAN §5 sequences it as
+**P6-02** (barcode→QR cleanup, removes the surface first) →
+**P6-01** shopping-list redesign (already largely built per
+[`SHOPPING_LIST_REDESIGN_PROPOSAL`](docs/04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md)
++ `IMPL_PLAN_SHOPPING_LISTS.md` / `_RECEIPTS.md`) → **P6-07**
+cook→consume → **P6-04**/**P6-13** suggestions & stocktake
+confidence → **P6-09/10/12** costing / self-drafting shop /
+briefing → the state-ownership enabler (already largely done).
+Confirm with the user which of P6-02 / P6-04 / P6-13 / P6-09 /
+P6-10 / P6-12 to open first — most of P6-01/06/07 has landed via
+the shopping-list + cook-mode / finish-restock work already
+tracked in earlier worklog entries.
+
+---
+
 ## 2026-07-01 — FU-344 + FU-345: Import polish + install-wide image compression
 
 Two related pieces of the Data area landing together — the Import page

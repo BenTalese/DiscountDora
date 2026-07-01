@@ -1,11 +1,46 @@
 # Changelog
 
-All notable changes to Discount Dora live here. Versions follow loose
+All notable changes to Dashy Dora live here. Versions follow loose
 semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
 ### Changed
+- **P8-01 rename: Discount Dora → Dashy Dora (2026-07-01).** The
+  full sweep. Every in-repo identifier that carried "Discount" or
+  "DiscountDora" is now "Dashy" / "DashyDora" / "Dashy Dora": UI
+  copy (Dashboard hero alt, Help update-available banner + About
+  panel, the assistant's "who are you" / "what's new" answers),
+  package name (`dashy-dora`), PWA `appId` (`dashy-dora`),
+  compose service + container name (`dashy_dora`), Docker image
+  ref (`ghcr.io/bentalese/dashydora`), User-Agents
+  (`DashyDora-Help`, `DashyDora-RecipeImporter`), release-check
+  URL (`api.github.com/repos/BenTalese/DashyDora/releases/latest`),
+  README badges and clone URL, and the docstrings/comments that
+  used the old name. Bare "Dora" is untouched — the mascot, the
+  short-form voice, and the code namespace stay. Two external
+  identifiers can't be flipped from inside the repo — the actual
+  GitHub repository and the local checkout directory — tracked as
+  FU-353.
+- **D.O.R.A. bot rename + easter egg (2026-07-01).** The
+  chat-header label "DoraBot" and the Help-page "Meet DoraBot"
+  button both read **D.O.R.A.** now. The `/help/dora` landing
+  reveals the acronym in a caption:
+  **D**elicious **O**rganised **R**estock **A**ssistant.
+  Hovering the header label surfaces the same expansion as a
+  tooltip. Suggestion chip "Thanks DoraBot" → "Thanks D.O.R.A."
+- **Nav-state policy: list-page filters/search/sort/scroll persist
+  within a session, reset on full reload (A8 §3, 2026-07-01).**
+  New composable
+  [`useListState`](web_app/src/composables/useListState.ts) —
+  module-level Map keyed by page scope, gone on hard reload.
+  Applied to Stock Overview (via `useStockFilters`), Cookbook,
+  and My Products as the canonical pattern; router now honours
+  Vue Router's `savedPosition` so browser back/forward restores
+  scroll. Codified as **R-026** with **ADR-022** in
+  [`docs/01_charter/ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md).
+  Remaining list pages migrate opportunistically (FU-354);
+  sign-out `clearAllListState()` hook is FU-355.
 - **QR labels moved to Settings → Kitchen setup (FU-340, 2026-07-01).**
   The Print QR labels workflow (pick items, pick a sheet layout,
   open a printable sheet) moves from `/data/barcodes` to

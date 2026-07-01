@@ -1,4 +1,4 @@
-# Claude session instructions — DiscountDora / Dashy Dora
+# Claude session instructions — Dashy Dora
 
 The repo is being finished against the planning library at `docs/` inside this
 repo. Multiple Claude sessions may be working on this concurrently from
@@ -238,9 +238,14 @@ there is worth extracting, that's fine — no section needed.
 
 ## Naming
 
-The code still reads "DiscountDora" until P8-01 lands. That's expected — the
-rename to "Dashy Dora" is itself a planned prompt, not a drift to fix
-piecemeal.
+Product is **Dashy Dora** (renamed via P8-01, landed 2026-07-01). The GitHub
+repo + local checkout are still under `DiscountDora/` — those are external
+identifiers renamed by hand, tracked as a follow-up. Internal identifiers
+(`dashy-dora` package name, `dashy_dora` container, `DashyDora-*` User-Agents,
+Docker image ref, PWA appId) are already flipped; don't reintroduce
+"Discount Dora" / "DiscountDora" in new code, copy, or comments. When
+adding new UI copy, prefer just "Dora" — the app-name form only where it
+actually belongs (About / Help / titles).
 
 ## Engineering standards & ADRs — MANDATORY, every task
 

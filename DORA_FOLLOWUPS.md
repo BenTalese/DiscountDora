@@ -53,6 +53,90 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-356 — Gamification: revisit the "someday-list" verdict as a discussion task
+- **Raised:** 2026-07-01 (§7 decisions audit).
+- **Type:** deferred job (discussion / re-decision — not an implementation).
+- **What:** `RECONCILED_FINISHING_PLAN.md` §7 Decision 3c parked **gamification** (rewards / streaks / notify-users) on the someday-list — "captured, not built during finishing." That was a 2026-06-04 call made before P8-08 Dora Score and the C-waste de-emphasis. Worth a fresh discussion pass to decide whether any gamification element (streaks on the Score card, "N shops on budget in a row", waste-free week, first-time badges) is actually free-standing content once the P8-08 card exists — or whether it stays parked. Do NOT design or build off this FU; the deliverable is a **decision** (keep-parked / promote a specific slice into a brief / kill outright).
+- **Why deferred:** the original call is defensible but was made without knowing what the Score card would look like; re-checking is cheap.
+- **Recommended resolution:** later, during the P8-08 / FU-352 combined Dora Score brief — take 10 minutes at the top of that session to co-decide gamification's fate against the just-designed card, then update `RECONCILED_FINISHING_PLAN.md` §7 Decision 3c accordingly (either "still someday" with a date, or "promoted, see brief §X"). If P8-08 slips, the discussion can happen standalone whenever the user wants — it's not on a critical path. Related: [[FU-352]].
+
+## [OPEN] FU-355 — Wire `clearAllListState()` into sign-out
+- **Raised:** 2026-07-01 (A8 §3 landing).
+- **Type:** leftover (nice-to-have on top of R-026).
+- **What:** `useListState`'s module-level Map persists across sign-out
+  because `authStore.signOut` currently does a soft router push rather
+  than a full reload. On a shared device the next user could inherit
+  the previous session's filter shape on any migrated list page. The
+  fallout is minor (filters are per-page UI knobs, not sensitive
+  data), but the honest close is to call `clearAllListState()` in the
+  sign-out handler (or force a `window.location.reload()`, which some
+  auth flows already do).
+- **Why deferred:** cross-cutting hook into the auth store — not part
+  of the A8 §3 shape and worth its own tiny prompt.
+- **Recommended resolution:** opportunistic — bundle with the next
+  auth-store touch, or when a shared-device concern surfaces.
+
+## [OPEN] FU-354 — Migrate remaining list pages to `useListState` (R-026 rollout)
+- **Raised:** 2026-07-01 (A8 §3 landing).
+- **Type:** deferred job.
+- **What:** R-026 (nav-state via `useListState`) was applied to
+  `StockOverview` (via `useStockFilters`), `RecipesOverview`, and
+  `MyProductsPage` as the canonical pattern. Remaining list surfaces
+  still lose their filter/search/sort/scroll on navigate-back:
+  `MealPlansOverview.vue`, `MealPlanTemplatesPage.vue`,
+  `ShoppingListsOverview.vue`, `ShoppingListDetail.vue` (line
+  filters + sort), `StocktakePage.vue` (if it grows filters),
+  `settings/UsersAdminSettings.vue`, `settings/StoresSettings.vue`,
+  `settings/ApiAccessSettings.vue`, and any surface added since. Each
+  is a small wrap-in-`useListState` edit; nothing structural.
+- **Why deferred:** scope discipline — Phase 0 closed the policy +
+  the primitive + three canonical pages, not a repo-wide sweep.
+- **Recommended resolution:** opportunistic — migrate a page the
+  next time you're editing it for another reason. New list pages
+  land with `useListState` from the outset (R-026 violation signal).
+
+## [OPEN] FU-353 — Rename local checkout dir + GitHub repo to `DashyDora`
+- **Raised:** 2026-07-01 (P8-01 landing).
+- **Type:** leftover (external identifier).
+- **What:** P8-01 renamed every in-repo identifier from
+  Discount Dora / DiscountDora → Dashy Dora / DashyDora (UI copy,
+  package name `dashy-dora`, PWA `appId`, container name
+  `dashy_dora`, User-Agents, README + docs, docstrings, badges,
+  release-check URL). Two external identifiers can't be flipped
+  from inside the repo:
+  1. The GitHub repository itself — still `BenTalese/DiscountDora`.
+     Until the user renames it, the README badges (shields.io
+     endpoints), `_GITHUB_RELEASE_URL` in
+     [`dora_api/features/help/get_version.py`](dora_api/features/help/get_version.py),
+     and the clone URL in the README all point at
+     `BenTalese/DashyDora` and will 404. GitHub auto-redirects the
+     old name for a while after rename, so flipping first is safe.
+  2. The local checkout directory (`~/Repos/DiscountDora/`) —
+     cosmetic; agent CLAUDE.md paths, Codex session paths, and
+     shell muscle memory all still work but read wrong.
+- **Why deferred:** the user has to run `gh repo rename` (or the web
+  UI) and `mv ~/Repos/DiscountDora ~/Repos/DashyDora` — not
+  something the agent should do unprompted.
+- **Recommended resolution:** now (opportunistic — do it whenever
+  the user has 30 seconds). After the GitHub rename, hit the Help
+  → About panel in the SPA to confirm the release check resolves
+  and the "newer version" banner logic still works. Once done,
+  flip this to `[RESOLVED]`.
+
+## [OPEN] FU-352 — P6-12 daily briefing → fold into a "Dora Score" dashboard card (with P8-07/P8-08)
+- **Raised:** 2026-07-01 (Phase 1/2 audit vs code — nothing built for P6-12).
+- **Type:** deferred job (Phase 1 loop item, un-started).
+- **What:** The legacy plan's **P6-12 (proactive daily briefing + alerts-as-launchpads)** has no code — no briefing module server-side, no dashboard section, no follow-up trail. Rather than build it as its own surface, **combine it with the Phase 3 "Dora Score" (P8-08)** and roll both into a single dashboard card: the score is the headline number, the briefing bullets underneath are the "why" (top alerts, likely-due items, over-budget flag, no-planned-meals-next-week, etc.), each bullet is a launchpad link into the relevant surface. One card, one card only — replaces (does not add to) whatever alerts/summary blocks the dashboard has today.
+- **Why deferred:** cross-phase design call — the sensible framing didn't exist until P8-08 was on the table.
+- **Recommended resolution:** later, when Phase 3 opens (P8-08 Dora Score). Draft a Wave-C brief that owns both P6-12 and P8-08 together (working name `PROPOSAL_DORA_SCORE_CARD.md`); do not build P6-12 as a standalone briefing surface first. Feeder data already exists — suggestions (`generators.py`), budget (`budget.py`), alerts, `your_prices` — so the card is mostly assembly + a score formula.
+
+## [OPEN] FU-351 — P6-10 "self-drafting weekly shop": plumbing is built, one-click entry point is missing
+- **Raised:** 2026-07-01 (Phase 1/2 audit vs code).
+- **Type:** deferred job (partial coverage — needs the shell on top).
+- **What:** The multi-source builder [`auto_generate.py`](dora_api/features/shopping_lists/auto_generate.py) already dedupes across `auto_recipe > auto_meal_plan > auto_flagged > auto_essential > auto_low_stock > auto_frequently_added` — that **is** the self-drafting engine P6-10 called for. What's missing is the P6-10 UX framing: a prominent "Draft my shop" one-click entry point that pre-selects sensible defaults (probably meal-plan-for-the-week + low-stock + flagged), shows the reason chip per line ("usually rebuy ~every 12 days"), and lands the user in a DRAFT list ready to edit before starting shopping. Legacy prompt in `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_6_POLISH.md:646`.
+- **Why deferred:** shipping X5 (`auto_generate`) satisfied the mechanics; the one-click "Draft my shop" surface was never built and no one flagged the gap.
+- **Recommended resolution:** later, during Phase 1 mop-up before Phase 3 opens (P8-07 Zero-Input Pantry directly depends on P6-10 per §5). Small design brief first — decide entry-point location (Dashboard? Shopping Lists overview? both?), default source set, and whether the reason chip is new UI or reuses the existing `added_via` chip. Then a bounded implementation prompt on top of `auto_generate.py`.
+
 ## [OPEN] FU-350 — Import templates: example row is positional, silently drifts on schema change
 - **Raised:** 2026-07-01 (post-FU-343 self-review).
 - **Type:** finding (drift risk).

@@ -1,4 +1,4 @@
-# Codex session instructions — DiscountDora / Dashy Dora
+# Codex session instructions — Dashy Dora
 
 The repo is being finished against the planning library at `docs/` inside this
 repo. Multiple Codex sessions may be working on this concurrently from
@@ -142,9 +142,11 @@ bullets that now have a home from gap → covered.
 
 ## Naming
 
-The code still reads "DiscountDora" until P8-01 lands. That's expected — the
-rename to "Dashy Dora" is itself a planned prompt, not a drift to fix
-piecemeal.
+Product is **Dashy Dora**. The GitHub repo + local checkout are still under
+`DiscountDora/` — those are external identifiers renamed by hand, tracked as
+a follow-up. Internal identifiers (`dashy-dora` package name, `dashy_dora`
+container, `DashyDora-*` UAs) are already flipped; don't reintroduce
+"Discount Dora" / "DiscountDora" in new code or copy.
 
 ## Don'ts
 

@@ -107,7 +107,7 @@
 #                   cache-from: type=gha
 #                   cache-to: type=gha,mode=max
 #                   labels: |
-#                       org.opencontainers.image.title=DiscountDora
+#                       org.opencontainers.image.title=DashyDora
 #                       org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 #                       org.opencontainers.image.version=${{ steps.version.outputs.version }}
 #                       org.opencontainers.image.revision=${{ github.sha }}

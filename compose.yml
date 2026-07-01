@@ -1,4 +1,4 @@
-# DiscountDora — monolithic-container compose file.
+# Dashy Dora — monolithic-container compose file.
 #
 # Phase D / FU-186: dora_api runs alongside nginx serving the built SPA.
 # The retailer-scraping `merchant_api` + the deals `emailer` live in the
@@ -14,9 +14,9 @@
 #   - bump healthcheck intervals
 
 services:
-  discount_dora:
-    container_name: discount_dora
-    # image: <IMAGE HOSTING SERVICE>/discountdora:latest
+  dashy_dora:
+    container_name: dashy_dora
+    # image: <IMAGE HOSTING SERVICE>/dashydora:latest
     # ↑ Once the image lives in a registry, drop the `build:` block and
     # use this instead.
     build:

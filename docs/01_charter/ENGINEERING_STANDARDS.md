@@ -951,6 +951,57 @@ exceptions, which still must be commented) · **Source** (where it was establish
   receipt-upload button surfaced the gap; the standards rule turns the
   fix into a one-time decision.
 
+### R-026 — Nav-state on list pages: persist within session, reset on full reload
+- **Rule:** Any list page whose user has spent effort dialing in filters,
+  search text, sort, or scroll position must preserve that shape when
+  they navigate away (to a detail page, another route) and back within
+  the same SPA session. A full browser reload should feel like a clean
+  slate — no restored filters, no restored scroll. Persistence goes
+  through the shared
+  [`useListState(scope, factory)`](../../web_app/src/composables/useListState.ts)
+  composable (module-level Map, gone on hard reload); scroll uses Vue
+  Router's `savedPosition` via the app's `scrollBehavior`. No
+  `localStorage`, no `sessionStorage`, no Pinia store slice for these
+  refs.
+- **Why:** Before A8 §3 the app was inconsistent — a couple of pages
+  kept their state via ad-hoc mechanisms (product search URL, filter
+  panel expanded), most didn't. Users reported the "click a stock item,
+  hit back, lose your filters" tax. Full-reload persistence via
+  `localStorage` was rejected because a stale filter that survives a
+  browser restart traps users on an empty list they don't remember
+  configuring; the session boundary is the honest one.
+- **Apply:**
+  - New list page: wrap filter / search / sort refs in a single
+    `useListState('<page-key>', () => ({ ... }))` call and destructure.
+    Non-persisted state (loading, in-flight fetches, hover, dialog
+    open) stays as regular `ref()`.
+  - Existing list page: migrate its refs into the composable using a
+    stable scope key; keep the same defaults so first-visit UX doesn't
+    shift.
+  - Filter-composables that back multiple pages (`useStockFilters`)
+    take an optional `persistScope` — callers pass their page key,
+    the composable wires the refs through `useListState`.
+  - The router's `scrollBehavior` already honours `savedPosition`; do
+    NOT override per-page unless there's a genuine reason (e.g. the
+    detail page anchors to a heading), and if so, document it inline.
+- **Violation signal:**
+  - A list page with `ref('')` search text bound to `v-model` and no
+    `useListState` wrapper.
+  - `sessionStorage`/`localStorage` used to persist a filter (except
+    the FU-121 filter-panel-expanded preference, which is
+    intentionally cross-session because it's a display preference
+    rather than a filter value).
+  - A per-page `scrollBehavior` override in `router/index.ts`.
+- **Carve-outs (must be commented):**
+  - `useFilterPanelExpanded` (FU-121) uses `localStorage` on purpose —
+    it's an ambient display preference, not a filter value.
+  - `useProductSearchUrl` mirrors state into the URL for
+    deep-linking / share; that's a different contract and is
+    intentionally not migrated.
+- **Source:** A8 §3 landed 2026-07-01. Round-trip pattern established
+  via `useStockFilters`, `RecipesOverview`, `MyProductsPage`; remaining
+  list pages migrate opportunistically (tracked in `DORA_FOLLOWUPS`).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1621,6 +1672,42 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   - `PUBLIC_ENDPOINTS` and `CSRF_EXEMPT_ENDPOINTS` are now load-bearing
     lists; additions need a written rationale (R-025 violation signal).
 - **Promotes rule:** R-025.
+
+### ADR-022 — Nav-state on list pages: session-scoped, no full-reload persistence
+- **Date:** 2026-07-01
+- **Context:** A8 §3 called for one consistent rule for filter / search /
+  sort / scroll on list pages. Before this, the app was inconsistent
+  (some pages persisted via URL, most reset on every mount). The
+  question was persist-across-reload (localStorage) vs
+  persist-within-session (in-memory) vs always-reset.
+- **Decision:** Persist within the SPA session, reset on full reload.
+  Filters/search/sort go through a module-level Map keyed by page
+  scope (`useListState`). Scroll goes through the router's
+  `savedPosition`. Neither uses `localStorage` or `sessionStorage`.
+- **Alternatives considered:**
+  - **localStorage-backed persistence across reloads.** Rejected: a
+    stale filter that survives a browser restart traps users on a
+    filter set they don't remember configuring; the session boundary
+    is honest.
+  - **Vue Router `<keep-alive>` on list routes.** Rejected: caches
+    every route indefinitely (memory spike), and re-mount-on-visit
+    is what stores rely on for fresh data.
+  - **Pinia store slice per list page.** Rejected as over-engineered
+    for what is view-only state; stores own domain data, not
+    per-page UI knobs.
+- **Consequences:**
+  - New primitive `useListState` is now the standard for list-page
+    view state; two existing patterns (`useFilterPanelExpanded`,
+    `useProductSearchUrl`) survive as explicit carve-outs with
+    different contracts.
+  - Remaining list pages (MealPlansOverview, ShoppingListsOverview,
+    Stocktake, settings-list surfaces) migrate opportunistically;
+    tracked as an open follow-up.
+  - Sign-out should call `clearAllListState()` when it's wired, so a
+    second user on a shared device doesn't inherit the previous
+    user's filter shape. Currently a full reload happens on sign-out
+    anyway, so this is a nice-to-have rather than a defect.
+- **Promotes rule:** R-026.
 
 ---
 

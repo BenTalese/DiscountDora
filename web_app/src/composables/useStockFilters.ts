@@ -14,6 +14,7 @@ import type { StockItem } from 'src/models/stockItem';
 import type { LocationNode } from 'src/models/location';
 import type { StockLevel } from 'src/models/stockLevel';
 import { computed, ref, watch, type DeepReadonly } from 'vue';
+import { useListState } from 'src/composables/useListState';
 
 export type StockSortKey =
     | 'name_asc'
@@ -52,24 +53,43 @@ export function useStockFilters(sources: {
     recipes: () => ReadList<Recipe>;
     stockGroups: () => ReadList<StockGroup>;
     membership: () => Membership | null;
-}) {
+}, options: { persistScope?: string } = {}) {
     // ── Raw filter state ────────────────────────────────────────────────
-    const searchText = ref('');
-    const levelFilter = ref<string | null>(null);
-    const locationFilter = ref<string | null>(null);
-    const groupFilter = ref<string | null>(null);
-    const essentialsOnly = ref(false);
-    const openOnly = ref(false);
-    const hasAlertOnly = ref(false);
-    // X5 — "items that will silently jump onto my list when low". Surfaced
-    // as its own chip so users can audit / find auto-add-prone items.
-    const autoAddOnly = ref(false);
-    const cartFilter = ref<StockCartFilter>('all');
-    // Narrow the list to the ingredient set of a single recipe. Set via
-    // deep-link from the stock-item detail page's "Recipes using this"
-    // tab; surfaced in the UI as a removable chip on the filter bar.
-    const recipeFilter = ref<string | null>(null);
-    const sortBy = ref<StockSortKey>('name_asc');
+    // Wrapped via useListState so filters/search/sort survive nav-away
+    // and back within the session (A8 §3). Reset on full reload.
+    const state = options.persistScope
+        ? useListState(`stockFilters:${options.persistScope}`, () => ({
+            searchText: ref(''),
+            levelFilter: ref<string | null>(null),
+            locationFilter: ref<string | null>(null),
+            groupFilter: ref<string | null>(null),
+            essentialsOnly: ref(false),
+            openOnly: ref(false),
+            hasAlertOnly: ref(false),
+            // X5 — "items that will silently jump onto my list when low".
+            autoAddOnly: ref(false),
+            cartFilter: ref<StockCartFilter>('all'),
+            // Deep-link from stock-item detail page's "Recipes using this".
+            recipeFilter: ref<string | null>(null),
+            sortBy: ref<StockSortKey>('name_asc'),
+        }))
+        : {
+            searchText: ref(''),
+            levelFilter: ref<string | null>(null),
+            locationFilter: ref<string | null>(null),
+            groupFilter: ref<string | null>(null),
+            essentialsOnly: ref(false),
+            openOnly: ref(false),
+            hasAlertOnly: ref(false),
+            autoAddOnly: ref(false),
+            cartFilter: ref<StockCartFilter>('all'),
+            recipeFilter: ref<string | null>(null),
+            sortBy: ref<StockSortKey>('name_asc'),
+        };
+    const {
+        searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
+        openOnly, hasAlertOnly, autoAddOnly, cartFilter, recipeFilter, sortBy,
+    } = state;
 
     // ── Lookup maps ─────────────────────────────────────────────────────
     const levelSequenceById = computed(() => {

@@ -1,4 +1,4 @@
-"""Single source of truth for the current Discount Dora version.
+"""Single source of truth for the current Dashy Dora version.
 
 Kept in code (rather than reading from setup.py / pyproject.toml) so the
 runtime doesn't need to import build tooling at request time, and so the

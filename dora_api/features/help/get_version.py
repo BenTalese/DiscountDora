@@ -23,7 +23,7 @@ from dora_api.infrastructure.api_response import ok
 _CACHE: dict[str, object] = {"value": None, "fetched_at": 0.0}
 _TTL_SECONDS = 60 * 30
 
-_GITHUB_RELEASE_URL = "https://api.github.com/repos/BenTalese/DiscountDora/releases/latest"
+_GITHUB_RELEASE_URL = "https://api.github.com/repos/BenTalese/DashyDora/releases/latest"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +48,7 @@ def _fetch_latest_release() -> tuple[Optional[str], Optional[str], Optional[str]
         req = Request(_GITHUB_RELEASE_URL, headers={
             "Accept": "application/vnd.github+json",
             # GitHub returns 403 for unauthenticated requests without a UA.
-            "User-Agent": "DiscountDora-Help",
+            "User-Agent": "DashyDora-Help",
         })
         with urlopen(req, timeout=4) as resp:
             payload = json.loads(resp.read().decode("utf-8"))

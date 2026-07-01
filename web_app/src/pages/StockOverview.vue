@@ -567,7 +567,7 @@
         recipes: () => recipes.value,
         stockGroups: () => stockGroups.value,
         membership: () => shoppingListStore.membership as Membership | null,
-    });
+    }, { persistScope: 'stock-overview' });
 
     // Filter panel expanded state — shared between the toolbar's
     // FilterToggleButton and the FilterBar's collapsible panel.

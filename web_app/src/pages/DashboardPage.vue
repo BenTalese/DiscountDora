@@ -3,7 +3,7 @@
         <!-- ───── Hero band ─────────────────────────────────────────────── -->
         <section class="dora-hero">
             <q-avatar size="72px" square class="dora-hero-mascot">
-                <img src="../assets/logo-mascot.png" alt="Discount Dora" />
+                <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
             </q-avatar>
             <div class="dora-hero-text">
                 <div class="dora-hero-greeting">

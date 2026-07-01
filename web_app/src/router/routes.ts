@@ -4,7 +4,7 @@ import type { RouteRecordRaw } from 'vue-router';
 declare module 'vue-router' {
     interface RouteMeta {
         // Set on every navigable route; router afterEach writes
-        // `${title} · Discount Dora` to document.title so browser tabs are
+        // `${title} · Dashy Dora` to document.title so browser tabs are
         // useful when several are open. Dynamic detail pages can override
         // at runtime by setting document.title in onMounted.
         title?: string;

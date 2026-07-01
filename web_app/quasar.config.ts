@@ -220,7 +220,7 @@ export default defineConfig((ctx): any => {
         },
 
         // https://v2.quasar.dev/quasar-cli-vite/developing-pwa/configuring-pwa
-        // M1 — Discount Dora as a real PWA. GenerateSW (Workbox builds the
+        // M1 — Dashy Dora as a real PWA. GenerateSW (Workbox builds the
         // service worker for us at build time) is the lower-friction
         // route since we only need standard runtime-caching rules.
         pwa: {
@@ -386,7 +386,7 @@ export default defineConfig((ctx): any => {
             builder: {
                 // https://www.electron.build/configuration/configuration
 
-                appId: 'discount-dora'
+                appId: 'dashy-dora'
             }
         },
 

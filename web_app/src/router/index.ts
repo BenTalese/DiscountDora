@@ -34,7 +34,13 @@ export default defineRouter(function (/* { store, ssrContext } */) {
           : createWebHashHistory;
 
     const ROUTER = createRouter({
-        scrollBehavior: () => ({ left: 0, top: 0 }),
+        // A8 §3 nav-state policy: scroll position persists on browser
+        // back/forward within a session (Vue Router populates
+        // savedPosition only for those navs), resets on fresh forward
+        // nav and on full reload (the history stack is gone). Filters /
+        // search / sort follow the same rule via useListState.
+        scrollBehavior: (_to, _from, savedPosition) =>
+            savedPosition ?? { left: 0, top: 0 },
         routes,
 
         // Leave this as is and make changes in quasar.conf.js instead!

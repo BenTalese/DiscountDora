@@ -2,7 +2,10 @@
     <q-card flat bordered class="dora-chat-card column" style="width: 360px">
         <q-card-section class="dora-chat-header q-py-sm">
             <div class="row items-center no-wrap">
-                <span class="dora-bot-name">DoraBot</span>
+                <span class="dora-bot-name">D.O.R.A.</span>
+                <q-tooltip anchor="bottom middle" self="top middle">
+                    Delicious Organised Restock Assistant
+                </q-tooltip>
                 <q-chip
                     v-if="aiActive !== null"
                     dense
@@ -47,7 +50,7 @@
                     class="dora-accent-btn"
                     @click="openDoraHelp"
                 >
-                    <q-tooltip>What can DoraBot do?</q-tooltip>
+                    <q-tooltip>What can D.O.R.A. do?</q-tooltip>
                 </q-btn>
                 <q-btn flat round dense :icon="ICONS.close" @click="emit('close')" />
             </div>
@@ -727,7 +730,7 @@
         { label: 'Tell me a joke', prompt: 'tell me a joke' },
         { label: 'Random food fact', prompt: 'tell me a random food fact' },
         { label: 'Tell me something', prompt: 'tell me something silly' },
-        { label: 'Thanks DoraBot', prompt: 'thanks dora' },
+        { label: 'Thanks D.O.R.A.', prompt: 'thanks dora' },
         { label: 'I found an issue', prompt: 'i found an issue' },
     ];
 

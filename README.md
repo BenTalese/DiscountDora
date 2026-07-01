@@ -6,12 +6,12 @@
 <br/>
 
 <p align="center">
-    <img alt="MIT Licence" src="https://img.shields.io/github/license/BenTalese/DiscountDora?style=flat"/>
+    <img alt="MIT Licence" src="https://img.shields.io/github/license/BenTalese/DashyDora?style=flat"/>
     <img alt="Awesomeness" src="https://img.shields.io/badge/Awesomeness-100%25-brightgreen" />
-    <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/BenTalese/DiscountDora/build-and-test.yml" />
-    <img alt="Current Release" src="https://img.shields.io/github/v/release/BenTalese/DiscountDora"/>
-    <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/bentalese/discountdora/latest">
-    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/bentalese/discountdora">
+    <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/BenTalese/DashyDora/build-and-test.yml" />
+    <img alt="Current Release" src="https://img.shields.io/github/v/release/BenTalese/DashyDora"/>
+    <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/bentalese/dashydora/latest">
+    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/bentalese/dashydora">
 </p>
 
 <br/>
@@ -25,7 +25,7 @@ _Disclaimer: Dora is a hobby project of Ben Talese!_
 
 ## 🍔 Where it all started...
 
-Discount Dora started out as an idea to efficiently keep track of all the edible items in the house without getting into too much detail. Why be overburdened by exactly how many tea bags you have? What people need is something that will be faster than going to the freezer and searching all the baskests for the salmon. After searching for a solution that fit this description, it soon became obvious a lot of pre-existing solutions were overcomplicated for what needed to be extremely fast and to the point. That's the core principle of Dora and the basis for all its features - your pantry at your fingertips.
+Dashy Dora started out as an idea to efficiently keep track of all the edible items in the house without getting into too much detail. Why be overburdened by exactly how many tea bags you have? What people need is something that will be faster than going to the freezer and searching all the baskests for the salmon. After searching for a solution that fit this description, it soon became obvious a lot of pre-existing solutions were overcomplicated for what needed to be extremely fast and to the point. That's the core principle of Dora and the basis for all its features - your pantry at your fingertips.
 
 And from there, the ideas continued to grow...
 
@@ -33,7 +33,7 @@ And from there, the ideas continued to grow...
 
 ## 🗺️ The Feature Roadmap (It's a Long Road...)
 
-The **vision** for Discount Dora is to have every single interaction with your groceries handled in the one place. No need to go to any external tools - it's all seamlessly managed with Dora!
+The **vision** for Dashy Dora is to have every single interaction with your groceries handled in the one place. No need to go to any external tools - it's all seamlessly managed with Dora!
 
 The following is a list of Dora's planned major features. It is **not** inclusive of all the items that have been or will be added to Dora.
 
@@ -76,8 +76,8 @@ As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is 
 ### 1 — Clone and copy env files
 
 ```bash
-git clone https://github.com/BenTalese/DiscountDora.git
-cd DiscountDora
+git clone https://github.com/BenTalese/DashyDora.git
+cd DashyDora
 ```
 
 Copy the two env templates and leave the defaults for local dev:
@@ -234,7 +234,7 @@ CI runs automatically on every push and PR ([.github/workflows/ci.yml](.github/w
 1. Land your changes on `main` and confirm CI is green for that SHA.
 2. Update the `## [Unreleased]` block in `CHANGELOG.md` — whatever sits there becomes the GitHub Release body.
 3. Go to **Actions → Release → Run workflow**, type a version like `v0.3.0`, and run it.
-4. The workflow validates the version, refuses if the tag already exists, builds the Docker image, pushes to `ghcr.io/bentalese/discountdora:vX.Y.Z` **and** `:latest`, then cuts the GitHub Release. Tick **dry_run** to preview build + tags without publishing.
+4. The workflow validates the version, refuses if the tag already exists, builds the Docker image, pushes to `ghcr.io/bentalese/dashydora:vX.Y.Z` **and** `:latest`, then cuts the GitHub Release. Tick **dry_run** to preview build + tags without publishing.
 5. After the release lands, move the `[Unreleased]` heading down and start a fresh empty section for the next cycle.
 
 <!-- TODO: Offer both docker and manual install options -->

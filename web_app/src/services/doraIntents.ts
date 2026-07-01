@@ -894,7 +894,7 @@ export async function runIntent(
                 ? ` There's also a newer version (${versionInfo.latest}) on offer — release notes are a click away.`
                 : '';
             return {
-                text: `You're on Discount Dora ${versionInfo?.current ?? 'an unknown version'}. The Help page has the full changelog; recent highlights include the assistant (that's me, the burger), the locations heatmap, and per-user preferences.${updateBit}`,
+                text: `You're on Dashy Dora ${versionInfo?.current ?? 'an unknown version'}. The Help page has the full changelog; recent highlights include the assistant (that's me, the burger), the locations heatmap, and per-user preferences.${updateBit}`,
                 mood: versionInfo?.updateAvailable ? 'super_excited' : 'excited',
                 navigateTo: { path: '/help', label: 'Open Help (changelog tab)' },
                 // Repo is private — the release URL isn't surfaced as an
@@ -915,7 +915,7 @@ export async function runIntent(
                     ? " You're on the latest. Smug bot noises."
                     : '';
             return {
-                text: `I'm Discount Dora ${info.current}.${updateLine}`,
+                text: `I'm Dashy Dora ${info.current}.${updateLine}`,
                 mood: info.updateAvailable ? 'super_excited' : 'confident',
                 ...(info.updateAvailable && info.releaseUrl
                     ? { externalLink: { url: info.releaseUrl, label: 'See release notes' } }

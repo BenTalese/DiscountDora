@@ -571,6 +571,7 @@
     import { useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
+    import { useListState } from 'src/composables/useListState';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
@@ -625,14 +626,22 @@
     }
 
     // ── Filters ─────────────────────────────────────────────────────
-    // FU-121: persisted per-page (mobile always starts hidden).
+    // FU-121: expanded state persisted per-page (mobile always starts hidden).
     const filtersExpanded = useFilterPanelExpanded('my-products');
-    const searchText = ref('');
-    const onDealOnly = ref(false);
-    const includeInactive = ref(false);
-    const storeFilter = ref<string | null>(null);
-    const linkedStockItemFilter = ref<string | null>(null);
-    const linkedStockItemPickerText = ref('');
+    // A8 §3 nav-state — filters/search survive navigation within the
+    // session and reset on full reload.
+    const myProductsState = useListState('my-products', () => ({
+        searchText: ref(''),
+        onDealOnly: ref(false),
+        includeInactive: ref(false),
+        storeFilter: ref<string | null>(null),
+        linkedStockItemFilter: ref<string | null>(null),
+        linkedStockItemPickerText: ref(''),
+    }));
+    const {
+        searchText, onDealOnly, includeInactive, storeFilter,
+        linkedStockItemFilter, linkedStockItemPickerText,
+    } = myProductsState;
 
     function onLinkedFilter(value: string, update: (cb: () => void) => void) {
         update(() => {

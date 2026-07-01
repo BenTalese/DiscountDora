@@ -13,7 +13,7 @@
                 no-caps
                 color="accent"
                 :icon="ICONS.smart_toy"
-                label="Meet DoraBot"
+                label="Meet D.O.R.A."
                 :to="{ path: '/help/dora' }"
                 class="q-mr-sm"
             />
@@ -32,7 +32,7 @@
                 <q-icon :name="ICONS.system_update" />
             </template>
             <div class="text-weight-medium">
-                A newer version of Discount Dora is available
+                A newer version of Dashy Dora is available
                 ({{ versionInfo.latest_version }}). You're on
                 {{ versionInfo.current_version }}.
             </div>
@@ -176,7 +176,7 @@
                 <q-card flat bordered>
                     <q-card-section v-if="versionInfo">
                         <div class="text-h6">
-                            Discount Dora {{ versionInfo.current_version }}
+                            Dashy Dora {{ versionInfo.current_version }}
                         </div>
                         <div class="text-caption dora-text-muted">
                             <span v-if="versionInfo.latest_version === null">

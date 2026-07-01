@@ -1,4 +1,4 @@
-# Discount Dora (discount-dora)
+# Dashy Dora (dashy-dora)
 
 Your grocery explorer!
 

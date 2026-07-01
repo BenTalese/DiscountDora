@@ -1,5 +1,7 @@
 # Dashy Dora — Real Progress Report (2026-06-12)
 
+> **⚠️ STALE SNAPSHOT — 2026-07-01.** This is a point-in-time report from 12 June. Since then: Phase 2 ingestion API landed in full (C-10.1 → C-10.4), Phase 1 loop is effectively closed (P6-04 suggestions, P6-09 costing, P6-13 stocktake all done; P6-10 plumbing done and tracked as **FU-351**; P6-12 daily briefing is unbuilt and tracked as **FU-352**), the C-1b Stock Item Detail brief closed the 16-bullet Bucket A-1 NO_HOME cluster, and Products-as-overlay reshaped the My Products / Product History surfaces. For **current** state read the top entry of `DORA_WORKLOG.md` + `CHANGELOG.md`; do **not** treat the numbers below as current. The residual NO_HOME clusters from this snapshot are tracked as **FU-359** (Data page), **FU-360** (Dora Bot polish), **FU-361** (Help content), **FU-362** (A-5 Settings), **FU-363** (Bucket C bundle), **FU-430** (Stocktake residuals), **FU-431** (Product History), **FU-432** (Recipe Detail residuals). Kept for the historical audit trail.
+
 The detailed per-bullet audit is at [docs/99_scratch/FEEDBACK_AUDIT_2026-06-12.md](FEEDBACK_AUDIT_2026-06-12.md). Here's the full report combining pathway + feedback.
 
 ---

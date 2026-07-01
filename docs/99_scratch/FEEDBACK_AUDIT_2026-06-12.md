@@ -1,5 +1,7 @@
 # Feedback audit — 2026-06-12
 
+> **⚠️ STALE SNAPSHOT — 2026-07-01.** Per-bullet SHIPPED/PROPOSED/NO_HOME counts here are from 12 June and are now 3 weeks out of date. In particular the "16 NO_HOME Stock Item Detail" cluster has since been closed by the C-1b brief + IMPL, and multiple Wave-C IMPL plans have shipped. See the banner at the top of `PROGRESS_REPORT_2026-06-12.md` for the current FU cross-references. The per-surface tables below are still useful for **evidence pointers** on individual bullets, but the summary percentages should not be quoted as current.
+
 Per-bullet classification of `docs/02_feedback/Feedback _ Fixes - as of [06-Jun-2026].md`.
 
 Each bullet is classified as:

@@ -53,19 +53,52 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-432 — Recipe Detail residual polish: uncovered NO_HOME bullets
+- **Raised:** 2026-07-01 (12-June feedback-audit delta).
+- **Type:** deferred job (small residual cluster).
+- **What:** Recipe Detail feedback had 33 bullets; Cookbook C-4 Chunks 1–10 shipped 17 and PROPOSED 11; **5 remain NO_HOME**. Named: **RD-11 ingredient-notes value** (open design question — do per-ingredient notes surface in cook mode / shopping list / just detail?); RD-18 substitutes-available status (already tracked by [[FU-407]]); plus ~3 other minor items (walk the audit doc for the current list).
+- **Why deferred:** small enough that each didn't earn its own home; Cookbook C-4 finished without picking them up.
+- **Recommended resolution:** next Cookbook touch — walk the audit's Recipe Detail table for `NO_HOME` rows, close each with a one-line call (kept / dropped / build). RD-11 is the only real design question; the rest are one-shot polish.
+
+## [OPEN] FU-431 — Product History: deeper redesign brief (feature discoverability + desktop drawer pattern)
+- **Raised:** 2026-07-01 (12-June feedback-audit delta).
+- **Type:** deferred job.
+- **What:** Product History has 10 bullets; B9.6 shipped 1 (chart-width fix); 7 are PROPOSED across A1/A6/B9/C-9. **2 remain NO_HOME:** **PH-1 "feature hidden away"** (surface-visibility redesign — how does a user land on Product History without knowing the URL?) and **PH-10 "drawer-style page on desktop"** (design open question). Deeper redesign has no brief. Overlaps with [[FU-227]] resolved "your prices" work but that closed the *stock-item* side, not the *product* side.
+- **Why deferred:** briefs went to higher-priority surfaces; Product History is Products-layer, data-gated, so it only matters once real product data is ingested.
+- **Recommended resolution:** discussion — decide whether a Product History redesign is worth its own brief (given the Products layer is data-presence-gated) or whether the "your prices" intel layer subsumes the user need. Wait until [[FU-214]] product-surface browser verify surfaces real usage patterns.
+
+## [OPEN] FU-430 — Stocktake mode deeper redesign brief (4 NO_HOME UX items)
+- **Raised:** 2026-07-01 (12-June feedback-audit delta).
+- **Type:** deferred job.
+- **What:** Stocktake mode has 11 feedback bullets; B7/B9 fixes shipped 3; PROPOSED 4; **4 remain NO_HOME:** SK-2 (top queue info feels obvious), SK-4 (keyboard shortcuts on buttons tacky), SK-5 (Skip button as big as others), SK-9 (Skip shortcut should be `4`). Micro-polish + a broader "review rules for queue selection" (SK-6) that was PROPOSED loosely but never briefed. No dedicated Stocktake redesign brief exists.
+- **Why deferred:** Stocktake was flagged as "brief deferred" during the Wave-C planning; nothing forced the redesign since the feature works.
+- **Recommended resolution:** small `PROPOSAL_STOCKTAKE_MODE.md` brief when Stocktake next opens for change (or opportunistic — the micro items can land inline). Not blocking anything upstream.
+
+## [OPEN] FU-214 — Products-as-overlay Phase F tail: product-surface browser verify + L197/205/206/223/225 items
+- **Raised:** 2026-06-22 (Phase F kickoff — reconstructed 2026-07-01 from `PRODUCTS_OVERLAY_RUNBOOK.md` + 8 worklog references; **the FU entry itself was missing from both ledgers**).
+- **Type:** deferred job (multi-item Phase-F tail).
+- **What:** Original scope was **product-surface browser verify + build the L205/206 bulk-select variants + decide L197 hard-delete**. Over time it accumulated:
+  - **L197** — hard-delete decision for products (still not made).
+  - **L205 / L206** — bulk-select variants on product surfaces (not built).
+  - **L223** — Price-History hover-bubble dark-mode bug (added 2026-06-22 worklog).
+  - **L225** — Price-History box-fit bug (redirected here from FU-227 scope, worklog).
+  - Product-surface browser verify (My Products page, Price History page, stock-item Products tab) — waits on a running app.
+- **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
+- **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
+
+## [OPEN] FU-429 — DORA_ASSISTANT_ARCHITECTURE_PROPOSAL: not built + collision with in-flight SLM work
+- **Raised:** 2026-07-01 (audit follow-up — file was missed on first pass because it lacks the `PROPOSAL_` prefix).
+- **Type:** deferred job (design reconciliation + build).
+- **What:** `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` proposes **one capability registry + two renderers** to collapse the three overlapping decision systems ([tools.py](dora_api/features/assistant/tools.py) server-side, [doraIntents.ts](web_app/src/services/doraIntents.ts) client rule engine, [doraContextualActions.ts](web_app/src/services/doraContextualActions.ts) client contextual chips) — none of which agree on what Dora can do. Proposal has been *augmented* multiple times (§2.2.1 mutation-confirmation model, §7 LLM-provider/connectivity) but **the structural refactor was never built** — all three systems still exist, no `CapabilityRegistry` exists anywhere, and `DoraChat.vue`'s missing-ingredients recompute (the Type-A duplication called out in §1) hasn't been deleted. **Collides with the in-flight SLM replacement** (memory `project_dora_slm_assistant`): the SLM direction may supersede parts of this proposal (rule-engine deletion becomes trivial once the SLM is always available), keep others (the capability registry is still the right shape for the SLM to call), or invalidate the whole thing. Nobody has reconciled the two directions.
+- **Why deferred:** the SLM work was in-flight when the proposal was drafted; sequencing was never firmed up.
+- **Recommended resolution:** **discussion first, not build** — a short session to reconcile: (a) which parts of the proposal survive the SLM pivot, (b) whether the capability registry lands before/after the SLM, (c) fate of the client-side rule engine (`doraIntents.ts`) once the SLM is the default. Outcome should either be a refreshed proposal or an explicit "superseded by SLM work, close" call. Tightly coupled to [[FU-390]] (P5-05 eval suite — tests whichever architecture wins) and [[FU-386]] (dangling client-only `doraContextualActions.ts` handle from the state-ownership plan).
+
 ## [OPEN] FU-428 — DOC_GRAPH.md is stale — 22 proposals/IMPL plans not indexed
 - **Raised:** 2026-07-01 (full-docs audit).
 - **Type:** finding (doc drift on the anti-drift spine).
 - **What:** `docs/00_DOC_GRAPH.md` is CLAUDE.md's "per-prompt required-reading map" — but 22 of 41 files under `04_proposals/` are not mentioned anywhere in it. Missing: `PROPOSAL_COOKBOOK_CARD_REVISION`, `PROPOSAL_PRODUCTS_AS_OVERLAY`, `PROPOSAL_RECIPE_IMAGE_STEPS`, `PROPOSAL_SHOPPING_LIST_UX_V2`, `PROPOSAL_SIMPLE_MODE`, `PROPOSAL_STOCK_ITEM_DETAIL`, `PROPOSAL_SUPPORT_CHANNEL`, `PROPOSAL_TEST_SUITE_IMPROVEMENTS`, `PROPOSAL_WASTE_MINIMISATION`, and all 13 `IMPL_PLAN_*.md` files. Prompts that would trigger these docs will not find them via the graph — silent under-reading.
 - **Why deferred:** each addition wants a real "who triggers it, which docs it cross-links to" pass; not a boilerplate append.
 - **Recommended resolution:** opportunistic — when a prompt in `03_prompts/` next fires against one of the missing docs, add its graph entry as part of that unit. If it drags on, do a dedicated sweep pass (~1 hour).
-
-## [OPEN] FU-427 — 99_scratch unstructured `.txt` files — triage
-- **Raised:** 2026-07-01 (docs audit).
-- **Type:** deferred job.
-- **What:** `docs/99_scratch/claude convo.txt`, `Finish task DS1.txt`, `prompt - up to speed.txt` sit outside the markdown convention and were never triaged. Either they contain something worth promoting into a proposal/FU, or they can be deleted.
-- **Why deferred:** unread; low signal-to-noise expected.
-- **Recommended resolution:** opportunistic — read each once, promote-or-delete, close this FU with the outcome.
 
 ## [OPEN] FU-426 — Waste-page scratch assessment: confirm fully absorbed by C-waste
 - **Raised:** 2026-07-01 (docs audit).

@@ -134,6 +134,31 @@ def _feature_flags() -> dict[str, bool]:
     return flags
 
 
+def _image_policy() -> dict[str, int]:
+    """FU-345 — install-wide image compression knobs. Read on boot by
+    the client-side `processImageFile` helper so every upload site
+    (stock items, recipes, products, avatars, receipts, store logos)
+    lands compressed to the admin's chosen quality + max dimension.
+    Surfaced here (not on `/app-settings`) because it's a public
+    policy every logged-in user's browser needs to apply, not admin-
+    only configuration; the admin edit path is still the same
+    admin-gated PATCH /app-settings. Wrapped in a try so a DB hiccup
+    doesn't take the health probe down."""
+    quality = 85
+    max_dim = 1920
+    try:
+        from dora_api.features.app_settings.access import \
+            get_or_create_app_setting
+        from dora_api.persistence.sqlalchemy_repository import \
+            SqlAlchemyRepository
+        setting = get_or_create_app_setting(SqlAlchemyRepository())
+        quality = int(getattr(setting, "image_quality", quality) or quality)
+        max_dim = int(getattr(setting, "image_max_dimension", max_dim) or max_dim)
+    except Exception:
+        pass
+    return {"quality": quality, "max_dimension": max_dim}
+
+
 @HEALTH_ROUTER.route("")
 def health_check():
     """Single endpoint for both monitoring and client compatibility.
@@ -146,4 +171,5 @@ def health_check():
         "schema_version": _SCHEMA_HEAD,
         "profile": (os.environ.get("DORA_ENV") or "development").lower(),
         "features": _feature_flags(),
+        "image_policy": _image_policy(),
     }), 200

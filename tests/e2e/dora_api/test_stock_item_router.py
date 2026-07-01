@@ -632,8 +632,8 @@ def test__delete_stock_item__DeletingAlreadyDeletedStockItem__StockItemNotFound(
 
 
 def test__get_stock_item_detail__exposes_lifecycle_keys(api):
-    # Pins the History-timeline contract: the three new DTO surfaces must
-    # be present (lists may be empty) and last_checked_at must serialise
+    # Pins the History-timeline contract: every DTO surface must be
+    # present (lists may be empty) and last_checked_at must serialise
     # (null is fine when the item has never been checked).
     _AnyItem = _items('?limit=1')[0]
 
@@ -641,7 +641,117 @@ def test__get_stock_item_detail__exposes_lifecycle_keys(api):
 
     assert isinstance(_Detail.get('waste_events'), list)
     assert isinstance(_Detail.get('recent_list_adds'), list)
+    # 2026-06-30 — three new event feeds added to the detail DTO.
+    assert isinstance(_Detail.get('purchase_events'), list)
+    assert isinstance(_Detail.get('cook_events'), list)
+    assert isinstance(_Detail.get('expiry_events'), list)
     assert 'last_checked_at' in _Detail
+
+
+def test__expiry_event__emitted_on_set_push_and_clear(api, stock_level_id):
+    """2026-06-30 — every mutation of `StockItem.expiry_date` appends
+    a StockItemExpiryEvent with the right `kind`. Create-with-expiry
+    emits `set`, a PATCH to a later date emits `pushed` with a
+    positive `delta_days`, a PATCH to null emits `cleared` with the
+    previous date preserved."""
+    _CreatedResp = requests.post(base_route, json=CreateStockItemRequest(
+        name=f'Expiry Event Item {uuid4().hex[:8]}',
+        stock_level_id=stock_level_id,
+        expiry_date='2026-07-05',
+    ).model_dump(mode='json'))
+    assert _CreatedResp.status_code == 200, _CreatedResp.text
+    _ItemId = _CreatedResp.json()['stock_item_id']
+
+    # Set on create → `set` event.
+    _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert len(_Detail['expiry_events']) == 1
+    _First = _Detail['expiry_events'][0]
+    assert _First['kind'] == 'set'
+    assert _First['previous_expiry_date'] is None
+    assert _First['new_expiry_date'] == '2026-07-05'
+    assert _First['delta_days'] is None
+
+    # Push +7 days → `pushed` event with delta 7.
+    _PushResp = requests.patch(
+        f'{base_route}/{_ItemId}',
+        json={'expiry_date': '2026-07-12'},
+    )
+    assert _PushResp.status_code == 200, _PushResp.text
+    _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert len(_Detail['expiry_events']) == 2
+    _Pushed = _Detail['expiry_events'][0]  # newest first
+    assert _Pushed['kind'] == 'pushed'
+    assert _Pushed['previous_expiry_date'] == '2026-07-05'
+    assert _Pushed['new_expiry_date'] == '2026-07-12'
+    assert _Pushed['delta_days'] == 7
+
+    # Clear → `cleared` event.
+    _ClearResp = requests.patch(
+        f'{base_route}/{_ItemId}',
+        json={'expiry_date': None},
+    )
+    assert _ClearResp.status_code == 200, _ClearResp.text
+    _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert len(_Detail['expiry_events']) == 3
+    _Cleared = _Detail['expiry_events'][0]
+    assert _Cleared['kind'] == 'cleared'
+    assert _Cleared['previous_expiry_date'] == '2026-07-12'
+    assert _Cleared['new_expiry_date'] is None
+    assert _Cleared['delta_days'] is None
+
+
+def test__history_older_count__caps_at_per_kind_limit(api, stock_level_id):
+    """2026-06-30 — the detail projection caps each event kind at
+    `HISTORY_PER_KIND_CAP` (50) and reports the sum of what got
+    dropped as `history_older_count`. Trip the cap with 52 expiry
+    transitions on a single item and verify the count is 2."""
+    from dora_api.features.stock_items.get_stock_item_detail import (
+        HISTORY_PER_KIND_CAP,
+    )
+    _CreatedResp = requests.post(base_route, json=CreateStockItemRequest(
+        name=f'Cap Test Item {uuid4().hex[:8]}',
+        stock_level_id=stock_level_id,
+        expiry_date='2026-07-01',
+    ).model_dump(mode='json'))
+    _ItemId = _CreatedResp.json()['stock_item_id']
+
+    # Chain N-1 additional PATCH-to-later transitions (each moves the
+    # date one day forward), so total events = HISTORY_PER_KIND_CAP + 2
+    # (1 set from create + HISTORY_PER_KIND_CAP + 1 pushes).
+    _target_transitions = HISTORY_PER_KIND_CAP + 1  # extra pushes
+    for _i in range(_target_transitions):
+        _new = f'2026-07-{2 + _i:02d}' if (2 + _i) <= 31 else f'2026-08-{(2 + _i) - 31:02d}'
+        _resp = requests.patch(
+            f'{base_route}/{_ItemId}',
+            json={'expiry_date': _new},
+        )
+        assert _resp.status_code == 200, _resp.text
+
+    _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    # 52 total events, cap 50 → returns 50 in the list, drops 2 past
+    # the cap.
+    assert len(_Detail['expiry_events']) == HISTORY_PER_KIND_CAP
+    assert _Detail['history_older_count'] == 2
+
+
+def test__expiry_event__no_change_no_event(api, stock_level_id):
+    """A PATCH that leaves `expiry_date` the same value must not
+    emit a new event — the timeline is for transitions, not saves."""
+    _CreatedResp = requests.post(base_route, json=CreateStockItemRequest(
+        name=f'Expiry NoOp Item {uuid4().hex[:8]}',
+        stock_level_id=stock_level_id,
+        expiry_date='2026-08-01',
+    ).model_dump(mode='json'))
+    _ItemId = _CreatedResp.json()['stock_item_id']
+
+    # Same-value PATCH → no new event.
+    _NoOp = requests.patch(
+        f'{base_route}/{_ItemId}',
+        json={'expiry_date': '2026-08-01'},
+    )
+    assert _NoOp.status_code == 200, _NoOp.text
+    _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert len(_Detail['expiry_events']) == 1  # only the `set` from create
 
 
 # ── C-1b.1 — detail DTO threads stock_group_id/name ─────────────────

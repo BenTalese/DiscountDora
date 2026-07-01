@@ -26,8 +26,8 @@
                 <q-tooltip max-width="280px">
                     Prints Dora's own label for this item — a scannable QR
                     that opens this page. It's *not* the product's real
-                    EAN/UPC barcode (that's managed on Data → Barcodes and
-                    links a barcode to a Product, not a stock item).
+                    EAN/UPC barcode (barcodes register a Product, and any
+                    linkage to this stock item is managed on this page).
                 </q-tooltip>
             </BaseButton>
             <BaseButton
@@ -948,6 +948,18 @@
                             </div>
                         </q-timeline-entry>
                     </q-timeline>
+                    <!-- 2026-06-30 — honest truncation footer. Server caps
+                         each event kind at HISTORY_PER_KIND_CAP (50) and
+                         reports what got dropped as `history_older_count`.
+                         When the number is 0 the footer is silent; the old
+                         behaviour was a silent client-side slice(0, 60)
+                         which hid arbitrary truncation. -->
+                    <div
+                        v-if="detail && (detail.history_older_count ?? 0) > 0"
+                        class="dora-text-muted text-caption q-pa-md q-pl-none text-center"
+                    >
+                        {{ detail.history_older_count }} older event{{ (detail.history_older_count ?? 0) === 1 ? '' : 's' }} not shown
+                    </div>
                 </q-tab-panel>
             </q-tab-panels>
         </div>
@@ -1890,6 +1902,79 @@
             });
         }
 
+        // Purchase events (2026-06-30) — every ticked line on a
+        // finished shopping list. Answers "when did I last actually
+        // buy this and for how much?" — a question the list-add
+        // entries can't. Price + store are both optional; render
+        // whichever the /finish flow captured.
+        for (const p of d.purchase_events ?? []) {
+            const bits: string[] = [];
+            if (p.quantity && p.quantity !== 1) bits.push(`${p.quantity}×`);
+            if (p.actual_unit_price != null) {
+                bits.push(`$${p.actual_unit_price.toFixed(2)}${p.quantity > 1 ? '/ea' : ''}`);
+            }
+            if (p.store_name) bits.push(`at ${p.store_name}`);
+            const entry: LifecycleEvent = {
+                id: `bought-${p.occurred_at}-${p.shopping_list_id}`,
+                at: p.occurred_at,
+                title: `Bought · ${p.shopping_list_name}`,
+                icon: ICONS.shopping_bag,
+                color: 'teal-8',
+            };
+            if (bits.length > 0) entry.body = bits.join(' · ');
+            out.push(entry);
+        }
+
+        // Cook events (2026-06-30) — every recipe you cooked that
+        // uses this ingredient. `meals_cooked > 1` badges the entry
+        // as a batch cook. Recipe id may be null (SET NULL on delete);
+        // denormalised name still renders.
+        for (const c of d.cook_events ?? []) {
+            const badge = c.meals_cooked > 1 ? ` · ${c.meals_cooked} meals` : '';
+            out.push({
+                id: `cook-${c.occurred_at}-${c.recipe_id ?? 'unknown'}`,
+                at: c.occurred_at,
+                title: `Used in ${c.recipe_name}${badge}`,
+                icon: ICONS.local_fire_department,
+                color: 'deep-orange-6',
+            });
+        }
+
+        // Expiry events (2026-06-30) — set / pushed / cleared trail.
+        // Repeat pushes tell the user "this is stale in your fridge".
+        for (const e of d.expiry_events ?? []) {
+            let title: string;
+            let body: string | null = null;
+            let color: string;
+            const fmt = (iso: string | null) => (iso ? iso : '—');
+            if (e.kind === 'cleared') {
+                title = 'Cleared expiry';
+                body = e.previous_expiry_date
+                    ? `Was ${fmt(e.previous_expiry_date)}`
+                    : null;
+                color = 'grey-7';
+            } else if (e.kind === 'pushed') {
+                const delta = e.delta_days ?? 0;
+                title = delta >= 0 ? `Pushed expiry +${delta} day${delta === 1 ? '' : 's'}`
+                                   : `Expiry moved ${delta} day${delta === -1 ? '' : 's'}`;
+                body = `${fmt(e.previous_expiry_date)} → ${fmt(e.new_expiry_date)}`;
+                color = 'orange-8';
+            } else {
+                title = 'Set expiry';
+                body = e.new_expiry_date;
+                color = 'orange-8';
+            }
+            const entry: LifecycleEvent = {
+                id: `expiry-${e.occurred_at}-${e.kind}`,
+                at: e.occurred_at,
+                title,
+                icon: ICONS.event,
+                color,
+            };
+            if (body) entry.body = body;
+            out.push(entry);
+        }
+
         // Synthetic "Opened" — single entry derived from current state.
         // opened_on is a date; widen to start-of-day for ordering.
         if (d.is_open && d.opened_on) {
@@ -1917,9 +2002,12 @@
             });
         }
 
-        // Sort newest first and cap so a chatty item doesn't blow the tab.
+        // Sort newest first. Truncation is server-owned now (per-kind
+        // cap in get_stock_item_detail.py, reported via
+        // `history_older_count`); we render everything the server
+        // sends and surface the drop count in the timeline footer.
         out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-        return out.slice(0, 60);
+        return out;
     });
 
     // ── Unlink products ──────────────────────────────────────────────────

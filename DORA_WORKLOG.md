@@ -9,6 +9,693 @@ next.
 
 ---
 
+## 2026-07-01 — FU-344 + FU-345: Import polish + install-wide image compression
+
+Two related pieces of the Data area landing together — the Import page
+gets its label-alignment fix, and the image-quality/dimension knobs
+promised by the FU-198 discussion get their AppSetting + admin UI.
+
+**FU-344 — Import page polish
+([`AdminDataImport.vue`](web_app/src/pages/settings/AdminDataImport.vue)):**
+- Replaced the Options section's stacked `<q-checkbox><br>` list with
+  four `SettingsRow` blocks (label + one-line help on the left,
+  `q-toggle` on the right). Matches every other Settings page (R-003);
+  the label-vs-checkbox misalignment can't happen because the
+  primitive owns the layout.
+- Tightened the caption on each option to be actually useful ("Rolls
+  the whole import back on any row-level failure" rather than the
+  parenthetical the label used to carry).
+- Updated the SettingsPageHeader description to point at the new
+  Download-template button (FU-343) instead of the stale "polish
+  tracked as FU-344" self-reference.
+- **Deliberately out of scope:** the FU's "cards-with-checkboxes
+  section picker" for multiple importable sections. Only stock_items
+  is importable today; building a one-choice picker is scope creep.
+  Note in the resolved FU says revisit when a second section lands.
+
+**FU-345 — install-wide image compression:**
+- **Schema:** migration
+  [`f7a3b8e2c1d5_20260701_image_quality_settings.py`](dora_api/persistence/migrations/versions/f7a3b8e2c1d5_20260701_image_quality_settings.py)
+  adds `AppSetting.image_quality` (int 30–100, default 85) and
+  `AppSetting.image_max_dimension` (int 512–8192, default 1920).
+  Entity + table mapping + get DTO + update request schema all
+  updated with matching bounds.
+- **Public surface:** `/api/health` gains an `image_policy`
+  block so every logged-in user's browser can read the install policy
+  without needing admin credentials. Admin edit → PATCH →
+  `refreshImagePolicy()` picks up the change in the same session.
+- **Frontend pipeline:** new
+  [`useImagePolicy`](web_app/src/composables/useImagePolicy.ts) —
+  module-level state, one probe per session, matches
+  `useScanningEnabled` / `useFeatureFlags` shape.
+  [`imageService.ts`](web_app/src/services/files/imageService.ts)
+  `processImageFile` now reads `currentImagePolicy()` on every call
+  instead of hardcoded 1600/0.85 defaults. All existing upload sites
+  (stock items, recipes, products, avatars, step images, store
+  logos) auto-inherit the admin's choice — no per-surface change.
+- **Admin UI:** new "Image compression" card at the bottom of
+  Settings → Admin → Data → Backup & restore, sibling to Library
+  settings. Slider for quality (label-always so the value is
+  visible); numeric input for max dimension. Independent Save/
+  Discard from the library-settings card so an admin tweaking one
+  doesn't have to re-confirm the other. Caption is explicit that
+  changes apply forward-only.
+- **Backup path:** unchanged. Backup files inherit whatever bytes
+  the images already have — per the FU-342 decision "one setting,
+  one pipeline; no re-encode on the backup path."
+
+**Standards check:**
+- R-003 (single source of truth): `AppSetting.image_*` on the
+  server, one composable on the client, one function
+  (`processImageFile`) applies. Same shape as scanning/feature
+  flags.
+- R-005 (theme tokens): reused `ICONS.image`, `ICONS.tune`; no new
+  colours.
+- R-006 (scope discipline):
+  - Did NOT re-encode existing images. Forward-only per the FU.
+  - Did NOT migrate output to WebP.
+  - Did NOT ship the "cards-with-checkboxes" section picker on
+    Import (still one section).
+  - Did NOT touch other Import options; only the Options block got
+    the SettingsRow treatment.
+
+**Ledger updates:**
+- FU-344 + FU-345 → [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md).
+- CHANGELOG entries under Unreleased → Added (FU-345) + Changed
+  (FU-344).
+- DORA_VERIFY entries added.
+
+**Next up:** browser-verify — the FU-345 essentials: (1) upload a
+photo at default settings, note the file size; (2) drop quality to
+50 in the admin card, upload the same photo again, confirm the
+resulting file is smaller; (3) drop max dimension to 800, upload a
+larger photo, confirm the stored image's longest edge is now 800px.
+FU-344 verify is a smoke test: the Import page's Options block
+renders with proper alignment.
+
+---
+
+## 2026-07-01 — FU-343: importable-section CSV templates
+
+**Why:** The importer assumed users arrived with a spreadsheet in
+the right shape. Users don't know the schema — the Import page
+was a "read the FU list to find out what columns you need" trap.
+FU-343 ships a "Download template" button so users get a blank
+CSV with the right headers + one example row, fill it in, upload.
+
+**Backend
+([`import_spreadsheet.py`](dora_api/features/data/import_spreadsheet.py)):**
+- Added `ImportTemplate` dataclass + `IMPORT_TEMPLATES` tuple with
+  a single `stock_items` entry (that's the only shape the importer
+  actually supports today).
+- `GET /api/data/import/templates` — returns
+  `{ sections: [{ section, label, caption, headers }, …] }`. Admin-
+  gated via `require_admin` (matches the rest of the import
+  surface).
+- `GET /api/data/import/templates/<section>.csv` — streams a CSV
+  with the header row + one illustrative example row.
+  `Content-Disposition: attachment` so the browser saves it as
+  `dora-import-<section>.csv`. Unknown section → 404.
+- **Source of truth:** headers come straight from `TARGET_FIELDS`
+  (the same constant the inspect + commit paths read), so a
+  template can never drift from what the importer accepts. R-003.
+
+**Frontend
+([`AdminDataImport.vue`](web_app/src/pages/settings/AdminDataImport.vue)):**
+- New "Download template" button in the file-picker card's
+  header row (same q-card-section as the title). Single-section
+  installs (today) render it as a plain button with a tooltip
+  showing the caption; when a second section lands the same slot
+  renders a `q-menu` of choices (already wired, no rework needed
+  when that day comes).
+- Templates load once on mount via `loadTemplates()`; download
+  failures notify but don't block the manual upload path (the
+  button is opt-in help, not a gate).
+
+**Standards check:**
+- R-003 (single source of truth): `TARGET_FIELDS` remains the sole
+  schema definition — no parallel list to keep in sync.
+- R-005 (theme tokens): reused `ICONS.file_download`; no new
+  colours.
+- R-006 (scope discipline): did **NOT** bundle FU-344's Import
+  page visual polish (still tracked); did **NOT** add `.xlsx`
+  templates (deferred per the FU discussion — ship CSV first,
+  revisit if users ask for dropdown-validated templates).
+
+**Ledger updates:**
+- FU-343 → [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md).
+- CHANGELOG entry under Unreleased → Added.
+- DORA_VERIFY entry added.
+
+**Next up:** browser-verify — click Download template on the
+Import page, confirm the file downloads as `dora-import-stock_items.csv`,
+open it in Excel/Sheets to confirm headers match, then upload it
+back and inspect the mapping.
+
+---
+
+## 2026-07-01 — FU-342: backup library (Shape A) — persist / list / download / restore-from-saved / delete + retention + storage path
+
+**Why:** The download-only `GET /data/backup` didn't scale. Users
+wanted a real library: generate → store → list → download / restore
+/ delete, with retention and an admin-set storage path. Per user
+decision, no fast-path — every backup goes through the library.
+
+Landed in one pass (per user's "build whole chunks in one pass"
+memory), without a separate proposal doc.
+
+**Schema (new `Backup` table + AppSettings columns + `User` drop):**
+- New entity
+  [`Backup`](dora_api/domain/entities/backup.py) — `(id,
+  created_at, created_by_user_id, size_bytes, sections JSON,
+  sha256, status, trigger_kind, storage_path)`.
+- Alembic migration
+  [`e5f9c2a8b4d6_20260701_backup_library.py`](dora_api/persistence/migrations/versions/e5f9c2a8b4d6_20260701_backup_library.py):
+  creates `Backup`; adds `AppSetting.backup_retention_count` (default
+  5, disk-conscious for Pi) + `AppSetting.backup_storage_path`
+  (default blank → `<DATA_DIR>/backups` at runtime); drops
+  `User.last_backup_at` (its only writer was the retired
+  fast-path).
+- Table mapping + entity mapper registered in
+  [`table_mappings.py`](dora_api/persistence/table_mappings.py);
+  BigInteger import added.
+- User entity + register_user DTO cleaned of `last_backup_at`; the
+  library now owns "when was the last backup" via
+  `MAX(Backup.created_at)`.
+
+**Endpoints ([`backup_library.py`](dora_api/features/data/backup_library.py)):**
+- `POST /api/data/backups` — build payload via the existing
+  `GetBackupHandler` (refactored out of the retired GET handler in
+  [`backup.py`](dora_api/features/data/backup.py)), write file to
+  disk, sha256, add row, enforce retention.
+- `GET /api/data/backups` — paginated list; usernames bulk-fetched
+  for the visible page.
+- `GET /api/data/backups/<id>/download` — `send_file` streams the
+  saved path.
+- `POST /api/data/backups/<id>/restore` — reads the saved file
+  in-place, routes through the existing
+  [`RestoreBackupHandler`](dora_api/features/data/restore_backup.py)
+  with an inline `backup` doc (skips the upload+inspect staging
+  loop the external-file flow uses).
+- `DELETE /api/data/backups/<id>` — best-effort unlink + row delete.
+- All five gated via `require_admin` (FU-341 plumbing).
+- Retention: `_enforce_retention` on every create — sorts by
+  `created_at` desc, drops row + file for everything past the cap.
+
+**Storage path resolution:**
+- New
+  [`DORA_CONFIG.get_backups_dir(override)`](dora_api/infrastructure/configuration_manager.py)
+  — blank override falls back to `<DATA_DIR>/backups`; non-blank is
+  expanded/resolved with `mkdir -p`.
+- AppSettings validator
+  `_validate_backup_storage_path` on the update endpoint —
+  rejects relative paths, non-directories, non-writeable
+  directories, and paths whose nearest existing ancestor isn't
+  writeable. Bad paths return 400 with a user-facing reason so a
+  broken NAS mount fails on save, not on next backup.
+
+**AppSettings surface:**
+- Entity: `backup_retention_count`, `backup_storage_path` fields
+  added to [`AppSetting`](dora_api/domain/entities/app_setting.py).
+- GET DTO: `_to_dto` now surfaces both.
+- PATCH request model: bounds (`ge=1, le=100`) on retention; length
+  cap on path.
+
+**Frontend
+([`AdminDataBackupRestore.vue`](web_app/src/pages/settings/AdminDataBackupRestore.vue)):**
+- Replaced the old "Create backup" card with a **Library list** card
+  (rows show timestamp, size, section count, creator; sensitive-data
+  chip when Optional sections present) + a "New backup" button
+  opening a section-picker dialog with an inline sensitive-data
+  warning banner.
+- Row actions: Download (fetches saved file), Restore (confirm
+  dialog → `POST /backups/<id>/restore`, notify with rows-imported
+  summary), Delete (confirm dialog → `DELETE`).
+- External-file restore card kept unchanged — the upload/inspect/tree
+  flow is orthogonal to the library.
+- New **Library settings** card at the bottom: retention count +
+  storage path inputs, dirty check, Save / Discard. Wired to `PATCH
+  /app-settings` — the new backend validator surfaces bad paths.
+- Removed `last_backup_at` logic; the model type in `auth.ts`
+  dropped the field.
+
+**Tests
+([`test_data_router.py`](tests/e2e/dora_api/test_data_router.py)):**
+- `BACKUP_URL` retired; new `_create_backup(sections=None)` helper
+  POSTs the library create + downloads the file. Every payload
+  assertion the old GET tests carried lives on unchanged; the auth
+  test switched to POST /backups and the section-toggle tests use
+  the sections body.
+- `test__get_backup__stamps_last_backup_at_on_user` deleted (feature
+  retired).
+
+**Standards check:**
+- R-003 (single source of truth):
+  `resolve_selected_sections` shared by create + inspect;
+  `get_or_create_app_setting` used consistently for the two new
+  columns; sensitive-section list defined once frontend-side.
+- R-005 (theme tokens): reused `dora-bg-warning-soft`; no new
+  colours.
+- R-006 (scope discipline): scheduled backups deferred; image-
+  quality re-encode deferred to [[FU-345]]; the backend keeps zero
+  image logic in the backup path (bytes ride through as-is).
+
+**Ledger updates:**
+- FU-342 → [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md).
+- CHANGELOG entry under Unreleased → Added.
+- DORA_VERIFY entries added.
+
+**Follow-on unblocked:** [[FU-345]] (image-quality setting — its
+planned home under Settings → Admin → Data is now populated).
+Scheduled backups can land as their own FU once Shape A beds in.
+
+**Next up:** browser-verify — see DORA_VERIFY. Especially: (1) create
++ download + delete happy path, (2) restore-from-saved skipping
+staging, (3) retention prune at cap+1, (4) storage-path validator
+rejects a bad path with a readable reason.
+
+---
+
+## 2026-07-01 — FU-341: retire /data shell; relocate Backup + Import under Settings → Admin → Data (closes FU-198)
+
+**Why:** The `/data` shell had lost every reason to exist:
+- FU-339 killed ExportPrint.
+- FU-340 relocated Barcodes/QR labels to Settings → Kitchen setup.
+- The remaining two surfaces — Backup and Import — were admin-only
+  workflows sitting in the main nav, and both were **un-gated on
+  the backend** (FU-198's HIGH-severity finding). Any authenticated
+  non-admin could hit `/api/data/backup/restore` and insert
+  arbitrary rows across every table.
+
+Both problems close in one pass, as [[FU-198]] specified.
+
+**Backend (FU-198 half):**
+- New
+  [`dora_api/features/auth/admin_gate.py`](dora_api/features/auth/admin_gate.py)
+  — single canonical `require_admin()` returning
+  `(user_id, err_response)`. Historic `_require_admin` re-exported
+  as an alias so callers of the old
+  `users/update_user_as_admin` copy keep working.
+- Three prior ad-hoc copies collapsed onto the shared module:
+  `users/update_user_as_admin.py` (now imports + re-exports),
+  `audit/get_audit_events.py` (local `_require_admin` +
+  `_forbidden` removed; two call sites switched to the shared dep),
+  and `app_settings/*` (unchanged — they already imported from
+  `update_user_as_admin`, which now points at the shared module).
+- Gate applied to every mutating data endpoint:
+  - `GET /api/data/backup`
+    ([backup.py:129](dora_api/features/data/backup.py:129)) — dumps
+    every install-wide table; must be admin.
+  - `POST /api/data/backup/inspect`
+    ([inspect_backup.py:272](dora_api/features/data/inspect_backup.py:272))
+    — reads uploaded backup contents; same gate as restore.
+  - `POST /api/data/backup/restore`
+    ([restore_backup.py:358](dora_api/features/data/restore_backup.py:358))
+    — the HIGH-severity endpoint. Inserts arbitrary rows across
+    every table.
+  - `POST /api/data/uploads/start|chunk|finish` and
+    `DELETE /api/data/uploads/<id>`
+    ([uploads.py](dora_api/features/data/uploads.py)) — the whole
+    chunked-upload chain. Gates on every step as defence-in-depth so
+    a leaked upload_id from a prior admin session doesn't grant
+    writes to a subsequent non-admin caller.
+  - `POST /api/data/import/spreadsheet/inspect|commit`
+    ([import_spreadsheet.py](dora_api/features/data/import_spreadsheet.py))
+    — inserts arbitrary stock rows.
+- Test admin (`dora`) already `is_admin=True` in
+  [seed.py:163](dora_api/persistence/seed.py:163), so the existing
+  e2e tests still authenticate correctly.
+
+**Frontend (relocate):**
+- `git mv` moved the two pages so history follows:
+  - `pages/data/BackupRestore.vue` → `pages/settings/AdminDataBackupRestore.vue`
+  - `pages/data/DataImport.vue` → `pages/settings/AdminDataImport.vue`
+- Both wrapped in `SettingsPageHeader` at the top — the ~800 lines
+  of internal template below untouched (that's FU-344's scope).
+- Route entries added under `admin/data/backup` and
+  `admin/data/import` in
+  [`routes.ts`](web_app/src/router/routes.ts). Admin-only via the
+  existing `/settings/admin/*` guard in
+  [`router/index.ts:132`](web_app/src/router/index.ts:132).
+- **Data sub-header** added under the Admin group in
+  [`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue) —
+  mirrors the existing "System" sub-header. Nav flows through to
+  the mobile settings tab strip via the shared `navGroups` def
+  (R-003 — one IA source).
+
+**Shell removed:**
+- `web_app/src/pages/DataManagement.vue` deleted.
+- `pages/data/` directory empty → removed.
+- All prior child paths preserved as **redirects** so bookmarks /
+  prior email deep-links / the retired PWA shortcut land somewhere
+  useful:
+  - `/data` → `/settings/admin/data/backup`
+  - `/data/backup` → `/settings/admin/data/backup`
+  - `/data/import` → `/settings/admin/data/import`
+  - `/data/barcodes` → `/settings/kitchen-setup/qr-labels` (from
+    FU-340; kept)
+  - `/data/export` → `/settings/admin/data/backup` (nearest sibling
+    — the page itself is gone)
+- "Data" main-menu entry in
+  [`MainLayout.vue`](web_app/src/layouts/MainLayout.vue) retired.
+  Admin-only IA doesn't belong in the top-level nav; admins reach
+  it in two clicks via the header avatar
+  (Settings → Admin · global → Data → Backup).
+- Onboarding link at
+  [`WelcomeWizard.vue:242`](web_app/src/pages/onboarding/WelcomeWizard.vue:242)
+  repointed to `/settings/admin/data/import`.
+
+**Non-admin bookmarks:** `/data/*` → redirect →
+`/settings/admin/data/*` → guard bounces to `/settings/account`.
+Deliberate: the redirects preserve URL stability but don't grant
+access.
+
+**Standards check:**
+- R-003 (single source of truth): one `require_admin`; one
+  `navGroups` feeds desktop + mobile settings nav.
+- R-005 (theme tokens): no new tokens; used existing
+  `ICONS.cloud_download` / `ICONS.file_upload` for the sidebar
+  entries.
+- R-006 (scope discipline): did **NOT** do
+  - FU-344's Import visual polish (label alignment, card grid) —
+    still tracked; the SettingsPageHeader wrapper is the only
+    chrome change.
+  - Break-up of the 830-line `AdminDataBackupRestore.vue` into
+    smaller components — the page is internally coherent and the
+    upcoming FU-342 (backup library) will restructure it anyway.
+  - Any change to the API endpoint URL shape (`/api/data/*`) — the
+    endpoint layer is orthogonal to the SPA IA; existing clients
+    (including barcode API) still work.
+
+**Ledger updates:**
+- FU-341 → [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md).
+- **FU-198 → [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md)**
+  (HIGH-severity security finding, closed as promised).
+- CHANGELOG entries under Unreleased → Security + Changed.
+- DORA_VERIFY entries added (Settings + Cross-cutting).
+
+**Follow-on unblocked:** FU-342 (backup library), FU-343 (import
+templates), FU-344 (import UI polish), FU-345 (image-quality
+setting — planned home is Settings → Admin → Data, now available).
+
+**Next up:** browser-verify + a targeted API-level check that a
+non-admin session gets 403 on `/api/data/backup`,
+`/api/data/backup/restore`, `/api/data/uploads/start`, and
+`/api/data/import/spreadsheet/inspect`.
+
+---
+
+## 2026-07-01 — FU-340: QR labels move to Settings → Kitchen setup; Scan tab retired
+
+**Why:** `/data/barcodes` didn't actually manage barcodes — barcode
+registration lives on the stock item detail page (FU-056 work). The
+page just had two tabs: a duplicative Scan tab (every scan-needing
+surface already had its own Scan button — Stock Overview, Add-to-
+list flows) and a genuinely useful Print QR labels workflow.
+
+**New page:**
+- [`web_app/src/pages/settings/QrLabels.vue`](web_app/src/pages/settings/QrLabels.vue)
+  — Print labels only. Filter items, pick a sheet layout, open the
+  printable sheet in a new tab (browser's Save-as-PDF from there).
+  Still gated by the install-wide `scanning_enabled` flag; the page
+  shows the "ask an admin to enable it" banner if reached by URL
+  while off.
+- Route added at `/settings/kitchen-setup/qr-labels`
+  ([`routes.ts`](web_app/src/router/routes.ts)).
+- Sidebar entry in
+  [`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue)
+  under Kitchen setup group. Entry is **gated by
+  `useScanningEnabled`** — the sidebar hides it when scanning is
+  off, mirroring the flag the page enforces. Same nav def flows
+  through to `SettingsMobileNav` per R-003.
+
+**Deletions / relocations:**
+- `web_app/src/pages/data/BarcodesQR.vue` — gone. Scan tab +
+  banner + register-now flow all retired. (Register-now was only
+  ever reachable from this page's unknown-scan dialog; barcodes are
+  registered per-item on stock detail now.)
+- `/data/barcodes` route in
+  [`routes.ts`](web_app/src/router/routes.ts) — turned into a
+  **redirect** to the new settings page. Preserves stale bookmarks
+  and the PWA shortcut window during the FU-341 transition. FU-341
+  will drop the redirect along with the shell.
+- "Scanning & QR labels" nav card removed from
+  [`DataManagement.vue`](web_app/src/pages/DataManagement.vue). The
+  `/data` shell now surfaces two cards (Backup + Import) —
+  transitional shape; FU-341 collapses the shell entirely.
+- "Scan a barcode" PWA shortcut in
+  [`quasar.config.ts`](web_app/quasar.config.ts) — retired. It
+  pointed at `/data/barcodes?action=scan`, which no longer exists.
+  A dedicated scan launcher on a stable surface (e.g. `/stock?scan=1`)
+  can land later if wanted; not scope for this FU.
+- Stale barcode-management comment at
+  [`StockItemDetailPage.vue:29`](web_app/src/pages/StockItemDetailPage.vue:29)
+  — updated to drop the "Data → Barcodes" pointer.
+
+**New icon:**
+- `ICONS.qr_code = 'mdi-qrcode'` added in
+  [`icons.ts`](web_app/src/style/icons.ts). DataManagement.vue had
+  been using a raw `'qr_code_2'` material-icon string, which is an
+  R-005 violation (no direct icon strings outside the tokens file).
+  Since the entry is retired anyway, the fix lands here on the
+  replacement.
+
+**Standards check:**
+- R-003 (single source of truth) — sidebar + mobile nav both read
+  the shared `navGroups` computed; no duplicate IA def.
+- R-005 (theme tokens) — added `ICONS.qr_code` rather than
+  inlining a mdi- string.
+- R-006 (scope discipline) — kept the `/data/barcodes` → new-page
+  redirect rather than deleting the route outright; FU-341 owns the
+  shell collapse. Also did NOT add a query-param scan launcher on
+  Stock Overview to replace the PWA shortcut — that's a separate
+  feature ask.
+
+**Ledger updates:**
+- FU-340 moved to
+  [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md).
+- CHANGELOG entry under Unreleased → Changed.
+- DORA_VERIFY entries added (Settings + Cross-cutting).
+
+**Next up:** browser-verify. [[FU-341]] (retire the `/data` shell)
+is now fully unblocked — both prerequisites (FU-339 + FU-340) done.
+
+---
+
+## 2026-07-01 — FU-339: retire the central `/data/export` page
+
+**Why:** With FU-338 closing the last in-context Print gap
+(meal-plan Board) earlier in the same session, the central
+[`ExportPrint.vue`](https://example.invalid) page had no reason to
+exist. Every printable surface now advertises its own Print/CSV
+action; the central hub was pure duplication and, per user, "a
+management area I never wanted; I print where I need to".
+
+**Deletions:**
+- `web_app/src/pages/data/ExportPrint.vue` — ~325 lines, gone.
+- `export` child route entry removed from
+  [`routes.ts`](web_app/src/router/routes.ts:184-188). Sibling
+  routes (`backup`, `import`, `barcodes`) untouched.
+- "Export & print" nav card removed from
+  [`DataManagement.vue`](web_app/src/pages/DataManagement.vue:71-76)
+  so the shell no longer advertises a dead destination. The `/data`
+  shell now surfaces three sections (Backup & restore, Import,
+  Scanning & QR labels) — no half-empty grid, no 404 for the fourth
+  card.
+
+**Kept:**
+- All four export composables (`useShoppingListExport`,
+  `useRecipeExport`, `useMealPlanExport`,
+  `useStockOverviewExport`) — every in-context caller still uses
+  them. R-003 (single source of truth) preserved.
+- Every backend endpoint that powered the retired page
+  (`/api/data/export/*`, `/api/meal-plans/{id}/print-view`, etc.).
+  They power the in-context callers now.
+
+**Comment tidy:**
+- [`RecipeDetailPage.vue`](web_app/src/pages/RecipeDetailPage.vue):
+  dropped the stale "shared with the Data → Export & Print page" +
+  "L306 CSV removed" comments. Both were referring to a page that
+  no longer exists / a decision that's now settled inline.
+- [`downloadHelpers.ts`](web_app/src/services/files/downloadHelpers.ts):
+  header comment updated from "every Export & Print composable" to
+  "every in-context export composable" — the shape is the same but
+  the naming referenced the retired hub.
+
+**Deliberately left as-is:**
+- Historical mentions in `CHANGELOG.md` older entries,
+  `DORA_WORKLOG.md` older entries, `DORA_VERIFY.md` (one bullet
+  under the "Set as primary" checklist that mentions the old
+  ExportPrint primary chip — trail of history), `docs/00_original_spec/`,
+  `docs/06_legacy_prompt_plans/`, `docs/99_scratch/`, and
+  `web_app/THEME_AUDIT.md`. All trail-of-history docs — non-runtime,
+  editing them would just be noise.
+- `tests/e2e/dora_api/test_data_router.py` header banner
+  "── Export & Print (N4) ──" — the tests themselves cover API
+  endpoints that are still live (they power the in-context
+  composables), so the banner is now historically-named but the
+  tests remain relevant. Left alone rather than reshuffle the file.
+
+**Standards check:**
+- R-003 (state-ownership / single source of truth) — composables +
+  backend endpoints kept; only the duplicating page removed. No new
+  duplication introduced.
+- R-005 (theme tokens) — n/a (deletion only).
+- R-006 (scope discipline) — did not touch [[FU-341]] (retire the
+  `/data` shell itself). FU-341 explicitly depends on FU-339 +
+  FU-340; this PR unblocks it but doesn't preempt it — the shell
+  still hosts Backup, Import, Barcodes.
+
+**Ledger updates:**
+- FU-339 moved to
+  [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md) with a
+  state note. FU-341's "sequence after FU-339 + FU-340" note now
+  half-satisfied.
+- CHANGELOG entry added under Unreleased → Removed.
+
+**Next up:** browser-verify (added under DORA_VERIFY Cross-cutting).
+[[FU-340]] (relocate `/data/barcodes` — see FU description; needs a
+user IA call) is the remaining blocker for [[FU-341]].
+
+---
+
+## 2026-07-01 — FU-338: in-context Print action added to meal-plan Board
+
+**Why:** Meal plans was the last printable surface reachable *only*
+from the central `/data/export` page — every other surface (stock
+overview, recipes, shopping lists) already had an in-context Print
+action. Closing that gap unblocks [[FU-339]] (retiring the central
+Print page) later.
+
+**Discovery:** Turned out
+[`MealPlansOverview.vue`](web_app/src/pages/MealPlansOverview.vue)
+already had a Print icon-button (line 98–105) using
+`planner.printFocusedWeek`. Only the Board page
+([`MealPlansBoardPage.vue`](web_app/src/pages/MealPlansBoardPage.vue))
+lacked it. So the actual work was smaller than the FU description
+suggested.
+
+**Changes:**
+- [`MealPlansBoardPage.vue`](web_app/src/pages/MealPlansBoardPage.vue):
+  desktop top strip — new icon `BaseButton` (`ICONS.print`, tooltip
+  "Print this week") placed after the `q-space`, right before
+  Templates. Hidden when `planner.focusedPlan.value` is falsy so an
+  empty state doesn't advertise a no-op. Wire: `@click="planner.printFocusedWeek"`.
+- [`MealPlanMobileFocus.vue`](web_app/src/components/MealPlanMobileFocus.vue):
+  new `print` emit added to the component's typed emits list; new
+  icon `BaseButton` in the week-nav row (after the next-week arrow)
+  gated on `plannedCount > 0` so a week with no meals doesn't
+  advertise printing an empty calendar. Board page wires
+  `@print="planner.printFocusedWeek"` on the `<MealPlanMobileFocus>`.
+- [`CHANGELOG.md`](CHANGELOG.md): one entry under Unreleased →
+  Changed.
+- [`DORA_FOLLOWUPS.md`](DORA_FOLLOWUPS.md) → moved FU-338 to
+  [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md) with a
+  state note.
+
+**Standards check:**
+- R-003 (state-ownership / no duplication) — reused
+  `useMealPlanExport` + `planner.printFocusedWeek`; no new export
+  code path, no duplicated URL construction.
+- R-005 (theme tokens) — icon-only button using the existing
+  `BaseButton variant="icon"`, no new colours.
+- R-006 (scope discipline) — did not proceed with [[FU-339]] (delete
+  central page). That's a separate call and larger blast radius; the
+  user asked for FU-338 specifically.
+
+**Next up:** browser-verify (see DORA_VERIFY entry). [[FU-339]] is
+now unblocked whenever it's called for.
+
+---
+
+## 2026-07-01 — Settings shell: independent sidebar/main scroll (kills jump-to-top on nav click)
+
+**Why:** user reported that after scrolling down inside a settings
+page, clicking a nav item in the sidebar (or any router-linking
+control) jarringly snapped the whole page back to the top. Root
+cause: the shell relied on window scroll, and the router's global
+`scrollBehavior` returns `{top:0}` on every navigation
+([`router/index.ts:37`](web_app/src/router/index.ts:37)) — so the
+window flew back to top on each click. The sidebar was `position:
+sticky` which papered over it partially, but any change of route
+still yanked the viewport.
+
+**Change:** turn the settings shell into a viewport-height flex
+container. Sidebar and main pane each own their own `overflow-y:
+auto`, so the *window* never needs to scroll while inside settings.
+Router's `{top:0}` still runs but has nothing to yank. Added a
+`watch(route.path)` in
+[`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue) that
+resets `mainEl.scrollTop = 0` on route change, so switching to a new
+leaf still lands the user at the top of that section (the expected
+settings behaviour) without touching the sidebar's scroll position.
+
+**Mobile (<1024px):** preserved the existing single-column, window-
+scrolled layout. Internal overflow on a small viewport makes pages
+feel truncated, and the mobile tab strip replaces the sidebar so
+there's no dual-scroll to preserve.
+
+**Scope discipline (R-006):**
+- Did NOT touch the router's global `scrollBehavior` — the top-of-
+  page reset is correct for every non-settings route; the settings
+  shell now just doesn't rely on window scroll so the reset is a
+  no-op inside it.
+- Did NOT move admin settings out of the settings tree. User floated
+  it ("maybe a separate option in the profile dropdown? Not sure")
+  but the profile dropdown was retired 2026-07-01 (worklog entry
+  below), so there's no obvious host, and the admin IA is fresh from
+  the settings rebuild. Logged as an open follow-up for the user to
+  decide direction (see DORA_FOLLOWUPS.md FU below).
+
+**Standards check:**
+- R-003 componentisation — no new components, layout tweak inside
+  the existing shell only.
+- R-005 theme tokens — no new colours introduced.
+- R-006 scope discipline — the scroll fix is the entire change; the
+  admin-relocation question is deferred to a follow-up rather than
+  bundled in.
+
+**Next up:** browser-verify at desktop widths (see DORA_VERIFY
+entry). Await user direction on admin-settings location.
+
+---
+
+## 2026-07-01 — Mobile header: hide "Dashy Dora" wordmark, push right-side buttons to edge, drop Help on mobile
+
+**Why:** on mobile the "Dashy Dora" wordmark next to the page title
+was crowding the toolbar and reading as a second title. User wants
+the mobile header sequence to be: burger → mascot (home) → page
+title → big gap → alerts → profile.
+
+**Changes:**
+- [`web_app/src/components/menu/ApplicationLogo.vue`](web_app/src/components/menu/ApplicationLogo.vue):
+  Moved the horizontal margin off the mascot avatar onto the wordmark
+  (so hiding the wordmark also removes the gap), and added a
+  `max-width: 1023px` media query that `display: none`s
+  `.dora-brand-text`. Mascot alone remains the tap target back to `/`.
+- [`web_app/src/layouts/MainLayout.vue`](web_app/src/layouts/MainLayout.vue):
+  Added `<q-space v-if="$q.screen.lt.md" />` after
+  `MainMenuButtonStrip` so on mobile the alerts + profile buttons get
+  shoved to the far right (desktop already fills the middle with the
+  menu strip, so the spacer only fires < md). Also gated the Help
+  icon button behind `$q.screen.gt.sm` — mobile header keeps only
+  alerts + profile per user's enumerated order.
+
+**Layout (mobile header, left → right):**
+`Burger · Mascot · Page title  ⟶  Alerts · Profile`
+
+**Layout (desktop header, unchanged):**
+`Mascot + wordmark · MainMenuButtonStrip · Alerts · Help · Profile`
+
+**Standards check (R-005 theme tokens / R-003 componentisation):**
+No new tokens, no new components — layout-only tweak inside existing
+componentised parts. Help route (`/help`) still reachable on mobile
+via the burger drawer / Dora bubble / in-page links.
+
+**Next up:** browser-verify at ~380px width — see DORA_VERIFY entry.
+
+---
+
 ## 2026-07-01 — Header dropdown retired; Help + Account become peer icon buttons with shared active ring
 
 **Why:** user asked to turn the profile button into a normal clickable
@@ -632,6 +1319,210 @@ specific FU-121 ask, not a new architectural rule).
 the FU-121 Chunk 2 section (toolbar order, per-page persistence,
 mobile-always-hidden, Clear-on-left stability) on Stock Overview /
 My Products / Cookbook overview.
+
+---
+
+## 2026-06-30 — History-tab retention + truncation footer + dev seed
+
+**Why:** user asked what happens when a stock item accumulates a lot
+of history, and how long history should be kept. Agreed on:
+retention forever (storage negligible; future Dora insights want
+the data), display capped at 50 per kind, and — critically — an
+honest truncation footer so the user knows more exists rather than
+watching the timeline silently drop events. Plus enough dev seed
+to actually exercise the footer in a browser.
+
+**Backend (`dora_api/features/stock_items/get_stock_item_detail.py`):**
+- Introduced `HISTORY_PER_KIND_CAP = 50` at module scope — one
+  constant, one policy for every event feed.
+- Every per-kind projection (level_history, waste_events,
+  recent_list_adds, purchase_events, cook_events, expiry_events)
+  now caps at that constant instead of a hardcoded 20 and
+  `max(0, len - CAP)`-adds into a running `_HistoryOlderCount`.
+- New DTO field `history_older_count: int = 0` on
+  `StockItemDetailDto` — the summed drop count across every kind.
+  Zero when the item fits comfortably; > 0 when the SPA should
+  render the footer.
+
+**SPA (`web_app/src/`):**
+- `models/stockItemDetail.ts` — new optional `history_older_count`
+  on `StockItemDetail`.
+- `pages/StockItemDetailPage.vue` — removed the defensive
+  `.slice(0, 60)` client cap on `lifecycleEvents` (silent
+  truncation was the bug it was hiding). Server owns truncation
+  now. Added a small centered footer under the q-timeline:
+  *"N older event[s] not shown"*, muted, only rendered when the
+  count > 0.
+
+**Dev seed (`dora_api/persistence/seed.py`):**
+- New chatty test item **"Sriracha (chatty history test)"** —
+  pantry, well-stocked, expiry 15 days out; seeded with 1 `set` +
+  65 `pushed` expiry events across the last 90 days. 66 > 50, so
+  the projection drops 16 events past the cap and the SPA footer
+  shows *"16 older events not shown"* reliably. Named so a
+  browser tester can find it via Stock Overview search.
+- Cook events across 16 recipe-cooks over the last 60 days —
+  aglio × 5, simple_pasta × 4, stir_fry × 3, fried_rice × 3,
+  garlic_bread × 1. Because projection joins CookEvent → recipe
+  → RecipeIngredient → stock_item, every ingredient on those
+  recipes (pasta, garlic, olive_oil, tomatoes, parmesan, rice,
+  broccoli, soy, chicken, eggs, onions, bread, butter) now has a
+  populated History tab with *"Used in <recipe>"* entries.
+- Scatter of `StockItemWasteEvent` rows on icecream, milk,
+  broccoli, brazil — one each, spread across days_ago 12–45 so
+  the negative-coloured row surfaces alongside the positive ones.
+- `StockItemExpiryEvent` `set` markers on the natural
+  perishables (mangoes, milk, icecream, broccoli) plus two
+  `pushed` events on milk walking the date forward to its current
+  value — enough to show the "kept pushing back" pattern short of
+  the cap on a real item.
+- Purchase (Bought) events already emerge implicitly from the
+  existing archived + weekend finished-shopping-list seeds; no
+  extra rows needed.
+
+**Test (`tests/e2e/dora_api/test_stock_item_router.py`):**
+- `test__history_older_count__caps_at_per_kind_limit` — chains
+  `HISTORY_PER_KIND_CAP + 1` PATCH-to-later transitions on a fresh
+  item (52 total events including the create `set`), asserts the
+  detail response returns exactly 50 in `expiry_events` and
+  reports `history_older_count == 2`. Pins the cap contract so a
+  future edit to the constant will surface here.
+
+**Docs:**
+- `CHANGELOG.md` — Changed entry.
+- `DORA_VERIFY.md` — new checklist under *Stock*.
+
+**Engineering-standards close-gate:** no rule violations. Constant
+lives in one file; every call site reads it (R-003). Seed
+exercises every new surface (R-017). Scope discipline (R-007): I
+did NOT build the collapsible "older activity by year" section or
+per-kind filters — those were explicitly rejected in the design
+discussion; if history browsing becomes a real ask, that's its
+own follow-up. Linted + typechecked clean.
+
+**Next up:** user-side `pytest tests/e2e/dora_api/
+test_stock_item_router.py` to confirm the new cap test passes,
+then walk the DORA_VERIFY entry (fresh `flask db upgrade` + reseed
+required to pick up the new dev-seed history).
+
+---
+
+## 2026-06-30 — History tab: Bought / Cook / Expiry events
+
+**Why:** user asked *"what other events can be tracked on the History
+tab that are useful, not fluff?"* We agreed on three: (1) **Bought**
+projected from finished shopping lists, (2) **Cooked-with-this-
+ingredient** derived from a new CookEvent log, (3) **Expiry set /
+pushed / cleared** from a new StockItemExpiryEvent log. This entry is
+that build.
+
+**New entities + migrations (2 tables):**
+- `dora_api/domain/entities/cook_event.py` — `CookEvent` (recipe_id,
+  denormalised recipe_name, meals_cooked, cooked_by_user_id,
+  occurred_at). FKs to Recipe + User both SET NULL so history
+  survives delete.
+- `dora_api/domain/entities/stock_item_expiry_event.py` —
+  `StockItemExpiryEvent` (stock_item_id, kind ∈ set/pushed/cleared,
+  previous/new expiry dates, delta_days, occurred_at) plus a
+  `classify_expiry_transition(prev, new)` helper — the single source
+  of truth for how create/update handlers pick the kind.
+- Two migrations chained off head `a4c8f2e1b9d3`:
+  `c3d7f1a2b8e4_20260630_cook_event.py` (with `cook_event_recipe_id`
+  index for the detail-projection join) and
+  `d4e8f2b1c9a5_20260630_stock_item_expiry_event.py` (with
+  `stock_item_expiry_event_stock_item_id` index). Timestamps
+  `DateTime(timezone=True)`, dates `sa.Date` — portable across
+  SQLite + Postgres per R-005.
+- `dora_api/persistence/table_mappings.py` — Table defs + mapper
+  registrations. `verify_mappings()` will pass automatically since
+  the entities have public FK fields that match the columns.
+
+**Write sites:**
+- `dora_api/features/recipes/cook_recipe.py` — writes a CookEvent
+  alongside the existing `available_meals` bump. Zero-meal POSTs
+  (used purely to nudge `last_made_on`) are skipped. Session
+  user-id lifted via a local `_current_user_id()` matching the
+  pattern used in `features/alerts/`.
+- `dora_api/features/stock_items/create_stock_item.py` — on birth
+  with a non-null `expiry_date`, appends a `set` event
+  (classify_expiry_transition(None, X)).
+- `dora_api/features/stock_items/update_stock_item.py` — captures
+  the pre-mutation date, classifies the transition, appends whichever
+  of `set`/`pushed`/`cleared` applies (or nothing when the date
+  hasn't changed). This is the SINGLE emit site for every
+  expiry-date mutation on an existing item — the row-menu "+N days"
+  nudges and "Clear expiry" both PATCH the same endpoint, so no
+  duplication.
+
+**Detail projection (`dora_api/features/stock_items/
+get_stock_item_detail.py`):**
+- Three new DTOs: `PurchaseEventDto`, `CookEventDto`, `ExpiryEventDto`
+  — added to `StockItemDetailDto` as `purchase_events`, `cook_events`,
+  `expiry_events` (all `List[...] = field(default_factory=list)`,
+  capped at 20 for parity with the existing lifecycle lists).
+- **Purchase events:** loads all ShoppingListLines for the item,
+  filters to `is_ticked` + parent list `status='done'` with
+  `completed_at` set; sorts by completed_at desc; caps 20.
+  Store names resolved server-side in a single IN-query so the
+  wire response is a string, not a raw FK.
+- **Cook events:** joined via the existing `_IngredientRecipeIds`
+  set (already computed for the linked-recipes list, so no extra
+  query needed to build the recipe universe). Loads CookEvents by
+  `recipe_id IN (…)` using the new index.
+- **Expiry events:** trivial fetch-by-stock_item_id, sort, cap 20.
+
+**SPA (`web_app/src/`):**
+- `models/stockItemDetail.ts` — three new types
+  (`PurchaseEvent`, `CookEvent`, `ExpiryEvent`) and three new
+  optional fields on `StockItemDetail`.
+- `pages/StockItemDetailPage.vue` — `lifecycleEvents` computed now
+  merges the three new kinds into the existing q-timeline. Icons:
+  `shopping_bag` teal for Bought, `local_fire_department` deep-orange
+  for Cook, `event` orange for Set/Pushed and grey for Cleared.
+  Purchase entries render a subtitle like "*2× · $2.10/ea · at
+  Coles*"; cook entries badge "× N meals" when > 1; expiry-push
+  entries render "*Was 2026-07-05 → 2026-07-12*" as the body.
+  `exactOptionalPropertyTypes` compatibility: conditional-set the
+  optional `body` field rather than passing `undefined`.
+
+**Tests (`tests/e2e/dora_api/test_stock_item_router.py`):**
+- `test__get_stock_item_detail__exposes_lifecycle_keys` extended to
+  assert `purchase_events` / `cook_events` / `expiry_events` are all
+  present in the DTO.
+- `test__expiry_event__emitted_on_set_push_and_clear` — end-to-end
+  loop covering all three kinds (create with expiry → set,
+  PATCH-to-later → pushed with correct delta, PATCH-to-null →
+  cleared with previous preserved).
+- `test__expiry_event__no_change_no_event` — a same-value PATCH
+  emits nothing; the timeline is for transitions, not saves.
+- Cook + Bought paths are covered by the shape assertion + the
+  browser-verify entry rather than full e2e (both require
+  substantial seed scaffolding for recipe ingredients / finished
+  shopping lists; the emit + projection code is the same shape as
+  the expiry-event test that DOES cover both directions).
+
+**Docs:**
+- `CHANGELOG.md` — Added entry.
+- `DORA_VERIFY.md` — new checklist under *Stock*.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+Migrations follow R-006 (clean forward-only, no guards) and R-015
+(constraint names inherit the MetaData convention — I only
+hand-named the two indexes, which take the bare suffix per the
+rule). Portability (R-005): every column type is portable across
+SQLite/Postgres; queries go through the repository layer and
+`select()` — no raw SQL. Scope discipline (R-007): I didn't refactor
+the existing lifecycle projection into a shared abstraction; three
+similar blocks beats a wrong helper. Componentisation (R-001): SPA
+timeline still one big computed; the additions parallel the existing
+`WasteEvent` / `ListAddEvent` blocks. Linted (`npx eslint .` on
+touched files) + typechecked (`npx vue-tsc --noEmit`) clean.
+
+**Next up:** user-side `pytest tests/e2e/dora_api/
+test_stock_item_router.py` to confirm the three new backend tests
+pass (needs Python-equipped shell), then walk the fresh-DB
+DORA_VERIFY checklist. Consider a Postgres CI lane at some point
+so the two new tables get exercised on both engines automatically.
 
 ---
 

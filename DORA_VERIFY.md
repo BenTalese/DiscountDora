@@ -203,6 +203,14 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Meal plans
 
+### In-context Print on the Board page — origin FU-338
+- [ ] Open `/meal-plans/board` on desktop with a focused week that has at least one meal planned. The top strip shows a small **Print** icon-button (printer glyph) between the recipe-picker/Templates buttons and the Templates label — tooltip on hover reads "Print this week"
+- [ ] Click the Print button → a **new tab** opens the meal-plan print view for the focused week (calendar layout with the week's meals). The Board page tab is unchanged (no navigation on it)
+- [ ] Switch to a focused week with **no plan at all** (empty week) → the Print icon disappears from the top strip (no dead affordance)
+- [ ] Resize to mobile (<md) → the Board switches to the mobile focus. The Print icon lives in the week-nav row, right of the "Next week" arrow. Only shown when the focused week has ≥1 planned meal
+- [ ] Tap Print on mobile → same behaviour (new tab with the print view)
+- [ ] `MealPlansOverview` (`/meal-plans`) still has its existing Print icon in the week header — no regression there
+
 ### Meal Planner R-Phase 1 extraction + Phases 2–6 — origin FU-305
 - [ ] Left palette: search filters trays; click-add into a focused slot; drag-and-drop from a recipe row to a day-slot (mouse only); pool ± / log-cook dialog; "Cancel" clears focused-target banner
 - [ ] Middle column: ↑/↓ arrows, top/bottom buttons, vertical-swipe on mobile, calendar click all move the focused week; URL `?monday=` persists across reload (F29)
@@ -375,6 +383,33 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Stock
 
+### History tab — retention, cap, and truncation footer — origin 2026-06-30 feedback
+*Requires a fresh dev seed (drop `dora.db` with `DORA_ALLOW_DESTRUCTIVE=1` then reseed).*
+- [ ] Stock Overview → search **"Sriracha (chatty history test)"** → open detail → History tab → the timeline renders **50 expiry events** (server-capped) with a small muted footer at the bottom reading *"16 older events not shown"*
+- [ ] The 50 rendered events are the newest ones (occurred_at desc); the oldest visible event is well within the last 90 days but not the earliest (that one was dropped past the cap)
+- [ ] Same page reload → footer count stays exactly the same (the count is server-derived, not client-drift)
+- [ ] Any item with < 50 events per kind → NO footer renders (empty state hidden when `history_older_count === 0`)
+- [ ] **Milk** detail → History shows a populated mix: level-changes, purchase events (from the seeded finished lists), expiry set + 2 pushes, one waste event ("spoiled" 45 days ago). No footer (well under the cap on every kind)
+- [ ] **Pasta / Rice / Garlic** detail → History shows *"Used in <recipe>"* deep-orange entries for the seeded cook events (aglio, simple_pasta, stir_fry, fried_rice — whichever recipes reference that ingredient)
+- [ ] **Broccoli / Icecream / Brazil Nuts** detail → History shows one waste event each in negative-red
+- [ ] Cook events with `meals_cooked > 1` badge *"× N meals"* in the title
+- [ ] Footer copy pluralises: 1 event → "1 older event not shown"; 2+ → "N older events not shown"
+
+### History tab — Bought / Cook / Expiry events — origin 2026-06-30 feedback
+*Requires a fresh migration pass: `flask db upgrade` picks up
+`c3d7f1a2b8e4` (CookEvent) + `d4e8f2b1c9a5` (StockItemExpiryEvent).*
+- [ ] **Expiry: set** — create a new stock item with an expiry date set. History tab → newest entry is *"Set expiry"* with the date in the body, orange
+- [ ] **Expiry: pushed** — on the detail page, edit expiry to a later date (or use the row menu's Push +7 days on the overview). History gets *"Pushed expiry +7 days"* with body *"YYYY-MM-DD → YYYY-MM-DD"*
+- [ ] **Expiry: cleared** — clear the expiry (row menu Clear expiry or detail Set-expiry dialog's Clear button). History gets *"Cleared expiry"* in grey with body *"Was YYYY-MM-DD"*
+- [ ] **Expiry: no-op** — save the same date again → NO new History entry (a save that doesn't change the value must not emit)
+- [ ] **Bought** — with an item that's on a shopping list: Start shopping → tick the item → Finish & restock. History gets *"Bought · &lt;list name&gt;"* with `2× · $2.10/ea · at Coles` (or whichever fields the Finish flow captured); teal icon
+- [ ] **Bought — price/store optional** — the Finish flow leaves till-total or store blank → still emits a "Bought" entry, just with fewer body chips (or none — title still renders)
+- [ ] **Cooked** — cook a recipe that lists this stock item as an ingredient (via cook mode's Log meals or the recipe detail Log-a-cook action). History gets *"Used in &lt;recipe name&gt;"* deep-orange; batch cook (>1 meal) badges *"× N meals"*
+- [ ] **Cook — item not an ingredient** — cook a recipe that DOESN'T reference this stock item as an ingredient → NO cook entry appears on this item's timeline (the join is via `RecipeIngredient.stock_item_id`, not a wildcard)
+- [ ] **Timeline ordering** — all three new event kinds interleave date-sorted (newest first) with the existing level changes / waste / list-adds; nothing gets a separate section
+- [ ] **Cap** — after >20 events of any single kind, only the most recent 20 render (server-capped; check the response body if unsure)
+- [ ] **Migration downgrade** — `flask db downgrade` runs cleanly through both new migrations (drops indexes then tables). Not required to test in normal use, but the R-006 close-gate wants forward-only clean migrations that CAN reverse cleanly
+
 ### Stock pickers + Log Waste — overview/dialog/detail consistency — origin 2026-06-30 feedback
 - [ ] Stock Overview → expand the filter panel → **Any level** dropdown trigger shows a coloured dot to the left of the picked level (or the muted sunken-bg dot when "Any level" is cleared). Open the dropdown → every option row has the same dot styling, matching the Stock Item detail page's Level picker pixel-for-pixel
 - [ ] Click "Add stock item" on the overview → in the dialog the **Stock level** q-select shows the picked level's dot in the trigger, and each option in the dropdown has the same dot. Pick a different level → trigger dot updates instantly
@@ -541,6 +576,73 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Settings
+
+### Backup library — origin FU-342 (2026-07-01)
+- [ ] As admin on `/settings/admin/data/backup`: the top card is **Backup library** (not the old "Create backup" tile). Empty state text appears until the first backup exists
+- [ ] Click **New backup** → dialog opens with the section picker. Default (Core data) sections ticked; Optional sections unticked. No warning banner
+- [ ] Tick any Optional section (system settings / users / historic offers) → an inline warning banner appears in the dialog naming what will be included
+- [ ] Click **Generate** → dialog closes, a positive toast, the library list gains a new row at the top with today's timestamp + a byte size + section count. Row shows "by dora"
+- [ ] With an Optional section included, the row also shows a **Includes sensitive data** warning chip (hover → naming which)
+- [ ] Click the row's **Download** button → browser downloads `dora-backup-<date>.json`; opening it shows a `schema_version` + section keys as before
+- [ ] Click the row's **Restore** button → confirm dialog appears; confirm → positive toast with a rows-imported summary. Nothing else changes since duplicates are skipped
+- [ ] Click the row's **Delete** button → confirm dialog; confirm → the row disappears from the list and the file on disk is gone (check the server's `<DATA_DIR>/backups/` — no leftover)
+- [ ] Create ≥ (retention_count + 1) backups → the oldest drops off the list AND its file is removed. Retention default is 5
+- [ ] The external-file **Restore from backup** card (right side / below) still works: pick a downloaded backup file → inspect → tree → commit. Unchanged
+- [ ] The old `/api/data/backup` GET endpoint no longer exists — no page relies on it; `POST /api/data/backups` is the only writer
+
+### Image compression settings — install-wide (FU-345, 2026-07-01)
+- [ ] Settings → Admin → Data → Backup & restore: at the bottom, a new **Image compression** card. Two rows: JPEG/WebP quality (slider, default 85) and Longest edge (numeric input, default 1920)
+- [ ] Change quality to 60, hit Save → toast "Image settings saved." with caption "Applies to new uploads; existing images are unchanged."
+- [ ] Discard button greys out when nothing's dirty; enables when the slider is moved but not yet saved
+- [ ] Bad value guards: try setting quality to 20 (below floor) or 200 (above ceiling) via DevTools; save → 400 with a readable reason. Same for max dimension < 512 or > 8192
+- [ ] End-to-end: with default (85 / 1920), upload a photo on a stock item. Note the stored file size (visible via DevTools → download the item's image, check size). Lower quality to 50, save, upload the same photo again → the new stored file is materially smaller
+- [ ] Longest-edge cap: with default 1920, upload a photo with a 4000px longest edge → stored image longest edge is 1920. Lower cap to 800, upload the same source photo again → stored longest edge is 800
+- [ ] Existing images unchanged after saving new settings — nothing re-encodes, no dashboard flicker
+- [ ] Non-admin session: the Image compression card is unreachable (the whole admin sub-tree is gated); a non-admin's uploads still get compressed at whatever the current install policy is (they read via /health, no admin credentials needed)
+
+### Import page Options alignment (FU-344, 2026-07-01)
+- [ ] Settings → Admin → Data → Import: past the file picker and mapping (upload a small CSV to reach the Options section) the four options render as SettingsRow blocks — label + short description on the left, toggle on the right. No stacked `<br>` gap between them
+- [ ] Each option's caption is descriptive (e.g. "Rolls the whole import back on any row-level failure. Off ⇒ valid rows land; errors are reported row-by-row.")
+- [ ] Toggling any option flips the boolean state (verify via the subsequent Import commit: skip_duplicates on/off behaviour is unchanged)
+
+### Import templates — Download template button (FU-343, 2026-07-01)
+- [ ] `/settings/admin/data/import`: the "Spreadsheet import" card's header row shows a **Download template** button on the right, next to the title / caption
+- [ ] Click it → the browser downloads `dora-import-stock_items.csv`. Opening it in a text editor: first line is `name,level,location,group,expiry,is_essential`; second line is an illustrative row (`Rice,In stock,Pantry,Grains,2027-01-01,no`)
+- [ ] Hover the button → tooltip shows the section caption ("One row per pantry item. Only `name` is required; the rest are optional.")
+- [ ] Round-trip: open the CSV in Excel / Sheets, edit the example row (or add more), save, upload via the file picker below. Inspect step auto-maps every column; commit succeeds (or reports row-level errors as before)
+- [ ] Non-admin session: `/api/data/import/templates` and `/api/data/import/templates/stock_items.csv` both return 403
+
+### Backup library — retention + storage path settings (FU-342)
+- [ ] Scroll to the **Library settings** card at the bottom of the page. Retention shows 5 by default; storage path is blank
+- [ ] Change retention to 3, Save → toast "Library settings saved." Create 4+ backups → only 3 rows visible; server has 3 files
+- [ ] Enter a **relative** storage path (e.g. `data/backups`) → Save → 400 with a readable reason ("must be absolute")
+- [ ] Enter a **non-existent parent** path → Save → 400 with a readable reason mentioning the offending ancestor
+- [ ] Enter a valid absolute path on a writeable dir → Save → toast success; the next backup file lands in that directory, not the default. Set back to blank → next backup lands under `<DATA_DIR>/backups` again
+
+### Backup & restore + Import relocated to Admin → Data — origin FU-341 (2026-07-01)
+- [ ] As **admin**: Settings → Admin · global sidebar shows a new **Data** sub-header with two entries: **Backup & restore** (cloud-download icon) and **Import** (file-upload icon). Between Features (under the System sub-header) and Audit log
+- [ ] Click Backup & restore → page loads with the standard SettingsPageHeader (title + description + cloud-download icon), then the existing Create-backup / Restore-backup two-card layout underneath. All existing controls work (section pickers, chunked upload, restore preview, confirm dialog)
+- [ ] Click Import → SettingsPageHeader (Import + file-upload icon) then the existing file picker + column mapping + preview + commit flow. All existing controls work
+- [ ] Main menu (top of the app) NO longer has a "Data" entry — the sequence is Stock · Cookbook · Meal Plans · Shopping Lists · Reports (+ My Products / Product Search where enabled). No gap where "Data" used to sit
+- [ ] Direct-navigate to `/data`, `/data/backup`, `/data/import`, `/data/export`, `/data/barcodes` → each redirects: /data + /data/backup → the new Backup page; /data/import → Import; /data/export → Backup (nearest sibling); /data/barcodes → QR labels. No 404, no blank flash
+- [ ] As **non-admin** (a regular user account): the "Admin · global" sidebar group is not shown at all. Direct-navigating to `/data/backup` or `/settings/admin/data/backup` → router guard bounces to `/settings/account`
+- [ ] Onboarding wizard's "Import from a spreadsheet or another app instead" link routes to the new `/settings/admin/data/import` (admins) or bounces to `/settings/account` (non-admins) — no dead route
+
+### FU-198 close-out — admin gate on data endpoints (2026-07-01)
+- [ ] As a non-admin session (log in with a non-admin user), open DevTools → Network. Try:
+  - `GET /api/data/backup` → **403** with a "Admin role required." problem-details body
+  - `POST /api/data/backup/inspect` (empty body is fine) → 403
+  - `POST /api/data/backup/restore` (empty body) → 403
+  - `POST /api/data/uploads/start` (empty body) → 403
+  - `POST /api/data/import/spreadsheet/inspect` (empty body) → 403
+- [ ] As an admin session: the same endpoints return their normal 200/4xx-domain-error responses. The Backup page's Create + Restore flows and the Import page's inspect + commit still work end-to-end
+
+### QR labels relocated to Kitchen setup — origin FU-340 (2026-07-01)
+- [ ] With `scanning_enabled` **on** (Settings → System → Features toggle): Settings → Kitchen setup sidebar shows a **QR labels** entry between "Stores" and the "Recipe taxonomies" sub-header. Icon is a QR-code glyph
+- [ ] Click into it → the page shows the QR labels description, the filter + layout picker, item list with checkboxes, and Print / Open-sheet actions. NO Scan tab, NO Scan card, NO "Open camera" button
+- [ ] Filter, All/None, layout picker, and both Print buttons behave the same as they did on the old `/data/barcodes` page — the sheet still opens in a new tab from `/stock-items/qr/sheet`
+- [ ] Toggle `scanning_enabled` **off** → the QR labels sidebar entry disappears from Kitchen setup (both desktop sidebar and mobile settings tab strip). Direct-navigate to `/settings/kitchen-setup/qr-labels` → the page renders only the "ask an admin to enable it" banner; no print controls
+- [ ] Toggle back on → the entry reappears without a full reload (may require a reload if `useScanningEnabled` cached — this is expected)
 
 ### Account — verified email change + CSRF defence — origin FU-197
 - [ ] Settings → Account → Email row: enter a new address; the "Send confirmation" button stays disabled until you also fill the **Current password** input
@@ -775,6 +877,35 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Cross-cutting
+
+### `/data/barcodes` redirects + shell shows two cards — origin FU-340 (2026-07-01)
+- [ ] Direct-navigate to `/data/barcodes` (via URL bar or a stale bookmark) → the router redirects you to `/settings/kitchen-setup/qr-labels`. No blank flash, no 404, no old page contents visible
+- [ ] `/data` shell now shows **two** nav cards: Backup & restore, Import. NO "Scanning & QR labels" card (regardless of the `scanning_enabled` flag state)
+- [ ] Direct-navigate to `/data/barcodes?action=scan` (the retired PWA shortcut target) → still redirects to the QR labels settings page (query string dropped is fine). No console error
+- [ ] Stock item detail page: the "Print label" tooltip on a stock item's Dora-QR button no longer references "Data → Barcodes" — the copy explains barcodes register a Product, not a stock item
+
+### `/data/export` page retired — origin FU-339 (2026-07-01)
+- [ ] Navigate to `/data` — the shell now shows **three** section cards: Backup & restore, Import, Scanning & QR labels (the last one gated on `scanning_enabled`). **No** "Export & print" card
+- [ ] Direct-navigate to `/data/export` in the URL bar → lands on the app's not-found route (or router error page — whichever the router does today for unknown paths). Does NOT render a blank data shell
+- [ ] From a recipe detail: the Print action still opens the print-view in a new tab (unchanged)
+- [ ] From a shopping list detail: the toolbar menu still exposes "Print / Save as PDF" (unchanged)
+- [ ] From `/stock`: the toolbar export menu still exposes CSV + Print (unchanged)
+- [ ] From `/meal-plans` and `/meal-plans/board`: the Print icon-buttons added in FU-338 still open the print-view (unchanged)
+- [ ] No console errors on any of the above about a missing route or a missing component
+
+### Settings shell — independent sidebar/main scroll — origin worklog 2026-07-01
+- [ ] Open `/settings/account` on desktop (≥1024px width). The sidebar sits on the left; the main pane on the right. **The window itself does not scroll** — only the two panes do (no browser scrollbar on the outer page while inside settings)
+- [ ] Scroll the main pane deep into a long settings page (e.g. Preferences) — the sidebar stays exactly where it is (no drift, no sticky-header jitter)
+- [ ] Scroll deep into the main pane, then click a sidebar nav item → **the window does NOT jump**. The new section loads with the main pane at the top; the sidebar's scroll position and the app header stay put
+- [ ] With a very long sidebar (admin users, expand Kitchen setup + Admin sub-groups) — the sidebar itself scrolls independently; the last nav item is reachable via that inner scroll
+- [ ] Resize the window to <1024px → the layout collapses to single-column with the top tab strip; window scroll returns for mobile. Resize back to ≥1024px → dual-scroll restored, no layout thrash
+- [ ] Navigate from `/settings/*` to a non-settings route (e.g. `/stock`) and back — no visual glitches; scroll positions on other pages behave normally (window scroll back on those pages)
+
+### Mobile header: wordmark hidden, right buttons pushed to edge (2026-07-01)
+- [ ] At ~380px width (or DevTools mobile viewport), the top toolbar reads left → right: burger · Dora mascot · page title · (big gap) · alerts bell · profile avatar. **No** "Dashy Dora" text next to the mascot, **no** Help icon
+- [ ] Tap the mascot → routes to `/` (Dashboard). Tap the burger → drawer opens with the full nav (Stock, Cookbook, …)
+- [ ] Rotate to landscape / resize past ~1024px width → wordmark reappears next to the mascot, MainMenuButtonStrip fills the middle, Help icon reappears between alerts and profile
+- [ ] No horizontal scroll or overflow on the toolbar at 320px, 375px, 414px widths
 
 ### Main-menu indicator stuck colour after sub-route nav — bug fix (2026-06-30)
 - [ ] On `/cookbook` → click into a recipe → the underline indicator under Cookbook stays the **accent** colour (yellow in the default theme), **not** the hot-pink flash colour

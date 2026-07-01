@@ -20,23 +20,19 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from http.client import FORBIDDEN
 from typing import Any
 from uuid import UUID
 
-from flask import request, session
+from flask import request
 from sqlalchemy import and_, desc, func, select
 
 from dora_api.app import db
 from dora_api.domain.entities.audit_event import AuditEvent
-from dora_api.domain.entities.user import User
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.routers import AUDIT_ROUTER
 from dora_api.infrastructure.api_response import (
-    bad_request, not_found, ok, paginated, ProblemDetails, unprocessable_entity,
+    bad_request, not_found, ok, paginated,
 )
-from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
-
-
 # Cap on `size` so the admin UI can't accidentally fetch the whole table.
 MAX_PAGE_SIZE = 500
 DEFAULT_PAGE_SIZE = 50
@@ -56,39 +52,6 @@ class AuditEventDto:
     entity_id: str | None
     request_id: str | None
     payload: Any
-
-
-def _require_admin() -> Any | None:
-    """Return a Forbidden response if the caller isn't an admin. Returns
-    None when the request may proceed."""
-    raw = session.get("user_id")
-    if not raw:
-        # Middleware should have rejected this already, but belt-and-braces.
-        return unprocessable_entity(ProblemDetails(
-            detail="Authentication required.",
-            status=403, errors={}, title="Forbidden.",
-            type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
-        ))
-    try:
-        user_id = UUID(raw)
-    except (ValueError, TypeError):
-        return _forbidden("Invalid session.")
-    user = SqlAlchemyRepository().get(User).by_id(user_id)
-    if user is None or not user.is_admin:
-        return _forbidden("Admin role required.")
-    return None
-
-
-def _forbidden(detail: str):
-    from flask import jsonify
-    response = jsonify(ProblemDetails(
-        detail=detail,
-        status=FORBIDDEN, errors={}, title="Forbidden.",
-        type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
-    ))
-    response.content_type = 'application/problem+json'
-    response.status_code = FORBIDDEN
-    return response
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -202,9 +165,9 @@ def _resolve_usernames(actor_ids: list[UUID]) -> dict[UUID, str]:
 @AUDIT_ROUTER.route("/events", methods=["GET"])
 def get_audit_events():
     _Logger = logging.getLogger(__name__)
-    forbidden = _require_admin()
-    if forbidden is not None:
-        return forbidden
+    _, err = require_admin()
+    if err is not None:
+        return err
 
     try:
         page = int(request.args.get("page", "1"))
@@ -251,9 +214,9 @@ def get_audit_events():
 
 @AUDIT_ROUTER.route("/events/<event_id>", methods=["GET"])
 def get_audit_event(event_id: str):
-    forbidden = _require_admin()
-    if forbidden is not None:
-        return forbidden
+    _, err = require_admin()
+    if err is not None:
+        return err
     try:
         parsed_id = UUID(event_id)
     except (ValueError, TypeError):

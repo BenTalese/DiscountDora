@@ -35,6 +35,7 @@
                     @generate-list="planner.generateListForWeek"
                     @go-prev-week="planner.goPrevWeek"
                     @go-next-week="planner.goNextWeek"
+                    @print="planner.printFocusedWeek"
                 />
             </template>
 
@@ -62,6 +63,21 @@
                 </BaseButton>
 
                 <q-space />
+
+                <!-- FU-338 — Print action lives in-context (matches the
+                     print affordance on MealPlansOverview and every other
+                     printable surface). Uses the same `useMealPlanExport`
+                     path via `planner.printFocusedWeek`. Hidden when no
+                     plan is focused (nothing to print). -->
+                <BaseButton
+                    v-if="planner.focusedPlan.value"
+                    variant="icon"
+                    :icon="ICONS.print"
+                    class="q-mr-sm"
+                    @click="planner.printFocusedWeek"
+                >
+                    <q-tooltip>Print this week</q-tooltip>
+                </BaseButton>
 
                 <BaseButton
                     variant="ghost"

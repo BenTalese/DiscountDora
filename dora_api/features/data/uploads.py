@@ -35,6 +35,7 @@ from uuid import UUID, uuid4
 from flask import request
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import bad_request, no_content, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
@@ -97,6 +98,14 @@ class StartUploadRequest(BaseModel):
 @has_request_body(StartUploadRequest)
 def start_upload():
     _Logger = logging.getLogger(__name__)
+    # FU-341 / FU-198 — the entire /uploads/* chain feeds admin-only
+    # workflows (backup inspect + restore, admin import). Gate on
+    # /start so a non-admin can't even open a staging slot; the
+    # subsequent /chunk /finish /abort endpoints repeat the gate as
+    # defence-in-depth (a leaked upload_id shouldn't grant writes).
+    _, err = require_admin()
+    if err is not None:
+        return err
     _Request: StartUploadRequest = get_request_body()
     if _Request.expected_size is not None and _Request.expected_size > MAX_UPLOAD_BYTES:
         return bad_request(
@@ -123,6 +132,9 @@ def start_upload():
 @DATA_ROUTER.route("/uploads/chunk", methods=["POST"])
 def append_chunk():
     _Logger = logging.getLogger(__name__)
+    _, err = require_admin()
+    if err is not None:
+        return err
     upload_id = request.form.get("upload_id", "")
     offset_raw = request.form.get("offset", "")
 
@@ -192,6 +204,9 @@ class FinishUploadResponse:
 @has_request_body(FinishUploadRequest)
 def finish_upload():
     _Logger = logging.getLogger(__name__)
+    _, err = require_admin()
+    if err is not None:
+        return err
     _Request: FinishUploadRequest = get_request_body()
     if not _is_valid_upload_id(_Request.upload_id):
         return bad_request("Malformed upload_id.")
@@ -210,6 +225,9 @@ def finish_upload():
 @DATA_ROUTER.route("/uploads/<upload_id>", methods=["DELETE"])
 def abort_upload(upload_id: str):
     _Logger = logging.getLogger(__name__)
+    _, err = require_admin()
+    if err is not None:
+        return err
     if not _is_valid_upload_id(upload_id):
         return bad_request("Malformed upload_id.")
     path = staged_path(upload_id)

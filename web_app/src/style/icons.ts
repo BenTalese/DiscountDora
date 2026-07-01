@@ -94,6 +94,7 @@ export const ICONS = {
     play_arrow: 'mdi-play',
     print: 'mdi-printer',
     priority_high: 'mdi-exclamation',
+    qr_code: 'mdi-qrcode',
     qr_code_scanner: 'mdi-qrcode-scan',
     receipt_long: 'mdi-receipt-text',
     redo: 'mdi-redo',

@@ -1,24 +1,61 @@
 <template>
-    <div class="q-gutter-md">
-        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
-            <template #avatar>
-                <q-icon :name="ICONS.info" size="18px" />
-            </template>
-            Import stock items from a spreadsheet (.xlsx or .csv). Map your
-            columns to Dora's fields, preview the result, then commit. Errors
-            are reported row-by-row.
-        </q-banner>
+    <div class="settings-page q-gutter-md">
+        <SettingsPageHeader
+            title="Import"
+            description="Bring stock items in from a spreadsheet. Upload an .xlsx or .csv, map columns to Dora's fields, preview, then commit. Errors are reported row-by-row. Start from a template (top-right) if you don't have a file yet."
+            :icon="ICONS.file_upload"
+        />
 
         <!-- ── File picker ────────────────────────────────────────── -->
         <q-card flat bordered>
             <q-card-section class="row items-center q-gutter-md">
                 <q-icon :name="ICONS.upload_file" size="32px" class="text-primary" />
-                <div>
+                <div class="col">
                     <div class="text-h6">Spreadsheet import</div>
                     <div class="text-caption dora-text-muted">
                         Required column: <strong>name</strong>. Optional:
                         level, location, group, expiry, is&nbsp;essential.
                     </div>
+                </div>
+                <!-- FU-343 — per-section CSV template. Sits on the same
+                     header row as the file picker below because "download a
+                     blank one" is a peer choice to "upload one you already
+                     have". Single-section installs (today: stock_items) get
+                     one entry; the menu becomes a picker when more sections
+                     land. -->
+                <div v-if="templates.length" class="col-auto">
+                    <BaseButton
+                        v-if="templates.length === 1"
+                        variant="ghost"
+                        :icon="ICONS.file_download"
+                        label="Download template"
+                        :loading="templatesLoading"
+                        @click="onDownloadTemplate(templates[0])"
+                    >
+                        <q-tooltip>{{ templates[0].caption }}</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        v-else
+                        variant="ghost"
+                        :icon="ICONS.file_download"
+                        label="Download template"
+                    >
+                        <q-menu auto-close>
+                            <q-list dense style="min-width: 220px">
+                                <q-item
+                                    v-for="template in templates"
+                                    :key="template.section"
+                                    clickable
+                                    @click="onDownloadTemplate(template)"
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ template.label }}</q-item-label>
+                                        <q-item-label caption>{{ template.caption }}</q-item-label>
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </q-menu>
+                    </BaseButton>
                 </div>
             </q-card-section>
             <q-separator />
@@ -164,25 +201,34 @@
             <q-separator />
             <q-card-section>
                 <div class="text-subtitle2 q-mb-sm">Options</div>
-                <q-checkbox
-                    v-model="options.skip_duplicates"
-                    label="Skip rows whose name already exists locally"
-                />
-                <br />
-                <q-checkbox
-                    v-model="options.create_missing_locations"
-                    label="Create missing locations on the fly"
-                />
-                <br />
-                <q-checkbox
-                    v-model="options.create_missing_groups"
-                    label="Create missing groups on the fly"
-                />
-                <br />
-                <q-checkbox
-                    v-model="options.halt_on_error"
-                    label="Halt on first error (roll back the whole import)"
-                />
+                <!-- FU-344 — SettingsRow puts the description on the left
+                     and the toggle on the right; consistent with every
+                     other Settings page and fixes the previous
+                     stacked-checkbox misalignment. -->
+                <SettingsRow
+                    label="Skip duplicates"
+                    help="Rows whose name already exists locally are left alone."
+                >
+                    <q-toggle v-model="options.skip_duplicates" />
+                </SettingsRow>
+                <SettingsRow
+                    label="Create missing locations"
+                    help="Locations referenced by rows are created on the fly if you haven't got them yet."
+                >
+                    <q-toggle v-model="options.create_missing_locations" />
+                </SettingsRow>
+                <SettingsRow
+                    label="Create missing groups"
+                    help="Same idea for groups. Levels are never auto-created — pick the name."
+                >
+                    <q-toggle v-model="options.create_missing_groups" />
+                </SettingsRow>
+                <SettingsRow
+                    label="Halt on first error"
+                    help="Rolls the whole import back on any row-level failure. Off ⇒ valid rows land; errors are reported row-by-row."
+                >
+                    <q-toggle v-model="options.halt_on_error" />
+                </SettingsRow>
             </q-card-section>
             <q-separator />
             <q-card-actions align="right">
@@ -267,14 +313,77 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
-    import { computed, reactive, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
 
     const $q = useQuasar();
     const { progress, upload, abort, reset: resetUpload } = useChunkedUpload();
+
+    // FU-343 — per-section CSV templates. Loaded once on mount; the
+    // download button in the header offers a single click when there's
+    // one section (today's shape) or a menu when more land later.
+    interface ImportTemplate {
+        section: string;
+        label: string;
+        caption: string;
+        headers: string[];
+    }
+    const templates = ref<ImportTemplate[]>([]);
+    const templatesLoading = ref(false);
+    async function loadTemplates(): Promise<void> {
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(`${baseUrl}/data/import/templates`, {
+                method: 'GET',
+                credentials: 'include',
+            });
+            if (!response.ok) throw new Error(`Templates load failed (${response.status})`);
+            const body = await response.json();
+            templates.value = (body.sections ?? []) as ImportTemplate[];
+        } catch (err) {
+            // Non-fatal — the file picker still works without a template.
+            // Log-only; no toast because the user didn't ask for this yet.
+            console.warn('[Import templates] load failed:', err);
+        }
+    }
+    async function onDownloadTemplate(template: ImportTemplate): Promise<void> {
+        templatesLoading.value = true;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(
+                `${baseUrl}/data/import/templates/${encodeURIComponent(template.section)}.csv`,
+                { method: 'GET', credentials: 'include' },
+            );
+            if (!response.ok) throw new Error(`Download failed (${response.status})`);
+            const blob = await response.blob();
+            const filename = `dora-import-${template.section}.csv`;
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't download the template.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            templatesLoading.value = false;
+        }
+    }
+    onMounted(() => {
+        void loadTemplates();
+    });
 
     // Target field labels — match the brief / server-side TARGET_FIELDS.
     const FIELD_LABELS: Record<string, string> = {

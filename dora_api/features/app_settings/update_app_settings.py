@@ -51,6 +51,17 @@ class UpdateAppSettingsRequest(BaseModel):
     product_search_url: str | None = Field(default=None, max_length=500)
     # FU-227 follow-up — AU vs US per-unit display locale.
     unit_pricing_locale: str | None = Field(default=None, max_length=8)
+    # FU-342 — backup library controls. Retention 1–100; storage_path
+    # blank ⇒ default `<data-dir>/backups`. Non-blank path is validated
+    # for writeability on save.
+    backup_retention_count: int | None = Field(default=None, ge=1, le=100)
+    backup_storage_path: str | None = Field(default=None, max_length=1024)
+    # FU-345 — image compression knobs. Quality 30–100; max dimension
+    # 512–8192 (below 512 → images legibly small; above 8192 → cap is
+    # bigger than any realistic camera output and the byte cap on the
+    # request schema kicks in first).
+    image_quality: int | None = Field(default=None, ge=30, le=100)
+    image_max_dimension: int | None = Field(default=None, ge=512, le=8192)
 
 
 @dataclass(slots=True)
@@ -136,12 +147,68 @@ class UpdateAppSettingsHandler:
                 )
             setting.product_search_url = _Url
 
+        # FU-342 — backup library controls. Retention is a plain int
+        # bounded by the request model; storage path is validated for
+        # writeability (an admin pointing at a bad NAS mount finds out
+        # here, not on the next backup attempt).
+        if "backup_retention_count" in set_fields and request.backup_retention_count is not None:
+            setting.backup_retention_count = request.backup_retention_count
+        if "backup_storage_path" in set_fields:
+            _Path = (request.backup_storage_path or "").strip()
+            if _Path:
+                invalid = _validate_backup_storage_path(_Path)
+                if invalid is not None:
+                    return UpdateAppSettingsResponse(invalid_reason=invalid)
+            setting.backup_storage_path = _Path
+
+        # FU-345 — image compression knobs. Bounds enforced by the
+        # request model. Applies forward-only: existing images are not
+        # re-encoded (out of scope; power users can log a follow-up if
+        # they want a re-encode pass).
+        if "image_quality" in set_fields and request.image_quality is not None:
+            setting.image_quality = request.image_quality
+        if "image_max_dimension" in set_fields and request.image_max_dimension is not None:
+            setting.image_max_dimension = request.image_max_dimension
+
         # FU-153 §7.1 — the install-wide setting is now a master kill-
         # switch only; the per-user "have you finished setting up?"
         # validation moved to auth/update_me.py.
 
         self.repository.save_changes()
         return UpdateAppSettingsResponse(dto=_to_dto(setting))
+
+
+def _validate_backup_storage_path(path_str: str) -> str | None:
+    """FU-342 — accept only absolute paths that we can actually write to.
+    Returns None on success, a user-facing reason on failure. Skips any
+    creation on the AppSetting save; the create endpoint's mkdir handles
+    directory materialisation, so we only assert the operator's chosen
+    location is reachable."""
+    import os
+    from pathlib import Path
+    try:
+        candidate = Path(path_str).expanduser().resolve()
+    except (OSError, ValueError):
+        return f"'{path_str}' is not a valid filesystem path."
+    if not candidate.is_absolute():
+        return "Backup storage path must be absolute."
+    # If the directory already exists, it must be a directory + writeable.
+    if candidate.exists():
+        if not candidate.is_dir():
+            return f"'{candidate}' exists but is not a directory."
+        if not os.access(candidate, os.W_OK):
+            return f"'{candidate}' is not writeable by the server process."
+        return None
+    # Doesn't exist — check the nearest existing parent is writeable so
+    # the create-endpoint mkdir will succeed.
+    parent = candidate.parent
+    while not parent.exists() and parent != parent.parent:
+        parent = parent.parent
+    if not parent.exists():
+        return f"No existing ancestor of '{candidate}' — check the path."
+    if not os.access(parent, os.W_OK):
+        return f"Cannot create '{candidate}' — '{parent}' is not writeable."
+    return None
 
 
 @APP_SETTINGS_ROUTER.route("", methods=["PATCH"])

@@ -9,19 +9,21 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID
 
-from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.user import User
-from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
+from dora_api.features.auth.admin_gate import _require_admin
 from dora_api.features.routers import USER_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
-                                                  forbidden, no_content,
-                                                  not_found, unauthorized)
+                                                  no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+# FU-341: `_require_admin` moved to a shared module. Re-exported for
+# feature modules that still import from here — no big-bang rename.
+__all__ = ["AdminUpdateUserRequest", "AdminUpdateUserResponse", "_require_admin"]
 
 
 class AdminUpdateUserRequest(BaseModel):
@@ -43,29 +45,6 @@ class AdminUpdateUserResponse:
     user_not_found: bool = False
     username_taken: bool = False
     would_remove_last_admin: bool = False
-
-
-def _require_admin() -> tuple[UUID | None, object]:
-    """Resolves the current session into a (user_id, error_response) tuple.
-    error_response is None when the caller is an authenticated admin.
-    """
-    _UserIdRaw = session.get(SESSION_USER_ID_KEY)
-    if not _UserIdRaw:
-        return None, unauthorized()
-    try:
-        _UserId = UUID(_UserIdRaw)
-    except (ValueError, TypeError):
-        session.clear()
-        return None, unauthorized()
-
-    repository = SqlAlchemyRepository()
-    me: User | None = repository.get(User).by_id(_UserId)
-    if me is None:
-        session.clear()
-        return None, unauthorized()
-    if not me.is_admin:
-        return None, forbidden("Admin role required.")
-    return _UserId, None
 
 
 class AdminUpdateUserHandler:

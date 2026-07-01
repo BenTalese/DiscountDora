@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, UniqueConstraint, false, true
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, UniqueConstraint, false, true
 from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
@@ -9,6 +9,7 @@ from dora_api.domain.entities.ingestion_source import IngestionSource
 from dora_api.domain.entities.ingestion_store_mapping import IngestionStoreMapping
 from dora_api.domain.entities.audit_event import AuditEvent
 from dora_api.domain.entities.auth_token import AuthToken
+from dora_api.domain.entities.backup import Backup
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
@@ -46,6 +47,8 @@ from dora_api.domain.entities.dora_suggestion_suppression import \
 from dora_api.domain.entities.alert_interaction import AlertInteraction
 from dora_api.domain.entities.alert_preference import AlertPreference
 from dora_api.domain.entities.push_subscription import PushSubscription
+from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.stock_item_expiry_event import StockItemExpiryEvent
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
@@ -105,6 +108,17 @@ def configure_mappings(db: SQLAlchemy):
         # FU-227 follow-up — AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
         Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
+        # FU-342 — backup library: retention cap + storage path.
+        # Retention 5 (not 10) is disk-conscious for Pi self-hosts.
+        # Empty storage_path ⇒ resolved to `$DORA_DATA_DIR/backups/`
+        # at runtime by the config helper — see backup_library.py.
+        Column("backup_retention_count", Integer, nullable=False, server_default="5"),
+        Column("backup_storage_path", String(1024), nullable=False, server_default=""),
+        # FU-345 — install-wide image compression knobs. Client-side
+        # `processImageFile` reads these on load and applies them at
+        # upload time to every image surface.
+        Column("image_quality", Integer, nullable=False, server_default="85"),
+        Column("image_max_dimension", Integer, nullable=False, server_default="1920"),
     )
 
     product_offer_table = Table(
@@ -503,6 +517,51 @@ def configure_mappings(db: SQLAlchemy):
         Column("occurred_at", DateTime(timezone=True), nullable=False),
     )
 
+    # History-tab feed — "the user cooked this recipe today." Written by
+    # POST /recipes/<id>/cook alongside the Recipe.available_meals bump.
+    # FKs are SET NULL so deleting a recipe / user leaves the historical
+    # timeline entries readable via the denormalised `recipe_name`.
+    cook_event_table = Table(
+        "CookEvent", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="SET NULL"), nullable=True),
+        Column("recipe_name", String(255), nullable=False),
+        Column("meals_cooked", Integer, nullable=False),
+        Column("cooked_by_user_id", UUIDType, ForeignKey("User.id", ondelete="SET NULL"), nullable=True),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # FU-342 — persisted backup library. One row per generated backup;
+    # `storage_path` points at the file on disk. See entity docstring.
+    backup_table = Table(
+        "Backup", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("created_by_user_id", UUIDType, ForeignKey("User.id", ondelete="SET NULL"), nullable=True),
+        Column("size_bytes", BigInteger, nullable=False),
+        # JSON-encoded list[str] of section backup_keys this file carries.
+        Column("sections", Text, nullable=False),
+        Column("sha256", String(64), nullable=False),
+        Column("status", String(16), nullable=False),
+        Column("trigger_kind", String(16), nullable=False),
+        Column("storage_path", String(1024), nullable=False),
+    )
+
+    # History-tab feed — "the user set / pushed / cleared this item's
+    # expiry date." Written by create_stock_item + update_stock_item on
+    # every date transition. FK is SET NULL so history survives item
+    # deletion.
+    stock_item_expiry_event_table = Table(
+        "StockItemExpiryEvent", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="SET NULL"), nullable=True),
+        Column("kind", String(16), nullable=False),
+        Column("previous_expiry_date", Date, nullable=True),
+        Column("new_expiry_date", Date, nullable=True),
+        Column("delta_days", Integer, nullable=True),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+    )
+
     recipe_collection_table = Table(
         "RecipeCollection", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -765,7 +824,6 @@ def configure_mappings(db: SQLAlchemy):
         # so DoraJSONProvider had to retag naive reads as UTC. Now declared
         # consistently with every other wall-clock column (R-021).
         Column("onboarding_completed_at", DateTime(timezone=True), nullable=True),
-        Column("last_backup_at", DateTime(timezone=True), nullable=True),
         Column("email_verified", Boolean, nullable=False, server_default=false()),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),
         # P2-05 — grocery budget. NULL amount = feature off.
@@ -1001,6 +1059,21 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(StockItemWasteEvent, stock_item_waste_event_table, properties={
         "_id_col": stock_item_waste_event_table.c.id,
         "id": stock_item_waste_event_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(CookEvent, cook_event_table, properties={
+        "_id_col": cook_event_table.c.id,
+        "id": cook_event_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(Backup, backup_table, properties={
+        "_id_col": backup_table.c.id,
+        "id": backup_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(StockItemExpiryEvent, stock_item_expiry_event_table, properties={
+        "_id_col": stock_item_expiry_event_table.c.id,
+        "id": stock_item_expiry_event_table.c.id,
     })
 
     _mapper_registry.map_imperatively(DoraSuggestionSuppression, dora_suggestion_suppression_table, properties={

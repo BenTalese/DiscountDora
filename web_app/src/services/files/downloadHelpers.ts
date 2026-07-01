@@ -1,6 +1,6 @@
 /**
  * Shared helpers for "fetch a file from the API and save it via the
- * browser". Used by every Export & Print composable + the backup
+ * browser". Used by every in-context export composable + the backup
  * download. Centralised so the Content-Disposition regex and the
  * <a download> trick live in one place.
  */

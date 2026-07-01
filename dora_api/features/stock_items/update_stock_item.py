@@ -7,6 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_expiry_event import (
+    StockItemExpiryEvent, classify_expiry_transition,
+)
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
@@ -157,7 +160,25 @@ class UpdateStockItemHandler:
             _StockItem.stocktake_alerts_are_enabled = request.stocktake_alerts_are_enabled
 
         if "expiry_date" in _SetFields:
+            # History-tab feed — capture the transition BEFORE mutating,
+            # then emit whichever kind the classifier reports (set /
+            # pushed / cleared). Same-date writes emit nothing. The
+            # row-menu "+N days" and "Clear expiry" nudges both flow
+            # through this same PATCH, so this is the single emit site
+            # for every expiry mutation on an existing item.
+            _PrevExpiry = _StockItem.expiry_date
             _StockItem.expiry_date = request.expiry_date
+            _ExpiryTransition = classify_expiry_transition(_PrevExpiry, request.expiry_date)
+            if _ExpiryTransition is not None:
+                _Kind, _Delta = _ExpiryTransition
+                self.repository.add(StockItemExpiryEvent(
+                    stock_item_id = _StockItem.id,
+                    kind = _Kind,
+                    previous_expiry_date = _PrevExpiry,
+                    new_expiry_date = request.expiry_date,
+                    delta_days = _Delta,
+                    occurred_at = datetime.now(UTC),
+                ))
 
         # C-1 Chunk 6 / FU-033 — explicit null clears, data-URL string sets.
         if "image" in _SetFields:

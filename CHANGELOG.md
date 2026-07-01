@@ -5,6 +5,148 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **QR labels moved to Settings → Kitchen setup (FU-340, 2026-07-01).**
+  The Print QR labels workflow (pick items, pick a sheet layout,
+  open a printable sheet) moves from `/data/barcodes` to
+  `/settings/kitchen-setup/qr-labels`. The old page's Scan tab is
+  retired — every surface that needs scanning already has its own
+  Scan button (Stock Overview toolbar, Add-to-list flows), so the
+  central Scan tab was pure duplication. `/data/barcodes` redirects
+  to the new settings page so existing bookmarks still work; the
+  redirect will drop when FU-341 collapses the `/data` shell. The
+  "Scan a barcode" PWA shortcut was retired at the same time (it
+  pointed at the deleted tab).
+
+### Added
+- **Install-wide image compression settings (FU-345, 2026-07-01).**
+  Settings → Admin → Data → Backup & restore has a new "Image
+  compression" card with two knobs: JPEG/WebP quality (30–100,
+  default 85 — visually indistinguishable from original) and
+  longest-edge cap in pixels (512–8192, default 1920). Applied at
+  upload time via the shared client-side pipeline, so every image
+  surface (stock items, recipes, products, avatars, receipts, store
+  logos) picks up the admin's choice with no per-surface work.
+  Existing images are unchanged — forward-only. Backups inherit
+  whatever bytes the images already have; no re-encode on the
+  backup path.
+
+### Changed
+- **Import page: Options block uses SettingsRow (FU-344, 2026-07-01).**
+  The Options checkbox list on Settings → Admin → Data → Import got
+  a chrome pass — same label-left / toggle-right shape as every
+  other Settings page. Each toggle now has a one-line hint under
+  its label explaining what it does. Fixes the previous stacked-
+  checkbox misalignment and lets the Import page sit flush with
+  its siblings.
+
+### Added
+- **Import templates — download a blank spreadsheet (FU-343, 2026-07-01).**
+  Settings → Admin → Data → Import now has a "Download template"
+  button next to the file picker. Clicking it downloads a CSV with
+  the right header row + one example line, so new users can fill
+  in the blanks instead of guessing the schema. Only `stock_items`
+  today (the one shape the importer accepts); more sections slot in
+  without a UI change. Headers come from the same constant the
+  inspect + commit paths read, so the template can never drift from
+  what the importer accepts.
+
+- **Backup library (FU-342, 2026-07-01).** Every backup now persists
+  as a row + a file on disk. Settings → Admin → Data → Backup &
+  restore shows a library list (newest first) with per-row
+  Download / Restore-from-saved / Delete actions; the "New backup"
+  button opens a section picker with an inline warning when
+  Optional sections (users, system settings, historic offers) are
+  ticked. Restore-from-saved skips the upload + inspect round-trip
+  external files still go through. Retention (default 5) and
+  storage path (default `<DATA_DIR>/backups`) are admin-editable at
+  the bottom of the page — an external mount / NAS is validated
+  for writeability on save. The old download-only
+  `GET /api/data/backup` and its `User.last_backup_at` stamp
+  retired in the same migration (no fast-path — every backup goes
+  through the library, per user decision).
+
+### Security
+- **Admin-gate every mutating Data endpoint (FU-198 / FU-341, 2026-07-01).**
+  New shared `require_admin()` dependency; backup export, backup
+  inspect, backup restore, the chunked-upload chain
+  (`/data/uploads/start|chunk|finish|<id>`), and spreadsheet
+  import (inspect + commit) all now return 403 for non-admin
+  callers. Previously required only a logged-in session — a
+  logged-in non-admin could restore arbitrary rows (users,
+  app_settings, historic offers) into the install. Closes the
+  FU-198 HIGH-severity finding.
+
+### Changed
+- **Data area collapsed under Settings → Admin → Data (FU-341, 2026-07-01).**
+  The `/data` shell and its DataManagement.vue host are retired.
+  Backup & restore and Import now live under
+  `Settings → Admin → Data → …` alongside the other admin-only
+  surfaces, with matching chrome. The "Data" main-menu entry is
+  gone (admin-only workflows don't need a top-level slot; admins
+  reach it in two clicks via the header avatar). Every prior URL
+  redirects to its new location — `/data/backup` and `/data` both
+  land on the new Backup page, `/data/import` on the new Import
+  page, `/data/barcodes` on QR labels (per FU-340), and
+  `/data/export` on Backup (nearest sibling — the Export page
+  itself was retired in FU-339). Non-admin bookmarks chain through
+  the redirect and land on Settings → Account.
+
+### Removed
+- **`/data/export` (Export & Print) page retired (FU-339, 2026-07-01).**
+  The central Data → Export & Print page has been deleted along with
+  its route. Every printable surface (stock overview, recipes,
+  shopping lists, meal plans) now carries its own Print/CSV action
+  in-context — the central hub duplicated those callers and, per
+  the user, was "a management area I never wanted; I print where I
+  need to". The four export composables and the backend
+  print-view/CSV endpoints are unchanged — every in-context caller
+  still uses them. Paired with FU-338 (meal-plan Board Print) in
+  the same day so no window existed where meal-plan print was
+  unreachable.
+
+### Changed
+- **Meal-plan Board — in-context Print action added (FU-338, 2026-07-01).**
+  The weekly Board (`/meal-plans/board`) now carries a Print /
+  Save-as-PDF button in the desktop top strip (icon, next to
+  Templates) and in the mobile week-nav header. Uses the existing
+  [`useMealPlanExport`](web_app/src/composables/useMealPlanExport.ts)
+  path via `planner.printFocusedWeek`. Closes the last hole where a
+  printable surface was only reachable from the central
+  `/data/export` page. Hidden when no plan is focused / no meals
+  planned this week (nothing to print).
+- **History tab honest truncation — 2026-06-30 (follow-up).** The
+  per-kind server cap rose from 20 to 50 events, and the client no
+  longer silently trims to the last 60 merged rows. Instead, the
+  server reports `history_older_count` — the sum of events dropped
+  past the 50-per-kind cap across every event kind — and the SPA
+  renders a single *"N older events not shown"* footer under the
+  timeline. Retention is unchanged (events live forever; only the
+  detail-page projection is capped).
+
+### Added
+- **Stock Item History tab: three new event kinds — 2026-06-30.** The
+  timeline on each stock item's History tab now surfaces three signals
+  the old view couldn't answer:
+  - **Bought** — every ticked line on a finished shopping list appears
+    as *"Bought · <list name>"* with quantity, price and store when
+    the Finish flow captured them. Answers *"when did I last actually
+    buy this and for how much?"* — a question the prior "added to
+    list" entries couldn't. Pure read-side projection; no new table.
+  - **Used in <recipe>** — every recipe you cooked (POST
+    `/api/recipes/<id>/cook`) that references this item as an
+    ingredient. Batch cooks badge with "× N meals". Closes the
+    purchase → use → waste loop that INV-7 sketched but only half-
+    built. Backed by a new `CookEvent` append-only table, joined to
+    the item's linked-recipe universe at projection time.
+  - **Set expiry / Pushed expiry +N days / Cleared expiry** — every
+    transition of `StockItem.expiry_date`. Repeat pushes reveal a
+    "this is stale in your fridge" pattern the user can act on.
+    Backed by a new `StockItemExpiryEvent` append-only table, written
+    from both `create_stock_item` and `update_stock_item` (which is
+    the single endpoint the row-menu "+N days" nudges and "Clear
+    expiry" both flow through).
+
 ### Security
 - **Account-takeover chain closed: CSRF defence + verified email change
   with password proof — FU-197 (2026-06-30).** Three coupled gaps fixed

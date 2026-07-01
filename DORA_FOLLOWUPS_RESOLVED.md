@@ -10,6 +10,447 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-146 — Sweep external GitHub-issues references
+- **Raised:** 2026-06-12 (user browser verify of FU-085: "should remove any mention of github issues as the repo is now private").
+- **Type:** finding / hygiene.
+- **What:** Dora-bot fallback bank, `report_issue` intent + its
+  `externalLink`, the `whats_new` "See latest release on GitHub"
+  link, `HelpPage` "Report a bug" header button + Help-tab repo
+  list + issues list, `AboutSettings` repo + bug-report items,
+  and `PageErrorState`'s pre-filled GitHub-issues URL all linked
+  to `github.com/BenTalese/DiscountDora` — a now-private repo.
+- **State note:** Resolved 2026-06-12 (the actual code changes had
+  landed; only the ledger bookkeeping was outstanding — moved from
+  the open file 2026-07-01). Replaced the FALLBACK_REPLIES bank +
+  `report_issue` intros to drop the GitHub framing; retired the
+  externalLink on `fallback` + `report_issue` (Help-nav stays);
+  retired the `whats_new` release URL; pulled the four GitHub
+  buttons/items from `HelpPage` + `AboutSettings`; retired
+  `PageErrorState`'s `reportUrl` + the "Report this" button (the
+  `showReport` prop stays so a self-host operator can restore a
+  similar surface pointing at their own report sink). The
+  `report_issue` intent itself stays — it's a useful "I found a
+  bug" affordance — but it now navigates to Help instead of
+  pointing at an external tracker.
+
+---
+
+## [RESOLVED] FU-173 — Slot-vocabulary "remap legacy entries" UI — WON'T BUILD
+- **Raised:** 2026-06-14 (authoring IMPL_PLAN_MEAL_PLANS — C-2.A scope call).
+- **Type:** deferred job → dropped.
+- **What:** `PROPOSAL_MEAL_PLANS.md §4 / §11.4` described a one-shot
+  "remap legacy/off-vocabulary `MealPlanEntry.slot` strings to the
+  user's current slot list" action in settings. Would let a user
+  say "everything currently labelled `Snack` → move to
+  `Afternoon tea`" as a one-shot cleanup.
+- **State note:** Resolved 2026-07-01 as **won't build** (user
+  decision). Rationale confirmed in conversation: the current design
+  (free-text `slot` string on MealPlanEntry, validated at write-time
+  against the current vocab, off-vocab strings render safely in the
+  "Other" row per C-2.C) is fine on its own. Auto-rewriting
+  historical entries when the vocab changes would silently rewrite
+  past plans, which is confusing when reviewing history. The
+  admin-driven remap tool is a UI to do the same rewrite manually —
+  same downside, more friction. Small enough problem (only bites when
+  users rename/delete a slot **and** then look at their old plans)
+  that no cleanup UI earns its place.
+- **If it ever comes back:** would need a genuine user complaint that
+  the "Other" row is annoying enough to warrant the tool. Even then,
+  reconsider whether making MealPlanEntry.slot an FK (with a
+  RESTRICT-on-delete policy) is a cleaner shape than a one-shot
+  remap dialog.
+
+---
+
+## [RESOLVED] FU-345 — App-wide image quality / compression setting
+- **Raised:** 2026-06-30 (FU-198 discussion follow-up — user clarified the image-quality knob is app-wide, not backup-specific).
+- **Type:** feature (admin setting + pipeline change).
+- **What:** Power users accumulate hundreds of stock/recipe/product/
+  avatar/receipt/store-logo images at full resolution; disk grows.
+  Ship one admin knob (quality + max dimension) that applies at
+  upload time via the shared client-side pipeline chokepoint.
+- **State note:** Resolved 2026-07-01. Landing:
+  - **Schema:** migration
+    [`f7a3b8e2c1d5_20260701_image_quality_settings.py`](dora_api/persistence/migrations/versions/f7a3b8e2c1d5_20260701_image_quality_settings.py)
+    adds `AppSetting.image_quality` (int 30–100, default 85) and
+    `AppSetting.image_max_dimension` (int 512–8192, default 1920).
+    Entity + table mapping + get/update DTOs updated to carry both.
+  - **Backend surface:** `/api/health` gains an
+    `image_policy: {quality, max_dimension}` block so every logged-in
+    user's browser can read the install policy without needing
+    admin credentials for the `/app-settings` PATCH (which stays
+    admin-only). Admin edit → PATCH → next health probe (or explicit
+    `refreshImagePolicy()`) picks up the new value.
+  - **Frontend pipeline:**
+    [`imageService.ts`](web_app/src/services/files/imageService.ts)
+    now reads `currentImagePolicy()` on every `processImageFile` call
+    instead of hardcoded defaults. New
+    [`useImagePolicy`](web_app/src/composables/useImagePolicy.ts)
+    composable — module-level state, one probe per session, matches
+    the `useScanningEnabled` / `useFeatureFlags` shape (R-003). All
+    upload sites automatically pick up the admin's choice — no
+    per-surface knobs.
+  - **Admin UI:** new "Image compression" card at the bottom of
+    Settings → Admin → Data → Backup & restore
+    ([`AdminDataBackupRestore.vue`](web_app/src/pages/settings/AdminDataBackupRestore.vue)),
+    sibling to Library settings. Slider for quality (30–100, label-
+    always so admins see the value); numeric input for max dimension
+    (512–8192). Save calls `refreshImagePolicy()` so subsequent
+    uploads in the same session pick up the new value without a page
+    reload. Caption is explicit that it "Applies when new images are
+    uploaded — existing images are unchanged" (per the FU's
+    forward-only stance).
+- **Deliberately out of scope:**
+  - Re-encoding *existing* images to the new quality. Tracked as a
+    future FU if users ask; the DB walk + partial-failure story is
+    heavier than the forward-only knob.
+  - Format migration to WebP. The pipeline still outputs JPEG; the
+    knob would just as happily drive WebP quality if that day comes.
+- **Standards check:** R-003 (single source: `AppSetting.image_*`,
+  read through one composable, applied by one function); R-005 no
+  new colours; R-006 kept scope tight (no re-encode; no format
+  migration).
+
+## [RESOLVED] FU-344 — Import page UI polish: fix label alignment, use SettingsRow
+- **Raised:** 2026-06-30 (FU-198 discussion — user's original feedback on the Import page UX).
+- **Type:** UX cleanup.
+- **What:** The Import page's Options section stacked `<q-checkbox>`
+  elements with raw `<br>` separators. Labels didn't align with
+  their checkboxes; horizontal space was underused; the page didn't
+  sit flush with the other Settings pages. FU original text also
+  imagined a "section picker" as cards-with-checkboxes — turned out
+  to be aspirational since the importer only supports one section
+  (`stock_items`) today.
+- **State note:** Resolved 2026-07-01. Landing:
+  - Replaced the Options section in
+    [`AdminDataImport.vue`](web_app/src/pages/settings/AdminDataImport.vue)
+    with four `SettingsRow` blocks — label + one-line help on the
+    left, `q-toggle` on the right. Matches the shape every other
+    Settings page uses (R-003); the toggle+label misalignment can't
+    happen because the primitive owns the layout.
+  - Copy tightened on each row so the caption is genuinely useful
+    (e.g. "Rolls the whole import back on any row-level failure. Off
+    ⇒ valid rows land; errors are reported row-by-row.").
+  - Updated the SettingsPageHeader description to point at the new
+    "Download template" button (FU-343) instead of a stale "polish
+    tracked as FU-344" self-reference.
+- **Deliberately out of scope:** the "cards-with-checkboxes section
+  picker" the FU imagined would only make sense once there's a
+  second importable section. When that lands, revisit — but no need
+  to build a picker for a one-choice picker.
+
+---
+
+## [RESOLVED] FU-343 — Import: generated template sheets from live schema
+- **Raised:** 2026-06-30 (FU-198 discussion — user's original feedback on the Import page UX).
+- **Type:** feature (small — one endpoint pair + a button).
+- **What:** The importer assumed users already had a file in the
+  right shape. That's brittle for new users who don't know the
+  schema. Ship a downloadable per-section CSV template so users can
+  fill in the blanks rather than guess.
+- **State note:** Resolved 2026-07-01. Landing (CSV-only per the FU
+  discussion; `.xlsx` with dropdown validation deferred until asked):
+  - **Backend:** two endpoints in
+    [`import_spreadsheet.py`](dora_api/features/data/import_spreadsheet.py):
+    `GET /api/data/import/templates` returns the section index
+    (label + caption + headers), and
+    `GET /api/data/import/templates/<section>.csv` streams a CSV
+    with the header row + one illustrative example row. Both
+    admin-gated via `require_admin` (matches the rest of the
+    import surface).
+  - **Source of truth:** headers come straight from `TARGET_FIELDS`
+    (the same constant the inspect + commit paths read), so a
+    template can never drift from what the importer actually
+    accepts. R-003.
+  - **Sections today:** just `stock_items` (that's the only shape
+    the importer supports). Registry is a tuple so more sections
+    slot in without touching the endpoints.
+  - **UI:**
+    [`AdminDataImport.vue`](web_app/src/pages/settings/AdminDataImport.vue)
+    got a "Download template" button in the file-picker card's
+    header row. Single-section installs render it as a plain
+    button with a tooltip; when a second section lands the same
+    slot renders a `q-menu` of choices (already wired).
+    Templates load once on mount; download failures notify but
+    don't block the manual upload path.
+- **Standards check:** R-003 (single source of truth for the
+  importer schema — `TARGET_FIELDS`); R-005 no new tokens; R-006
+  did NOT bundle FU-344's visual polish (still tracked).
+- **Follow-on:** `.xlsx` templates with dropdown validation only if
+  asked; [[FU-344]] still open for the section-picker chrome.
+
+---
+
+## [RESOLVED] FU-342 — Backup library (Shape A): persist backups, list/download/delete, retention, custom location
+- **Raised:** 2026-06-30 (FU-198 discussion — current download-only flow doesn't scale).
+- **Type:** feature (medium-large — schema + 5 endpoints + UI).
+- **What:** Replaced the download-only `GET /data/backup` fast-path
+  with a real backup library. Generate → store → list → download /
+  restore / delete. Every backup persists as a row + a file on disk.
+- **State note:** Resolved 2026-07-01. Landing (single pass, per the
+  user's build-whole-chunks preference — no separate proposal doc):
+  - **Schema:** new
+    [`Backup`](dora_api/domain/entities/backup.py) table
+    (`id, created_at, created_by_user_id, size_bytes, sections JSON,
+    sha256, status, trigger_kind, storage_path`) via alembic migration
+    [`e5f9c2a8b4d6_20260701_backup_library.py`](dora_api/persistence/migrations/versions/e5f9c2a8b4d6_20260701_backup_library.py).
+    `trigger_kind` is forward-looking for scheduled backups (deferred
+    FU); Shape A always writes `'manual'`. FK on
+    `created_by_user_id` is SET NULL so removing an admin leaves the
+    library trail intact.
+  - **Endpoints** (all admin-gated via `require_admin` — FU-341
+    plumbing) in
+    [`backup_library.py`](dora_api/features/data/backup_library.py):
+    `POST /data/backups`,
+    `GET /data/backups`,
+    `GET /data/backups/<id>/download`,
+    `POST /data/backups/<id>/restore`,
+    `DELETE /data/backups/<id>`.
+  - **Retention:** new AppSetting `backup_retention_count`
+    (default 5 — Pi-disk-conscious, not 10). Prunes oldest above cap
+    on every create; drops the file too, not just the row.
+  - **Storage path:** new AppSetting `backup_storage_path` — blank
+    ⇒ `<DATA_DIR>/backups` via new
+    [`DORA_CONFIG.get_backups_dir()`](dora_api/infrastructure/configuration_manager.py).
+    Non-blank paths validated for absolute-ness + writeability on
+    save via a new `_validate_backup_storage_path()` helper on the
+    AppSettings update endpoint. Bad paths return 400 with a
+    user-facing reason so an admin pointing at a broken NAS mount
+    finds out immediately, not on next backup attempt.
+  - **Sensitive-data warning:** the Optional sections (`users`,
+    `app_settings`, `product_historic_offers`) get a warning banner
+    in the create dialog and a warning chip on any library row
+    whose stored `sections` list includes them.
+  - **External-file restore stays** — the upload → inspect → tree
+    → commit flow is unchanged. The library adds a fast-path
+    restore-from-saved (skip staging; the handler reads the file
+    directly via the existing `RestoreBackupHandler` with an inline
+    `backup` document).
+  - **Old download-only fast-path retired** —
+    `GET /api/data/backup` and
+    [`User.last_backup_at`](dora_api/persistence/table_mappings.py)
+    both dropped in the same migration (per user's pre-release "no
+    real users; clean non-preserving migrations OK" memory). The
+    library owns "when was the last backup" via `MAX(created_at)`
+    now; the page derives it from the library list.
+  - **UI:**
+    [`AdminDataBackupRestore.vue`](web_app/src/pages/settings/AdminDataBackupRestore.vue)
+    replaces the old "Create backup" card with a library list (rows
+    for each persisted backup + per-row Download / Restore / Delete)
+    and a "New backup" button opening a section-picker dialog with
+    the sensitive-data warning banner. A new Library-settings card
+    at the bottom lets the admin edit retention + storage path.
+    External-file restore card unchanged.
+  - **Tests:**
+    [`test_data_router.py`](tests/e2e/dora_api/test_data_router.py)
+    refactored — `BACKUP_URL` retired; a
+    `_create_backup(sections)` helper POSTs the library create
+    endpoint + downloads the file, preserving every existing
+    payload-shape assertion. The `last_backup_at` stamping test
+    deleted (feature retired).
+- **Standards check:**
+  - R-003 (single source of truth): `resolve_selected_sections`
+    shared between the create endpoint + the existing inspect flow;
+    `SqlAlchemyRepository`/`get_or_create_app_setting` used
+    consistently.
+  - R-005 (theme tokens): no new colours; reused
+    `dora-bg-warning-soft` for the sensitive banner.
+  - R-006 (scope discipline): scheduled backups deferred to a
+    future FU; image-quality knob deferred to [[FU-345]] (already
+    tracked); no re-encode logic on the backup path.
+- **Follow-on unblocked:** [[FU-345]] (image-quality setting —
+  planned Settings → Admin → Data home now available); scheduled
+  backups (their own future FU once Shape A beds in).
+
+---
+
+## [RESOLVED] FU-341 — Collapse /data area; relocate Backup + Import under Settings → Admin → Data
+- **Raised:** 2026-06-30 (FU-198 discussion — IA cleanup + admin gating).
+- **Type:** refactor + security close-out (pairs with FU-198).
+- **What:** The `/data` shell had lost every reason to exist by the
+  time FU-339 (kill ExportPrint) and FU-340 (relocate Barcodes to
+  QR labels under Kitchen setup) landed. Backup + Import were the
+  last two surfaces holding the shell up, and both were
+  admin-only workflows sitting in the main nav — confusing for
+  non-admins, un-gated on the backend.
+- **State note:** Resolved 2026-07-01. Two-part landing:
+  - **Backend (FU-198 half):** New shared
+    [`dora_api/features/auth/admin_gate.py`](dora_api/features/auth/admin_gate.py)
+    holds one canonical `require_admin()`. The three ad-hoc copies
+    (`users/update_user_as_admin.py`, `audit/get_audit_events.py`,
+    and the `app_settings/*` re-imports of the first) now all funnel
+    through it (`_require_admin` re-exported from
+    `update_user_as_admin` so the `app_settings` importers keep
+    working without a big-bang rename). Gate applied to every
+    mutating data endpoint that was previously login-only:
+    `/data/backup` (GET),
+    `/data/backup/inspect` (POST),
+    `/data/backup/restore` (POST),
+    `/data/uploads/start|chunk|finish|<id>` (POST/DELETE — the whole
+    chunked-upload chain gates on every step as defence-in-depth so a
+    leaked upload_id doesn't grant writes), and
+    `/data/import/spreadsheet/inspect|commit` (POST). Closes
+    [[FU-198]].
+  - **Frontend (relocate):** Moved
+    `web_app/src/pages/data/BackupRestore.vue` →
+    `web_app/src/pages/settings/AdminDataBackupRestore.vue` and
+    `web_app/src/pages/data/DataImport.vue` →
+    `web_app/src/pages/settings/AdminDataImport.vue` (via `git mv` so
+    history follows). Wrapped both with `SettingsPageHeader` so their
+    chrome (padding, title, description) matches every other Settings
+    page. Added routes
+    `/settings/admin/data/backup` and
+    `/settings/admin/data/import`; both admin-only via the existing
+    `/settings/admin/*` guard in
+    [`router/index.ts:132`](web_app/src/router/index.ts:132). Added
+    a **Data** sub-header under the Admin group in
+    [`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue) —
+    mirrors the existing "System" grouping. Nav flows through to the
+    mobile settings tab strip via the shared `navGroups` def (R-003).
+  - **Shell removed:**
+    `web_app/src/pages/DataManagement.vue` deleted; the `pages/data/`
+    directory removed after its last file left. Every prior child
+    path is preserved as a **redirect** so bookmarks / prior email
+    deep-links / the retired PWA shortcut land somewhere useful:
+    `/data` → `/settings/admin/data/backup`;
+    `/data/backup` → `/settings/admin/data/backup`;
+    `/data/import` → `/settings/admin/data/import`;
+    `/data/barcodes` → `/settings/kitchen-setup/qr-labels`
+    (already added by FU-340; kept);
+    `/data/export` → `/settings/admin/data/backup` (nearest sibling —
+    the page itself is gone). The "Data" main-menu entry in
+    [`MainLayout.vue`](web_app/src/layouts/MainLayout.vue) retired
+    (admin-only IA belongs under Settings → Admin, not the top nav).
+    Onboarding link at
+    [`WelcomeWizard.vue:242`](web_app/src/pages/onboarding/WelcomeWizard.vue:242)
+    repointed to the new import path.
+- **Non-admin behaviour:** Non-admin bookmarks to `/data/*` chain
+  through the redirect → `/settings/admin/data/*` → hit the router's
+  admin guard → bounce to `/settings/account`. Deliberate: the
+  redirects don't grant access, just avoid a 404.
+- **Standards check:**
+  - R-003 (single source of truth): one `require_admin`; one
+    `navGroups` feeding desktop + mobile.
+  - R-006 (scope discipline): did NOT do FU-344's Import visual
+    polish (still tracked); did NOT extract the Backup/Restore page
+    into smaller components (still 830 lines but internally
+    coherent). Kept the relocate mechanical.
+- **Follow-on unblocked:** FU-342 (backup library — needs the admin
+  gate + settings page in place), FU-343 (import templates — same),
+  FU-344 (import UI polish — same page shell now available), FU-345
+  (image-quality setting — planned to live in Settings → Admin →
+  Data).
+
+---
+
+## [RESOLVED] FU-198 — DB restore + chunked uploads not admin-gated; no shared @require_admin
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (security, HIGH)
+- **What:** `data/restore_backup.py`, the `uploads.py` chunk chain,
+  backup export, backup inspect, and import inspect/commit all
+  required only a logged-in session — restore inserts arbitrary
+  rows across every table. Root cause: no shared admin gate; three
+  ad-hoc copies of `_require_admin` (`users/update_user_as_admin.py`,
+  `audit/get_audit_events.py`, and `app_settings/*` re-imports).
+- **State note:** Resolved 2026-07-01 as part of [[FU-341]]. New
+  shared
+  [`dora_api/features/auth/admin_gate.py`](dora_api/features/auth/admin_gate.py)
+  holds one `require_admin()`; every previously-ungated data
+  endpoint now calls it (backup export, inspect, restore; the four
+  chunked-upload endpoints; import inspect + commit). Three prior
+  ad-hoc copies point at the shared module (`_require_admin`
+  re-exported for callers still importing from the old location).
+
+---
+
+## [RESOLVED] FU-340 — Replace /data/barcodes with a "QR labels" page under Settings → Kitchen setup; drop the Scan tab
+- **Raised:** 2026-06-30 (FU-198 discussion — confirmed in follow-up).
+- **Type:** IA refactor + dead-code removal.
+- **What:** The old `/data/barcodes` page held two tabs: a
+  duplicative Scan tab (every scan-needing surface already has its
+  own Scan button) and a genuinely useful Print QR labels workflow.
+  Barcode registration lives on the stock item detail page, not on
+  a central management page.
+- **State note:** Resolved 2026-07-01. New page
+  [`web_app/src/pages/settings/QrLabels.vue`](web_app/src/pages/settings/QrLabels.vue)
+  under `/settings/kitchen-setup/qr-labels` owns the Print labels
+  surface only. Sidebar entry added to Kitchen setup, hidden when
+  the install-wide `scanning_enabled` flag is off (matches the gate
+  the page itself enforces). Old `BarcodesQR.vue` deleted;
+  `/data/barcodes` now redirects to the new settings page so stale
+  bookmarks and the retired PWA shortcut don't 404 (FU-341 will
+  drop the redirect along with the `/data` shell). Entry removed
+  from [`DataManagement.vue`](web_app/src/pages/DataManagement.vue)
+  (which now surfaces only Backup + Import). Retired the "Scan a
+  barcode" PWA shortcut in
+  [`quasar.config.ts`](web_app/quasar.config.ts) — it pointed at
+  the retired Scan tab; a dedicated scan launcher can land later on
+  a stable surface if wanted. Stale barcode-management comment in
+  [`StockItemDetailPage.vue:29`](web_app/src/pages/StockItemDetailPage.vue:29)
+  updated to drop the "Data → Barcodes" pointer. New
+  [`ICONS.qr_code`](web_app/src/style/icons.ts) added (mdi-qrcode)
+  for the nav entry — the DataManagement.vue entry had been using a
+  raw material-icon string in violation of R-005.
+- **Unblocks:** [[FU-341]] (retire the `/data` shell). Both its
+  prerequisites (FU-339 + FU-340) are now resolved.
+
+---
+
+## [RESOLVED] FU-339 — Kill the Export & Print page; rely on in-context Print/CSV affordances
+- **Raised:** 2026-06-30 (FU-198 discussion — "I print where I need to, I don't need a central print management area").
+- **Type:** dead-code removal + IA cleanup.
+- **What:** The central `/data/export` page duplicated every
+  in-context export affordance across the app. Every printable
+  surface (stock overview, recipes, shopping lists, meal plans)
+  already carries its own Print/CSV action.
+- **State note:** Resolved 2026-07-01 (paired with [[FU-338]] which
+  closed the meal-plan Print gap earlier the same day, so no window
+  existed where meal-plan print was unreachable). Deleted
+  `web_app/src/pages/data/ExportPrint.vue` (~325 lines); removed the
+  `export` child route from
+  [`routes.ts`](web_app/src/router/routes.ts); removed the
+  "Export & print" section from
+  [`DataManagement.vue`](web_app/src/pages/DataManagement.vue) so
+  the shell no longer advertises a dead destination. The four
+  export composables (`useShoppingListExport`, `useRecipeExport`,
+  `useMealPlanExport`, `useStockOverviewExport`) stay — every
+  in-context caller still uses them. Backend API endpoints
+  unchanged (they power the in-context callers). Stale comments
+  referencing the retired page tidied in
+  [`RecipeDetailPage.vue`](web_app/src/pages/RecipeDetailPage.vue)
+  and
+  [`downloadHelpers.ts`](web_app/src/services/files/downloadHelpers.ts).
+  Also unblocks [[FU-341]]'s shell-collapse (one fewer child route
+  to relocate). Historical mentions in worklog/changelog/audit docs
+  and the legacy prompt-plan under `docs/06_legacy_prompt_plans/` +
+  `docs/00_original_spec/` deliberately left as-is — they're
+  trail-of-history, not runtime.
+
+---
+
+## [RESOLVED] FU-338 — Add in-context Print action to meal-plan surfaces
+- **Raised:** 2026-06-30 (FU-198 discussion — pre-req to killing the central Print page).
+- **Type:** small UX gap.
+- **What:** Meal plans was the only printable surface reachable
+  solely from the central
+  [`ExportPrint.vue`](web_app/src/pages/data/ExportPrint.vue). Every
+  other surface (stock overview, recipes, shopping lists) already
+  carried an in-context Print action; the Board page did not.
+- **State note:** Resolved 2026-07-01. Print buttons added to
+  [`MealPlansBoardPage.vue`](web_app/src/pages/MealPlansBoardPage.vue)
+  in both the desktop top strip (icon-button next to Templates) and
+  the mobile week-nav header (via a new `print` emit on
+  [`MealPlanMobileFocus.vue`](web_app/src/components/MealPlanMobileFocus.vue)).
+  [`MealPlansOverview.vue`](web_app/src/pages/MealPlansOverview.vue)
+  already had the action (line 98–105). Both wire to
+  `planner.printFocusedWeek` → the existing
+  [`useMealPlanExport`](web_app/src/composables/useMealPlanExport.ts)
+  composable — no new export path, no duplication (R-003). Now
+  clears the way for [[FU-339]] to delete the central
+  `/data/export` page without stranding meal-plan print.
+
+---
+
 ## [RESOLVED] FU-197 — CSRF absent + email-change needs no password proof (account-takeover chain)
 - **Raised:** 2026-06-16 (senior/tech-lead review; confirms prior-art A.1/A.2 in
   `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md`)

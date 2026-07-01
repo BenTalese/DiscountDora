@@ -109,6 +109,7 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 | `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` | C-cross (config / opt-ins / taxonomy settings) |
 | `04_proposals/PROPOSAL_LOCALE_I18N.md` | C-locale (international readiness; currency/format + de-AU) |
 | `04_proposals/PROPOSAL_HELP_OVERLAY.md` | C-help (opt-in contextual help overlay) |
+| `04_proposals/PROPOSAL_SUPPORT_CHANNEL.md` | Support/feedback channel — copy + AppSettings + button wiring (closes the FU-146 gap) |
 | `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md` | Shopping-list overhaul (pre-Wave-C) |
 | `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` | C-impl: shopping-lists phased plan |
 | `04_proposals/IMPL_PLAN_MEAL_PLANS.md` | C-2 impl: meal-plans phased plan (C-2.A…K) |

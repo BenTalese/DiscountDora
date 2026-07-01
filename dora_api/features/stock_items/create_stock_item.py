@@ -6,6 +6,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_expiry_event import (
+    StockItemExpiryEvent, classify_expiry_transition,
+)
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
@@ -112,6 +115,20 @@ class CreateStockItemHandler:
         )
 
         self.repository.add(_NewStockItem)
+        # History-tab feed — a "Set expiry" event whenever the item is
+        # born with a non-null expiry. `previous_expiry_date=None` is a
+        # first-time set, so classify_expiry_transition emits `set`.
+        _ExpiryTransition = classify_expiry_transition(None, request.expiry_date)
+        if _ExpiryTransition is not None:
+            _Kind, _Delta = _ExpiryTransition
+            self.repository.add(StockItemExpiryEvent(
+                stock_item_id = _NewStockItem.id,
+                kind = _Kind,
+                previous_expiry_date = None,
+                new_expiry_date = request.expiry_date,
+                delta_days = _Delta,
+                occurred_at = datetime.now(timezone.utc),
+            ))
         self.repository.save_changes()
 
         return CreateStockItemResponse(new_stock_item_id = _NewStockItem.id)

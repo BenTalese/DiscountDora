@@ -261,6 +261,20 @@ class DoraConfig:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def get_backups_dir(self, override: str | None = None) -> Path:
+        """Where the backup library persists its files. Default:
+        `<DATA_DIR>/backups`. An admin can override via
+        `AppSetting.backup_storage_path` (validated on save) to point
+        at an external mount / NAS. Empty override falls back to the
+        default. The caller (backup_library.py) passes the AppSetting
+        value; we own path resolution + dir creation."""
+        if override:
+            path = Path(override).expanduser().resolve()
+        else:
+            path = self.get_data_dir() / "backups"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def get_voices_dir(self) -> Path:
         """Where Piper TTS voice models (`.onnx` + `.onnx.json`) are stored.
         Downloaded on demand from the catalog (see features/tts) into the data

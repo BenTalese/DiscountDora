@@ -11,7 +11,16 @@
  * resize + re-encode + MIME-validation pipeline used by every upload site
  * (user avatar, recipe hero, stock item, store, step images). Centralised
  * so resize targets / quality / MIME allow-list don't drift per surface.
+ *
+ * FU-345 — the resize dimensions + JPEG quality are install-wide
+ * settings (`AppSetting.image_max_dimension` + `AppSetting.image_quality`)
+ * exposed via `/health.image_policy`. `processImageFile` reads them via
+ * `currentImagePolicy()` on every call — no per-surface knobs to keep
+ * in sync. Callers may still override for narrow cases (e.g. avatars),
+ * but the default path just uses the admin's chosen policy.
  */
+
+import { currentImagePolicy } from 'src/composables/useImagePolicy';
 
 /** MIME types we accept for upload across the app. */
 export const ALLOWED_UPLOAD_MIME_TYPES = [
@@ -45,11 +54,11 @@ export type ProcessedImage = {
     height: number;
 };
 
-const DEFAULTS: Required<ProcessImageOptions> = {
-    maxLongEdge: 1600,
-    quality: 0.85,
-    maxInputBytes: 12 * 1024 * 1024,
-};
+// Input byte cap is a hard limit on the picker (not policy-driven);
+// resize + quality default to whatever the install's current policy
+// resolves to. `currentImagePolicy()` returns the loaded values (or
+// conservative defaults if the health probe hasn't landed yet).
+const INPUT_BYTE_CAP_DEFAULT = 12 * 1024 * 1024;
 
 /**
  * Resize + re-encode + validate a user-picked image file. Single shared
@@ -61,7 +70,16 @@ export async function processImageFile(
     file: File,
     options: ProcessImageOptions = {},
 ): Promise<ProcessedImage> {
-    const opts = { ...DEFAULTS, ...options };
+    // FU-345 — read the install policy on every call. `options` still
+    // wins so a narrow surface (e.g. a tight avatar) can override; the
+    // vast majority of callers omit options entirely and get the
+    // admin-chosen defaults automatically.
+    const policy = currentImagePolicy();
+    const opts: Required<ProcessImageOptions> = {
+        maxLongEdge: options.maxLongEdge ?? policy.maxLongEdge,
+        quality: options.quality ?? policy.quality,
+        maxInputBytes: options.maxInputBytes ?? INPUT_BYTE_CAP_DEFAULT,
+    };
 
     if (!(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(file.type)) {
         throw new Error(

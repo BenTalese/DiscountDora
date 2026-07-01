@@ -239,7 +239,7 @@
                 </div>
                 <div class="col-12 text-caption dora-text-muted q-mt-xs">
                     Prefer to bring in your own data?
-                    <router-link to="/data/import" class="text-primary">
+                    <router-link to="/settings/admin/data/import" class="text-primary">
                         Import from a spreadsheet or another app instead →
                     </router-link>
                 </div>

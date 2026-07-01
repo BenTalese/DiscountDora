@@ -23,6 +23,11 @@
                     :menu-links="linksList"
                 />
 
+                <!-- Mobile: shove the right-hand buttons (alerts, profile)
+                     to the far edge, leaving a big gap after the page title.
+                     Desktop already fills the middle with MainMenuButtonStrip. -->
+                <q-space v-if="$q.screen.lt.md" />
+
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
                 <!-- Help & guides — peer of the profile button.
@@ -31,7 +36,7 @@
                      "you're somewhere reachable from here" when on a
                      /help/* route. -->
                 <BaseButton
-                    v-if="currentUser"
+                    v-if="currentUser && $q.screen.gt.sm"
                     variant="icon"
                     aria-label="Help & guides"
                     to="/help"
@@ -237,8 +242,13 @@
             { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
             { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
             { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
-            { label: 'Data', icon: ICONS.storage, link: '/data' },
             { label: 'Reports', icon: ICONS.insights, link: '/reports' },
+            // FU-341 — "Data" main-menu entry retired. The `/data` shell
+            // itself is gone; Backup/Restore and Import now live under
+            // Settings → Admin → Data (admin-only). A top-level slot for
+            // an admin-only workflow was confusing for the 90% case, and
+            // admins can still reach it in two clicks from the header
+            // avatar (Settings → Admin · global → Data → Backup).
             // C-waste W6 — Waste nav slot removed; near-expiry items
             // surface via Needs-your-attention on the dashboard and
             // through Dora's `expiry_rescue` tool. No replacement slot

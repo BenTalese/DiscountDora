@@ -63,7 +63,6 @@ class AuthenticatedUserDto:
     font_family: str
     font_size: str
     onboarding_completed_at: str | None
-    last_backup_at: str | None
     email_verified: bool
     # P2-05 — grocery budget. `budget_amount` is None when the user
     # hasn't opted in; a positive number turns on the dashboard / Dora
@@ -139,10 +138,6 @@ class AuthenticatedUserDto:
             onboarding_completed_at=(
                 user.onboarding_completed_at.isoformat()
                 if user.onboarding_completed_at is not None else None
-            ),
-            last_backup_at=(
-                user.last_backup_at.isoformat()
-                if user.last_backup_at is not None else None
             ),
             email_verified=bool(user.email_verified),
             budget_amount=(

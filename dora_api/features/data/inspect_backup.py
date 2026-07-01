@@ -28,6 +28,7 @@ from flask import request
 from sqlalchemy import select
 
 from dora_api.app import db
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.data.backup import BACKUP_SCHEMA_VERSION
 from dora_api.features.data.restore_shared import (
     DUPLICATE_KEY_BY_BACKUP_KEY,
@@ -272,6 +273,12 @@ def _inspect_inline(payload: dict) -> tuple[dict | None, str | None]:
 @DATA_ROUTER.route("/backup/inspect", methods=["POST"])
 def inspect_backup():
     _Logger = logging.getLogger(__name__)
+    # FU-341 / FU-198 — inspect reads uploaded backup contents,
+    # including any user rows the file would carry into a restore.
+    # Same admin gate as the restore endpoint itself.
+    _, admin_err = require_admin()
+    if admin_err is not None:
+        return admin_err
     path, err, owns_path = _resolve_file_path()
     if err is not None:
         _Logger.warning("inspect_backup rejected upload: %s", err)

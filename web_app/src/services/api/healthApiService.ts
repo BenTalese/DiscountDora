@@ -21,6 +21,13 @@ export interface HealthInfo {
         // can land without breaking existing clients.
         [key: string]: boolean;
     };
+    // FU-345 — install-wide image compression knobs the client applies
+    // at upload time. Optional in the type because older backends won't
+    // emit it; callers default to 85 / 1920.
+    image_policy?: {
+        quality: number;         // 30–100
+        max_dimension: number;   // longest edge in px
+    };
 }
 
 export default class HealthApiService {

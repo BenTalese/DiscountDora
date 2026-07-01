@@ -5,12 +5,12 @@
         aria-label="Dashy Dora — home"
         @click="onBrandClick"
     >
-        <q-avatar square size="44px" class="q-mr-sm dora-brand-mascot">
+        <q-avatar square size="44px" class="dora-brand-mascot">
             <img src="../../assets/logo-mascot.png" alt="" />
         </q-avatar>
         <span
             ref="textEl"
-            class="dora-brand-text"
+            class="dora-brand-text q-ml-sm"
             @animationend="onAnimationEnd"
         >Dashy Dora</span>
     </router-link>
@@ -71,6 +71,15 @@
         transform-origin: center center;
         color: var(--brand-accent);
         cursor: pointer;
+    }
+
+    /* Mobile: mascot alone is the home affordance — hide the wordmark to
+       reclaim toolbar space for the page title. Keeps the click target
+       (whole router-link) intact. */
+    @media (max-width: 1023px) {
+        .dora-brand-text {
+            display: none;
+        }
     }
 
     /* On click: a clean grow-shrink pulse, plus a bright highlight that

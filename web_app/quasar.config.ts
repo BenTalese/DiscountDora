@@ -275,12 +275,13 @@ export default defineConfig((ctx): any => {
                         url: '/shop-now',
                         icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
                     },
-                    {
-                        name: 'Scan a barcode',
-                        short_name: 'Scan',
-                        url: '/data/barcodes?action=scan',
-                        icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
-                    },
+                    // FU-340 — "Scan a barcode" PWA shortcut retired along
+                    // with the /data/barcodes Scan tab. Every page that
+                    // needs scan already has its own Scan button (Stock
+                    // Overview toolbar, Add-to-list flows); if a dedicated
+                    // scan launcher is wanted later it belongs on a stable
+                    // surface (`/stock?scan=1` would be the shape), not on
+                    // a page that no longer exists.
                     {
                         name: 'Add a stock item',
                         short_name: 'Add item',

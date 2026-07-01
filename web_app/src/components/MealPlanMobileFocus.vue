@@ -9,6 +9,18 @@
             <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
                 <q-tooltip>Next week</q-tooltip>
             </BaseButton>
+            <!-- FU-338 — in-context print. Parent wires this to
+                 `planner.printFocusedWeek` (opens the print-view route in a
+                 new tab, then the browser's "Save as PDF" is the export). -->
+            <BaseButton
+                v-if="plannedCount > 0"
+                variant="icon"
+                :icon="ICONS.print"
+                class="q-ml-sm"
+                @click="emit('print')"
+            >
+                <q-tooltip>Print this week</q-tooltip>
+            </BaseButton>
         </div>
 
         <!-- Day strip — 7 day buttons across the top. Today is highlighted;
@@ -180,6 +192,7 @@
         (e: 'generateList'): void;
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;
+        (e: 'print'): void;
     }>();
 
     // Focused day — defaults to today when today is inside the focused week,

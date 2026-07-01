@@ -1131,11 +1131,7 @@
     const recipeId = computed(() => String(route.params.id ?? ''));
     const recipe = ref<Recipe | null>(null);
 
-    // Export actions â€” shared with the Data â†’ Export & Print page so URL
-    // shape and filename slug stay in lockstep.
     const recipeExport = useRecipeExport();
-    // L306 — CSV export removed from the recipe detail page (felt out of
-    // place); Print/PDF stays as a top-toolbar action.
     function onPrint() {
         if (!recipeId.value) return;
         recipeExport.openPrintView(recipeId.value);

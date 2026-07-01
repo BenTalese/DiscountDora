@@ -37,6 +37,12 @@ class AppSettingsDto:
     product_search_url: str
     # FU-227 follow-up — AU vs US per-unit display locale.
     unit_pricing_locale: str
+    # FU-342 — backup library controls. See AppSetting entity.
+    backup_retention_count: int
+    backup_storage_path: str
+    # FU-345 — image compression knobs. See AppSetting entity.
+    image_quality: int
+    image_max_dimension: int
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -54,6 +60,10 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         default_days_until_stocktake_alert=int(setting.default_days_until_stocktake_alert),
         product_search_url=setting.product_search_url or "",
         unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
+        backup_retention_count=int(getattr(setting, "backup_retention_count", 5) or 5),
+        backup_storage_path=getattr(setting, "backup_storage_path", None) or "",
+        image_quality=int(getattr(setting, "image_quality", 85) or 85),
+        image_max_dimension=int(getattr(setting, "image_max_dimension", 1920) or 1920),
     )
 
 

@@ -25,6 +25,11 @@ from dora_api.domain.entities.shopping_list_template import (
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.stock_item_expiry_event import (
+    EXPIRY_EVENT_PUSHED, EXPIRY_EVENT_SET, StockItemExpiryEvent,
+)
+from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
@@ -255,6 +260,16 @@ def seed_dev_data():
     coffee = make_item(name="Coffee Beans", group=g_pantry, level=well, location=top_shelf,
                        flagged=True, is_open=True, opened_on=today - timedelta(days=3),
                        products=[coffee_iga])
+    # 2026-06-30 — dedicated test item for the History-tab truncation
+    # footer. Gets 60+ expiry-push events seeded below so the "N older
+    # events not shown" copy fires reliably on this one item. Named so
+    # a browser tester can find it without spelunking.
+    sriracha = make_item(
+        name="Sriracha (chatty history test)", group=g_pantry, level=well,
+        location=middle_left, is_open=True,
+        opened_on=today - timedelta(days=90),
+        expiry=today + timedelta(days=15),
+    )
 
     repo.save_changes()  # items need ids before substitutes / history / lines
 
@@ -546,6 +561,132 @@ def seed_dev_data():
     aglio.available_meals = 4
     stir_fry.available_meals = 2
     fried_rice.available_meals = 2
+
+    # ---------------- HISTORY-TAB EVENTS (2026-06-30) ---------------- #
+    # Enough events to make the Stock Item detail History tab feel
+    # populated across three kinds — Cook, Waste, and Expiry — and to
+    # trip the per-kind cap's "N older events not shown" footer on the
+    # dedicated `sriracha` item. Purchase (Bought) events are already
+    # emitted implicitly by the finished-shopping-list seed below.
+    # R-017 — seed exercises every new surface introduced this round.
+
+    # Cook events across the last 60 days. Recipes are referenced by
+    # id/name — the projection joins each cook to its
+    # RecipeIngredient stock items, so every ingredient on these
+    # recipes gets a "Used in <recipe>" timeline entry.
+    _cook_history = [
+        # (recipe, days_ago, meals_cooked)
+        (aglio, 55, 2),
+        (aglio, 40, 2),
+        (aglio, 22, 4),
+        (aglio, 8, 2),
+        (aglio, 2, 2),
+        (simple_pasta, 45, 2),
+        (simple_pasta, 30, 2),
+        (simple_pasta, 12, 3),
+        (simple_pasta, 4, 2),
+        (stir_fry, 50, 3),
+        (stir_fry, 25, 2),
+        (stir_fry, 10, 3),
+        (fried_rice, 35, 2),
+        (fried_rice, 15, 2),
+        (fried_rice, 3, 2),
+        (garlic_bread, 20, 4),
+    ]
+    for _recipe, _days_ago, _meals in _cook_history:
+        repo.add(CookEvent(
+            recipe_id=_recipe.id,
+            recipe_name=_recipe.name,
+            meals_cooked=_meals,
+            cooked_by_user_id=None,
+            occurred_at=now - timedelta(days=_days_ago),
+        ))
+
+    # A scatter of waste events so the History tab shows the negative-
+    # coloured row alongside the positive ones. Reasons are drawn from
+    # the WASTE_REASON_* sentinel set (see waste_event entity).
+    for _item, _days_ago, _reason in [
+        (icecream, 30, "expired"),
+        (milk, 45, "spoiled"),
+        (broccoli, 20, "spoiled"),
+        (brazil, 12, "did_not_like"),
+    ]:
+        repo.add(StockItemWasteEvent(
+            stock_item_id=_item.id,
+            stock_item_name=_item.name,
+            reason=_reason,
+            occurred_at=now - timedelta(days=_days_ago),
+        ))
+
+    # Expiry events on the natural perishables — a `set` (matching the
+    # date the item was created with) plus a couple of pushes on milk
+    # to demonstrate the "kept pushing back" pattern short of the cap.
+    for _item, _set_days_ago in [
+        (mangoes, 5),
+        (milk, 8),
+        (icecream, 30),
+        (broccoli, 4),
+    ]:
+        if _item.expiry_date is not None:
+            repo.add(StockItemExpiryEvent(
+                stock_item_id=_item.id,
+                kind=EXPIRY_EVENT_SET,
+                previous_expiry_date=None,
+                new_expiry_date=_item.expiry_date,
+                delta_days=None,
+                occurred_at=now - timedelta(days=_set_days_ago),
+            ))
+    # Two extra pushes on milk that walk the date forward to its
+    # current value.
+    _milk_expiry = milk.expiry_date
+    if _milk_expiry is not None:
+        repo.add(StockItemExpiryEvent(
+            stock_item_id=milk.id,
+            kind=EXPIRY_EVENT_PUSHED,
+            previous_expiry_date=_milk_expiry - timedelta(days=7),
+            new_expiry_date=_milk_expiry - timedelta(days=4),
+            delta_days=3,
+            occurred_at=now - timedelta(days=4),
+        ))
+        repo.add(StockItemExpiryEvent(
+            stock_item_id=milk.id,
+            kind=EXPIRY_EVENT_PUSHED,
+            previous_expiry_date=_milk_expiry - timedelta(days=4),
+            new_expiry_date=_milk_expiry,
+            delta_days=4,
+            occurred_at=now - timedelta(days=1),
+        ))
+
+    # Sriracha chatty test — one `set` plus 65 `pushed` events across
+    # the last 90 days. 65 > HISTORY_PER_KIND_CAP (50), so the
+    # projection drops 15+ events past the cap and the SPA's
+    # "N older events not shown" footer trips reliably on this one
+    # item without contaminating the rest of the dataset.
+    _sri_start_expiry = today - timedelta(days=45)
+    repo.add(StockItemExpiryEvent(
+        stock_item_id=sriracha.id,
+        kind=EXPIRY_EVENT_SET,
+        previous_expiry_date=None,
+        new_expiry_date=_sri_start_expiry,
+        delta_days=None,
+        occurred_at=now - timedelta(days=90),
+    ))
+    _sri_prev = _sri_start_expiry
+    for _i in range(65):
+        _push_by = 1 + (_i % 3)
+        _new_date = _sri_prev + timedelta(days=_push_by)
+        # Space pushes evenly across the last 88 days (older to newer
+        # as `_i` grows, mirroring real user behaviour).
+        _days_ago = max(1, 88 - int(_i * 88 / 65))
+        repo.add(StockItemExpiryEvent(
+            stock_item_id=sriracha.id,
+            kind=EXPIRY_EVENT_PUSHED,
+            previous_expiry_date=_sri_prev,
+            new_expiry_date=_new_date,
+            delta_days=_push_by,
+            occurred_at=now - timedelta(days=_days_ago),
+        ))
+        _sri_prev = _new_date
 
     # ---------------- MEAL PLAN (this week) ---------------- #
     monday = today - timedelta(days=today.weekday())

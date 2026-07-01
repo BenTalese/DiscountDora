@@ -78,6 +78,22 @@ class AppSetting(BaseEntity):
     # only the display denominator changes. Default `"AU"` because Dora's
     # built here and ships AU-first; admin can flip to `"US"` in Settings.
     unit_pricing_locale: str = "AU"
+    # FU-342 — backup library controls. `backup_retention_count` caps
+    # the library; oldest above the cap is auto-dropped on each new
+    # write. Default 5 is Pi-disk-conscious. `backup_storage_path`
+    # empty ⇒ resolved to `$DORA_DATA_DIR/backups/` at runtime; an
+    # admin may point at an external mount / NAS path (validated on
+    # save).
+    backup_retention_count: int = 5
+    backup_storage_path: str = ""
+    # FU-345 — install-wide image compression knobs. Applied at upload
+    # time by the client-side `processImageFile` helper (R-003 pipeline
+    # chokepoint) to every image surface. Existing images are untouched
+    # — forward-only. 85 is visually indistinguishable from "original";
+    # 60–70 is the disk-conscious floor. `image_max_dimension` caps the
+    # longest edge in pixels; images above are scaled down first.
+    image_quality: int = 85
+    image_max_dimension: int = 1920
 
     class Fields(BaseEntity.Fields):
         MASTER_LLM_ENABLED = "master_llm_enabled"
@@ -93,3 +109,7 @@ class AppSetting(BaseEntity):
         DEFAULT_DAYS_UNTIL_STOCKTAKE_ALERT = "default_days_until_stocktake_alert"
         PRODUCT_SEARCH_URL = "product_search_url"
         UNIT_PRICING_LOCALE = "unit_pricing_locale"
+        BACKUP_RETENTION_COUNT = "backup_retention_count"
+        BACKUP_STORAGE_PATH = "backup_storage_path"
+        IMAGE_QUALITY = "image_quality"
+        IMAGE_MAX_DIMENSION = "image_max_dimension"

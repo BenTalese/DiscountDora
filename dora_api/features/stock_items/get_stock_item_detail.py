@@ -21,9 +21,14 @@ from dora_api.app import db
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.app_setting import AppSetting
-from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine,
+)
 from dora_api.domain.entities.preferred_buy import PreferredBuy
+from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_expiry_event import StockItemExpiryEvent
 from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
@@ -127,6 +132,51 @@ class ListAddEventDto:
     added_via: str
     shopping_list_id: UUID
     shopping_list_name: str
+
+
+# History tab — the "you actually bought this" surface. Projected from
+# ShoppingListLine rows on lists with `status='done'` where the line
+# was ticked at Finish. Purely read-side: no new table, no dedicated
+# write path — the /finish handler already stamps
+# `actual_unit_price` + `purchased_store_id` on the line, plus the
+# parent list's `completed_at` gives us the "when." Store name is
+# resolved server-side so the SPA renders a string, not the FK.
+@dataclass(frozen=True, slots=True)
+class PurchaseEventDto:
+    occurred_at: datetime
+    quantity: int
+    actual_unit_price: float | None
+    store_id: UUID | None
+    store_name: str | None
+    shopping_list_id: UUID
+    shopping_list_name: str
+
+
+# History tab — the "used in a recipe you actually cooked" surface.
+# Written by POST /recipes/<id>/cook (see cook_recipe.py); projected
+# here by walking the item's linked-recipe universe and pulling every
+# CookEvent for those recipes. `meals_cooked` gives the SPA an
+# optional badge ("Used 3× in Pasta Bake") on batch cooks.
+@dataclass(frozen=True, slots=True)
+class CookEventDto:
+    occurred_at: datetime
+    recipe_id: UUID | None
+    recipe_name: str
+    meals_cooked: int
+
+
+# History tab — expiry-date change trail (set / pushed / cleared).
+# Written by create_stock_item + update_stock_item on every date
+# transition; the classifier assigns `kind` and (for pushes) a
+# `delta_days`. Repeat pushes surface a "kept pushing this back"
+# pattern the user can act on.
+@dataclass(frozen=True, slots=True)
+class ExpiryEventDto:
+    occurred_at: datetime
+    kind: str
+    previous_expiry_date: date | None
+    new_expiry_date: date | None
+    delta_days: int | None
 
 
 # FU-211 — free-text "what I actually buy" reminders (PROPOSAL_PRODUCTS_AS_OVERLAY
@@ -237,6 +287,19 @@ class StockItemDetailDto:
     # spend reports surfaces instead).
     waste_events: List[WasteEventDto] = field(default_factory=list)
     recent_list_adds: List[ListAddEventDto] = field(default_factory=list)
+    # 2026-06-30 — three new history-tab feeds. Capped per-kind at
+    # `HISTORY_PER_KIND_CAP` (see below); older rows are counted, not
+    # rendered.
+    purchase_events: List[PurchaseEventDto] = field(default_factory=list)
+    cook_events: List[CookEventDto] = field(default_factory=list)
+    expiry_events: List[ExpiryEventDto] = field(default_factory=list)
+    # 2026-06-30 — total number of history events that exist for this
+    # item but were NOT included in the response because they fell past
+    # the per-kind cap. Summed across every event kind (level_history +
+    # waste + list-adds + purchase + cook + expiry). The SPA renders a
+    # single honest footer — "N older events not shown" — instead of
+    # silently truncating.
+    history_older_count: int = 0
     # FU-211 — free-text "what I buy" reminders (always present; not gated).
     preferred_buys: List[PreferredBuyDto] = field(default_factory=list)
     # FU-213 — price observations + the server-derived per-unit cost (the
@@ -267,6 +330,13 @@ class StockItemDetailDto:
     # of "Change image / Remove" when the preview is being served from a
     # linked product (there's nothing the user could "remove").
     has_own_image: bool = False
+
+
+# 2026-06-30 — one number, one policy. Every event-kind projection
+# below caps at this many rows (newest first); the leftover count is
+# summed into `history_older_count` on the DTO so the SPA can render a
+# single honest "N older events not shown" footer.
+HISTORY_PER_KIND_CAP = 50
 
 
 class GetStockItemDetailHandler:
@@ -419,18 +489,24 @@ class GetStockItemDetailHandler:
                 key=lambda d: d.name.lower(),
             )
 
+        # Running tally of every event dropped past the per-kind cap
+        # across every history feed. Reported as `history_older_count`
+        # on the DTO so the SPA can show a single truncation footer.
+        _HistoryOlderCount = 0
+
         # Level-change history — newest first, capped so the page stays light.
         _Changes = self.repository.get(StockLevelChange).all(
             EntityField(StockLevelChange, StockLevelChange.Fields.STOCK_ITEM_ID).eq(stock_item_id)
         )
         _Changes.sort(key=lambda c: c.changed_at, reverse=True)
+        _HistoryOlderCount += max(0, len(_Changes) - HISTORY_PER_KIND_CAP)
         _LevelHistory = [
             LevelChangeDto(
                 changed_at = c.changed_at,
                 stock_level_id = c.stock_level_id,
                 stock_level_name = c.stock_level_name,
             )
-            for c in _Changes[:20]
+            for c in _Changes[:HISTORY_PER_KIND_CAP]
         ]
 
         # C-1b.5 / INV-7 — lifecycle inputs (read-only, capped).
@@ -439,12 +515,13 @@ class GetStockItemDetailHandler:
             EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.STOCK_ITEM_ID).eq(stock_item_id)
         )
         _Wastes.sort(key=lambda w: w.occurred_at, reverse=True)
+        _HistoryOlderCount += max(0, len(_Wastes) - HISTORY_PER_KIND_CAP)
         _WasteEvents = [
             WasteEventDto(
                 occurred_at = w.occurred_at,
                 reason = w.reason,
             )
-            for w in _Wastes[:20]
+            for w in _Wastes[:HISTORY_PER_KIND_CAP]
         ]
 
         # Past list-adds: every line for this stock item that has an
@@ -457,7 +534,8 @@ class GetStockItemDetailHandler:
         )
         _Lines = [l for l in _Lines if l.added_at is not None]
         _Lines.sort(key=lambda l: l.added_at, reverse=True)
-        _Lines = _Lines[:20]
+        _HistoryOlderCount += max(0, len(_Lines) - HISTORY_PER_KIND_CAP)
+        _Lines = _Lines[:HISTORY_PER_KIND_CAP]
         _ListAdds: List[ListAddEventDto] = []
         if _Lines:
             _ListIds = {l.shopping_list_id for l in _Lines}
@@ -474,6 +552,121 @@ class GetStockItemDetailHandler:
                 )
                 for l in _Lines
             ]
+
+        # ── Purchase events (2026-06-30) ─────────────────────────────
+        # "You actually bought this on <date> at <store>." Pulled from
+        # every ShoppingListLine for this item where the parent list
+        # is `done` AND the line was ticked at Finish. The parent
+        # list's `completed_at` gives the "when" (a line has no
+        # per-tick timestamp; the list-level stamp is the closest
+        # proxy). Reuses the ShoppingList name cache built above so
+        # we don't re-hit the DB.
+        _PurchaseEvents: List[PurchaseEventDto] = []
+        _AllLinesForItem = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+        )
+        _BoughtLines = [
+            l for l in _AllLinesForItem
+            if l.is_ticked
+        ]
+        if _BoughtLines:
+            # Load parent lists for status + completed_at. Separate hit
+            # from the recent-list-adds branch's name-only cache because
+            # here we need the full row (status/completed_at/name).
+            _BoughtListIds = {l.shopping_list_id for l in _BoughtLines}
+            _AllLists = list(_Session.execute(
+                select(ShoppingList).where(ShoppingList.id.in_(_BoughtListIds))
+            ).scalars())
+            _ListForId = {lst.id: lst for lst in _AllLists}
+            # Resolve store names in one hit for the union of purchased_store_ids.
+            _StoreIds = {
+                l.purchased_store_id for l in _BoughtLines
+                if l.purchased_store_id is not None
+            }
+            _StoreNameLookup: dict[UUID, str] = {}
+            if _StoreIds:
+                _Stores = list(_Session.execute(
+                    select(Store).where(Store.id.in_(_StoreIds))
+                ).scalars())
+                _StoreNameLookup = {s.id: s.name for s in _Stores}
+
+            _Purchases_raw = []
+            for l in _BoughtLines:
+                lst = _ListForId.get(l.shopping_list_id)
+                # Only surface lines on genuinely-finished lists — a
+                # ticked line on an in-flight list means the user is
+                # mid-shop, not that they've bought yet.
+                if lst is None or lst.status != SHOPPING_LIST_STATUS_DONE:
+                    continue
+                if lst.completed_at is None:
+                    continue
+                _Purchases_raw.append((lst, l))
+            _Purchases_raw.sort(key=lambda pair: pair[0].completed_at, reverse=True)
+            _HistoryOlderCount += max(0, len(_Purchases_raw) - HISTORY_PER_KIND_CAP)
+            _Purchases_raw = _Purchases_raw[:HISTORY_PER_KIND_CAP]
+            _PurchaseEvents = [
+                PurchaseEventDto(
+                    occurred_at = lst.completed_at,
+                    quantity = l.quantity,
+                    actual_unit_price = l.actual_unit_price,
+                    store_id = l.purchased_store_id,
+                    store_name = (
+                        _StoreNameLookup.get(l.purchased_store_id)
+                        if l.purchased_store_id is not None else None
+                    ),
+                    shopping_list_id = lst.id,
+                    shopping_list_name = lst.display_name,
+                )
+                for lst, l in _Purchases_raw
+            ]
+
+        # ── Cook events (2026-06-30) ─────────────────────────────────
+        # "You cooked a recipe that uses this ingredient." Universe of
+        # recipes is exactly the linked-recipes set already computed
+        # above (any recipe with an ingredient referencing this stock
+        # item). Iterating CookEvent by `recipe_id IN (…)` uses the
+        # `cook_event_recipe_id` index so this stays cheap even on
+        # heavy cooks. Cap at 20.
+        _CookEvents: List[CookEventDto] = []
+        if _IngredientRecipeIds:
+            _CookRows = list(_Session.execute(
+                select(CookEvent).where(
+                    CookEvent.recipe_id.in_(_IngredientRecipeIds)
+                )
+            ).scalars())
+            _CookRows.sort(key=lambda e: e.occurred_at, reverse=True)
+            _HistoryOlderCount += max(0, len(_CookRows) - HISTORY_PER_KIND_CAP)
+            _CookEvents = [
+                CookEventDto(
+                    occurred_at = e.occurred_at,
+                    recipe_id = e.recipe_id,
+                    recipe_name = e.recipe_name,
+                    meals_cooked = e.meals_cooked,
+                )
+                for e in _CookRows[:HISTORY_PER_KIND_CAP]
+            ]
+
+        # ── Expiry events (2026-06-30) ───────────────────────────────
+        # Every set / pushed / cleared transition for this item.
+        # Newest first, capped at 20.
+        _ExpiryRows = self.repository.get(StockItemExpiryEvent).all(
+            EntityField(
+                StockItemExpiryEvent,
+                StockItemExpiryEvent.Fields.STOCK_ITEM_ID,
+            ).eq(stock_item_id)
+        )
+        _ExpiryRows.sort(key=lambda e: e.occurred_at, reverse=True)
+        _HistoryOlderCount += max(0, len(_ExpiryRows) - HISTORY_PER_KIND_CAP)
+        _ExpiryEvents = [
+            ExpiryEventDto(
+                occurred_at = e.occurred_at,
+                kind = e.kind,
+                previous_expiry_date = e.previous_expiry_date,
+                new_expiry_date = e.new_expiry_date,
+                delta_days = e.delta_days,
+            )
+            for e in _ExpiryRows[:HISTORY_PER_KIND_CAP]
+        ]
 
         # FU-211 — free-text preferred buys for this item. FU-225 dropped
         # the `position` column and the manual reorder UI; sort alphabetically
@@ -671,6 +864,10 @@ class GetStockItemDetailHandler:
             substitutes = _Substitutes,
             waste_events = _WasteEvents,
             recent_list_adds = _ListAdds,
+            purchase_events = _PurchaseEvents,
+            cook_events = _CookEvents,
+            expiry_events = _ExpiryEvents,
+            history_older_count = _HistoryOlderCount,
             preferred_buys = _PreferredBuys,
             price_observations = _PriceObservations,
             unit_cost = _UnitCost,

@@ -162,36 +162,36 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('pages/errors/ErrorServer.vue'),
                 meta: { title: 'Server error' }
             },
-            // Data Management shell. Greenfield section (N1) — placeholder
-            // sub-pages for now; N2-N5 fill them with backup/import/export
-            // /barcode functionality. Pattern mirrors SettingsShell.
+            // FU-341 — the `/data` shell + its DataManagement.vue host are
+            // retired. Backup + Import now live under Settings → Admin →
+            // Data (see the settings route tree below). Every child path
+            // that used to hang off `/data` is preserved as a redirect so
+            // stale bookmarks, prior emails, and the retired PWA shortcut
+            // still land somewhere useful; the parent `/data` redirect
+            // catches direct visits to the shell URL itself.
             {
                 path: 'data',
-                component: () => import('pages/DataManagement.vue'),
-                redirect: '/data/backup',
-                meta: { title: 'Data' },
-                children: [
-                    {
-                        path: 'backup',
-                        component: () => import('pages/data/BackupRestore.vue'),
-                        meta: { title: 'Backup & restore' }
-                    },
-                    {
-                        path: 'import',
-                        component: () => import('pages/data/DataImport.vue'),
-                        meta: { title: 'Import' }
-                    },
-                    {
-                        path: 'export',
-                        component: () => import('pages/data/ExportPrint.vue'),
-                        meta: { title: 'Export & print' }
-                    },
-                    {
-                        path: 'barcodes',
-                        component: () => import('pages/data/BarcodesQR.vue'),
-                        meta: { title: 'Barcodes & QR' }
-                    }
-                ]
+                redirect: '/settings/admin/data/backup'
+            },
+            {
+                path: 'data/backup',
+                redirect: '/settings/admin/data/backup'
+            },
+            {
+                path: 'data/import',
+                redirect: '/settings/admin/data/import'
+            },
+            {
+                path: 'data/barcodes',
+                redirect: '/settings/kitchen-setup/qr-labels'
+            },
+            {
+                // FU-339 retired the page; the redirect points at Backup so
+                // a stale bookmark lands on the closest sibling rather than
+                // 404. Print now lives in-context on each printable
+                // surface (see FU-338/339).
+                path: 'data/export',
+                redirect: '/settings/admin/data/backup'
             },
             // Settings shell hosts sub-routes via its own <router-view>.
             // Three top-level groups (IMPL_PLAN_SETTINGS_REBUILD §2.1):
@@ -300,6 +300,17 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/RecipeDietaryTagsSettings.vue'),
                         meta: { title: 'Recipe dietary tags' }
                     },
+                    // FU-340 — QR labels (Print sheet). Relocated from
+                    // `/data/barcodes`; the old page's Scan tab was retired
+                    // (duplicative with Stock Overview's scan button). Still
+                    // gated by the install-wide `scanning_enabled` flag; the
+                    // sidebar hides the entry when off, the page itself shows
+                    // an "ask an admin to enable it" banner if reached by URL.
+                    {
+                        path: 'kitchen-setup/qr-labels',
+                        component: () => import('pages/settings/QrLabels.vue'),
+                        meta: { title: 'QR labels' }
+                    },
                     // Backwards-compat redirects for moved/split routes.
                     // Bookmarks, email deep-links and HelpPage entries that
                     // shipped under the old paths keep working. Drop these
@@ -366,6 +377,22 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/api-access',
                         component: () => import('pages/settings/ApiAccessSettings.vue'),
                         meta: { title: 'API access' }
+                    },
+                    // FU-341 — Data sub-group under Admin: relocated
+                    // Backup/Restore + Import from the retired `/data`
+                    // shell. Admin-only via the same isAdmin router
+                    // guard that covers the rest of `admin/*`; the
+                    // backend endpoints these pages call carry the
+                    // shared @require_admin dep (FU-198 closure).
+                    {
+                        path: 'admin/data/backup',
+                        component: () => import('pages/settings/AdminDataBackupRestore.vue'),
+                        meta: { title: 'Backup & restore' }
+                    },
+                    {
+                        path: 'admin/data/import',
+                        component: () => import('pages/settings/AdminDataImport.vue'),
+                        meta: { title: 'Import' }
                     }
                 ]
             }

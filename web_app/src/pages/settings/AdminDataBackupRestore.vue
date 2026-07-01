@@ -1,87 +1,171 @@
 <template>
-    <div class="q-gutter-md">
-        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
-            <template #avatar>
-                <q-icon :name="ICONS.info" size="18px" />
+    <div class="settings-page q-gutter-md">
+        <SettingsPageHeader
+            title="Backup & restore"
+            description="Snapshot your install to JSON — stock, lists, recipes, meal plans and saved products by default; optional sections (system settings, user accounts, historic offers) can be ticked on per-backup. Passwords are never included. Restore an existing backup on the right."
+            :icon="ICONS.cloud_download"
+        />
+
+        <!-- FU-342 — Backup library. One row per persisted backup;
+             retention (default 5) prunes the oldest above the cap on every
+             new create. Rows carry Download / Restore / Delete actions;
+             external-file restore lives in the sibling card. -->
+        <q-card flat bordered>
+            <q-card-section class="row items-center q-gutter-md">
+                <q-icon :name="ICONS.cloud_download" size="32px" class="text-primary" />
+                <div>
+                    <div class="text-h6">Backup library</div>
+                    <div class="text-caption dora-text-muted">
+                        Keeps the most recent {{ retentionCount }}; older backups drop off on the next create.
+                    </div>
+                </div>
+                <q-space />
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.add"
+                    label="New backup"
+                    :loading="generating"
+                    @click="openCreateDialog"
+                />
+            </q-card-section>
+            <q-separator />
+            <q-card-section v-if="libraryLoading" class="row items-center q-gutter-sm dora-text-muted">
+                <q-spinner size="18px" />
+                <div class="text-caption">Loading backups…</div>
+            </q-card-section>
+            <q-card-section
+                v-else-if="library.length === 0"
+                class="dora-text-secondary text-center q-py-lg"
+            >
+                No backups yet. Click <strong>New backup</strong> to create your first snapshot.
+            </q-card-section>
+            <q-list v-else separator>
+                <q-item v-for="row in library" :key="row.backup_id">
+                    <q-item-section>
+                        <q-item-label>
+                            {{ formatBackupTimestamp(row.created_at) }}
+                            <q-chip
+                                v-if="rowIncludesSensitive(row)"
+                                dense
+                                size="sm"
+                                color="warning"
+                                text-color="dark"
+                                class="q-ml-sm"
+                                icon="warning"
+                            >
+                                Includes sensitive data
+                                <q-tooltip max-width="300px">
+                                    This backup contains {{ sensitiveSectionsLabel(row) }} — handle the file accordingly.
+                                </q-tooltip>
+                            </q-chip>
+                        </q-item-label>
+                        <q-item-label caption>
+                            {{ formatSize(row.size_bytes) }}
+                            · {{ row.sections.length }} section{{ row.sections.length === 1 ? '' : 's' }}
+                            <span v-if="row.created_by_username">
+                                · by {{ row.created_by_username }}
+                            </span>
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <div class="row q-gutter-xs">
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.download"
+                                @click="onDownloadRow(row)"
+                            >
+                                <q-tooltip>Download</q-tooltip>
+                            </BaseButton>
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.cloud_upload"
+                                @click="onRestoreRow(row)"
+                            >
+                                <q-tooltip>Restore this backup</q-tooltip>
+                            </BaseButton>
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.delete"
+                                @click="onDeleteRow(row)"
+                            >
+                                <q-tooltip>Delete</q-tooltip>
+                            </BaseButton>
+                        </div>
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </q-card>
+
+        <!-- New-backup dialog — section picker with sensitive-data warning. -->
+        <BaseDialog v-model="createDialogOpen" card-style="min-width: 480px; max-width: 640px">
+            <q-card-section>
+                <div class="text-h6">New backup</div>
+                <div class="text-caption dora-text-muted q-mt-xs">
+                    Pick which sections to include. Passwords are never included.
+                </div>
+            </q-card-section>
+            <q-separator />
+            <q-card-section class="q-pb-none">
+                <q-banner
+                    v-if="createIncludesSensitive"
+                    class="dora-bg-warning-soft q-mb-md text-caption"
+                    dense
+                    rounded
+                >
+                    <template #avatar>
+                        <q-icon name="warning" color="warning" />
+                    </template>
+                    This backup will include {{ createSensitiveLabel }} — handle the file accordingly.
+                </q-banner>
+                <q-expansion-item
+                    v-for="(group, idx) in backupSectionGroups"
+                    :key="group.category"
+                    :label="group.category"
+                    :caption="`${countSelectedInGroup(group)} of ${group.sections.length} selected`"
+                    :default-opened="idx === 0"
+                    dense
+                    header-class="q-px-none"
+                >
+                    <div class="row items-center q-gutter-x-sm q-mb-xs">
+                        <BaseButton
+                            variant="ghost"
+                            dense
+                            size="sm"
+                            label="All"
+                            @click="toggleGroup(group, true)"
+                        />
+                        <BaseButton
+                            variant="ghost"
+                            dense
+                            size="sm"
+                            label="None"
+                            @click="toggleGroup(group, false)"
+                        />
+                    </div>
+                    <q-checkbox
+                        v-for="section in group.sections"
+                        :key="section.key"
+                        v-model="backupSelected[section.key]"
+                        dense
+                        :label="section.label"
+                        class="block"
+                    />
+                </q-expansion-item>
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.cloud_download"
+                    label="Generate"
+                    :loading="generating"
+                    :disable="generating || selectedBackupKeys.length === 0"
+                    @click="onGenerate"
+                />
             </template>
-            Backups capture your stock, lists, recipes, meal plans and saved products
-            by default. Optional sections (system settings, user accounts,
-            historic offers) can be ticked on per-backup. Passwords are never
-            included.
-        </q-banner>
+        </BaseDialog>
 
         <div class="row q-col-gutter-md">
-            <!-- ── Create ──────────────────────────────────────────── -->
-            <div class="col-12 col-md-6">
-                <q-card flat bordered>
-                    <q-card-section class="row items-center q-gutter-md">
-                        <q-icon :name="ICONS.cloud_download" size="32px" class="text-primary" />
-                        <div>
-                            <div class="text-h6">Create backup</div>
-                            <div class="text-caption dora-text-muted">
-                                Download a JSON snapshot of your install.
-                            </div>
-                            <div
-                                v-if="lastBackupLabel"
-                                class="text-caption dora-text-muted-7 q-mt-xs"
-                            >
-                                <q-icon :name="ICONS.schedule" size="14px" class="q-mr-xs" />
-                                Last backup: {{ lastBackupLabel }}
-                            </div>
-                        </div>
-                    </q-card-section>
-                    <q-separator />
-                    <q-card-section class="q-pb-none">
-                        <div class="text-caption dora-text-muted-7 q-mb-xs">
-                            Include in this backup:
-                        </div>
-                        <q-expansion-item
-                            v-for="(group, idx) in backupSectionGroups"
-                            :key="group.category"
-                            :label="group.category"
-                            :caption="`${countSelectedInGroup(group)} of ${group.sections.length} selected`"
-                            :default-opened="idx === 0"
-                            dense
-                            header-class="q-px-none"
-                        >
-                            <div class="row items-center q-gutter-x-sm q-mb-xs">
-                                <BaseButton
-                                    variant="ghost"
-                                    dense
-                                    size="sm"
-                                    label="All"
-                                    @click="toggleGroup(group, true)"
-                                />
-                                <BaseButton
-                                    variant="ghost"
-                                    dense
-                                    size="sm"
-                                    label="None"
-                                    @click="toggleGroup(group, false)"
-                                />
-                            </div>
-                            <q-checkbox
-                                v-for="section in group.sections"
-                                :key="section.key"
-                                v-model="backupSelected[section.key]"
-                                dense
-                                :label="section.label"
-                                class="block"
-                            />
-                        </q-expansion-item>
-                    </q-card-section>
-                    <q-card-section>
-                        <BaseButton
-                            :icon="ICONS.download"
-                            label="Download backup"
-                            :loading="downloading"
-                            :disable="downloading || selectedBackupKeys.length === 0"
-                            @click="onDownload"
-                        />
-                    </q-card-section>
-                </q-card>
-            </div>
-
             <!-- ── Restore ─────────────────────────────────────────── -->
             <div class="col-12 col-md-6">
                 <q-card flat bordered>
@@ -283,25 +367,184 @@
                     />
                 </template>
         </BaseDialog>
+
+        <!-- FU-342 — library retention + storage-path admin settings. Sits
+             at the bottom of the page because it's operator-configuration,
+             not day-to-day workflow. -->
+        <q-card flat bordered>
+            <q-card-section class="row items-center q-gutter-md">
+                <q-icon :name="ICONS.tune" size="24px" class="text-primary" />
+                <div>
+                    <div class="text-subtitle1">Library settings</div>
+                    <div class="text-caption dora-text-muted">
+                        Where backups land on disk, and how many to keep.
+                    </div>
+                </div>
+            </q-card-section>
+            <q-separator />
+            <q-card-section class="row q-col-gutter-md">
+                <div class="col-12 col-md-4">
+                    <q-input
+                        v-model.number="retentionInput"
+                        type="number"
+                        outlined
+                        dense
+                        min="1"
+                        max="100"
+                        label="Retention count"
+                        hint="Oldest above this cap auto-drop on each new backup."
+                    />
+                </div>
+                <div class="col-12 col-md-8">
+                    <q-input
+                        v-model="storagePathInput"
+                        outlined
+                        dense
+                        clearable
+                        label="Storage path"
+                        placeholder="(default: DORA_DATA_DIR/backups)"
+                        hint="Absolute path on the server. Blank ⇒ default. External mount / NAS OK — must be writeable."
+                    />
+                </div>
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton
+                    variant="ghost"
+                    label="Discard"
+                    :disable="!librarySettingsDirty"
+                    @click="resetLibrarySettings"
+                />
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.save"
+                    label="Save"
+                    :loading="savingSettings"
+                    :disable="!librarySettingsDirty || savingSettings"
+                    @click="onSaveLibrarySettings"
+                />
+            </q-card-actions>
+        </q-card>
+
+        <!-- FU-345 — install-wide image compression. Applied at upload
+             time via the shared `processImageFile` helper; every surface
+             (stock items, recipes, products, avatars, receipts, store
+             logos) picks these up automatically. Forward-only — existing
+             images are not re-encoded. -->
+        <q-card flat bordered>
+            <q-card-section class="row items-center q-gutter-md">
+                <q-icon :name="ICONS.image" size="24px" class="text-primary" />
+                <div>
+                    <div class="text-subtitle1">Image compression</div>
+                    <div class="text-caption dora-text-muted">
+                        Applied when new images are uploaded — existing images are unchanged. Lower quality + smaller dimensions ⇒ less disk over time.
+                    </div>
+                </div>
+            </q-card-section>
+            <q-separator />
+            <q-card-section>
+                <SettingsRow
+                    label="JPEG/WebP quality"
+                    help="30 = strong compression (visible loss); 85 (default) is visually indistinguishable from the original; 100 = no compression, large files."
+                >
+                    <div class="row items-center q-gutter-sm" style="min-width: 260px">
+                        <q-slider
+                            v-model="imageQualityInput"
+                            :min="30"
+                            :max="100"
+                            :step="1"
+                            label
+                            label-always
+                            color="primary"
+                            style="flex: 1"
+                        />
+                    </div>
+                </SettingsRow>
+                <SettingsRow
+                    label="Longest edge (px)"
+                    help="Photos larger than this on their longest side are scaled down before encode. 1920 (default) is Full-HD; 1280 is a disk-conscious floor."
+                >
+                    <q-input
+                        v-model.number="imageMaxDimensionInput"
+                        type="number"
+                        outlined
+                        dense
+                        :min="512"
+                        :max="8192"
+                        style="max-width: 140px"
+                    />
+                </SettingsRow>
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton
+                    variant="ghost"
+                    label="Discard"
+                    :disable="!imageSettingsDirty"
+                    @click="resetImageSettings"
+                />
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.save"
+                    label="Save"
+                    :loading="savingImageSettings"
+                    :disable="!imageSettingsDirty || savingImageSettings"
+                    @click="onSaveImageSettings"
+                />
+            </q-card-actions>
+        </q-card>
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
-    import { storeToRefs } from 'pinia';
-    import { computed, ref } from 'vue';
+    import { computed, onMounted, ref } from 'vue';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
-    import { useAuthStore } from 'src/stores/authStore';
+    import { refreshImagePolicy } from 'src/composables/useImagePolicy';
 
     const $q = useQuasar();
-    const authStore = useAuthStore();
-    const { currentUser } = storeToRefs(authStore);
 
-    const downloading = ref(false);
+    // FU-342 — library-facing state. Old download-only path retired;
+    // "Create backup" now POSTs the library create endpoint, and the
+    // list at the top of the page shows every persisted backup.
+    interface BackupRow {
+        backup_id: string;
+        created_at: string;
+        created_by_user_id: string | null;
+        created_by_username: string | null;
+        size_bytes: number;
+        sections: string[];
+        sha256: string;
+        status: string;
+        trigger_kind: string;
+    }
+    const library = ref<BackupRow[]>([]);
+    const libraryLoading = ref(false);
+    const generating = ref(false);
+    const createDialogOpen = ref(false);
+
+    // Retention + storage path settings (loaded once on mount, saved on
+    // "Save"). Split from the runtime state so the "dirty" check is honest
+    // even if the user cancels and reopens.
+    const retentionCount = ref<number>(5);
+    const storagePath = ref<string>('');
+    const retentionInput = ref<number>(5);
+    const storagePathInput = ref<string>('');
+    const savingSettings = ref(false);
+
+    // FU-345 — install-wide image compression knobs, loaded alongside the
+    // backup settings so admins see the whole storage picture in one
+    // place. Saved via the same PATCH /app-settings endpoint.
+    const imageQuality = ref<number>(85);
+    const imageMaxDimension = ref<number>(1920);
+    const imageQualityInput = ref<number>(85);
+    const imageMaxDimensionInput = ref<number>(1920);
+    const savingImageSettings = ref(false);
+
     const inspecting = ref(false);
     const restoring = ref(false);
 
@@ -335,25 +578,40 @@
     const report = ref<RestoreReport | null>(null);
     const reportOpen = ref(false);
 
-    // ── Last backup label ─────────────────────────────────────────────
-    const lastBackupLabel = computed(() => {
-        const iso = currentUser.value?.last_backup_at ?? null;
-        if (!iso) return null;
-        try {
-            const when = new Date(iso);
-            const diffMs = Date.now() - when.getTime();
-            const diffMins = Math.floor(diffMs / 60000);
-            if (diffMins < 1) return 'just now';
-            if (diffMins < 60) return `${diffMins} min ago`;
-            const diffHours = Math.floor(diffMins / 60);
-            if (diffHours < 24) return `${diffHours} hr ago`;
-            const diffDays = Math.floor(diffHours / 24);
-            if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-            return when.toLocaleDateString();
-        } catch {
-            return iso;
-        }
-    });
+    // FU-342: "last backup" now derives from the library list (`SELECT
+    // MAX(created_at)`), not the retired User.last_backup_at column. The
+    // header caption at the top of the library card reads the count; a
+    // per-row "how long ago" is on each library row.
+
+    // FU-342 — sensitive sections warning. Optional sections carry data
+    // Dora doesn't want written to disk casually. Chips + banner surface
+    // this so the choice is visible; not blocked (admins may legitimately
+    // need a full-fidelity dump for a migration).
+    const SENSITIVE_SECTIONS = ['users', 'app_settings', 'product_historic_offers'];
+    const SENSITIVE_LABEL_BY_KEY: Record<string, string> = {
+        users: 'user accounts',
+        app_settings: 'system settings',
+        product_historic_offers: 'historic offers',
+    };
+    function sensitiveKeysIn(sections: string[]): string[] {
+        return SENSITIVE_SECTIONS.filter((k) => sections.includes(k));
+    }
+    function rowIncludesSensitive(row: BackupRow): boolean {
+        return sensitiveKeysIn(row.sections).length > 0;
+    }
+    function sensitiveSectionsLabel(row: BackupRow): string {
+        const keys = sensitiveKeysIn(row.sections);
+        return keys.map((k) => SENSITIVE_LABEL_BY_KEY[k] ?? k).join(', ');
+    }
+    const createIncludesSensitive = computed(() =>
+        selectedBackupKeys.value.some((k) => SENSITIVE_SECTIONS.includes(k)),
+    );
+    const createSensitiveLabel = computed(() =>
+        selectedBackupKeys.value
+            .filter((k) => SENSITIVE_SECTIONS.includes(k))
+            .map((k) => SENSITIVE_LABEL_BY_KEY[k] ?? k)
+            .join(', '),
+    );
 
     interface InspectSampleRow {
         id: string;
@@ -562,35 +820,80 @@
         }
     }
 
-    // ── Download ──────────────────────────────────────────────────────
-    async function onDownload() {
-        downloading.value = true;
+    // ── Library: load / create / download / restore / delete ──────────
+    async function loadLibrary(): Promise<void> {
+        libraryLoading.value = true;
         try {
             const baseUrl = resolveBaseURL();
-            const query = selectedBackupKeys.value.length
-                ? `?sections=${encodeURIComponent(selectedBackupKeys.value.join(','))}`
-                : '';
-            const response = await fetch(`${baseUrl}/data/backup${query}`, {
+            const response = await fetch(`${baseUrl}/data/backups?size=200`, {
                 method: 'GET',
                 credentials: 'include',
             });
+            if (!response.ok) throw new Error(`List failed (${response.status})`);
+            const body = await response.json();
+            library.value = (body.items ?? []) as BackupRow[];
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't load backups.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            libraryLoading.value = false;
+        }
+    }
+
+    function openCreateDialog() {
+        createDialogOpen.value = true;
+    }
+
+    async function onGenerate() {
+        generating.value = true;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(`${baseUrl}/data/backups`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sections: selectedBackupKeys.value }),
+            });
             if (!response.ok) {
-                throw new Error(`Backup failed (${response.status})`);
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.detail ?? `Backup failed (${response.status})`);
             }
-            const filename = parseFilename(response.headers.get('content-disposition'))
-                ?? defaultFilename();
-            const blob = await response.blob();
-            triggerSave(blob, filename);
-            // The backup endpoint stamps `last_backup_at` on the user as a
-            // side effect; refresh /me so the card label updates without
-            // waiting for the next page navigation.
-            void authStore.refreshAsync();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: 'Backup downloaded.',
+                message: 'Backup saved to the library.',
                 timeout: 3000,
             });
+            createDialogOpen.value = false;
+            await loadLibrary();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't create backup.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            generating.value = false;
+        }
+    }
+
+    async function onDownloadRow(row: BackupRow) {
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(
+                `${baseUrl}/data/backups/${encodeURIComponent(row.backup_id)}/download`,
+                { method: 'GET', credentials: 'include' },
+            );
+            if (!response.ok) throw new Error(`Download failed (${response.status})`);
+            const filename = parseFilename(response.headers.get('content-disposition'))
+                ?? `dora-backup-${row.created_at.slice(0, 10)}.json`;
+            const blob = await response.blob();
+            triggerSave(blob, filename);
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -598,10 +901,246 @@
                 message: "Couldn't download backup.",
                 caption: err instanceof Error ? err.message : String(err),
             });
-        } finally {
-            downloading.value = false;
         }
     }
+
+    async function onRestoreRow(row: BackupRow) {
+        // Confirm — restore inserts arbitrary rows across every table; the
+        // library fast-path skips inspect/preview, so a two-step confirm is
+        // the correct friction.
+        const ok = await confirmAsync(
+            'Restore this backup?',
+            `This will import every section in the ${formatBackupTimestamp(row.created_at)} backup, skipping any rows that already exist. Users, settings, or historic offers included in the file will be applied if you saved them.`,
+            'Restore',
+        );
+        if (!ok) return;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(
+                `${baseUrl}/data/backups/${encodeURIComponent(row.backup_id)}/restore`,
+                { method: 'POST', credentials: 'include' },
+            );
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(body.detail ?? `Restore failed (${response.status})`);
+            }
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Restore complete.',
+                caption: summarizeRestore(body),
+                timeout: 4000,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Restore failed.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    async function onDeleteRow(row: BackupRow) {
+        const ok = await confirmAsync(
+            'Delete this backup?',
+            `The ${formatBackupTimestamp(row.created_at)} backup will be removed from the library and the file will be deleted from disk. This can't be undone.`,
+            'Delete',
+        );
+        if (!ok) return;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(
+                `${baseUrl}/data/backups/${encodeURIComponent(row.backup_id)}`,
+                { method: 'DELETE', credentials: 'include' },
+            );
+            if (!response.ok && response.status !== 204) {
+                throw new Error(`Delete failed (${response.status})`);
+            }
+            library.value = library.value.filter((r) => r.backup_id !== row.backup_id);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't delete backup.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    // Library / row formatting helpers.
+    function formatBackupTimestamp(iso: string | null): string {
+        if (!iso) return 'unknown';
+        try {
+            return new Date(iso).toLocaleString();
+        } catch {
+            return iso;
+        }
+    }
+    function formatSize(bytes: number): string {
+        if (bytes < 1024) return `${bytes} B`;
+        const kb = bytes / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        const mb = kb / 1024;
+        if (mb < 1024) return `${mb.toFixed(1)} MB`;
+        return `${(mb / 1024).toFixed(2)} GB`;
+    }
+    function summarizeRestore(body: any): string {
+        const created = body?.created ?? {};
+        const total = Object.values(created).reduce((a: number, b: any) => a + Number(b || 0), 0);
+        return total === 0
+            ? 'No new rows — every section skipped as duplicates.'
+            : `${total} row${total === 1 ? '' : 's'} imported.`;
+    }
+
+    // Confirm dialog — used by restore + delete. Quasar's dialog plugin
+    // returns a Promise via its `.onOk` / `.onCancel` — wrap it so the
+    // handler can await.
+    function confirmAsync(title: string, message: string, ok: string): Promise<boolean> {
+        return new Promise((resolve) => {
+            $q.dialog({
+                title,
+                message,
+                ok: { label: ok, color: 'primary' },
+                cancel: true,
+                persistent: true,
+            }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false));
+        });
+    }
+
+    // ── Library settings (retention + storage path) ───────────────────
+    const librarySettingsDirty = computed(() =>
+        retentionInput.value !== retentionCount.value
+        || storagePathInput.value !== storagePath.value,
+    );
+
+    async function loadLibrarySettings(): Promise<void> {
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(`${baseUrl}/app-settings`, {
+                method: 'GET',
+                credentials: 'include',
+            });
+            if (!response.ok) throw new Error(`Settings load failed (${response.status})`);
+            const settings = await response.json();
+            retentionCount.value = Number(settings.backup_retention_count ?? 5);
+            storagePath.value = String(settings.backup_storage_path ?? '');
+            retentionInput.value = retentionCount.value;
+            storagePathInput.value = storagePath.value;
+            // FU-345 — image compression settings live on the same
+            // /app-settings payload; hydrate their inputs from the same
+            // response so both cards render current state after mount.
+            imageQuality.value = Number(settings.image_quality ?? 85);
+            imageMaxDimension.value = Number(settings.image_max_dimension ?? 1920);
+            imageQualityInput.value = imageQuality.value;
+            imageMaxDimensionInput.value = imageMaxDimension.value;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't load library settings.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    // FU-345 — image compression dirty check + save. Kept as its own
+    // section (not folded into onSaveLibrarySettings) so the two cards
+    // save independently — an admin tweaking quality shouldn't have to
+    // also re-confirm the storage path.
+    const imageSettingsDirty = computed(() =>
+        imageQualityInput.value !== imageQuality.value
+        || imageMaxDimensionInput.value !== imageMaxDimension.value,
+    );
+    function resetImageSettings() {
+        imageQualityInput.value = imageQuality.value;
+        imageMaxDimensionInput.value = imageMaxDimension.value;
+    }
+    async function onSaveImageSettings() {
+        savingImageSettings.value = true;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(`${baseUrl}/app-settings`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_quality: Number(imageQualityInput.value),
+                    image_max_dimension: Number(imageMaxDimensionInput.value),
+                }),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(body.detail ?? `Save failed (${response.status})`);
+            }
+            imageQuality.value = Number(imageQualityInput.value);
+            imageMaxDimension.value = Number(imageMaxDimensionInput.value);
+            // Kick the shared policy composable so subsequent uploads in
+            // *this* session pick up the new values without a page
+            // reload. Other tabs get it on their next health probe.
+            void refreshImagePolicy();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Image settings saved.',
+                caption: 'Applies to new uploads; existing images are unchanged.',
+                timeout: 3000,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't save image settings.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            savingImageSettings.value = false;
+        }
+    }
+    function resetLibrarySettings() {
+        retentionInput.value = retentionCount.value;
+        storagePathInput.value = storagePath.value;
+    }
+    async function onSaveLibrarySettings() {
+        savingSettings.value = true;
+        try {
+            const baseUrl = resolveBaseURL();
+            const response = await fetch(`${baseUrl}/app-settings`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    backup_retention_count: Number(retentionInput.value),
+                    backup_storage_path: (storagePathInput.value ?? '').trim(),
+                }),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(body.detail ?? `Save failed (${response.status})`);
+            }
+            retentionCount.value = Number(retentionInput.value);
+            storagePath.value = (storagePathInput.value ?? '').trim();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Library settings saved.',
+                timeout: 2500,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't save library settings.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            savingSettings.value = false;
+        }
+    }
+
+    onMounted(async () => {
+        await Promise.all([loadLibrary(), loadLibrarySettings()]);
+    });
 
     function parseFilename(header: string | null): string | null {
         if (!header) return null;

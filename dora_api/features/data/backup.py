@@ -1,36 +1,50 @@
-"""GET /api/data/backup — install-wide JSON snapshot.
+"""Backup payload builder — shared by the library create endpoint.
 
 Dumps every section listed in `SECTIONS` (restore_shared) column-by-column
-to a single JSON document. Callers can narrow the dump by passing
-`?sections=stock_items,recipes,...`; omitting the query string falls back
-to the default-on sections.
+to a single JSON document. Callers pass the set of section `backup_key`s
+they want; the builder returns the ready-to-serialise payload + a
+suggested filename.
 
 Per-section `excluded_columns` (e.g. `password_hash` on User) are dropped
 from the output and not restored either, so credentials never round-trip.
+
+FU-342: the previous `GET /data/backup` download-only endpoint retired —
+every backup now flows through the library
+(`features/data/backup_library.py`). This module owns the *shape* of a
+backup document; the library owns the *persistence* around it.
 """
 import base64
-import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from flask import Response, jsonify, request, session
 from sqlalchemy import select
 
 from dora_api.app import db
 from dora_api.domain.entities.user import User
-from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.data.restore_shared import SECTIONS, SECTION_BY_BACKUP_KEY
-from dora_api.features.routers import DATA_ROUTER
-from dora_api.infrastructure.api_response import bad_request, unauthorized
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 # Schema version for the on-disk format. Bump when the JSON shape changes in
 # a way the restore endpoint can't tolerate.
 BACKUP_SCHEMA_VERSION = 1
+
+
+def resolve_selected_sections(
+    requested: list[str] | None,
+) -> tuple[frozenset[str] | None, str | None]:
+    """Resolve a caller-supplied section list into a frozenset the builder
+    can consume. `None` (or an empty list) falls back to every section
+    flagged `default_on`. Returns `(sections, error)`; on error the sections
+    slot is None and error carries a user-facing message."""
+    if not requested:
+        return frozenset(s.backup_key for s in SECTIONS if s.default_on), None
+    unknown = set(requested) - set(SECTION_BY_BACKUP_KEY.keys())
+    if unknown:
+        return None, f"Unknown backup section(s): {', '.join(sorted(unknown))}."
+    return frozenset(requested), None
 
 
 def _encode_value(value: Any) -> Any:
@@ -64,6 +78,7 @@ def _dump_table(table_name: str, excluded_columns: frozenset[str]) -> list[dict[
 class BackupResult:
     payload: dict[str, Any]
     filename: str
+    exported_at: datetime
 
 
 class GetBackupHandler:
@@ -76,9 +91,8 @@ class GetBackupHandler:
         selected_keys: frozenset[str],
     ) -> BackupResult:
         username = "unknown"
-        user: User | None = None
         if exported_by_user_id is not None:
-            user = self.repository.get(User).by_id(exported_by_user_id)
+            user: User | None = self.repository.get(User).by_id(exported_by_user_id)
             if user is not None:
                 username = user.username
 
@@ -99,60 +113,5 @@ class GetBackupHandler:
                 section.table_name, section.excluded_columns,
             )
 
-        # Stamp the user as having taken a backup. Side-effect of the
-        # successful dump; persisted so the UI can show "last backup N ago"
-        # across sessions.
-        if user is not None:
-            user.last_backup_at = now_utc
-            self.repository.save_changes()
-
         filename = f"dora-backup-{now_utc.date().isoformat()}.json"
-        return BackupResult(payload=payload, filename=filename)
-
-
-def _resolve_selected_sections() -> frozenset[str] | Response:
-    """Honour `?sections=a,b,c` if present; otherwise return every section
-    flagged `default_on`. Unknown keys → 400.
-    """
-    raw = request.args.get("sections")
-    if raw is None:
-        return frozenset(s.backup_key for s in SECTIONS if s.default_on)
-    requested = {token.strip() for token in raw.split(",") if token.strip()}
-    unknown = requested - set(SECTION_BY_BACKUP_KEY.keys())
-    if unknown:
-        return bad_request(
-            f"Unknown backup section(s): {', '.join(sorted(unknown))}."
-        )
-    return frozenset(requested)
-
-
-@DATA_ROUTER.route("/backup", methods=["GET"])
-def get_backup():
-    _Logger = logging.getLogger(__name__)
-    _UserIdRaw = session.get(SESSION_USER_ID_KEY)
-    # Middleware has already gated for an authenticated session before we
-    # get here, but we still want the UUID for `exported_by`. Fall back
-    # gracefully if the session somehow has a bad value.
-    _UserId: UUID | None = None
-    if _UserIdRaw:
-        try:
-            _UserId = UUID(_UserIdRaw)
-        except (ValueError, TypeError):
-            session.clear()
-            return unauthorized()
-
-    _Selected = _resolve_selected_sections()
-    if isinstance(_Selected, Response):
-        return _Selected
-
-    _Result = get_container().inject(GetBackupHandler).handle(_UserId, _Selected)
-    _Logger.info(
-        "Built backup: %d section(s), exported_by=%s",
-        len(_Selected), _Result.payload.get("exported_by"),
-    )
-
-    response: Response = jsonify(_Result.payload)
-    response.headers["Content-Disposition"] = (
-        f'attachment; filename="{_Result.filename}"'
-    )
-    return response
+        return BackupResult(payload=payload, filename=filename, exported_at=now_utc)

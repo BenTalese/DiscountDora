@@ -72,6 +72,43 @@ export type ListAddEvent = {
     shopping_list_name: string;
 };
 
+// 2026-06-30 History tab — "you actually bought this on <date> at
+// <store>." Server-side projection of ticked shopping-list lines on
+// finished lists. `actual_unit_price` and `store_name` are both
+// nullable — a Finish with the till-total field left blank still
+// counts as a purchase for the timeline.
+export type PurchaseEvent = {
+    occurred_at: string; // ISO datetime (parent list's completed_at)
+    quantity: number;
+    actual_unit_price: number | null;
+    store_id: string | null;
+    store_name: string | null;
+    shopping_list_id: string;
+    shopping_list_name: string;
+};
+
+// 2026-06-30 History tab — "you cooked a recipe that uses this
+// ingredient." Server-side join across the item's linked recipes
+// and the CookEvent log. `meals_cooked` gives the timeline entry
+// an optional badge ("×3") on batch cooks.
+export type CookEvent = {
+    occurred_at: string; // ISO datetime
+    recipe_id: string | null;
+    recipe_name: string;
+    meals_cooked: number;
+};
+
+// 2026-06-30 History tab — expiry-date change trail. `kind` is one
+// of 'set' | 'pushed' | 'cleared'; `delta_days` only populated on
+// pushed entries.
+export type ExpiryEvent = {
+    occurred_at: string; // ISO datetime
+    kind: 'set' | 'pushed' | 'cleared';
+    previous_expiry_date: string | null; // ISO date (YYYY-MM-DD)
+    new_expiry_date: string | null;      // ISO date (YYYY-MM-DD)
+    delta_days: number | null;
+};
+
 // FU-211 — free-text "what I actually buy" reminders on a stock item
 // (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Everyday-user construct, separate from
 // the Product overlay; always present, never gated.
@@ -181,6 +218,17 @@ export type StockItemDetail = {
      *  status), newest first, capped on the server. The History tab
      *  humanises `added_via` ("auto: low stock" / "auto: recipe" / …). */
     recent_list_adds?: ListAddEvent[];
+    /** 2026-06-30 — three new history-tab feeds: what you actually bought,
+     *  which cooked recipes consumed this ingredient, and every expiry
+     *  transition. All capped on the server (see HISTORY_PER_KIND_CAP). */
+    purchase_events?: PurchaseEvent[];
+    cook_events?: CookEvent[];
+    expiry_events?: ExpiryEvent[];
+    /** 2026-06-30 — total number of history events that exist for this
+     *  item but were NOT included above because they fell past the
+     *  per-kind cap. Summed across every event kind. Drives the honest
+     *  "N older events not shown" footer under the timeline. */
+    history_older_count?: number;
     /** FU-211 — free-text "what I buy" reminders, ordered by position.
      *  Always present (not gated by products/money). */
     preferred_buys?: PreferredBuy[];

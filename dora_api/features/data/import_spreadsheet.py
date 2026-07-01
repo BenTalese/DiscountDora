@@ -45,6 +45,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.data.uploads import staged_path
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import bad_request, internal_server_error, not_found, ok
@@ -274,6 +275,11 @@ class InspectSpreadsheetHandler:
 @DATA_ROUTER.route("/import/spreadsheet/inspect", methods=["POST"])
 @has_request_body(InspectSpreadsheetRequest)
 def inspect_spreadsheet():
+    # FU-341 / FU-198 — import inserts arbitrary stock rows across
+    # the install. Same admin gate as backup restore.
+    _, err = require_admin()
+    if err is not None:
+        return err
     _Request: InspectSpreadsheetRequest = get_request_body()
     _Result = get_container().inject(InspectSpreadsheetHandler).handle(_Request)
     if isinstance(_Result, str):
@@ -617,6 +623,9 @@ class _HaltOnError(Exception):
 @DATA_ROUTER.route("/import/spreadsheet/commit", methods=["POST"])
 @has_request_body(CommitSpreadsheetRequest)
 def commit_spreadsheet():
+    _, err = require_admin()
+    if err is not None:
+        return err
     _Request: CommitSpreadsheetRequest = get_request_body()
     _Result = get_container().inject(CommitSpreadsheetHandler).handle(_Request)
     if isinstance(_Result, str):
@@ -637,3 +646,92 @@ def commit_spreadsheet():
             for r in _Result.rows
         ],
     })
+
+
+# ── Templates (FU-343) ─────────────────────────────────────────────────
+#
+# Downloadable per-section CSV templates so users don't have to guess the
+# schema. Headers come straight from `TARGET_FIELDS` above (the same
+# source of truth the auto-mapping + commit paths read) so a template
+# can never drift from what the importer accepts. CSV-only for now;
+# `.xlsx` with dropdown validation is a deferred follow-on (see FU-343
+# discussion — ship CSV first, revisit if users ask).
+#
+# Only stock_items is a real "section" today. The endpoint is scoped as
+# a section index so the frontend affordance stays the same shape when
+# more sections land later (recipes, shopping lists, etc.).
+
+
+@dataclass(slots=True)
+class ImportTemplate:
+    section: str
+    label: str
+    caption: str
+    headers: tuple[str, ...]
+    # One-line example row shown as the second line of the CSV so users
+    # see the expected shape at a glance. Optional cells may be blank.
+    example: tuple[str, ...]
+
+
+IMPORT_TEMPLATES: tuple[ImportTemplate, ...] = (
+    ImportTemplate(
+        section="stock_items",
+        label="Stock items",
+        caption="One row per pantry item. Only `name` is required; the rest are optional.",
+        headers=TARGET_FIELDS,
+        # Example values are illustrative — the level / location / group
+        # matchers are name-based, so any string that resembles an existing
+        # entity is a valid starting point for a real import.
+        example=("Rice", "In stock", "Pantry", "Grains", "2027-01-01", "no"),
+    ),
+)
+
+IMPORT_TEMPLATES_BY_SECTION: dict[str, ImportTemplate] = {t.section: t for t in IMPORT_TEMPLATES}
+
+
+@DATA_ROUTER.route("/import/templates", methods=["GET"])
+def list_import_templates():
+    # Same admin gate as the rest of import (see FU-341 / FU-198): only
+    # admins can invoke the importer, so only admins need the template
+    # index. Non-admins hitting this get a plain 403 rather than an
+    # index that hints at endpoints they can't use.
+    _, err = require_admin()
+    if err is not None:
+        return err
+    return ok({
+        "sections": [
+            {
+                "section": t.section,
+                "label": t.label,
+                "caption": t.caption,
+                "headers": list(t.headers),
+            }
+            for t in IMPORT_TEMPLATES
+        ],
+    })
+
+
+@DATA_ROUTER.route("/import/templates/<section>.csv", methods=["GET"])
+def download_import_template(section: str):
+    _, err = require_admin()
+    if err is not None:
+        return err
+    template = IMPORT_TEMPLATES_BY_SECTION.get(section)
+    if template is None:
+        return not_found("Import template", section)
+
+    # Build the CSV in memory — headers row + one example row so the shape
+    # is obvious. StringIO + csv.writer keeps escaping honest for names
+    # containing commas / quotes even in the illustrative row.
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(template.headers)
+    writer.writerow(template.example)
+    body = buf.getvalue().encode("utf-8")
+
+    from flask import Response
+    response = Response(body, mimetype="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="dora-import-{template.section}.csv"'
+    )
+    return response

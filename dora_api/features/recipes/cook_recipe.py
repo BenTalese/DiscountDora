@@ -1,9 +1,12 @@
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID
 
+from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import RECIPE_ROUTER
@@ -11,6 +14,16 @@ from dora_api.infrastructure.api_response import no_content, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+
+def _current_user_id() -> UUID | None:
+    raw = session.get("user_id")
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 class CookRecipeRequest(BaseModel):
@@ -31,13 +44,30 @@ class CookRecipeHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, request: CookRecipeRequest, recipe_id: UUID) -> CookRecipeResponse:
+    def handle(
+        self,
+        request: CookRecipeRequest,
+        recipe_id: UUID,
+        cooked_by_user_id: UUID | None = None,
+    ) -> CookRecipeResponse:
         _Recipe = self.repository.get(Recipe).by_id(recipe_id)
         if not _Recipe:
             return CookRecipeResponse(recipe_not_found = True)
         _Recipe.available_meals = (_Recipe.available_meals or 0) + request.meals_cooked
         # R-021 — last_made_on is now a Date stamp (which household day).
         _Recipe.last_made_on = household_today(self.repository)
+        # History-tab feed — persist the cook as a discrete event so the
+        # Stock Item detail can surface "Used in <recipe>" for every
+        # ingredient. Only recorded when the caller actually cooked >0
+        # meals (a zero-meal POST is used purely to bump `last_made_on`).
+        if request.meals_cooked > 0:
+            self.repository.add(CookEvent(
+                recipe_id = _Recipe.id,
+                recipe_name = _Recipe.name,
+                meals_cooked = request.meals_cooked,
+                cooked_by_user_id = cooked_by_user_id,
+                occurred_at = datetime.now(timezone.utc),
+            ))
         self.repository.save_changes()
         return CookRecipeResponse(available_meals = _Recipe.available_meals)
 
@@ -48,7 +78,7 @@ def cook_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Handler = get_container().inject(CookRecipeHandler)
     _Request: CookRecipeRequest = get_request_body()
-    _Response = _Handler.handle(_Request, recipe_id)
+    _Response = _Handler.handle(_Request, recipe_id, _current_user_id())
     if _Response.recipe_not_found:
         return not_found(Recipe.__name__, recipe_id)
     _Logger.info(

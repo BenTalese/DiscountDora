@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import insert, select
 
 from dora_api.app import db
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.data.backup import BACKUP_SCHEMA_VERSION
 from dora_api.features.data.uploads import staged_path
 from dora_api.features.data.restore_shared import (
@@ -359,6 +360,13 @@ class RestoreBackupHandler:
 @has_request_body(RestoreBackupRequest)
 def restore_backup():
     _Logger = logging.getLogger(__name__)
+    # FU-341 / FU-198 — restore inserts arbitrary rows across every
+    # table (users, app_settings, historic offers). Any authenticated
+    # caller could invoke it before; the gate closes that HIGH-severity
+    # hole.
+    _, err = require_admin()
+    if err is not None:
+        return err
     _Request: RestoreBackupRequest = get_request_body()
     _Result = get_container().inject(RestoreBackupHandler).handle(_Request)
     if isinstance(_Result, str):

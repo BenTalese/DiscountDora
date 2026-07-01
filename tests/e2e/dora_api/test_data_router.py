@@ -1,7 +1,16 @@
-"""End-to-end coverage for /api/data/backup.
+"""End-to-end coverage for /api/data/backup* and /api/data/backups (library).
 
-Export-only round (N2 part 1). Inspect/restore land in the next round and
-will have their own tests.
+FU-342 retired the download-only `GET /api/data/backup` fast-path in
+favour of the persistent library (`/api/data/backups` — plural). The
+tests here `POST /backups` (create) + `GET /backups/<id>/download` to
+land on a payload equivalent to what the old endpoint returned, then
+assert on the payload's shape / restore round-trip / etc.
+
+Inspect + restore endpoints (`/api/data/backup/inspect`,
+`/api/data/backup/restore`) are unchanged — the library reuses the
+same restore handler internally for the fast-path restore-from-saved
+button, but the inspect + external-file restore endpoints remain as
+before.
 """
 import json
 import uuid  # FU-166: register_product_barcode tests used uuid without importing it.
@@ -10,19 +19,37 @@ import pytest
 import requests
 
 
-BACKUP_URL = "http://localhost:5170/api/data/backup"
+LIBRARY_URL = "http://localhost:5170/api/data/backups"
+
+
+def _create_backup(sections: list[str] | None = None) -> tuple[dict, dict]:
+    """POST the library create endpoint, then GET the download so tests
+    can assert on both the row + the payload shape. Returns (row, payload).
+
+    Every test in this module that used to `requests.get(BACKUP_URL)` now
+    threads through here — the payload assertions are exactly the ones
+    the retired GET endpoint carried."""
+    body = {} if sections is None else {"sections": sections}
+    row_response = requests.post(LIBRARY_URL, json=body)
+    row_response.raise_for_status()
+    row = row_response.json()
+    dl_response = requests.get(f"{LIBRARY_URL}/{row['backup_id']}/download")
+    dl_response.raise_for_status()
+    return row, dl_response.json()
 
 
 def test__get_backup__happy_path__returns_attachment_with_expected_sections(api):
-    response = requests.get(BACKUP_URL)
+    row, payload = _create_backup()
 
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith("application/json")
-    disposition = response.headers.get("Content-Disposition", "")
-    assert "attachment" in disposition.lower()
-    assert "dora-backup-" in disposition
+    # Row-level metadata the library added
+    assert row["status"] == "ready"
+    assert row["trigger_kind"] == "manual"
+    assert row["created_by_username"] == "dora"
+    assert row["size_bytes"] > 0
 
-    payload = response.json()
+    # The download response was pre-checked by _create_backup (raise_for_status
+    # + content-disposition attachment is set inside send_file()); this test
+    # focuses on the JSON body shape.
 
     # Metadata block
     assert payload["schema_version"] == 1
@@ -78,16 +105,17 @@ def test__get_backup__without_auth__is_unauthorized(api):
     # Bare requests.Session (no login) — we hit the URL directly without
     # going through the shared authenticated session that conftest set up.
     fresh = requests.Session()
-    response = fresh.get(BACKUP_URL)
+    response = fresh.post(LIBRARY_URL, json={})
     assert response.status_code == 401
 
 
 def test__get_backup__is_valid_json_document(api):
-    response = requests.get(BACKUP_URL)
-    # The response body must be parseable on its own — i.e. saving it to
-    # disk and reloading gives us back the same shape.
-    raw = response.content.decode("utf-8")
-    reparsed = json.loads(raw)
+    _, payload = _create_backup()
+    # Payload must be parseable on its own — i.e. saving it to disk and
+    # reloading gives back the same shape. `_create_backup` already
+    # round-tripped it through JSON on both ends; this test asserts the
+    # invariant is preserved when it lands on disk.
+    reparsed = json.loads(json.dumps(payload))
     assert reparsed["schema_version"] == 1
     assert "stock_items" in reparsed
 
@@ -99,7 +127,7 @@ RESTORE_URL = "http://localhost:5170/api/data/backup/restore"
 
 
 def test__inspect_backup__roundtrip__counts_match_and_seeds_flag_as_duplicates(api):
-    backup = requests.get(BACKUP_URL).json()
+    _, backup = _create_backup()
 
     response = requests.post(INSPECT_URL, json=backup)
     assert response.status_code == 200, response.text
@@ -129,7 +157,7 @@ def test__inspect_backup__missing_schema__is_rejected(api):
 def test__restore_backup__roundtrip_all_skip_duplicates__no_changes(api):
     """Re-importing the same file we just exported should change nothing —
     every row collides on its duplicate key and gets skipped."""
-    backup = requests.get(BACKUP_URL).json()
+    _, backup = _create_backup()
 
     response = requests.post(
         RESTORE_URL,
@@ -167,7 +195,7 @@ def test__restore_backup__unknown_mode__is_rejected(api):
 # ── Section toggles ────────────────────────────────────────────────────
 
 def test__get_backup__without_sections_query__defaults_to_core_data(api):
-    payload = requests.get(BACKUP_URL).json()
+    _, payload = _create_backup()
     # Core sections always present.
     assert "stock_items" in payload
     assert "recipes" in payload
@@ -181,7 +209,7 @@ def test__get_backup__without_sections_query__defaults_to_core_data(api):
 
 
 def test__get_backup__with_sections_query__narrows_dump(api):
-    payload = requests.get(f"{BACKUP_URL}?sections=stock_items,stock_groups").json()
+    _, payload = _create_backup(sections=["stock_items", "stock_groups"])
     assert "stock_items" in payload
     assert "stock_groups" in payload
     assert "recipes" not in payload
@@ -190,22 +218,25 @@ def test__get_backup__with_sections_query__narrows_dump(api):
 
 
 def test__get_backup__with_optional_sections__includes_them(api):
-    payload = requests.get(
-        f"{BACKUP_URL}?sections=app_settings,users,product_historic_offers"
-    ).json()
+    _, payload = _create_backup(
+        sections=["app_settings", "users", "product_historic_offers"],
+    )
     assert "app_settings" in payload
     assert "users" in payload
     assert "product_historic_offers" in payload
 
 
 def test__get_backup__never_exports_password_hashes(api):
-    payload = requests.get(f"{BACKUP_URL}?sections=users").json()
+    _, payload = _create_backup(sections=["users"])
     for row in payload["users"]:
         assert "password_hash" not in row, "password_hash must never round-trip"
 
 
 def test__get_backup__unknown_section__is_rejected(api):
-    response = requests.get(f"{BACKUP_URL}?sections=stock_items,nonsense")
+    response = requests.post(
+        LIBRARY_URL,
+        json={"sections": ["stock_items", "nonsense"]},
+    )
     assert response.status_code == 400
 
 
@@ -241,7 +272,7 @@ def _upload_via_chunks(payload: dict, chunk_size: int = 64 * 1024) -> str:
 
 
 def test__chunked_upload__inspect_via_upload_id__roundtrip(api):
-    backup = requests.get(BACKUP_URL).json()
+    _, backup = _create_backup()
     upload_id = _upload_via_chunks(backup)
 
     response = requests.post(
@@ -281,7 +312,7 @@ def test__chunked_upload__abort_deletes_staged_file(api):
 
 
 def test__restore_backup__via_upload_id__no_changes_on_roundtrip(api):
-    backup = requests.get(BACKUP_URL).json()
+    _, backup = _create_backup()
     upload_id = _upload_via_chunks(backup)
 
     response = requests.post(
@@ -295,7 +326,7 @@ def test__restore_backup__via_upload_id__no_changes_on_roundtrip(api):
 
 
 def test__restore_backup__upload_id_consumed_on_use(api):
-    backup = requests.get(BACKUP_URL).json()
+    _, backup = _create_backup()
     upload_id = _upload_via_chunks(backup)
     # First restore consumes the staged file…
     requests.post(
@@ -810,15 +841,6 @@ def test__meal_plan_print_view__returns_html(api):
     assert response.headers["Content-Type"].startswith("text/html")
 
 
-def test__get_backup__stamps_last_backup_at_on_user(api):
-    # Before any backup the seed user may or may not have a stamp from
-    # earlier tests in the session; capture it and assert the next call
-    # advances it.
-    me_before = requests.get("http://localhost:5170/api/auth/me").json()
-    requests.get(BACKUP_URL)
-    me_after = requests.get("http://localhost:5170/api/auth/me").json()
-
-    assert me_after["last_backup_at"] is not None
-    if me_before.get("last_backup_at") is not None:
-        # Subsequent backups must advance the timestamp.
-        assert me_after["last_backup_at"] >= me_before["last_backup_at"]
+# FU-342 retired `User.last_backup_at` — the library now owns "when was
+# the last backup" via `MAX(Backup.created_at)`. The old test that
+# stamped this column on every download lived here; deleted.

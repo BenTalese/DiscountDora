@@ -2,6 +2,12 @@ import logging
 import os
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
+# Load repo-root .env before any dora_api import — configuration_manager reads
+# os.environ at import time. Real shell/Docker env vars still win (override=False).
+load_dotenv(find_dotenv(), override=False)
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from flask_cors import CORS

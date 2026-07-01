@@ -12,7 +12,10 @@ The override sits at the repo's tests/ root so it loads before any
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_REPO_ROOT / ".env", override=False)
 (_REPO_ROOT / "data").mkdir(parents=True, exist_ok=True)
 os.environ.setdefault(
     "DORA_DB_PATH",

@@ -1,5 +1,11 @@
 # Dashy Dora — Implementation Prompt Pack
 
+> **⚠️ STATUS COLUMN IS STALE (verified 2026-07-02).** The 🟢/🟡/🔵 legend below
+> reflects *readiness at pack-authoring time*, not what's been run. In reality all
+> Wave-A + Wave-B prompts shipped and every Wave-C brief produced its proposal
+> (most now built via `IMPL_PLAN_*`). Read this as a historical execution map. For
+> live per-doc state + where-we-are, see `PROJECT_STATE.md` (front door + register).
+
 Generated from `Feedback / Fixes (MASTER).md` via `FEEDBACK_TRIAGE_AND_PLAN.md`.
 
 ## How to use this pack

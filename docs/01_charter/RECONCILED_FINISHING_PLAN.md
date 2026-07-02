@@ -20,7 +20,7 @@
 | `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` | One capability registry (Phase 1/3) | Untangling the assistant; pairs with state-ownership |
 | `MULTI_USER_READINESS.md` | Pre-flight for households/tenancy (Phase 4) | Before any multi-user work |
 | `AUTH_ASSISTANT_SECURITY_FINDINGS.md` | Security fixes (CSRF/email → Phase 0; rest → Phase 4) | Phase 0 hardening + pre-sale |
-| `00_DOCS_INDEX.md` + `PROMPT_PLAN_*`, `DASHY_DORA_CHAMPION_PLAN.md`, `COMMERCIALIZATION_REPORT.md` | The underlying vision/spec: the Charter, Part 6/7/8 tasks | For the source spec behind a phase |
+| `PROJECT_STATE.md` (register) + `PROMPT_PLAN_*`, `DASHY_DORA_CHAMPION_PLAN.md`, `COMMERCIALIZATION_REPORT.md` | The underlying vision/spec: the Charter, Part 6/7/8 tasks | For the source spec behind a phase |
 
 **Orchestration order:** Phase 0 → run `prompts/` Waves A + B + INV (incl. INV-6). Phase 1 → the loop: state-ownership enabler first, then shopping-list + cook-mode, each gated by its C-brief/proposal. Phase 2 → extract scraper + build the ingestion API (§6.6). Phase 3 → champion (Part 8). Phase 4 → commercialize (Part 7).
 

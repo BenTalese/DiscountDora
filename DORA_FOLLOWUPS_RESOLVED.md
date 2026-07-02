@@ -10,6 +10,40 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-435 — `.gitignore` `data/` pattern unanchored → `backup_library.py` never committed
+- **Raised:** 2026-07-02 (P8-02 close).
+- **Type:** finding (latent build/history bug).
+- **What:** an unanchored `.gitignore` `data/` pattern silently ignored new files
+  under `dora_api/features/data/`, so `backup_library.py` (FU-342) appeared
+  uncommitted.
+- **Resolved:** 2026-07-02 — `.gitignore` patterns were root-anchored, and code
+  verification confirms `dora_api/features/data/backup_library.py` **is now
+  git-tracked** (last touched in commit `37165fc "P8-02 and P8-05"`), along with
+  its migration `e5f9c2a8b4d6_20260701_backup_library.py`. The commit gap is
+  closed. *Residual:* since the runtime never previously had this code, a backend
+  smoke-test of its endpoints is still worth doing before relying on it — but the
+  build/history bug itself is fixed.
+
+## [RESOLVED] FU-446 — Doc indexes incomplete: ~23 orphaned docs + DOC_GRAPH gaps
+- **Raised:** 2026-07-02 (doc-register audit).
+- **Type:** finding.
+- **What:** ~15 proposals/impl-plans + ~9 investigations were unreferenced by
+  `00_DOCS_INDEX.md` / `00_DOC_GRAPH.md`, which also cited non-existent files.
+- **Resolved:** 2026-07-02 — indexes retired (see FU-428). The per-doc register
+  now lives inside `PROJECT_STATE.md` and accounts for **all** 107 active docs, so
+  there is no separate index to be orphaned from. "Orphaned" is no longer a
+  meaningful state.
+
+## [RESOLVED] FU-428 — DOC_GRAPH.md is stale — proposals not indexed
+- **Raised:** 2026-07-01 (full-docs audit).
+- **Type:** finding (doc drift on the anti-drift spine).
+- **What:** `00_DOC_GRAPH.md` indexed only ~25 of 48 proposals and cited 2
+  non-existent files; the per-prompt required-reading map had rotted.
+- **Resolved:** 2026-07-02 — per user request to reduce doc count. `DOC_GRAPH.md`
+  shrunk to a retired stub and `00_DOCS_INDEX.md` deleted; the anti-drift
+  "assemble your own required reading" rule now lives directly in `CLAUDE.md` /
+  `AGENTS.md`, and `PROJECT_STATE.md`'s register is the authoritative doc map.
+
 ## [RESOLVED] FU-195 — Onboarding starter-data: in-page import + groups/locations "some" (trims from C-5.5)
 - **Raised:** 2026-06-16 (Onboarding C-5.5)
 - **Type:** leftover

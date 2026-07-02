@@ -9,6 +9,180 @@ next.
 
 ---
 
+## 2026-07-02 — Code-verified the PROJECT_STATE workstream table
+
+**Why:** User spotted a wrong state ("Meal Plans 🔵 designed-not-built" — he knew
+it was built) and asked that the dashboard be verified against the **codebase**,
+not just docs. Root cause: the dashboard's Major-workstreams rows were hand-carried
+from the stale June report and never reconciled against the register I'd just built
+(which had Meal Plans/Alerts correctly as ✅).
+
+### What was done
+
+- **4 parallel `general-purpose` agents** verified all 17 workstreams against real
+  `web_app/` + `dora_api/` code (pages, routes, components, features, models).
+
+### Corrections applied to `PROJECT_STATE.md`
+
+- **Meal Plans:** 🔵 "not built" → ➗ **built** (3 pages, 13 components,
+  board/calendar/templates/shortfall + 8 backend handlers; `IMPL_PLAN_MEAL_PLANS`
+  + `_REBUILD` shipped). Awaiting the user's screen-style pick + feedback, not
+  construction. Reframed the needs-attention item accordingly.
+- **Alerts:** 🔵 "designed only" → ✅ **fully built** (`/alerts` hub,
+  `ALERT_ROUTER`, price-alert/preference/interaction entities, email-digest + push).
+- **Postgres:** dashboard said "deferred (FU-045)" → ✅ **done + default datastore**
+  (`configuration_manager.py`; SQLite fallback via `DORA_DB_PATH`). FU-045 was
+  already resolved 2026-06-26; added a dedicated Postgres row.
+- **Auth shell:** ✅ → ➗ (8 pre-auth surfaces, no standalone register page).
+- Header now states states are **code-verified**, not doc-derived.
+
+### FUs resolved (proven done by code verification)
+
+- **FU-435** (`backup_library.py` "never committed") → RESOLVED: `git ls-files`
+  confirms it's tracked (committed in `37165fc`) + its migration. Removed from the
+  needs-attention list. Residual: a backend smoke-test is still worth doing.
+- The other 12 workstreams verified **accurate** as-was (Stock Overview, Stock Item
+  Detail, Products-overlay, Buy-verdict, Barcode, Cook Mode, Cookbook, Shopping
+  Lists, Onboarding, Data/Backup, Ingestion API, Merchant→Store) — incl.
+  confirming `BuyVerdictCard` is genuinely unwired dead code (FU-437 real).
+
+### Next up
+
+- User to give Meal Plans UX-style feedback (now the clear top product decision).
+- Still open: FU-447 (security), FU-445 (stale headers).
+
+---
+
+## 2026-07-02 — Doc consolidation: fewer files (user request)
+
+**Why:** User wants fewer docs ("one massive doc is fine"), and specifically:
+regen routine → CLAUDE.md; DOC_REGISTER → into PROJECT_STATE; shrink DOC_GRAPH +
+DOCS_INDEX ("I never look at them").
+
+### What changed
+
+- **`DOC_REGISTER.md` → merged into `PROJECT_STATE.md`** as a "Document register"
+  section (bottom half). File deleted. Dashboard stays the skimmable top half.
+- **`PROJECT_STATE_REGEN.md` → merged into `CLAUDE.md`** as a "Regenerating
+  PROJECT_STATE.md" section (dashboard vs register cadences + agent briefs +
+  status key). File deleted.
+- **`docs/00_DOCS_INDEX.md` → deleted** (git rm). Fully redundant: register lists
+  every doc; folder map already in CLAUDE.md. Front-door links in
+  DASHY_DORA_CHAMPION_PLAN.md + RECONCILED_FINISHING_PLAN.md repointed to
+  PROJECT_STATE.md.
+- **`docs/00_DOC_GRAPH.md` → shrunk to a retired stub.** The anti-drift
+  "assemble your own required reading" rule now lives in CLAUDE.md session-start
+  step 2 (and AGENTS.md front-door pointer updated).
+- **Net:** `docs/` root went from 4 meta-files to 1 stub + INGESTION_GUIDE.
+  Everything now lives in `PROJECT_STATE.md` (state) + `CLAUDE.md` (process).
+
+### Ledger reconciliation
+
+- **FU-428** (DOC_GRAPH stale) + **FU-446** (orphaned docs / index gaps) → moved
+  to `DORA_FOLLOWUPS_RESOLVED.md`: retiring the indexes + register-as-SoT
+  dissolves both (nothing to be orphaned from). Dashboard needs-attention item 13
+  updated to keep only FU-429 (assistant-arch/SLM collision).
+- FU-445 (stale headers) + FU-447 (security) still open; references repointed
+  from DOC_REGISTER to the PROJECT_STATE register.
+
+### Next up
+
+- Same as prior entry: user to action FU-447 (security) + decide the deferred
+  cleanup (batch-flip 15 stale headers, FU-445).
+
+---
+
+## 2026-07-02 — Full doc-register audit (107 docs verified + mapped)
+
+**Why:** User will trust PROJECT_STATE.md as source of truth and asked whether
+every doc's state had actually been verified/mapped. It had not — the dashboard
+was synthesized from process logs, not a per-doc audit. Closed that gap.
+
+### What was done
+
+- **Full inventory** via `Glob docs/**/*.md`: 107 active planning docs + 157
+  historical `00_original_spec/` files (bucketed, not per-file).
+- **5 parallel `general-purpose` auditors** (gap-free slices: proposals ×2,
+  prompts, investigations+legacy, charter+feedback+nav+scratch). Each opened
+  every doc in its slice and cross-checked claims against worklog + CHANGELOG +
+  git. 107/107 classified.
+- **`docs/DOC_REGISTER.md`** (new) — complete per-doc state map (one row each:
+  state, purpose, evidence, indexed?, action). The "everything accounted for"
+  backing for the dashboard. Linked from PROJECT_STATE.md.
+- **Reconciled `PROJECT_STATE.md`** — added the standing HIGH-CSRF security
+  finding to "needs attention" (item 0; it was invisible before), linked the
+  register.
+- **Trust-banners** on the two stale nav docs so their status columns don't
+  mislead: `00_DOC_GRAPH.md` (FU-428) and `03_prompts/00_INDEX.md`.
+
+### Key findings (logged as FUs)
+
+- **FU-447** — security: AUTH_ASSISTANT HIGH CSRF + MEDIUM email-change unfixed
+  (was orphaned from any status view).
+- **FU-446** — ~23 orphaned docs + DOC_GRAPH gaps (enumerates/extends FU-428).
+- **FU-445** — ~15 shipped docs carry stale "no code yet" headers (bodies fine).
+- Supersede chains confirmed: SIMPLE_MODE→products-overlay;
+  SHOPPING_LIST_REDESIGN→UX_V2; MEAL_PLANS proposal→IMPL→IMPL_REBUILD (live).
+- 8 investigations still OPEN/need action; legacy folder safely historical.
+- Scratch: PROGRESS_REPORT + FEEDBACK_AUDIT (June) safe to delete once FU
+  cross-refs unneeded; PRICING_REASSESSMENT + WASTE_ASSESSMENT executed;
+  MINIMAL_USER_PRODUCTS_OFF the only genuinely untriaged note.
+
+### Decisions / next up
+
+- `DOC_REGISTER.md` refresh cadence documented in `PROJECT_STATE_REGEN.md`:
+  rebuild only when docs are added/superseded/change state, not every chunk.
+- **Deferred remediation** (all logged): batch-flip stale headers (FU-445),
+  backfill indexes + rebuild DOC_GRAPH (FU-446/428), action security (FU-447).
+- User to review DOC_REGISTER.md + reconciled PROJECT_STATE.md.
+
+---
+
+## 2026-07-02 — PROJECT_STATE.md living dashboard + regeneration wiring
+
+**Why:** User was severely lost in the docs library — no single place to see
+what's done / outstanding / stale / needs-attention at a glance. Two prior
+attempts (`99_scratch/PROGRESS_REPORT_2026-06-12.md`,
+`FEEDBACK_AUDIT_2026-06-12.md`) went stale because the date was in the filename,
+they lived in `99_scratch/`, and nothing regenerated them.
+
+### What shipped (docs/process only — no app code)
+
+- **`PROJECT_STATE.md`** (repo root) — new living, human-readable front door:
+  where-we-are prose + phase board + workstreams table + "needs your attention"
+  shortlist (top 15 of 155 FUs) + recently-shipped + where-the-detail-lives.
+  Fixed filename (no date), summarises + links out rather than embedding the
+  rot-prone per-bullet audit. Populated from a fresh ground-truth audit
+  (worklog top entries + CHANGELOG + RUNBOOK live-status + FOLLOWUPS shortlist),
+  not the stale June numbers.
+- **`docs/PROJECT_STATE_REGEN.md`** — the regeneration routine: agent brief +
+  canonical section order + shared status vocab (✅/➗/🟡/🔵/⚪/🔴/🕸). This is
+  the sync mechanism the prior attempts lacked.
+- **`CLAUDE.md`** — wired both ends: session-start step 0 opens PROJECT_STATE
+  first as the front door; work-unit close-gate now refreshes it every chunk
+  (spawn regen agent for substantive units, hand-edit rows for trivial ones).
+- **`docs/00_DOCS_INDEX.md`** — top banner now points at PROJECT_STATE as the
+  front door; index demoted to "floor plan for the deep library".
+
+### Decisions
+
+- User picked "both layers" (per-doc status headers + central board) + agent-
+  regenerated sync, then clarified the real need is ONE human-digestible living
+  doc. Delivered the central board + regen mechanism first. **Deferred:** the
+  per-doc status headers across ~80 planning docs — with agent-regeneration
+  reading ground truth, the dashboard is accurate without them, so we're
+  validating whether the single doc suffices before backfilling 80 files.
+
+### Next up
+
+- User to review `PROJECT_STATE.md` and confirm the shape works.
+- If yes and they still want per-doc headers, backfill them as a follow-on.
+- Original ask ("Finish task DS1.txt") was a stale pre-rebuild scratch note
+  (describes the retired 5-theme DS1 world, not the current paired-family
+  themes); recommended deleting `docs/99_scratch/Finish task DS1.txt`.
+
+---
+
 ## 2026-07-02 — FU-195: onboarding starter-data per-name picks + inline paste-rows
 
 **Why:** FU-195 flagged two C-5.5 trims (L30 inline import + L34

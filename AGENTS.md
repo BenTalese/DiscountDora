@@ -15,7 +15,9 @@ To keep handoffs clean:
    redirects.
 2. **Planning docs live at `docs/` in this repo, organised by lifecycle.**
    Entry points:
-   - `docs/00_DOCS_INDEX.md` — top-level navigation.
+   - `PROJECT_STATE.md` (repo root) — **the front door**: where every phase and
+     workstream stands + the per-doc register. Start here. (Regeneration routine
+     and the full session ritual live in `CLAUDE.md`.)
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
      `STATUS.md`).

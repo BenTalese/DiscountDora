@@ -1,6 +1,6 @@
 # Dashy Dora — Champion Vision & Prompt Plan (Part 8)
 
-> **Doc library:** see [00_DOCS_INDEX.md](00_DOCS_INDEX.md). The **Dora Decision Charter** (Part II) and the verify-state-first procedure (Part III) in this doc govern the entire library.
+> **Doc library:** see [PROJECT_STATE.md](../../PROJECT_STATE.md) (front door + document register). The **Dora Decision Charter** (Part II) and the verify-state-first procedure (Part III) in this doc govern the entire library.
 
 A single-file strategic report **and** prompt plan for turning Discount Dora into
 **Dashy Dora**, the category champion. Companion to the earlier docs

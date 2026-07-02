@@ -9,19 +9,28 @@ To keep handoffs clean:
 
 ## On session start — ALWAYS
 
+0. **Open `PROJECT_STATE.md` (repo root) first.** It is the single
+   human-readable front door — where every phase and workstream is up to, what
+   needs the user's attention, what shipped recently. Read it to orient before
+   diving into the deeper logs below. It is a *living* doc, regenerated at each
+   work-unit close-gate (see "Regenerating PROJECT_STATE.md" below); if it looks
+   out of date, that's a signal the last session skipped its close-gate — trust
+   `DORA_WORKLOG.md` + `CHANGELOG.md` over it and regenerate it. Its bottom half
+   is the **document register** — the per-doc verified state of the whole library.
 1. **Read the last entry in `DORA_WORKLOG.md`** (at this repo's root). It tells
    you what was just done, what decisions were made, and what's next. If the
    last entry says "Next up: X", that's your starting point unless the user
    redirects.
 2. **Planning docs live at `docs/` in this repo, organised by lifecycle.**
-   Entry points:
-   - `docs/00_DOCS_INDEX.md` — top-level navigation.
-   - `docs/00_DOC_GRAPH.md` — **per-prompt required-reading map.** Before
-     running any `03_prompts/` prompt, open its section here and read every
-     cited doc (charter anchors, engineering rules, feedback bullets, related
-     proposals/investigations, open follow-ups, cross-prompt dependencies).
-     This is the anti-drift spine — skipping it is how prompts ship in
-     isolation and silently violate the charter.
+   `PROJECT_STATE.md` (front door + document register) is the map of what
+   exists and where it stands — start there, not a separate index. Folders:
+   - **Anti-drift rule (before running any `03_prompts/` prompt):** assemble its
+     required reading yourself — the governing proposal/impl-plan in
+     `04_proposals/`, the relevant charter anchors + engineering rules
+     (`01_charter/`), the feedback bullets it targets (`02_feedback/`), and any
+     open follow-ups on that surface. Skipping this is how prompts ship in
+     isolation and silently violate the charter. (`docs/00_DOC_GRAPH.md` is a
+     legacy stub of this map, known stale — don't rely on it.)
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
      `ENGINEERING_STANDARDS.md` — the code/architecture rules
@@ -77,6 +86,13 @@ Append a new entry to `DORA_WORKLOG.md` using the template at the top of that
 file. Do this even if the unit was partial or blocked — the next session needs
 to know where you stopped and why.
 
+**Refresh `PROJECT_STATE.md`** (the human-readable front door). For a substantive
+unit, spawn the regeneration agent (see "Regenerating PROJECT_STATE.md" below) so
+the dashboard is rebuilt from ground truth; for a trivial unit, hand-edit just the
+affected row(s) + the "Recently shipped" and "Regenerated:" lines. This is what
+stops it going stale — do not skip it. If your unit changed nothing about where any
+workstream stands (e.g. a pure doc tidy), no refresh is needed.
+
 **Also update the follow-ups ledger** with anything the current job spun off.
 **There are two separate ledgers — pick the right one for each item:**
 
@@ -114,6 +130,39 @@ to know where you stopped and why.
   the stateful record until the bug is confirmed gone.
 
 If the unit produced no new loops and no new verify checks, no edit is needed.
+
+## Regenerating PROJECT_STATE.md
+
+`PROJECT_STATE.md` (repo root) is the single human-readable front door + the
+document register. It's a *living* doc — **regenerated in place, never re-dated or
+re-created under a new filename** (the retired `99_scratch/PROGRESS_REPORT_*` /
+`FEEDBACK_AUDIT_*` went stale precisely because the date was in the filename and
+nothing refreshed them — don't repeat that). Keep the top half skimmable (~2-min
+read); summarise and let detail live in the logs.
+
+**Two halves, different refresh cadences:**
+
+- **Dashboard (top)** — refresh at every substantive close-gate. Spawn a
+  `general-purpose` agent with this brief: *"Compile the current state of Dashy
+  Dora. Read, newer-wins: `DORA_WORKLOG.md` top ~10 entries; `CHANGELOG.md`
+  `[Unreleased]`; `docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md` live-status;
+  `DORA_FOLLOWUPS.md` (count open; extract only the ~15 that need a decision or a
+  running-app check now); `RECONCILED_FINISHING_PLAN.md` §5 for the phase frame.
+  Return tight markdown for: Where-we-are (3-5 sentences) · Phase board · Major
+  workstreams · ⚠️ Needs-attention (top ~15) · Recently-shipped (~10). Synthesise,
+  don't dump."* Drop the output into the dashboard sections, preserving order.
+- **Document register (bottom)** — rebuild only when docs are **added, superseded,
+  or materially change state** (not every chunk; a periodic re-verify is enough).
+  Fan out ~5 parallel `general-purpose` agents over gap-free slices of
+  `Glob docs/**/*.md` (partition by folder; split the large `04_proposals/`;
+  exclude the 157 historical `00_original_spec/` files as one bucket). Each reads
+  worklog-top + CHANGELOG once, opens every doc in its slice, and returns one row
+  per doc: `Doc | Type | State | Purpose | Evidence`. Consolidate, then reconcile
+  any dashboard row the per-doc reality contradicts.
+
+**Shared status key:** ✅ done-clean · ➗ done-with-carve-outs · 🟡 active/in-progress
+· 🔵 designed-not-built · ⚪ not-started · 🔴 needs-a-decision · 🕸 stale · 📦 superseded
+· 🗄 historical.
 
 **MANDATORY — reported defects you conclude are "non-issues" still get a
 follow-up.** When a prompt (or the user) reports a bug and your investigation

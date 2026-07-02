@@ -53,6 +53,32 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-447 — Security: AUTH_ASSISTANT findings (HIGH CSRF + MEDIUM email-change) still unfixed
+- **Raised:** 2026-07-02 (surfaced by the full doc-register audit).
+- **Type:** finding (security).
+- **What:** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` (dated
+  2026-06-04, "Draft for discussion") records a **HIGH-severity CSRF** flaw and a
+  **MEDIUM email-change** flaw. No fix is logged in CHANGELOG/worklog; the report
+  is still `[OPEN]` with the findings standing.
+- **Why deferred:** The report was written but never actioned; it's orphaned from
+  the "needs attention" view, so it silently aged.
+- **Recommended resolution:** now — review the two findings and decide fix-vs-accept
+  before more Phase-3 champion work. Now surfaced at the top of `PROJECT_STATE.md`.
+
+## [OPEN] FU-445 — Stale "no code yet" status headers on ~15 shipped docs
+- **Raised:** 2026-07-02 (doc-register audit).
+- **Type:** finding.
+- **What:** ~13 `IMPL_PLAN_*` (Alerts, Cart, Cookbook, Cook-Mode, Dashboard,
+  Error-Handling, Ingestion, Meal-Plans, State-Ownership, Stock-Item-Detail,
+  Stock-Overview, Waste) + 2 proposals (Auth-Shell, Buy-Verdict-Oracle) still carry
+  a top "Status: … no code yet / Implementing" line despite the feature having fully
+  shipped. Doc *bodies* are accurate design records — only the header lies. Full list
+  in the `PROJECT_STATE.md` document register (marked "stale header").
+- **Why deferred:** Purely cosmetic per-file edit; batch it rather than interleave.
+- **Recommended resolution:** opportunistic — batch-flip each header to a
+  done/record status (e.g. "✅ Shipped — see CHANGELOG"). The `PROJECT_STATE.md`
+  register already carries the truth, so this is de-risked, not urgent.
+
 ## [OPEN] FU-444 — `test__all_axes_thin__collapses_to_single_not_enough_history` fails on pre-existing composer behaviour
 - **Raised:** 2026-07-02 (surfaced while running `pytest` for the Sufficient-band axe close-gate).
 - **Type:** finding (pre-existing, not introduced this session).
@@ -147,27 +173,6 @@ long session summary. Distinct from the other logs:
   keep/shrink, the P8-05 endpoint already has the shape to accept a
   crowd-baseline field later.
 
-## [OPEN] FU-435 — `.gitignore` `data/` pattern was unanchored → `backup_library.py` never committed
-- **Raised:** 2026-07-02 (P8-02 close — surfaced when the new `off_lookup.py` refused to stage).
-- **Type:** finding (latent build/history bug).
-- **What:** `.gitignore` line 16 read `data/` (unanchored), which
-  matched **any** directory named `data`, including
-  `dora_api/features/data/`. Existing tracked files under that path
-  survived via history, but any *new* file added there was silently
-  ignored. This session's `off_lookup.py` refused to stage; a check
-  turned up **`dora_api/features/data/backup_library.py`** — a real
-  feature file authored 2026-07-01 (FU-342 backup library) that was
-  never actually committed. The code was thought to be live but is
-  only on the local machine.
-- **Fix applied this session:** root-anchored the patterns
-  (`/data/`, `/cache/`, `/logs/`) so unrelated `data/` subdirs stay
-  visible. `off_lookup.py` now stages.
-- **Recommended resolution:** stage + commit `backup_library.py` in
-  a separate commit (it's not P8-02's; keep the trail clean). Verify
-  its endpoints match the docstring — FU-342 CHANGELOG entry should
-  line up, but the runtime never had this code merged so a smoke test
-  is warranted before shipping.
-
 ## [OPEN] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
 - **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).
 - **Type:** finding (pre-existing, not touched by P8-02).
@@ -221,13 +226,6 @@ long session summary. Distinct from the other logs:
 - **What:** `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` proposes **one capability registry + two renderers** to collapse the three overlapping decision systems ([tools.py](dora_api/features/assistant/tools.py) server-side, [doraIntents.ts](web_app/src/services/doraIntents.ts) client rule engine, [doraContextualActions.ts](web_app/src/services/doraContextualActions.ts) client contextual chips) — none of which agree on what Dora can do. Proposal has been *augmented* multiple times (§2.2.1 mutation-confirmation model, §7 LLM-provider/connectivity) but **the structural refactor was never built** — all three systems still exist, no `CapabilityRegistry` exists anywhere, and `DoraChat.vue`'s missing-ingredients recompute (the Type-A duplication called out in §1) hasn't been deleted. **Collides with the in-flight SLM replacement** (memory `project_dora_slm_assistant`): the SLM direction may supersede parts of this proposal (rule-engine deletion becomes trivial once the SLM is always available), keep others (the capability registry is still the right shape for the SLM to call), or invalidate the whole thing. Nobody has reconciled the two directions.
 - **Why deferred:** the SLM work was in-flight when the proposal was drafted; sequencing was never firmed up.
 - **Recommended resolution:** **discussion first, not build** — a short session to reconcile: (a) which parts of the proposal survive the SLM pivot, (b) whether the capability registry lands before/after the SLM, (c) fate of the client-side rule engine (`doraIntents.ts`) once the SLM is the default. Outcome should either be a refreshed proposal or an explicit "superseded by SLM work, close" call. Tightly coupled to [[FU-390]] (P5-05 eval suite — tests whichever architecture wins) and [[FU-386]] (dangling client-only `doraContextualActions.ts` handle from the state-ownership plan).
-
-## [OPEN] FU-428 — DOC_GRAPH.md is stale — 22 proposals/IMPL plans not indexed
-- **Raised:** 2026-07-01 (full-docs audit).
-- **Type:** finding (doc drift on the anti-drift spine).
-- **What:** `docs/00_DOC_GRAPH.md` is CLAUDE.md's "per-prompt required-reading map" — but 22 of 41 files under `04_proposals/` are not mentioned anywhere in it. Missing: `PROPOSAL_COOKBOOK_CARD_REVISION`, `PROPOSAL_PRODUCTS_AS_OVERLAY`, `PROPOSAL_RECIPE_IMAGE_STEPS`, `PROPOSAL_SHOPPING_LIST_UX_V2`, `PROPOSAL_SIMPLE_MODE`, `PROPOSAL_STOCK_ITEM_DETAIL`, `PROPOSAL_SUPPORT_CHANNEL`, `PROPOSAL_TEST_SUITE_IMPROVEMENTS`, `PROPOSAL_WASTE_MINIMISATION`, and all 13 `IMPL_PLAN_*.md` files. Prompts that would trigger these docs will not find them via the graph — silent under-reading.
-- **Why deferred:** each addition wants a real "who triggers it, which docs it cross-links to" pass; not a boilerplate append.
-- **Recommended resolution:** opportunistic — when a prompt in `03_prompts/` next fires against one of the missing docs, add its graph entry as part of that unit. If it drags on, do a dedicated sweep pass (~1 hour).
 
 ## [OPEN] FU-426 — Waste-page scratch assessment: confirm fully absorbed by C-waste
 - **Raised:** 2026-07-01 (docs audit).

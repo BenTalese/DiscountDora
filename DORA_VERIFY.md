@@ -362,7 +362,6 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Toggling group-by-location → none → group-by-merchant doesn't quietly mutate saved order
 
 ### P6-01 Chunk 7 — planned shop day — origin FU-076
-- [ ] Migration `e1a4c7b2f9d0` applies; restart API + web app
 - [ ] Open a list → header chip reads "No shop day" → click → date dialog → save 2026-07-01 → chip updates → refresh → still set
 - [ ] Clear the date via Clear button → chip → "No shop day"
 - [ ] Create a list via *New list* dialog with a date → detail loads → chip shows the date
@@ -384,12 +383,6 @@ surface — pick a surface, walk it top-to-bottom.
 ## Stock
 
 ### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
-- [ ] Fresh install (or after `alembic upgrade head` from an existing DB) — Settings → Stock levels shows exactly **three rows**: Stocked (seq 0), Low Stock (seq 1), Out of Stock (seq 2). No "Sufficient Stock" row anywhere
-- [ ] Any StockItem that was on "Sufficient Stock" in the pre-migration DB now sits on "Stocked" (spot-check via Stock Overview)
-- [ ] StockLevelChange history for items that had transitions through Sufficient still shows "Sufficient Stock" in the history rail (denormalised name column preserved the audit trail); the FK column is null for those historic rows
-- [ ] Stock Overview footer counts show 3 level chips (Stocked / Low / Out) — no Sufficient chip. Recompute live as filters change
-- [ ] StockLevelDot component: three visual states — green + "OK" (Stocked), red + "Low" (Low), muted (Out). No "Mid" abbreviation anywhere
-- [ ] Stock Overview level filter dropdown lists only 3 options (Stocked / Low / Out)
 - [ ] Finishing a shopping list — every ticked item flips to "Stocked" (was "Well-Stocked"). No level-override UI still labels a "Sufficient" middle option
 - [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out)
 - [ ] Alerts "Mark as restocked" action — the item's level becomes "Stocked"

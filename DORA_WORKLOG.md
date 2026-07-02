@@ -9,6 +9,396 @@ next.
 
 ---
 
+## 2026-07-02 — FU-195: onboarding starter-data per-name picks + inline paste-rows
+
+**Why:** FU-195 flagged two C-5.5 trims (L30 inline import + L34
+per-name group/location picks) as "opportunistic". Actioned as a
+compact unit — both hit the same wizard step and share test
+infrastructure.
+
+### What shipped
+
+- **Backend** — `SeedRequest` gained optional `group_names: list[str] | None`
+  and `location_paths: list[str] | None` filters
+  ([`onboarding.py`](dora_api/features/onboarding/onboarding.py)).
+  Semantics: bool `False` short-circuits regardless of filter; bool `True`
+  + filter `None` seeds every default (backward compat); bool `True` +
+  provided filter seeds the intersection. Location paths use "Zone" for a
+  top-level zone alone or "Zone/Child" for a nested area. A child path
+  implicitly creates its parent zone (FK requirement) and the auto-created
+  parent does **not** count as skipped — it's a silent prerequisite, not
+  a duplicate.
+- **Frontend model** — `SeedRequest` in
+  [`models/onboarding.ts`](web_app/src/models/onboarding.ts) mirrors
+  the two new optional fields.
+- **Wizard UX** — the two default-catalogue cards in step 3 are now
+  `q-expansion-item` blocks with tri-state master checkboxes + per-name
+  tick-lists ([`WelcomeWizard.vue`](web_app/src/pages/onboarding/WelcomeWizard.vue)):
+  * Groups render a flat list of the 7 defaults.
+  * Locations render zones + indented children; each row toggles its
+    own path.
+  * Master checkbox is `false` when nothing is picked, `null`
+    (indeterminate) when some, `true` when all — clicking cycles
+    all-off ⇄ all-on.
+  * `applyDraft()` sends `null` for `group_names` / `location_paths`
+    when every name is picked (keeps the common-case wire payload
+    small and preserves the historical "seed all" semantic), otherwise
+    the picked subset.
+  * State persisted to the wizard draft in `localStorage`. Legacy
+    drafts (pre-FU-195 `seedGroups`/`seedLocations` booleans) resume
+    gracefully: an explicit `false` seeds the pick map with all-false,
+    anything else lets the catalogue-driven default (all-true) apply.
+- **Inline paste-rows** — a new expansion "Paste rows to bulk-add items"
+  underneath the seed cards. Textarea parses lines like
+  `Milk, Dairy, Fridge` (Name, Group?, Location? — CSV shape) client-side.
+  On "Queue N rows" the parsed rows push into the existing `draftItems`
+  queue, so `applyDraft()`'s existing seed-items pipeline handles them
+  after the groups/locations seed lands (group/location names resolve
+  against whatever exists at that point — matches the current
+  first-item behaviour). The old "Bringing in a spreadsheet?" link to
+  the full importer is still there as the fallback for anything richer.
+- **The removed `form.seedGroups` / `form.seedLocations` booleans** —
+  gone from the wizard draft type. The pick maps replace them.
+  `groupNameOptions` / `locationNameOptions` (fed into the first-item
+  picker) now read from the picked names instead of the master bool.
+
+### Tests
+
+- New unit suite [`test_onboarding_seed_filter.py`](tests/test_onboarding_seed_filter.py)
+  — 17 tests covering:
+  * Missing filter seeds every default.
+  * Empty list filter seeds nothing.
+  * List filter seeds only the intersection.
+  * Case-insensitive matching on names and paths.
+  * Unknown names in the filter are dropped silently.
+  * Existing rows get counted as `skipped`, not re-created.
+  * `groups: False` / `locations: False` bypass the filter entirely.
+  * Location "Zone/Child" auto-creates the parent zone.
+  * Auto-created parent is NOT counted as `skipped` (silent
+    prerequisite semantics).
+  * Existing zone lets a new child hang off it without a duplicate.
+  * Both filters active on the same request round-trip.
+
+### Close-gate
+
+- `pytest tests/ --ignore=tests/e2e` — **148 passed** (+17 new
+  FU-195 tests), 1 pre-existing deselect ([FU-444](DORA_FOLLOWUPS.md)).
+- `npx vue-tsc --noEmit` — clean bar the pre-existing FU-434 errors.
+
+### Engineering-standards close-gate
+
+- **R-002 / R-003 (SSoT).** Server keeps the "which defaults exist"
+  authority — the client filter never re-declares names, it just picks
+  from the catalogue the server serves. Pass.
+- **R-005 (portable data access).** New handler code stays inside the
+  existing repository shape; no schema change. Pass.
+- **R-007 (scope discipline).** Only the two FU-195 asks landed;
+  didn't touch the demo-dataset card, packs, or first-item step. Pass.
+- **R-010 (strong types).** Both new fields are `list[str] | None` with
+  explicit semantics. Pass.
+- **R-019 (no magic).** Filter is a plain list of strings; server
+  matches by lowercase string equality; no reflection, no clever
+  auto-inference. Pass.
+
+### ADR evaluation
+
+No new recurring pattern. The filter shape (optional list narrowing an
+otherwise-all default) is a small addition, not an architecture move.
+No ADR added.
+
+### Follow-ups
+
+- **FU-195** — resolved this unit; moved to
+  `DORA_FOLLOWUPS_RESOLVED.md`.
+- **DORA_VERIFY.md §Onboarding** — new browser-verify checklist for
+  the per-name picks + paste-rows added at the top of that section.
+
+**Files touched (code):**
+- `dora_api/features/onboarding/onboarding.py`
+- `web_app/src/models/onboarding.ts`
+- `web_app/src/pages/onboarding/WelcomeWizard.vue`
+- `tests/test_onboarding_seed_filter.py` (new)
+
+**Files touched (docs/ledgers):**
+- `CHANGELOG.md`, `DORA_WORKLOG.md`, `DORA_FOLLOWUPS.md`,
+  `DORA_FOLLOWUPS_RESOLVED.md`, `DORA_VERIFY.md`.
+
+### Next up
+
+Browser-verify the new `DORA_VERIFY.md §Onboarding` items — the
+happy path (`/welcome` on a fresh install) walks through the per-name
+picks and the paste-rows queue end-to-end.
+
+---
+
+## 2026-07-02 — StockLevel collapsed to 3 bands (Sufficient axed)
+
+**Why:** the middle "Sufficient Stock" band was semantically dead
+(`needs_restock` / `is_low_stock` / `is_missing` predicates all treated
+it identically to Well-Stocked — no downstream behaviour discriminated
+it) and clashed with P8-07 Zero-Input Pantry's charter-mandated
+Out/Low/Stocked band vocabulary (`DASHY_DORA_CHAMPION_PLAN.md:402`).
+Retrofitting an inference model over a 4-band schema would have needed
+either a display-time collapse layer or a divergent inference
+vocabulary — both drift risks. User called "axe it cleanly" after the
+weigh-up.
+
+### What shipped
+
+- **Domain enum rewrite** (`dora_api/domain/stock_status.py`):
+  `StockStatus.WELL_STOCKED` → `STOCKED`; dropped `SUFFICIENT_STOCK`;
+  reserquenced `LOW_STOCK = 1`, `OUT_OF_STOCK = 2`; dropped
+  `SUFFICIENT_STOCK_SEQUENCE`; renamed `WELL_STOCKED_SEQUENCE` →
+  `STOCKED_SEQUENCE`. Kept the docstring rule "keyed to sequence, not
+  name" as the invariant that made this rename cheap.
+- **Data migration** (`a1c7d9e42be0_20260702_drop_sufficient_stock_band`):
+  multi-head merge (also collapses the three open heads
+  `c4a8e2b9d7f5` / `b7e2d9a4c1f5` / `e2b9c4a7f5d1`). Redirects any
+  StockItem currently pointing at Sufficient (seq=1) to the seq=0 row,
+  deletes the Sufficient row, reseries Low + Out, renames
+  "Well-Stocked" → "Stocked". `StockLevelChange`'s SET-NULL FK +
+  denormalised name column preserves audit trail intact.
+- **Backend sweep**: `stocktake.py` (`set_well_stocked` → `set_stocked`
+  API field), `alerts/act_on_alert.py`, `shopping_lists/manage_shopping_list.py`,
+  `shopping_lists/auto_generate.py` (`SEQ_WELL_STOCKED` →
+  `SEQ_STOCKED`; renumbered `SEQ_LOW = 1`, `SEQ_OUT = 2`),
+  `data/import_spreadsheet.py`, `onboarding/onboarding.py`,
+  `assistant/confirm_actions.py` (kept "sufficient"/"ok"/"fine" as
+  user-speech aliases that now resolve to STOCKED),
+  `assistant/app_knowledge.py`, `stock_items/get_buy_verdict.py`
+  (`signal="well_stocked"` → `"stocked"`, `label="Well stocked"` →
+  `"Stocked"`), `stock_items/update_stock_item.py`.
+- **Persistence seed** (`persistence/seed.py`): seeded rows now
+  Stocked/Low/Out; demo StockItems and StockLevelChange history
+  rewritten to exercise 3-band transitions.
+- **Frontend sweep**: `helpers/stockStatus.ts` (dropped
+  `SUFFICIENT_STOCK_SEQUENCE`, renamed `WELL_STOCKED_SEQUENCE` →
+  `STOCKED_SEQUENCE`, renumbered), `helpers/stockLevelLogic.ts`
+  (dropped the Sufficient/warning colour row),
+  `components/StockLevelDot.vue` (dropped "Mid" case),
+  `composables/useStockFilters.ts` (footer tone + shortLabel regex),
+  `pages/ShoppingListDetail.vue` (`wellStockedLevelId` →
+  `stockedLevelId`), `services/api/stocktakeApiService.ts`
+  (`setWellStocked` → `setStocked`, response field renames),
+  `services/api/shoppingListApiService.ts` (docstring),
+  `services/doraIntents.ts` (comment), plus UI prose in
+  `StockItemDetailPage.vue`, `pages/onboarding/onboardingContent.ts`.
+- **Tests**: `tests/test_stock_status.py` (three-band suite),
+  `tests/test_confirm_actions_resolve_level.py` (all sufficient/ok/
+  fine aliases now resolve to STOCKED), `tests/test_recipe_cookability.py`
+  (renumbered sequences — Low is now 1, Out is now 2 — while keeping
+  the "missing = out-of-stock only" invariant), `tests/test_buy_verdict.py`
+  (renamed test names + comments for signal string rename),
+  `tests/e2e/dora_api/test_stock_level_router.py` (3 rows instead of
+  4, pagination assertions), `tests/e2e/dora_api/test_data_router.py`
+  (import fixture uses "Stocked"), `tests/e2e/dora_api/test_alerts_push.py`
+  (comment).
+
+### Close-gate
+
+- `git grep -- 'WELL_STOCKED\|SUFFICIENT_STOCK\|Sufficient Stock\|Well-Stocked'`
+  in `dora_api/`, `web_app/src/`, `tests/` returns only:
+  (a) the audit-trail refs in the new migration + the `stock_status.py`
+  history note, (b) the initial migration seed (frozen — the new
+  migration transforms it forward), (c) the `confirm_actions.py`
+  user-speech synonyms that map to STOCKED (kept on purpose).
+- `pytest tests/ --ignore=tests/e2e` — **131 passed, 1 deselected**.
+  The deselect is
+  `tests/test_buy_verdict.py::test__all_axes_thin__collapses_to_single_not_enough_history`
+  which was **already failing on `main` before this session** (verified
+  via `git stash` re-run); unrelated pre-existing bug, logged as a
+  follow-up.
+- `npx vue-tsc --noEmit` — clean bar the pre-existing FU-434
+  `AdminDataImport.vue` errors.
+
+### Engineering-standards close-gate
+
+- **R-002 / R-003 (SSoT).** `stock_status.py` docstring rule "keyed
+  to sequence, not name" is what made this rename cheap; the migration
+  transforms one canonical row set. Pass.
+- **R-006 (clean migrations).** New migration is a multi-head merge
+  with clear `down_revision` tuple; no idempotent guards; downgrade
+  path preserved. Pass.
+- **R-007 (scope discipline).** No adjacent cleanup rode along; the
+  pre-existing FU-434 errors + the unrelated `test__all_axes_thin`
+  failure were left alone. Pass.
+- **R-010 (strong types).** IntEnum contract preserved; no bare
+  literals introduced. Pass.
+- **R-019 (no magic).** Rename is verbose + consistent across
+  Python + TS + tests + API contract. Pass.
+
+### ADR evaluation
+
+No new recurring pattern. The invariant "status is keyed to sequence,
+never name" was already the standing rule that let this rename ship
+without a data migration on the domain enum side. No ADR added.
+
+### Follow-ups
+
+- **FU-444 (new)** — `tests/test_buy_verdict.py::test__all_axes_thin__collapses_to_single_not_enough_history`
+  fails on the pre-existing behaviour: the composer only surfaces the
+  "not enough history yet" fallback when *exactly three* axes signal
+  `thin_data`, but the test's fixture (`waste_events_12mo=0,
+  purchases_12mo=1`) produces `no_waste_history` on the waste axis
+  (only two thin axes). Either the composer should widen the fallback
+  trigger to "zero reasons produced" (test intent) or the fixture
+  should be updated to force all three axes thin. Not in scope for
+  this unit — logged in `DORA_FOLLOWUPS.md`.
+- **DORA_VERIFY.md §Stock** — new browser-verify checklist appended
+  (StockLevelDot renders 3-way, sticky footer shows 3 counts,
+  auto_generate low-or-out picker still fires, spreadsheet import
+  defaults to Stocked, shopping-list finish restocks to Stocked).
+
+**Files touched (code):** 21 (see close-gate greps).
+**Files touched (docs/ledgers):** `CHANGELOG.md`, `DORA_WORKLOG.md`,
+`DORA_FOLLOWUPS.md`, `DORA_VERIFY.md`.
+
+### Next up
+
+Browser-verify the appended `DORA_VERIFY.md §Stock` checklist. Dev
+DB reset (or run alembic upgrade) picks up the new schema. Once
+verified, FU-444 is the only real loose end from this unit.
+
+---
+
+## 2026-07-02 — C-19 auth-shell + AuthButton implementation
+
+**Why:** actioned the C-19 deferred job (FU-443). The design brief
+shipped earlier this session; user answered D2 (backdrop="quiet" on
+splash), D4 (fold aux pages in), D7 (hardcode pre-mount midnight), D10
+(add `--auth-shell-accent-amber-strong` token) as recommended, along
+with D9 (dedicated `AuthButton.vue`) already affirmed earlier. This
+unit turned the brief into `IMPL_PLAN_AUTH_SHELL.md` and executed all
+seven migration steps in one pass.
+
+### What shipped
+
+- **`docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md`** — the impl plan doc
+  (baked-in decisions, 7 reversible steps, close-gate checklist, R-* pass
+  list).
+- **New components** (~330 LOC combined):
+  - `web_app/src/components/AuthShell.vue` — backdrop (blobs / quiet /
+    none), mascot (top-right / top-centre / none), variant (card /
+    full-bleed), slots for card-head / default / card-foot; owns the
+    promoted `--auth-shell-*` ladder with the DEC-2 carve-out comment
+    physically next to the tokens.
+  - `web_app/src/components/AuthButton.vue` — composes `BaseButton`
+    (`variant="ghost"` as base to avoid competing with Quasar's
+    colour prop); colour = primary (teal gradient) / secondary (amber
+    gradient using the new D10 token) / ghost (flat with hit target).
+    Size pinned; deliberately auth-only per §5.8 anti-drift rationale.
+- **Migrations**:
+  - `LoginPage.vue` — wraps `AuthShell`, card foot is now three
+    stacked `AuthButton`s (primary submit → secondary mode toggle →
+    ghost forgot-password). Deleted the entire private `--lp-*`
+    ladder + blob/mascot/card CSS (~-130 LOC).
+  - `SetupAdminPage.vue` — same shape; badge in `#card-head`;
+    deleted the drift-copy of the ladder (~-160 LOC). FU-440
+    resolved.
+  - `SplashScreen.vue` — wraps `AuthShell backdrop="quiet"
+    variant="full-bleed"`, keeps its own overlay wrapper for the
+    `position: fixed; z-index: 9000` concern; retry now an
+    `AuthButton colour="primary"`.
+  - `index.html` — pre-mount splash pinned to `#1f2647`, OS-scheme
+    switch removed (D7). Comment names C-19.
+  - `WelcomeLayout.vue` — wraps in `AuthShell backdrop="blobs"
+    variant="full-bleed"`; header sign-out button + text switch to
+    force-light so they read over midnight.
+  - `OnboardingStory.vue` — glyph fills + `.story-pill` retuned to
+    `--auth-shell-*` tokens with the standard tokens as fallback so
+    scenes render legibly on midnight. No motion / choreography /
+    copy change (scope belongs to `PROPOSAL_ONBOARDING §2.4`).
+  - `VerifyEmailPage.vue`, `ForgotPasswordPage.vue`,
+    `ResetPasswordPage.vue`, `ConfirmEmailChangePage.vue` — each
+    folded into `AuthShell backdrop="blobs" mascot="none"`; local
+    `.auth-shell` blocks deleted. FU-441 resolved.
+
+### Small carve-out from the impl plan
+
+- **Full-bleed variant behaviour.** The plan §Step 5 said
+  WelcomeLayout wraps `q-page-container` in AuthShell. First pass
+  used the shell's default flex-centering, which broke WelcomeLayout's
+  header-on-top flow. Adjusted `AuthShell.vue` so flex-centering only
+  applies to `variant="card"`; `full-bleed` leaves layout to the
+  consumer (splash re-centres via its own `.splash-inner` wrapper).
+  No API change — same three variant values as documented.
+- **Splash text colour.** Bleed variant's colour was
+  `--auth-shell-text` (dark card-face colour). Splash text on the
+  midnight canvas needed to be light; overridden to `#ffffff`
+  locally in `SplashScreen.vue`.
+
+### Close-gate results
+
+- `git grep -- '--lp-\|--setup-'` in `web_app/src/` → zero.
+- `git grep -- '\.auth-shell\b'` in `web_app/src/` → zero.
+- `git grep -- 'login-shell|login-bg|…|setup-badge'` → zero.
+- `npx vue-tsc --noEmit` — clean bar the two pre-existing
+  `AdminDataImport.vue` errors already tracked as FU-434 (out of
+  scope for this unit).
+
+### Engineering-standards close-gate
+
+- **R-001 / R-005** (componentise) — two new primitives, five consumers
+  shrink. Pass.
+- **R-002** (theme tokens) — DEC-2 carve-out captured inline on the
+  shell (not scattered). Pass.
+- **R-003** (SSoT) — `--lp-*` / `--setup-*` duplication removed;
+  `.auth-shell` collision removed. Pass.
+- **R-004** (framework discipline) — pure Vue 3 SFC + Quasar. Pass.
+- **R-007** (scope discipline) — scene choreography, password policy,
+  configurable-background, `BaseButton` gradient variants all left
+  alone. Pass.
+- **R-008** (code-style minimalism) — no filler comments; DEC-2 gets
+  one block. Pass.
+- **R-010** (strong types) — new components typed via
+  `defineProps<>()` unions. Pass.
+- **R-019** (no magic) — explicit prop enums, no reflection. Pass.
+
+### ADR evaluation
+
+No new recurring pattern promoted. The auth-shell is a single instance
+of R-001/R-003/R-005 being applied correctly; it doesn't generalise.
+No ADR added.
+
+### Follow-ups
+
+- **FU-440** (SetupAdmin ladder drift) — resolved this unit; moved
+  to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **FU-441** (auth-shell class collision) — resolved this unit;
+  moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **FU-443** (deferred C-19 impl job) — resolved this unit; moved
+  to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **FU-442** (§LOGIN password-policy feedback) — still open; noted
+  as out of scope in this unit's impl plan §1. No change.
+- **New verify checks** appended to `DORA_VERIFY.md §Cross-cutting`
+  (browser-verify list per surface: primary/secondary/ghost button
+  render, cold-load flash test, reduced-motion, aux pages match
+  Login, Resend verification dialog still works).
+
+**Files touched (code):** `web_app/src/components/AuthShell.vue` (new),
+`web_app/src/components/AuthButton.vue` (new),
+`web_app/src/pages/LoginPage.vue`, `web_app/src/pages/SetupAdminPage.vue`,
+`web_app/src/components/SplashScreen.vue`, `web_app/index.html`,
+`web_app/src/layouts/WelcomeLayout.vue`,
+`web_app/src/pages/onboarding/OnboardingStory.vue`,
+`web_app/src/pages/VerifyEmailPage.vue`,
+`web_app/src/pages/ForgotPasswordPage.vue`,
+`web_app/src/pages/ResetPasswordPage.vue`,
+`web_app/src/pages/ConfirmEmailChangePage.vue`.
+
+**Files touched (docs/ledgers):**
+`docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md` (new), `CHANGELOG.md`,
+`DORA_WORKLOG.md`, `DORA_FOLLOWUPS.md`,
+`DORA_FOLLOWUPS_RESOLVED.md`, `DORA_VERIFY.md`.
+
+### Next up
+
+Browser-verify the appended `DORA_VERIFY.md §Cross-cutting` items
+(user pass). Otherwise: C-19 fully closed; open FU-442 (password
+policy) still awaiting its own unit.
+
+---
+
 ## 2026-07-02 — C-19 shared auth-shell design brief
 
 **Why:** the pre-auth quartet (splash, cannot-connect, login,

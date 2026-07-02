@@ -1,8 +1,7 @@
 import {
     LOW_STOCK_SEQUENCE,
     OUT_OF_STOCK_SEQUENCE,
-    SUFFICIENT_STOCK_SEQUENCE,
-    WELL_STOCKED_SEQUENCE,
+    STOCKED_SEQUENCE,
 } from 'src/helpers/stockStatus';
 import type { ThemePalette } from 'src/services/themeService';
 import nameOf from './nameOf';
@@ -13,8 +12,7 @@ import nameOf from './nameOf';
 // that breaks dark themes. The saturated branches stay on Quasar
 // semantics — those are theme-stable.
 const COLOUR_BY_SEQUENCE: Record<number, string | null> = {
-    [WELL_STOCKED_SEQUENCE]: nameOf<ThemePalette>('positive'),
-    [SUFFICIENT_STOCK_SEQUENCE]: nameOf<ThemePalette>('warning'),
+    [STOCKED_SEQUENCE]: nameOf<ThemePalette>('positive'),
     [LOW_STOCK_SEQUENCE]: nameOf<ThemePalette>('negative'),
     [OUT_OF_STOCK_SEQUENCE]: null,
 };

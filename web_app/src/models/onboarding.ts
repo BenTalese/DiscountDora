@@ -19,6 +19,15 @@ export type OnboardingState = {
 export type SeedRequest = {
     groups: boolean;
     locations: boolean;
+    // FU-195 — optional per-name filter over the bundled defaults. Null
+    // (or omitted) means "seed all" when the bool is true; a provided
+    // list narrows the seed to just those names/paths.
+    //
+    // location_paths use "Zone" for a top-level zone alone, or
+    // "Zone/Child" for a child under it. Selecting a child implicitly
+    // creates its parent zone even when the parent's path isn't listed.
+    group_names?: string[] | null;
+    location_paths?: string[] | null;
 };
 
 export type SeedResult = {

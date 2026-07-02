@@ -204,10 +204,10 @@ def _need_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
         detail = _cadence_detail(inputs)
         return VerdictReasonDto(
             axis="need",
-            signal="well_stocked",
-            label="Well stocked",
+            signal="stocked",
+            label="Stocked",
             detail=detail,
-        ), "well_stocked"
+        ), "stocked"
     # Unknown stock band means we don't have a status at all — treat as
     # thin-data on this axis; the composer will absorb the drop in
     # confidence.
@@ -294,7 +294,7 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
             verdict, confidence = "wait", "medium"
         else:
             verdict, confidence = "buy", "medium"
-    elif need_signal == "well_stocked":
+    elif need_signal == "stocked":
         if waste_signal == "wastes_often":
             verdict, confidence = "skip", "high"
         elif price_signal == "cheapest_3mo":

@@ -24,8 +24,10 @@
   <body>
     <!-- Pre-mount splash. Paints the moment HTML parses so cold-load doesn't
          flash black before Vue/Quasar mount. App.vue's onMounted removes it.
-         Background tracks the OS colour scheme so it lines up with whatever
-         theme themeService will pick once it boots. -->
+         Background is hardcoded to match AuthShell's --auth-shell-bg-base
+         (#1f2647) so the pre-mount → shell handoff reads as one moment.
+         C-19: previously tracked prefers-color-scheme; that made cold-load
+         visibly flash light → midnight the instant Vue mounted the shell. -->
     <style>
         #pre-mount-splash {
             position: fixed;
@@ -33,11 +35,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #E8F6F3;
+            background: #1f2647;
             z-index: 10000;
-        }
-        @media (prefers-color-scheme: dark) {
-            #pre-mount-splash { background: #1B2026; }
         }
         #pre-mount-splash img {
             width: clamp(120px, 24vw, 200px);

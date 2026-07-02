@@ -53,34 +53,16 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-443 — Action C-19: resolve open decisions + write `IMPL_PLAN_AUTH_SHELL.md`
-- **Raised:** 2026-07-02 (C-19 proposal written this session).
-- **Type:** deferred job.
-- **What:** [`docs/04_proposals/PROPOSAL_AUTH_SHELL.md`](docs/04_proposals/PROPOSAL_AUTH_SHELL.md)
-  is design-only. To ship, two things need to happen in order:
-  1. **User resolves D1–D10 in §7** — the substantive calls are D2
-     (splash adopts `backdrop="quiet"`?), D4 (fold auxiliary pages
-     Verify/Forgot/Reset/ConfirmEmailChange in?), D7 (hardcode
-     pre-mount splash to `#1f2647`?), D9 (dedicated `AuthButton.vue`
-     vs `BaseButton` gradient variants — user leaned dedicated
-     2026-07-02), D10 (new `--auth-shell-accent-amber-strong` token
-     for the amber gradient). Others have low-risk defaults.
-  2. **Write `docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md`** — single
-     PR, seven reversible migration steps per §6 (create `AuthShell` +
-     `AuthButton` → migrate Login → SetupAdmin → Splash + pre-mount
-     alignment → WelcomeLayout + onboarding scene retune → aux pages
-     → close-gate). Notes for the impl-plan already listed in the
-     proposal's §11.
-- **Blocks:** FU-440 (SetupAdmin `--lp-*` drift), FU-441 (auth-shell
-  name collision on aux pages) — both resolve automatically when this
-  ships.
-- **Why deferred:** the design brief was itself the deliverable of
-  this session (C-19). Impl-planning is a separate work unit; needs
-  the user's D1–D10 answers before it can be drafted.
-- **Recommended resolution:** later during any subsequent Dashy Dora
-  session where the user is ready to answer D1–D10 and greenlight
-  the shell + button component build. Also coordinate the scene-glyph
-  retune with whoever picks up `PROPOSAL_ONBOARDING §3.1` next.
+## [OPEN] FU-444 — `test__all_axes_thin__collapses_to_single_not_enough_history` fails on pre-existing composer behaviour
+- **Raised:** 2026-07-02 (surfaced while running `pytest` for the Sufficient-band axe close-gate).
+- **Type:** finding (pre-existing, not introduced this session).
+- **What:** [`tests/test_buy_verdict.py:222`](tests/test_buy_verdict.py) asserts that "three thin axes ⇒ one honest reason" — but the fixture (`price_samples=[one]`, `stock_level_band="unknown"`, `waste_events_12mo=0, purchases_12mo=1`) only produces two thin axes: `_waste_axis` returns `(None, "no_waste_history")`, not `thin_data`, when purchases is under `_MIN_PURCHASES_FOR_WASTE_RATE` **and** waste_events is 0. The composer at [`get_buy_verdict.py:314`](dora_api/features/stock_items/get_buy_verdict.py) only surfaces the collapsed "not enough history yet" reason when `len(thin) == 3`, so this test lands with an empty `reasons` list. Confirmed pre-existing via `git stash` re-run against `main`.
+- **Resolution options:**
+  1. Loosen the composer trigger to "zero reasons produced" (broadest — matches the test's intent that a bare-data verdict should carry one honest message).
+  2. Widen the fixture to actually trigger three thin axes (e.g. `purchases_12mo=1, waste_events_12mo=1` so the waste axis returns `thin_data` per the `< _MIN_PURCHASES_FOR_WASTE_RATE` branch line 243).
+  3. Retire the test if the composer's stricter contract is intentional.
+- **Why deferred:** unrelated to the Sufficient-band axe; pre-existed on `main`. Small enough to be a single unit later.
+- **Recommended resolution:** opportunistic — next time buy-verdict is opened for change (P8-06 wait-until work looks likely; see FU-438). Not blocking anything.
 
 ## [OPEN] FU-442 — §LOGIN password-policy feedback still uncovered
 - **Raised:** 2026-07-02 (C-19 audit — spotted while writing coverage table).
@@ -96,41 +78,6 @@ long session summary. Distinct from the other logs:
   `AppSetting` config; C-cross may already own the settings shell).
 - **Recommended resolution:** later during `PROPOSAL_CONFIG_AND_OPTINS.md`
   extension, or spin a small standalone prompt. Not blocking C-19.
-
-## [OPEN] FU-440 — R-003 drift: `SetupAdminPage.vue` verbatim-copies the `--lp-*` colour ladder
-- **Raised:** 2026-07-02 (C-19 audit).
-- **Type:** finding.
-- **What:** [`web_app/src/pages/SetupAdminPage.vue:174-184`](web_app/src/pages/SetupAdminPage.vue) declares
-  `--setup-bg-base` / `--setup-blob-1..3` / `--setup-card-*` / `--setup-text*`
-  / `--setup-accent*` / `--setup-shadow` — an identical-value copy of
-  `LoginPage.vue`'s private `--lp-*` ladder. Precisely the drift that R-003
-  guards against and the retired FU-002 / DEC-2 "keep private" call was
-  worried about. Discovered while producing `PROPOSAL_AUTH_SHELL.md`
-  (C-19); logged separately so the finding survives if that impl is
-  deferred.
-- **Why deferred:** fixing it now duplicates work — the shell extraction
-  in the C-19 impl-plan deletes both copies in one migration step
-  (`PROPOSAL_AUTH_SHELL.md §6 step 3`).
-- **Recommended resolution:** when `IMPL_PLAN_AUTH_SHELL.md` runs. If
-  C-19 stalls beyond one release cycle, resolve opportunistically by
-  extracting an interim `--auth-shell-*` layer.
-- **Rule cited:** R-003 (single source of truth).
-
-## [OPEN] FU-441 — Naming collision: four aux pre-auth pages define `.auth-shell` locally
-- **Raised:** 2026-07-02 (C-19 audit).
-- **Type:** finding.
-- **What:** `VerifyEmailPage.vue`, `ForgotPasswordPage.vue`,
-  `ResetPasswordPage.vue`, `ConfirmEmailChangePage.vue` each declare a
-  scoped `.auth-shell` class that renders a plain centred container on
-  `--surface-page`. `PROPOSAL_AUTH_SHELL.md` proposes a new
-  `AuthShell.vue` component; naive introduction re-uses the class name
-  in the DOM and confuses future readers. Proposal already routes
-  around it (component's root uses `.dora-auth-shell` + the four pages
-  fold in), but the collision is a real live-code smell today.
-- **Why deferred:** the fix ships as part of the C-19 impl-plan
-  (`PROPOSAL_AUTH_SHELL.md §5.5`, migration step 6). Not worth a
-  stand-alone patch.
-- **Recommended resolution:** when `IMPL_PLAN_AUTH_SHELL.md` runs.
 
 ## [OPEN] FU-438 — P8-06 Wait-or-Buy — populate `wait_until` on the buy-verdict endpoint
 - **Raised:** 2026-07-02 (P8-05 close, forward-look).
@@ -1932,21 +1879,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   back on. Trimmed in place rather than split — (b)–(f) are still
   cleanly umbrella-able under "review hardening batch", they share a
   source and a tier.
-
-## [OPEN] FU-195 — Onboarding starter-data: in-page import + groups/locations "some" (trims from C-5.5)
-- **Raised:** 2026-06-16 (Onboarding C-5.5)
-- **Type:** leftover
-- **What:** Two C-5.5 sub-asks were scoped down: (1) **inline import** (L30) — the starter-data step
-  still **links** to `/data/import` rather than embedding the importer on the page (embedding the
-  full importer was disproportionate for this build); (2) **groups/locations "some"** (L34) — the
-  step offers all/none per catalogue **+ a static preview** (captions list the default names), and
-  the **packs** give item-level ticking, but there's no individual tick-list for the default
-  groups/locations themselves.
-- **Why deferred:** size of the combined C-5.5 + C-5.6 build; both are enhancements, not
-  acceptance-blockers (the acceptance centres on packs + the added-list, which shipped).
-- **Recommended resolution:** opportunistic — (1) embed a slim importer (or a "paste rows"
-  affordance) when the importer is next touched; (2) add a per-name checklist for default
-  groups/locations (needs `/seed` to accept name lists, or a `seed-items`-style call for them).
 
 ## [OPEN] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5)
 - **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)

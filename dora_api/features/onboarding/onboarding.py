@@ -176,6 +176,17 @@ class SeedRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     groups: bool = False
     locations: bool = False
+    # FU-195 — optional per-name filter over the bundled defaults. When
+    # None (default) and the corresponding bool is True, seed all defaults
+    # (original behaviour). When a list is provided, seed only those
+    # defaults whose name (or path, for locations) is in the list.
+    #
+    # Location paths use the form "Zone" for a top-level zone alone, or
+    # "Zone/Child" for a child under it. Selecting a child implicitly
+    # creates its parent zone (needed for the FK), even when the parent's
+    # own path is not in the list.
+    group_names: list[str] | None = None
+    location_paths: list[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +207,11 @@ class SeedHandler:
 
         if request.groups:
             seed_groups = _load_seed("default_stock_groups.json")
+            group_filter: set[str] | None = (
+                {n.strip().lower() for n in request.group_names if (n or "").strip()}
+                if request.group_names is not None
+                else None
+            )
             existing = {
                 g.name.strip().lower()
                 for g in self.repository.get(StockGroup).all()
@@ -203,6 +219,8 @@ class SeedHandler:
             for entry in seed_groups:
                 name = (entry.get("name") or "").strip()
                 if not name:
+                    continue
+                if group_filter is not None and name.lower() not in group_filter:
                     continue
                 if name.lower() in existing:
                     groups_skipped += 1
@@ -214,6 +232,11 @@ class SeedHandler:
 
         if request.locations:
             seed_locations = _load_seed("default_locations.json")
+            path_filter: set[str] | None = (
+                {p.strip().lower() for p in request.location_paths if (p or "").strip()}
+                if request.location_paths is not None
+                else None
+            )
             # Match the dedupe semantics of groups: skip locations whose
             # (parent_id, name) pair already exists. Top-level zones are
             # keyed by name alone.
@@ -227,10 +250,39 @@ class SeedHandler:
                 z_kind = zone.get("kind") or "zone"
                 if not z_name:
                     continue
+
+                # Compute the set of child names under this zone that the
+                # filter accepts (empty when no filter). A zone is created
+                # if it's directly named OR any of its children is named.
+                zone_path = z_name.lower()
+                child_entries = zone.get("children") or []
+                accepted_children: list[dict[str, Any]] = []
+                if path_filter is None:
+                    accepted_children = list(child_entries)
+                    zone_wanted = True
+                else:
+                    zone_wanted = zone_path in path_filter
+                    for child in child_entries:
+                        c_name = (child.get("name") or "").strip()
+                        if not c_name:
+                            continue
+                        c_path = f"{zone_path}/{c_name.lower()}"
+                        if c_path in path_filter:
+                            accepted_children.append(child)
+
+                # If the zone isn't named and no accepted children under
+                # it, skip this zone entirely.
+                if not zone_wanted and not accepted_children:
+                    continue
+
                 key = (None, z_name.lower())
                 if key in existing_pairs:
-                    locations_skipped += 1
                     zone_entity = self._find_existing(z_name, None)
+                    # Only count as "skipped" when the zone itself was
+                    # explicitly requested — otherwise the zone is a
+                    # silent prerequisite for the accepted children.
+                    if zone_wanted:
+                        locations_skipped += 1
                 else:
                     zone_entity = StockLocation(
                         name=z_name, kind=z_kind, parent_id=None, sequence=0
@@ -240,7 +292,7 @@ class SeedHandler:
                     existing_pairs.add(key)
                     locations_created += 1
 
-                for idx, child in enumerate(zone.get("children") or []):
+                for idx, child in enumerate(accepted_children):
                     c_name = (child.get("name") or "").strip()
                     c_kind = child.get("kind") or "area"
                     if not c_name or zone_entity is None:
@@ -435,7 +487,7 @@ class SeedItemsHandler:
             _LOGGER.warning("Seed-items skipped: no stock levels configured.")
             return SeedItemsResultDto(0, 0)
         # Most-stocked level (lowest sequence) is the sensible default.
-        well_stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+        stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
 
         existing = {
             item.name.strip().lower()
@@ -474,7 +526,7 @@ class SeedItemsHandler:
                 notes=None,
                 stock_group=group,
                 stock_level_last_updated=now,
-                stock_level=well_stocked,
+                stock_level=stocked,
                 stock_location=location,
                 stocktake_alerts_are_enabled=False,
             ))
@@ -563,7 +615,7 @@ class SeedDemoHandler:
         if not levels:
             _LOGGER.warning("Seed-demo skipped: no stock levels configured.")
             return SeedDemoResultDto(False, 0, False, False)
-        well_stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+        stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
         now = datetime.now(timezone.utc)
         for spec in _DEMO_INGREDIENTS:
             name = spec["name"]
@@ -578,7 +630,7 @@ class SeedDemoHandler:
                 notes=None,
                 stock_group=None,
                 stock_level_last_updated=now,
-                stock_level=well_stocked,
+                stock_level=stocked,
                 stock_location=None,
                 stocktake_alerts_are_enabled=False,
             )

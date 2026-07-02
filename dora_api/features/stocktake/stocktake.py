@@ -4,8 +4,8 @@
   POST /api/stock-items/<id>/check            — bump last_checked_at only
   POST /api/stocktake/bulk-check              — body {ids}
   POST /api/shopping-lists/<id>/review/complete — bulk-set ticked items
-                                                  to Well-Stocked (used by
-                                                  the shopping-list review
+                                                  to Stocked (used by the
+                                                  shopping-list review
                                                   mode).
 
 The queue's ordering is:
@@ -250,14 +250,14 @@ def bulk_check():
 
 class ReviewCompleteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    set_well_stocked: bool = True
+    set_stocked: bool = True
 
 
-def _well_stocked_level_id(repo: SqlAlchemyRepository) -> UUID | None:
-    """The seeded Well-Stocked level, resolved by status identity (sequence)
+def _stocked_level_id(repo: SqlAlchemyRepository) -> UUID | None:
+    """The seeded Stocked level, resolved by status identity (sequence)
     rather than name — the UUID isn't stable across installs and the label may
     be renamed."""
-    level = level_for_status(repo.get(StockLevel).all(), StockStatus.WELL_STOCKED)
+    level = level_for_status(repo.get(StockLevel).all(), StockStatus.STOCKED)
     return level.id if level else None
 
 
@@ -267,7 +267,7 @@ from dora_api.features.routers import SHOPPING_LIST_ROUTER  # noqa: E402
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/review/complete", methods=["POST"])
 @has_request_body(ReviewCompleteRequest)
 def shopping_list_review_complete(shopping_list_id: UUID):
-    """Mark every ticked item on this list as Well-Stocked AND bump both
+    """Mark every ticked item on this list as Stocked AND bump both
     timestamps. Mirrors the existing finish-shopping flow but without
     archiving the list."""
     body: ReviewCompleteRequest = get_request_body()
@@ -291,7 +291,7 @@ def shopping_list_review_complete(shopping_list_id: UUID):
     ).all()
     item_ids = [r[0] for r in ticked_rows]
     if not item_ids:
-        return ok({"set_well_stocked": 0, "checked": 0})
+        return ok({"set_stocked": 0, "checked": 0})
 
     now = datetime.now(UTC)
     checked_count = db.session.execute(
@@ -301,17 +301,17 @@ def shopping_list_review_complete(shopping_list_id: UUID):
     ).rowcount or 0
 
     set_count = 0
-    if body.set_well_stocked:
-        well_stocked_id = _well_stocked_level_id(repo)
-        if well_stocked_id is None:
-            return bad_request("Well-Stocked level not configured.")
+    if body.set_stocked:
+        stocked_id = _stocked_level_id(repo)
+        if stocked_id is None:
+            return bad_request("Stocked level not configured.")
         result = db.session.execute(
             item_table.update().where(item_table.c.id.in_(item_ids)).values(
-                stock_level_id=well_stocked_id,
+                stock_level_id=stocked_id,
                 stock_level_last_updated=now,
             )
         )
         set_count = int(result.rowcount or 0)
 
     db.session.commit()
-    return ok({"set_well_stocked": set_count, "checked": int(checked_count)})
+    return ok({"set_stocked": set_count, "checked": int(checked_count)})

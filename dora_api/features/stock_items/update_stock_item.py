@@ -90,7 +90,7 @@ class UpdateStockItemHandler:
 
         # Capture the *previous* stock level sequence so we can detect the
         # specific transition the auto-add hook cares about (something
-        # well-stocked dropping to low/out).
+        # stocked dropping to low/out).
         _PreviousLevelSeq: int | None = (
             _StockItem.stock_level.sequence if _StockItem.stock_level else None
         )

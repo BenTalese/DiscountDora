@@ -167,32 +167,61 @@
             </q-card>
 
             <!-- ── Step 3: Seed catalogues ──────────────────────────── -->
+            <!-- FU-195 — the two default-catalogue cards are expansions so
+                 the user can pick individual names, not just all-or-none.
+                 Master checkbox on each expansion header is tri-state:
+                 unchecked = none picked, indeterminate = some, checked =
+                 all. Clicking it toggles all names on/off. Individual
+                 rows toggle themselves. -->
             <div
                 v-show="currentStep?.id === 'seed'"
                 class="row q-col-gutter-md q-mb-md"
             >
                 <div class="col-12 col-md-6">
-                    <q-card
-                        flat
-                        bordered
-                        class="seed-card"
-                        :class="{ 'seed-card--picked': form.seedGroups }"
-                        @click="form.seedGroups = !form.seedGroups"
-                    >
-                        <q-card-section class="row items-center">
-                            <q-icon :name="ICONS.category" size="28px" class="q-mr-sm" color="primary" />
-                            <div class="col">
-                                <div class="text-subtitle1">Use Dora's default stock groups</div>
-                                <div class="text-caption dora-text-muted">
-                                    Pantry, Fridge, Freezer, Cleaning, Toiletries, Pet, Other.
-                                </div>
-                            </div>
-                            <q-checkbox
-                                v-model="form.seedGroups"
-                                @click.stop
-                                :disable="state?.has_groups"
-                            />
-                        </q-card-section>
+                    <q-card flat bordered class="seed-card"
+                        :class="{ 'seed-card--picked': groupPickCount > 0 }">
+                        <q-expansion-item
+                            :model-value="!state?.has_groups && groupPickCount > 0"
+                            :disable="state?.has_groups"
+                        >
+                            <template #header>
+                                <q-item-section avatar>
+                                    <q-icon :name="ICONS.category" size="28px" color="primary" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-subtitle1">
+                                        Use Dora's default stock groups
+                                    </q-item-label>
+                                    <q-item-label caption class="dora-text-muted">
+                                        {{ groupPickCount }} of {{ catalog?.groups?.length ?? 0 }} chosen
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <q-checkbox
+                                        :model-value="groupMasterState"
+                                        toggle-indeterminate
+                                        :disable="state?.has_groups"
+                                        @update:model-value="toggleAllGroups($event)"
+                                        @click.stop
+                                    />
+                                </q-item-section>
+                            </template>
+                            <q-list dense v-if="!state?.has_groups">
+                                <q-item
+                                    v-for="name in catalog?.groups ?? []"
+                                    :key="name"
+                                    tag="label"
+                                    dense
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ name }}</q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-checkbox v-model="groupPicks[name.toLowerCase()]" />
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </q-expansion-item>
                         <q-separator v-if="state?.has_groups" />
                         <q-card-section
                             v-if="state?.has_groups"
@@ -205,28 +234,67 @@
                     </q-card>
                 </div>
                 <div class="col-12 col-md-6">
-                    <q-card
-                        flat
-                        bordered
-                        class="seed-card"
-                        :class="{ 'seed-card--picked': form.seedLocations }"
-                        @click="form.seedLocations = !form.seedLocations"
-                    >
-                        <q-card-section class="row items-center">
-                            <q-icon :name="ICONS.place" size="28px" class="q-mr-sm" color="primary" />
-                            <div class="col">
-                                <div class="text-subtitle1">Use Dora's default locations</div>
-                                <div class="text-caption dora-text-muted">
-                                    Kitchen (Pantry, Fridge, Freezer), Bathroom (Cabinet),
-                                    Laundry (Shelf).
-                                </div>
-                            </div>
-                            <q-checkbox
-                                v-model="form.seedLocations"
-                                @click.stop
-                                :disable="state?.has_locations"
-                            />
-                        </q-card-section>
+                    <q-card flat bordered class="seed-card"
+                        :class="{ 'seed-card--picked': locationPickCount > 0 }">
+                        <q-expansion-item
+                            :model-value="!state?.has_locations && locationPickCount > 0"
+                            :disable="state?.has_locations"
+                        >
+                            <template #header>
+                                <q-item-section avatar>
+                                    <q-icon :name="ICONS.place" size="28px" color="primary" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-subtitle1">
+                                        Use Dora's default locations
+                                    </q-item-label>
+                                    <q-item-label caption class="dora-text-muted">
+                                        {{ locationPickCount }} of {{ locationLeafPaths.length }} chosen
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <q-checkbox
+                                        :model-value="locationMasterState"
+                                        toggle-indeterminate
+                                        :disable="state?.has_locations"
+                                        @update:model-value="toggleAllLocations($event)"
+                                        @click.stop
+                                    />
+                                </q-item-section>
+                            </template>
+                            <q-list dense v-if="!state?.has_locations">
+                                <template v-for="zone in catalog?.locations ?? []" :key="zone.name">
+                                    <q-item tag="label" dense>
+                                        <q-item-section>
+                                            <q-item-label>{{ zone.name }}</q-item-label>
+                                            <q-item-label caption class="dora-text-muted">Zone</q-item-label>
+                                        </q-item-section>
+                                        <q-item-section side>
+                                            <q-checkbox v-model="locationPicks[zone.name.toLowerCase()]" />
+                                        </q-item-section>
+                                    </q-item>
+                                    <q-item
+                                        v-for="child in zone.children"
+                                        :key="`${zone.name}/${child.name}`"
+                                        tag="label"
+                                        dense
+                                        class="q-pl-lg"
+                                    >
+                                        <q-item-section>
+                                            <q-item-label>{{ child.name }}</q-item-label>
+                                            <q-item-label caption class="dora-text-muted">
+                                                Under {{ zone.name }}
+                                            </q-item-label>
+                                        </q-item-section>
+                                        <q-item-section side>
+                                            <q-checkbox
+                                                v-model="locationPicks[`${zone.name}/${child.name}`.toLowerCase()]"
+                                            />
+                                        </q-item-section>
+                                    </q-item>
+                                </template>
+                            </q-list>
+                        </q-expansion-item>
                         <q-separator v-if="state?.has_locations" />
                         <q-card-section
                             v-if="state?.has_locations"
@@ -237,10 +305,63 @@
                         </q-card-section>
                     </q-card>
                 </div>
+
+                <!-- FU-195 (L30) — inline "paste rows" affordance so bulk
+                     ingest doesn't demand a nav-out to the full importer.
+                     Rows queue into draftItems and flow through the
+                     existing seed-items pipeline on Finish, after the
+                     groups/locations seed lands (so group/location names
+                     resolve). Full spreadsheet importer still one click
+                     away for anything richer. -->
+                <div class="col-12">
+                    <q-expansion-item
+                        icon="content_paste"
+                        label="Paste rows to bulk-add items"
+                        caption="One per line: Name, Group?, Location?"
+                        class="seed-paste"
+                    >
+                        <div class="q-pa-sm">
+                            <q-input
+                                v-model="pasteRowsText"
+                                type="textarea"
+                                outlined
+                                dense
+                                autogrow
+                                :input-style="{ minHeight: '110px' }"
+                                placeholder="Milk, Dairy, Fridge
+Olive oil, Pantry
+Toilet paper, Toiletries, Bathroom"
+                            />
+                            <div class="row items-center justify-between q-mt-sm">
+                                <div class="text-caption dora-text-muted">
+                                    <template v-if="pasteRowsParsed.length > 0">
+                                        {{ pasteRowsParsed.length }} row{{ pasteRowsParsed.length === 1 ? '' : 's' }}
+                                        ready — added on Finish.
+                                    </template>
+                                    <template v-else-if="pasteRowsText.trim().length > 0">
+                                        Every row needs at least a name.
+                                    </template>
+                                    <template v-else>
+                                        Group + location are optional. Unknown names create
+                                        an item without a group/location — you can fix it later.
+                                    </template>
+                                </div>
+                                <BaseButton
+                                    variant="ghost"
+                                    class="text-primary"
+                                    :disable="pasteRowsParsed.length === 0"
+                                    :label="`Queue ${pasteRowsParsed.length || ''} row${pasteRowsParsed.length === 1 ? '' : 's'}`"
+                                    @click="queuePastedRows"
+                                />
+                            </div>
+                        </div>
+                    </q-expansion-item>
+                </div>
+
                 <div class="col-12 text-caption dora-text-muted q-mt-xs">
-                    Prefer to bring in your own data?
+                    Bringing in a full spreadsheet?
                     <router-link to="/settings/admin/data/import" class="text-primary">
-                        Import from a spreadsheet or another app instead →
+                        Open the full importer instead →
                     </router-link>
                 </div>
 
@@ -701,8 +822,10 @@
         theme: ThemePreference;
         fontFamily: FontFamilyPreference;
         headcount: number | null;
-        seedGroups: boolean;
-        seedLocations: boolean;
+        // FU-195 — the seed-catalogue master booleans are gone; the
+        // per-name pick sets below carry the same signal. A card is
+        // effectively "on" when any name in it is picked, "off" when
+        // none. See groupPicks / locationPicks below.
         // FU-194 — optional demo dataset (one recipe + a current-week meal
         // plan). Default off because it inserts plain rows the user then
         // has to clean up if they didn't actually want demo content.
@@ -726,11 +849,25 @@
         theme: 'system',
         fontFamily: 'default',
         headcount: null,
-        seedGroups: true,
-        seedLocations: true,
         seedDemo: false,
         stepIndex: 0,
     });
+
+    // FU-195 — per-name picks over the bundled catalogues. Keys are
+    // lowercased (name for groups; "zone" or "zone/child" path for
+    // locations). Default state (populated on catalog load) has every
+    // name ticked — matches the pre-FU-195 "seedGroups=true" behaviour.
+    const groupPicks = reactive<Record<string, boolean>>({});
+    const locationPicks = reactive<Record<string, boolean>>({});
+
+    // FU-195 — L30 inline paste-rows affordance state.
+    const pasteRowsText = ref('');
+
+    // FU-195 legacy-draft hints: honoured when the catalogue lands + the
+    // pick maps get seeded, so a pre-FU-195 "seedGroups=false" resumes as
+    // "no groups picked".
+    let legacyGroupsOff = false;
+    let legacyLocationsOff = false;
 
     const firstItem = reactive({
         name: '',
@@ -748,8 +885,31 @@
     async function loadCatalog() {
         try {
             catalog.value = await onboardingApi.getCatalogAsync();
+            seedDefaultPicks();
         } catch {
             catalog.value = null;
+        }
+    }
+
+    // FU-195 — after the catalogue lands, seed the pick maps with every
+    // name ticked by default (preserving the pre-FU-195 default of
+    // "seed everything"). A pick key already present in the map (from a
+    // resumed draft) is left alone so the user's choice survives reload.
+    function seedDefaultPicks() {
+        if (!catalog.value) return;
+        const groupsDefault = legacyGroupsOff ? false : true;
+        const locationsDefault = legacyLocationsOff ? false : true;
+        for (const name of catalog.value.groups) {
+            const key = name.toLowerCase();
+            if (!(key in groupPicks)) groupPicks[key] = groupsDefault;
+        }
+        for (const zone of catalog.value.locations) {
+            const zoneKey = zone.name.toLowerCase();
+            if (!(zoneKey in locationPicks)) locationPicks[zoneKey] = locationsDefault;
+            for (const child of zone.children) {
+                const childKey = `${zone.name}/${child.name}`.toLowerCase();
+                if (!(childKey in locationPicks)) locationPicks[childKey] = locationsDefault;
+            }
         }
     }
 
@@ -766,6 +926,8 @@
                     storySceneIndex: storySceneIndex.value,
                     personaPreview: personaPreview.value,
                     packItemSelected: { ...packItemSelected },
+                    groupPicks: { ...groupPicks },
+                    locationPicks: { ...locationPicks },
                 }),
             );
         } catch {
@@ -784,6 +946,13 @@
                 storySceneIndex?: number;
                 personaPreview?: PersonaPreviewKey;
                 packItemSelected?: Record<string, boolean>;
+                groupPicks?: Record<string, boolean>;
+                locationPicks?: Record<string, boolean>;
+                // Legacy pre-FU-195 draft booleans — folded into the pick
+                // maps once the catalogue lands (seedDefaultPicks respects
+                // whatever the pick maps already say).
+                seedGroups?: boolean;
+                seedLocations?: boolean;
             };
             const {
                 stepIndex: savedIndex,
@@ -792,6 +961,10 @@
                 storySceneIndex: savedScene,
                 personaPreview: savedPersona,
                 packItemSelected: savedPacks,
+                groupPicks: savedGroupPicks,
+                locationPicks: savedLocationPicks,
+                seedGroups: legacySeedGroups,
+                seedLocations: legacySeedLocations,
                 ...formFields
             } = parsed;
             Object.assign(form, formFields);
@@ -813,6 +986,19 @@
             if (savedPacks) {
                 Object.assign(packItemSelected, savedPacks);
             }
+            if (savedGroupPicks) {
+                Object.assign(groupPicks, savedGroupPicks);
+            }
+            if (savedLocationPicks) {
+                Object.assign(locationPicks, savedLocationPicks);
+            }
+            // Legacy pre-FU-195: the booleans became pick maps. If the
+            // legacy master was explicitly off, honour that by defaulting
+            // any not-yet-populated pick to false (seedDefaultPicks fills
+            // absent keys with true; overriding it after mount would race
+            // the catalogue fetch).
+            legacyGroupsOff = legacySeedGroups === false;
+            legacyLocationsOff = legacySeedLocations === false;
         } catch {
             // Bad draft — ignore.
         }
@@ -829,7 +1015,7 @@
     watch(
         [
             form, stepIndex, draftItems, view, storySceneIndex,
-            personaPreview, packItemSelected,
+            personaPreview, packItemSelected, groupPicks, locationPicks,
         ],
         saveDraft,
         { deep: true },
@@ -870,20 +1056,46 @@
     });
 
     // First-item group/location pickers offer NAMES (resolved server-side on
-    // Finish — FU-191): seeded defaults (if chosen) + any pack groups +
-    // whatever already exists.
+    // Finish — FU-191): the actually-picked seed defaults (FU-195) + any
+    // pack groups + whatever already exists.
+    const pickedGroupNames = computed<string[]>(() =>
+        (catalog.value?.groups ?? []).filter((n) => groupPicks[n.toLowerCase()]),
+    );
+    const pickedLocationNames = computed<string[]>(() => {
+        const out: string[] = [];
+        for (const zone of catalog.value?.locations ?? []) {
+            if (locationPicks[zone.name.toLowerCase()]) out.push(zone.name);
+            for (const child of zone.children) {
+                if (locationPicks[`${zone.name}/${child.name}`.toLowerCase()]) {
+                    out.push(child.name);
+                }
+            }
+        }
+        return out;
+    });
+    // Paths in the "Zone" / "Zone/Child" form the server expects — passed
+    // straight through to /onboarding/seed's location_paths filter.
+    const pickedLocationPaths = computed<string[]>(() => {
+        const out: string[] = [];
+        for (const zone of catalog.value?.locations ?? []) {
+            if (locationPicks[zone.name.toLowerCase()]) out.push(zone.name);
+            for (const child of zone.children) {
+                const path = `${zone.name}/${child.name}`;
+                if (locationPicks[path.toLowerCase()]) out.push(path);
+            }
+        }
+        return out;
+    });
     const groupNameOptions = computed(() =>
         uniqueSorted([
-            ...(form.seedGroups ? (catalog.value?.groups ?? []) : []),
+            ...pickedGroupNames.value,
             ...selectedPackItemsList.value.map((it) => it.group),
             ...stockGroups.value.map((g) => g.name),
         ]),
     );
     const locationNameOptions = computed(() =>
         uniqueSorted([
-            ...(form.seedLocations
-                ? flattenLocationNames(catalog.value?.locations ?? [])
-                : []),
+            ...pickedLocationNames.value,
             ...selectedPackItemsList.value.map((it) => it.location),
             ...stockLocationStore.stockLocations.map((l) => l.name),
         ]),
@@ -901,6 +1113,85 @@
     function togglePack(pack: StarterPack, value: boolean | null) {
         const on = value === true;
         for (const item of pack.items) packItemSelected[item.name] = on;
+    }
+
+    // FU-195 — per-name pick helpers for the default groups / locations
+    // cards. Master checkbox is tri-state: false = none picked, null =
+    // some (indeterminate), true = all. Clicking cycles all-off ⇄ all-on.
+    const groupPickCount = computed(() => {
+        const names = catalog.value?.groups ?? [];
+        return names.filter((n) => groupPicks[n.toLowerCase()]).length;
+    });
+    const groupMasterState = computed<boolean | null>(() => {
+        const total = catalog.value?.groups.length ?? 0;
+        const picked = groupPickCount.value;
+        if (total === 0 || picked === 0) return false;
+        if (picked === total) return true;
+        return null;
+    });
+    function toggleAllGroups(value: boolean | null) {
+        const on = value === true;
+        for (const n of catalog.value?.groups ?? []) {
+            groupPicks[n.toLowerCase()] = on;
+        }
+    }
+    // Location paths ("zone" or "zone/child") the user has ticked, in
+    // the same order the catalogue lists them.
+    const locationLeafPaths = computed<string[]>(() => {
+        const out: string[] = [];
+        for (const zone of catalog.value?.locations ?? []) {
+            out.push(zone.name);
+            for (const child of zone.children) {
+                out.push(`${zone.name}/${child.name}`);
+            }
+        }
+        return out;
+    });
+    const locationPickCount = computed(
+        () => locationLeafPaths.value.filter((p) => locationPicks[p.toLowerCase()]).length,
+    );
+    const locationMasterState = computed<boolean | null>(() => {
+        const total = locationLeafPaths.value.length;
+        const picked = locationPickCount.value;
+        if (total === 0 || picked === 0) return false;
+        if (picked === total) return true;
+        return null;
+    });
+    function toggleAllLocations(value: boolean | null) {
+        const on = value === true;
+        for (const p of locationLeafPaths.value) locationPicks[p.toLowerCase()] = on;
+    }
+
+    // FU-195 (L30) — parse the paste-rows textarea. One row per line;
+    // fields comma-separated: Name, Group?, Location?. Empty lines and
+    // rows without a Name are dropped silently.
+    const pasteRowsParsed = computed<DraftItem[]>(() => {
+        const rows: DraftItem[] = [];
+        for (const rawLine of pasteRowsText.value.split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            const parts = line.split(',').map((p) => p.trim());
+            const name = parts[0] ?? '';
+            if (!name) continue;
+            rows.push({
+                name,
+                group_name: parts[1] ? parts[1] : null,
+                location_name: parts[2] ? parts[2] : null,
+            });
+        }
+        return rows;
+    });
+    function queuePastedRows() {
+        const rows = pasteRowsParsed.value;
+        if (rows.length === 0) return;
+        draftItems.value.push(...rows);
+        const n = rows.length;
+        pasteRowsText.value = '';
+        $q.notify({
+            type: 'positive',
+            position: 'bottom-right',
+            message: `Queued ${n} row${n === 1 ? '' : 's'} — saved when you finish.`,
+        });
     }
 
     // ── Navigation ───────────────────────────────────────────────────
@@ -932,10 +1223,25 @@
     // items), so the items resolve against the groups/locations just seeded.
     async function applyDraft() {
         await persistPreferences();
-        if (form.seedGroups || form.seedLocations) {
+        // FU-195 — send the actual picked names/paths. Master bool is
+        // implicit: it's true whenever any pick under it survives.
+        const groupsWanted = groupPickCount.value > 0;
+        const locationsWanted = locationPickCount.value > 0;
+        if (groupsWanted || locationsWanted) {
+            const totalGroups = catalog.value?.groups.length ?? 0;
+            const totalLocations = locationLeafPaths.value.length;
+            const allGroupsPicked = groupPickCount.value === totalGroups;
+            const allLocationsPicked = locationPickCount.value === totalLocations;
             await onboardingApi.seedAsync({
-                groups: form.seedGroups,
-                locations: form.seedLocations,
+                groups: groupsWanted,
+                locations: locationsWanted,
+                // Null when the user wants everything → matches the "seed
+                // all defaults" semantic on the server (and keeps the wire
+                // payload tiny in the common case).
+                group_names: groupsWanted && !allGroupsPicked
+                    ? pickedGroupNames.value : null,
+                location_paths: locationsWanted && !allLocationsPicked
+                    ? pickedLocationPaths.value : null,
             });
         }
         // Pack picks + first items, created by NAME (server resolves group /

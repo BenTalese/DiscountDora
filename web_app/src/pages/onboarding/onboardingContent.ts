@@ -66,7 +66,7 @@ export const LOOP_STAGES: readonly LoopStage[] = [
         key: 'restock',
         label: 'Restock',
         icon: ICONS.sync,
-        sell: 'Finishing the shop bumps what you bought back to well-stocked — no re-counting.',
+        sell: 'Finishing the shop bumps what you bought back to stocked — no re-counting.',
     },
     {
         key: 'cook',

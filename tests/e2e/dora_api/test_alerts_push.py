@@ -198,7 +198,7 @@ def test__push_job__skips_fyi_tier_alerts(api):
     user_id = _me_user_id()
     _subscribe(f"https://test.push/fyi-test/{uuid.uuid4().hex}")
     name = f"push-fyi-{uuid.uuid4().hex[:8]}"
-    # Create at the low-stock level (sequence > 0 but < well-stocked).
+    # Create at the low-stock level (sequence > 0 but < stocked).
     levels = requests.get(f"{BASE}/stock-levels").json()["items"]
     low_level = next((l for l in levels if "low" in l.get("name", "").lower()), levels[0])
     resp = requests.post(f"{BASE}/stock-items", json={

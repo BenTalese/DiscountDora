@@ -25,7 +25,7 @@ def test__get_stock_levels__GettingStockLevel__GetsAllExpectedAttributes(api):
     # natural order, not sequence order.
     _StockLevel = requests.get(f'{base_route}?sort=sequence:asc').json()['items'][0]
 
-    assert _StockLevel['name'] == 'Well-Stocked'
+    assert _StockLevel['name'] == 'Stocked'
     assert _StockLevel['sequence'] == 0
     assert is_valid_uuid(_StockLevel['stock_level_id'])
     assert _StockLevel.keys() == {
@@ -40,12 +40,12 @@ def test__get_stock_levels__GettingAllStockLevels__GetsAllStockLevels(api):
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()['items']) == 4
-    assert _Response.json()['total'] == 4
+    assert len(_Response.json()['items']) == 3
+    assert _Response.json()['total'] == 3
 
 
 def test__get_stock_levels__FilteringBySequence__GetsSingleMatchingStockLevel(api):
-    _Response = requests.get(f'{base_route}?filter=sequence:gt:2')
+    _Response = requests.get(f'{base_route}?filter=sequence:gt:1')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
@@ -107,10 +107,9 @@ def test__get_stock_levels__SortingByNonExistentAttribute__IsBadRequest(api):
 def test__get_stock_levels__SortingBySequenceAscending__StockLevelsSortedBySequenceAscending(api):
     _Items = requests.get(f'{base_route}?sort=sequence:asc').json()['items']
 
-    assert _Items[0]['name'] == 'Well-Stocked'
-    assert _Items[1]['name'] == 'Sufficient Stock'
-    assert _Items[2]['name'] == 'Low Stock'
-    assert _Items[3]['name'] == 'Out of Stock'
+    assert _Items[0]['name'] == 'Stocked'
+    assert _Items[1]['name'] == 'Low Stock'
+    assert _Items[2]['name'] == 'Out of Stock'
 
 
 def test__get_stock_levels__SortingBySequenceDescending__StockLevelsSortedBySequenceDescending(api):
@@ -118,8 +117,7 @@ def test__get_stock_levels__SortingBySequenceDescending__StockLevelsSortedBySequ
 
     assert _Items[0]['name'] == 'Out of Stock'
     assert _Items[1]['name'] == 'Low Stock'
-    assert _Items[2]['name'] == 'Sufficient Stock'
-    assert _Items[3]['name'] == 'Well-Stocked'
+    assert _Items[2]['name'] == 'Stocked'
 
 
 def test__get_stock_levels__GettingTwoStockLevelsPerPage__GetsPageOfTwoStockLevels(api):
@@ -127,10 +125,10 @@ def test__get_stock_levels__GettingTwoStockLevelsPerPage__GetsPageOfTwoStockLeve
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()['items'][0]['name'] == 'Well-Stocked'
-    assert _Response.json()['items'][1]['name'] == 'Sufficient Stock'
+    assert _Response.json()['items'][0]['name'] == 'Stocked'
+    assert _Response.json()['items'][1]['name'] == 'Low Stock'
     assert len(_Response.json()['items']) == 2
-    assert _Response.json()['total'] == 4
+    assert _Response.json()['total'] == 3
 
 
 def test__get_stock_levels__GettingSecondPage__GetsSecondPageOfStockLevels(api):
@@ -138,9 +136,8 @@ def test__get_stock_levels__GettingSecondPage__GetsSecondPageOfStockLevels(api):
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()['items'][0]['name'] == 'Low Stock'
-    assert _Response.json()['items'][1]['name'] == 'Out of Stock'
-    assert len(_Response.json()['items']) == 2
+    assert _Response.json()['items'][0]['name'] == 'Out of Stock'
+    assert len(_Response.json()['items']) == 1
 
 
 def test__get_stock_levels__PageValueIsNotInteger__IsBadRequest(api):
@@ -179,7 +176,7 @@ def test__get_stock_levels__PageWithoutLimit__DefaultsLimit(api):
     assert _Response.status_code == 200
     assert _Response.json()['page'] == 1
     assert _Response.json()['limit'] == 50
-    assert len(_Response.json()['items']) == 4
+    assert len(_Response.json()['items']) == 3
 
 
 def test__get_stock_levels__LimitWithoutPage__DefaultsPage(api):
@@ -193,15 +190,14 @@ def test__get_stock_levels__LimitWithoutPage__DefaultsPage(api):
 
 
 def test__get_stock_levels__FilteringSortingAndPagingStockLevels__GetsMatchingStockLevels(api):
-    _Response = requests.get(f'{base_route}?filter=sequence:gt:0&sort=sequence:desc&page=2&limit=2')
+    _Response = requests.get(f'{base_route}?filter=sequence:gt:0&sort=sequence:desc&page=2&limit=1')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    # sequence>0 → Sufficient(1), Low(2), Out(3); desc → Out, Low, Sufficient;
-    # page 2 of 2 → Sufficient Stock.
-    assert _Response.json()['items'][0]['name'] == 'Sufficient Stock'
+    # sequence>0 → Low(1), Out(2); desc → Out, Low; page 2 of 2 → Low Stock.
+    assert _Response.json()['items'][0]['name'] == 'Low Stock'
     assert len(_Response.json()['items']) == 1
-    assert _Response.json()['total'] == 3
+    assert _Response.json()['total'] == 2
 
 
 #endregion get_stock_levels tests

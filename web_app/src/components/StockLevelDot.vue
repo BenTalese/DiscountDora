@@ -32,8 +32,7 @@
         LOW_STOCK_SEQUENCE,
         needsRestockSequence,
         OUT_OF_STOCK_SEQUENCE,
-        SUFFICIENT_STOCK_SEQUENCE,
-        WELL_STOCKED_SEQUENCE,
+        STOCKED_SEQUENCE,
     } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -59,10 +58,8 @@
     const levelColour = computed(() => colourForSequence(levelSequence.value));
     const levelShort = computed(() => {
         switch (levelSequence.value) {
-            case WELL_STOCKED_SEQUENCE:
+            case STOCKED_SEQUENCE:
                 return 'OK';
-            case SUFFICIENT_STOCK_SEQUENCE:
-                return 'Mid';
             case LOW_STOCK_SEQUENCE:
                 return 'Low';
             case OUT_OF_STOCK_SEQUENCE:

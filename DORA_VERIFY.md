@@ -383,16 +383,33 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Stock
 
+### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
+- [ ] Fresh install (or after `alembic upgrade head` from an existing DB) — Settings → Stock levels shows exactly **three rows**: Stocked (seq 0), Low Stock (seq 1), Out of Stock (seq 2). No "Sufficient Stock" row anywhere
+- [ ] Any StockItem that was on "Sufficient Stock" in the pre-migration DB now sits on "Stocked" (spot-check via Stock Overview)
+- [ ] StockLevelChange history for items that had transitions through Sufficient still shows "Sufficient Stock" in the history rail (denormalised name column preserved the audit trail); the FK column is null for those historic rows
+- [ ] Stock Overview footer counts show 3 level chips (Stocked / Low / Out) — no Sufficient chip. Recompute live as filters change
+- [ ] StockLevelDot component: three visual states — green + "OK" (Stocked), red + "Low" (Low), muted (Out). No "Mid" abbreviation anywhere
+- [ ] Stock Overview level filter dropdown lists only 3 options (Stocked / Low / Out)
+- [ ] Finishing a shopping list — every ticked item flips to "Stocked" (was "Well-Stocked"). No level-override UI still labels a "Sufficient" middle option
+- [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out)
+- [ ] Alerts "Mark as restocked" action — the item's level becomes "Stocked"
+- [ ] Stocktake "Set all ticked to Stocked" (the shopping-list review-complete flow) — API request body carries `set_stocked: true` (verify in DevTools network); response body reads `{set_stocked: N, checked: N}`
+- [ ] Spreadsheet import (Settings → Data → Import) — items with a blank Level column default to "Stocked" (was "Sufficient Stock"). Items with "Stocked" / "Low" / "Out of stock" in the Level column parse correctly
+- [ ] Assistant chat: say "mark milk as sufficient" — assistant proposes setting milk to **Stocked** (the "sufficient" NLU alias now resolves to STOCKED). Similarly "ok" / "fine" / "well stocked" all resolve to Stocked
+- [ ] Recipe cookability: an ingredient at Low stock still counts the recipe as cookable (Low ≠ missing); at Out of Stock the recipe is not cookable
+- [ ] Onboarding "Restock" scene copy reads "Finishing the shop bumps what you bought back to stocked — no re-counting" (was "well-stocked")
+- [ ] Buy-verdict popover on a Stocked item: reads "Stocked" as the need-axis label (was "Well stocked")
+
 ### P8-05 "Should I buy?" buy-verdict oracle
 *Needs a seed with plausible price history + a few waste events. `buy_verdict_enabled` defaults on.*
 - [ ] **Feature flag** — Settings → System → Features → toggle "Should I buy? oracle" **off**. Reload Stock Overview: no badges anywhere. Toggle **on** again: badges reappear.
 - [ ] **Silent on low-confidence** — pick an item with < 3 shopping-list price samples. The badge does **not** render on its row (verify in DevTools: `/buy-verdict` request fires and returns `confidence: "low"`, but the row shows nothing).
 - [ ] **Out-of-stock → buy (high)** — mark an item Out of Stock. Its row renders a green **Buy** badge with confidence `high`. Popover shows "You're out of stock" as the first reason. One-tap "Add to primary list" — verify the item lands on the current quick-add-target list; the badge refreshes (may briefly show the *new* verdict factoring in the fact that it's on a list).
-- [ ] **Well-stocked + wasteful → skip (high)** — pick a well-stocked item, log 3+ waste events on it (`POST /waste/events` or via the row expiry menu). Rescan the overview: badge is red **Skip**. Popover reason: "You've wasted this ~N% of the time". One-tap label reads "Already stocked" (or "Remove from list" if it happens to be on an open list).
+- [ ] **Stocked + wasteful → skip (high)** — pick a stocked item, log 3+ waste events on it (`POST /waste/events` or via the row expiry menu). Rescan the overview: badge is red **Skip**. Popover reason: "You've wasted this ~N% of the time". One-tap label reads "Already stocked" (or "Remove from list" if it happens to be on an open list).
 - [ ] **Low-stock + cheap price → buy (high)** — mark an item Low Stock and log a shopping-list line with price ≤ 92% of its average. Badge is green **Buy** with confidence `high`. Popover reasons: "Running low" + "Cheapest you've paid in 3 months".
-- [ ] **Well-stocked + above usual → wait (medium)** — mark an item Well Stocked and log a recent purchase ≥ 108% of its average. Badge is orange **Wait**. Popover reason: "Above your usual price". Detail line quotes `$last vs $usual`.
+- [ ] **Stocked + above usual → wait (medium)** — mark an item Stocked and log a recent purchase ≥ 108% of its average. Badge is orange **Wait**. Popover reason: "Above your usual price". Detail line quotes `$last vs $usual`.
 - [ ] **Thin data collapse** — pick a brand-new stock item with no history. Badge should render **only** if the oracle managed to produce a non-low-confidence verdict; typically it should be silent. Force-open the item's `/buy-verdict` in a browser: response reads `verdict: "unsure", confidence: "low", reasons: [{signal: "thin_data"}]`.
-- [ ] **In-shop consumer** — open a draft shopping list with a well-stocked-and-wasteful item on it. The line-row badge reads **Skip**. Popover one-tap action reads "Remove from list"; tapping it calls the existing `onRemoveLine` handler and the line disappears with the same toast the normal remove uses.
+- [ ] **In-shop consumer** — open a draft shopping list with a stocked-and-wasteful item on it. The line-row badge reads **Skip**. Popover one-tap action reads "Remove from list"; tapping it calls the existing `onRemoveLine` handler and the line disappears with the same toast the normal remove uses.
 - [ ] **Cache behaviour** — reload Stock Overview twice quickly. Backend logs show one `/buy-verdict` request per item on first paint; the second paint hits the module-level cache (no additional requests within the 5-min stale window unless a mutation invalidated an entry).
 - [ ] **Mutation invalidation** — add an item to a list via the row's cart button. Its badge refreshes (may flip verdict / hide entirely if the new `is_on_open_list` state changes the one-tap action). Backend log confirms a fresh `/buy-verdict` request after `invalidateBuyVerdict(id)`.
 
@@ -480,7 +497,7 @@ surface — pick a surface, walk it top-to-bottom.
   - [ ] Overview tab's image / inputs have even breathing room
   - [ ] Peek panel scroll: whole detail panel scrolls with the page; nothing scrolls inside the panel; name + Delete never hidden
   - [ ] DoraTabs hover: inactive tab text transitions to accent, no surface-tint background
-  - [ ] Footer counts: Well-stocked (positive), Sufficient (warning), Low (negative), Out (muted/grey); "Auto-add" default text colour like "Shown"; label is "Essential" (not Flagged); sits between level stats and Auto-add
+  - [ ] Footer counts: Stocked (positive), Low (negative), Out (muted/grey); "Auto-add" default text colour like "Shown"; label is "Essential" (not Flagged); sits between level stats and Auto-add
   - [ ] Row buttons cluster: expiry / flag / open / cart same round shape + size. Click flag → toggles essential (left stripe + warning-tint icon)
 
 ### Stock Item Detail + Stock Overview feedback pass — origin FU-222
@@ -498,7 +515,7 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Level filter is a single "Any level" dropdown; selecting filters; clearable; no floating count badges
 - [ ] "Used in a recipe" filter is gone
 - [ ] Search placeholder reads "Search" (no parenthesised hint)
-- [ ] Footer counts in order: Shown · Well-stocked · Sufficient · Low · Out · Flagged · Auto-add · Needs attention. Reflect filtered set; recompute live
+- [ ] Footer counts in order: Shown · Stocked · Low · Out · Flagged · Auto-add · Needs attention. Reflect filtered set; recompute live
 - [ ] No console errors from dropped `usedInRecipeOnly` / `getStockLevelColour` references
 
 ### Stock Overview Chunk 4 — expiry control — origin FU-123
@@ -765,6 +782,25 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Onboarding
 
+### FU-195 — starter-data per-name picks + inline paste-rows (2026-07-02)
+- [ ] On a fresh install, `/welcome` step 3 shows two collapsed cards: "Use Dora's default stock groups" and "Use Dora's default locations". Master checkbox on each header is **fully ticked** by default (matches pre-FU-195 all-on behaviour)
+- [ ] Expand the groups card — 7 rows visible (Pantry, Fridge, Freezer, Cleaning, Toiletries, Pet, Other). Each has its own checkbox
+- [ ] Untick "Cleaning" and "Toiletries". Header caption now reads "5 of 7 chosen". Master checkbox flips to **indeterminate**
+- [ ] Untick everything else. Header caption reads "0 of 7 chosen". Master flips to **unchecked**
+- [ ] Click the master while unchecked → all 7 rows tick on. Click while fully checked → all off. Middle-click on indeterminate = tick-all
+- [ ] Expand the locations card — Kitchen (Zone) with Pantry / Fridge / Freezer indented, then Bathroom + Cabinet, then Laundry + Shelf
+- [ ] Tick just "Kitchen/Fridge" (leaf), leave the Kitchen zone unticked. Master says "1 of 8 chosen", indeterminate
+- [ ] Finish the wizard. In Settings → Stock locations only Kitchen (auto-created as FK parent) + Fridge exist. Bathroom / Laundry / their children are **not** seeded. Kitchen's zone row is NOT visually marked as "already existed"
+- [ ] Ticking the zone AND a child (e.g. Kitchen + Kitchen/Fridge) seeds both (zone once, child once). No duplicate rows
+- [ ] Case-insensitive: manually PATCH the local draft to have a path `"KITCHEN/fridge"` (in DevTools localStorage) → finish → seeds correctly (path comparison is lowercased server-side)
+- [ ] Master card body is hidden entirely when `state.has_groups` / `state.has_locations` is true. Existing-groups copy shows in place (unchanged from pre-FU-195)
+- [ ] Legacy draft resume: manually inject `{"seedGroups": false}` into the localStorage draft, reload — the groups pick-map defaults to all-**unticked** (respecting the legacy explicit-off intent). Any other legacy value → all-ticked default
+- [ ] **Paste-rows affordance:** below the two seed cards, an expansion "Paste rows to bulk-add items" opens a textarea. Paste `Milk, Dairy, Fridge\nOlive oil, Pantry\nEmpty,\n , trailing comma test\n` — caption below reads "3 rows ready — added on Finish" (the empty-name and whitespace-only rows drop silently)
+- [ ] Click "Queue 3 rows" → toast fires, textarea clears, the queued rows behave like step-4 draftItems (visible on step 4's "Added" list)
+- [ ] Finish the wizard → the pasted rows land as stock items with the given group/location names when those exist as seeded defaults; land without a group/location when unknown (matches the step-4 "unknown name = no group" semantics)
+- [ ] Full-importer link ("Bringing in a full spreadsheet? Open the full importer instead →") still routes to `/settings/admin/data/import`
+- [ ] `POST /onboarding/seed` in the DevTools Network tab: when every default is ticked, the body sends `group_names: null` / `location_paths: null` (compact wire; matches "seed all" semantic). When a subset is picked, the body carries just the picked names / paths in the original casing
+
 ### Onboarding C-5.1 / C-5.2 / C-5.3 / C-5.4 / C-5.5 / C-5.6 — origin FU-192
 - [ ] **C-5.1:** header reads "Skip"; bailing mid-wizard applies nothing — no username/theme/font change, no seeded groups/locations, no stock items
 - [ ] Finish applies everything in dependency order (prefs → seeds → queued first items) and lands on `/`
@@ -902,6 +938,28 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Cross-cutting
+
+### C-19 shared auth-shell + AuthButton (2026-07-02)
+- [ ] Cold-load the app on slow-3G throttle. `#pre-mount-splash` paints midnight `#1f2647` immediately; when Vue mounts and `AuthShell` takes over, there is **no** light→midnight flash. One unified moment
+- [ ] Splash pulse: the mascot logo pulses at 60fps while `authStore` bootstraps; blobs are visibly present but motion-frozen (D2 `backdrop="quiet"`) — no CPU cost
+- [ ] Cannot-connect variant: kill the API (stop `dora_api`), reload. Splash shows the offline mascot + "Can't reach Dora's brain" + the retry button. Retry button matches the login-primary teal gradient
+- [ ] `/login` — primary Sign In button is pixel-identical to pre-migration (teal gradient, hover lifts, shadow bump)
+- [ ] `/login` — "Need an account? Register" now renders as a **full-width amber-gradient button** at the same size as Sign In (was: tiny ghost text). Toggle click still swaps the form mode
+- [ ] `/login` — "Forgot password?" now renders as a **full-width ghost button** at the same size (was: fine-print router-link). Click routes to `/forgot-password`
+- [ ] `/login` register mode: password-policy fineprint ("Passwords must be at least 10 characters…") still shows under the form
+- [ ] Register with bad credentials → the field-level error still surfaces (regression check on `useFormErrors` plumbing)
+- [ ] Login with wrong password → generic "Sign-in failed. Check your username and password." error surfaces (the 401-opaque path still works)
+- [ ] `/setup` (bounce a fresh install with `admin_user_present=false` or hit the route while logged out on a bootstrap install) — visual should be **identical** to pre-migration. One-time-setup badge sits above the title; Create admin button is teal-gradient primary
+- [ ] `/forgot-password` — canvas matches Login (blobs, mascot NOT shown, frosted card). "Send reset link" primary; "Back to sign in" ghost. Success banner (submit any email) still renders. Feedback L16 satisfied
+- [ ] `/reset-password` — with a token: card shows the two password inputs + primary "Reset password" + ghost "Cancel". With no token: banner "This reset link is missing a token" + ghost "Cancel". After success: positive banner + primary "Continue to sign in"
+- [ ] `/verify-email?token=<good>` — success card renders with green tick + "Continue to sign in" primary. `?token=<bad>` — error card renders with "Resend verification" ghost. Click it → BaseDialog opens; submit any email → toast + dialog closes
+- [ ] `/confirm-email-change?token=<x>` — pending → success/error card renders; "Continue" primary routes to `/`
+- [ ] `git grep '\.auth-shell\b' web_app/src/` returns zero from a fresh clone (no aux page still declares the class locally)
+- [ ] `/welcome` (onboarding wizard) — canvas now shows the midnight blobs behind the wizard cards. Header ("Dashy Dora" title + mascot avatar + Sign out) is legible over midnight (white text on midnight). Sign out button still tappable and logs you out
+- [ ] `/welcome` onboarding scenes — Scene 1 (scatter icons) legible on midnight, question-mark glyph reads amber. Scene 3 (brain mascot) centred + visible. Scene 4 (persona pills) pills readable (frosted-glass background)
+- [ ] Reduced-motion (toggle OS setting or DevTools emulation) on `/login`: blobs and mascot freeze in place; card enter animation off; button hover no longer translates
+- [ ] Mobile viewport (~360px) on `/login` and `/setup` — mascot shrinks to 72px, tucks above the card (not fighting card overlap)
+- [ ] Password policy note under register mode still readable inside the card foot area
 
 ### P8-01 rename: no stray "Discount Dora" anywhere user-facing (2026-07-01)
 - [ ] Dashboard hero: mascot image alt text (inspect → "Dashy Dora"), any screen-reader announcement of the greeting says "Dashy Dora" nowhere in it (the label is only on the image alt now)

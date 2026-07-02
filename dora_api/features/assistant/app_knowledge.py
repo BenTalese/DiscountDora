@@ -33,7 +33,7 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian stores
 - Shopping Lists: multiple lists with one marked PRIMARY (the default target
   for new additions). Archive completed lists, copy lists, use templates,
   group items by store, and a "finish shopping" flow that bumps ticked
-  items back to a well-stocked level. Lists can be marked in-progress while
+  items back to a stocked level. Lists can be marked in-progress while
   shopping.
 - Alerts: the bell icon (top bar) opens a panel of things needing attention —
   expired, expiring soon, low/out of stock, stocktake overdue — with inline

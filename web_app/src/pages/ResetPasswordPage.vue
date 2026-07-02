@@ -1,72 +1,67 @@
 <template>
-    <div class="auth-shell">
-        <q-card class="auth-card" flat bordered>
-            <q-card-section class="text-center">
-                <q-icon :name="ICONS.password" size="56px" class="text-primary" />
-                <div class="text-h6 q-mt-md">Choose a new password</div>
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    Must be at least 10 characters and include a letter and a digit.
-                </div>
-            </q-card-section>
-            <q-card-section v-if="!token">
-                <q-banner class="dora-bg-negative-soft text-negative" rounded>
-                    This reset link is missing a token. Request a fresh one
-                    from Forgot password.
-                </q-banner>
-            </q-card-section>
-            <q-card-section v-else-if="!done">
-                <q-form @submit.prevent="onSubmit" class="q-gutter-md">
-                    <q-input
-                        v-model="password"
-                        outlined
-                        autofocus
-                        type="password"
-                        label="New password"
-                        autocomplete="new-password"
-                        :error="!!fieldError"
-                        :error-message="fieldError"
-                        @update:model-value="fieldError = ''"
-                    />
-                    <q-input
-                        v-model="confirm"
-                        outlined
-                        type="password"
-                        label="Confirm new password"
-                        autocomplete="new-password"
-                    />
-                    <BaseButton
-                        type="submit"
-                        size="lg"
-                        class="full-width"
-                        :loading="submitting"
-                        :disable="!password || password !== confirm"
-                        label="Reset password"
-                    />
-                    <div v-if="password && password !== confirm" class="text-caption text-negative">
-                        Passwords don't match.
-                    </div>
-                </q-form>
-            </q-card-section>
-            <q-card-section v-else>
-                <q-banner class="dora-bg-positive-soft text-positive" rounded>
-                    <template #avatar><q-icon :name="ICONS.check_circle" /></template>
-                    Password reset. Sign in with your new password.
-                </q-banner>
-            </q-card-section>
-            <q-card-actions align="center">
-                <BaseButton
-                    v-if="done"
-                    label="Continue to sign in"
-                    to="/login"
-                />
-                <BaseButton v-else variant="ghost" class="text-primary" label="Cancel" to="/login" />
-            </q-card-actions>
-        </q-card>
-    </div>
+    <AuthShell backdrop="blobs" mascot="none">
+        <template #card-head>
+            <q-icon :name="ICONS.password" size="56px" :style="'color: var(--auth-shell-accent)'" />
+            <div class="text-h6 q-mt-md">Choose a new password</div>
+            <div class="text-caption q-mt-xs auth-aux-sub">
+                Must be at least 10 characters and include a letter and a digit.
+            </div>
+        </template>
+
+        <q-banner v-if="!token" class="dora-bg-negative-soft text-negative" rounded>
+            This reset link is missing a token. Request a fresh one
+            from Forgot password.
+        </q-banner>
+        <q-form v-else-if="!done" @submit.prevent="onSubmit" class="q-gutter-md">
+            <q-input
+                v-model="password"
+                outlined
+                autofocus
+                type="password"
+                label="New password"
+                autocomplete="new-password"
+                :error="!!fieldError"
+                :error-message="fieldError"
+                @update:model-value="fieldError = ''"
+            />
+            <q-input
+                v-model="confirm"
+                outlined
+                type="password"
+                label="Confirm new password"
+                autocomplete="new-password"
+            />
+            <AuthButton
+                type="submit"
+                colour="primary"
+                :loading="submitting"
+                :disable="!password || password !== confirm"
+                label="Reset password"
+            />
+            <div v-if="password && password !== confirm" class="text-caption text-negative">
+                Passwords don't match.
+            </div>
+        </q-form>
+        <q-banner v-else class="dora-bg-positive-soft text-positive" rounded>
+            <template #avatar><q-icon :name="ICONS.check_circle" /></template>
+            Password reset. Sign in with your new password.
+        </q-banner>
+
+        <template #card-foot>
+            <AuthButton
+                v-if="done"
+                colour="primary"
+                label="Continue to sign in"
+                to="/login"
+            />
+            <AuthButton v-else colour="ghost" label="Cancel" to="/login" />
+        </template>
+    </AuthShell>
 </template>
 
 <script lang="ts" setup>
-    import BaseButton from 'src/components/BaseButton.vue';
+    import AuthShell from 'src/components/AuthShell.vue';
+    import AuthButton from 'src/components/AuthButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, ref } from 'vue';
@@ -114,9 +109,7 @@
 </script>
 
 <style scoped>
-    .auth-shell {
-        min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        padding: 24px; background: var(--surface-page);
+    .auth-aux-sub {
+        color: var(--auth-shell-text-muted);
     }
-    .auth-card { max-width: 420px; width: 100%; padding: 16px; }
 </style>

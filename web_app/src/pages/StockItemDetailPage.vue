@@ -321,7 +321,7 @@
                                                     Flagged items show up in
                                                     "essentials" auto-generate
                                                     sources even when they're
-                                                    well-stocked. Different
+                                                    stocked. Different
                                                     from auto-add: this one
                                                     only matters when you run
                                                     auto-generate, not on

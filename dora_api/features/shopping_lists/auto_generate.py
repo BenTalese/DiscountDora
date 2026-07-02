@@ -54,10 +54,10 @@ from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-# Stock level sequences (seed.py): 0=Well-Stocked, 1=Sufficient, 2=Low, 3=Out.
-SEQ_WELL_STOCKED = 0
-SEQ_LOW = 2
-SEQ_OUT = 3
+# Stock level sequences (seed.py): 0=Stocked, 1=Low, 2=Out.
+SEQ_STOCKED = 0
+SEQ_LOW = 1
+SEQ_OUT = 2
 LOW_OR_OUT = {SEQ_LOW, SEQ_OUT}
 
 
@@ -89,7 +89,7 @@ class AutoGenerateSources(BaseModel):
     # from. Resolution: any MealPlanEntry between [week_start, week_start+6d].
     meal_plan_week: Optional[date] = None
     # Specific recipe IDs to ingest. For each recipe, subtract items that
-    # are well-stocked. Mode == "missing" means subtract; we don't yet
+    # are stocked. Mode == "missing" means subtract; we don't yet
     # support "ingredients regardless of stock" here (no UX path for it).
     recipes: List[UUID] = []
 
@@ -289,7 +289,7 @@ class AutoGenerateHandler:
 
     def _collect_flagged(self, candidates: Dict[UUID, _Candidate]) -> None:
         # "Always include in auto-generated lists" — flagged items go on the
-        # list even if currently well-stocked. The user has explicitly said
+        # list even if currently stocked. The user has explicitly said
         # "always restock this".
         items: List[StockItem] = self.repository.get(StockItem).all(
             EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True)
@@ -307,7 +307,7 @@ class AutoGenerateHandler:
         recipe_ids: List[UUID],
     ) -> None:
         # Pull each recipe with ingredients, then for each ingredient stock
-        # item: if it's not well-stocked, schedule it. Recipe name goes into
+        # item: if it's not stocked, schedule it. Recipe name goes into
         # `detail` so the UI can render "auto: recipe Tomato Soup".
         for rid in recipe_ids:
             recipe = (
@@ -327,7 +327,7 @@ class AutoGenerateHandler:
                 .all(EntityField(StockItem, "id").in_(stock_item_ids))
             )
             for item in items:
-                if item.stock_level is not None and item.stock_level.sequence == SEQ_WELL_STOCKED:
+                if item.stock_level is not None and item.stock_level.sequence == SEQ_STOCKED:
                     continue
                 self._merge(
                     candidates,
@@ -346,7 +346,7 @@ class AutoGenerateHandler:
     ) -> None:
         # Window = 7 days starting at week_start. Pull every entry in range,
         # then every recipe their meals reference, then ingredients. Items
-        # already well-stocked are subtracted (the user has them).
+        # already stocked are subtracted (the user has them).
         week_end = week_start + timedelta(days=6)
         plans: List[MealPlan] = (
             self.repository.get(MealPlan).include(MealPlan.Fields.ENTRIES).all()
@@ -386,7 +386,7 @@ class AutoGenerateHandler:
                 .all(EntityField(StockItem, "id").in_(stock_item_ids))
             )
             for item in items:
-                if item.stock_level is not None and item.stock_level.sequence == SEQ_WELL_STOCKED:
+                if item.stock_level is not None and item.stock_level.sequence == SEQ_STOCKED:
                     continue
                 self._merge(
                     candidates,

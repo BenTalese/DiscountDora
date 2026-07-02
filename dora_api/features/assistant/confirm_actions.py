@@ -114,11 +114,11 @@ _LEVEL_ALIASES: dict[str, StockStatus] = {
     "low": StockStatus.LOW_STOCK, "low stock": StockStatus.LOW_STOCK,
     "running low": StockStatus.LOW_STOCK, "almost out": StockStatus.LOW_STOCK,
     "almost gone": StockStatus.LOW_STOCK,
-    "sufficient": StockStatus.SUFFICIENT_STOCK, "ok": StockStatus.SUFFICIENT_STOCK,
-    "fine": StockStatus.SUFFICIENT_STOCK,
-    "well stocked": StockStatus.WELL_STOCKED, "well-stocked": StockStatus.WELL_STOCKED,
-    "stocked up": StockStatus.WELL_STOCKED, "full": StockStatus.WELL_STOCKED,
-    "plenty": StockStatus.WELL_STOCKED,
+    "stocked": StockStatus.STOCKED, "stocked up": StockStatus.STOCKED,
+    "ok": StockStatus.STOCKED, "fine": StockStatus.STOCKED,
+    "full": StockStatus.STOCKED, "plenty": StockStatus.STOCKED,
+    "sufficient": StockStatus.STOCKED,
+    "well stocked": StockStatus.STOCKED, "well-stocked": StockStatus.STOCKED,
 }
 
 

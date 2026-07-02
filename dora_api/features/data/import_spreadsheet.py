@@ -518,12 +518,12 @@ class CommitSpreadsheetHandler:
         row: list[Any], idx: int | None,
         existing_levels: list[StockLevel], choices: list[str],
     ) -> Any:
-        # Pick a sensible default — the Sufficient-Stock level (resolved by
-        # status identity, not name) is the middle-of-the-road option; users
-        # can edit individual items post-import.
-        sufficient = level_for_status(existing_levels, StockStatus.SUFFICIENT_STOCK)
+        # Pick a sensible default — the Stocked level (resolved by status
+        # identity, not name) is the "you have it" starting point; users can
+        # edit individual items post-import.
+        stocked = level_for_status(existing_levels, StockStatus.STOCKED)
         default = (
-            sufficient.id if sufficient
+            stocked.id if stocked
             else (existing_levels[0].id if existing_levels else None)
         )
         if idx is None or idx >= len(row):

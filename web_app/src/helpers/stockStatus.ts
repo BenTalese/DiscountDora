@@ -9,10 +9,9 @@
 // the helpers below only when you have a bare sequence number or a
 // StockLevel row.
 
-export const WELL_STOCKED_SEQUENCE = 0;
-export const SUFFICIENT_STOCK_SEQUENCE = 1;
-export const LOW_STOCK_SEQUENCE = 2;
-export const OUT_OF_STOCK_SEQUENCE = 3;
+export const STOCKED_SEQUENCE = 0;
+export const LOW_STOCK_SEQUENCE = 1;
+export const OUT_OF_STOCK_SEQUENCE = 2;
 
 type WithSequence = { sequence: number };
 

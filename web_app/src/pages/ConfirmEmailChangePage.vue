@@ -1,33 +1,33 @@
 <template>
-    <div class="auth-shell">
-        <q-card class="auth-card" flat bordered>
-            <q-card-section class="text-center">
-                <q-icon
-                    :name="status === 'ok' ? 'check_circle' : status === 'error' ? 'error' : 'mail_lock'"
-                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
-                    :class="{ 'dora-text-secondary': status !== 'ok' && status !== 'error' }"
-                    size="56px"
-                />
-                <div class="text-h6 q-mt-md">
-                    {{ status === 'ok' ? 'Email updated' : status === 'error' ? 'Link invalid' : 'Confirming…' }}
-                </div>
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    {{ status === 'ok'
-                        ? 'Your account email has been changed.'
-                        : status === 'error'
-                            ? 'The link may have expired or already been used.'
-                            : 'Just a moment.' }}
-                </div>
-            </q-card-section>
-            <q-card-actions align="center">
-                <BaseButton variant="primary" label="Continue" to="/" />
-            </q-card-actions>
-        </q-card>
-    </div>
+    <AuthShell backdrop="blobs" mascot="none">
+        <template #card-head>
+            <q-icon
+                :name="status === 'ok' ? 'check_circle' : status === 'error' ? 'error' : 'mail_lock'"
+                :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
+                :style="status !== 'ok' && status !== 'error' ? 'color: var(--auth-shell-accent)' : ''"
+                size="56px"
+            />
+            <div class="text-h6 q-mt-md">
+                {{ status === 'ok' ? 'Email updated' : status === 'error' ? 'Link invalid' : 'Confirming…' }}
+            </div>
+            <div class="text-caption q-mt-xs auth-aux-sub">
+                {{ status === 'ok'
+                    ? 'Your account email has been changed.'
+                    : status === 'error'
+                        ? 'The link may have expired or already been used.'
+                        : 'Just a moment.' }}
+            </div>
+        </template>
+
+        <template #card-foot>
+            <AuthButton colour="primary" label="Continue" to="/" />
+        </template>
+    </AuthShell>
 </template>
 
 <script lang="ts" setup>
-    import BaseButton from 'src/components/BaseButton.vue';
+    import AuthShell from 'src/components/AuthShell.vue';
+    import AuthButton from 'src/components/AuthButton.vue';
     import { onMounted, ref } from 'vue';
     import { useRoute } from 'vue-router';
     import AuthApiService from 'src/services/api/authApiService';
@@ -49,9 +49,7 @@
 </script>
 
 <style scoped>
-    .auth-shell {
-        min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        padding: 24px; background: var(--surface-page);
+    .auth-aux-sub {
+        color: var(--auth-shell-text-muted);
     }
-    .auth-card { max-width: 420px; width: 100%; padding: 16px; }
 </style>

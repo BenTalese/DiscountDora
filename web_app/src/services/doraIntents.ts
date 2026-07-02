@@ -67,7 +67,7 @@ export type DoraReply = {
 export type StockSnapshotItem = {
     id: string;
     name: string;
-    levelName: string | null;       // "Sufficient" / "Low Stock" / "Out of Stock" / null
+    levelName: string | null;       // "Stocked" / "Low Stock" / "Out of Stock" / null
     levelSequence: number | null;   // higher = less stock; null when unknown
     locationName: string | null;
     expiryDate: string | null;      // ISO yyyy-mm-dd

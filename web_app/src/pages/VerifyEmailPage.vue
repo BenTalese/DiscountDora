@@ -1,71 +1,70 @@
 <template>
-    <div class="auth-shell">
-        <q-card class="auth-card" flat bordered>
-            <q-card-section class="text-center">
-                <q-icon
-                    :name="status === 'ok' ? 'mark_email_read' : status === 'error' ? 'error' : 'mail_lock'"
-                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
-                    :class="{ 'dora-text-secondary': status !== 'ok' && status !== 'error' }"
-                    size="64px"
-                />
-                <div class="text-h6 q-mt-md">
-                    {{ headline }}
-                </div>
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    {{ subline }}
-                </div>
-            </q-card-section>
-            <q-card-actions align="center">
-                <BaseButton
-                    v-if="status === 'ok'"
-                    variant="primary"
-                    label="Continue to sign in"
-                    to="/login?verified=1"
-                />
-                <BaseButton
-                    v-else-if="status === 'error'"
-                    variant="ghost"
-                    class="text-primary"
-                    label="Resend verification"
-                    @click="resendOpen = true"
-                />
-                <BaseButton
-                    v-else
-                    variant="ghost"
-                    class="text-primary"
-                    label="Cancel"
-                    to="/login"
-                />
-            </q-card-actions>
-        </q-card>
+    <AuthShell backdrop="blobs" mascot="none">
+        <template #card-head>
+            <q-icon
+                :name="status === 'ok' ? 'mark_email_read' : status === 'error' ? 'error' : 'mail_lock'"
+                :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
+                :style="status !== 'ok' && status !== 'error' ? 'color: var(--auth-shell-accent)' : ''"
+                size="64px"
+            />
+            <div class="text-h6 q-mt-md">
+                {{ headline }}
+            </div>
+            <div class="text-caption q-mt-xs auth-aux-sub">
+                {{ subline }}
+            </div>
+        </template>
 
-        <BaseDialog v-model="resendOpen" title="Resend verification" closable card-style="min-width: 320px">
-                <q-card-section>
-                    <q-input
-                        v-model="resendEmail"
-                        type="email"
-                        outlined
-                        dense
-                        label="Email address"
-                        autofocus
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Send"
-                        :loading="resending"
-                        :disable="!resendEmail.trim() || resending"
-                        @click="onResend"
-                    />
-                </template>
-        </BaseDialog>
-    </div>
+        <template #card-foot>
+            <AuthButton
+                v-if="status === 'ok'"
+                colour="primary"
+                label="Continue to sign in"
+                to="/login?verified=1"
+            />
+            <AuthButton
+                v-else-if="status === 'error'"
+                colour="ghost"
+                label="Resend verification"
+                @click="resendOpen = true"
+            />
+            <AuthButton
+                v-else
+                colour="ghost"
+                label="Cancel"
+                to="/login"
+            />
+        </template>
+    </AuthShell>
+
+    <BaseDialog v-model="resendOpen" title="Resend verification" closable card-style="min-width: 320px">
+            <q-card-section>
+                <q-input
+                    v-model="resendEmail"
+                    type="email"
+                    outlined
+                    dense
+                    label="Email address"
+                    autofocus
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
+                    label="Send"
+                    :loading="resending"
+                    :disable="!resendEmail.trim() || resending"
+                    @click="onResend"
+                />
+            </template>
+    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import AuthShell from 'src/components/AuthShell.vue';
+    import AuthButton from 'src/components/AuthButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { computed, onMounted, ref } from 'vue';
@@ -130,9 +129,7 @@
 </script>
 
 <style scoped>
-    .auth-shell {
-        min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        padding: 24px; background: var(--surface-page);
+    .auth-aux-sub {
+        color: var(--auth-shell-text-muted);
     }
-    .auth-card { max-width: 420px; width: 100%; padding: 16px; }
 </style>

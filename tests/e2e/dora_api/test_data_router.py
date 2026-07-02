@@ -377,7 +377,7 @@ def test__spreadsheet_import__csv_happy_path__creates_rows(api):
     csv = (
         "Item,Status,Where,Group,Best before,Essential?\n"
         "TestImport-Alpha,Low,Pantry,Baking,2027-01-15,yes\n"
-        "TestImport-Beta,Well-Stocked,Pantry,,2026-12-31,\n"
+        "TestImport-Beta,Stocked,Pantry,,2026-12-31,\n"
         "TestImport-Gamma,Out of stock,,,,no\n"
     ).encode("utf-8")
     upload_id = _stage_bytes(csv)

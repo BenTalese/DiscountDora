@@ -184,11 +184,13 @@ def seed_dev_data():
         repo.add(loc)
 
     # ---------------- STOCK LEVELS ---------------- #
-    well = StockLevel(name="Well-Stocked", sequence=0)
-    sufficient = StockLevel(name="Sufficient Stock", sequence=1)
-    low = StockLevel(name="Low Stock", sequence=2)
-    out = StockLevel(name="Out of Stock", sequence=3)
-    for lvl in (well, sufficient, low, out):
+    # 3-band scheme (see dora_api/domain/stock_status.py). The middle
+    # "Sufficient" band was axed 2026-07-02 — semantically dead + clashed
+    # with P8-07 Zero-Input Pantry's Out/Low/Stocked inference.
+    stocked = StockLevel(name="Stocked", sequence=0)
+    low = StockLevel(name="Low Stock", sequence=1)
+    out = StockLevel(name="Out of Stock", sequence=2)
+    for lvl in (stocked, low, out):
         repo.add(lvl)
 
     # ---------------- STOCK GROUPS ---------------- #
@@ -223,41 +225,41 @@ def seed_dev_data():
         repo.add(item)
         return item
 
-    mangoes = make_item(name="Kensington Pride Mangoes", group=g_fruit, level=well,
+    mangoes = make_item(name="Kensington Pride Mangoes", group=g_fruit, level=stocked,
                         location=crisper, expiry=today + timedelta(days=4), stocktake_days=3)
-    pizza = make_item(name="Super Awesome Pizza", group=g_frozen, level=sufficient, location=freezer)
+    pizza = make_item(name="Super Awesome Pizza", group=g_frozen, level=stocked, location=freezer)
     chips = make_item(name="Hot Crispy Chippies", group=g_snacks, level=low, location=None,
                       stocktake_alerts=True, stocktake_days=5)
     brazil = make_item(name="Brazil Nuts", group=g_snacks, level=low, location=middle_left,
                        flagged=True, stocktake_alerts=True)
     icecream = make_item(name="Vanilla Ice Cream", group=g_frozen, level=low, location=freezer,
                          stocktake_alerts=True, expiry=today - timedelta(days=3))
-    pasta = make_item(name="Barilla Pasta", group=g_pantry, level=well, location=top_shelf,
+    pasta = make_item(name="Barilla Pasta", group=g_pantry, level=stocked, location=top_shelf,
                       products=[pasta_barilla])
     milk = make_item(name="Full Cream Milk", group=g_dairy, level=low, location=fridge,
                      expiry=today + timedelta(days=2), auto_add=True, is_open=True,
                      opened_on=today - timedelta(days=2), products=[milk_woolies, milk_coles],
                      updated_days_ago=1)
-    eggs = make_item(name="Free Range Eggs", group=g_dairy, level=sufficient, location=fridge,
+    eggs = make_item(name="Free Range Eggs", group=g_dairy, level=stocked, location=fridge,
                      flagged=True, products=[eggs_woolies])
-    butter = make_item(name="Butter", group=g_dairy, level=well, location=fridge,
+    butter = make_item(name="Butter", group=g_dairy, level=stocked, location=fridge,
                        is_open=True, opened_on=today - timedelta(days=5))
-    tomatoes = make_item(name="Canned Tomatoes", group=g_pantry, level=well, location=middle_right)
-    onions = make_item(name="Brown Onions", group=g_fruit, level=sufficient, location=pantry)
-    garlic = make_item(name="Garlic", group=g_fruit, level=well, location=pantry)
-    olive_oil = make_item(name="Olive Oil", group=g_pantry, level=sufficient, location=top_shelf,
+    tomatoes = make_item(name="Canned Tomatoes", group=g_pantry, level=stocked, location=middle_right)
+    onions = make_item(name="Brown Onions", group=g_fruit, level=stocked, location=pantry)
+    garlic = make_item(name="Garlic", group=g_fruit, level=stocked, location=pantry)
+    olive_oil = make_item(name="Olive Oil", group=g_pantry, level=stocked, location=top_shelf,
                           flagged=True, is_open=True, opened_on=today - timedelta(days=20),
                           products=[oil_aldi])
     parmesan = make_item(name="Parmesan Cheese", group=g_dairy, level=out, location=fridge,
                          auto_add=True, products=[parmesan_coles])
-    chicken = make_item(name="Chicken Breast", group=g_meat, level=sufficient, location=freezer)
-    rice = make_item(name="Jasmine Rice", group=g_pantry, level=well, location=middle_right)
-    soy = make_item(name="Soy Sauce", group=g_pantry, level=sufficient, location=middle_left)
+    chicken = make_item(name="Chicken Breast", group=g_meat, level=stocked, location=freezer)
+    rice = make_item(name="Jasmine Rice", group=g_pantry, level=stocked, location=middle_right)
+    soy = make_item(name="Soy Sauce", group=g_pantry, level=stocked, location=middle_left)
     broccoli = make_item(name="Broccoli", group=g_fruit, level=low, location=crisper,
                          expiry=today + timedelta(days=1), auto_add=True, stocktake_alerts=True)
     bread = make_item(name="Sourdough Bread", group=g_pantry, level=out, location=None,
                       flagged=True, auto_add=True)
-    coffee = make_item(name="Coffee Beans", group=g_pantry, level=well, location=top_shelf,
+    coffee = make_item(name="Coffee Beans", group=g_pantry, level=stocked, location=top_shelf,
                        flagged=True, is_open=True, opened_on=today - timedelta(days=3),
                        products=[coffee_iga])
     # 2026-06-30 — dedicated test item for the History-tab truncation
@@ -265,7 +267,7 @@ def seed_dev_data():
     # events not shown" copy fires reliably on this one item. Named so
     # a browser tester can find it without spelunking.
     sriracha = make_item(
-        name="Sriracha (chatty history test)", group=g_pantry, level=well,
+        name="Sriracha (chatty history test)", group=g_pantry, level=stocked,
         location=middle_left, is_open=True,
         opened_on=today - timedelta(days=90),
         expiry=today + timedelta(days=15),
@@ -307,12 +309,16 @@ def seed_dev_data():
             changed_at=now - timedelta(days=days_ago),
         ))
 
-    level_change(milk, well, 9)
-    level_change(milk, sufficient, 5)
+    # Demo history exercising every 3-band transition (stocked → low →
+    # out on parmesan; stocked ⇄ low bounce on milk/icecream; a
+    # stocked-only refresh on pasta after a shop). Post-2026-07-02 the
+    # Sufficient middle-band is gone, so old stocked→sufficient
+    # transitions collapse into single stocked entries.
+    level_change(milk, stocked, 9)
     level_change(milk, low, 1)
-    level_change(pasta, sufficient, 12)
-    level_change(pasta, well, 3)
-    level_change(icecream, sufficient, 8)
+    level_change(pasta, stocked, 12)
+    level_change(pasta, stocked, 3)
+    level_change(icecream, stocked, 8)
     level_change(icecream, low, 2)
     level_change(parmesan, low, 6)
     level_change(parmesan, out, 1)
@@ -468,7 +474,7 @@ def seed_dev_data():
         repo.add(recipe)
         return recipe
 
-    # Cookable now (all ingredients well/sufficient).
+    # Cookable now (all ingredients stocked).
     aglio = make_recipe(
         name="Spaghetti Aglio e Olio", collection=weeknight, cuisine="Italian",
         category="Pasta", favourite=True, cook=15, prep=5, servings=2,
@@ -569,6 +575,13 @@ def seed_dev_data():
     # dedicated `sriracha` item. Purchase (Bought) events are already
     # emitted implicitly by the finished-shopping-list seed below.
     # R-017 — seed exercises every new surface introduced this round.
+
+    # Flush the recipes so the CookEvent inserts below (FK → Recipe.id)
+    # can rely on the parent rows already existing. CookEvent has no ORM
+    # `relationship(Recipe, ...)` — only a table-level FK — so SA's
+    # unit-of-work topo sort can't order Recipe before CookEvent on its
+    # own, and without this flush the FK check fails on commit.
+    repo.save_changes()
 
     # Cook events across the last 60 days. Recipes are referenced by
     # id/name — the projection joins each cook to its

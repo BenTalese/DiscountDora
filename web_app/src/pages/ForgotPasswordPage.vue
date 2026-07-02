@@ -1,50 +1,45 @@
 <template>
-    <div class="auth-shell">
-        <q-card class="auth-card" flat bordered>
-            <q-card-section class="text-center">
-                <q-icon :name="ICONS.lock_reset" size="56px" class="text-primary" />
-                <div class="text-h6 q-mt-md">Forgot password</div>
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    Enter your account email and we'll send a reset link.
-                </div>
-            </q-card-section>
-            <q-card-section v-if="!submitted">
-                <q-form @submit.prevent="onSubmit" class="q-gutter-md">
-                    <q-input
-                        v-model="email"
-                        type="email"
-                        outlined
-                        autofocus
-                        label="Email address"
-                        autocomplete="email"
-                        :rules="[(v: string) => !!v || 'Email is required']"
-                    />
-                    <BaseButton
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        class="full-width"
-                        :loading="submitting"
-                        label="Send reset link"
-                    />
-                </q-form>
-            </q-card-section>
-            <q-card-section v-else>
-                <q-banner class="dora-bg-sunken" rounded>
-                    <template #avatar><q-icon :name="ICONS.mark_email_read" /></template>
-                    If that address is registered, a reset link is on its way.
-                    Check your inbox (and spam folder).
-                </q-banner>
-            </q-card-section>
-            <q-card-actions align="center">
-                <BaseButton variant="ghost" class="text-primary" label="Back to sign in" to="/login" />
-            </q-card-actions>
-        </q-card>
-    </div>
+    <AuthShell backdrop="blobs" mascot="none">
+        <template #card-head>
+            <q-icon :name="ICONS.lock_reset" size="56px" :style="'color: var(--auth-shell-accent)'" />
+            <div class="text-h6 q-mt-md">Forgot password</div>
+            <div class="text-caption q-mt-xs auth-aux-sub">
+                Enter your account email and we'll send a reset link.
+            </div>
+        </template>
+
+        <q-form v-if="!submitted" @submit.prevent="onSubmit" class="q-gutter-md">
+            <q-input
+                v-model="email"
+                type="email"
+                outlined
+                autofocus
+                label="Email address"
+                autocomplete="email"
+                :rules="[(v: string) => !!v || 'Email is required']"
+            />
+            <AuthButton
+                type="submit"
+                colour="primary"
+                :loading="submitting"
+                label="Send reset link"
+            />
+        </q-form>
+        <q-banner v-else class="dora-bg-sunken" rounded>
+            <template #avatar><q-icon :name="ICONS.mark_email_read" /></template>
+            If that address is registered, a reset link is on its way.
+            Check your inbox (and spam folder).
+        </q-banner>
+
+        <template #card-foot>
+            <AuthButton colour="ghost" label="Back to sign in" to="/login" />
+        </template>
+    </AuthShell>
 </template>
 
 <script lang="ts" setup>
-    import BaseButton from 'src/components/BaseButton.vue';
+    import AuthShell from 'src/components/AuthShell.vue';
+    import AuthButton from 'src/components/AuthButton.vue';
     import { ICONS } from 'src/style/icons';
     import { ref } from 'vue';
     import AuthApiService from 'src/services/api/authApiService';
@@ -68,9 +63,7 @@
 </script>
 
 <style scoped>
-    .auth-shell {
-        min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        padding: 24px; background: var(--surface-page);
+    .auth-aux-sub {
+        color: var(--auth-shell-text-muted);
     }
-    .auth-card { max-width: 420px; width: 100%; padding: 16px; }
 </style>

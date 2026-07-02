@@ -23,7 +23,7 @@ def _today() -> date:
 def _rich_history_inputs(**overrides) -> _AxisInputs:
     """A middle-of-the-road history: 8 price samples over 6 months at
     around $3.80 with the most-recent shop at $3.85 (usual price band),
-    buying every ~14 days, no waste events, well-stocked. Individual
+    buying every ~14 days, no waste events, stocked. Individual
     tests override the axes they care about."""
     base = _AxisInputs(
         price_samples=[
@@ -128,9 +128,9 @@ def test__low_stock_plus_usual_price__is_buy_medium():
     assert verdict.confidence == "medium"
 
 
-# ── Well-stocked branches (waste + price interplay) ───────────────────
+# ── Stocked branches (waste + price interplay) ───────────────────
 
-def test__well_stocked_plus_frequent_waste__is_skip_high():
+def test__stocked_plus_frequent_waste__is_skip_high():
     """Charter §2.3.3: 'wastes often' should trump a cheap price — you
     do not want to buy more of what you throw away."""
     inputs = _rich_history_inputs(
@@ -152,7 +152,7 @@ def test__well_stocked_plus_frequent_waste__is_skip_high():
     assert verdict.one_tap_action.kind == "mark_stocked"
 
 
-def test__well_stocked_plus_waste_and_on_open_list__action_is_remove():
+def test__stocked_plus_waste_and_on_open_list__action_is_remove():
     """If we're saying skip *and* the item is already on an open list,
     the sensible one-tap is 'remove from list', not 'mark stocked'."""
     inputs = _rich_history_inputs(
@@ -166,7 +166,7 @@ def test__well_stocked_plus_waste_and_on_open_list__action_is_remove():
     assert verdict.one_tap_action.kind == "remove_from_list"
 
 
-def test__well_stocked_plus_cheapest__is_buy_medium():
+def test__stocked_plus_cheapest__is_buy_medium():
     inputs = _rich_history_inputs(
         stock_level_band="stocked",
         price_samples=[
@@ -182,7 +182,7 @@ def test__well_stocked_plus_cheapest__is_buy_medium():
     assert verdict.confidence == "medium"
 
 
-def test__well_stocked_plus_above_usual__is_wait():
+def test__stocked_plus_above_usual__is_wait():
     inputs = _rich_history_inputs(
         stock_level_band="stocked",
         price_samples=[
@@ -196,7 +196,7 @@ def test__well_stocked_plus_above_usual__is_wait():
     assert verdict.verdict == "wait"
 
 
-def test__well_stocked_plus_usual_price__is_unsure_low():
+def test__stocked_plus_usual_price__is_unsure_low():
     verdict = compose_verdict(_rich_history_inputs(stock_level_band="stocked"))
     assert verdict.verdict == "unsure"
     assert verdict.confidence == "low"
@@ -263,7 +263,7 @@ def test__waste_thin_but_no_events__signals_no_waste_history_not_thin():
         today=_today(),
     )
     verdict = compose_verdict(inputs)
-    # Well-stocked + usual price + no-waste-history → unsure/low
+    # Stocked + usual price + no-waste-history → unsure/low
     # (no positive reason for a buy either). But not the 3-axis
     # collapse; there are still price + need reasons.
     assert verdict.verdict == "unsure"

@@ -10,6 +10,82 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-195 — Onboarding starter-data: in-page import + groups/locations "some" (trims from C-5.5)
+- **Raised:** 2026-06-16 (Onboarding C-5.5)
+- **Type:** leftover
+- **What:** Two C-5.5 sub-asks were scoped down: (1) **inline import** (L30) — the starter-data step
+  still **linked** to `/data/import` rather than embedding the importer on the page (embedding the
+  full importer was disproportionate for this build); (2) **groups/locations "some"** (L34) — the
+  step offered all/none per catalogue **+ a static preview** (captions listed the default names), and
+  the **packs** gave item-level ticking, but there was no individual tick-list for the default
+  groups/locations themselves.
+- **State note:** Resolved 2026-07-02. Backend `SeedRequest` gained optional
+  `group_names: list[str] | None` and `location_paths: list[str] | None` filters
+  (`"Zone"` / `"Zone/Child"` path form for the nested locations). Null-or-omitted preserves
+  the "seed all defaults" behaviour; provided list narrows to the intersection. Selecting a
+  child location auto-creates its parent zone as a silent FK prerequisite (not counted as
+  skipped). The wizard's two seed-catalogue cards became `q-expansion-item` blocks with
+  tri-state master checkboxes + per-name tick-lists. Inline "Paste rows to bulk-add items"
+  expansion parses `Name, Group?, Location?` lines client-side and pushes them into the
+  existing `draftItems` queue, so `applyDraft()`'s existing seed-items pipeline handles them
+  after the groups/locations seed lands. New unit suite
+  [`test_onboarding_seed_filter.py`](tests/test_onboarding_seed_filter.py) (17 tests) pins the
+  filter semantics. Full pytest + vue-tsc green; browser-verify checklist appended to
+  `DORA_VERIFY.md §Onboarding`.
+
+## [RESOLVED] FU-443 — Action C-19: resolve open decisions + write `IMPL_PLAN_AUTH_SHELL.md`
+- **Raised:** 2026-07-02 (C-19 proposal written this session).
+- **Type:** deferred job.
+- **What:** [`docs/04_proposals/PROPOSAL_AUTH_SHELL.md`](docs/04_proposals/PROPOSAL_AUTH_SHELL.md)
+  was design-only. To ship, two things needed to happen in order:
+  1. User resolves D1–D10 in §7.
+  2. Write `docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md` and execute it.
+- **State note:** Resolved 2026-07-02 — user answered D2/D4/D7/D10 with
+  the recommended calls (D9 already affirmed earlier); wrote
+  `IMPL_PLAN_AUTH_SHELL.md` and executed all seven migration steps in
+  one unit. Two new components landed
+  ([`AuthShell.vue`](web_app/src/components/AuthShell.vue),
+  [`AuthButton.vue`](web_app/src/components/AuthButton.vue)); nine
+  pre-auth surfaces migrated (Login, Setup, Splash, index.html
+  pre-mount, WelcomeLayout, OnboardingStory glyphs, Verify, Forgot,
+  Reset, ConfirmEmailChange). Close-gate greps returned zero; vue-tsc
+  clean bar pre-existing FU-434. Blocked FU-440 and FU-441 both
+  resolved along with this one. Browser-verify checklist appended to
+  `DORA_VERIFY.md §Cross-cutting`. FU-442 (§LOGIN password policy)
+  stays open — different work unit.
+
+## [RESOLVED] FU-441 — Naming collision: four aux pre-auth pages define `.auth-shell` locally
+- **Raised:** 2026-07-02 (C-19 audit).
+- **Type:** finding.
+- **What:** `VerifyEmailPage.vue`, `ForgotPasswordPage.vue`,
+  `ResetPasswordPage.vue`, `ConfirmEmailChangePage.vue` each declared a
+  scoped `.auth-shell` class that rendered a plain centred container on
+  `--surface-page`. `PROPOSAL_AUTH_SHELL.md` proposed a new
+  `AuthShell.vue` component whose root would collide on class name in
+  the DOM.
+- **State note:** Resolved 2026-07-02 with the C-19 impl run. New
+  component's root class is `.dora-auth-shell` (project-prefixed);
+  all four aux pages fold into `AuthShell` and their local
+  `.auth-shell` blocks are gone. `git grep -- '\.auth-shell\b'`
+  returns zero across `web_app/src/`.
+
+## [RESOLVED] FU-440 — R-003 drift: `SetupAdminPage.vue` verbatim-copies the `--lp-*` colour ladder
+- **Raised:** 2026-07-02 (C-19 audit).
+- **Type:** finding.
+- **What:** [`web_app/src/pages/SetupAdminPage.vue`](web_app/src/pages/SetupAdminPage.vue)
+  declared a `.setup-shell` block that copied `LoginPage.vue`'s private
+  `--lp-*` ladder verbatim — precisely the R-003 drift the "keep the
+  ladder private" call (retired FU-002 / DEC-2) was supposed to
+  prevent.
+- **State note:** Resolved 2026-07-02 with the C-19 impl run. Both
+  copies deleted; the promoted `--auth-shell-*` ladder now lives once
+  on `AuthShell.vue` with the DEC-2 rationale physically next to the
+  tokens. `git grep -- '--lp-\|--setup-'` returns zero across
+  `web_app/src/`.
+- **Rule cited:** R-003 (single source of truth).
+
+---
+
 ## [RESOLVED] FU-146 — Sweep external GitHub-issues references
 - **Raised:** 2026-06-12 (user browser verify of FU-085: "should remove any mention of github issues as the repo is now private").
 - **Type:** finding / hygiene.

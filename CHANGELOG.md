@@ -5,6 +5,75 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Onboarding starter-data: per-name checklists + inline paste-rows
+  (FU-195, 2026-07-02).** The C-5.5 "Seed catalogues" step is no longer
+  all-or-none. The two "Use Dora's defaults" cards became expansions
+  with a tri-state master checkbox and a per-name tick-list — you can
+  now pick just "Pantry" + "Fridge" without importing the six other
+  default groups, or just "Kitchen/Freezer" without the other zones.
+  Selecting a child location auto-creates its parent zone (silent FK
+  prerequisite, not counted as skipped). A new inline "Paste rows to
+  bulk-add items" affordance lets you queue `Name, Group?, Location?`
+  lines from a spreadsheet excerpt without navigating to the full
+  importer; rows flow through the existing seed-items pipeline on
+  Finish (idempotent by name). API contract: `POST /onboarding/seed`
+  now accepts optional `group_names: string[] | null` and
+  `location_paths: string[] | null` filters (null = seed all defaults,
+  same as before). Legacy pre-FU-195 wizard drafts stored in
+  `localStorage` (with the old `seedGroups` / `seedLocations` booleans)
+  resume gracefully — an explicit `false` legacy value maps to "no
+  picks", anything else lets the catalogue-driven defaults fill in.
+
+- **StockLevel collapsed to 3 bands: Stocked / Low / Out (2026-07-02).**
+  The middle "Sufficient Stock" band was axed — it was semantically
+  dead (no predicate ever discriminated it: `needs_restock`,
+  `is_low_stock`, `is_missing` all treated it identically to Stocked)
+  and clashed with P8-07 Zero-Input Pantry's charter-mandated
+  Out/Low/Stocked inference vocabulary. **Rename:** `WELL_STOCKED` →
+  `STOCKED` throughout the domain enum, Python constants
+  (`WELL_STOCKED_SEQUENCE` → `STOCKED_SEQUENCE`), TS helpers, the
+  shopping-list review API contract (`set_well_stocked` →
+  `set_stocked`), and the buy-verdict signal string
+  (`"well_stocked"` → `"stocked"`). **DB rename:** the seeded "Well-
+  Stocked" row now reads "Stocked". Migration
+  `a1c7d9e42be0_20260702_drop_sufficient_stock_band` collapses any
+  existing StockItems from Sufficient onto Stocked, deletes the
+  Sufficient row, and reseries Low (was seq=2 → seq=1) and Out (was
+  seq=3 → seq=2). StockLevelChange history survives via its
+  denormalised name column. UX ripple: sticky-footer counts,
+  `StockLevelDot`, the `useStockFilters` short-label regex, and the
+  onboarding "Restock" scene copy all updated. Assistant NLU keeps
+  "sufficient" / "ok" / "fine" as user-speech synonyms that now
+  resolve to Stocked. Pre-release — no data preservation shim.
+
+- **C-19 shared auth-shell + AuthButton (2026-07-02).** All nine pre-auth
+  surfaces (Login, Setup admin, Splash + cannot-connect, Onboarding
+  wrapper, Verify email, Forgot password, Reset password, Confirm
+  email change, plus the `index.html` pre-mount) now share a single
+  `AuthShell.vue` component that owns the animated blob backdrop,
+  floating mascot, frosted-glass card, and the promoted
+  `--auth-shell-*` colour ladder. The private `--lp-*` / `--setup-*`
+  duplication is gone (R-003 fix, closes FU-440); the
+  `.auth-shell` class-name collision across four aux pages is gone
+  (closes FU-441).
+
+  The submit button treatment is extracted into a dedicated
+  `AuthButton.vue` — primary (teal gradient, unchanged from today's
+  Login submit), secondary (amber "dora yellow" gradient), ghost
+  (flat with hit target). Login's tiny "Need an account? Register"
+  toggle and "Forgot password?" link are now full-sized buttons
+  (feedback §LOGIN "make them buttons in the same style, different
+  colour"). Forgot Password matches Login (feedback §LOGIN "Forgot
+  password screen should match styling of login screen"). Splash and
+  cannot-connect share the login canvas via `backdrop="quiet"`
+  (blobs motion-frozen so bootstrap doesn't burn CPU) and the
+  pre-mount HTML splash is pinned to `#1f2647` so cold-load reads as
+  one unified midnight moment. Net ~-200 LOC.
+
+  Design: `docs/04_proposals/PROPOSAL_AUTH_SHELL.md`. Execution:
+  `docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md`.
+
 ### Added
 - **P8-05 "Should I buy this?" personal buy-verdict oracle (2026-07-02).**
   Every stock item now has a personal verdict — **buy / wait / skip /

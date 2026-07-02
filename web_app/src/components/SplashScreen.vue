@@ -1,40 +1,56 @@
 <template>
-    <div class="splash-screen" role="status" :aria-busy="!error">
-        <div class="splash-logo-wrap">
-            <img
-                :src="error ? offlineSrc : logoSrc"
-                alt="Dashy Dora"
-                class="splash-logo"
-                :class="{ 'splash-logo--pulse': !error }"
-                draggable="false"
-            />
-        </div>
+    <!-- Splash is the only surface that sits over the whole viewport
+         with a high z-index (App.vue mounts it above the router-view
+         while the auth store bootstraps). AuthShell owns the midnight
+         canvas + blob backdrop; the overlay concern is splash-only. -->
+    <div class="splash-overlay">
+        <AuthShell
+            backdrop="quiet"
+            mascot="none"
+            variant="full-bleed"
+            role="status"
+            :aria-busy="!error"
+        >
+            <div class="splash-inner">
+                <div class="splash-logo-wrap">
+                    <img
+                        :src="error ? offlineSrc : logoSrc"
+                        alt="Dashy Dora"
+                        class="splash-logo"
+                        :class="{ 'splash-logo--pulse': !error }"
+                        draggable="false"
+                    />
+                </div>
 
-        <div class="splash-text">
-            <p v-if="error" class="splash-error-headline">
-                Can't reach Dora's brain
-            </p>
-            <p v-if="error" class="splash-error-detail">{{ error }}</p>
-            <p
-                v-else
-                class="splash-loading-message"
-                :key="loadingMessage"
-            >
-                {{ loadingMessage }}
-            </p>
-        </div>
+                <div class="splash-text">
+                    <p v-if="error" class="splash-error-headline">
+                        Can't reach Dora's brain
+                    </p>
+                    <p v-if="error" class="splash-error-detail">{{ error }}</p>
+                    <p
+                        v-else
+                        class="splash-loading-message"
+                        :key="loadingMessage"
+                    >
+                        {{ loadingMessage }}
+                    </p>
+                </div>
 
-        <BaseButton
-            v-if="error"
-            label="Try again"
-            class="splash-retry"
-            @click="emit('retry')"
-        />
+                <AuthButton
+                    v-if="error"
+                    colour="primary"
+                    label="Try again"
+                    class="splash-retry"
+                    @click="emit('retry')"
+                />
+            </div>
+        </AuthShell>
     </div>
 </template>
 
 <script setup lang="ts">
-    import BaseButton from 'src/components/BaseButton.vue';
+    import AuthShell from 'src/components/AuthShell.vue';
+    import AuthButton from 'src/components/AuthButton.vue';
     import logoSrc from 'src/assets/logo-mascot.png';
     import offlineSrc from 'src/assets/dora/dorabot-fatal-error-or-offline.png';
     import { onBeforeUnmount, ref, watch } from 'vue';
@@ -89,18 +105,19 @@
 </script>
 
 <style scoped>
-    .splash-screen {
+    .splash-overlay {
         position: fixed;
         inset: 0;
+        z-index: 9000;
+    }
+    .splash-inner {
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 20px;
         padding: 24px;
-        background: var(--q-page, var(--surface-component));
-        color: var(--q-text, var(--text-primary));
-        z-index: 9000;
     }
 
     .splash-logo-wrap {
@@ -114,6 +131,9 @@
         object-fit: contain;
         user-select: none;
         -webkit-user-drag: none;
+        /* Light source-of-truth image on the midnight canvas needs a
+           soft glow so it doesn't read too dim. */
+        filter: drop-shadow(0 18px 22px rgba(20, 12, 50, 0.45));
     }
 
     .splash-logo--pulse {
@@ -143,10 +163,14 @@
         text-align: center;
     }
 
+    /* Splash sits on the shell's midnight canvas with no card. Text
+       has to be light-on-dark; --auth-shell-text is the dark card-face
+       colour, wrong here. */
     .splash-loading-message {
         margin: 0;
         font-size: 0.95rem;
-        opacity: 0.8;
+        color: #ffffff;
+        opacity: 0.85;
         animation: splash-fade-in 0.4s ease;
     }
 
@@ -154,22 +178,25 @@
         margin: 0;
         font-size: 1.15rem;
         font-weight: 600;
+        color: #ffffff;
     }
 
     .splash-error-detail {
         margin: 0;
         font-size: 0.95rem;
-        opacity: 0.8;
+        color: #ffffff;
+        opacity: 0.85;
         line-height: 1.4;
     }
 
     .splash-retry {
         margin-top: 8px;
+        max-width: 260px;
     }
 
     @keyframes splash-fade-in {
         from { opacity: 0; transform: translateY(4px); }
-        to   { opacity: 0.8; transform: translateY(0); }
+        to   { opacity: 0.85; transform: translateY(0); }
     }
 
     @media (prefers-reduced-motion: reduce) {

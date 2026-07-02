@@ -74,7 +74,7 @@ export type FinishResult = {
 };
 
 /** UX-v2 restock review — per-item level choice from the finish modal.
- *  Items without an override restock to Well-Stocked (server default). */
+ *  Items without an override restock to Stocked (server default). */
 export type FinishLevelOverride = {
     stock_item_id: string;
     stock_level_id: string;

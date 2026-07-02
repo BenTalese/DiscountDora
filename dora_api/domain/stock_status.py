@@ -8,7 +8,15 @@ this module; no other code may compare a stock-level name or hardcode a bare
 sequence literal.
 
 Seeded sequences (see ``persistence/seed.py`` / the initial migration):
-0 Well-Stocked, 1 Sufficient Stock, 2 Low Stock, 3 Out of Stock.
+0 Stocked, 1 Low Stock, 2 Out of Stock.
+
+The middle "Sufficient Stock" band was axed 2026-07-02 — it was semantically
+dead (no predicate discriminated it) and clashed with P8-07 Zero-Input Pantry's
+charter-mandated three-band inference (Out/Low/Stocked). Data migration in
+alembic revision ``a1c7d9e42be0`` collapses any Sufficient rows into Stocked
+and reseries Low/Out. Downstream code always used ``level_for_status`` /
+``needs_restock`` / ``is_low_stock`` / ``is_missing`` predicates, so nothing
+functional was lost.
 
 "Missing" semantics (used for ingredient cookability): out-of-stock **only** — a
 low-stock ingredient you can usually still cook with.
@@ -24,16 +32,14 @@ from typing import Iterable, Optional
 
 class StockStatus(IntEnum):
     """Stock-level roles, ordered worst-last by ``sequence``."""
-    WELL_STOCKED = 0
-    SUFFICIENT_STOCK = 1
-    LOW_STOCK = 2
-    OUT_OF_STOCK = 3
+    STOCKED = 0
+    LOW_STOCK = 1
+    OUT_OF_STOCK = 2
 
 
 # Readable aliases for the canonical sequence values. Prefer the predicates
 # below to bare comparisons; these exist for the few ordinal cases.
-WELL_STOCKED_SEQUENCE = int(StockStatus.WELL_STOCKED)
-SUFFICIENT_STOCK_SEQUENCE = int(StockStatus.SUFFICIENT_STOCK)
+STOCKED_SEQUENCE = int(StockStatus.STOCKED)
 LOW_STOCK_SEQUENCE = int(StockStatus.LOW_STOCK)
 OUT_OF_STOCK_SEQUENCE = int(StockStatus.OUT_OF_STOCK)
 

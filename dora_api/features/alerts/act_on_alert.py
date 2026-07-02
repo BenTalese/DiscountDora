@@ -5,7 +5,7 @@ alert means changing the underlying state so it doesn't re-fire:
 
   - reset_expiry: clear `expiry_date` on the linked stock item
   - extend_expiry: push `expiry_date` forward by 7 days
-  - mark_restocked: set the stock level to "Well-Stocked"
+  - mark_restocked: set the stock level to "Stocked"
   - acknowledge_stocktake: bump `stock_level_last_updated` to now without
     changing the level (the user has "looked at it" but doesn't want to
     change anything)
@@ -70,11 +70,11 @@ class AlertActionHandler:
             base = item.expiry_date or household_today(self.repository)
             item.expiry_date = base + timedelta(days=7)
         elif action == ACTION_MARK_RESTOCKED:
-            well_stocked = level_for_status(
-                self.repository.get(StockLevel).all(), StockStatus.WELL_STOCKED
+            stocked = level_for_status(
+                self.repository.get(StockLevel).all(), StockStatus.STOCKED
             )
-            if well_stocked is not None:
-                item.stock_level = well_stocked
+            if stocked is not None:
+                item.stock_level = stocked
             item.stock_level_last_updated = datetime.now(timezone.utc)
         elif action == ACTION_ACKNOWLEDGE_STOCKTAKE:
             item.stock_level_last_updated = datetime.now(timezone.utc)

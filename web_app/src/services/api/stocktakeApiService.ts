@@ -34,13 +34,13 @@ export default class StocktakeApiService {
         );
 
     reviewCompleteAsync = async (
-        shoppingListId: string, setWellStocked = true,
-    ): Promise<{ set_well_stocked: number; checked: number }> =>
+        shoppingListId: string, setStocked = true,
+    ): Promise<{ set_stocked: number; checked: number }> =>
         await this.http.post<
-            { set_well_stocked: number; checked: number },
-            { set_well_stocked: boolean }
+            { set_stocked: number; checked: number },
+            { set_stocked: boolean }
         >(
             `/shopping-lists/${encodeURIComponent(shoppingListId)}/review/complete`,
-            { set_well_stocked: setWellStocked },
+            { set_stocked: setStocked },
         );
 }

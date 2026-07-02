@@ -2,9 +2,8 @@ import {
     isLowStockSequence,
     isOutOfStockSequence,
     OUT_OF_STOCK_SEQUENCE,
-    SUFFICIENT_STOCK_SEQUENCE,
     LOW_STOCK_SEQUENCE,
-    WELL_STOCKED_SEQUENCE,
+    STOCKED_SEQUENCE,
 } from 'src/helpers/stockStatus';
 import type { PageCount } from 'src/components/PageCountsFooter.vue';
 import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
@@ -322,15 +321,13 @@ export function useStockFilters(sources: {
     });
 
     // ── Sticky-footer counts (A7) — reflect the FILTERED view ───────────
-    // Feedback 2026-06-18 (round 2): the footer level palette now mirrors
-    // the picker palette in `stockLevelLogic.colourForSequence` exactly:
-    // Well-stocked = positive (green), Sufficient = warning (yellow),
-    // Low = negative (red), Out = muted (grey). Anything else maps to
-    // muted so a renamed/custom level reads consistently with the picker.
+    // Feedback 2026-06-18 (round 2): the footer level palette mirrors the
+    // picker palette in `stockLevelLogic.colourForSequence` exactly:
+    // Stocked = positive (green), Low = negative (red), Out = muted
+    // (grey). Anything else (custom level) maps to muted.
     function toneForLevelSequence(seq: number): NonNullable<PageCount['tone']> {
         switch (seq) {
-            case WELL_STOCKED_SEQUENCE: return 'positive';
-            case SUFFICIENT_STOCK_SEQUENCE: return 'warning';
+            case STOCKED_SEQUENCE: return 'positive';
             case LOW_STOCK_SEQUENCE: return 'negative';
             case OUT_OF_STOCK_SEQUENCE: return 'muted';
             default: return 'muted';
@@ -355,16 +352,13 @@ export function useStockFilters(sources: {
             // `none` qualifies (on_target / on_other / on_multiple).
             if ((cartMap.get(it.stock_item_id) ?? 'none') !== 'none') onAnyList++;
         }
-        // C-1 Chunk 2 / L93 — minified labels; matches the plan's order
-        // Shown · Well-stocked · Sufficient · Low · Out · Flagged ·
-        // Auto-add · Needs-attention. Stock-level names are shortened
-        // for the chip ("Sufficient Stock" → "Sufficient", "Low Stock"
-        // → "Low", "Out of Stock" → "Out") so they fit in a single
-        // sticky row.
+        // C-1 Chunk 2 / L93 — minified labels; matches the plan's order:
+        // Shown · Stocked · Low · Out · Flagged · Auto-add ·
+        // Needs-attention. Level names are shortened for the chip
+        // ("Low Stock" → "Low", "Out of Stock" → "Out") so they fit in
+        // a single sticky row.
         const shortLabel = (name: string): string =>
             name
-                .replace(/\bWell-Stocked\b/i, 'Well-stocked')
-                .replace(/\bSufficient Stock\b/i, 'Sufficient')
                 .replace(/\bLow Stock\b/i, 'Low')
                 .replace(/\bOut of Stock\b/i, 'Out');
         // `hideOnMobile: true` on the level + essential + auto-add stats:

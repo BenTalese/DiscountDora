@@ -447,7 +447,7 @@
                                                 <!-- P8-05 — in-shop "should I buy?" nudge.
                                                      Silent on low-confidence items so the
                                                      line list stays legible; when the pantry
-                                                     says the item is well-stocked and the
+                                                     says the item is stocked and the
                                                      user has a history of wasting it, the
                                                      'skip' verdict gives them a second chance
                                                      to remove it before checkout. Emits the
@@ -1002,14 +1002,14 @@
 
         <!-- UX-v2 M12 — restock review. One-click "Restock & finish" with
              every ticked item listed and individually adjustable (default
-             Well-Stocked). Replaces the old text-only confirm dialog. -->
+             Stocked). Replaces the old text-only confirm dialog. -->
         <BaseDialog v-model="finishReviewOpen" title="Finish & restock" closable card-style="min-width: 320px; max-width: 480px">
             <q-card-section>
                 <div class="text-body2 dora-text-muted">
                     {{
                         finishEntries.length === 0
                             ? 'No items are ticked — the list is marked done and nothing is restocked.'
-                            : 'Ticked items restock to Well-Stocked. Adjust any that you only partly topped up.'
+                            : 'Ticked items restock to Stocked. Adjust any that you only partly topped up.'
                     }}
                 </div>
             </q-card-section>
@@ -1080,7 +1080,7 @@
     import { useShortcut } from 'src/composables/useShortcut';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
-    import { WELL_STOCKED_SEQUENCE } from 'src/helpers/stockStatus';
+    import { STOCKED_SEQUENCE } from 'src/helpers/stockStatus';
     import {
         chosenOfferFor,
         priceOfLine,
@@ -1182,10 +1182,10 @@
             value: l.stock_level_id,
         })),
     );
-    const wellStockedLevelId = computed<string | null>(
+    const stockedLevelId = computed<string | null>(
         () =>
             stockLevelStore.stockLevels.find(
-                (l) => l.sequence === WELL_STOCKED_SEQUENCE,
+                (l) => l.sequence === STOCKED_SEQUENCE,
             )?.stock_level_id ?? null,
     );
 
@@ -1206,7 +1206,7 @@
                 line_id: l.line_id,
                 stock_item_id: l.stock_item_id,
                 name: l.stock_item_name,
-                level_id: l.stock_item_id ? wellStockedLevelId.value : null,
+                level_id: l.stock_item_id ? stockedLevelId.value : null,
             }));
         finishReviewOpen.value = true;
     }
@@ -1215,13 +1215,13 @@
         finishing.value = true;
         try {
             // Only non-default picks travel as overrides; everything else
-            // takes the server's Well-Stocked default.
+            // takes the server's Stocked default.
             const overrides: FinishLevelOverride[] = finishEntries.value
                 .filter(
                     (e): e is FinishEntry & { stock_item_id: string; level_id: string } =>
                         !!e.stock_item_id
                         && !!e.level_id
-                        && e.level_id !== wellStockedLevelId.value,
+                        && e.level_id !== stockedLevelId.value,
                 )
                 .map((e) => ({
                     stock_item_id: e.stock_item_id,

@@ -21,15 +21,13 @@ class _Level:
     name: str = "irrelevant"
 
 
-WELL = _Level(0, "Well-Stocked")
-SUFFICIENT = _Level(1, "Sufficient Stock")
-LOW = _Level(2, "Low Stock")
-OUT = _Level(3, "Out of Stock")
+STOCKED = _Level(0, "Stocked")
+LOW = _Level(1, "Low Stock")
+OUT = _Level(2, "Out of Stock")
 
 
 def test__status_for__maps_each_sequence_to_its_role():
-    assert status_for(WELL) is StockStatus.WELL_STOCKED
-    assert status_for(SUFFICIENT) is StockStatus.SUFFICIENT_STOCK
+    assert status_for(STOCKED) is StockStatus.STOCKED
     assert status_for(LOW) is StockStatus.LOW_STOCK
     assert status_for(OUT) is StockStatus.OUT_OF_STOCK
     assert status_for(None) is None
@@ -49,21 +47,20 @@ def test__status_is_keyed_to_sequence_not_name():
 def test__is_out_of_stock():
     assert is_out_of_stock(OUT) is True
     assert is_out_of_stock(LOW) is False
-    assert is_out_of_stock(WELL) is False
+    assert is_out_of_stock(STOCKED) is False
     assert is_out_of_stock(None) is False
 
 
 def test__is_low_stock_is_exact_band():
     assert is_low_stock(LOW) is True
     assert is_low_stock(OUT) is False  # out-of-stock is not "low"
-    assert is_low_stock(SUFFICIENT) is False
+    assert is_low_stock(STOCKED) is False
 
 
 def test__needs_restock_covers_low_and_out():
     assert needs_restock(LOW) is True
     assert needs_restock(OUT) is True
-    assert needs_restock(SUFFICIENT) is False
-    assert needs_restock(WELL) is False
+    assert needs_restock(STOCKED) is False
     assert needs_restock(None) is False
 
 
@@ -72,7 +69,7 @@ def test__is_missing_is_out_of_stock_only_with_none_missing():
     assert is_missing(OUT) is True
     assert is_missing(None) is True
     assert is_missing(LOW) is False
-    assert is_missing(WELL) is False
+    assert is_missing(STOCKED) is False
 
 
 def test__out_of_range_sequence_clamps_to_out_of_stock():
@@ -82,8 +79,9 @@ def test__out_of_range_sequence_clamps_to_out_of_stock():
 
 
 def test__level_for_status_picks_by_sequence_ignoring_name():
-    levels = [WELL, SUFFICIENT, LOW, OUT]
+    levels = [STOCKED, LOW, OUT]
     assert level_for_status(levels, StockStatus.OUT_OF_STOCK) is OUT
-    assert level_for_status(levels, StockStatus.WELL_STOCKED) is WELL
-    # Missing role -> None, not an exception.
-    assert level_for_status([WELL, LOW], StockStatus.SUFFICIENT_STOCK) is None
+    assert level_for_status(levels, StockStatus.STOCKED) is STOCKED
+    # A status whose sequence isn't present -> None, not an exception. Fake
+    # this by asking for STOCKED with only LOW/OUT in the list.
+    assert level_for_status([LOW, OUT], StockStatus.STOCKED) is None

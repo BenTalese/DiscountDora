@@ -40,11 +40,10 @@ class _FakeRepo:
 
 # Display names are deliberately *not* the seeded labels — that's the whole
 # point: the alias map resolves through StockStatus, not through the name.
-_WELL = _level(int(StockStatus.WELL_STOCKED), "Renamed-Well")
-_SUFFICIENT = _level(int(StockStatus.SUFFICIENT_STOCK), "Renamed-Sufficient")
+_STOCKED = _level(int(StockStatus.STOCKED), "Renamed-Stocked")
 _LOW = _level(int(StockStatus.LOW_STOCK), "Renamed-Low")
 _OUT = _level(int(StockStatus.OUT_OF_STOCK), "Renamed-Out")
-_ALL_LEVELS = [_WELL, _SUFFICIENT, _LOW, _OUT]
+_ALL_LEVELS = [_STOCKED, _LOW, _OUT]
 
 
 def test__alias_resolves_to_sequence_not_name():
@@ -57,11 +56,11 @@ def test__alias_resolves_to_sequence_not_name():
     for phrase in ("low", "running low", "almost out", "almost gone"):
         assert _resolve_level(repo, phrase) is _LOW, phrase
 
-    for phrase in ("sufficient", "ok", "fine"):
-        assert _resolve_level(repo, phrase) is _SUFFICIENT, phrase
-
-    for phrase in ("well stocked", "stocked up", "full", "plenty"):
-        assert _resolve_level(repo, phrase) is _WELL, phrase
+    # Post-2026-07-02: the middle "Sufficient" band is gone. "sufficient"/
+    # "ok"/"fine" now resolve to Stocked alongside the direct synonyms.
+    for phrase in ("stocked", "stocked up", "ok", "fine", "full", "plenty",
+                   "sufficient", "well stocked", "well-stocked"):
+        assert _resolve_level(repo, phrase) is _STOCKED, phrase
 
 
 def test__alias_is_case_and_whitespace_insensitive():

@@ -205,8 +205,8 @@ class FinishLevelOverride(BaseModel):
 class FinishShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # UX-v2 restock review: per-item level choices from the finish modal.
-    # Items not listed here restock to Well-Stocked (the default). Empty /
-    # absent body = restock everything to Well-Stocked, the one-click path.
+    # Items not listed here restock to Stocked (the default). Empty /
+    # absent body = restock everything to Stocked, the one-click path.
     level_overrides: list[FinishLevelOverride] = Field(default_factory=list)
 
 
@@ -219,11 +219,11 @@ class FinishShoppingListResponse:
 
 class FinishShoppingListHandler:
     """Marks the list as done. For every ticked line, set the linked stock
-    item's stock level — Well-Stocked by default (you just bought it), or
-    the level the user picked in the restock-review modal (UX-v2 M12: e.g.
-    knock a part-restocked item down to Sufficient). Untouched lines are
-    left on the now-done list — the caller can copy them to a new list or
-    use the "move unchecked" flow.
+    item's stock level — Stocked by default (you just bought it), or the
+    level the user picked in the restock-review modal (UX-v2 M12: e.g.
+    knock a part-restocked item down to Low). Untouched lines are left on
+    the now-done list — the caller can copy them to a new list or use the
+    "move unchecked" flow.
     """
 
     def __init__(self):
@@ -250,12 +250,12 @@ class FinishShoppingListHandler:
             if line.picked_offer_price is None:
                 snapshot_offer_price(self.repository, line)
 
-        # Resolve all levels once: Well-Stocked is the default target (by
-        # status identity, not name), and the UX-v2 restock-review overrides
-        # are validated against the same set.
+        # Resolve all levels once: Stocked is the default target (by status
+        # identity, not name), and the UX-v2 restock-review overrides are
+        # validated against the same set.
         all_levels = self.repository.get(StockLevel).all()
         levels_by_id = {level.id: level for level in all_levels}
-        well_stocked = level_for_status(all_levels, StockStatus.WELL_STOCKED)
+        stocked = level_for_status(all_levels, StockStatus.STOCKED)
 
         overrides: dict[UUID, UUID] = {
             o.stock_item_id: o.stock_level_id for o in request.level_overrides
@@ -272,7 +272,7 @@ class FinishShoppingListHandler:
             now = datetime.now(timezone.utc)
             for item in stock_items:
                 override_id = overrides.get(item.id)
-                target = levels_by_id.get(override_id) if override_id else well_stocked
+                target = levels_by_id.get(override_id) if override_id else stocked
                 if target is None:
                     continue
                 item.stock_level = target

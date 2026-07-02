@@ -97,6 +97,17 @@
                      breathing room on every side. The outer wrapper
                      keeps q-pa-md too for the header/toolbar row. -->
                 <q-tab-panel name="overview" class="q-pa-md">
+                    <!-- P8-05 + P8-06 — the buy-verdict oracle (row/line
+                         badges elsewhere; the full detail card here per
+                         FU-437). The card no-ops when the composable hasn't
+                         resolved yet or the install-wide flag is off, so
+                         the overview stays quiet on thin data. -->
+                    <BuyVerdictCard
+                        v-if="buyVerdict"
+                        :verdict="buyVerdict"
+                        class="q-mb-md"
+                        @action="onBuyVerdictAction"
+                    />
                     <div class="row q-col-gutter-md items-start">
                         <div class="col-12 col-sm-5 col-md-4">
                             <ImageUploadField
@@ -1006,6 +1017,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import BuyVerdictCard from 'src/components/stock/BuyVerdictCard.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
@@ -1020,6 +1032,7 @@
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import { relativeTime } from 'src/helpers/relativeTime';
     import { humaniseWasteReason } from 'src/helpers/wasteReasons';
+    import { useBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -1080,6 +1093,14 @@
     const slActions = useShoppingListActions();
 
     const stockItemId = computed(() => props.idOverride ?? (route.params.id as string));
+
+    // P8-05/06 — buy-verdict oracle (row/line badges elsewhere; the full
+    // card renders on the overview tab, per FU-437). The composable
+    // fetches on mount, caches for 5 min, and yields a computed we can
+    // v-if in the template. `.value` at wire time so the string overload
+    // fires — the id is stable for the page's lifetime.
+    const { verdict: buyVerdict, invalidate: buyVerdictInvalidate } =
+        useBuyVerdict(stockItemId.value);
 
     const detail = ref<StockItemDetail | null>(null);
     const loading = ref(false);
@@ -1473,6 +1494,25 @@
     }
     async function onAddToList() {
         await withBusyReload(() => actions.addToList(stockItemId.value));
+        // P8-05/06 — the verdict's stock-band + open-list state both
+        // changed. Invalidate so a re-render fetches a fresh answer.
+        buyVerdictInvalidate();
+    }
+    // P8-05/06 — closes FU-437. Delegates the card's one-tap action to
+    // the same per-page handlers used elsewhere and drops the verdict
+    // cache after any mutation.
+    async function onBuyVerdictAction(
+        kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
+    ) {
+        if (kind === 'add_to_list') {
+            await onAddToList();  // already invalidates
+            return;
+        }
+        // `mark_stocked` + `remove_from_list` need the "Well-Stocked"
+        // level lookup / a specific list-line target; both are handled
+        // through the fact editors below the card, so the card's action
+        // for these variants is a no-op nudge for now (FU-454).
+        // `skip` / `none` — nothing to do.
     }
     async function onChangeStockLevel(stockLevelId: string) {
         await withBusyReload(() =>
@@ -1481,6 +1521,9 @@
                 stock_level_id: stockLevelId,
             }),
         );
+        // P8-05/06 — stock band feeds `_need_axis`; drop the cached
+        // verdict so the card re-fetches the new answer.
+        buyVerdictInvalidate();
     }
 
     // ── Expiry ───────────────────────────────────────────────────────────

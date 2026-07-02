@@ -5,6 +5,27 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **P8-06 — Dora tells you *when* to buy, not just whether (2026-07-02).**
+  When the buy-verdict oracle lands on `wait`, Dora now adds a time-boxed
+  hint: "Expect a dip around Nov 15" with a sub-caption explaining the
+  cycle she detected ("Your usual low lands ~every 14 days"). Derived
+  purely from the user's own personal price history over the last 12
+  months — no crowd data (P8-04 was cut per §7 Decision 6). The endpoint
+  `GET /api/stock-items/<id>/buy-verdict` gains an optional
+  `wait_hint: { until, reason }` field, present only when Dora has ≥2
+  detected lows, a stable cycle (coefficient of variation ≤ 0.5), and a
+  predicted next low still in the future — otherwise she stays quiet
+  (Charter P3 Honesty). Same endpoint, no new route — "should I buy?" and
+  "when should I buy?" are the same question at different resolutions.
+- **BuyVerdictCard wired into the stock-item detail page (closes FU-437,
+  2026-07-02).** Opening any stock item now shows the full three-axis
+  verdict card at the top of the Overview tab — price / need / waste
+  reasons, one-tap action for buy verdicts, and the P8-06 wait hint when
+  present. Uses the existing `useBuyVerdict()` composable + 5-minute
+  cache, and invalidates after any level-change or add-to-list mutation
+  so the card re-fetches a fresh answer.
+
 ### Fixed
 - **Filters button alignment on Stock Overview / My Products /
   Recipes Overview (2026-07-02).** The Filters button sat 8px above

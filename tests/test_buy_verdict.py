@@ -285,3 +285,102 @@ def test__data_used_reflects_the_actual_inputs():
     assert data.waste_events_last_12mo == 0
     assert data.average_days_between_purchase is not None
     assert data.days_since_last_purchase is not None
+
+
+# ── P8-06 wait-hint (`_wait_hint`) ────────────────────────────────────
+
+
+def _wait_case(price_samples):
+    """Wait-shaped fixture — stocked + samples the caller controls. The
+    most recent sample is above the usual band, so the composer lands on
+    `wait` and `_wait_hint` gets to run."""
+    dates = sorted({ts.date() for _, ts in price_samples})
+    return _AxisInputs(
+        price_samples=sorted(price_samples, key=lambda s: s[1], reverse=True),
+        unique_purchase_dates=dates,
+        waste_events_12mo=0,
+        purchases_12mo=len(dates),
+        stock_level_band="stocked",
+        is_on_open_list=False,
+        today=_today(),
+    )
+
+
+def test__wait_hint__regular_fortnightly_cycle__predicts_next_low():
+    """Two lows 28 days apart with the newest sample above usual → wait
+    verdict + wait_hint pointing 28 days after the most recent low (i.e.
+    into the future — the whole point of P8-06)."""
+    # Trimmed-mean of [3.30, 3.30, 3.85, 3.90, 4.30] drops min+max, giving
+    # usual ≈ $3.68; 0.92× = $3.39 → the two $3.30 samples are "lows".
+    # $4.30 newest reads as ~117% of usual → above_usual → wait.
+    inputs = _wait_case([
+        (4.30, _dt(3)),        # newest — above usual → wait
+        (3.30, _dt(14)),       # recent low
+        (3.85, _dt(28)),
+        (3.30, _dt(42)),       # earlier low — 28 days before the recent one
+        (3.90, _dt(56)),
+    ])
+    v = compose_verdict(inputs)
+    assert v.verdict == "wait"
+    assert v.wait_hint is not None
+    expected_next = _today() - timedelta(days=14) + timedelta(days=28)
+    assert v.wait_hint.until == expected_next.isoformat()
+    assert "~every 28 days" in v.wait_hint.reason
+
+
+def test__wait_hint__single_low__silent():
+    """One low = no gap to measure = no cycle. Stay silent (Charter P3)."""
+    inputs = _wait_case([
+        (4.30, _dt(6)),        # above usual → wait
+        (3.90, _dt(20)),
+        (3.95, _dt(34)),
+        (3.30, _dt(48)),       # only one low across the window
+        (3.90, _dt(62)),
+    ])
+    v = compose_verdict(inputs)
+    assert v.verdict == "wait"
+    assert v.wait_hint is None
+
+
+def test__wait_hint__wildly_varying_gaps__silent():
+    """Two gaps of vastly different sizes (2 days vs 100+ days) trip the
+    CV guard — the cadence is too erratic to time. Stay silent."""
+    inputs = _wait_case([
+        (4.30, _dt(4)),        # newest — above usual → wait
+        (3.30, _dt(14)),       # low
+        (3.30, _dt(16)),       # low, 2 days after the previous one
+        (3.85, _dt(60)),
+        (3.90, _dt(120)),
+        (3.30, _dt(180)),      # low, 164 days earlier
+    ])
+    v = compose_verdict(inputs)
+    assert v.verdict == "wait"
+    assert v.wait_hint is None
+
+
+def test__wait_hint__overdue_prediction__silent():
+    """Two lows early in the window → the predicted next low is well in
+    the past. The cycle has broken; don't surface a stale date (Charter
+    P3). Prices tuned so the two ancient $3.20 samples survive the
+    trimmed-mean cheap-band as genuine lows."""
+    inputs = _wait_case([
+        (5.00, _dt(4)),        # newest — above usual → wait
+        (4.80, _dt(30)),
+        (4.60, _dt(60)),
+        (4.90, _dt(100)),
+        (3.20, _dt(300)),      # low
+        (3.20, _dt(350)),      # low, 50 days earlier → predicted next ≈ 250d ago
+    ])
+    v = compose_verdict(inputs)
+    assert v.verdict == "wait"
+    assert v.wait_hint is None
+
+
+def test__wait_hint__not_wait__is_none():
+    """Non-wait verdicts must not carry a wait_hint — the field is a
+    verdict-specific extension, not general noise."""
+    v = compose_verdict(_rich_history_inputs())
+    # Baseline rich fixture lands on `unsure` (stocked + usual price + no
+    # waste history) — the important assertion is `wait_hint is None`.
+    assert v.verdict != "wait"
+    assert v.wait_hint is None

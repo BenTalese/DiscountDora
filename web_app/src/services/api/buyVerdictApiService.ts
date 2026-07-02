@@ -37,12 +37,24 @@ export interface BuyVerdictDataUsed {
     stock_level_band: 'out' | 'low' | 'stocked' | 'unknown';
 }
 
+/** P8-06 — the time-boxed "when" attached to a `wait` verdict. Populated
+ *  server-side only when the composer landed on `wait` and `_wait_hint`
+ *  found a confident cycle (thin/erratic/overdue history → `null`). The
+ *  reason string is the human explanation; `until` is the machine date. */
+export interface BuyVerdictWaitHint {
+    until: string;      // ISO date (yyyy-mm-dd)
+    reason: string;
+}
+
 export interface BuyVerdict {
     verdict: 'buy' | 'wait' | 'skip' | 'unsure';
     confidence: 'high' | 'medium' | 'low';
     reasons: BuyVerdictReason[];
     one_tap_action: BuyVerdictAction;
     data_used: BuyVerdictDataUsed;
+    // P8-06 — populated only on `wait` verdicts when a confident cycle
+    // is detected; `null` otherwise.
+    wait_hint: BuyVerdictWaitHint | null;
 }
 
 export default class BuyVerdictApiService {

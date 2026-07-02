@@ -22,6 +22,7 @@ Design points that keep this honest:
   sample.
 """
 import logging
+import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -70,6 +71,14 @@ _WASTES_SOMETIMES_RATE = 0.10
 _HISTORY_WINDOW_DAYS = 365
 _PRICE_RECENT_WINDOW_DAYS = 90   # "cheapest in 3 months" window
 
+# P8-06 — cycle detection for the `wait` verdict's time-boxed hint.
+# Reuses `_CHEAP_BAND_FRACTION` to define a "low" (same threshold P8-05
+# uses for `cheapest_3mo`), so there is one definition of "low" the whole
+# oracle agrees on. We need ≥2 lows to measure a gap; the CV guard drops
+# the hint when the observed cycle is too erratic to trust (Charter P3).
+_MIN_LOWS_FOR_CYCLE = 2
+_CYCLE_CV_MAX = 0.5
+
 
 # ── DTOs — one shape shared by the composer + the response ────────────
 
@@ -103,12 +112,30 @@ class VerdictDataUsedDto:
 
 
 @dataclass(frozen=True, slots=True)
+class WaitHintDto:
+    """P8-06 — the time-boxed *when* attached to a `wait` verdict.
+
+    Both fields are always populated when the DTO exists: `until` is the
+    machine-readable expected next-low date (ISO), `reason` is the human
+    explanation the card renders as a sub-caption. Fires only when the
+    composer landed on `wait` AND `_wait_hint` found a confident cycle
+    over the user's own price history.
+    """
+    until: str          # ISO date (yyyy-mm-dd) of the next expected low
+    reason: str         # human "why" — always paired with `until`
+
+
+@dataclass(frozen=True, slots=True)
 class BuyVerdictDto:
     verdict: str                # "buy" | "wait" | "skip" | "unsure"
     confidence: str             # "high" | "medium" | "low"
     reasons: list[VerdictReasonDto]
     one_tap_action: OneTapActionDto
     data_used: VerdictDataUsedDto
+    # P8-06 — populated only on `wait` verdicts when a confident cycle
+    # is detected. `None` otherwise (non-wait verdicts, thin data, or
+    # unstable/overdue cycles — see `_wait_hint`).
+    wait_hint: Optional[WaitHintDto] = None
 
 
 # ── Raw inputs (fetched once by the endpoint, passed to composer) ─────
@@ -266,6 +293,71 @@ def _waste_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
     return None, "no_waste_history"
 
 
+# ── P8-06 — wait-hint (time-boxed hint on the `wait` verdict) ─────────
+
+
+def _wait_hint(inputs: _AxisInputs) -> Optional[WaitHintDto]:
+    """Predict *when* the user's usual low tends to land, so a `wait`
+    verdict has time-boxed advice ("expect the next dip around Nov 15")
+    instead of just "above your usual price".
+
+    Pure function; the composer only calls this when it has already
+    decided on `wait`. Returns None whenever the cycle prediction can't
+    be made honestly — thin history, unstable cadence, or an overdue
+    prediction (Charter P3 — silence beats a fabricated date)."""
+    samples = inputs.price_samples
+    if len(samples) < _MIN_PRICE_SAMPLES:
+        return None
+
+    prices = [p for p, _ in samples]
+    usual = _trimmed_mean(prices)
+    if usual <= 0:
+        return None
+
+    # Same "low" definition `_price_axis` uses for `cheapest_3mo` — one
+    # threshold, not two. `low_dates` sorted oldest→newest so gaps read
+    # left-to-right chronologically.
+    low_dates = sorted({
+        ts.date() for price, ts in samples
+        if price <= _CHEAP_BAND_FRACTION * usual
+    })
+    if len(low_dates) < _MIN_LOWS_FOR_CYCLE:
+        return None
+
+    gaps = [
+        (low_dates[i] - low_dates[i - 1]).days
+        for i in range(1, len(low_dates))
+    ]
+    gaps = [g for g in gaps if g > 0]
+    if not gaps:
+        return None
+
+    median_gap = statistics.median(gaps)
+    if median_gap <= 0:
+        return None
+    # Coefficient of variation drops the hint when the cadence is too
+    # erratic to trust ("prices swing wildly" isn't actionable timing).
+    # `pstdev` (population) is safe for len==1; regular `stdev` needs 2+.
+    stdev = statistics.pstdev(gaps) if len(gaps) >= 1 else 0.0
+    if stdev / median_gap > _CYCLE_CV_MAX:
+        return None
+
+    next_low = low_dates[-1] + timedelta(days=int(round(median_gap)))
+    if next_low <= inputs.today:
+        # The cycle predicts a low that's already passed — the pattern
+        # has broken (or prices shifted upward across the whole cycle).
+        # Stay silent rather than surface a stale date.
+        return None
+
+    return WaitHintDto(
+        until=next_low.isoformat(),
+        reason=(
+            f"Your usual low lands ~every {int(round(median_gap))} days — "
+            f"expect the next around {next_low.strftime('%b %d')}."
+        ),
+    )
+
+
 # ── The composer itself ────────────────────────────────────────────────
 
 
@@ -328,12 +420,17 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
         confidence = _step_down(confidence)
 
     one_tap = _pick_action(verdict, inputs)
+    # P8-06 — attach the time-boxed hint only when the verdict actually
+    # landed on `wait`. The helper self-guards on thin/unstable/overdue
+    # cycles, so a `wait` with unreliable history simply gets `None`.
+    wait_hint = _wait_hint(inputs) if verdict == "wait" else None
     return BuyVerdictDto(
         verdict=verdict,
         confidence=confidence,
         reasons=reasons,
         one_tap_action=one_tap,
         data_used=_data_used_dto(inputs),
+        wait_hint=wait_hint,
     )
 
 

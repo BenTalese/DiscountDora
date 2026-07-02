@@ -178,36 +178,26 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later during `PROPOSAL_CONFIG_AND_OPTINS.md`
   extension, or spin a small standalone prompt. Not blocking C-19.
 
-## [OPEN] FU-438 — P8-06 Wait-or-Buy — populate `wait_until` on the buy-verdict endpoint
-- **Raised:** 2026-07-02 (P8-05 close, forward-look).
-- **Type:** deferred job (champion sequence).
-- **What:** the P8-05 verdict has a `wait` outcome ("price is above
-  usual — try later"), but no time-boxed advice ("your usual low lands
-  ~end of fortnight"). P8-06 spec: derive that from cadence + price-
-  cycle detection over personal history. Extends the *same* endpoint
-  with a `wait_until` field (or a `wait_reason` if we can't compute a
-  date) rather than a separate route — the two verdicts are the same
-  question ("should I buy now?") at different resolutions.
-- **Why deferred:** P8-05 is the base layer; P8-06 is the polish.
-- **Recommended resolution:** **unblocked 2026-07-02** — FU-436 resolved
-  as CUT, so P8-06 works on personal data only (same shape as P8-05).
-  Ready to schedule; slot after the FU-437 detail-card wiring and the
-  P8-05 browser-verify pass so the same session validates both.
-
-## [OPEN] FU-437 — Extend the buy-verdict oracle to the stock-item detail page
-- **Raised:** 2026-07-02 (P8-05 close).
-- **Type:** deferred job.
-- **What:** the full three-axis `BuyVerdictCard.vue` component ships
-  in this unit but isn't wired anywhere yet. Slot it into
-  `StockItemDetailPage.vue` (probably above the History tab or under
-  the level/expiry controls — user-testable placement). Uses
-  `useBuyVerdict(routeParamId)` — the composable already accepts a
-  reactive ref for this exact case.
-- **Why deferred:** P8-05's payoff is the row/line badge; the full
-  card is deep-dive detail that adds nothing before we've seen how
-  users interpret the compact form.
-- **Recommended resolution:** after the badge has real usage — pair
-  with the P8-05 browser-verify checklist in `DORA_VERIFY.md §Stock`.
+## [OPEN] FU-454 — BuyVerdictCard `mark_stocked` + `remove_from_list` one-tap actions unwired
+- **Raised:** 2026-07-02 (P8-06 close, spotted while closing FU-437).
+- **Type:** deferred job (polish; nice-to-have).
+- **What:** the card's one-tap-action button now renders in
+  `StockItemDetailPage.vue` overview tab, and the `add_to_list` variant is
+  fully wired. The other two variants (`mark_stocked` when
+  wastes-often + stocked → "Already stocked"; `remove_from_list` when the
+  item is already on an open list → "Remove from list") emit their
+  `@action` events but the handler in `onBuyVerdictAction` is a no-op
+  nudge — the fact editors immediately below the card *are* the primary
+  way to change level or remove a list line. Tapping the button is silent,
+  which is quietly-broken UX (Charter P3).
+- **Why deferred:** wiring these needs the "Well-Stocked" `StockLevel` id
+  lookup (from `stockLevelStore`) + a specific list-line target (find the
+  open list containing this item + drop that line). Neither is difficult;
+  it just wasn't the P8-06 story and the fact editors cover both cases.
+- **Recommended resolution:** opportunistic — either wire both handlers
+  properly, OR hide the card's one-tap button for these two `kind` values
+  (reveal-and-disable, R-014) so users don't tap a dead button. Small
+  either way.
 
 ## [OPEN] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
 - **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).

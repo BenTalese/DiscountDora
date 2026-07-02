@@ -20,9 +20,12 @@ backend-green now). **Phase 1** is closer to **~85%** than the earlier "95%" cal
 a 2026-07-02 cross-check against `PROMPT_PLAN_PART_6_POLISH.md` found six real gaps
 (FU-449..452 plus the existing FU-351/352) — notably `consumption_events` was never
 persisted, so run-out prediction still sees purchases only, not cooking (the loop
-is closed in the UX but not yet in the data). You are in **Phase 3, the
-champion features** (~25%): the "Should I buy this?" buy-verdict oracle (P8-05) and
-barcode-to-add via Open Food Facts (P8-02) just shipped. The most recent work was
+is closed in the UX but not yet in the data). **Phase 3 is now ~35%**: P8-06
+Wait-or-Buy (`wait_hint` on the buy-verdict endpoint) shipped this session,
+BuyVerdictCard is wired into the stock-item detail page (FU-437 closed), and
+P8-03/P8-04 were cut so the champion sequence collapses to
+`P8-01 → P8-02 → P8-05 → P8-06 → P8-07 (flagship) → P8-08 → P8-09 → P8-10` —
+Zero-Input Pantry is genuinely next. The most recent work was
 the onboarding starter-data rework (per-name checklists + paste-rows). **Next up:**
 browser-verify the new onboarding flow, then continue the champion sequence toward
 the flagship **Zero-Input Pantry (P8-07)** — but a governance call on crowd-sourced
@@ -37,7 +40,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/430/431/432). |
 | **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~85% | Six P6 items partial or unbuilt (surfaced 2026-07-02 legacy-plan cross-check): **FU-449** P6-07 `consumption_events` writes missing (UX shipped, prediction still purchase-only); **FU-450** P6-03 `fake_markdown` flag + `good_deal` alert type (P8-05 superseded framing but left pieces); **FU-451** P6-09 budget-defense swaps ("negotiator" half); **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (folded into P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~25% | Flagship P8-07 not started; P8-06 wait-until (FU-438), P8-08/09/10 not started. P8-02 + P8-05 shipped. |
+| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~35% | P8-02 + P8-05 + **P8-06 wait_hint** shipped; **BuyVerdictCard wired into detail-page overview** (FU-437 closed). Flagship P8-07 next; P8-08/09/10 not started. P8-03 + P8-04 cut (§7 Decisions 6/7). |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
 
 ---
@@ -54,7 +57,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | Cook Mode | ✅ | Chunks 1–6 (84% of feedback) | `C_big_rock_design_briefs.md` |
 | Cookbook | ➗ | Chunks 1–10 shipped; 5 Recipe-Detail bullets remain (FU-432); tag-taxonomy needs env verify (FU-085) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Stock Overview | ✅ | 32/41 bullets; 3-band StockLevel; buy-verdict badge wired | `PROPOSAL_STOCK_OVERVIEW` |
-| Buy-verdict oracle (P8-05) | ➗ | Row + shopping-line badges shipped; full `BuyVerdictCard` built but **not wired** to item-detail (FU-437); wait-until deferred (FU-438) | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
+| Buy-verdict oracle (P8-05 + P8-06) | ✅ | Row + shopping-line badges + full `BuyVerdictCard` wired into stock-item detail overview (FU-437 closed 2026-07-02); P8-06 `wait_hint` on `wait` verdicts landed 2026-07-02 (FU-438 closed). Only opportunistic polish left (FU-454 — two card action variants unwired). | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
 | Barcode-to-add (P8-02) | ✅ | OFF lookup for unknown EANs, gated by `scanning_enabled` | [PROPOSAL](docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md) |
 | Onboarding | 🟡 | Per-name picks + paste-rows just shipped; **verify pending**; preferred-stores step not built (FU-383) | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
 | Meal Plans | ➗ | **Built end-to-end** (3 pages, 13 components, board/calendar/templates/shortfall + backend). Waiting on **your screen-style pick + feedback**, not construction | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) + `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
@@ -83,14 +86,14 @@ a decision or a running-app check *now*, most important first.
 9. **FU-444 — `test_buy_verdict.py::test__all_axes_thin` fails (pre-existing).** One deselected test each run; needs a call on trigger vs. fixture.
 10. **FU-442 — Login password-policy feedback has no design home.** Real gap (min-8 + admin toggle).
 11. **FU-214 — Products-overlay Phase F verify + bulk-select/hard-delete.** Last real gate on that effort; needs the running app.
-12. **FU-437 — Wire the full `BuyVerdictCard` into stock-item detail.** Built but dead-coded; pair with P8-05 verify.
-13. **FU-429 — Assistant-architecture proposal collides with in-flight SLM work.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` proposes a capability registry that the SLM pivot may supersede; needs a reconcile-or-close decision.
-14. **FU-025 follow-on — component labels ignore the text-scale tokens.** Button/input/toggle labels don't track the A6 scale; small global sweep.
+12. **FU-429 — Assistant-architecture proposal collides with in-flight SLM work.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` proposes a capability registry that the SLM pivot may supersede; needs a reconcile-or-close decision.
+13. **FU-025 follow-on — component labels ignore the text-scale tokens.** Button/input/toggle labels don't track the A6 scale; small global sweep.
 
 ---
 
 ## Recently shipped (newest first)
 
+- **P8-06 Wait-or-Buy** — `wait_hint` on `wait` verdicts + BuyVerdictCard wired into stock-item detail overview (closes FU-437, FU-438) — 2026-07-02
 - Onboarding starter-data: per-name checklists + inline paste-rows (FU-195) — 2026-07-02
 - StockLevel collapsed to 3 bands: Stocked / Low / Out — 2026-07-02
 - C-19 shared auth-shell + AuthButton across 9 pre-auth surfaces — 2026-07-02

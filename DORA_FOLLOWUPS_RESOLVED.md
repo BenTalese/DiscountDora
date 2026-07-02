@@ -10,6 +10,18 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-438 — P8-06 Wait-or-Buy: `wait_hint` on the buy-verdict endpoint shipped
+- **Raised:** 2026-07-02 (P8-05 close, forward-look).
+- **Type:** deferred job (champion sequence).
+- **What:** the P8-05 verdict had a `wait` outcome ("price is above usual — try later") with no time-boxed advice. P8-06 needed to derive that from cadence + personal price history, extending the *same* endpoint rather than a separate route.
+- **State note (2026-07-02):** **Shipped**. New `WaitHintDto(until, reason)` + optional `wait_hint` field on `BuyVerdictDto`. New pure helper `_wait_hint(inputs)` in `dora_api/features/stock_items/get_buy_verdict.py` — low-cadence cycle detection reusing `_CHEAP_BAND_FRACTION` (one definition of "low"), median gap over ≥2 detected lows, CV guard drops the hint on erratic cadence, overdue guard drops it when the predicted next low is already past (all three: Charter P3 honesty). Composer calls it only when the verdict landed on `wait`. Frontend: `BuyVerdictWaitHint` TS type + `wait_hint: BuyVerdictWaitHint | null` on `BuyVerdict`; `BuyVerdictCard.vue` renders a `--semantic-warning-soft` block between header and reasons with a friendly relative-date headline ("Expect a dip in ~14 days (Nov 15)") + the server's reason as sub-caption. 5 new unit tests in `tests/test_buy_verdict.py` cover regular fortnightly cycle, single-low, wildly-varying-gaps, overdue-prediction, and non-wait-verdict cases (all pass). Pre-existing `test__all_axes_thin` failure (FU-444) unchanged.
+
+## [RESOLVED] FU-437 — BuyVerdictCard wired into stock-item detail page
+- **Raised:** 2026-07-02 (P8-05 close).
+- **Type:** deferred job.
+- **What:** the full three-axis `BuyVerdictCard.vue` component shipped with P8-05 but wasn't wired anywhere — dead code pending a home.
+- **State note (2026-07-02):** **Shipped alongside FU-438** (P8-06). `StockItemDetailPage.vue` overview tab now renders the card above the fact editors, bound via `useBuyVerdict(stockItemId.value)`. The `@action` emit is delegated to the page's existing per-mutation handlers: `add_to_list` routes through the same primary-list add the row badge uses, and `buyVerdictInvalidate()` fires after `onAddToList` + `onChangeStockLevel` so the verdict re-fetches on any change that could shift the answer. The `mark_stocked` + `remove_from_list` action variants are a no-op nudge for now (the fact editors below the card are the primary way to change level / drop a list line) — logged as [FU-454](DORA_FOLLOWUPS.md) for the small polish. Browser walk pending — pair with the P8-05 verify pass in `DORA_VERIFY.md §Stock`.
+
 ## [RESOLVED] FU-453 — P8-03 email-ingestion: CUT
 - **Raised:** 2026-07-02 (user's own instinct while auditing the champion sequence: *"P8-03 might also share the same fate as -04? i don't think its feasible / feels clunky"*).
 - **Type:** finding + design call (governance, not code — sits next to [FU-436](DORA_FOLLOWUPS_RESOLVED.md) for P8-04).

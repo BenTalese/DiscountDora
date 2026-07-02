@@ -9,6 +9,76 @@ next.
 
 ---
 
+## 2026-07-02 — P8-06 Wait-or-Buy shipped + FU-437 closed
+
+**Why:** User asked to move onto P8-06. Unblocked by the earlier P8-04
+CUT (§7 Decision 6). Goal: extend the P8-05 verdict's coarse `wait`
+outcome ("above your usual price") into a time-boxed "expect a dip
+around Nov 15" hint derived from personal price history + cadence.
+
+**Locked decisions (plan mode):**
+1. Cycle detection = low-cadence, reusing P8-05's `_CHEAP_BAND_FRACTION`
+   threshold — one definition of "low", robust on sparse grocery data.
+2. Fold FU-437 (wire BuyVerdictCard into the detail page) into the
+   same slice — without it the P8-06 UI is untestable. Card placed at
+   the top of the Overview tab.
+
+**What shipped:**
+- Backend: new `WaitHintDto(until, reason)`; optional `wait_hint` on
+  `BuyVerdictDto`; pure helper `_wait_hint` in
+  `dora_api/features/stock_items/get_buy_verdict.py` doing:
+  detect lows (samples ≤ 0.92 × trimmed-mean), require ≥2 lows,
+  compute median-gap + coefficient-of-variation guard, overdue guard,
+  emit `until` (ISO) + reason string. Composer calls the helper only
+  when `verdict == "wait"`.
+- Tests: 5 new fixtures in `tests/test_buy_verdict.py` — regular
+  fortnightly cycle predicts the right date, single-low silent,
+  wildly-varying-gaps silent (CV guard), overdue prediction silent,
+  non-wait verdict has no hint. 18/19 buy-verdict tests pass; the 1
+  fail is the pre-existing FU-444 `test__all_axes_thin`.
+- Frontend: `BuyVerdictWaitHint` type + `wait_hint` field on
+  `BuyVerdict`; `BuyVerdictCard.vue` renders a `--semantic-warning-soft`
+  block between header and reasons with a friendly relative-date
+  ("Expect a dip in ~14 days (Nov 15)") plus the server's reason as
+  sub-caption. `StockItemDetailPage.vue` overview tab now mounts the
+  card via `useBuyVerdict(stockItemId.value)`; `add_to_list` delegates
+  to the existing `onAddToList` handler and invalidates the composable
+  cache. `mark_stocked` / `remove_from_list` action variants are a
+  no-op nudge for now — the fact editors below cover both cases;
+  logged as FU-454.
+
+**Verification:** `pytest tests/test_buy_verdict.py` 18/19 (1 pre-existing);
+full `pytest tests/` shows **40 failures identical to HEAD baseline** —
+zero P8-06 regressions (verified via stash-and-compare). `vue-tsc` and
+`eslint` GREEN on all three touched frontend files (only pre-existing
+FU-434 AdminDataImport errors persist, unchanged). **Live browser walk
+still pending** — pair with the P8-05 verify pass in
+`DORA_VERIFY.md §Stock` (per the FU-437 recommendation).
+
+**Ledger:** FU-437 + FU-438 both moved to `DORA_FOLLOWUPS_RESOLVED.md`
+with full state notes. FU-454 opened for the two unwired card action
+variants. `PROJECT_STATE.md` Phase 3 line updated: P8-06 shipped and
+FU-437 closed alongside.
+
+**Git-hygiene incident (fully recovered):** while running the full
+pytest for regression comparison, I chained `git stash push -u && pytest
+&& git stash pop`. Pytest's non-zero exit code (40 pre-existing fails)
+broke the `&&` chain, so `stash pop` never ran. The stash was intact
+but the working tree was empty. Recovered by (a) checking out each of
+the 5 P8-06 files from `stash@{0}` — confirmed byte-identical to the
+stash — and (b) `git reset --quiet` to rebuild the index from HEAD
+after a subsequent stash-pop attempt corrupted the index (emptied
+`git ls-files` to 0 while all 33k files remained on disk).
+**Never chain `stash pop` after a command that may exit non-zero** —
+run them separately or use `;` instead of `&&`.
+
+**Next up:** the browser walk (P8-05 badges + P8-06 wait-hint block +
+the card in the detail overview tab); after that, P8-07 Zero-Input
+Pantry (flagship — the P6 loop is now complete enough on the data
+side that inference has real signal).
+
+---
+
 ## 2026-07-02 — Filters button alignment + R-027 styling encapsulation
 
 **Why:** User spotted the Filters button sitting slightly above its

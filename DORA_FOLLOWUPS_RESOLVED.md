@@ -10,6 +10,40 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-436 — P8-04 crowd-prices governance decision: KEEP / SHRINK / CUT
+- **Raised:** 2026-07-02 (P8-05 kickoff — user's own feasibility
+  concern: *"i don't think the logistics of sharing/pooling community
+  data is feasible for this app. how could it even be possible?"*).
+- **Type:** finding + design call (governance, not code).
+- **What:** the champion plan's recommended order put P8-04
+  (crowd-sourced anonymised price graph) before P8-05, on the theory
+  that community baselines make the oracle stronger for new users
+  with thin history. Four structural blockers: (a) small-cohort
+  re-identification even under anonymisation, (b) cold-start
+  chicken/egg with no distribution channel to bootstrap contributor
+  volume, (c) weekly Aus catalogue rotation caps the useful
+  freshness window, (d) hosted-broker ops role (uptime + moderation
+  + abuse detection + DPAs) reintroduces exactly the pattern
+  `RECONCILED_FINISHING_PLAN.md §7 Decision 1` retired when the
+  scraper was extracted to the private companion.
+- **State note:** Resolved 2026-07-02 as **CUT**. Argument trail
+  landed as [INV-11](docs/05_investigations/CROWD_PRICES_ASSESSMENT.md).
+  Decision recorded in
+  [`RECONCILED_FINISHING_PLAN.md §7`](docs/01_charter/RECONCILED_FINISHING_PLAN.md)
+  as new Decision 6. Champion sequence in
+  [`DASHY_DORA_CHAMPION_PLAN.md`](docs/01_charter/DASHY_DORA_CHAMPION_PLAN.md)
+  updated: P8-04 prompt block retired with a CUT banner (body preserved
+  as audit trail), Part V order rewritten to
+  `P8-01 → P8-02 → P8-03 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 → P8-10`,
+  Part I "optional crowd" phrasing dropped, P8-06 prompt annotated so
+  the "optionally blend crowd baselines" line is dead. Someday-list in
+  the reconciled plan split (P8-10 stays, P8-04 moves under Decision 6).
+  Buy-verdict proposal §5 hedge replaced with the CUT resolution.
+  Grep for `crowd_baseline` / `community_baseline` in `dora_api/` +
+  `web_app/src/` returned zero (no code hook to remove). Unblocks
+  [FU-438](DORA_FOLLOWUPS.md) (P8-06 wait-until) — now scheduled
+  after FU-437 detail-card wiring + P8-05 browser-verify.
+
 ## [RESOLVED] FU-435 — `.gitignore` `data/` pattern unanchored → `backup_library.py` never committed
 - **Raised:** 2026-07-02 (P8-02 close).
 - **Type:** finding (latent build/history bug).

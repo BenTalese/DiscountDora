@@ -5,6 +5,46 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Filters button alignment on Stock Overview / My Products /
+  Recipes Overview (2026-07-02).** The Filters button sat 8px above
+  its `BaseButton` siblings in the toolbar. Root cause: the
+  `FilterToggleButton` component wrapped its two children (Clear +
+  Filters) in a `<div class="row items-center q-gutter-sm no-wrap">`.
+  Quasar's `q-gutter-*` is the negative-margin trick (`margin-top: -8px`
+  on the container, `+8px` on each direct child); when the wrapper sat
+  inside the parent toolbar's own `q-gutter-sm`, it received `+8px`
+  from outside AND applied `-8px` to itself internally — net zero
+  displacement. Sibling `BaseButton`s only got the outer `+8px`, so
+  they sat 8px lower. Both buttons already shared the same
+  `BaseButton` base; the misalignment was purely from the wrapper.
+  Fix: refactored `FilterToggleButton` to a Vue 3 multi-root template
+  (no wrapper `<div>`) so the two `BaseButton`s participate directly
+  in the parent's flex-row + gutter. Promoted the lesson to a new
+  standing rule **R-027 — Styling encapsulation** in
+  [`ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md)
+  (ADR-023).
+
+### Governance
+- **P8-04 crowd-sourced price graph — CUT (2026-07-02).** FU-436
+  resolved: the originally-spec'd opt-in community price graph is
+  retired from the champion sequence. Four structural blockers ruled
+  out both KEEP and SHRINK — small-cohort re-identification even under
+  anonymisation, cold-start with no distribution channel to bootstrap
+  contributor volume, weekly Aus catalogue rotation caps the useful
+  freshness window, hosted-broker ops role reintroduces the pattern
+  `RECONCILED_FINISHING_PLAN.md §7 Decision 1` retired when the
+  scraper was extracted to the private companion. P8-06's own spec
+  already read "design to work on personal data alone" — crowd was
+  framed as optional-blend, never load-bearing. Champion sequence is
+  now `P8-01 → P8-02 → P8-03 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 →
+  P8-10`. Unblocks FU-438 (P8-06 wait-until). Full argument trail:
+  [`docs/05_investigations/CROWD_PRICES_ASSESSMENT.md`](docs/05_investigations/CROWD_PRICES_ASSESSMENT.md)
+  (INV-11); decision recorded as
+  [Reconciled Plan §7 Decision 6](docs/01_charter/RECONCILED_FINISHING_PLAN.md).
+  No code changes (grep for `crowd_baseline` / `community_baseline`
+  returned zero).
+
 ### Changed
 - **Onboarding starter-data: per-name checklists + inline paste-rows
   (FU-195, 2026-07-02).** The C-5.5 "Seed catalogues" step is no longer

@@ -56,23 +56,47 @@ long session summary. Distinct from the other logs:
 ## [OPEN] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece never built)
 - **Raised:** 2026-07-02 (surfaced while checking whether P2-05 was done).
 - **Type:** deferred job (design + build; nice-to-have).
-- **What:** P2-05 in the original plan (`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md:400`
-  "Budget-Aware Auto Lists") had **two halves**. The *user-facing budget* half is
-  fully shipped: `dora_api/features/budget/budget.py`, migration
-  `a6e3b5d2c8f1_20260606_user_budget.py`, `User.budget_amount`/`budget_period`
-  handled in `update_me.py:49-56, 164-178`, budget-vs-spend surfacing on
-  `DashboardPage.vue`. The **optimizer half was not built** — the auto-generated
-  shopping-list flow (`features/shopping_lists/auto_generate.py` and the
-  dashboard's "Suggested list" surface) does not consult `budget_amount`; there is
-  no "keep the list under $X" or "trim these items to fit the budget" pass.
+- **What:** P2-05 in the original plan
+  ([`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md:400`](docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md)
+  "Budget-Aware Auto Lists") had **two halves**. The *user-facing budget* half
+  is fully shipped: [`features/budget/budget.py`](dora_api/features/budget/budget.py),
+  migration `a6e3b5d2c8f1_20260606_user_budget.py`,
+  `User.budget_amount` / `budget_period` handled in
+  [`update_me.py:49-56, 164-178`](dora_api/features/auth/update_me.py),
+  budget-vs-spend surfacing at
+  [`DashboardPage.vue:380`](web_app/src/pages/DashboardPage.vue) (the P2-05
+  "Grocery budget" card). The **optimizer half was not built** — the
+  auto-generated shopping-list flow
+  ([`features/shopping_lists/auto_generate.py`](dora_api/features/shopping_lists/auto_generate.py))
+  does not consult `budget_amount` anywhere (verified: `grep -n budget` on that
+  file returns only unrelated `frequently_added_limit` matches). No "keep the
+  list under $X" / "trim items to fit the budget" pass, no per-list
+  `budget_target` / `budget_strategy` columns, no `POST /shopping-lists/optimize`
+  route, no strategy segmented control in the auto-generate modal, no
+  explainability chips ("Deferred because it would exceed budget"), no
+  "Build me a $120 shop" assistant intent. What the original P2-05 spec called
+  for on that side is all missing.
+- **What NOT to keep from the original spec:** `preferred_merchants` +
+  cross-store strategies (`"fewest_stores"` / `"preferred_store"`) are coupled
+  to hosted multi-store scraping, which the reconciled plan explicitly retired
+  (`RECONCILED_FINISHING_PLAN.md` Decision 7). Any brief here should drop those
+  strategies or reshape them around ingested product data (C-10).
 - **Why deferred:** shipped the simpler user-facing budget + alert first; the
   optimizer wants a proper design (which items to drop first, how essentials +
-  low-stock priorities compose with budget, whether it warns or hard-caps).
+  low-stock priorities compose with budget, whether it warns or hard-caps,
+  whether the budget is per-shop or per-period remaining, and how it interacts
+  with P8-05 buy-verdict on individual items).
 - **Recommended resolution:** later (opportunistic Phase 3-ish, or bundled with
-  the next shopping-list intelligence pass) — needs a short design brief first:
-  what "budget-aware" means UX-wise (soft warn vs auto-trim vs suggest-swap), how
-  it interacts with `essential`/low-stock priority, and whether the constraint
-  ties to `budget_period` remaining or the single-shop total.
+  the next shopping-list intelligence pass) — **needs a proper design brief
+  first, not a direct build.** The brief should cover: (a) UX shape (soft warn
+  vs auto-trim vs suggest-swap), (b) priority stack (essential > low-stock >
+  frequently-added when budget-constrained), (c) whether "budget" ties to
+  `budget_period` remaining or a single-shop cap, (d) explainability (per-line
+  "why deferred" reasons), (e) interaction with P8-05 (each candidate already
+  has a buy/wait/skip verdict — the optimizer can lean on those instead of
+  re-deriving priorities), (f) which of the original P2-05 spec pieces
+  (multi-store strategies, `preferred_merchants`) get dropped per the
+  post-scrape-divorce charter.
 
 ## [OPEN] FU-447 — Security: AUTH_ASSISTANT findings (HIGH CSRF + MEDIUM email-change) still unfixed
 - **Raised:** 2026-07-02 (surfaced by the full doc-register audit).
@@ -137,11 +161,10 @@ long session summary. Distinct from the other logs:
   date) rather than a separate route — the two verdicts are the same
   question ("should I buy now?") at different resolutions.
 - **Why deferred:** P8-05 is the base layer; P8-06 is the polish.
-  Also blocked pending FU-436 (crowd-price governance) — if crowd
-  data lands, P8-06 can blend it in.
-- **Recommended resolution:** after FU-436 lands its decision. If cut
-  ⇒ P8-06 works on personal data only, same shape as P8-05. If keep ⇒
-  wait until crowd baseline exists.
+- **Recommended resolution:** **unblocked 2026-07-02** — FU-436 resolved
+  as CUT, so P8-06 works on personal data only (same shape as P8-05).
+  Ready to schedule; slot after the FU-437 detail-card wiring and the
+  P8-05 browser-verify pass so the same session validates both.
 
 ## [OPEN] FU-437 — Extend the buy-verdict oracle to the stock-item detail page
 - **Raised:** 2026-07-02 (P8-05 close).
@@ -157,42 +180,6 @@ long session summary. Distinct from the other logs:
   users interpret the compact form.
 - **Recommended resolution:** after the badge has real usage — pair
   with the P8-05 browser-verify checklist in `DORA_VERIFY.md §Stock`.
-
-## [OPEN] FU-436 — P8-04 crowd-prices governance decision: KEEP / SHRINK / CUT
-- **Raised:** 2026-07-02 (P8-05 kickoff — user's own feasibility
-  concern: *"i don't think the logistics of sharing/pooling community
-  data is feasible for this app. how could it even be possible?"*).
-- **Type:** finding + design call (governance, not code).
-- **What:** the champion plan's recommended order puts P8-04
-  (crowd-sourced anonymised price graph) before P8-05, on the theory
-  that community baselines make the oracle stronger for new users
-  with thin history. But P8-04 owns real problems Dora isn't built to
-  solve:
-  - **Privacy** — even anonymised (item + price + store + coarse
-    region + date), aggregation over small households leaks purchase
-    behaviour. Requires a differential-privacy layer or a large
-    minimum-cohort threshold; both add ops complexity.
-  - **Incentive** — nobody contributes unless they get value back;
-    that requires either (a) trust in an operator we don't have, or
-    (b) a peer-to-peer model with different technical + legal shape.
-  - **Freshness** — Australian grocery pricing rotates weekly per
-    catalogue; a snapshot older than 7 days is misleading on the
-    axis P8-04 is meant to help with.
-  - **Ops** — the "central store, opt-in contributions" model requires
-    a service Dora explicitly isn't (P9 No-scrape → P9-adjacent
-    concerns about being a data broker).
-- **P8-05 as evidence:** shipping the oracle on *pure personal data*
-  works. The `unsure/low` branch on thin history is honest (Charter
-  P3), not a blocker — a user with two shops sees "not enough history
-  yet"; that's the correct answer, not something crowd data should
-  paper over.
-- **Recommended resolution:** short assessment doc under
-  `docs/05_investigations/CROWD_PRICES_ASSESSMENT.md` (INV-11 shape)
-  covering the four axes above, land the call in
-  `RECONCILED_FINISHING_PLAN.md` §7. **Recommendation: CUT.** If cut,
-  update the champion order (P8-03 → P8-05 → P8-06 → P8-07 …). If
-  keep/shrink, the P8-05 endpoint already has the shape to accept a
-  crowd-baseline field later.
 
 ## [OPEN] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
 - **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).
@@ -227,7 +214,7 @@ long session summary. Distinct from the other logs:
 - **Type:** deferred job.
 - **What:** Stocktake mode has 11 feedback bullets; B7/B9 fixes shipped 3; PROPOSED 4; **4 remain NO_HOME:** SK-2 (top queue info feels obvious), SK-4 (keyboard shortcuts on buttons tacky), SK-5 (Skip button as big as others), SK-9 (Skip shortcut should be `4`). Micro-polish + a broader "review rules for queue selection" (SK-6) that was PROPOSED loosely but never briefed. No dedicated Stocktake redesign brief exists.
 - **Why deferred:** Stocktake was flagged as "brief deferred" during the Wave-C planning; nothing forced the redesign since the feature works.
-- **Recommended resolution:** small `PROPOSAL_STOCKTAKE_MODE.md` brief when Stocktake next opens for change (or opportunistic — the micro items can land inline). Not blocking anything upstream.
+- **Recommended resolution:** small `PROPOSAL_STOCKTAKE_MODE.md` brief when Stocktake next opens for change (or opportunistic — the micro items can land inline). Not blocking anything upstream. **Coordinate with [[FU-226]]** — the queue-inclusion-rules assessment there was extended 2026-07-02 with two candidate additions (expiry as an engagement signal, waste as a stocktake resolution + bulk API); those give the brief a stronger anchor than the four SK NO_HOME items alone.
 
 ## [OPEN] FU-214 — Products-as-overlay Phase F tail: product-surface browser verify + L197/205/206/223/225 items
 - **Raised:** 2026-06-22 (Phase F kickoff — reconstructed 2026-07-01 from `PRODUCTS_OVERLAY_RUNBOOK.md` + 8 worklog references; **the FU entry itself was missing from both ledgers**).
@@ -1766,6 +1753,73 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
     - Promote `stocktake_alerts_are_enabled` from "manual opt-out only" to
       "auto-set false when engagement decays past N days" so the data
       self-cleans.
+  - **Candidate rule 4 — expiry as an engagement signal** (added
+    2026-07-02, user feedback): the current engagement filter treats
+    "opened" as a signal but does NOT treat "near-expiry" as one. Yet
+    stocktake is exactly the moment the user walks the pantry and
+    reviews expiring items, and near-expiry is arguably a stronger
+    version of "in play" — a countdown ends in the discard bin.
+    Currently near-expiry items surface via a **separate** flow
+    ([`waste/rescue`](dora_api/features/waste/waste.py) endpoint + the
+    Dashboard's "Needs your attention" card), so users have to check
+    two surfaces for the same walk. Proposal to weigh: add "`expiry_date`
+    within N days" (default 7, reusing `EXPIRING_SOON_WINDOW_DAYS`) as
+    a sixth engagement signal.
+    * **Frequency mismatch worth thinking through:** item-cadence is
+      typically weekly-plus, but expiry-driven review wants **daily**
+      surfacing. Two options:
+      * (a) one queue, but expiring items get a synthetic-overdue score
+        that pins them to the top regardless of `last_checked_at`. Simple;
+        risks noise on a pantry with lots of dated items.
+      * (b) two queue "modes" surfaced from the same page ("Overdue"
+        cadence-driven + "Expiring" daily-driven, mode toggle on the
+        header). Same list UI, filtered by mode. Cleaner UX; small
+        extra API surface (`GET /stocktake/queue?mode=expiring`).
+    * **Queue row shape:** whichever way, the queue row needs an
+      `entry_reason` so the UI can render *why* it surfaced ("expiring
+      in 2 days" vs "10 days overdue for a check"). The user shouldn't
+      have to guess.
+    * **R-003 check:** `waste/rescue` and the Dashboard expiry card
+      stay — they're glance-surfaces (Dashboard) and cook-what-you-can
+      rescue (rescue recipes matched to expiring ingredients).
+      Stocktake would be the walk-the-pantry-and-decide surface. Shared
+      SoT lives on a server-side `get_expiring_items` helper; UI cards
+      read from it rather than duplicating expiry logic. Not a
+      collision — three verbs (glance / cook / decide) on the same
+      underlying data.
+  - **Candidate verb 3 — waste as a stocktake resolution + bulk waste
+    API** (added 2026-07-02, user feedback): today stocktake has two
+    resolutions per item — Check (keep, bumps `last_checked_at`) and
+    Set level (adjust). There's no **Waste** verb. If Rule 4 lands and
+    expiring items enter the queue, the natural resolution for "past
+    date" is bin-it → and the user shouldn't have to leave the
+    stocktake flow to log it. Proposal to weigh:
+    * Add "Waste" as a per-item resolution that logs a
+      [`StockItemWasteEvent`](dora_api/domain/entities/stock_item_waste_event.py)
+      AND flips the level to Out AND bumps `last_checked_at`, in one
+      action. Charter P2 preserved — waste-capture stays
+      reason-only (no quantity, no value, no note per
+      `PROPOSAL_WASTE_MINIMISATION §5`).
+    * New endpoint `POST /waste/events/bulk` taking a list of
+      `{stock_item_id, reason}`. Bulk-select mode gains "Log waste on
+      selected" alongside "Bulk check."
+    * **Interaction with the check verb:** if an item is
+      near-expiry AND the user hits "Check" (level still correct, not
+      binning it yet), does it stay on the expiring queue? Probably
+      yes — Check bumps `last_checked_at`, but expiry is unchanged.
+      Worth surfacing this explicitly so a checked-but-still-close-to-
+      expiry item doesn't silently drop off the rescue card.
+  - **The combined framing worth naming:** stocktake and waste-rescue
+    are two halves of the same walk (open the fridge → eyeball each
+    item → resolve it), currently split into two surfaces. The clean
+    long-term shape is stocktake as a *review* mode with three
+    resolutions per item (Keep / Set level / Waste) and a queue that
+    includes both cadence-overdue and expiry-imminent items. That's
+    proposal-scope — probably belongs in a proper
+    `PROPOSAL_STOCKTAKE_MODE.md` brief (see [[FU-430]]) rather than
+    piecemeal, and the expiry+waste angle is a stronger anchor to
+    build that brief around than the four remaining SK NO_HOME
+    items alone.
   - **No-change cost**: if the round-18 rule turns out to be roughly right,
     the only required follow-on is the browser-verify pass (FU-222 covers
     the SPA side; this rule lives in the backend and wants its own dataset
@@ -1773,10 +1827,18 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 
 - **Why deferred:** the user explicitly wants to sit with this and decide
   later. No code change pending here yet — this entry is the substrate for
-  that decision.
+  that decision. **Extended 2026-07-02** with two candidate additions
+  (expiry as an engagement signal, waste as a stocktake resolution + bulk
+  API) surfaced from user feedback; the underlying framing is that
+  stocktake and waste-rescue are two halves of the same walk. This
+  extension is *for careful consideration*, not a build ask.
 - **Recommended resolution:** opportunistic — re-open when the user has
   walked their pantry through the new queue and decided whether the
-  engagement rule is too tight, too loose, or right.
+  engagement rule is too tight, too loose, or right. Coordinate with
+  [[FU-430]] when either opens: the expiry+waste extension above is a
+  stronger anchor for the missing `PROPOSAL_STOCKTAKE_MODE.md` brief
+  than the four remaining SK NO_HOME items alone. Do not action either
+  FU in isolation.
 
 ## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
 - **Raised:** 2026-06-18 (Stock-pages feedback pass)

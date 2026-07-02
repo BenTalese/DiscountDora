@@ -9,6 +9,236 @@ next.
 
 ---
 
+## 2026-07-02 — Filters button alignment + R-027 styling encapsulation
+
+**Why:** User spotted the Filters button sitting slightly above its
+`BaseButton` siblings on the toolbar row (Stock Overview / My
+Products / Recipes Overview) and asked whether the buttons share the
+same base. They do — both are `BaseButton` — so the misalignment was
+elsewhere. Root cause was the `FilterToggleButton` component's own
+wrapper `<div class="row items-center q-gutter-sm no-wrap">` around
+its two children (Clear + Filters). User also asked for an
+engineering rule promoting the general principle: "as much styling
+should be in the component as possible to ensure consistency."
+
+### Diagnosis
+
+Quasar's `q-gutter-*` is the negative-margin trick: the container
+gets `margin-top: -8px`, each direct child gets `margin-top: +8px`.
+When a component wraps its own children in a `<div class="row
+q-gutter-sm">` and that wrapper is placed inside a parent
+`q-gutter-sm` toolbar row, the wrapper receives `+8px` from the outer
+gutter AND applies `-8px` to itself from its own inner gutter. Net
+displacement zero — but sibling `BaseButton`s (direct children of the
+outer row) only get the outer `+8px`, so they sit 8px lower than the
+wrapper. That was exactly the Filters button's `+8` vs siblings' `0`
+displacement (relative to visual centre).
+
+### What shipped
+
+- **[`FilterToggleButton.vue`](web_app/src/components/FilterToggleButton.vue)**
+  refactored to a Vue 3 multi-root template — no wrapper `<div>`. The
+  two `BaseButton`s render as top-level siblings that participate
+  directly in the parent's flex-row + gutter. Aligned + consistent.
+  Inline comment names R-027 so a future author knows why the
+  wrapper is deliberately absent.
+- **New standing rule R-027 — Styling encapsulation** in
+  [`docs/01_charter/ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md):
+  * Component owns intrinsic appearance (size / padding / border /
+    colour / hover / transitions).
+  * Parent owns layout context (position in a flex row, spacing
+    between siblings, alignment with surrounding chrome).
+  * A composite component that renders multiple children uses a
+    Vue 3 multi-root template — no wrapper `<div>` with a spacing
+    scheme that collides with the parent.
+  * Where a wrapper is genuinely needed, it uses flexbox `gap` (no
+    negative-margin trick).
+  * Callers do NOT re-declare intrinsic styling or fudge alignment
+    with call-site `class="q-mt-xs"`.
+  * Violation signals + carve-out shape documented.
+- **New ADR-023** capturing the reasoning trail (context / decision
+  / alternatives / consequences), promoting R-027.
+
+### Defensive sweep
+
+`git grep 'q-gutter' web_app/src/components/` returned 20 files.
+Filtered to those whose **root element** carries `q-gutter-*`
+(the only shape where a parent-vs-wrapper collision can happen):
+
+| Component | Root class | Current call sites | Risk |
+|---|---|---|---|
+| `FilterToggleButton.vue` | `row … q-gutter-sm no-wrap` | Stock / Products / Recipes toolbar rows (all use `q-gutter-sm`) | **Real collision — fixed this session.** |
+| `MealStepper.vue` | `row … q-gutter-xs` | `RecipeDetailPage.vue:297` inside `q-card-section` | Safe (no parent gutter). R-027 applies if it's ever dropped into a gutter row. |
+| `dora/PriceEntry.vue` | `q-gutter-sm` on outer form container | Inside `q-card-section` in `StockItemRowPriceButton` + `YourPricesWidget` | Safe (parent is a card section, not a gutter row). |
+
+The other 17 `q-gutter` matches were inner-node usage (form-field
+stacks inside dialogs / cards / drawers), not root-element wrappers —
+outside R-027's collision surface.
+
+### Close-gate
+
+- `npx vue-tsc --noEmit` — clean bar the pre-existing FU-434 errors
+  (`AdminDataImport.vue:33,35`, untouched).
+- No pytest run needed — pure frontend + docs change; no backend
+  test coverage impacted.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentise first).** The refactor tightens R-001 by
+  removing a wrapper that had no semantic purpose. R-027 explicitly
+  extends R-001. Pass.
+- **R-002 (theme tokens).** No colour/token changes. N/A.
+- **R-007 (scope discipline).** Only FilterToggleButton fixed; the
+  two safe-but-flagged components (MealStepper, PriceEntry) left
+  alone — R-027 catches them if their call sites ever change. Pass.
+- **R-008 (code-style minimalism).** Inline R-027 rule reference on
+  the component; no filler comments. Pass.
+- **R-027 (new)** — the rule established this unit passes for the
+  refactored FilterToggleButton (no wrapper collision).
+
+### ADR evaluation
+
+**Yes — ADR-023 added**, promoting R-027. Full argument trail in
+`ENGINEERING_STANDARDS.md`.
+
+### Follow-ups
+
+- No new open FU. The two flagged-but-safe components (`MealStepper`,
+  `PriceEntry`) are R-027-compliant at current call sites; the rule
+  itself is the guard for any future call-site change.
+- **DORA_VERIFY.md §Cross-cutting** — new item added: browser-check
+  toolbar rows on Stock Overview / My Products / Recipes Overview to
+  confirm the Filters button now sits flush.
+
+**Files touched (code):**
+- `web_app/src/components/FilterToggleButton.vue`
+
+**Files touched (docs/ledgers):**
+- `docs/01_charter/ENGINEERING_STANDARDS.md` (new R-027 + ADR-023)
+- `CHANGELOG.md`, `DORA_WORKLOG.md`, `DORA_VERIFY.md`.
+
+### Next up
+
+Browser-verify the Filters button alignment on the three affected
+toolbar surfaces (Stock Overview / My Products / Recipes Overview);
+new checklist item in `DORA_VERIFY.md §Cross-cutting`. Everything
+else on the champion track (FU-437 detail-card wiring → P8-05
+verify → P8-06 wait-until) remains queued per the earlier session
+handoff.
+
+---
+
+## 2026-07-02 — FU-436 resolved: P8-04 crowd prices CUT
+
+**Why:** FU-436 was the highest-priority open governance decision in
+`PROJECT_STATE.md` — top-of-list 🔴 blocking champion features. User
+asked to discuss; after weighing KEEP / SHRINK-(a,b,c) / CUT against
+the four structural blockers (privacy small-cohort re-identification,
+cold-start with no distribution channel, weekly Aus catalogue rotation
+freshness cap, hosted-broker ops role that reintroduces the pattern
+`RECONCILED_FINISHING_PLAN §7 Decision 1` retired) and the champion
+plan's own P8-06 spec (which already read "design to work on personal
+data alone" — line 366), user called **CUT**.
+
+### What shipped (all docs, no code)
+
+- **New:** [`docs/05_investigations/CROWD_PRICES_ASSESSMENT.md`](docs/05_investigations/CROWD_PRICES_ASSESSMENT.md)
+  (**INV-11**) — INV-9-shape memo recording the four axes, the three
+  SHRINK options considered, and the CUT rationale. Preserved as the
+  argument trail so future re-openers see the reasoning, not just the
+  verdict.
+- **`RECONCILED_FINISHING_PLAN.md §7`** — added new **Decision 6**
+  recording CUT with the full rationale + updated champion sequence.
+  Someday-list at end of §7 split: P8-10 stays there, P8-04 moved
+  under Decision 6.
+- **`DASHY_DORA_CHAMPION_PLAN.md`**:
+  * Part I `§6` — dropped "+ optional crowd" from the Wait-or-Buy
+    summary bullet for consistency (charter principle 9 kept intact —
+    the CUT is app-scope, not a fundamental rejection of opt-in crowd
+    contribution as a data source).
+  * Part IV **P8-04 prompt block** — retired with a CUT banner at the
+    top; prompt body preserved as audit trail with a "do not build"
+    note.
+  * Part IV **P8-06 prompt block** — banner added noting that CUT
+    makes the "personal data only" branch permanent; the "optionally
+    blend crowd baselines" line in DO is now dead.
+  * Part V sequencing — rewrote the recommended-order list to drop
+    P8-04, marked shipped items (P8-01/02/05) with ✅, removed the
+    "P8-03 and P8-04 both touch price data" parallel-work warning.
+- **`PROPOSAL_BUY_VERDICT_ORACLE.md`**:
+  * §5 hedge ("can trivially blend a crowd baseline in later") replaced
+    with the CUT resolution.
+  * §9 follow-ups list — FU-436 marked ✅ resolved with link back to
+    INV-11; FU-438 noted as unblocked.
+
+### Code sweep (defensive check)
+
+- `grep 'crowd_baseline\|community_baseline\|crowd_price\|community_price'`
+  across `dora_api/` and `web_app/src/` → zero. The ledger's earlier
+  hint that "the P8-05 endpoint already has the shape to accept a
+  crowd-baseline field later" was aspirational — no such field was
+  ever added. Nothing to remove.
+- `dora_api/features/stock_items/get_buy_verdict.py:15` docstring
+  correctly says "no crowd data" as a descriptive statement, not a
+  hook — left as-is (accurate).
+
+### Ledger
+
+- **FU-436** — moved from open ledger to
+  [`DORA_FOLLOWUPS_RESOLVED.md`](DORA_FOLLOWUPS_RESOLVED.md), flipped
+  to `[RESOLVED]`, state note recording where each decision landed.
+- **FU-438** (P8-06 wait-until) — updated in the open ledger: was
+  "blocked pending FU-436", now "unblocked 2026-07-02, ready to
+  schedule after FU-437 detail-card wiring + P8-05 browser-verify".
+
+### Engineering-standards close-gate
+
+- **R-002 / R-003 (SSoT).** Decision recorded in exactly one place
+  (`§7 Decision 6`); other docs cross-link back rather than duplicating
+  the rationale. Pass.
+- **R-006 (framework discipline).** No code touched. N/A.
+- **R-007 (scope discipline).** Charter principle 9 (data-sourcing
+  categories) left intact — the CUT is a Dora-core scope call, not a
+  rejection of opt-in crowd contribution as an idea. Champion plan
+  P8-04 prompt body preserved as audit trail rather than deleted. Pass.
+- **R-008 (code-style minimalism).** N/A (no code).
+
+### ADR evaluation
+
+No new recurring pattern. The CUT is a scope decision, not an
+architectural move. No ADR added.
+
+### PROJECT_STATE.md
+
+`PROJECT_STATE.md` line 71 lists FU-436 as the #1 🔴 attention item
+blocking champion work. Next regeneration should reflect the CUT: FU-436
+disappears from the top-priority list, and the top-of-doc "Next up" line
+(lines 22-25) should be rewritten to point at P8-06 (or its
+prerequisite FU-437 + P8-05 verify) as the actionable next champion
+feature. Not regenerating the whole doc in this unit — the regeneration
+routine in `CLAUDE.md` owns that.
+
+### Next up
+
+The champion track is unblocked. In sequence: **FU-437** (wire the full
+`BuyVerdictCard` into `StockItemDetailPage.vue` — small, ready now),
+then **P8-05 browser-verify** (walk `DORA_VERIFY.md §Stock`), then
+**P8-06 Wait-or-Buy** (FU-438; needs a small design brief up front to
+pin what `wait_until` means with thin cadence data, but no crowd-data
+dependency). The other 🔴 attention items in `PROJECT_STATE.md` (Meal
+Plans screen-style pick, FU-346 admin placement, FU-353 repo rename)
+remain your decisions and are non-blocking for the champion track.
+
+**Files touched (docs):**
+- `docs/05_investigations/CROWD_PRICES_ASSESSMENT.md` (new, INV-11)
+- `docs/01_charter/RECONCILED_FINISHING_PLAN.md`
+- `docs/01_charter/DASHY_DORA_CHAMPION_PLAN.md`
+- `docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`, `DORA_FOLLOWUPS.md`,
+  `DORA_FOLLOWUPS_RESOLVED.md`.
+
+---
+
 ## 2026-07-02 — Code-verified the PROJECT_STATE workstream table
 
 **Why:** User spotted a wrong state ("Meal Plans 🔵 designed-not-built" — he knew

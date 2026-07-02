@@ -175,10 +175,12 @@ Order per the plan's own dependencies:
    - **The one genuine caveat:** the only thing truly hard to retrofit is **multi-tenant isolation** (strangers' data in one DB, per-tenant backups/migrations/rate-limits) — that's Path A, deferred. "SaaS-style" meaning *managed single-tenant instances* (Path B) costs ~nothing today. The five disciplines are exactly what keep the Path B→A jump a **6–12 month project, not a rewrite**.
    - **No new build work now** — this is a posture, not a task. It records what to *avoid* (the irreversible mistakes) while finishing, so the SaaS door stays open. Confirms and supersedes nothing in Decision 4; it makes Decision 4's "Path B → Path A" concrete at the code level.
 
+6. **Crowd price graph (P8-04) — RESOLVED 2026-07-02: CUT** (FU-436). The originally-spec'd opt-in community price graph is retired. Four structural blockers, not fixable by design: (a) small-cohort re-identification even under anonymisation, (b) cold-start with no distribution channel to bootstrap contributor volume, (c) weekly Aus catalogue rotation caps the useful freshness window, (d) hosted-broker ops role (uptime + moderation + abuse detection + DPAs) reintroduces exactly the pattern Decision 1 retired when the scraper was extracted. The champion plan's own P8-06 spec (line 366) already read "design to work on personal data alone" — crowd was framed as optional-blend, never load-bearing. P8-05 shipped this session on pure personal data with an honest thin-data branch (Charter P3); the "brand-new user, no history" experience it produces is honest, not broken. **Champion order becomes `P8-01 → P8-02 → P8-03 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 → P8-10`** (P8-04 removed). Full argument trail: [`docs/05_investigations/CROWD_PRICES_ASSESSMENT.md`](../05_investigations/CROWD_PRICES_ASSESSMENT.md) (INV-11). Unblocks FU-438 (P8-06 wait-until).
+
 ### Someday-list (captured, not in finishing scope)
 - Gamification (rewards / notify-users / streaks).
 - The standalone scraper/product-search companion (its own project; Dora-core only owes it the ingestion API).
-- Crowd price graph (P8-04), native app (P8-10) — already in Part 8 but post-loop.
+- Native app (P8-10) — already in Part 8 but post-loop. (Crowd price graph P8-04 was cut per Decision 6; see above.)
 
 ### Immediate next step
 Phase 0 is unblocked and no-regret — start the **Wave A foundation + Wave B bug prompts**. Two small parallel tasks: **INV-6** (assess recipe-comparison worth) and drafting the **ingestion-API contract** (the Dora↔companion seam, reused by P8-03/04).

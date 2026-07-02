@@ -939,6 +939,14 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Cross-cutting
 
+### Filters button toolbar alignment (R-027 fix, 2026-07-02)
+- [ ] `/stock` — the Filters button (right end of the top toolbar row) sits **flush** with New item / Scan / Stocktake / Bulk select / Export. Zoom in if needed: their tops + bottoms line up pixel-for-pixel
+- [ ] `/stock` — when a filter is active, the **Clear** button appears to the left of Filters and BOTH sit flush with the other toolbar buttons (Clear didn't have this bug before either, but verify it's still aligned after the multi-root refactor)
+- [ ] `/products` — Filters + Clear flush with Toolbar's other actions
+- [ ] `/cookbook` — Filters + Clear flush with the recipe toolbar's other actions
+- [ ] Toggling filters on/off doesn't shift any neighbouring button horizontally (FU-121 stability preserved)
+- [ ] Active-count badge on the Filters button still renders (floating primary badge) when filters are engaged
+
 ### C-19 shared auth-shell + AuthButton (2026-07-02)
 - [ ] Cold-load the app on slow-3G throttle. `#pre-mount-splash` paints midnight `#1f2647` immediately; when Vue mounts and `AuthShell` takes over, there is **no** light→midnight flash. One unified moment
 - [ ] Splash pulse: the mascot logo pulses at 60fps while `authStore` bootstraps; blobs are visibly present but motion-frozen (D2 `backdrop="quiet"`) — no CPU cost

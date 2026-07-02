@@ -1002,6 +1002,74 @@ exceptions, which still must be commented) · **Source** (where it was establish
   via `useStockFilters`, `RecipesOverview`, `MyProductsPage`; remaining
   list pages migrate opportunistically (tracked in `DORA_FOLLOWUPS`).
 
+### R-027 — Styling encapsulation: component owns intrinsic appearance; parent owns layout context
+- **Rule:** A shared component owns its **intrinsic appearance** — size,
+  padding, border-radius, colours, hover, transitions, disabled-state
+  styling — and callers must not re-declare or fudge them at the call
+  site. The **parent** owns **layout context** — position in a flex row,
+  spacing between siblings, alignment with surrounding chrome. A
+  component **must not introduce a wrapper DOM element that fights the
+  parent's layout scheme**. If a shared component renders multiple
+  children (a paired button set, a label + control), the children
+  render as top-level siblings via a Vue 3 multi-root template — never
+  wrapped in an inner `<div>` that carries `q-gutter-*` or any other
+  spacing scheme that collides with the parent container's own.
+- **Why:** Two failure modes recur when the rule is broken.
+  1. **Wrapper vs parent gutter collision.** Quasar's `q-gutter-*`
+     classes are the negative-margin trick — the container gets
+     `margin-top: -8px` and each direct child gets `margin-top: +8px`.
+     If a component wraps its own children in a `<div class="row
+     q-gutter-sm">` and that wrapper is placed inside a parent
+     `q-gutter-sm` toolbar row, the wrapper receives `+8px` from
+     outside AND `−8px` from its own inner gutter. Net displacement
+     zero — but sibling `BaseButton`s (direct children of the outer
+     row) only get the outer `+8px`, so they sit 8px lower than the
+     wrapper. **This is the FilterToggleButton bug that surfaced
+     2026-07-02.**
+  2. **Call-site style fudge.** When the component underdelivers,
+     each caller adds a `class="q-mt-xs"` or a `:style="{ marginTop:
+     '-3px' }"` locally to nudge alignment. Every page drifts a
+     different fudge. Consistency is destroyed silently.
+- **Apply:**
+  - Composite components (a Clear + Filters pair, a label + control,
+    a search + action group) render children as top-level siblings.
+    In Vue 3 the SFC `<template>` root can contain multiple nodes;
+    use that instead of a wrapper `<div>`.
+  - If a wrapper genuinely IS needed (e.g. the component needs a
+    positioning context or a focus ring), it uses **flexbox `gap`**
+    for inter-child spacing (`display: flex; gap: 8px`) — `gap`
+    doesn't use margins, so there's no negative-margin dance to
+    collide with the parent.
+  - Callers do **not** re-declare intrinsic styling. If a caller
+    wants to nudge alignment, the fix is in the component, not the
+    caller.
+  - Prefer a component prop over a call-site `class="..."` when the
+    caller has a *legitimate* variant need (e.g. `size="sm"`).
+    Variant proliferation is fine; call-site fudge is not.
+- **Violation signal:**
+  - A component's root is `<div class="row q-gutter-*">` wrapping
+    other Base primitives, and it's meant to drop into a page toolbar.
+  - A page toolbar contains a call-site inline `class` or `style`
+    prop tweaking margin/padding/alignment of a shared button.
+  - `git grep 'q-gutter' web_app/src/components/` returns shared
+    components whose root wrapper carries a `q-gutter-*` class.
+    Each hit is a candidate for the collision above; audit whether
+    the component is used inside a parent that also carries a
+    Quasar gutter class.
+- **Carve-outs (must be commented, naming the rule):**
+  - A component that is only ever used **standalone** (never dropped
+    into a shared-gutter toolbar) may still use `q-gutter-*` — the
+    collision only happens when it's a direct child of another
+    `q-gutter-*` container. If you carve out, add an inline
+    comment: `<!-- R-027 carve-out: only ever mounted at page root,
+    no parent gutter -->` so a future author knows why the wrapper
+    is safe there but not elsewhere.
+- **Source:** ADR-023; FilterToggleButton misalignment surfaced
+  2026-07-02 during a toolbar-parity review. The fix was a Vue 3
+  multi-root template on FilterToggleButton itself; the rule was
+  promoted because the same mistake is easy to make on any future
+  paired-primitive component.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1708,6 +1776,21 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
     user's filter shape. Currently a full reload happens on sign-out
     anyway, so this is a nice-to-have rather than a defect.
 - **Promotes rule:** R-026.
+
+### ADR-023 — Styling encapsulation: component owns intrinsic appearance; parent owns layout context
+- **Date / task:** 2026-07-02 (toolbar-parity review — user spotted the Filters button sitting 8px above its BaseButton siblings on Stock Overview).
+- **Status:** accepted
+- **Context:** The Filters button and the other toolbar buttons (New item / Scan / Stocktake / Bulk select / Export) all share the same base (`BaseButton`). But the Filters button visually sat higher than the rest. Root cause was not the base component — it was the `FilterToggleButton` wrapper: `<div class="row items-center q-gutter-sm no-wrap">` around the (Clear + Filters) pair. `q-gutter-*` is Quasar's negative-margin trick (`margin-top: -8px` on the container, `+8px` on each direct child). When the wrapper sat inside the parent toolbar's own `q-gutter-sm`, it received `+8px` from the parent AND applied `-8px` to itself internally — net displacement zero. Sibling `BaseButton`s that were direct children of the outer container only got the outer `+8px`, so they sat 8px lower than the wrapper. Every other composite component that wraps children in its own `q-gutter-*` `<div>` has the same latent bug — the failure mode isn't specific to FilterToggleButton, it's a class of collision.
+- **Decision:** Adopt R-027. Component owns intrinsic appearance (size / padding / border / colour / hover); parent owns layout context (position in a flex row, spacing between siblings). A composite component that renders multiple children uses a **Vue 3 multi-root template** so the children participate directly in the parent's layout — no wrapper `<div>` that carries a spacing scheme colliding with the parent. Where a wrapper is genuinely needed, it uses flexbox `gap` (no negative-margin trick) so it can't collide. Callers never re-declare intrinsic styling or fudge alignment with call-site `class="q-mt-xs"` — the fix is in the component.
+- **Alternatives considered:**
+  - **Fix the specific FilterToggleButton bug and log the general lesson as an FU.** Rejected — the class of collision recurs anywhere a shared component wraps children in a gutter-carrying div, and the R-001 componentisation rule doesn't cover it explicitly. Promoting to a rule now means it's on the close-gate checklist for every future paired-primitive component.
+  - **Wrap children in a `<div style="display: flex; gap: 8px">`.** Valid alternative for the specific fix and worked as a fallback. Rejected as the *primary* pattern because it introduces an extra DOM node with no semantic purpose; the multi-root template is one less element and clearer intent.
+  - **Push the Clear button up to the caller.** Rejected — Clear and Filters are logically paired (they appear/disappear together as a unit; FU-121 encoded that pairing). Splitting them means every caller re-implements the appear/disappear + ordering rules.
+- **Consequences:**
+  - The `q-gutter-*` negative-margin scheme is now considered *hazardous inside shared components*. Toolbar rows on pages can still use it freely — the hazard is only when a *component wraps children* in it.
+  - Existing paired-button components get an audit: `git grep 'q-gutter' web_app/src/components/` surfaces candidates. Each hit is checked against "is this component ever mounted inside a parent that also carries a Quasar gutter class?" — if yes, migrate to multi-root or `gap`.
+  - The rule extends R-001 (componentise first) — R-001 said *create the primitive*; R-027 adds *and don't sabotage it with wrapper DOM that fights the caller's layout*.
+- **Promotes rule:** R-027.
 
 ---
 

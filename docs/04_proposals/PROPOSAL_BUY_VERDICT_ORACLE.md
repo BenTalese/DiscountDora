@@ -176,12 +176,16 @@ proven in production. Not scoped in this proposal.
 
 ## 5. What this slice does NOT do
 
-- **Crowd-price baselines (P8-04).** User's own feasibility concern is
-  legitimate — pooling anonymised prices across households has real
-  privacy, incentive, and freshness problems that Dora is not built to
-  own. Flagged as a governance question (FU-436 below); the oracle is
-  designed to work without it, and can trivially blend a crowd baseline
-  in later if the decision goes the other way.
+- **Crowd-price baselines (P8-04).** **CUT** 2026-07-02 (FU-436 /
+  [INV-11](../05_investigations/CROWD_PRICES_ASSESSMENT.md) /
+  `RECONCILED_FINISHING_PLAN.md §7 Decision 6`). The originally-spec'd
+  opt-in community price graph is retired — four structural blockers
+  (small-cohort re-identification, cold-start with no distribution
+  channel, weekly-catalogue freshness cap, hosted-broker ops role
+  reintroduces the pattern Decision 1 retired). The oracle is designed
+  to work on pure personal data with an honest thin-data branch
+  (Charter P3), which is the answer for new users, not a bug crowd
+  data was supposed to paper over.
 - **Loyalty / email price ingestion (P8-03).** Not shipped either;
   price data comes only from completed shopping lists (P6-01 →
   archived lines). Enough to run the oracle; deeper price coverage
@@ -231,12 +235,12 @@ described a manual sort by store — nothing worth extracting here.
 
 ## 9. Open follow-ups
 
-- **FU-436** — governance decision on P8-04 crowd prices (KEEP /
-  SHRINK / CUT), triggered by the user's feasibility concern raised
-  during P8-05 kickoff. Track like INV-9 (palette): produce a short
-  assessment, land the call in the reconciled plan.
+- **FU-436** — ✅ resolved 2026-07-02 as **CUT**
+  ([INV-11 assessment](../05_investigations/CROWD_PRICES_ASSESSMENT.md);
+  `RECONCILED_FINISHING_PLAN.md §7 Decision 6`). The oracle stays
+  personal-data-only; no crowd-baseline blend.
 - **FU-437** — extend the oracle to the item-detail page with the
   full `BuyVerdictCard` after the badge lands.
 - **FU-438** — P8-06 Wait-or-Buy — populate the `wait_until` field
   on the same endpoint once cadence-based price cycle detection
-  exists.
+  exists. Unblocked by the FU-436 CUT (no crowd-data prerequisite).

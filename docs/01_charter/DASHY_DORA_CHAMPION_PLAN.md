@@ -107,7 +107,7 @@ defensible niche none of these serve.
   matters." Only possible because Dora holds the whole loop. Tagline: **"The pantry app
   you never have to update."**
 - **Wait-or-Buy personal price oracle** — advises *your* best time to buy from *your*
-  cadence + price history (+ optional crowd). Personalised; doesn't exist for groceries.
+  cadence + price history. Personalised; doesn't exist for groceries.
 - **Household culinary memory** — the compounding moat: years of meals, prices, rhythms,
   preferences → irreplaceable, and impossible for ad-driven rivals who monetise the data.
 - **The Dora Score** — a single self-running-kitchen health metric (low waste, on-budget,
@@ -296,6 +296,16 @@ DONE WHEN:
 
 ## P8-04 — Crowd-sourced price graph (opt-in, privacy-preserving)
 
+> **⚠ CUT 2026-07-02** (FU-436 / [INV-11](../05_investigations/CROWD_PRICES_ASSESSMENT.md)
+> / `RECONCILED_FINISHING_PLAN.md §7 Decision 6`). Four structural
+> blockers: small-cohort re-identification risk, cold-start with no
+> distribution channel to bootstrap contributor volume, weekly Aus
+> catalogue rotation caps the useful freshness window, hosted-broker
+> ops role reintroduces the pattern Decision 1 retired. P8-06's spec
+> already read "design to work on personal data alone" (line 366) —
+> crowd was framed as optional-blend, never load-bearing. **The prompt
+> body below is preserved as the audit trail; do not build it.**
+
 ```
 Build an opt-in community price graph so users (and especially new users with no history)
 get a price baseline — from facts users contribute, never from scraping (Charter 9, 4).
@@ -356,14 +366,20 @@ DONE WHEN:
 
 ## P8-06 — Wait-or-Buy personal price oracle
 
+> **Updated 2026-07-02:** P8-04 crowd prices was CUT (see above /
+> `RECONCILED_FINISHING_PLAN.md §7 Decision 6`). This prompt was
+> already designed to work on personal data alone (STEP 0's "if crowd
+> data is absent, design to work on personal data alone") — the CUT
+> just makes that permanent. The "optionally blend crowd baselines"
+> line in DO is now dead; ignore it. No other change to this prompt.
+
 ```
-Advise the user's BEST TIME to buy from their own purchase cadence + price history (+
-optional crowd), e.g. "don't buy now — you usually hit a lower price ~fortnightly"
+Advise the user's BEST TIME to buy from their own purchase cadence + price history
 (Charter 4). Novel; doesn't exist for groceries.
 
 STEP 0 (verify state): confirm personal price history (P6-03/P7-01) and cadence
 (P6-01/P6-04) exist with enough depth. Read purchase_price_stats and the price-history
-store. If crowd data (P8-04) is absent, design to work on personal data alone.
+store. Personal data only — P8-04 crowd data was cut per FU-436.
 
 STEP 1 (charter): only advise when confidence is real (Charter 3); never fabricate a
 cycle from one data point. Explain the basis (Charter 7).
@@ -371,7 +387,7 @@ cycle from one data point. Explain the basis (Charter 7).
 DO:
 - Detect personal price cycles / typical low points per item from price history + cadence.
 - Produce a wait/buy recommendation with the basis ("your last 4 buys were lower than this;
-  your usual low lands ~end of fortnight"). Optionally blend crowd baselines (P8-04).
+  your usual low lands ~end of fortnight").
 - Surface in item detail and within the should-I-buy oracle (P8-05). Stay silent (low
   confidence) when history is thin.
 
@@ -516,14 +532,15 @@ This plan assumes the **P6 closed loop** and **P7-01 de-risk** are built or in p
 much of Part 8 depends on them. Each prompt's STEP 0 must confirm this and STOP if a
 foundation is missing.
 
-Recommended order:
+Recommended order (**updated 2026-07-02** — P8-04 crowd prices CUT per
+`RECONCILED_FINISHING_PLAN.md §7 Decision 6` / FU-436 /
+[INV-11](../05_investigations/CROWD_PRICES_ASSESSMENT.md)):
 
-1. **P8-01 Rebrand** — cheap, foundational identity. Do first.
-2. **P8-02 Barcode-to-add** — closes the input-friction gap; quick competitive parity win.
-3. **P8-03 Loyalty/email ingestion** → **P8-04 Crowd prices** — feed personal + community
-   price data (P8-03 before P8-04; both depend on P6-01/P7-01).
+1. **P8-01 Rebrand** — cheap, foundational identity. Do first. ✅ shipped 2026-07-01.
+2. **P8-02 Barcode-to-add** — closes the input-friction gap; quick competitive parity win. ✅ shipped 2026-07-02.
+3. **P8-03 Loyalty/email ingestion** — feed personal price data (depends on P6-01/P7-01). *P8-04 crowd prices removed from this stage.*
 4. **P8-05 Should-I-Buy oracle** → **P8-06 Wait-or-Buy oracle** — the decision features;
-   depend on the price data above + P6-03/P6-04.
+   depend on the price data above + P6-03/P6-04. P8-05 ✅ shipped 2026-07-02; P8-06 designed to work on personal data alone (line 366) — no crowd-data dependency.
 5. **P8-07 Zero-Input Pantry (FLAGSHIP)** — only after the P6 loop (P6-01/04/07/13) is
    solid. This is the crown; don't rush it onto a shaky foundation.
 6. **P8-08 Dora Score** → **P8-09 Culinary memory** — engagement + moat; depend on
@@ -532,8 +549,8 @@ Recommended order:
    the data/feature work since it wraps the SPA. Schedule it early enough that the
    above features are tested on-device.
 
-**Do not run in parallel** any two prompts touching the same tables/stores (e.g. P8-03 and
-P8-04 both touch price data; P8-07 touches everything in the loop). And above all: **every
+**Do not run in parallel** any two prompts touching the same tables/stores (e.g.
+P8-07 touches everything in the loop). And above all: **every
 prompt verifies current state first (Part III) and checks every decision against the Dora
 Decision Charter (Part II).** That is how this stays true to the vision as the code drifts
 beneath it — and how Dashy Dora becomes the champion, not just another app that makes you

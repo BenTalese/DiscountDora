@@ -10,6 +10,19 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-453 — P8-03 email-ingestion: CUT
+- **Raised:** 2026-07-02 (user's own instinct while auditing the champion sequence: *"P8-03 might also share the same fate as -04? i don't think its feasible / feels clunky"*).
+- **Type:** finding + design call (governance, not code — sits next to [FU-436](DORA_FOLLOWUPS_RESOLVED.md) for P8-04).
+- **What:** the champion plan's P8-03 (`docs/01_charter/DASHY_DORA_CHAMPION_PLAN.md:266`) proposes ingesting real prices from the user's own **emails** — a per-user forwarding address / inbound webhook + retailer-specific parsers for order-confirmation emails (Coles, Woolies) and loyalty offer emails (Everyday Rewards, Flybuys). No code existed (grep clean on `loyalty` / `email.*ingest` / `receipt.*ocr` under `dora_api/features`). Five concrete problems, distinct from P8-04's:
+  - **Mail-receiving surface is SaaS-shaped ops.** Per-user forwarding needs either an inbound mail service (Postmark / SES / SendGrid Inbound) — ongoing operator cost + DNS + MX for every self-host install (against **§7.5 distribution posture**), or user hand-forwarding (repeated task — Charter P1 Effortless), or IMAP polling with inbox credentials (worse credential-storage class than the loyalty portals P8-03 itself refuses — Charter 9).
+  - **Retailer email HTML is silent-fragility, same class as scraping.** Layouts change without notice; parsers break silently and prices stop landing. Exactly the failure mode the pivot from central scraping was designed to escape (Charter 4/9); moving the fragility from HTTP HTML to email HTML doesn't change its shape.
+  - **Loyalty offer emails are image-only by design.** Everyday Rewards / Flybuys increasingly render personalised offers as single images to defeat automated parsing. Extracting "$X off Y" reliably often isn't possible from the email HTML at all.
+  - **We already ship the "in without scraping" pattern — and it's a companion.** `/api/ingest` + `dora-companion` is the architecturally correct home for legally-sourced automatic feeds.
+  - **The shipped alternative already works.** `Finish & restock` (P6-01) captures `paid_price` from the list at the till — one manual event per week vs an ongoing email-parser maintenance treadmill.
+- **State note (2026-07-02):** **CUT** by user decision — *"cut anyways, not worth the work — dora excels elsewhere."* Decision landed in `RECONCILED_FINISHING_PLAN.md §7 Decision 7` (adjacent to Decision 6's P8-04 CUT — different failure surface) and reflected in `DASHY_DORA_CHAMPION_PLAN.md` (P8-03 section marked CUT). If an email-ingestion companion ever surfaces, it plugs into `/api/ingest` on the same seam the retailer-scraper companion uses; no Dora-core doc debt required. Champion order collapses further to `P8-01 → P8-02 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 → P8-10`.
+
+---
+
 ## [RESOLVED] FU-436 — P8-04 crowd-prices governance decision: KEEP / SHRINK / CUT
 - **Raised:** 2026-07-02 (P8-05 kickoff — user's own feasibility
   concern: *"i don't think the logistics of sharing/pooling community
@@ -34,7 +47,8 @@ resolutions go at the **top**.
   [`DASHY_DORA_CHAMPION_PLAN.md`](docs/01_charter/DASHY_DORA_CHAMPION_PLAN.md)
   updated: P8-04 prompt block retired with a CUT banner (body preserved
   as audit trail), Part V order rewritten to
-  `P8-01 → P8-02 → P8-03 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 → P8-10`,
+  `P8-01 → P8-02 → P8-03 → P8-05 → P8-06 → P8-07 → P8-08 → P8-09 → P8-10`
+  (further collapsed by Decision 7 / FU-453 to drop P8-03),
   Part I "optional crowd" phrasing dropped, P8-06 prompt annotated so
   the "optionally blend crowd baselines" line is dead. Someday-list in
   the reconciled plan split (P8-10 stays, P8-04 moves under Decision 6).

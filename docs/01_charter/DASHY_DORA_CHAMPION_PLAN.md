@@ -263,7 +263,17 @@ DONE WHEN:
   CHANGELOG updated.
 ```
 
-## P8-03 — Automatic prices, legally: loyalty + email ingestion
+## P8-03 — Automatic prices, legally: loyalty + email ingestion  🚫 CUT (2026-07-02)
+
+> **This section is retained as historical framing. Do not build against it.** CUT
+> per `RECONCILED_FINISHING_PLAN.md §7 Decision 6` and [FU-453](../../DORA_FOLLOWUPS_RESOLVED.md).
+> Rationale in short: retailer email HTML is the same silent-fragility class as
+> scraping (which the Decision-1 pivot was designed to escape); loyalty offer emails
+> are increasingly image-only by design; the mail-receiving surface adds SaaS-shaped
+> ops to every self-host install; and `Finish & restock` already captures paid_price
+> from the list at the till. If email ingestion is ever worth doing, it lives in a
+> **companion** pointing at `/api/ingest`, not in Dora-core.
+
 
 ```
 Bring real prices and purchases in automatically WITHOUT scraping retailers, by parsing

@@ -53,6 +53,34 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-452 — P6-11 location-aware grouping (put-away + expiry-by-location) never built
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type:** deferred job (Phase 1 loop item, un-started; fell off the map when spatial locations were retired).
+- **What:** `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_6_POLISH.md:688` specified two flows on the (now simple) location tree: **(A)** after `Finish & restock`, offer a put-away checklist grouped by `stock_location` tree node ("Freezer: 3 · Pantry: 2 · Fridge: 4") with tick-per-group + quick-assign for unsorted items; **(B)** in the expiry/alerts view, allow grouping expiring items by location node ("Back of freezer: 2 expiring"). No new alert type — just a presentation grouping over `get_alerts` data. Grep confirms neither flow exists: the only `_group_by_location` hit is in [`export_stock_overview.py`](dora_api/features/data/export_stock_overview.py) (a CSV export helper, not either P6-11 surface). Explicitly **not** on `PROJECT_STATE.md`'s attention list — probably dropped off after the spatial-location idea was cut (they simplified past the goal).
+- **Why deferred:** believed absorbed by other work; nothing built.
+- **Recommended resolution:** later during Phase 1 mop-up. Small — no data model change, uses existing tree + alerts data. Or, if the appetite isn't there, **explicitly cut** and log it (better a clean CUT than a silent drop). MUST NOT reintroduce stock-map / spatial coordinates / location routing (charter Removed-features list).
+
+## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) never built
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type:** deferred job (partial coverage — only the passive tracker half shipped).
+- **What:** `PROMPT_PLAN_PART_6_POLISH.md:594` had two halves. **Shipped:** per-recipe cost estimate (Cookbook Chunk 9, uses `paid_price` via FU-216). **Missing:** the headline "negotiator" — `cost_per_week` on meal-plan weeks (no `cost_per_week` grep hits), and the budget-defense loop that, when a week is over budget, emits ranked swap suggestions with concrete dollar savings and one-tap apply — **(a)** PRODUCT swap ("Buy the on-special <brand> for the chicken instead of your usual → save $X"; reuse `compare_prices`), **(b)** RECIPE swap ("Swap Thursday's <expensive recipe> for <cheaper saved recipe> → save $Y"). Must NOT use a stock-item substitute graph (that surface is retired). Depends on P6-03 deal-quality signal being present (see FU-450) for the "prefer genuinely-good-price products" ranking.
+- **Why deferred:** the negotiator loop needs the P6-03 signal + a design call on where the swaps surface (meal-plan week, budget card, both?); recipe cost shipped standalone and no one closed the rest.
+- **Recommended resolution:** later during Phase 1 mop-up; or fold into the P8-08 Dora Score card (over-budget bullet → "Save $X: apply this swap"), which is where FU-352 already parks the daily-briefing bullets. Do FU-450 (P6-03 signal) first or in parallel.
+
+## [OPEN] FU-450 — P6-03 deal-quality (deal_score / fake_markdown / percentile) never built as spec'd
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type:** deferred job (superseded framing; specific pieces still worth extracting).
+- **What:** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history (`lowest_price`, `is_lowest_in_window`, percentile, **`fake_markdown` flag**, 0–100 `deal_score`), a `good_deal` alert type with one-tap add-to-list + per-user threshold + throttle, and a lowest/median overlay on `PriceHistoryPage.vue`. Zero code hits for `deal_score`, `fake_markdown`, or `is_lowest_in_window`; `find_deals` in `dora_api/features/assistant/tools.py` still returns raw offers. **Superseded framing:** the **P8-05 buy-verdict oracle** (shipped 2026-07-02) answers "is this a good price" with a verdict badge on rows + shopping-lines — different shape, same intent. **Missing pieces still valuable:** (a) the **`fake_markdown` flag** (detects inflated "was" prices — truth-in-advertising for a product literally called Dora that tracks *discounts*); (b) the **`good_deal` alert type** with one-tap add-to-list + throttle (proactive, not just passive on-page).
+- **Why deferred:** framing moved from "score" to "verdict" (P8-05); the leftover pieces weren't back-ported.
+- **Recommended resolution:** opportunistic — fold the `fake_markdown` detection into `BuyVerdictCard` (also un-wires FU-437), and add the `good_deal` alert type to `get_alerts.py`. Skip the 0–100 score + percentile UI — P8-05 replaces that surface. Feeds FU-451 (budget defense wants a deal-quality signal to rank product swaps).
+
+## [OPEN] FU-449 — P6-07 cook→consume: `consumption_events` writes never landed
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type:** finding (loop-integrity gap — the UX shipped but the persisted event did not).
+- **What:** `PROMPT_PLAN_PART_6_POLISH.md:479` specified a `consumption_events` table (id, user_id, household_id, stock_item_id, recipe_id, consumed_on, created_at) written on every recipe finish, so run-out prediction can blend **consumption cadence with purchase cadence**. The **UX half shipped** — `RecipeCookMode.vue` (C-3 Chunk 1 rewrite) has the finish dialog with per-ingredient level control, "Down one level" default, per-row add-to-list, meals-cooked counter (`finishRows`, `finishMealsCooked`, `confirmFinish` ~L1208). Level changes go through `update_stock_level` and auto-add-when-low fires correctly. **The persisted event is missing:** zero grep hits for `consumption_events` / `ConsumptionEvent` anywhere in `dora_api/`. As a consequence, the P6-07 done-when *"run-out prediction demonstrably shifts when an item is cooked vs only bought"* is **not true** — run-out prediction sees purchase cadence only. That's the whole point of the P6 close-the-loop story; without it, "loop closed" is optimistic (`PROJECT_STATE.md` currently reports Phase 1 ✅ ~95%).
+- **Why deferred:** the finish dialog was scoped as a UX rewrite (C-3 Chunk 1); the analytics/prediction wire was in a different scope and never followed.
+- **Recommended resolution:** later during Phase 1 mop-up (small — one entity + migration + write in the existing finish confirm path; the reason chip on run-out predictions is a bonus). Consider before Phase 3 opens — P8-07 Zero-Input Pantry depends on cadence quality (per `RECONCILED_FINISHING_PLAN.md §5`).
+
 ## [OPEN] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece never built)
 - **Raised:** 2026-07-02 (surfaced while checking whether P2-05 was done).
 - **Type:** deferred job (design + build; nice-to-have).

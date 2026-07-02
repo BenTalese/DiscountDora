@@ -14,9 +14,13 @@ Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progres
 
 ## Where we are right now
 
-Phases 0–2 are effectively **done**: foundations, the full shop→cook→restock loop,
-and the ingestion API + standalone companion all landed (the June baseline that
-called Phase 2 "0%" is stale — it's backend-green now). You are in **Phase 3, the
+Phases 0 and 2 are effectively **done**: foundations, and the ingestion API +
+standalone companion (the June baseline that called Phase 2 "0%" is stale — it's
+backend-green now). **Phase 1** is closer to **~85%** than the earlier "95%" call:
+a 2026-07-02 cross-check against `PROMPT_PLAN_PART_6_POLISH.md` found six real gaps
+(FU-449..452 plus the existing FU-351/352) — notably `consumption_events` was never
+persisted, so run-out prediction still sees purchases only, not cooking (the loop
+is closed in the UX but not yet in the data). You are in **Phase 3, the
 champion features** (~25%): the "Should I buy this?" buy-verdict oracle (P8-05) and
 barcode-to-add via Open Food Facts (P8-02) just shipped. The most recent work was
 the onboarding starter-data rework (per-name checklists + paste-rows). **Next up:**
@@ -31,7 +35,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/430/431/432). |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ✅ ~95% | P6-10 self-drafting plumbing done but unwired (FU-351); P6-12 daily briefing unbuilt (FU-352). |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~85% | Six P6 items partial or unbuilt (surfaced 2026-07-02 legacy-plan cross-check): **FU-449** P6-07 `consumption_events` writes missing (UX shipped, prediction still purchase-only); **FU-450** P6-03 `fake_markdown` flag + `good_deal` alert type (P8-05 superseded framing but left pieces); **FU-451** P6-09 budget-defense swaps ("negotiator" half); **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (folded into P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
 | **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~25% | Flagship P8-07 not started; P8-06 wait-until (FU-438), P8-08/09/10 not started. P8-02 + P8-05 shipped. |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
@@ -68,7 +72,7 @@ Full backlog is 155 open items in `DORA_FOLLOWUPS.md`; these are the ones that w
 a decision or a running-app check *now*, most important first.
 
 0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work.
-1. **🔴 FU-436 — Crowd-prices: KEEP / SHRINK / CUT?** Ledger recommends CUT. **Blocks** champion features P8-04 and P8-06 — needs your call before the next champion work.
+1. **🔴 FU-436 — Crowd-prices (P8-04): KEEP / SHRINK / CUT?** Ledger recommends **CUT** (privacy + incentive + freshness + broker-role). One-word confirmation closes it and unlocks the collapsed champion sequence **P8-05 (shipped) → P8-06 → P8-07 (Zero-Input Pantry) → …**. (P8-03 email ingestion **CUT** 2026-07-02, [FU-453](DORA_FOLLOWUPS_RESOLVED.md) resolved; §7 Decision 6.)
 2. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering. This is the blocker you flagged.
 3. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
 4. **🔴 FU-353 — Rename GitHub repo + local checkout to DashyDora.** Your action (`gh repo rename` + `mv`); until then release-check URLs + README badges 404.

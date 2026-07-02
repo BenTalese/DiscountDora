@@ -53,6 +53,27 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece never built)
+- **Raised:** 2026-07-02 (surfaced while checking whether P2-05 was done).
+- **Type:** deferred job (design + build; nice-to-have).
+- **What:** P2-05 in the original plan (`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md:400`
+  "Budget-Aware Auto Lists") had **two halves**. The *user-facing budget* half is
+  fully shipped: `dora_api/features/budget/budget.py`, migration
+  `a6e3b5d2c8f1_20260606_user_budget.py`, `User.budget_amount`/`budget_period`
+  handled in `update_me.py:49-56, 164-178`, budget-vs-spend surfacing on
+  `DashboardPage.vue`. The **optimizer half was not built** — the auto-generated
+  shopping-list flow (`features/shopping_lists/auto_generate.py` and the
+  dashboard's "Suggested list" surface) does not consult `budget_amount`; there is
+  no "keep the list under $X" or "trim these items to fit the budget" pass.
+- **Why deferred:** shipped the simpler user-facing budget + alert first; the
+  optimizer wants a proper design (which items to drop first, how essentials +
+  low-stock priorities compose with budget, whether it warns or hard-caps).
+- **Recommended resolution:** later (opportunistic Phase 3-ish, or bundled with
+  the next shopping-list intelligence pass) — needs a short design brief first:
+  what "budget-aware" means UX-wise (soft warn vs auto-trim vs suggest-swap), how
+  it interacts with `essential`/low-stock priority, and whether the constraint
+  ties to `budget_period` remaining or the single-shop total.
+
 ## [OPEN] FU-447 — Security: AUTH_ASSISTANT findings (HIGH CSRF + MEDIUM email-change) still unfixed
 - **Raised:** 2026-07-02 (surfaced by the full doc-register audit).
 - **Type:** finding (security).

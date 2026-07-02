@@ -160,7 +160,12 @@ No clean per-surface home; mostly future or "nice-to-have".
 Surfaces verified covered by existing prompts/proposals — listed so the
 next reviewer can fast-skip them.
 
-- SPLASH, CANNOT CONNECT, LOGIN/REGISTER/FORGOT — A1, B9.8, INV-4.
+- SPLASH, CANNOT CONNECT, LOGIN/REGISTER/FORGOT — `04_proposals/PROPOSAL_AUTH_SHELL.md`
+  (C-19, written 2026-07-02; maps the shared-styling, register-button, and Forgot-match
+  bullets — coverage table in §10). Password policy (§LOGIN "8 chars, admin toggle") stays
+  out of C-19, still uncovered → tracks as a separate follow-up. B9.8 covered the
+  mascot-hidden-on-mobile bug; A1 handled other theme drift; INV-4 remains the audit
+  reference.
 - ONBOARDING — `04_proposals/PROPOSAL_ONBOARDING.md` (C-5, written 2026-06-06;
   maps L24-46); dead-nav was B5; feature-flags → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md`
   §2.6 (C-cross); headcount → C-3. **Update 2026-06-17:** personas + the `products_enabled` flag

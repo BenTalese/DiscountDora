@@ -6,6 +6,8 @@ export type AppSettings = {
     // on the User row (see authStore.currentUser.llm_*).
     master_llm_enabled: boolean;
     scanning_enabled: boolean;
+    // P8-05 — buy-verdict oracle. Default on (pure-personal feature).
+    buy_verdict_enabled: boolean;
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: boolean;
     money_enabled: boolean;

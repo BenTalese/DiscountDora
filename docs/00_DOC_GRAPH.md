@@ -875,6 +875,47 @@ Then the per-prompt list below.
 - **Removed-features watchlist:** none.
 - **Cross-prompt dependencies:** independent; touches C-10.
 
+### C-19 — Shared auth-shell styling → `PROPOSAL_AUTH_SHELL.md`
+- **Surface:** pre-auth quartet — splash, cannot-connect, login,
+  onboarding — plus the auxiliary pre-auth pages (setup-admin,
+  verify-email, forgot/reset-password, confirm-email-change) folded in
+  by the audit.
+- **Produces:** `04_proposals/PROPOSAL_AUTH_SHELL.md` (written
+  2026-07-02).
+- **Charter principles:** P1 Effortless (four surfaces feel like one
+  moment); P10 Anti-creep (one shell, not four per-surface animated
+  backdrops); P11 Fast (GPU-friendly blobs, reduced-motion respected).
+- **Feedback bullets:**
+  - `§SPLASH` "would be better if it shared the same colouring as the
+    login screen".
+  - `§CANNOT CONNECT / INITIAL LOAD` "Same styling as login, splash,
+    etc., ensuring to keep the logo/dora pic animation and
+    location/placement".
+  - `§LOGIN / REGISTRATION / FORGOT` "Forgot password screen should
+    match styling of login screen".
+  - `§ONBOARDING` "Should be same styling as login screen".
+- **Related proposals:** `04_proposals/PROPOSAL_ONBOARDING.md` §3.1 +
+  §2.4 (cinematic-scene owner; C-19 provides the backdrop tokens the
+  scenes retune against — do NOT re-litigate scene choreography here).
+- **Related investigations:** none direct; retired FU-002 / DEC-2
+  (the `--lp-*` ladder "keep private" decision) is folded into this
+  prompt's body and settled here.
+- **Original spec:** `00_original_spec/Feature Boards/User & Global
+  Options.md` — historical "landing/login page" + "configurable
+  background" bullets (the configurable-background is **deferred, out
+  of C-19**, per anti-creep).
+- **Open follow-ups:** none open at time of writing; D-decisions in
+  `PROPOSAL_AUTH_SHELL.md §7` land as follow-ups if the user picks
+  non-default answers.
+- **Removed-features watchlist:** none. Force-light `color-scheme`
+  on the shell is a **deliberate carve-out** from R-002 (documented
+  as DEC-2), NOT a removed feature — do not "fix" it to consume
+  `--data-theme-*` tokens.
+- **Cross-prompt dependencies:** blocks `IMPL_PLAN_AUTH_SHELL.md`;
+  coordinates with `PROPOSAL_ONBOARDING`'s §3.1 for scene retune;
+  removes duplicated `--lp-*` / `--setup-*` ladders (R-003 drift) as
+  part of the migration.
+
 ### C-help — Opt-in contextual help overlay → `PROPOSAL_HELP_OVERLAY.md`
 - **Surface:** cross-cutting help layer
 - **Produces:** `04_proposals/PROPOSAL_HELP_OVERLAY.md`.

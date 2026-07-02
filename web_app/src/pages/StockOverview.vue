@@ -363,6 +363,7 @@
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
                             @long-press="onRowLongPress"
+                            @verdict-action="onVerdictAction"
                         />
                     </ListTransition>
                     <q-virtual-scroll
@@ -384,6 +385,7 @@
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
                             @long-press="onRowLongPress"
+                            @verdict-action="onVerdictAction"
                         />
                     </q-virtual-scroll>
 
@@ -433,7 +435,11 @@
 
         <PageCountsFooter v-if="stockItems.length > 0" :counts="filters.footerCounts.value" />
 
-        <CreateStockItemDialog v-model="createDialogOpen" />
+        <CreateStockItemDialog
+            v-model="createDialogOpen"
+            :prefill="createDialogPrefill"
+            @created="createDialogPrefill = null"
+        />
 
         <BulkMoveLocationDialog
             v-model="moveDialogOpen"
@@ -465,6 +471,7 @@
     import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
+    import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
@@ -487,6 +494,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useLocationStore } from 'src/stores/locationStore';
@@ -674,6 +682,47 @@
         if (!$q.screen.lt.md) return;
         if (!bulkMode.value) bulkMode.value = true;
         if (!bulkSelection.value.has(stockItemId)) toggleBulk(stockItemId);
+    }
+
+    // ── P8-05 buy-verdict actions ────────────────────────────────────────
+    // The badge emits its one-tap intent up here so we can reuse the
+    // existing shopping-list + stock-level mutation seams. R-003: no new
+    // mutation paths; verdict = suggestion, cart/level buttons = action.
+    // First-slice scope: `add_to_list` calls the quick-add-target path
+    // (matches the cart button's default) and `remove_from_list` clears
+    // this item from every open list. The remaining actions
+    // (`mark_stocked`, `none`) show a notice and defer to the row's
+    // existing controls; tracked as FU-437.
+    async function onVerdictAction(
+        stockItemId: string,
+        kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
+    ) {
+        if (kind === 'add_to_list') {
+            const targetId = shoppingListStore.quickAddTargetListId;
+            if (!targetId) {
+                $q.notify({
+                    type: 'warning',
+                    position: 'bottom-right',
+                    message: 'No draft list yet — use the cart button to choose one.',
+                });
+                return;
+            }
+            await slActions.addItems(targetId, [{ stock_item_id: stockItemId }]);
+            invalidateBuyVerdict(stockItemId);
+            return;
+        }
+        // `remove_from_list` / `mark_stocked` / `skip` / `none` — the
+        // row already owns these mutations via the cart button and the
+        // stock-level dropdown (R-003: no new mutation seams). The
+        // verdict is a *nudge* toward those controls; tracked as FU-437
+        // for a follow-up slice that wires them end-to-end here.
+        $q.notify({
+            type: 'info',
+            position: 'bottom-right',
+            message: kind === 'remove_from_list'
+                ? 'Use the cart button to remove from your list.'
+                : 'Use the row controls to update the stock level.',
+        });
     }
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
@@ -914,9 +963,18 @@
 
     // ── Create dialog ────────────────────────────────────────────────────
     const createDialogOpen = ref(false);
+    // P8-02 — carries a scan-driven prefill (Open Food Facts hit, EAN-only
+    // fallback, or product_no_link) so the dialog can seed the name/image/
+    // barcode and auto-register the EAN on submit. Cleared on close so the
+    // next non-scan "New item" click starts blank.
+    const createDialogPrefill = ref<CreateStockItemPrefill | null>(null);
     function onCreateClick() {
+        createDialogPrefill.value = null;
         createDialogOpen.value = true;
     }
+    watch(createDialogOpen, (open) => {
+        if (!open) createDialogPrefill.value = null;
+    });
 
     // ── Bulk-print QRs (post-N5 polish) ───────────────────────────────────
     // Fires the same QR-sheet endpoint Data → Barcodes & QR uses, scoped to
@@ -937,21 +995,59 @@
             const result = await barcodeApi.lookupAsync(value);
             // FU-056 — both stock-item kinds route directly. `UNIQUE` on
             // StockItemProduct.product_id guarantees there's no multi-link
-            // ambiguity to handle.
+            // ambiguity to handle. **P8-02 invariant: already-mapped EANs
+            // never trigger the OFF lookup or the add flow** — they jump
+            // straight to the existing item so no duplicate is created.
             if (result.kind === 'stock_item' || result.kind === 'stock_item_via_product') {
                 overviewScanOpen.value = false;
                 void router.push(`/stock/${result.id}`);
                 return;
             }
-            const message
-                = result.kind === 'product_no_link'
-                    ? 'This barcode matches a product, but it isn\'t linked to a stock item yet.'
-                : "Unknown barcode — not registered yet.";
-            $q.notify({
-                type: 'warning',
-                position: 'bottom-right',
-                message,
-            });
+            // `product_no_link` — the Product exists (probably from ingestion)
+            // but no stock item is linked. Skip OFF (the user's own Product
+            // data wins over an open-data suggestion) and open the add-item
+            // dialog with a barcode-only prefill; the dialog registers the
+            // EAN against the new stock item on save. Deeper "link into an
+            // existing item" flow is deferred (see FU-056 Phase-2 Products
+            // UI).
+            if (result.kind === 'product_no_link') {
+                overviewScanOpen.value = false;
+                createDialogPrefill.value = {
+                    barcode: value,
+                    source: 'product_no_link',
+                };
+                createDialogOpen.value = true;
+                return;
+            }
+            // `unknown` — the EAN is genuinely not in Dora. Ask Open Food
+            // Facts. On a hit, seed the dialog with the OFF suggestion; on
+            // a miss (or network failure — OFF returns `found: false` for
+            // both), open the dialog with only the barcode so the user can
+            // still one-tap add + register the EAN. The barcode registers
+            // against the new stock item on submit either way.
+            overviewScanOpen.value = false;
+            let prefill: CreateStockItemPrefill = { barcode: value, source: 'unknown' };
+            try {
+                const off = await barcodeApi.offLookupAsync(value);
+                if (off.found) {
+                    prefill = {
+                        barcode: value,
+                        source: 'off',
+                        name: off.name ?? undefined,
+                        brand: off.brand ?? undefined,
+                        imageUrl: off.image_url ?? undefined,
+                        categories: off.categories ?? undefined,
+                        quantity: off.quantity ?? undefined,
+                    };
+                }
+            } catch {
+                // OFF endpoint itself failed (server-side, distinct from a
+                // "found: false" miss). Fall through to the barcode-only
+                // prefill so the user isn't blocked — the add still works,
+                // and the EAN still gets registered on submit.
+            }
+            createDialogPrefill.value = prefill;
+            createDialogOpen.value = true;
         } catch (err) {
             $q.notify({
                 type: 'negative',

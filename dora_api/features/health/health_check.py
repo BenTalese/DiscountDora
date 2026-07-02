@@ -59,6 +59,9 @@ def _feature_flags() -> dict[str, bool]:
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
         "scanning": False,      # resolved below — off by default
+        # P8-05 — buy-verdict oracle. Defaults on (pure-personal
+        # feature, no external calls); resolved from AppSetting below.
+        "buy_verdict": True,
         "multi_user": True,     # register + admin role
         "email": os.environ.get("DORA_EMAIL_ENABLED", "false").lower()
                  in {"1", "true", "yes", "on"},
@@ -115,6 +118,7 @@ def _feature_flags() -> dict[str, bool]:
         # as the "feature is available here at all" signal.
         flags["assistant"] = bool(setting.master_llm_enabled)
         flags["scanning"] = bool(setting.scanning_enabled)
+        flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
         flags["meal_planning"] = bool(setting.meal_planning_enabled)
         flags["money"] = bool(setting.money_enabled)
         flags["nutrition"] = bool(setting.nutrition_enabled)

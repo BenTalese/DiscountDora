@@ -383,6 +383,31 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Stock
 
+### P8-05 "Should I buy?" buy-verdict oracle
+*Needs a seed with plausible price history + a few waste events. `buy_verdict_enabled` defaults on.*
+- [ ] **Feature flag** — Settings → System → Features → toggle "Should I buy? oracle" **off**. Reload Stock Overview: no badges anywhere. Toggle **on** again: badges reappear.
+- [ ] **Silent on low-confidence** — pick an item with < 3 shopping-list price samples. The badge does **not** render on its row (verify in DevTools: `/buy-verdict` request fires and returns `confidence: "low"`, but the row shows nothing).
+- [ ] **Out-of-stock → buy (high)** — mark an item Out of Stock. Its row renders a green **Buy** badge with confidence `high`. Popover shows "You're out of stock" as the first reason. One-tap "Add to primary list" — verify the item lands on the current quick-add-target list; the badge refreshes (may briefly show the *new* verdict factoring in the fact that it's on a list).
+- [ ] **Well-stocked + wasteful → skip (high)** — pick a well-stocked item, log 3+ waste events on it (`POST /waste/events` or via the row expiry menu). Rescan the overview: badge is red **Skip**. Popover reason: "You've wasted this ~N% of the time". One-tap label reads "Already stocked" (or "Remove from list" if it happens to be on an open list).
+- [ ] **Low-stock + cheap price → buy (high)** — mark an item Low Stock and log a shopping-list line with price ≤ 92% of its average. Badge is green **Buy** with confidence `high`. Popover reasons: "Running low" + "Cheapest you've paid in 3 months".
+- [ ] **Well-stocked + above usual → wait (medium)** — mark an item Well Stocked and log a recent purchase ≥ 108% of its average. Badge is orange **Wait**. Popover reason: "Above your usual price". Detail line quotes `$last vs $usual`.
+- [ ] **Thin data collapse** — pick a brand-new stock item with no history. Badge should render **only** if the oracle managed to produce a non-low-confidence verdict; typically it should be silent. Force-open the item's `/buy-verdict` in a browser: response reads `verdict: "unsure", confidence: "low", reasons: [{signal: "thin_data"}]`.
+- [ ] **In-shop consumer** — open a draft shopping list with a well-stocked-and-wasteful item on it. The line-row badge reads **Skip**. Popover one-tap action reads "Remove from list"; tapping it calls the existing `onRemoveLine` handler and the line disappears with the same toast the normal remove uses.
+- [ ] **Cache behaviour** — reload Stock Overview twice quickly. Backend logs show one `/buy-verdict` request per item on first paint; the second paint hits the module-level cache (no additional requests within the 5-min stale window unless a mutation invalidated an entry).
+- [ ] **Mutation invalidation** — add an item to a list via the row's cart button. Its badge refreshes (may flip verdict / hide entirely if the new `is_on_open_list` state changes the one-tap action). Backend log confirms a fresh `/buy-verdict` request after `invalidateBuyVerdict(id)`.
+
+### P8-02 barcode-to-add via Open Food Facts
+*Requires `scanning_enabled=true` (Settings → System) and a real camera + real packaged-product barcodes.*
+- [ ] **Already-mapped, direct** — scan an EAN already registered against a stock item (Stock item → Barcodes section). Expected: navigate straight to that item's detail page. No dialog. In DevTools network tab: `/api/data/barcodes/lookup` hit, **no** `/api/data/products/off-lookup` hit.
+- [ ] **Already-mapped, via Product** — scan an EAN registered against a Product that's linked to a stock item. Expected: same as above (navigate to the linked item; no dialog; no OFF call).
+- [ ] **Product-no-link** — scan an EAN registered against a Product with no linked stock item. Expected: Add-Item dialog opens with the barcode-only prefill and a "matches a known product" note. **No OFF call in network tab.** Confirm → new stock item created + EAN now linked to it.
+- [ ] **Unknown EAN, OFF hit** — scan a real cereal/beverage/pantry barcode Dora doesn't know. Expected: OFF network hit; dialog opens with name, brand, image, category seeded and a "Suggested from Open Food Facts — review and confirm" banner. Confirm → new stock item created + EAN now registered → rescanning jumps straight to the new item.
+- [ ] **Cache** — immediately rescan the same code from step above. Expected: dialog shows identical suggestion; server logs show the OFF request served from cache (no outbound OFF call).
+- [ ] **Unknown EAN, OFF miss** — scan a made-up but plausible 13-digit numeric string. Expected: OFF returns `{found: false}`; dialog opens with barcode-only fallback + generic banner. Confirm → item created + EAN registered.
+- [ ] **OFF network failure** — kill wifi / block `world.openfoodfacts.org` at the host level. Rescan an unknown EAN. Expected: same barcode-only fallback as OFF-miss; **no error toast**; item creates cleanly.
+- [ ] **Scanning off** — flip `scanning_enabled=false` in Settings → System. Stock Overview no longer shows the scan button; the OFF endpoint stays reachable but there's no UI path to it. (Server-side gating of the endpoint itself is deliberately absent — matches `/barcodes/lookup`.)
+- [ ] **Charter honesty** — the "Suggested from Open Food Facts" banner is clearly labelled and the image is a *preview*, not silently ingested. After confirm, `StockItem.image` is empty (FU-033 image seam is separate); user can add the image manually.
+
 ### History tab — retention, cap, and truncation footer — origin 2026-06-30 feedback
 *Requires a fresh dev seed (drop `dora.db` with `DORA_ALLOW_DESTRUCTIVE=1` then reseed).*
 - [ ] Stock Overview → search **"Sriracha (chatty history test)"** → open detail → History tab → the timeline renders **50 expiry events** (server-capped) with a small muted footer at the bottom reading *"16 older events not shown"*

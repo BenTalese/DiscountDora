@@ -1,7 +1,7 @@
 <template>
     <BaseDialog
         :model-value="modelValue"
-        title="Add a stock item"
+        :title="dialogTitle"
         closable
         card-style="width: 600px; max-width: 95vw"
         @update:model-value="onDialogUpdate"
@@ -10,6 +10,42 @@
             <q-card-section>
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
                     <FormErrorSummary :message="generalError" />
+
+                    <!-- P8-02 — barcode-to-add suggestion banner. Shown when
+                         the dialog opens from a scan flow with either an OFF
+                         suggestion (source='off') or an EAN-only prefill
+                         (unknown barcode, OFF miss or product_no_link). Uses
+                         --surface-sunken for consistency with the FU-012
+                         sub-bar treatment. -->
+                    <div v-if="prefill?.barcode" class="dora-suggestion-banner">
+                        <img
+                            v-if="prefill.imageUrl"
+                            :src="prefill.imageUrl"
+                            alt=""
+                            class="dora-suggestion-image"
+                        />
+                        <div class="col">
+                            <div class="text-caption dora-text-muted">
+                                <template v-if="prefill.source === 'off'">
+                                    Suggested from <strong>Open Food Facts</strong> — review and confirm.
+                                </template>
+                                <template v-else-if="prefill.source === 'product_no_link'">
+                                    This barcode matches a known product. Add a stock item to link it.
+                                </template>
+                                <template v-else>
+                                    Adding a stock item for a scanned barcode.
+                                </template>
+                            </div>
+                            <div class="text-caption q-mt-xs">
+                                Barcode <code>{{ prefill.barcode }}</code>
+                                <span v-if="prefill.brand"> · {{ prefill.brand }}</span>
+                                <span v-if="prefill.quantity"> · {{ prefill.quantity }}</span>
+                            </div>
+                            <div v-if="prefill.categories" class="text-caption dora-text-muted q-mt-xs">
+                                {{ prefill.categories }}
+                            </div>
+                        </div>
+                    </div>
 
                     <q-input
                         v-model="form.name"
@@ -98,18 +134,34 @@
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
+    import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
+    import BarcodeApiService from 'src/services/api/barcodeApiService';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { useFormErrors } from 'src/composables/useFormErrors';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useQuasar } from 'quasar';
     import { computed, reactive, ref, watch } from 'vue';
 
-    const props = defineProps<{ modelValue: boolean }>();
+    // P8-02 prefill type lives in a sibling `.ts` file so page callers
+    // resolve it under ESLint's TS parser (which doesn't always trace
+    // named exports across `.vue` boundaries).
+    const props = defineProps<{
+        modelValue: boolean;
+        prefill?: CreateStockItemPrefill | null;
+    }>();
     const emit = defineEmits<{
         (e: 'update:modelValue', value: boolean): void;
         (e: 'created'): void;
     }>();
+
+    const $q = useQuasar();
+    const barcodeApi = new BarcodeApiService();
+
+    const dialogTitle = computed(() =>
+        props.prefill?.barcode ? 'Add a stock item from scan' : 'Add a stock item',
+    );
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
@@ -144,7 +196,7 @@
     }
 
     const defaultForm = (): CreateStockItemCommand => ({
-        name: '',
+        name: props.prefill?.name?.trim() || '',
         stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
         stock_location_id: null,
     });
@@ -201,11 +253,34 @@
         saving.value = true;
         resetFormErrors();
         try {
-            await stockItemStore.createStockItemAsync({
+            const created = await stockItemStore.createStockItemAsync({
                 name: form.name,
                 stock_level_id: form.stock_level_id,
                 stock_location_id: form.stock_location_id,
             });
+            // P8-02 — if the dialog was opened from a scan flow with a
+            // barcode prefill, register the EAN against the new stock
+            // item so the next scan of the same code lands on this item
+            // instead of re-triggering the add-flow. A conflict here (rare
+            // race — another registration happened between lookup and
+            // submit) is surfaced as a warning but doesn't undo the
+            // create; the item exists, the user can add the barcode
+            // manually if the race really matters.
+            if (props.prefill?.barcode) {
+                try {
+                    await barcodeApi.registerAsync({
+                        barcode: props.prefill.barcode,
+                        stock_item_id: created.stock_item_id,
+                    });
+                } catch (regErr) {
+                    $q.notify({
+                        type: 'warning',
+                        position: 'bottom-right',
+                        message: 'Item added, but the barcode was already registered elsewhere.',
+                        caption: regErr instanceof Error ? regErr.message : String(regErr),
+                    });
+                }
+            }
             emit('created');
             emit('update:modelValue', false);
         } catch (err) {
@@ -215,3 +290,25 @@
         }
     }
 </script>
+
+<style scoped>
+    /* P8-02 — scan-driven prefill banner. Uses the same sunken-well
+       treatment as FU-012 filter sub-bars so the "this data came from
+       elsewhere" affordance reads consistently across surfaces. */
+    .dora-suggestion-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 10px 12px;
+        background: var(--surface-sunken);
+        border-radius: 6px;
+    }
+    .dora-suggestion-image {
+        width: 56px;
+        height: 56px;
+        object-fit: cover;
+        border-radius: 4px;
+        flex-shrink: 0;
+        background: var(--surface-default);
+    }
+</style>

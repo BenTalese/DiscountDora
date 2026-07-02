@@ -24,6 +24,12 @@ class AppSetting(BaseEntity):
     # live on User (see entity below).
     master_llm_enabled: bool = True
     scanning_enabled: bool = False
+    # P8-05 — buy-verdict oracle ("should I buy this?"). Defaults **on**
+    # because it's a pure-personal feature: no external calls, no crowd
+    # data, no config required — the composer just needs the user's own
+    # shopping-list / waste history. Admin can turn it off if the row-level
+    # badges feel noisy on their pantry.
+    buy_verdict_enabled: bool = True
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6). Surface
     # via `/api/health features.*` + admin-only `PATCH /api/admin/feature-
     # flags`. Per-user opt-ins (money, nutrition, image display) layer on
@@ -98,6 +104,7 @@ class AppSetting(BaseEntity):
     class Fields(BaseEntity.Fields):
         MASTER_LLM_ENABLED = "master_llm_enabled"
         SCANNING_ENABLED = "scanning_enabled"
+        BUY_VERDICT_ENABLED = "buy_verdict_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
         NUTRITION_ENABLED = "nutrition_enabled"

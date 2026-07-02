@@ -84,7 +84,9 @@ export const useStockItemStore = defineStore('stockItem', () => {
         return inflight;
     };
 
-    const createStockItemAsync = async (stockItemToCreate: CreateStockItemCommand) => {
+    const createStockItemAsync = async (
+        stockItemToCreate: CreateStockItemCommand,
+    ): Promise<StockItem> => {
         const created = await stockItemApiService.createAsync(stockItemToCreate);
         // The API returns the full DTO body when available.
         const entity =
@@ -93,6 +95,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
                 : await stockItemApiService.getAsync(created.id as string);
         stockItems.value.push(entity);
         stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
+        return entity;
     };
 
     /** Optimistic stock-level swap with rollback if the API rejects.

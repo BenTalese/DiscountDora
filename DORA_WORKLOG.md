@@ -9,6 +9,493 @@ next.
 
 ---
 
+## 2026-07-02 — C-19 shared auth-shell design brief
+
+**Why:** the pre-auth quartet (splash, cannot-connect, login,
+onboarding) each carry their own visual language today — only
+`LoginPage.vue` is designed for the moment. Feedback across all four
+surfaces explicitly asks them to share styling. The brief also required
+settling the fate of the retired FU-002 / DEC-2 `--lp-*` colour ladder
+(kept private on purpose; revisit deferred to this prompt).
+
+### What the audit found beyond the brief
+
+- **The brief lists four surfaces; there are nine pre-auth files.**
+  `SetupAdminPage.vue`, `VerifyEmailPage.vue`, `ForgotPasswordPage.vue`,
+  `ResetPasswordPage.vue`, `ConfirmEmailChangePage.vue` all sit in the
+  same pre-auth moment and had to be folded in for the shell to make
+  sense.
+- **`--lp-*` is already duplicated.** `SetupAdminPage.vue` carries a
+  verbatim copy of the 11-token ladder under a `--setup-*` selector.
+  This is the exact drift "keep private" was supposed to prevent —
+  which flips the retired FU-002 recommendation from "keep private" to
+  **promote to `--auth-shell-*` on a shared shell**.
+- **Naming collision waiting to bite.** `VerifyEmail` / `Forgot` /
+  `Reset` / `ConfirmEmailChange` all define `.auth-shell` locally as a
+  plain centred container. The proposal calls for the new component's
+  root class to be `.dora-auth-shell` and folds those four pages in.
+
+### What shipped
+
+**No code.** One design proposal:
+[`docs/04_proposals/PROPOSAL_AUTH_SHELL.md`](docs/04_proposals/PROPOSAL_AUTH_SHELL.md).
+
+Highlights:
+
+- Single `AuthShell.vue` component with `backdrop` (`blobs` / `quiet` /
+  `none`), `mascot` (`top-right` / `top-centre` / `none`), and
+  `variant` (`card` / `full-bleed`) props; slots for `card-head`,
+  default, `card-foot`.
+- Palette promoted to `--auth-shell-*` scoped-in-component, with the
+  DEC-2 rationale (force-light, raw hex, R-002 carve-out) documented
+  physically next to the tokens.
+- Per-surface variant matrix covers login, setup-admin, splash/
+  cannot-connect, welcome-layout (onboarding), and the four auxiliary
+  pages.
+- Migration plan (7 reversible steps) nets ~-200 LOC.
+- Explicit non-goal: does NOT re-litigate onboarding cinematic scenes —
+  `PROPOSAL_ONBOARDING.md §2.4` remains authoritative; C-19 only
+  wraps the layout and exposes tokens the scenes retune against.
+- Feedback coverage table maps four bullets (§SPLASH, §CANNOT
+  CONNECT, §LOGIN, §ONBOARDING) to specific proposal sections. All
+  covered; no bullet punted.
+
+### Open decisions for user
+
+D1–D8 in `PROPOSAL_AUTH_SHELL.md §7`. Highest-signal:
+
+- **D2** — Does splash / cannot-connect adopt the blob backdrop?
+  Recommendation: yes, via `backdrop="quiet"` (motion-frozen, low
+  opacity) so it reads continuous with login but doesn't spend
+  animation budget during bootstrap.
+- **D4** — Fold auxiliary pages (Verify / Forgot / Reset /
+  ConfirmEmailChange) into the shell? Recommendation: yes — the name
+  collision is a real bug and Forgot Password has a direct feedback
+  ask to match Login.
+- **D7** — Hardcode the pre-mount splash to `#1f2647`? Recommendation:
+  yes — the alternative flashes light-then-midnight on cold-load.
+- **D8** — The original spec's "configurable landing background"?
+  Recommendation: **out of scope for C-19** (P10 Anti-creep); log as
+  historical `consider (deferred)` in the proposal's original-spec
+  section.
+
+### Files touched
+
+- `docs/04_proposals/PROPOSAL_AUTH_SHELL.md` — new.
+- `docs/00_DOC_GRAPH.md` — new C-19 section (inserted before C-help).
+
+### Engineering-standards close-gate
+
+No code changed this unit. The proposal itself is checked against R-002
+(force-light carve-out documented as DEC-2), R-003 (promotion of `--lp-*`
+to the shell is *the* SSoT fix), R-005 (componentisation-first — the
+whole proposal), R-006 (no framework rewrite — Vue SFC + scoped CSS).
+
+### Follow-ups spun off
+
+- **FU-440** — R-003 drift: `SetupAdminPage.vue` duplicates the
+  `--lp-*` ladder. Resolves when the C-19 impl-plan runs.
+- **FU-441** — naming collision: four aux pre-auth pages define
+  `.auth-shell` locally. Resolves when the C-19 impl-plan runs.
+- **FU-442** — §LOGIN password-policy feedback still uncovered; C-19
+  explicitly leaves it out. Needs a small standalone prompt or a
+  C-cross extension.
+- **FU-443** — Action C-19: driver FU for resolving D1–D10 and writing
+  `IMPL_PLAN_AUTH_SHELL.md`. Blocks FU-440 + FU-441 (which resolve
+  automatically when the shell ships).
+
+Also refreshed `docs/02_feedback/COVERAGE_GAPS.md` — the
+SPLASH/CANNOT-CONNECT/LOGIN/REGISTER/FORGOT surface now homes to
+`PROPOSAL_AUTH_SHELL.md` (was A1/B9.8/INV-4 as a placeholder).
+
+`PROPOSAL_AUTH_SHELL.md §11` lists notes for the future
+`IMPL_PLAN_AUTH_SHELL.md` (git-grep cleanup check, cold-load handoff
+verify, single-PR guidance). No new `DORA_VERIFY.md` entries yet — the
+verify list gets appended when the impl-plan runs.
+
+### Correction pass — user asked whether feedback was fully covered
+
+Initial proposal covered the four "same styling as X" bullets but
+missed **§LOGIN "Register text is too small, make it a button same as
+sign in but another colour, gradient of the dora yellow"** — internal
+card styling that C-19 owns. First-round edit added §5.8 as
+`BaseButton` gradient variants + §3.1 Wave-A dependencies.
+
+**User pushback (2026-07-02):** liked the current LP submit button
+size + colour; suggested those buttons might warrant their own
+component rather than folding into generic `BaseButton` variants.
+Correct call — the gradient treatment is deliberately contextual and
+`BaseButton` variants would invite it to leak onto dashboard/random
+pages. Second-round edit:
+
+- Reversed §5.8: **dedicated `AuthButton.vue` component** (composes
+  `BaseButton` internally, layers gradient/shadow/hover). Colours:
+  `primary` (current LP teal-gradient, preserved as reference),
+  `secondary` (amber gradient — "dora yellow"), `ghost` (flat with
+  hit target).
+- Added open decision **D9** (dedicated `AuthButton` vs `BaseButton`
+  variants; recommendation dedicated) and **D10** (new
+  `--auth-shell-accent-amber-strong` token so amber gradient has
+  two-stop depth).
+- Updated §3.1 A2 note: shell does NOT extend BaseButton; the auth
+  surfaces get their own paired primitive.
+- Split migration step 2 into 2a (create `AuthButton`) + 2b (migrate
+  Login).
+- Splash retry button now also uses `AuthButton colour="primary"`.
+- Added `AuthButton.vue` (~80 LOC) to the ripple.
+
+### Correction pass — browser-verify FUs cleaned up
+
+User pointed out that FU-433 (P8-02 browser-verify) and FU-439 (P8-05
+browser-verify) shouldn't exist — CLAUDE.md is explicit that pure
+browser-verify work belongs in `DORA_VERIFY.md` only, not
+`DORA_FOLLOWUPS.md`. Both were prior sessions' mistakes; I inherited
+them and then referenced them in this session's FU-443. Cleanup:
+
+- Deleted FU-433 + FU-439 from `DORA_FOLLOWUPS.md`. Verify checklists
+  in `DORA_VERIFY.md §Stock` are unaffected — they were always the
+  real work; the FUs were phantom pointers.
+- Dropped `— origin FU-433` and `— origin FU-439` tags from the two
+  `DORA_VERIFY.md` headings (no originating FU anymore).
+- Updated FU-437 (which cross-referenced FU-439) to point at
+  `DORA_VERIFY.md §Stock` directly.
+- Saved as `feedback-browser-verify-not-an-fu.md` memory so this
+  doesn't recur.
+- Flagged for the user (not swept this session) — FU-085, FU-218,
+  FU-315, FU-420 may also be pure-browser-verify violations. FU-161
+  looks like a legitimate reported-defect-didn't-reproduce
+  (`type=finding`) which per CLAUDE.md stays as an FU. FU-214 is a
+  legitimate multi-item Phase-F tail. Sweep those on demand.
+
+### Next up
+
+User reviews `PROPOSAL_AUTH_SHELL.md` and answers D1–D8. Once
+approved, spawn `IMPL_PLAN_AUTH_SHELL.md` (single PR: shell extraction
++ five surface migrations + pre-mount alignment + naming collision
+fix). Coordinate scene-glyph retune with whoever picks up
+`PROPOSAL_ONBOARDING §3.1` next.
+
+---
+
+## 2026-07-02 — P8-05 "Should I buy this?" personal buy-verdict oracle
+
+**Why:** first champion decision-feature after P8-02. STEP 0 audit
+found the personal-data foundation is in place (P6-01 shopping-list
+lines, P6-03 price stats, P6-04 cadence inline, P6-06 waste events);
+P8-03 loyalty/email and P8-04 crowd prices are NOT built. User decided
+personal-data-only for this slice — crowd data feasibility is a bigger
+governance question, flagged as **FU-436** for a keep/shrink/cut call.
+
+Surface question the user resolved: "would this make more sense while
+shopping?" — yes; the oracle lands on **Stock Overview** (list-building)
+AND **Shopping List detail** (in-shop), same endpoint, two consumers.
+Item-detail card is a follow-up.
+
+### The verdict shape
+
+One endpoint, `GET /api/stock-items/<id>/buy-verdict`, returning:
+
+```
+{ verdict: "buy"|"wait"|"skip"|"unsure",
+  confidence: "high"|"medium"|"low",
+  reasons: [{ axis, signal, label, detail }],
+  one_tap_action: { kind, label },
+  data_used: { …price / cadence / waste transparency… } }
+```
+
+Composed from three pure axis functions in
+[`get_buy_verdict.py`](dora_api/features/stock_items/get_buy_verdict.py):
+
+- **Price** (`_price_axis`) — trimmed-mean over 12 months, bands
+  `cheapest_3mo` / `usual_price` / `above_usual`. `line_paid_unit_price`
+  ladder (R-003 chokepoint) is reused, not re-implemented.
+- **Need** (`_need_axis`) — StockLevel band + cadence-derived
+  "days-to-run-out" detail string when history supports it.
+- **Waste** (`_waste_axis`) — event count ÷ purchases over the same
+  12-month window; `wastes_often` at ≥40%, `wastes_sometimes` at 10–39%.
+
+Composition rules (proposal §2.3): **need trumps price, waste warns
+on well-stocked** — the branch table lives in one place. Charter P12
+(No-invent) enforced: three thin axes ⇒ one honest "Not enough history
+yet" reason, verdict `unsure/low`. Every thin axis drops confidence
+one step. Never fabricate a call from one sample.
+
+### What shipped
+
+**Backend:**
+- New feature module
+  [`get_buy_verdict.py`](dora_api/features/stock_items/get_buy_verdict.py) —
+  endpoint + composer + three axis functions + data-gathering layer.
+- AppSetting field `buy_verdict_enabled` (default **on** — pure-personal;
+  no external surface to gate). Migration
+  [`e2b9c4a7f5d1`](dora_api/persistence/migrations/versions/e2b9c4a7f5d1_20260702_buy_verdict_enabled.py)
+  adds it with `server_default=true()`. `batch_alter_table` for SQLite
+  portability (R-005).
+- Health flag `features.buy_verdict` for client capability gating.
+- `AppSettingsDto` + update-request extended with the flag.
+
+**Frontend:**
+- API client + type in
+  [`buyVerdictApiService.ts`](web_app/src/services/api/buyVerdictApiService.ts).
+- [`useBuyVerdict.ts`](web_app/src/composables/useBuyVerdict.ts) — per-item
+  fetcher with a module-level `Map` cache (5-min stale window,
+  background refresh). `invalidateBuyVerdict(id)` for post-mutation
+  cache-busting; `clearBuyVerdictCache()` for sign-out. Not a Pinia
+  store — verdicts are per-item read-only; the Map + composable gives
+  us the fan-out without ceremony.
+- [`useBuyVerdictEnabled.ts`](web_app/src/composables/useBuyVerdictEnabled.ts) —
+  mirrors the `useScanningEnabled` shape; single health probe shared
+  across the tab.
+- Two components in `web_app/src/components/stock/`:
+  [`BuyVerdictBadge.vue`](web_app/src/components/stock/BuyVerdictBadge.vue)
+  (compact chip + popover with reasons + "why?" summary + one-tap
+  action), and
+  [`BuyVerdictCard.vue`](web_app/src/components/stock/BuyVerdictCard.vue)
+  (full three-axis card for the deferred item-detail slice).
+- Thin wrapper
+  [`BuyVerdictBadgeInline.vue`](web_app/src/components/stock/BuyVerdictBadgeInline.vue) —
+  takes just `stockItemId`, fetches internally, and applies the
+  "silent-on-low-confidence" + feature-flag gate. Both surfaces use it
+  (well, Stock Overview row wires it explicitly since it already has
+  the composable imported; Shopping List Detail uses the wrapper).
+- Wired into
+  [`StockItemRow.vue`](web_app/src/components/stock/StockItemRow.vue) —
+  badge sits left of the price/cart cluster (that's where the buying
+  decision is happening). Emits `verdict-action` up to StockOverview,
+  which routes `add_to_list` through `useShoppingListActions.addItems`
+  on the quick-add target list — reusing the existing cart-button
+  semantics rather than a new mutation seam (R-003).
+- Wired into
+  [`ShoppingListDetail.vue`](web_app/src/pages/ShoppingListDetail.vue)
+  line rows via `BuyVerdictBadgeInline`. First-slice action mapping:
+  `remove_from_list` calls the page's existing `onRemoveLine`;
+  everything else notifies the user to use the row's existing controls.
+- Admin toggle in
+  [`AdminSystemFeaturesSettings.vue`](web_app/src/pages/settings/AdminSystemFeaturesSettings.vue)
+  under "Install-wide flags" alongside Scanning.
+
+**Tests** — new
+[`tests/test_buy_verdict.py`](tests/test_buy_verdict.py):
+- Rich-history fixture with 8 price samples + 8 unique purchase dates +
+  no waste (well-stocked / usual price → unsure/low baseline).
+- Every composition branch: OOS + above-usual, low + cheapest, low +
+  above-usual, well-stocked + waste + cheap, well-stocked + on-open-list
+  action ⇒ `remove_from_list`, thin-price only drops confidence but
+  keeps verdict, three-axis-thin collapses to a single "not enough
+  history yet" reason, waste-thin-no-events distinguishes from unknown.
+- Data-used transparency test pins the payload the SPA renders.
+
+Written but **not executed** — same Python-not-on-PATH story as P8-02
+(logged 2026-07-02). CI or a set-up venv will run them.
+
+### Standards close-gate
+
+Walked every rule in
+[`docs/01_charter/ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md):
+- **R-001** (component-first) — reused `BaseButton`, `BaseDialog` idioms;
+  new `BuyVerdictBadge` is the reusable primitive both surfaces call.
+- **R-002** (theme tokens only) — badge + card use
+  `--semantic-positive`/`-warning`/`-negative` + `-soft` variants,
+  `--surface-elevated` / `--surface-sunken` / `--text-primary` /
+  `--text-muted`. No hex, no raw colour, no hardcoded dark/light.
+- **R-003** (server owns; SSOT) — the verdict is a server property
+  computed once from the user's data. Client never re-derives it.
+  Line-price ladder reused, not re-implemented. Actions delegate to
+  existing mutation seams (`useShoppingListActions`, row controls).
+- **R-005** (portable migrations) — `batch_alter_table` + `sa.true()`
+  server default → works on SQLite and Postgres.
+- **R-007** (scope discipline) — the item-detail card is written but
+  not wired; deferred to FU-437. The `wait_until` field for P8-06 is
+  documented in the proposal but not populated. No feature creep.
+- **R-014** (reveal-and-disable) — the feature flag hides the badge
+  entirely; when off, no consumer renders anything (no half-lit chips).
+- **R-025** (safe mutations) — the one wired action (`add_to_list`)
+  routes through the same `useShoppingListActions` the cart button
+  uses, so authorisation + audit trail are identical.
+
+No new ADR — this is a straight application of existing rules
+(server-composed derived fact per R-003; opt-out via existing flag
+pattern per R-014). Anything worth abstracting can wait until the
+detail-card slice lands.
+
+### Follow-ups spun off
+
+- **FU-436** — P8-04 crowd-prices governance decision (**keep / shrink
+  / cut**). User raised the feasibility concern during P8-05 kickoff:
+  "how could sharing/pooling community data even be possible for this
+  app?" — legitimate; privacy, incentive, and freshness problems Dora
+  isn't built to own. Treat like INV-9 palette: short assessment,
+  formal call in the reconciled plan. Recommended: cut (P8-05
+  demonstrates the personal-data foundation is enough).
+- **FU-437** — extend the oracle to the stock-item detail page with
+  the full `BuyVerdictCard` after the badge lands in real usage.
+- **FU-438** — P8-06 Wait-or-Buy — populate the `wait_until` field on
+  the same endpoint once cadence-based price-cycle detection exists.
+- **FU-439** — browser-verify the P8-05 badge across the two surfaces
+  (see `DORA_VERIFY.md` §Stock).
+
+### Next up
+
+The P8-04 governance call (FU-436) should come before P8-06 — if the
+answer is CUT, P8-06 can build on the same personal-data foundation
+P8-05 uses and the recommended sequence collapses. If KEEP, P8-06 still
+works but the wait-until confidence gets richer once crowd prices land.
+
+---
+
+## 2026-07-02 — P8-02 barcode-to-add via Open Food Facts
+
+**Why:** first champion feature after P8-01. Scanning an *unknown* EAN
+from Stock Overview was dead-ending in a warning toast; P8-02 turns it
+into a one-tap confirm-add seeded from Open Food Facts. User's brief
+was explicit: **"ensure it works well with already mapped EANs"** —
+the OFF call must never fire for a barcode Dora already knows and must
+never create a duplicate. That invariant drove the branch ordering
+below.
+
+### The scan flow, layered so the invariant is by construction
+
+`onOverviewScanDecoded` (in
+[`StockOverview.vue:935+`](web_app/src/pages/StockOverview.vue)) now
+branches on the existing `/api/data/barcodes/lookup` result:
+
+- `stock_item` / `stock_item_via_product` → navigate to the item.
+  **No OFF call, no dialog.** (Existing behaviour, unchanged.)
+- `product_no_link` → open Add-Item dialog with barcode-only prefill +
+  a "matches a known product" note. Skip OFF — the user's own Product
+  data wins over an open-data suggestion. Register the EAN against the
+  new stock item on save.
+- `unknown` → **only here** call OFF via
+  `barcodeApi.offLookupAsync(value)`. Hit → seed dialog with name /
+  brand / image / category. Miss or network failure → barcode-only
+  fallback. Register the EAN either way.
+
+OFF is invoked in exactly one place; nothing else reaches
+`/api/data/products/off-lookup`, and the endpoint doesn't consult
+Dora's tables, so there's no way for an already-mapped EAN to slip
+through.
+
+### What shipped
+
+**Backend** — new
+[`dora_api/features/data/off_lookup.py`](dora_api/features/data/off_lookup.py):
+- `GET /api/data/products/off-lookup?value=<ean>` returning
+  `{found, name?, brand?, image_url?, categories?, quantity?}`.
+- In-memory bounded FIFO cache (512 entries, 24 h TTL).
+- 5 s timeout, `URLError` / `TimeoutError` / non-JSON → `{found: false}`
+  so the SPA has one fallback path, not four.
+- UA: `DashyDora/<version> (barcode-to-add; +https://openfoodfacts.org)`.
+- EAN plausibility gate (`\d{8,14}`) — Dora QR URIs and freeform garbage
+  are cheaply refused without an OFF round-trip.
+
+**Frontend:**
+- [`barcodeApiService.ts`](web_app/src/services/api/barcodeApiService.ts) —
+  `offLookupAsync` + `OpenFoodFactsSuggestion` type. Docstring reiterates
+  the unknown-only invariant.
+- [`CreateStockItemDialog.vue`](web_app/src/components/stock/CreateStockItemDialog.vue) —
+  new `prefill: CreateStockItemPrefill | null` prop. Banner ("Suggested
+  from Open Food Facts — review and confirm" / "This barcode matches a
+  known product") uses `--surface-sunken` matching FU-012. On submit,
+  if `barcode` is set, POSTs `/data/barcodes` to link the EAN to the
+  new stock item. 409 there (rare race) surfaces as a warning but does
+  **not** roll back the create.
+- New
+  [`createStockItemPrefill.ts`](web_app/src/components/stock/createStockItemPrefill.ts)
+  holds the `CreateStockItemPrefill` interface. Extracted from the SFC
+  because ESLint's TS resolver couldn't trace the export across the
+  `.vue` boundary (`no-redundant-type-constituents` misfire on the
+  page-level import). Cleaner separation anyway — the type is shared
+  between the dialog and its callers.
+- [`StockOverview.vue`](web_app/src/pages/StockOverview.vue) — scan
+  handler rewired, `createDialogPrefill` state added, dialog wired to
+  reset the prefill on close.
+- [`stockItemStore.ts`](web_app/src/stores/stockItemStore.ts) —
+  `createStockItemAsync` now returns the created `StockItem` so callers
+  can chain the barcode registration off its id. No other consumers
+  broke (they discard the return value).
+
+**Tests** — new [`tests/test_off_lookup.py`](tests/test_off_lookup.py):
+- Parser: status-0 miss, status-1 hit with expected fields,
+  `generic_name` + `image_url` fallback branches.
+- EAN plausibility (accept 8/12/13/14-digit, reject dora://, non-digit,
+  too short, too long).
+- Cache: caches across calls, TTL expiry refetches, FIFO eviction
+  bounded (monkeypatched `_CACHE_MAX_ENTRIES` = 3).
+- Fetch: `URLError` → `{found: false}`, non-JSON body → `{found: false}`.
+
+**Not shipped (deferred, logged as FUs below):**
+- OFF from *other* scan surfaces (only StockOverview drives ScanOverlay
+  today; add-to-list inline / recipe surfaces are separate C-1 / C-7
+  concerns).
+- Category → stock-group mapping (OFF's categories are displayed but
+  not mapped).
+- Image ingestion (`image_url` is previewed but not fetched into
+  `StockItem.image`; waits on FU-033 image seam).
+
+### Standards close-gate
+
+Walked every rule in
+[`docs/01_charter/ENGINEERING_STANDARDS.md`](docs/01_charter/ENGINEERING_STANDARDS.md):
+- **R-001** (BaseButton/BaseDialog etc.) — dialog already used
+  `BaseDialog` + `BaseButton`; the new banner is inline layout, not a
+  reusable widget yet (no second consumer to abstract with).
+- **R-002** (theme tokens only) — banner uses `--surface-sunken`,
+  `--surface-default`, `--text-muted`. No hex or raw colour.
+- **R-003** (server owns) — the OFF payload is fetched server-side
+  (avoids client CORS + centralises the UA + cache); the *only* Dora
+  fact the client synthesises is the branch decision, which is picked
+  purely from the server-owned `/barcodes/lookup` result.
+- **R-005** (portable DB layer) — no DB touched.
+- **R-014** (reveal-and-disable) — endpoint isn't itself gated
+  server-side (matches the sibling `/barcodes/lookup` — gating is
+  centralised via `features.scanning` on the client). Add-item flow
+  entry is the ScanOverlay button, which is already `v-if
+  scanningEnabled`.
+- **R-025** (safe mutations) — the barcode auto-register on save is
+  a mutation but is scoped to the *newly-created* stock item's id,
+  so no cross-user leakage or race outside the caller's own work.
+- **Other rules** — no violations introduced or touched.
+
+No new ADR — P8-02 is straightforwardly an application of existing
+rules (server-side external call = R-003; graceful degradation on
+external-source failure is already the pattern in
+`get_version.py` and `import_recipe_from_url.py`).
+
+### Verification
+
+- `vue-tsc --noEmit` clean across P8-02 files. Only remaining error is
+  pre-existing in `AdminDataImport.vue` (line 33/35 — `exactOptional`
+  fallout in a `find(...)` call unrelated to this unit; logged below).
+- Backend unit tests written but **not executed locally** — no working
+  Python on this machine (only a Microsoft Store shim). Tests are pure
+  parser/cache/fetch monkeypatch tests, no fixtures needed; run in CI
+  or after a venv is set up.
+- Browser-verify: needs a running app with `scanning_enabled=true` and
+  a real camera. Logged to `DORA_VERIFY.md`.
+
+### Follow-ups spun off
+
+- **FU-433** — verify P8-02 in browser (scan-real-barcode paths on
+  hit/miss/network-fail; already-mapped invariant).
+- **FU-434** — pre-existing `AdminDataImport.vue` `exactOptional`
+  errors surfaced by vue-tsc (not touched this unit).
+- **FU-435** — `.gitignore` `data/` pattern was unanchored, silently
+  ignoring new files under `dora_api/features/data/`. Root-anchored
+  in this session (`/data/`); the surprise victim is a whole feature
+  file (`backup_library.py` from FU-342) that was never actually
+  committed. Flagged; not committed by this unit.
+- Reference to `FU-056 Phase 2` unchanged (ingestion EAN
+  auto-populate still deferred).
+
+### Next up
+
+Champion order per plan: **P8-03 Loyalty/email ingestion**, then
+**P8-04 Crowd prices**. Both depend on the ingestion API (C-10) being
+in place enough to receive their payloads — worth confirming that
+state before starting P8-03.
+
+---
+
 ## 2026-07-01 — Phase 0 close-out: P8-01 rename + D.O.R.A. + A8 §2/§3
 
 Finishing Phase 0. Static audit found three items remaining vs the

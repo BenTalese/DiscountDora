@@ -17,6 +17,7 @@ def get_or_create_app_setting(repository: SqlAlchemyRepository) -> AppSetting:
     # individually).
     setting = AppSetting(
         master_llm_enabled=True, scanning_enabled=False,
+        buy_verdict_enabled=True,
     )
     repository.add(setting)
     repository.save_changes()

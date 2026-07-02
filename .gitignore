@@ -13,9 +13,12 @@ __pycache__
 # cache/, and logs/ (configurable via DORA_DATA_DIR / DORA_CACHE_DIR /
 # DORA_LOG_DIR). Keep the directory ignores so a `docker compose run`
 # that bind-mounts ./data into the container doesn't pollute git.
-data/
-cache/
-logs/
+# Root-anchored so unrelated `data/` subdirs (e.g.
+# `dora_api/features/data/`) aren't silently ignored — that bug bit
+# P8-02 when adding a new file under the features tree.
+/data/
+/cache/
+/logs/
 .quasar
 .thumbs.db
 .venv

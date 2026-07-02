@@ -134,6 +134,20 @@
 
             <q-space />
 
+            <!-- P8-05 — "should I buy this?" verdict. Renders inline
+                 left of the cart cluster because that's where the user
+                 is deciding whether to add to the list. Silent on
+                 low-confidence verdicts (Charter P3: don't dashboard
+                 every row) and when the feature flag is off. Emits the
+                 action up so the page can reuse the existing cart /
+                 stock-level mutation seams — the oracle emits intent,
+                 not new mutation paths. -->
+            <BuyVerdictBadge
+                v-if="verdictShouldShow"
+                :verdict="verdict"
+                @action="(kind) => emit('verdict-action', item.stock_item_id, kind)"
+            />
+
             <!-- FU-227 chunk 3 — "Log a price" (G2: money-gated, left of
                  expiry). Opens the shared PriceEntry dialog. No emit
                  wiring beyond the optimistic close — the row's visible
@@ -273,10 +287,13 @@
     import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
+    import BuyVerdictBadge from 'src/components/stock/BuyVerdictBadge.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
+    import { useBuyVerdict } from 'src/composables/useBuyVerdict';
+    import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -309,11 +326,26 @@
         (e: 'long-press', stockItemId: string): void;
         // C-1 Chunk 3 — `go-to-list` retired with the "On N lists" chip.
         // The cart button owns the list interaction now.
+        // P8-05 — buy-verdict badge emits its one-tap action up so the
+        // page can reuse the existing cart / stock-level mutation seams.
+        (e: 'verdict-action', stockItemId: string,
+            kind: 'add_to_list' | 'skip' | 'mark_stocked'
+                | 'remove_from_list' | 'none'): void;
     }>();
 
     const $q = useQuasar();
     const actions = useStockItemActions();
     const { moneyEnabled } = useMoneyEnabled();
+    const { buyVerdictEnabled } = useBuyVerdictEnabled();
+    // P8-05 — fetch the verdict for this row (per-item cache in the
+    // composable keeps re-mounts free). Show only medium/high
+    // confidence: low-confidence noise on every row breaks Charter P3.
+    const { verdict } = useBuyVerdict(props.item.stock_item_id);
+    const verdictShouldShow = computed(() =>
+        buyVerdictEnabled.value
+        && verdict.value !== null
+        && verdict.value.confidence !== 'low',
+    );
     // C-1 Chunk 6 / FU-033 — defensive fallback. If the bytes endpoint
     // 404s mid-render (race with a delete, transient error), drop the
     // <img> rather than show a broken icon — placeholder takes over.

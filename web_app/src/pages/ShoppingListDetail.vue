@@ -444,6 +444,19 @@
                                                     v-if="stockItemFor(line.stock_item_id)"
                                                     :stock-item="stockItemFor(line.stock_item_id)!"
                                                 />
+                                                <!-- P8-05 — in-shop "should I buy?" nudge.
+                                                     Silent on low-confidence items so the
+                                                     line list stays legible; when the pantry
+                                                     says the item is well-stocked and the
+                                                     user has a history of wasting it, the
+                                                     'skip' verdict gives them a second chance
+                                                     to remove it before checkout. Emits the
+                                                     action up so the existing cart/level
+                                                     controls own the mutation. -->
+                                                <BuyVerdictBadgeInline
+                                                    :stock-item-id="line.stock_item_id"
+                                                    @action="onLineVerdictAction(line, $event)"
+                                                />
                                             </template>
                                             <q-chip
                                                 v-else-if="isNestedChild(line)"
@@ -1057,6 +1070,8 @@
     import PageToolbar from 'src/components/PageToolbar.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
+    import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
+    import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useQuasar, type QVirtualScroll } from 'quasar';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useDragDropList } from 'src/composables/useDragDropList';
@@ -2178,6 +2193,30 @@
                 caption: toastCaption(err),
             });
         }
+    }
+
+    // P8-05 — buy-verdict action for an in-shop line. First slice wires
+    // `remove_from_list` (the killer case: pantry says you're already
+    // stocked + waste history says you throw this away — remove before
+    // checkout). Other action kinds nudge the user toward the row's
+    // existing controls (R-003: no duplicate mutation seams).
+    async function onLineVerdictAction(
+        line: ShoppingListLine,
+        kind: 'add_to_list' | 'skip' | 'mark_stocked'
+            | 'remove_from_list' | 'none',
+    ) {
+        if (kind === 'remove_from_list') {
+            await onRemoveLine(line.line_id);
+            if (line.stock_item_id) invalidateBuyVerdict(line.stock_item_id);
+            return;
+        }
+        $q.notify({
+            type: 'info',
+            position: 'bottom-right',
+            message: kind === 'mark_stocked'
+                ? 'Use the stock-level control on the item to mark as stocked.'
+                : 'Use the line controls to update this line.',
+        });
     }
 
     async function onRemoveLine(lineId: string) {

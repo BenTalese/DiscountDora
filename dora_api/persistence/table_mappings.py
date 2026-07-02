@@ -87,6 +87,9 @@ def configure_mappings(db: SQLAlchemy):
         # model / provider / API key live on the User table.
         Column("master_llm_enabled", Boolean, nullable=False, server_default=true()),
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
+        # P8-05 — buy-verdict oracle. Defaults on because it's pure-personal;
+        # admin can turn off from Settings → System.
+        Column("buy_verdict_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
         Column("money_enabled", Boolean, nullable=False, server_default=false()),

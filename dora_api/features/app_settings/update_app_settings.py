@@ -27,6 +27,8 @@ class UpdateAppSettingsRequest(BaseModel):
     # the User row now (see auth/update_me).
     master_llm_enabled: bool | None = None
     scanning_enabled: bool | None = None
+    # P8-05 — buy-verdict oracle toggle.
+    buy_verdict_enabled: bool | None = None
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool | None = None
     money_enabled: bool | None = None
@@ -82,6 +84,8 @@ class UpdateAppSettingsHandler:
             setting.master_llm_enabled = request.master_llm_enabled
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
+        if "buy_verdict_enabled" in set_fields and request.buy_verdict_enabled is not None:
+            setting.buy_verdict_enabled = request.buy_verdict_enabled
         # C-cross Chunk 1 — install feature flags. Partial-update semantics
         # like every other field above: only fields present in the body
         # change; the rest are left alone.

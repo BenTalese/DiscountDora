@@ -53,6 +53,188 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-443 — Action C-19: resolve open decisions + write `IMPL_PLAN_AUTH_SHELL.md`
+- **Raised:** 2026-07-02 (C-19 proposal written this session).
+- **Type:** deferred job.
+- **What:** [`docs/04_proposals/PROPOSAL_AUTH_SHELL.md`](docs/04_proposals/PROPOSAL_AUTH_SHELL.md)
+  is design-only. To ship, two things need to happen in order:
+  1. **User resolves D1–D10 in §7** — the substantive calls are D2
+     (splash adopts `backdrop="quiet"`?), D4 (fold auxiliary pages
+     Verify/Forgot/Reset/ConfirmEmailChange in?), D7 (hardcode
+     pre-mount splash to `#1f2647`?), D9 (dedicated `AuthButton.vue`
+     vs `BaseButton` gradient variants — user leaned dedicated
+     2026-07-02), D10 (new `--auth-shell-accent-amber-strong` token
+     for the amber gradient). Others have low-risk defaults.
+  2. **Write `docs/04_proposals/IMPL_PLAN_AUTH_SHELL.md`** — single
+     PR, seven reversible migration steps per §6 (create `AuthShell` +
+     `AuthButton` → migrate Login → SetupAdmin → Splash + pre-mount
+     alignment → WelcomeLayout + onboarding scene retune → aux pages
+     → close-gate). Notes for the impl-plan already listed in the
+     proposal's §11.
+- **Blocks:** FU-440 (SetupAdmin `--lp-*` drift), FU-441 (auth-shell
+  name collision on aux pages) — both resolve automatically when this
+  ships.
+- **Why deferred:** the design brief was itself the deliverable of
+  this session (C-19). Impl-planning is a separate work unit; needs
+  the user's D1–D10 answers before it can be drafted.
+- **Recommended resolution:** later during any subsequent Dashy Dora
+  session where the user is ready to answer D1–D10 and greenlight
+  the shell + button component build. Also coordinate the scene-glyph
+  retune with whoever picks up `PROPOSAL_ONBOARDING §3.1` next.
+
+## [OPEN] FU-442 — §LOGIN password-policy feedback still uncovered
+- **Raised:** 2026-07-02 (C-19 audit — spotted while writing coverage table).
+- **Type:** finding.
+- **What:** feedback bullet "Password policy feels too restrictive, do
+  minimum of 8 characters, and allow admins to turn the restrictions
+  off." C-19 explicitly leaves this alone (out of shell-styling scope).
+  Not tracked by any Wave-A prompt or existing proposal — grep for
+  "password polic|8 char|admin.*toggle" only hits the C-19 note that
+  says it's out-of-scope. Real gap.
+- **Why deferred:** doesn't belong in an auth-shell styling proposal;
+  needs its own decision (default min length, admin override storage —
+  `AppSetting` config; C-cross may already own the settings shell).
+- **Recommended resolution:** later during `PROPOSAL_CONFIG_AND_OPTINS.md`
+  extension, or spin a small standalone prompt. Not blocking C-19.
+
+## [OPEN] FU-440 — R-003 drift: `SetupAdminPage.vue` verbatim-copies the `--lp-*` colour ladder
+- **Raised:** 2026-07-02 (C-19 audit).
+- **Type:** finding.
+- **What:** [`web_app/src/pages/SetupAdminPage.vue:174-184`](web_app/src/pages/SetupAdminPage.vue) declares
+  `--setup-bg-base` / `--setup-blob-1..3` / `--setup-card-*` / `--setup-text*`
+  / `--setup-accent*` / `--setup-shadow` — an identical-value copy of
+  `LoginPage.vue`'s private `--lp-*` ladder. Precisely the drift that R-003
+  guards against and the retired FU-002 / DEC-2 "keep private" call was
+  worried about. Discovered while producing `PROPOSAL_AUTH_SHELL.md`
+  (C-19); logged separately so the finding survives if that impl is
+  deferred.
+- **Why deferred:** fixing it now duplicates work — the shell extraction
+  in the C-19 impl-plan deletes both copies in one migration step
+  (`PROPOSAL_AUTH_SHELL.md §6 step 3`).
+- **Recommended resolution:** when `IMPL_PLAN_AUTH_SHELL.md` runs. If
+  C-19 stalls beyond one release cycle, resolve opportunistically by
+  extracting an interim `--auth-shell-*` layer.
+- **Rule cited:** R-003 (single source of truth).
+
+## [OPEN] FU-441 — Naming collision: four aux pre-auth pages define `.auth-shell` locally
+- **Raised:** 2026-07-02 (C-19 audit).
+- **Type:** finding.
+- **What:** `VerifyEmailPage.vue`, `ForgotPasswordPage.vue`,
+  `ResetPasswordPage.vue`, `ConfirmEmailChangePage.vue` each declare a
+  scoped `.auth-shell` class that renders a plain centred container on
+  `--surface-page`. `PROPOSAL_AUTH_SHELL.md` proposes a new
+  `AuthShell.vue` component; naive introduction re-uses the class name
+  in the DOM and confuses future readers. Proposal already routes
+  around it (component's root uses `.dora-auth-shell` + the four pages
+  fold in), but the collision is a real live-code smell today.
+- **Why deferred:** the fix ships as part of the C-19 impl-plan
+  (`PROPOSAL_AUTH_SHELL.md §5.5`, migration step 6). Not worth a
+  stand-alone patch.
+- **Recommended resolution:** when `IMPL_PLAN_AUTH_SHELL.md` runs.
+
+## [OPEN] FU-438 — P8-06 Wait-or-Buy — populate `wait_until` on the buy-verdict endpoint
+- **Raised:** 2026-07-02 (P8-05 close, forward-look).
+- **Type:** deferred job (champion sequence).
+- **What:** the P8-05 verdict has a `wait` outcome ("price is above
+  usual — try later"), but no time-boxed advice ("your usual low lands
+  ~end of fortnight"). P8-06 spec: derive that from cadence + price-
+  cycle detection over personal history. Extends the *same* endpoint
+  with a `wait_until` field (or a `wait_reason` if we can't compute a
+  date) rather than a separate route — the two verdicts are the same
+  question ("should I buy now?") at different resolutions.
+- **Why deferred:** P8-05 is the base layer; P8-06 is the polish.
+  Also blocked pending FU-436 (crowd-price governance) — if crowd
+  data lands, P8-06 can blend it in.
+- **Recommended resolution:** after FU-436 lands its decision. If cut
+  ⇒ P8-06 works on personal data only, same shape as P8-05. If keep ⇒
+  wait until crowd baseline exists.
+
+## [OPEN] FU-437 — Extend the buy-verdict oracle to the stock-item detail page
+- **Raised:** 2026-07-02 (P8-05 close).
+- **Type:** deferred job.
+- **What:** the full three-axis `BuyVerdictCard.vue` component ships
+  in this unit but isn't wired anywhere yet. Slot it into
+  `StockItemDetailPage.vue` (probably above the History tab or under
+  the level/expiry controls — user-testable placement). Uses
+  `useBuyVerdict(routeParamId)` — the composable already accepts a
+  reactive ref for this exact case.
+- **Why deferred:** P8-05's payoff is the row/line badge; the full
+  card is deep-dive detail that adds nothing before we've seen how
+  users interpret the compact form.
+- **Recommended resolution:** after the badge has real usage — pair
+  with the P8-05 browser-verify checklist in `DORA_VERIFY.md §Stock`.
+
+## [OPEN] FU-436 — P8-04 crowd-prices governance decision: KEEP / SHRINK / CUT
+- **Raised:** 2026-07-02 (P8-05 kickoff — user's own feasibility
+  concern: *"i don't think the logistics of sharing/pooling community
+  data is feasible for this app. how could it even be possible?"*).
+- **Type:** finding + design call (governance, not code).
+- **What:** the champion plan's recommended order puts P8-04
+  (crowd-sourced anonymised price graph) before P8-05, on the theory
+  that community baselines make the oracle stronger for new users
+  with thin history. But P8-04 owns real problems Dora isn't built to
+  solve:
+  - **Privacy** — even anonymised (item + price + store + coarse
+    region + date), aggregation over small households leaks purchase
+    behaviour. Requires a differential-privacy layer or a large
+    minimum-cohort threshold; both add ops complexity.
+  - **Incentive** — nobody contributes unless they get value back;
+    that requires either (a) trust in an operator we don't have, or
+    (b) a peer-to-peer model with different technical + legal shape.
+  - **Freshness** — Australian grocery pricing rotates weekly per
+    catalogue; a snapshot older than 7 days is misleading on the
+    axis P8-04 is meant to help with.
+  - **Ops** — the "central store, opt-in contributions" model requires
+    a service Dora explicitly isn't (P9 No-scrape → P9-adjacent
+    concerns about being a data broker).
+- **P8-05 as evidence:** shipping the oracle on *pure personal data*
+  works. The `unsure/low` branch on thin history is honest (Charter
+  P3), not a blocker — a user with two shops sees "not enough history
+  yet"; that's the correct answer, not something crowd data should
+  paper over.
+- **Recommended resolution:** short assessment doc under
+  `docs/05_investigations/CROWD_PRICES_ASSESSMENT.md` (INV-11 shape)
+  covering the four axes above, land the call in
+  `RECONCILED_FINISHING_PLAN.md` §7. **Recommendation: CUT.** If cut,
+  update the champion order (P8-03 → P8-05 → P8-06 → P8-07 …). If
+  keep/shrink, the P8-05 endpoint already has the shape to accept a
+  crowd-baseline field later.
+
+## [OPEN] FU-435 — `.gitignore` `data/` pattern was unanchored → `backup_library.py` never committed
+- **Raised:** 2026-07-02 (P8-02 close — surfaced when the new `off_lookup.py` refused to stage).
+- **Type:** finding (latent build/history bug).
+- **What:** `.gitignore` line 16 read `data/` (unanchored), which
+  matched **any** directory named `data`, including
+  `dora_api/features/data/`. Existing tracked files under that path
+  survived via history, but any *new* file added there was silently
+  ignored. This session's `off_lookup.py` refused to stage; a check
+  turned up **`dora_api/features/data/backup_library.py`** — a real
+  feature file authored 2026-07-01 (FU-342 backup library) that was
+  never actually committed. The code was thought to be live but is
+  only on the local machine.
+- **Fix applied this session:** root-anchored the patterns
+  (`/data/`, `/cache/`, `/logs/`) so unrelated `data/` subdirs stay
+  visible. `off_lookup.py` now stages.
+- **Recommended resolution:** stage + commit `backup_library.py` in
+  a separate commit (it's not P8-02's; keep the trail clean). Verify
+  its endpoints match the docstring — FU-342 CHANGELOG entry should
+  line up, but the runtime never had this code merged so a smoke test
+  is warranted before shipping.
+
+## [OPEN] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
+- **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).
+- **Type:** finding (pre-existing, not touched by P8-02).
+- **What:** `vue-tsc --noEmit` reports two errors in
+  [`AdminDataImport.vue:33,35`](web_app/src/pages/settings/AdminDataImport.vue):
+  a `find(...)` result assigned to `ImportTemplate` without narrowing
+  the possible `undefined`. Fires under `exactOptionalPropertyTypes:
+  true`. Confirmed pre-existing (git status was clean at session start;
+  `git diff` empty on the file).
+- **Why deferred:** out of scope for P8-02; the file works at runtime
+  (find over a fixed template list that always has entries).
+- **Recommended resolution:** opportunistic — next Admin/Data touch,
+  fix with either an assertion or an explicit fallback. Two-line fix.
+
 ## [OPEN] FU-432 — Recipe Detail residual polish: uncovered NO_HOME bullets
 - **Raised:** 2026-07-01 (12-June feedback-audit delta).
 - **Type:** deferred job (small residual cluster).

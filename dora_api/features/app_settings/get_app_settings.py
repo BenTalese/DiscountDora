@@ -19,6 +19,8 @@ class AppSettingsDto:
     # per-install LLM URL/model/enabled config, which moved to User).
     master_llm_enabled: bool
     scanning_enabled: bool
+    # P8-05 — buy-verdict oracle toggle.
+    buy_verdict_enabled: bool
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
     money_enabled: bool
@@ -49,6 +51,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
     return AppSettingsDto(
         master_llm_enabled=bool(setting.master_llm_enabled),
         scanning_enabled=bool(setting.scanning_enabled),
+        buy_verdict_enabled=bool(getattr(setting, "buy_verdict_enabled", True)),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
         nutrition_enabled=bool(setting.nutrition_enabled),

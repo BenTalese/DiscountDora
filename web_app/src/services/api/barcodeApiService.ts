@@ -37,6 +37,22 @@ export interface BarcodeRegistration {
     stock_item_id: string | null;
 }
 
+/** P8-02 — Open Food Facts suggestion. Every field is optional so the
+ *  caller can render whatever OFF provided without treating gaps as an
+ *  error. `found: false` covers both "OFF has no entry" and "OFF was
+ *  unreachable"; the SPA falls through to the manual-entry path in
+ *  either case. */
+export type OpenFoodFactsSuggestion =
+    | {
+        found: true;
+        name?: string | null;
+        brand?: string | null;
+        image_url?: string | null;
+        categories?: string | null;
+        quantity?: string | null;
+    }
+    | { found: false };
+
 export default class BarcodeApiService {
     private httpClient = new AxiosHttpClient();
 
@@ -67,4 +83,14 @@ export default class BarcodeApiService {
     /** Remove a registration. The barcode value is freed for re-registration. */
     deleteAsync = async (barcodeId: string): Promise<void> =>
         await this.httpClient.delete<void>(`/data/barcodes/${barcodeId}`);
+
+    /** P8-02 — Open Food Facts lookup for a genuinely-unknown EAN. Only
+     *  callable after `lookupAsync` returned `kind: 'unknown'`; already-
+     *  mapped EANs must never round-trip through OFF (invariant defended
+     *  in the caller, not enforced by the server — the SPA is the one
+     *  place that knows what "unknown" means for the scan flow). */
+    offLookupAsync = async (value: string): Promise<OpenFoodFactsSuggestion> =>
+        await this.httpClient.get<OpenFoodFactsSuggestion>(
+            `/data/products/off-lookup?value=${encodeURIComponent(value)}`,
+        );
 }

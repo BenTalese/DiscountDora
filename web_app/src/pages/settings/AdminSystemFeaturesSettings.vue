@@ -37,6 +37,19 @@
                         @update:model-value="onScanningToggle"
                     />
                 </SettingsRow>
+
+                <!-- P8-05 — buy-verdict oracle. Personal-data-only: no
+                     external calls, no crowd data. On by default. -->
+                <SettingsRow
+                    label='"Should I buy?" oracle'
+                    help="Show a personal buy/wait/skip verdict on stock items and shopping-list lines, using only your own price / cadence / waste history. On by default; turn off if the row-level badges feel noisy."
+                >
+                    <q-toggle
+                        :model-value="buyVerdictDraft"
+                        :disable="savingBuyVerdict"
+                        @update:model-value="onBuyVerdictToggle"
+                    />
+                </SettingsRow>
             </SettingsSection>
 
             <hr class="settings-divider" />
@@ -101,6 +114,11 @@
     // Scanning & QR labels — a real install-wide flag, saved on toggle.
     const scanningDraft = ref(false);
     const savingScanning = ref(false);
+
+    // P8-05 — buy-verdict oracle install-wide toggle. Defaults on (see
+    // AppSetting entity docstring); the API returns the current value.
+    const buyVerdictDraft = ref(true);
+    const savingBuyVerdict = ref(false);
 
     // C-cross Chunk 1 — install-wide feature flags.
     type FeatureFlagKey =
@@ -201,6 +219,29 @@
         }
     }
 
+    async function onBuyVerdictToggle(value: boolean) {
+        savingBuyVerdict.value = true;
+        try {
+            const result = await api.updateAsync({ buy_verdict_enabled: value });
+            buyVerdictDraft.value = result.buy_verdict_enabled;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: value
+                    ? '"Should I buy?" verdicts enabled.'
+                    : '"Should I buy?" verdicts disabled.',
+            });
+        } catch (err) {
+            buyVerdictDraft.value = !value;
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save buy-verdict setting.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            savingBuyVerdict.value = false;
+        }
+    }
+
     // Product search URL (Phase D / FU-186) ───────────────────────────────
     const productSearchUrlDraft = ref('');
     const savedProductSearchUrl = ref('');
@@ -232,6 +273,7 @@
 
     type LoadedSettings = {
         scanning_enabled: boolean;
+        buy_verdict_enabled?: boolean;
         meal_planning_enabled?: boolean;
         money_enabled?: boolean;
         nutrition_enabled?: boolean;
@@ -241,6 +283,9 @@
     };
     function applyLoaded(s: LoadedSettings) {
         scanningDraft.value = s.scanning_enabled;
+        if (s.buy_verdict_enabled !== undefined) {
+            buyVerdictDraft.value = s.buy_verdict_enabled;
+        }
         if (s.product_search_url !== undefined) {
             savedProductSearchUrl.value = s.product_search_url;
             productSearchUrlDraft.value = s.product_search_url;

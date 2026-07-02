@@ -5,6 +5,60 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **P8-05 "Should I buy this?" personal buy-verdict oracle (2026-07-02).**
+  Every stock item now has a personal verdict — **buy / wait / skip /
+  unsure** — composed server-side from *your own* data: completed
+  shopping-list line prices (per FU-227 line ladder), purchase cadence,
+  and waste events over the last 12 months. **No external calls, no
+  crowd baselines, no scraping** — the oracle reads only what you've
+  logged.
+
+  Two surfaces:
+  * **Stock Overview row** — inline badge on each item so you can decide
+    at list-building time.
+  * **Shopping List detail line** — same badge while in shop mode, so
+    the "wait, actually skip this" nudge lands right before checkout.
+
+  The badge is silent on low-confidence verdicts (Charter P3 — no
+  dashboarding every row). The popover shows the reasons in three axes
+  (price / need / waste) plus a "why?" summary of the data used
+  (Charter P7 — never a black box). One-tap `add_to_list` is wired in
+  Stock Overview via the existing quick-add-target seam; other actions
+  route to the row's existing controls (R-003 — no duplicate mutation
+  seams).
+
+  Gated by install-wide `AppSetting.buy_verdict_enabled` (default
+  **on**). Migration `e2b9c4a7f5d1` adds the flag. Full charter +
+  composition rules: `docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md`.
+
+- **P8-02 barcode-to-add via Open Food Facts (2026-07-02).** Scanning
+  a barcode from Stock Overview now handles the *unknown* case: Dora
+  asks Open Food Facts (open data, add-only) for a suggested name,
+  brand, image, and category, and opens the "Add a stock item" dialog
+  pre-filled and clearly labelled as a suggestion the user reviews. On
+  save the EAN is auto-registered against the new stock item so the
+  next scan of the same code jumps straight to that item.
+
+  **Interaction with already-mapped EANs is honest by design:**
+  * `stock_item` / `stock_item_via_product` (barcode already resolves
+    to an item, directly or via a Product) → navigate to the existing
+    item; **no OFF lookup, no duplicate created**.
+  * `product_no_link` (barcode matches a Product with no linked stock
+    item) → open the add dialog barcode-only, with a "matches a known
+    product" note; user's own Product data wins over an open-data
+    suggestion, so no OFF call.
+  * `unknown` → OFF lookup; on a hit the dialog is seeded with the
+    suggestion, on a miss (or a network failure) the dialog falls back
+    to a barcode-only prefill so the add still works.
+
+  The whole surface stays gated by `scanning_enabled` (off by default).
+  This is **distinct from the removed real-world barcode deal-lookup**
+  (P6-02); OFF is used only as a name/image seed for a *user-
+  confirmed* new pantry item, never for price/deal data. See
+  `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md` §P8-02 for the
+  design rationale.
+
 ### Changed
 - **P8-01 rename: Discount Dora → Dashy Dora (2026-07-01).** The
   full sweep. Every in-repo identifier that carried "Discount" or

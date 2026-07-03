@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { Notify } from 'quasar';
 import {
     tryWithQueue,
     type QueueableMutationKind,
@@ -7,10 +8,12 @@ import type { StockItem } from 'src/models/stockItem';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 import type {
     CreateStockItemCommand,
-    UpdateStockItemCommand
+    UpdateStockItemCommand,
+    UpdateStockItemResponse
 } from 'src/services/api/stockItemApiService';
 import StockItemApiService from 'src/services/api/stockItemApiService';
 import { clearRollbacks, registerRollback } from 'src/services/errorHandling/rollbackRegistry';
+import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import type { Ref } from 'vue';
 import { readonly, ref } from 'vue';
 
@@ -41,6 +44,39 @@ function classifyUpdate(cmd: UpdateStockItemCommand): {
 export const useStockItemStore = defineStore('stockItem', () => {
     const stockItems: Ref<StockItem[]> = ref([]);
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
+
+    /** FU-315 — when a level-change PATCH transitions a stock item to
+     *  Low/Out and `auto_add_when_low` is on, the server drops it onto the
+     *  unambiguous draft list and returns `{ auto_added: { line_id,
+     *  shopping_list_id } }`. Fire a positive toast naming the list + the
+     *  item, and refresh the shopping-list store so the new line renders
+     *  everywhere it's watched. Silent no-op for the 204 no-trigger case. */
+    async function handleAutoAddedResponse(
+        stockItemId: string,
+        result: UpdateStockItemResponse | { queued: true },
+    ): Promise<void> {
+        if (
+            !result || typeof result !== 'object' || 'queued' in result
+            || !('auto_added' in result) || !result.auto_added
+        ) {
+            return;
+        }
+        const shoppingListStore = useShoppingListStore();
+        await shoppingListStore.refreshAsync();
+        const item = stockItems.value.find((si) => si.stock_item_id === stockItemId);
+        const itemName = item?.name ?? 'that item';
+        const listSummary = shoppingListStore.summaries.find(
+            (s) => s.shopping_list_id === result.auto_added!.shopping_list_id,
+        );
+        const listName = listSummary?.display_name ?? 'your list';
+        Notify.create({
+            type: 'positive',
+            position: 'bottom-right',
+            message: `Added ${itemName} to ${listName}.`,
+            caption: 'Auto-added because it went low.',
+            timeout: 3000,
+        });
+    }
 
     /** FU-125 — per-item image-version counter. Bumped whenever an
      *  `image` field is sent on an `updateStockItemAsync` call so any
@@ -133,6 +169,8 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[stockItemIndex] = await stockItemApiService.getAsync(stock_item_id);
         }
         clearRollbacks();
+        // FU-315 — level transition may have triggered the auto-add hook.
+        await handleAutoAddedResponse(stock_item_id, result);
     }
 
     /** General-purpose update for the detail page (name/notes/location/etc).
@@ -165,6 +203,10 @@ export const useStockItemStore = defineStore('stockItem', () => {
         // FU-125 — bump the image version when the PATCH touched the image
         // so every surface displaying this item refetches the bytes.
         if ('image' in cmd) bumpImageVersion(stock_item_id);
+        // FU-315 — `saveField`-style level changes on the detail page also
+        // go through this path (they carry `stock_level_id`), so the
+        // auto-add hook can fire here too.
+        await handleAutoAddedResponse(stock_item_id, result);
     };
 
     const deleteStockItemAsync = async (stockItemID: string) => {

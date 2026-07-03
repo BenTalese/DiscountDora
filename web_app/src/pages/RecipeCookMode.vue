@@ -971,6 +971,15 @@
                 timerRemaining.value = 0;
                 pauseTimer();
                 $q.notify({ type: 'positive', message: 'Timer finished!', icon: ICONS.timer });
+                // FU-287 — on iOS / macOS WKWebView a timer callback is not
+                // a user activation, so both `speak()` (HTMLAudioElement)
+                // and `playTimerFinishTone()` (Web Audio) are subject to
+                // the autoplay gate. `useSpeechOutput` primes the audio
+                // context on first user gesture (session-scoped), which
+                // covers most in-session timers; a timer that fires long
+                // after the last interaction may still be silent. The
+                // visible Notify above is the load-bearing "timer done"
+                // signal; audio + narration are best-effort.
                 if (speechEnabled.value) speak('Timer finished');
                 playTimerFinishTone();
             }

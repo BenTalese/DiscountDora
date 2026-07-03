@@ -233,6 +233,17 @@
         try {
             await api.updateAsync(user.user_id, command);
             await loadUsers();
+            // FU-016 — when the admin is editing themselves (self-demote,
+            // rename, email change), the admin-user list refresh above
+            // doesn't touch `authStore.currentUser`. Without this refresh
+            // the router guard, MainLayout, SettingsShell, and every
+            // admin page keep reading a stale `is_admin`/`username`, so
+            // the demoted admin still sees admin surfaces until the next
+            // hard reload. Backend prevents removing the last admin so
+            // this can't lock the caller out.
+            if (user.user_id === currentUser.value?.user_id) {
+                await authStore.refreshAsync();
+            }
             return true;
         } catch (err) {
             $q.notify({

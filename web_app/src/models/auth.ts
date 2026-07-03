@@ -88,6 +88,14 @@ export type AuthenticatedUser = {
     // reveals cook-pool affordances + shortfall warning. Use
     // `useBatchEnabled()` to read + write.
     batch_features_enabled: boolean;
+    // FU-316 — when true, `useQuickAddTargetPick` skips the remembered pick
+    // so the "which list?" prompt fires every quick-add for users with more
+    // than one draft. Default false = current behaviour (session-remembered).
+    always_ask_which_shopping_list: boolean;
+    // FU-181 loose-end 2 — target meal count for the sequential builder.
+    // null = not set → the SPA falls back to `BUILDER_TARGET_MEALS_FALLBACK` (7).
+    // Bounds 1–21 enforced server-side.
+    meals_per_week: number | null;
     // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
     // the composable layers this with install `features.nutrition`.

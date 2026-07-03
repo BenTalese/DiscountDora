@@ -490,6 +490,10 @@ class GetRecipesHandler:
                 .then_include(RecipeIngredient.Fields.STOCK_ITEM)
                 .then_include(StockItem.Fields.STOCK_LOCATION)
             .include(Recipe.Fields.RECIPE_COLLECTION)
+            # FU-314 — cuisine + category flipped to noload; RecipeDto reads
+            # both, so every list/detail hit must eager-load them here.
+            .include(Recipe.Fields.CUISINE)
+            .include(Recipe.Fields.CATEGORY)
         )
 
     def _ingredient_excluded_recipe_ids(self, terms: tuple[str, ...]) -> set[UUID]:

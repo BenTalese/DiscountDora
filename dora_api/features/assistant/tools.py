@@ -988,7 +988,14 @@ def search_products(args: dict) -> list[dict]:
 
 def search_recipes(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
-    query = repo.get(Recipe).include(Recipe.Fields.RECIPE_COLLECTION)
+    # FU-314 — cuisine + category noload; both read below for the
+    # response body and the Python-side cuisine filter.
+    query = (
+        repo.get(Recipe)
+        .include(Recipe.Fields.RECIPE_COLLECTION)
+        .include(Recipe.Fields.CUISINE)
+        .include(Recipe.Fields.CATEGORY)
+    )
 
     conditions: list[BoolOperation] = []
     keyword_condition = _keyword_condition(Recipe, Recipe.Fields.NAME, args.get("keywords", ""))
@@ -1073,11 +1080,15 @@ def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
 
 def suggest_recipes(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
+    # FU-314 — cuisine + category noload; the response body reads cuisine
+    # and `_recipe_matches_keywords` reads both, so eager-load both.
     query = (
         repo.get(Recipe)
         .include(Recipe.Fields.INGREDIENTS)
         .then_include(RecipeIngredient.Fields.STOCK_ITEM)
         .then_include(StockItem.Fields.STOCK_LEVEL)
+        .include(Recipe.Fields.CUISINE)
+        .include(Recipe.Fields.CATEGORY)
     )
 
     conditions: list[BoolOperation] = []
@@ -1551,6 +1562,8 @@ def recipes_using_item(args: dict) -> list[dict]:
         repo.get(Recipe)
         .include(Recipe.Fields.INGREDIENTS)
         .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+        # FU-314 — cuisine noload; response body reads it below.
+        .include(Recipe.Fields.CUISINE)
         .all()
     )
     matches: list[dict] = []
@@ -1696,11 +1709,15 @@ def recipe_detail(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
 
     def build():
+        # FU-314 — cuisine + category noload; both read on the winner
+        # AND on the ambiguous-candidates list below.
         return (
             repo.get(Recipe)
             .include(Recipe.Fields.INGREDIENTS)
             .then_include(RecipeIngredient.Fields.STOCK_ITEM)
             .then_include(StockItem.Fields.STOCK_LEVEL)
+            .include(Recipe.Fields.CUISINE)
+            .include(Recipe.Fields.CATEGORY)
         )
 
     result = _find_one_by_name(repo, Recipe, name, build)
@@ -1843,7 +1860,8 @@ def meal_detail(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
 
     def build():
-        return repo.get(Recipe)
+        # FU-314 — cuisine noload; response body reads it below.
+        return repo.get(Recipe).include(Recipe.Fields.CUISINE)
 
     result = _find_one_by_name(repo, Recipe, name, build)
     status = result[1] if isinstance(result, tuple) else "not_found"

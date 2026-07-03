@@ -1016,7 +1016,6 @@
     } from 'src/services/api/reportsApiService';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import { useAuthStore } from 'src/stores/authStore';
-    import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
@@ -1124,7 +1123,6 @@
     const suggestionStore = useSuggestionStore();
     const shoppingListApi = new ShoppingListApiService();
 
-    const recipeStore = useRecipeStore();
     const shoppingListStore = useShoppingListStore();
 
     const summary = ref<DashboardSummary | null>(null);
@@ -1928,7 +1926,6 @@
             // the card is actually shown (R-016 lazy hydration).
             isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
             suggestionStore.refreshAsync(),
-            recipeStore.ensureLoadedAsync(),
             shoppingListStore.ensureLoadedAsync(),
         ]);
         // Primary list detail depends on the shoppingListStore refresh

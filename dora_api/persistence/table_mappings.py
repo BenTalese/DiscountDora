@@ -847,6 +847,14 @@ def configure_mappings(db: SQLAlchemy):
         # posture. Default False ("fresh"); when True, the planner reveals
         # the cook-pool affordances + shortfall warning + "to cook by" line.
         Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
+        # FU-316 — per-user "always ask which draft list on quick-add" flag.
+        # Default False; when True the SPA skips the remembered pick so the
+        # picker fires every time (see useStockItemActions.addToList).
+        Column("always_ask_which_shopping_list", Boolean, nullable=False, server_default=false()),
+        # FU-181 loose-end 2 — target meal count for the sequential builder.
+        # NULL = not set → SPA falls back to `BUILDER_TARGET_MEALS` (7).
+        # Bounds enforced at the update-me boundary (1–21).
+        Column("meals_per_week", Integer, nullable=True),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
         Column("nutrition_mode", String(16), nullable=False, server_default="off"),
         # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
@@ -1235,12 +1243,14 @@ def configure_mappings(db: SQLAlchemy):
         # `has_image: bool` DTO field from a separate SELECT.
         "image": deferred(recipe_table.c.image),
         "recipe_collection": relationship(RecipeCollection, lazy="noload"),
-        # selectin (not noload): cuisine + category are tiny, always-wanted
-        # lookups, so every recipe read carries them without each call site
-        # needing an explicit .include() (keeps the assistant / search /
-        # export consumers simple).
-        "cuisine": relationship(Cuisine, lazy="selectin"),
-        "category": relationship(Category, lazy="selectin"),
+        # R-019 / ADR-014 — no lazy overrides. Callers that read
+        # `recipe.cuisine` / `recipe.category` must chain
+        # `.include(Recipe.Fields.CUISINE)` /
+        # `.include(Recipe.Fields.CATEGORY)` on the query. FU-314 walked
+        # every read site; the FU-138 e2e query-count test guards the
+        # list handler against N+1 regressions from a missed include.
+        "cuisine": relationship(Cuisine, lazy="noload"),
+        "category": relationship(Category, lazy="noload"),
         "ingredients": relationship(
             RecipeIngredient,
             lazy="noload",

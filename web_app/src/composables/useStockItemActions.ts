@@ -2,6 +2,7 @@ import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
 import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+import { useAuthStore } from 'src/stores/authStore';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import { useStockItemStore } from 'src/stores/stockItemStore';
 import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -23,7 +24,19 @@ export function useStockItemActions() {
     const stockItemStore = useStockItemStore();
     const shoppingListStore = useShoppingListStore();
     const stockLevelStore = useStockLevelStore();
+    const authStore = useAuthStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
+    const { currentUser } = storeToRefs(authStore);
+
+    // FU-316 — resolve a shopping list's display name from the store's
+    // hydrated summaries. Falls back to a generic label so we never
+    // render an obviously-broken toast if the store isn't loaded yet.
+    function listNameFor(listId: string): string {
+        const summary = shoppingListStore.summaries.find(
+            (s) => s.shopping_list_id === listId,
+        );
+        return summary?.display_name ?? 'your list';
+    }
 
     const notifyOk = (message: string) =>
         $q.notify({ type: 'positive', position: 'bottom-right', message });
@@ -50,16 +63,23 @@ export function useStockItemActions() {
         const ok = (msg: string) => { if (!silent) notifyOk(msg); };
         const err = (msg: string, caption?: string) => { if (!silent) notifyErr(msg, caption); };
         const pick = useQuickAddTargetPick();
+        // FU-316 — when the user has opted into "always ask", ignore any
+        // session-remembered pick so the picker fires every add.
+        const alwaysAsk = currentUser.value?.always_ask_which_shopping_list ?? false;
         try {
             if (listId) {
                 const result = await shoppingListApi.addLineAsync(listId, {
                     stock_item_id: stockItemId,
                 });
                 await shoppingListStore.refreshAsync();
-                ok(result.already_on_list ? 'Already on that list.' : 'Added to list.');
+                ok(
+                    result.already_on_list
+                        ? `Already on ${listNameFor(listId)}.`
+                        : `Added to ${listNameFor(listId)}.`,
+                );
                 return;
             }
-            const remembered = pick.load();
+            const remembered = alwaysAsk ? null : pick.load();
             let outcome = await shoppingListApi.quickAddToPrimaryAsync(
                 stockItemId, remembered ?? undefined,
             );
@@ -84,8 +104,9 @@ export function useStockItemActions() {
                 const choice = await new Promise<string | null>((resolve) => {
                     $q.dialog({
                         title: 'Which list?',
-                        message:
-                            'You have multiple draft lists — pick one. We\'ll remember it for the rest of this tab.',
+                        message: alwaysAsk
+                            ? 'You have multiple draft lists — pick one. Dora will ask again next time (you can change this in Preferences).'
+                            : 'You have multiple draft lists — pick one. We\'ll remember it for the rest of this tab.',
                         options: {
                             type: 'radio',
                             model: outcome.result === 'ambiguous'
@@ -106,6 +127,10 @@ export function useStockItemActions() {
                         .onDismiss(() => resolve(null));
                 });
                 if (!choice) return;
+                // FU-316 — always save the pick so the bulk-add caller in
+                // AddToListButton can read it and batch items 2..N into
+                // the same list. When "always ask" is on we clear it at
+                // the end of this call so the *next* quick-add re-prompts.
                 pick.save(choice);
                 outcome = await shoppingListApi.quickAddToPrimaryAsync(stockItemId, choice);
                 if (outcome.result !== 'added') {
@@ -115,10 +140,11 @@ export function useStockItemActions() {
             }
             await shoppingListStore.refreshAsync();
             if (outcome.result === 'added') {
+                const listName = listNameFor(outcome.shopping_list_id);
                 ok(
                     outcome.already_on_list
-                        ? 'Already on your list.'
-                        : 'Added to your list.',
+                        ? `Already on ${listName}.`
+                        : `Added to ${listName}.`,
                 );
             }
         } catch (e) {
@@ -131,6 +157,11 @@ export function useStockItemActions() {
                 return;
             }
             err('Could not add to list.', String(e));
+        } finally {
+            // FU-316 — with "always ask" on, wipe the pick so the next
+            // quick-add re-prompts. The current call already used it for
+            // any bulk-follow-up read in AddToListButton.
+            if (alwaysAsk) pick.clear();
         }
     }
 

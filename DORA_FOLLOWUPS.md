@@ -53,6 +53,55 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-462 — Sweep the ~237 prompt-ID comments (`P[0-9]-` / `C-[0-9]` / `B[0-9]`) from shipped source
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
+- **Type:** deferred job / pre-release polish.
+- **What:** The senior review flagged ~237 prompt-ID comments in shipped source (e.g. `// C-4 Chunk 2 —`, `# P8-05 — …`) — useful during construction, noise pre-release. Sweep by category: keep the ones that document a *rule* (R-003 / R-014 / ADR references) or an incident's *why*; drop the ones that only name the prompt that produced them. FU-424 also tracks this as one of the review's Tier-2 items — the two FUs are the same finding.
+- **Why deferred:** cross-cutting, pre-release-only polish; no user-visible effect.
+- **Recommended resolution:** later — pre-release polish pass, or fold into FU-424's broader Tier-2 delta re-audit.
+
+## [OPEN] FU-461 — Account-deletion endpoint (GDPR) — design + build
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type:** deferred job / feature (compliance).
+- **What:** No account-deletion path exists (`DELETE /auth/me` etc.). Needed for GDPR "right to erasure" once the product is user-facing. Design questions: soft-delete (retention window) vs hard-delete, cascade rules (personal data vs household-shared data like recipes/products), auth (password reprompt), audit trail, self-service UI location (Settings → Account danger-zone). Recommend a short brief before building.
+- **Why deferred:** real feature with UX + policy calls, not a fix.
+- **Recommended resolution:** before Phase 4 commercialization. Write a short brief in `docs/04_proposals/` first (`PROPOSAL_ACCOUNT_DELETION.md`), then implement as its own chunk.
+
+## [OPEN] FU-460 — `SESSION_COOKIE_SECURE` default: keep off or flip on?
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type:** finding / policy call.
+- **What:** [`app.py:90`](dora_api/app.py) sets `SESSION_COOKIE_SECURE` from `DORA_SECURE_COOKIES` env var, **defaulting off**. Correct for local HTTP dev but a footgun for a first-time SaaS operator who forgets to set the var — session cookies then travel over cookie-visible transports. Options: (a) keep default off, add a boot-time WARNING when `DORA_ENV=prod` + `SECURE_COOKIES` unset; (b) flip default on and require an explicit `DORA_SECURE_COOKIES=false` for dev; (c) auto-detect from request scheme (Flask's `PREFERRED_URL_SCHEME` or `X-Forwarded-Proto`). Distribution-posture rule (§7.5) wants same artifact, different config — option (a) fits that shape best.
+- **Why deferred:** policy call, not a bug per se.
+- **Recommended resolution:** before Phase 4 commercialization. If (a): add the boot-time warning now (10 lines in `startup.py`, mirroring the existing "refuse to boot in production when required env vars are missing" pattern).
+
+## [OPEN] FU-459 — App-wide security headers (CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy)
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type:** deferred job / hardening.
+- **What:** No app-wide security-header middleware. Add a response-hook in `infrastructure/middleware.py` that sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, and a permissive-but-honest `Content-Security-Policy` (script-src 'self' 'unsafe-inline'/'unsafe-eval' initially — Quasar's runtime uses eval-ish patterns; tighten later). Flask-Talisman is one option; hand-rolled is fine at this scope.
+- **Why deferred:** Tier-2 hardening, not ship-blocking; CSP tuning has to be done carefully to avoid breaking Piper TTS / print-view / any inline styles the SPA relies on.
+- **Recommended resolution:** later — pair with the security-review Tier-2 delta re-audit (FU-424). Write a one-hit browser-verify sweep after landing (all pages still render, no CSP violations in the console).
+
+## [OPEN] FU-458 — Rate-limit assistant endpoints
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type:** deferred job / hardening.
+- **What:** `dora_api/features/assistant/ask_assistant.py:368` (`POST /assistant/ask`) and the confirm-actions endpoint have no rate limit. In multi-tenant (Phase 4) an authenticated user could burn a lot of upstream LLM tokens by looping requests. Options: `flask-limiter` (per-user token bucket, in-memory or Redis), or hand-rolled per-user counter in a DB table. Rate limits should be per-user (`session.user_id`), not per-IP (shared households).
+- **Why deferred:** Tier-2 hardening; Phase 3 is single-user personal-use so the risk is theoretical.
+- **Recommended resolution:** before Phase 4 commercialization / when the first tenancy work starts. Pair with a per-user token accounting design if paid-provider LLM is on.
+
+## [OPEN] FU-457 — Boot-time resolved-route assertion for reflection-based wiring
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (c)).
+- **Type:** finding / hardening.
+- **What:** [`startup.py:135`](dora_api/startup.py) uses `get_attributes_ending_with('router', ...)` to auto-register blueprints; [`service_wiring.py:17`](dora_api/infrastructure/service_wiring.py) and [`decorators.py:13`](dora_api/infrastructure/decorators.py) also do reflection-based wiring. If a router file has a broken import or is renamed, the failure surfaces at the first request (opaque 404), not at boot. Add a boot-time assertion that (a) every discovered `*_ROUTER` was successfully registered on `app.url_map` (compare expected vs `app.url_map.iter_rules()`), (b) every `@has_request_body`-decorated handler has a registered URL rule. Fail-fast → operator sees the misconfiguration on `flask run`, not on the first 404.
+- **Why deferred:** Tier-2 hardening; current failure mode is a 404 which is diagnosable, just not obvious.
+- **Recommended resolution:** opportunistic — small (30-line assertion in `startup.py` after `register_routers()`), useful the first time a router silently breaks.
+
+## [OPEN] FU-456 — Unit-of-work refactor for multi-commit handlers (starting with `create_recipe.py`)
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (b)).
+- **Type:** deferred job / architecture.
+- **What:** [`create_recipe.py`](dora_api/features/recipes/create_recipe.py) calls `self.repository.save_changes()` five times in one handler (L273/317/332/362/379) — no unit-of-work; a partial failure leaves committed rows plus dirty session state. FU-196's belt-and-braces `db.session.rollback()` in the global handler (shipped 2026-07-03) covers the *dirty-session* half; the *partial-commit* half needs the handler restructured to a single commit at the end. Sweep other multi-commit handlers when this pattern is decided (grep `save_changes` for count-per-file). Constraint: some handlers `add()` a parent → need its id → then `add()` children referencing that id, which currently uses an interstitial `save_changes()` to force a flush. Look at whether `db.session.flush()` (no commit) is enough for those cases so the whole handler stays one transaction.
+- **Why deferred:** real refactor, not a one-liner; safer to do after the rollback safety net (done 2026-07-03) rather than before.
+- **Recommended resolution:** later — Type-B aggregates pass, or the next serious cookbook-editor touch.
+
 ## [OPEN] FU-452 — P6-11 location-aware grouping (put-away + expiry-by-location) never built
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
 - **Type:** deferred job (Phase 1 loop item, un-started; fell off the map when spatial locations were retired).
@@ -273,13 +322,6 @@ long session summary. Distinct from the other logs:
 - **What:** `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md` Tier-1 ship-blockers were closed (register-first-admin, CSRF, build). Tier-2 "credibility gaps" — ~237 prompt-ID comments in shipped source, half-finished base-component adoption, missing request-level transaction safety, unreachable Postgres posture — were not systematically verified this session. Postgres is closed (FU-045). The other three need a delta pass.
 - **Why deferred:** re-audit vs shipped code, not a fix.
 - **Recommended resolution:** before any commercialization gate — grep for prompt-ID comments (`P[0-9]-\|C-[0-9]\|B[0-9]`) in shipped source; count non-Base component usage; audit for missing `db.session.commit()` boundaries. Log a proper FU or plan per finding.
-
-## [OPEN] FU-423 — MINIMAL_USER_PRODUCTS_OFF_FRICTION scratch → promote or consolidate
-- **Raised:** 2026-07-01 (docs audit).
-- **Type:** deferred job.
-- **What:** `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` is scratch awaiting promotion; already tracked by [[FU-181]]. Overlap check: this new FU exists only because the docs-audit rule was "every open item becomes an FU" — but it's a duplicate. **Action: close as duplicate of FU-181** the next time FU-181 gets touched (or now).
-- **Why deferred:** duplicate; kept in the ledger for the audit trail.
-- **Recommended resolution:** immediate — close as duplicate of [[FU-181]] with a state note; no separate work.
 
 ## [OPEN] FU-422 — Search: display which products already link to a stock item
 - **Raised:** 2026-07-01 (original-spec sweep).
@@ -1280,75 +1322,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F5 (+
   F6, which rides this decision).
 
-## [OPEN] FU-316 — Quick-add "remembered list": per-add toast names the destination + "always ask" setting (F3)
-- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F3 — combo (b)+(c)).
-- **Type:** UX / cleanup + settings.
-- **What:**
-  1. Verify that the per-add toast names the destination list
-     (e.g. "Added to *Sunday shop*", not just "Added") for the
-     `useQuickAddTargetPick`-powered remembered-list path. If not,
-     update the wording in `useShoppingListActions` (or wherever the
-     toast fires).
-  2. Add a per-user setting **"Always ask which list when I have
-     more than one draft"**, default **off** (current behaviour
-     preserved). When on, `useQuickAddTargetPick` either skips the
-     `save()` step entirely or `clear()`s after every add so the
-     picker fires every time.
-- **Where:** `web_app/src/composables/useQuickAddTargetPick.ts` +
-  `useShoppingListActions` (toast wording); per-user setting lives in
-  Settings → Account.
-- **Recommended resolution:** opportunistic — folds into a shopping-list
-  polish pass.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F3.
-
-## [OPEN] FU-315 — Verify auto-add-when-low toast + line indicator (F1)
-- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F1 — (b) + line
-  indicator).
-- **Type:** verification / cleanup.
-- **What:** When a stocktake update transitions a stock item to Low/Out
-  and `auto_add_when_low` is on, the API returns `auto_added_line_id` +
-  `auto_added_to_list_id` (see
-  `update_stock_item.py:217-241`). Verify:
-  1. The SPA reads those fields off the PATCH response and fires a
-     positive toast naming the list ("Added <item> to *Sunday shop*").
-     If the toast doesn't fire or doesn't name the list, fix it.
-  2. The line's existing `added_via` chip on `ShoppingListDetail.vue`
-     renders as **"auto: low stock"** for the auto_low_stock case
-     (already wired in `addedViaLabel` at L2206-2222 of
-     `ShoppingListDetail.vue`); confirm it's visible at normal density
-     and doesn't get crowded out by other line chrome.
-- **Where:** `dora_api/features/stock_items/update_stock_item.py` (server
-  side already in place); SPA toast wiring on whatever surface PATCHes
-  stock-item updates (`StockItemDetailPage.vue`, quick stocktake flows).
-- **Recommended resolution:** browser-verify pass — pair with the next
-  stock-item / shopping-list smoke.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F1.
-
-## [OPEN] FU-314 — Retire grandfathered `lazy="selectin"` overrides on `Recipe.cuisine` / `.category`
-- **Raised:** 2026-06-28 (R-019 / ADR-014 adoption — "no magic" rule).
-- **Type:** finding / engineering-standards cleanup.
-- **What:** R-019 (the new "no magic" rule) calls out per-entity
-  SQLAlchemy `lazy="..."` overrides as a flavour of magic — the read
-  site no longer reflects what it loads. Two such overrides exist:
-  `Recipe.cuisine` and `Recipe.category` were set to `lazy="selectin"`
-  during C-4 Chunk 2 so the ~10 read sites didn't each need an
-  `.include()`. ADR-014 grandfathers these (R-007 scope discipline)
-  but flags them as a follow-up.
-- **What to do:** flip both relationships back to the codebase default
-  (`noload`); walk every read site that currently relies on the
-  implicit load and add an explicit `.include(...)` / `selectinload(...)`
-  at the query. Greppable starting points:
-  `get_recipes.py`, `import_recipe_from_url.py`,
-  `update_recipe.py`, `create_recipe.py`,
-  `new_recipe_version.py`, plus anything else hitting
-  `recipe.cuisine` / `recipe.category` after a `repository.get(Recipe)`
-  call. Add a query-count test (FU-138 pattern) before & after to
-  confirm we didn't trade one selectin for ten lazy-loads.
-- **Why deferred:** out of scope for the rule-adoption session;
-  R-007 — flag, don't drift.
-- **Recommended resolution:** opportunistic — pair with the next
-  cookbook / recipe-query touch, or do as a focused cleanup chunk.
-
 ## [OPEN] FU-313 — Designed token ladder for graded severity / heatmap palettes
 - **Raised:** 2026-06-26 (FU-046 A1 theme-token regression sweep).
 - **Type:** deferred job.
@@ -1578,92 +1551,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** the verify itself is tracked in `DORA_VERIFY.md`
   under "Dashboard rebuild" (it's the same click that exercises the Phase-3
   alert card → `/alerts` link). Close this FU once that pass is green.
-
-## [OPEN] FU-327 — Windows + macOS desktop build scripts for the Piper bundle
-- **Raised:** 2026-06-24 (Piper platform audit). Renumbered from FU-288
-  on 2026-06-29 to resolve a ledger numbering collision (two open items
-  shared FU-288 — this build-script one and a separate profile-picture
-  test-fix item; the latter took FU-288 and was resolved that day).
-- **Type:** deferred job.
-- **What:** `packaging/build-linux.sh` is the only platform build script. The
-  spec (`dora.spec`) is platform-agnostic, but the Piper binary fetch
-  (`packaging/fetch_piper.py`) only runs when invoked explicitly, and the
-  default-voice fetch (`packaging/fetch_default_voice.py`) ditto. A Windows
-  desktop bundle needs `build-windows.bat` (or PowerShell) that runs the same
-  three steps in order — `fetch_piper.py --platform windows_amd64`,
-  `fetch_default_voice.py`, then `pyinstaller dora.spec`. macOS needs
-  `build-macos.sh` for both arm64 and x86_64 (separate runs).
-- **Why deferred:** the dev machine for this session is Linux; can't smoke
-  Windows / macOS builds without runners. The fetch script already has
-  `_ASSETS` entries for all three platforms — only the orchestration is
-  missing.
-- **Recommended resolution:** opportunistic — first time a Windows or macOS
-  release is needed. Until then the Linux + Docker artifacts are the shipped
-  paths and they're complete.
-- **Update 2026-06-30 — full audit done, scope reframed.** Output:
-  [docs/05_investigations/PLATFORM_BUILDS_AUDIT.md](docs/05_investigations/PLATFORM_BUILDS_AUDIT.md).
-  The audit confirms FU-327's named scripts are still the right
-  Tier-2 work, but two higher-leverage moves came out of it and are
-  tracked separately:
-  - [[FU-336]] — PWA build mode is never actually selected
-    (`npm run build` runs SPA mode, not `quasar build -m pwa`), so
-    the Workbox SW + manifest config is fully wired but emits
-    nothing. ~1-hour fix; highest ROI in the audit.
-  - [[FU-337]] — README + FU-333 Bucket D copy reference
-    AppImage/`.exe`/`.dmg` as if all three exist. Only AppImage
-    does. Pair with this FU.
-  Mobile (iOS/Android via Capacitor) and Electron are
-  **deliberately deferred** per the audit's matrix — ship PWA
-  first; revisit Capacitor only if PWA proves insufficient on
-  Android (iOS-PWA via Add-to-Home-Screen plus the FU-287
-  autoplay-primer fix covers iOS adequately).
-- **CI status (explicit user policy):** both
-  `.github/workflows/ci.yml` and `release.yml` are intentionally
-  commented out to preserve the GitHub Actions free-tier
-  allowance during rapid Claude-driven development. **They must
-  stay disabled while that cadence continues.** A CI matrix
-  exercising any Windows/macOS build script is therefore deferred
-  with them — the audit recommends pairing the script work with
-  CI revival ([[FU-169]]) when the user decides to spend the
-  minutes, since untested cross-platform scripts bit-rot fast.
-  Until then the Linux + Docker artifacts remain the only
-  CI-validated paths (and even those aren't currently CI-built —
-  they're hand-built on the dev box).
-
-## [OPEN] FU-287 — iOS / WKWebView autoplay across an `await` for Piper synth
-- **Raised:** 2026-06-24 (Piper platform audit).
-- **Type:** finding (real cross-platform constraint, not a regression).
-- **What:** iOS Safari (and the macOS WKWebView the desktop bundle uses on
-  Mac) enforce a strict user-gesture rule for `HTMLAudioElement.play()`. The
-  gesture-permission "credit" is consumed the first time `play()` is called
-  after a user interaction — and crucially, it can be **revoked** by an
-  intervening `await` that spans more than a few hundred ms. Two flows
-  affected:
-  - `DoraChat.vue:1061` — user sends → LLM round-trip (`await`) → reply →
-    `speechOut.speak(reply.text)` → `await ttsApi.synthesizeAsync()` → new
-    `<audio>` → `await audio.play()`. On iOS, after the LLM round-trip + the
-    synth fetch the gesture token is often gone. Browser-voice fallback
-    (`SpeechSynthesis`) is subject to the same rule but is more forgiving —
-    not a guaranteed fix.
-  - `RecipeCookMode.vue:923, 1222-1228` — timer-fired narration. No gesture
-    at all; the timer callback is not a user activation.
-  This is not a regression — the cook-mode timer narration already had the
-  same problem on the pre-Piper SpeechSynthesis path. Piper just adds one
-  more `await` (the synth fetch) before `audio.play()`, making the gate
-  fractionally easier to hit on chat replies.
-- **Why deferred:** needs iOS device testing + a small refactor to add a
-  silent-audio unlock primer. The current code is correct on every other
-  platform.
-- **Recommended resolution:** when the user reports voice failing on iPhone,
-  OR opportunistic with the FU-283 browser walk. Fix shape:
-  - Add a one-time `unlockAudio()` to `useSpeechOutput`: on the first user
-    interaction (router init or a global `pointerdown` listener), play a
-    silent / muted audio buffer to claim the gesture credit. Subsequent
-    network-trip `audio.play()` calls then inherit it.
-  - Alternative: keep a single long-lived `<audio>` element rather than
-    creating one per utterance; iOS treats reused elements more leniently.
-  - Document the timer-narration limitation in `RecipeCookMode.vue` (it
-    already half-acknowledges it at line 944).
 
 ## [OPEN] FU-357 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
@@ -1895,36 +1782,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   location if Help also uses it (e.g. `components/dora/AppLoopDiagram.vue`).
 
 
-## [OPEN] FU-208 — My Products → stock-item "Link…" flow is a silent dead-end
-- **Raised:** 2026-06-17 (products-as-overlay pivot — code investigation)
-- **Type:** finding (bug)
-- **What:** `web_app/src/pages/MyProductsPage.vue` routes its "Link…" action to
-  `/stock/{id}?link_product_id=<pid>&section=products`, but **nothing consumes `link_product_id`** —
-  C-1b.3 removed the saved-products picker dialog from `StockItemDetailPage.vue` (and its
-  `onLink`/`openProductPicker` handlers) per R-008, leaving the My-Products entry point routing to a
-  handler that no longer exists. Result: pick a stock item → Link → land on the Products tab → the
-  product is **not linked**, no error. Static read confirms zero consumers of `link_product_id`. Per
-  CLAUDE.md, logged even though static-confirmed — verify in browser.
-- **Why deferred:** belongs with the products-as-overlay build, not the doc pass.
-- **Recommended resolution:** **with FU-209** — rebuild a working link path (consume
-  `link_product_id` on detail, or link in place via `POST /api/stock-items/{id}/products`). Link
-  pre-existing (ingested) products only — do NOT rebuild manual product creation. Design:
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.2. **Confirm in browser.**
-- **Update 2026-06-17 — code-complete (static-only).** `MyProductsPage.vue` `confirmLink()` now
-  links in place via `stockItemApi.linkProductAsync` (`POST /stock-items/{id}/products`) + `loadAll()`
-  + a toast, instead of the dead `link_product_id` navigation. **Keep OPEN until browser-verified:**
-  from My Products, "Link…" → pick stock item → the product links and shows as linked (no bounce),
-  error toast on failure.
-- **Update 2026-06-29 — static re-verified.** Confirmed
-  `MyProductsPage.vue:1013` `confirmLink()` posts to
-  `/stock-items/{id}/products` via `linkProductAsync`, reloads, and toasts.
-  Repo-wide grep for `link_product_id` returns only the doc comment at
-  `MyProductsPage.vue:984` (no other consumer; no dead nav remains). The
-  endpoint exists at `link_product_to_stock_item.py:104`. **Still OPEN —
-  CLAUDE.md mandate: only flip to RESOLVED once the click-through has been
-  exercised in a running browser.** Folds into the next stock / products
-  smoke session.
-
 ## [OPEN] FU-199 — SSRF in recipe import-from-URL
 - **Raised:** 2026-06-16 (senior/tech-lead review)
 - **Type:** finding (security, HIGH)
@@ -1936,48 +1793,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** **before managed/SaaS (Path A/B) deploy** — validate scheme; resolve
   hostname and reject RFC-1918/loopback/link-local before connecting; re-validate each redirect hop.
   **Confirm in a running app.**
-
-## [OPEN] FU-196 — Review's lower-severity hardening batch
-- **Raised:** 2026-06-16 (senior/tech-lead review)
-- **Type:** finding (architecture + hardening)
-- **What:** Umbrella for the review's MEDIUM/LOW items still real after
-  FU-045's Postgres switch.
-  - **(b)** In-request multi-commit, no unit-of-work, global handler
-    doesn't roll back (`create_recipe.py:258/302/317/347`,
-    `startup.py:140-150`).
-  - **(c)** Reflection-based wiring has no boot-time resolved-route
-    assertion (`startup.py:135`, `service_wiring.py:17`,
-    `decorators.py:13`).
-  - **(d)** `requests` CVE-2024-35195 → confirm resolved version
-    ≥2.32.4 (only transitive via `requests_cache==1.1.1`);
-    `fuzzywuzzy==0.18.0` is unmaintained — replace with `rapidfuzz`
-    or drop.
-  - **(e)** Assistant endpoints unthrottled
-    (`ask_assistant.py:331,367`); `SESSION_COOKIE_SECURE` env-driven
-    via `DORA_SECURE_COOKIES` but defaults off (`app.py:90`); no
-    app-wide security headers; no account-deletion endpoint (GDPR).
-  - **(f)** Orphaned `SelectComponent.vue` (no callers; `CardComponent.vue`
-    already removed); ~237 prompt-ID comments to sweep pre-release;
-    `.npmrc` pnpm-only keys warn on every npm command.
-  Full detail in the review doc.
-- **Why deferred:** read-only review; these are Tier-2/Tier-3 polish,
-  not ship-blockers.
-- **Recommended resolution:** Tier-2 (b–e) before "professional";
-  Tier-3 (f) pre public release.
-- **Update 2026-06-29 — (a) struck.** The original (a) sub-item
-  ("Postgres unreachable; `configuration_manager.py:145` hardcodes
-  `sqlite:///`") is **resolved by [[FU-045]]** (closed 2026-06-26):
-  `get_db_connection_string()` rewritten with `DORA_DB_URL` +
-  per-component env vars + docker-compose Postgres default;
-  `psycopg[binary]` added; portable boolean defaults swept across 24
-  table-mapping sites and 12 migration sites. The downstream "add a
-  Postgres CI lane" carve-out from FU-045 close stays — but it's
-  double-blocked behind the currently-commented-out
-  `.github/workflows/ci.yml` (see [[FU-169]] for the CI revival
-  decision); spinning a separate FU for it is premature until CI is
-  back on. Trimmed in place rather than split — (b)–(f) are still
-  cleanly umbrella-able under "review hardening batch", they share a
-  source and a tier.
 
 ## [OPEN] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5)
 - **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)
@@ -1993,74 +1808,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   now would be speculative (charter: don't pre-build). User confirmed skipping it for C-9.5.
 - **Recommended resolution:** **when** the companion/ingestion path (C-10) defines a back-in-stock
   signal — then add a second tier to `SubscriptionsPanel.vue` (same list/manage shape) reading it.
-
-## [RESOLVED?] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
-> **Update 2026-06-17 — Phase D landed.** `merchant_api/` + `emailer/` directories deleted from this
-> repo (they live in `../dora-companion`). Backend wiring stripped (audit `SOURCE_MAPI` + `SOURCE_EMAILER`
-> retained read-only as `*_LEGACY` for historical rows; nothing in `dora_api` writes those values
-> any more). FE wiring stripped: `merchantApiService` / `merchantManagementApiService` /
-> `MerchantsSettings.vue` / `ProductSearch.vue` / `ProductSearchCard.vue` / `ProviderHealthChip.vue` /
-> `merchantStore` / `scrapedProductOffer*` / `offerSortByOptions` all gone; `axiosHttpClient` no
-> longer carries the `'merchant'` `ApiBackend` arm. `useProductSearchUrl()` composable added;
-> `useFeatureFlags().products` + the new `AppSetting.product_search_url` drive a re-pointed
-> **Product Search** nav entry that opens the admin-configured URL in a new tab (data-gated;
-> R-014 disabled-with-hint when URL unset). Infra cleaned: `desktop_app.py` only spawns dora_api,
-> `compose.yml` drops the 5172 port + emailer block, `Dockerfile` + `startup.sh` no longer spawn
-> the companion processes, `nginx.conf` drops the 5172 proxy comment, `dora.spec` drops the
-> merchant_api submodules + emailer templates, `.env` / `.env.example` drop `MAPI_*` + the
-> `DORA_EMAIL_ENABLED` deals-emailer block (the `DORA_SMTP_*` vars stay for the transactional
-> sender), CI drops the `compileall` smoke job. Migration `f8b2d4a6c1e3` adds
-> `AppSetting.product_search_url`. **Verified:** pytest **405/405** (+4 new), `vue-tsc` clean,
-> `npm run lint` clean, fresh-SQLite `flask db upgrade` clean. **Move to RESOLVED once the
-> browser-pass on the re-pointed nav + the System Settings input is confirmed** (FU-186-verify).
-
-
-> **Re-sequenced 2026-06-17 — now the ACTIVE track, ahead of FU-189.** The Merchant→Store rename
-> (FU-189) is blocked on this because "merchant" = entity AND `merchant_api` companion (a blind
-> rename corrupts the companion wiring). Build order: scaffold companion → ingestion API → companion
-> standalone+wired → **this decommission** → FU-189 rename. **Companion scaffolded 2026-06-17** as a
-> sibling repo at `../dora-companion` (copied `merchant_api/` + `emailer/`; nothing removed from Dora
-> yet — the delete + de-wire happens here, after the ingestion API + a functional companion).
-- **Raised:** 2026-06-15 (C-10 ingestion API design); **emailer scope added 2026-06-16**
-- **Type:** deferred job / decommission
-- **What:** With scraping divorced and `/api/ingest` (C-10) as the **only** inbound product path,
-  Dora-core must **not scrape live**. The current in-app **product search calls the sibling
-  `merchant_api` (port 5172) to live-scrape** — that has to go. Options: (a) repoint in-app
-  product search at the **already-ingested local catalogue** (search what your source pushed), or
-  (b) move product search entirely to the companion. This **reshapes C-1b's "find & link a
-  product"** (it can no longer live-search) and the "Find deals" / best-deals surfaces; `merchant_api`'s
-  live-scrape role moves to the private external producer. Folds in **FU-053** (best-deals card
-  fetches all products client-side).
-  - **Surgical removal — `emailer/` (the standalone weekly-deals email service):** the half-finished
-    `emailer/` package (`generate.py` / `delivery.py` / `startup.py` / `product_model.py` /
-    `user_model.py` / `templates/` / `food_emojis.txt`) is the **old "Weekly Price Report" deals
-    email** — it's coupled to the scraper (its commented-out core fetches `/api/webScraper/offers`;
-    `product_model.py` mirrors the merchant-offer shape) and isn't wired into the running app (only
-    shares `logging_setup`). Per the user (2026-06-16) it is **part of this same surgical-removal
-    sweep**: (1) **move it into the private companion app and finish it off properly there** —
-    that's where deals + mailing belong (the companion gathers offers and mails the user; invisible
-    to Dora per the hard rule); (2) **then delete `emailer/` from this repo.** Also clean the
-    now-dead refs left behind: `SOURCE_EMAILER` (`audit_event.py:12`) + the `emailer` arm in
-    `get_audit_events.py` / `logging_setup.py` docs once nothing emits them.
-  - **Not in scope / keep:** `dora_api/infrastructure/email_sender.py` is the **transactional**
-    sender (password-reset etc., works OOTB per INV-4) — **stays**. The legitimate in-app
-    "email me stuff" need is the **Alerts C-9.7 email digest** (per-user opt-in, hangs off the
-    alerts evaluator, reuses `email_sender.py`) — so removing `emailer/` leaves **no in-app gap**.
-- **Why deferred:** a cross-cutting decommission sweep, distinct from building the ingestion seam;
-  needs `/ingest` landed first so the catalogue is populated to search against. The `emailer/` move
-  needs the companion repo to land it in.
-- **Recommended resolution:** after **C-10.2** (the ingest path exists); pair with **FU-182**
-  (Products-off) since both reshape the product surfaces, and re-confirm C-1b §2.4's "find & link"
-  against it. Keep the **invisibility rule** — no scraper references in whatever replaces search,
-  and none of the companion's existence (incl. the emailer it now hosts) surfaces in the app.
-- **Update 2026-06-17 (products-as-overlay pivot — resolution settled):** the search question is
-  now decided (`docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1): **only the Product Search
-  page moves** to the companion, which becomes a *complete app* (`merchant_api` + the moved search
-  page + its own settings page) in its **own repo**. Dora keeps the **Product Search nav entry** →
-  an install-configured URL (data-gated; companion never named — a bounded carve-out to the
-  invisibility rule). My Products / Price History / the stock-item Products tab **stay in Dora**.
-  The old "pair with FU-182" now reads "pair with **FU-209** (gate reframe) + the new proposal".
-  The `emailer/` move/delete is unchanged.
 
 ## [OPEN] FU-184 — Reconcile onboarding sell-copy + loop stages against actual app behaviour
 - **Raised:** 2026-06-15 (Onboarding C-5 v3 design)
@@ -2123,26 +1870,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   + post-mapping roundtrip) + `test_ingestion_store_mappings.py` (CRUD + invalid merchant rejected).
   **Move to RESOLVED once the FU-218 browser pass confirms the pending → assign flow in the UI.**
 
-## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
-- **Raised:** 2026-06-14 (C-2.J sequential builder)
-- **Type:** follow-up (deferred sub-feature)
-- **What:** Two small loose ends from the sequential builder (C-2.J):
-  1. **Plan email** — the builder's done-step **Email button is shown disabled**
-     ("isn't set up yet", per R-014). Actual emailing of a plan / its shopping
-     list isn't built (`useMealPlanExport` only does print). Wire it to the
-     existing email infra (INV-4 / `emailer`), SMTP-gated: enable the button
-     only when email is configured for the install, otherwise keep it
-     disabled-with-a-hint (R-014). The proposal §6 also lists email on the
-     recurring/template flows — same backing.
-  2. **`meals_per_week` pref** — the builder's target count is hardcoded to 7
-     (proposal §6 wanted "user's `meals_per_week` if set, else 7"). No such
-     user/household field exists yet. Add it (household-wide, like the slot
-     vocab) + have the builder read it. Minor; the 7 default works fine
-     meanwhile.
-- **Recommended resolution:** opportunistic — pair the email work with the
-  broader email/INV-4 effort; the `meals_per_week` pref with the next
-  settings/onboarding touch (C-5 seeds it).
-
 ## [OPEN] FU-176 — Apply R-014 (reveal-and-disable) app-wide
 - **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; new rule R-014 / ADR-009)
 - **Type:** follow-up
@@ -2184,26 +1911,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   which link in the chain breaks at runtime.
 - **State note:** open — no code change in Chunk A (no repro to fix). The
   Chunk A card rewrite preserves the same `v-if` gate.
-
-## [OPEN] FU-170 — App-wide button display preference (icon-only / icon+text / mixed)
-- **Raised:** 2026-06-13 (FU-088 cookbook card revision — Cook button went icon-only `mdi-chef-hat` per user choice; want this controllable user-wide)
-- **Type:** new feature
-- **What:** A single user preference (Settings → Appearance, alongside the existing image-display opt-in) controlling how primary action buttons render across the app:
-  - **Icon only** — every action button is `flat`/`round` (or `unelevated` for primary) with no label; the verb lives in the tooltip.
-  - **Icon + text** — every action button shows both icon and label.
-  - **Mixed** (default, recommended) — a curated per-button policy: high-frequency / unambiguous actions (Cook, favourite, add-to-list on the recipe card, ± steppers) go icon-only; less-frequent / verbier actions (Save, Cancel, Create recipe, Delete, Mark cooked, Confirm) keep their labels. The policy is defined once in code, per button, not at the call site.
-- **Why:** the cookbook revision (Chunks A–C) introduces the first deliberately icon-only primary button (Cook = chef hat). Without a system-level preference, users who prefer verbose UIs lose the verb entirely, and ad-hoc "should this have a label?" calls drift across the app over time.
-- **Shape (sketch — to be designed in a brief):**
-  - User-prefs field `button_display: 'icon_only' | 'icon_text' | 'mixed'`, default `'mixed'`.
-  - A thin `<AppActionBtn>` wrapper (or a `useButtonDisplay()` composable) that reads the pref + the button's per-instance policy hint (`prefer="icon-only" | "icon-text" | "auto"`) and decides whether to render the label. Existing `q-btn` call sites migrate gradually.
-  - Tooltips become mandatory on any button whose policy allows icon-only rendering (accessibility — screen readers still get the verb).
-  - Per-button policy lives in a small registry/enum so policy changes are one-line edits, not codebase-wide grep-and-replace.
-- **Scope notes:**
-  - Footer/toolbar buttons (sticky footer A7, modal action rows A3) are in-scope.
-  - Menu items (`q-item`) are out of scope — they need labels for legibility.
-  - Settings page itself is out of scope — it uses long-form forms, not action buttons.
-- **Recommended resolution:** after the cookbook card revision (Chunks A–C) lands and we have lived with at least one icon-only primary button for a few days. Write a short brief first (charter cross-check: Effortless + Anti-creep — this is a knob, justify it doesn't feel like one), then implement as a small standalone chunk.
-- **State note:** open — no brief yet, no code.
 
 ## [OPEN] FU-169 — Implement the test-suite improvements proposal
 - **Raised:** 2026-06-13 (post-FU-166 proposal)
@@ -2298,50 +2005,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** opportunistic — when the user
   next needs Aldi pricing data, or as a focused session in the
   companion repo.
-
-## [OPEN] FU-134 — Audit other `autoGenerate` call sites for Axis-B routing
-- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl)
-- **Type:** follow-up
-- **What:** The meal-plan "Generate shopping list for this week" button
-  now offers add-to-existing vs. create-new via Axis B. Three other
-  `shoppingListApi.autoGenerateAsync` call sites were left alone:
-  - `web_app/src/components/dialogs/NewListDialog.vue:416` — already
-    explicitly picks/creates a target list before generating; no change
-    needed (already Axis-B-aware by construction).
-  - `web_app/src/pages/RecipesOverview.vue:1153` — recipe "add all
-    missing to a new list" path. Acceptance candidate for the same
-    treatment (the proposal puts recipe bulk-add under variant="bulk"
-    via the `AddToListButton`, which is the longer-term home).
-  - `web_app/src/layouts/MainLayout.vue:291` — global/keyboard
-    shortcut entry. Check whether this should also offer Axis B or
-    is intentionally always-new.
-- **Why deferred:** out of Chunk 4's documented scope (`PROPOSAL_CART_
-  BUTTON.md §5` surface 10 is meal-plan generate only). Scope discipline
-  (R-007) — flag, don't drift.
-- **Recommended resolution:** opportunistic — re-evaluate when the
-  `AddToListButton variant="bulk"` work lands for recipes (FU-131
-  vicinity) and again when the global shortcut surface gets touched.
-
-## [OPEN] FU-144 — Cart-state awareness for product-anchored adds
-- **Raised:** 2026-06-12 (FU-131 impl)
-- **Type:** follow-up
-- **What:** `AddToListButton variant="inline-product"`
-  doesn't show "on a list" state today — `cartStateFor` keys
-  on `stock_item_id` and a product-anchored button has none.
-  Result: a user can re-click "Add as product" on the same
-  product and get a second product-only line (the backend's
-  dedupe catches it and the toast reads "Already on your
-  list", so it's safe — just not as informative as the
-  stock-item variant). A parallel membership index keyed on
-  `product_id` would let the button render the same
-  on-list / on-multiple states the stock-item variant does.
-- **Why deferred:** out of FU-131's documented scope (the
-  three named pieces shipped); product-anchored membership
-  is a server-side extension that touches the
-  `Membership` DTO + how its `items` array is keyed.
-- **Recommended resolution:** when a third product-anchored
-  consumer of `AddToListButton` shows up, or when a user
-  reports the double-add UX as a problem.
 
 ## [OPEN] FU-108 — Reorder Cookbook overview filters by usefulness
 - **Raised:** 2026-06-10 (FU-083 follow-up; user, after the bug pass)
@@ -2501,13 +2164,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   fire-and-forget (`void (async () => { ... })()`) or drop the `async`
   and use `.then()/.catch()` so the handler returns `void`. ~5 line fix.
 
-## [OPEN] FU-065 — Ticked-summary string duplicated across both finish dialogs
-- **Raised:** 2026-06-08 (Chunk 3 impl)
-- **Type:** finding (R-003 lite — same display string built in two places)
-- **What:** `ShoppingListDetail.vue` and `ShoppingListShopMode.vue` each build the "N items will be bumped to Well-Stocked: a, b, c, and N more." string for their respective Finish-and-restock dialog. Identical algorithm, two copies. If the wording or cap-count changes, both need editing.
-- **Why deferred:** extracting a single helper is one line of value today; both copies are 4-line, Type-C display logic, and the two dialogs *do* differ (Detail has the copy-unticked-to-new-list radio, ShopMode appends a one-line note). Worth a helper only if a third caller appears, or if the wording becomes prose worth localising.
-- **Recommended resolution:** opportunistic — when C-locale (FU-043) lands, fold both summaries through one localised builder. Otherwise leave alone.
-
 ## [OPEN] FU-056 (partial) — Phase 2 ingestion EAN auto-populate
 - **Raised:** 2026-06-07 (P6-02); slice 1 closed 2026-06-28 (hybrid model)
 - **Type:** deferred job (Phase-2 scoped)
@@ -2524,27 +2180,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
     server-side ("one Product = one EAN").
 - **Recommended resolution:** Phase 2 ingestion + the Products UI work,
   whichever lands first.
-
-## [OPEN] FU-052 — Switch cookable surfaces to the server query + optimise the helper
-- **Raised:** 2026-06-07 (Phase 1 Chunk 4 — queryable cookability)
-- **Type:** follow-up
-- **What:** Chunk 4 added the `?cookable` / `?max_missing` API + `cookable_count`,
-  but the **shared-store surfaces still fetch all recipes and filter client-side**
-  on `r.cookable` (RecipesOverview's cookable toggle / missing-max; the dashboard
-  "Cookable tonight" list). Proposal step 4 ("switch the cookable surfaces to
-  query") isn't finished. Two parts: (a) make those surfaces *query* the server
-  (tricky — the recipes Pinia store is shared and does multi-facet client filtering,
-  and the dashboard top-3 needs server-side sort+limit, currently client-sorted by
-  favourite/last-made); (b) `load_recipe_cookability` loads **all recipes + full
-  ingredient trees** on every dashboard summary and every cookable-filtered query —
-  one query (not N+1) and fine at personal scale, but a set-based `COUNT(...) GROUP
-  BY recipe` would scale better (watch SQLite/Postgres portability — avoid engine-
-  specific `FILTER`).
-- **Why deferred:** the store rewire is a real refactor needing browser verification
-  (FU-051), and the perf optimisation is premature at current scale (R-007).
-- **Recommended resolution:** **later — fold into the Type-B aggregates pass / when
-  recipe counts grow.** Backend capability already exists; this is the client
-  adoption + optimisation tail.
 
 ## [OPEN] FU-044 — C-help opt-in help-overlay brief written; awaiting approval + per-surface hint rollout
 - **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`)
@@ -2677,22 +2312,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   text-scale var. Deliberately-fixed-px carve-outs (ScanOverlay camera UI,
   PriceHistoryChart SVG labels, Dashboard 3px/7.5px micro-gauge) stay.
 
-
-## [OPEN] FU-016 — Audit other "frontend cache vs backend mutation" guard races
-- **Raised:** 2026-06-05 (B5 follow-up)
-- **Type:** finding
-- **What:** The onboarding "dead button" bug was a stale `authStore.currentUser`
-  read by the router guard after `onboardingApi.completeAsync()` updated the
-  backend. The same shape could exist for any flow where the backend mutates
-  user-scoped state that a guard or computed reads from a frontend cache —
-  candidates worth scanning: account changes (email/role/admin flag), data
-  import/restore, restart-onboarding. (Stock-item Undo restore was a candidate
-  here too; removed with the app-wide undo posture per FU-163.) Look for
-  `currentUser?.*` reads in router and layout guards, and pair each with the
-  store mutation that should refresh them.
-- **Why deferred:** out of B5's bug-fix scope; cross-cutting audit.
-- **Recommended resolution:** opportunistic — fold into a Wave-A or polish
-  pass once one obvious symptom shows up; not worth a dedicated session.
 
 ## [OPEN] FU-010 — Late-game holistic theme / colour / overall-look review
 - **Raised:** 2026-06-05 (user request)

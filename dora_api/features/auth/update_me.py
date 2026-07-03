@@ -68,6 +68,12 @@ class UpdateMeRequest(BaseModel):
     # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
     # posture. Boolean only.
     batch_features_enabled: bool | None = None
+    # FU-316 — per-user "always ask which draft list on quick-add" toggle.
+    always_ask_which_shopping_list: bool | None = None
+    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # Present-in-body sets it (null clears back to the 7 fallback); bounds
+    # 1–21 enforced here so the request never persists an out-of-range value.
+    meals_per_week: int | None = Field(default=None, ge=1, le=21)
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # Validated against NUTRITION_MODE_VALUES at the boundary
     # (R-010 carve-out for closed-set sentinels).
@@ -200,6 +206,16 @@ class UpdateMeHandler:
             _User.money_features_enabled = request.money_features_enabled
         if "batch_features_enabled" in _SetFields and request.batch_features_enabled is not None:
             _User.batch_features_enabled = request.batch_features_enabled
+        if (
+            "always_ask_which_shopping_list" in _SetFields
+            and request.always_ask_which_shopping_list is not None
+        ):
+            _User.always_ask_which_shopping_list = request.always_ask_which_shopping_list
+        # FU-181 loose-end 2 — present-in-body sets the target; a null
+        # payload clears back to the SPA's 7 fallback. Range already
+        # validated by the request model above.
+        if "meals_per_week" in _SetFields:
+            _User.meals_per_week = request.meals_per_week
 
         # C-cross Chunk 3 — per-user nutrition mode. R-010 carve-out: a
         # closed-set sentinel validated at this single boundary point

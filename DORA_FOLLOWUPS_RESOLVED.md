@@ -10,6 +10,557 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-327 — Windows + macOS desktop build scripts for the Piper bundle
+- **Raised:** 2026-06-24 (Piper platform audit). Renumbered from
+  FU-288 on 2026-06-29 to resolve a ledger numbering collision.
+- **Type:** deferred job.
+- **Resolved:** 2026-07-03. Shipped both platform build scripts
+  mirroring `build-linux.sh`. User has no Windows or macOS dev
+  machine at resolve time — cross-platform verify is user-driven,
+  16 checkboxes total split across two new sections in
+  `DORA_VERIFY.md` under Build/install/desktop.
+- **What shipped:**
+  - `packaging/build-windows.ps1` — PowerShell script; SPA build →
+    Piper fetch (auto-detected `windows_amd64`) → default voice
+    fetch → `pyinstaller --noconfirm dora.spec` → smoke-check
+    `dist\Dora\Dora.exe`. Flags `-SkipSpa`, `-SkipPyInstaller`,
+    `-Clean`.
+  - `packaging/build-macos.sh` — bash script; auto-detects arch
+    via `uname -m` (arm64 → `macos_aarch64`; x86_64 → `macos_x64`),
+    passes explicit `--platform` to `fetch_piper.py` so the right
+    tarball lands. Extra `--arch` override for cross-arch scenarios.
+    Executable bit set via `git update-index --chmod=+x`. Same
+    three flags as Linux.
+  - `README.md` — Desktop-bundle section rewritten to cover all
+    three platforms with per-platform prereqs and OS-appropriate
+    data directories. Notes Linux is the CI-verified path;
+    Windows/macOS scripts are checked-in-only pending user verify.
+- **Explicitly not shipped in this pass:**
+  - **`.exe` installer / `.dmg`** — both platforms produce
+    directory-tree bundles; single-file installers stay a follow-on
+    aligned with FU-337 (README/copy references
+    AppImage/.exe/.dmg as if all three exist; only AppImage does).
+  - **CI matrix.** FU flagged this as double-blocked behind FU-169
+    (CI intentionally commented out to preserve free-tier
+    minutes). Not touching `.github/workflows/*.yml` here.
+- **Related:**
+  - [[FU-336]] — PWA build mode selection (from the same
+    2026-06-30 platform-builds audit); still open.
+  - [[FU-337]] — README/copy alignment on installer references;
+    still open.
+  - Audit doc: `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry for design notes +
+  rules check.
+
+## [RESOLVED] FU-287 — iOS / WKWebView autoplay across an `await` for Piper synth
+- **Raised:** 2026-06-24 (Piper platform audit).
+- **Type:** finding (real cross-platform constraint, not a regression).
+- **Resolved:** 2026-07-03. Shipped the primer fix the FU spec'd.
+  `useSpeechOutput.ts` registers a one-shot document listener at
+  first mount that plays a 44-byte silent muted `data:audio/wav`
+  blob on the first user gesture, claiming the browser's autoplay
+  credit for the tab session — subsequent `audio.play()` calls
+  (including the Dora chat reply flow that awaits LLM + Piper
+  synth before playing) inherit it. Idempotent; no-op on
+  Chrome/Firefox/Android. Timer-narration edge case documented
+  in-code as best-effort (a timer callback that fires long after
+  the last gesture may still be silent; the visible Notify remains
+  the load-bearing "timer done" signal).
+- **Design choice:** the FU listed two options — primer, or single
+  long-lived `<audio>` element. Shipped the primer alone (the FU's
+  recommended shape); ships the smaller safe change first. If iOS
+  browser-verify shows the primer isn't enough, the reused-element
+  refactor stays available as a follow-up.
+- **iOS browser-verify pending:** user has no iOS device access
+  as of resolve time. Seven-scenario checklist added to
+  `DORA_VERIFY.md` under **"iOS / macOS-WKWebView audio-unlock
+  primer — origin FU-287"** in the Cross-cutting section
+  (chat reply Piper, chat reply browser voice, cook-mode step
+  narration, timer-narration edge case, macOS WKWebView, non-iOS
+  no-regression, session-scoped reload). Walked when device access
+  next arrives.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry for design notes +
+  rules check.
+
+## [RESOLVED] FU-208 — My Products → stock-item "Link…" flow is a silent dead-end
+- **Raised:** 2026-06-17 (products-as-overlay pivot — code investigation).
+- **Type:** finding (bug).
+- **Resolved:** 2026-07-03. Code has been fixed since 2026-06-17 and
+  re-verified statically 2026-06-29; the FU was sitting OPEN pending
+  browser-verify. Under current ledger conventions
+  ([[feedback-browser-verify-not-an-fu]]) pure browser-verify belongs
+  in `DORA_VERIFY.md`, not gating an FU's resolution. Two unchecked
+  verify items already live under **"My Products → stock-item 'Link…'
+  — origin FU-208"** in `DORA_VERIFY.md` (L912-914):
+  - From My Products, "Link…" → pick stock item → product links and
+    shows as linked (no bounce)
+  - Error toast on failure
+- **What shipped (2026-06-17):** `MyProductsPage.vue` `confirmLink()`
+  now links in place via `stockItemApi.linkProductAsync`
+  (`POST /stock-items/{id}/products`) + `loadAll()` + a toast, instead
+  of the dead `link_product_id` navigation that had no consumer after
+  C-1b.3 removed the saved-products picker dialog from
+  `StockItemDetailPage.vue`. 2026-06-29 static re-verify confirmed
+  `MyProductsPage.vue:1013` still hits the correct path, the endpoint
+  exists at `link_product_to_stock_item.py:104`, and grep across the
+  repo finds `link_product_id` only in a doc comment at
+  `MyProductsPage.vue:984` — no dead navigation remains.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-196 — Review's lower-severity hardening batch (umbrella disassembled)
+- **Raised:** 2026-06-16 (senior/tech-lead review).
+- **Type:** finding (architecture + hardening).
+- **Resolved:** 2026-07-03. Umbrella disassembled. The genuinely-safe
+  and small items landed in one pass; each remaining item was spun
+  off into its own FU so it can be triaged / scheduled / declined on
+  its own merits rather than dragged around inside a stale umbrella.
+- **Landed this session (easy wins):**
+  - **(d1)** `Requests==2.31.0` → **`Requests==2.32.4`** — closes
+    CVE-2024-35195 (`requirements.txt`).
+  - **(d2)** `fuzzywuzzy==0.18.0` → **`rapidfuzz==3.9.6`** — actively
+    maintained, MIT-licensed (fuzzywuzzy is GPL — mild licensing
+    hazard), no python-Levenshtein warning noise. Two call sites
+    swapped (`features/recipes/import_recipe_from_url.py`,
+    `features/search/global_search.py`). rapidfuzz's `process` +
+    `fuzz` modules are drop-in compatible with the surface both
+    files used.
+  - **(f1)** `web_app/src/components/SelectComponent.vue` **deleted**
+    — grep confirmed zero non-self callers.
+  - **(f2)** `web_app/.npmrc` **deleted** — repo is on npm, the file
+    only held pnpm-specific keys (`shamefully-hoist`,
+    `strict-peer-dependencies`, `resolution-mode=highest`) that warn
+    on every `npm` command.
+  - **(b partial)** Global exception handler in `startup.py` now
+    calls `db.session.rollback()` before returning 500. Belt-and-
+    braces for the multi-commit sites; the full unit-of-work
+    refactor stays as FU-456 below.
+- **Split off as their own FUs (do not re-umbrella):**
+  - **FU-456** — Unit-of-work refactor for multi-commit handlers
+    (starting with `create_recipe.py`). *(item b)*
+  - **FU-457** — Boot-time resolved-route assertion for
+    reflection-based wiring. *(item c)*
+  - **FU-458** — Rate-limit assistant endpoints. *(item e1)*
+  - **FU-459** — App-wide security headers (CSP / X-Frame-Options /
+    X-Content-Type-Options / Referrer-Policy). *(item e2)*
+  - **FU-460** — `SESSION_COOKIE_SECURE` default: policy call.
+    *(item e3)*
+  - **FU-461** — Account-deletion endpoint (GDPR) — design + build.
+    *(item e4)*
+  - **FU-462** — Sweep the ~237 prompt-ID comments from shipped
+    source. *(item f3; duplicates FU-424's Tier-2 sub-item — same
+    finding.)*
+- **Previously struck (2026-06-29):** original (a) sub-item
+  ("Postgres unreachable") — resolved by FU-045.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry for the audit method
+  and per-item verdicts.
+
+## [RESOLVED] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
+- **Raised:** 2026-06-15 (C-10 ingestion API design); emailer scope added 2026-06-16.
+- **Type:** deferred job / decommission.
+- **Resolved:** 2026-07-03. Code work has been fully shipped since
+  **2026-06-17** (Phase D landed); the FU was sitting under a
+  `[RESOLVED?]` heading pending browser-verify. Under current ledger
+  conventions ([[feedback-browser-verify-not-an-fu]]) pure
+  browser-verify belongs in `DORA_VERIFY.md`, not gating an FU's
+  resolution, so moving to RESOLVED now.
+- **What shipped (2026-06-17 Phase D — verbatim from the FU update):**
+  `merchant_api/` + `emailer/` directories deleted from this repo
+  (they live in `../dora-companion`). Backend wiring stripped
+  (audit `SOURCE_MAPI` + `SOURCE_EMAILER` retained read-only as
+  `*_LEGACY` for historical rows; nothing in `dora_api` writes those
+  values any more). FE wiring stripped: `merchantApiService` /
+  `merchantManagementApiService` / `MerchantsSettings.vue` /
+  `ProductSearch.vue` / `ProductSearchCard.vue` /
+  `ProviderHealthChip.vue` / `merchantStore` / `scrapedProductOffer*`
+  / `offerSortByOptions` all gone; `axiosHttpClient` no longer
+  carries the `'merchant'` `ApiBackend` arm. `useProductSearchUrl()`
+  composable added; `useFeatureFlags().products` + the new
+  `AppSetting.product_search_url` drive a re-pointed **Product
+  Search** nav entry that opens the admin-configured URL in a new
+  tab (data-gated; R-014 disabled-with-hint when URL unset). Infra
+  cleaned: `desktop_app.py` only spawns dora_api, `compose.yml`
+  drops the 5172 port + emailer block, `Dockerfile` + `startup.sh`
+  no longer spawn the companion processes, `nginx.conf` drops the
+  5172 proxy comment, `dora.spec` drops the merchant_api submodules
+  + emailer templates, `.env` / `.env.example` drop `MAPI_*` + the
+  `DORA_EMAIL_ENABLED` deals-emailer block (the `DORA_SMTP_*` vars
+  stay for the transactional sender), CI drops the `compileall`
+  smoke job. Migration `f8b2d4a6c1e3` adds
+  `AppSetting.product_search_url`. **Verified at land time:** pytest
+  **405/405** (+4 new), `vue-tsc` clean, `npm run lint` clean,
+  fresh-SQLite `flask db upgrade` clean.
+- **Design context — products-as-overlay pivot (2026-06-17):** the
+  search question was settled by
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1 — only the
+  Product Search page moves to the companion (its own complete app
+  in its own repo, hosting `merchant_api` + the moved search page +
+  its own settings). Dora keeps the Product Search nav entry as an
+  install-configured URL (data-gated; companion never named — a
+  bounded carve-out to the invisibility rule). My Products / Price
+  History / the stock-item Products tab **stay in Dora**.
+- **Not-in-scope (preserved as-is):**
+  `dora_api/infrastructure/email_sender.py` is the transactional
+  sender (password-reset etc.) — stays. The legitimate in-app
+  "email me stuff" need is the Alerts C-9.7 email digest (per-user
+  opt-in, reuses `email_sender.py`) — so removing `emailer/` left
+  no in-app gap.
+- **Remaining browser-verify (unblocked):** two unchecked items
+  under "Decommission scraping (Phase D) — re-pointed nav — origin
+  FU-186" in `DORA_VERIFY.md` — Product Search nav opens the
+  admin-configured URL in a new tab, and the System Settings input
+  for `AppSetting.product_search_url` saves + round-trips. Walked
+  on the user's own time; not gating this resolve.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-423 — MINIMAL_USER_PRODUCTS_OFF_FRICTION scratch → promote or consolidate
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** deferred job.
+- **Resolved:** 2026-07-03. Duplicate of an already-resolved FU;
+  its "close as duplicate of FU-181" note was a **typo** — the
+  scratch doc's own header + IMPL_PLAN_ONBOARDING.md +
+  PROPOSAL_ONBOARDING.md all point the scratch at **FU-182**
+  (Products-off minimal-user workflow), which was promoted to
+  `docs/04_proposals/PROPOSAL_SIMPLE_MODE.md` and resolved.
+  Fixing the ledger typo rather than propagating it. The scratch
+  doc's header still says "see FU-181" — leaving that alone (it's
+  a talk-time doc; the two promotion targets in `04_proposals/`
+  cite FU-182 correctly and are authoritative).
+- **See:** the resolved FU-182 entry below in this file.
+
+## [RESOLVED] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
+- **Raised:** 2026-06-14 (C-2.J sequential builder).
+- **Type:** follow-up (deferred sub-feature).
+- **Resolved:** 2026-07-03. Two loose ends resolved differently:
+  1. **Loose-end #1 (plan email) — stale, not built.** The disabled
+     Email button the FU cited was removed from
+     `SequentialBuilderDialog.vue`'s done-step (grep across all
+     meal-plan surfaces returns zero email references). Removing
+     the button was an implicit product decision — print-view →
+     Save-as-PDF is the export path
+     (`useMealPlanExport.ts:1-4` also notes FU-168 similarly
+     retired CSV). Not re-added. If plan-emailing returns as an
+     ask later it's a fresh feature request grounded in current
+     email/SMTP infra, not the FU's original disabled-button entry
+     point.
+  2. **Loose-end #2 (`meals_per_week` pref) — shipped.**
+     `BUILDER_TARGET_MEALS = 7` was still hardcoded in
+     `useMealPlanner.ts:24`. Added `User.meals_per_week int | null`
+     (bounds 1–21, null → SPA fallback of 7), wired through the
+     entity + Fields + `AuthenticatedUserDto` + `UpdateMeRequest` +
+     handler + table mapping. New `useMealsPerWeek()` composable
+     (`web_app/src/composables/useMealsPerWeek.ts`) reads the pref
+     reactively; both `MealPlansBoardPage` and `MealPlansOverview`
+     consume it. Constant renamed to `BUILDER_TARGET_MEALS_FALLBACK`
+     — single source of the fallback, no other file re-hardcodes 7.
+     Preferences → Meal planning gains a "Meals per week" number
+     input (1–21; blank = default 7). Migration
+     `d7e3b9f4a1c2_20260703_user_meals_per_week.py` (chains off
+     `c6d2a8e3b9f1` FU-316).
+- **Where landed:**
+  `dora_api/persistence/migrations/versions/d7e3b9f4a1c2_20260703_user_meals_per_week.py`,
+  `dora_api/persistence/table_mappings.py`,
+  `dora_api/domain/entities/user.py`,
+  `dora_api/features/auth/register_user.py`,
+  `dora_api/features/auth/update_me.py`,
+  `web_app/src/models/auth.ts`,
+  `web_app/src/services/api/authApiService.ts`,
+  `web_app/src/composables/useMealPlanner.ts` (rename),
+  `web_app/src/composables/useMealsPerWeek.ts` (new),
+  `web_app/src/pages/MealPlansBoardPage.vue`,
+  `web_app/src/pages/MealPlansOverview.vue`,
+  `web_app/src/pages/settings/PreferencesSettings.vue`.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-170 — App-wide button display preference (icon-only / icon+text / mixed)
+- **Raised:** 2026-06-13 (FU-088 cookbook card revision — Cook button
+  went icon-only `mdi-chef-hat`; wanted this controllable user-wide).
+- **Type:** new feature.
+- **Resolved:** 2026-07-03. Planning-pass verdict: the proposed
+  3-way user pref doesn't pay its rent. Not building. User agreed.
+  Full reasoning preserved so a future "revisit if a real user
+  complaint arrives" is grounded:
+  - **Scale checked:** 651 button call sites in the SPA
+    (`BaseButton` + raw `q-btn`); 119 use `variant="icon"`.
+    Almost all icon-only buttons already carry their verb in a
+    `<q-tooltip>` child or `aria-label` — the "per-button policy"
+    the FU proposed to formalise is already embedded in each call
+    site's shape, just not in a registry.
+  - **Neither non-default mode is genuinely usable.**
+    `icon_only` would strip labels off Save / Cancel / Delete /
+    Confirm — those words *are* the affordance. `icon_text` would
+    force labels onto ± steppers, modal-close X's, week-nav arrows,
+    hamburger, image-reorder arrows — components explicitly
+    designed for icon-density, layouts break.
+  - **"Mixed" default is what the code already does implicitly.**
+    Formalising it into a Settings knob nobody will meaningfully
+    change adds a permanent audit tax on every new button
+    ("what's this button's policy?") for zero user-observable
+    payoff. Charter P8 Anti-creep concern.
+  - **Trigger case is a one-liner.** The FU's raiser trigger — Cook
+    button feeling too icon-only on the recipe card — can be
+    addressed by just adding a `label` prop to that one button if a
+    complaint arrives. Since the button landed, no user complaint
+    has surfaced in DORA_FOLLOWUPS or this session's punch-list
+    passes.
+- **Trigger for a future revisit** (self-surfacing): if a user
+  reports a specific icon-only button as unreadable, address that
+  button. If a *class* of complaints surfaces (users lost across
+  many icon-only surfaces), reopen this FU and consider a narrower
+  per-surface fix rather than a global knob.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-134 — Audit other `autoGenerate` call sites for Axis-B routing
+- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl).
+- **Type:** follow-up.
+- **Resolved:** 2026-07-03. Audit complete — all three named sites
+  resolve without code changes. Grep-verified only three
+  `autoGenerateAsync` hits remain in the codebase (the service
+  definition, `useMealPlanner.ts` — the Axis-B-aware Chunk-4
+  surface, and `NewListDialog.vue`); the two other named sites are
+  gone entirely.
+  1. **`web_app/src/components/dialogs/NewListDialog.vue:418`** —
+     still calls `autoGenerateAsync` with
+     `merge_into_list_id: targetListId`, where `targetListId` was
+     resolved upstream. Axis-B-aware by construction; FU's original
+     verdict on this site was "no change needed" and remains true.
+  2. **`web_app/src/pages/RecipesOverview.vue` "add all missing" —
+     `autoGenerateAsync` call is gone.** The flow was reworked to
+     open a per-ingredient picker (`pickerOpen` at ~L1247-1296) that
+     emits `{ stockItemIds, targetListId }`, then `onPickerConfirm`
+     calls `addItems(targetListId, ...)`. Axis-B-aware by
+     construction — the user picks the list before anything runs.
+  3. **`web_app/src/layouts/MainLayout.vue` global shortcut —
+     `autoGenerateAsync` call is gone.** The command palette was
+     retired 2026-06-12 (comment at ~L183). Remaining global
+     shortcuts are pure navigation (`g s`/`g l`/`g r`/`g d`/`g h`,
+     `?`, `/`) — no "generate shopping list" entry to route.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-144 — Cart-state awareness for product-anchored adds
+- **Raised:** 2026-06-12 (FU-131 impl).
+- **Type:** follow-up.
+- **Resolved:** 2026-07-03. Trigger-not-fired resolve. Verified
+  against current code: still one consumer of
+  `AddToListButton variant="inline-product"` — 
+  `web_app/src/pages/MyProductsPage.vue:351`, and only for
+  **unlinked** products (linked products fall through to the
+  stock-item variant, which already renders full cart-state).
+  Backend dedup at
+  `dora_api/features/shopping_lists/manage_shopping_list_lines.py:107-113`
+  already returns `already_on_list=true` on a repeat product-anchored
+  click on the same list, so the *bug* the FU worried about
+  (spurious duplicate lines) does not exist — only a
+  UX-informativeness gap remains. The FU raiser's deferred bar was
+  well-set:
+  - **"Third product-anchored consumer of `AddToListButton` shows up"** —
+    still one.
+  - **"User reports the double-add UX as a problem"** — not reported.
+  Doing it now means extending `MembershipDto` with a parallel
+  `product_items` array (permanent DTO-payload growth on every
+  navigation), generalising `cartStateFor`, and rewiring the ~200
+  lines of state logic in `AddToListButton.vue` that today branch on
+  `stockItemId`. Not warranted against zero triggers.
+- **Trigger for a future revisit** (self-surfacing): if a second
+  product-anchored consumer lands (a page adding a product-line
+  button somewhere new) or a user reports the double-add UX gap,
+  reopen this FU and reuse the analysis above. Unlinked products
+  are also a transient state — a product typically gets linked to
+  a stock item over time — so the affected surface shrinks
+  naturally without code changes.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-065 — Ticked-summary string duplicated across both finish dialogs
+- **Raised:** 2026-06-08 (Chunk 3 impl).
+- **Type:** finding (R-003 lite — same display string built in two places).
+- **Resolved:** 2026-07-03. Superseded — the FU's premise is triply
+  obsolete against the current code:
+  1. **The second location is gone.** `ShoppingListShopMode.vue` no
+     longer exists; shop-mode was folded into
+     `ShoppingListDetail.vue`. No duplication to extract — only one
+     surface builds a Finish-and-restock summary now.
+  2. **The specific string is gone.** The Finish-and-restock flow
+     was reworked into the M12 restock-review modal (per-item level
+     tweaks via `finishReviewOpen` at
+     `web_app/src/pages/ShoppingListDetail.vue:1006`), not a bullet
+     summary. Grep confirms no "will be bumped" / "and N more"
+     string anywhere in the SPA.
+  3. **"Well-Stocked" is a retired band.** The 2026-07-02 3-band
+     StockLevel collapse dropped the Sufficient middle band and
+     relabelled the top band from "Well-Stocked" to "Stocked". Even
+     if the summary string reappeared, it would say "Stocked", not
+     "Well-Stocked".
+  User is also considering redoing the modal — any future
+  duplication would be shaped by the new design, not the pre-M12
+  one the FU described.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-455 — Dashboard prefetches recipeStore but never reads from it
+- **Raised:** 2026-07-03 (FU-052 audit — side-finding).
+- **Type:** finding / cleanup.
+- **Resolved:** 2026-07-03. Removed the dead prefetch from
+  `web_app/src/pages/DashboardPage.vue` — deleted
+  `recipeStore.ensureLoadedAsync()` from the `loadAll` fan-out plus
+  the `const recipeStore = useRecipeStore()` binding and the
+  `import { useRecipeStore }` line. Grep-verified no residual
+  references. Saves one `GET /recipes` round-trip per dashboard load.
+  R-016 lazy hydration means any downstream page still gets the
+  store on its own `ensureLoadedAsync` call — nothing else depended
+  on the dashboard pre-hydrating for it.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-052 — Switch cookable surfaces to the server query + optimise the helper
+- **Raised:** 2026-06-07 (Phase 1 Chunk 4 — queryable cookability).
+- **Type:** follow-up.
+- **Resolved:** 2026-07-03. Audit result — no code change; item is
+  fully resolved (point 1 already done, points 2/3 correctly declined
+  as premature and drift-creating at current scale). Original scope
+  had three sub-items:
+  1. ✅ **Dashboard "Cookable tonight" server-side.** Already closed
+     by [[FU-298]]: the card at
+     `web_app/src/pages/DashboardPage.vue:1619-1641` reads
+     `summary.meal_plan.upcoming_entries` (server-computed, capped at
+     3). No fetch-all + client-sort remaining.
+  2. **RecipesOverview cookable toggle → server-side query — declined
+     as architectural incoherence.** The cookbook applies ~20
+     client-side filter axes over a hydrated store; moving one axis
+     (cookable) server-side while the other ~19 stay client-side
+     makes `recipes.value` mean "recipes minus the server-filtered
+     axes" — a confusing local invariant. A coherent alternative
+     (whole-cookbook server-query rewrite with paginated fetch and
+     all axes moved) is a real refactor, not this FU. At
+     ~200-recipe personal scale, multi-axis client filter over a
+     hydrated cache is the right architecture.
+  3. **`load_recipe_cookability` → SQL `COUNT ... GROUP BY` —
+     declined as R-003 drift.** Technically cleaner, portable (no
+     engine-specific `FILTER`). But at ~200 recipes / ~2000
+     ingredient rows the current eager-loaded one-query pass is not
+     a measurable hot path, and the SQL would duplicate the
+     "is_missing" rule (`level is None OR sequence >= OUT_OF_STOCK_
+     SEQUENCE`) that
+     `dora_api/domain/recipe_cookability.py` +
+     `dora_api/domain/stock_status.py` own as the R-003 single
+     source. A SQL copy of that rule is exactly the drift R-003
+     exists to prevent.
+- **Side-finding spun off:** [[FU-455]] —
+  `DashboardPage.vue:1931` calls `recipeStore.ensureLoadedAsync()`
+  but grep-confirmed nothing on the dashboard reads `recipes.value`.
+  Dead pre-hydration from a pre-FU-298 design; opportunistic cleanup.
+- **Trigger for a future revisit** (self-surfacing, no persistent
+  loop needed): if `GET /api/recipes/?cookable` or the dashboard-
+  summary timing becomes a measurable hot path, or if the cookbook
+  grows a paginated "load next page from server" posture — that's
+  when the point-2/3 rewrites become coherent. Until then, resolved.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry for the audit method.
+
+## [RESOLVED] FU-016 — Audit other "frontend cache vs backend mutation" guard races
+- **Raised:** 2026-06-05 (B5 follow-up).
+- **Type:** finding.
+- **Resolved:** 2026-07-03. Full audit: grepped router / layout guards
+  for `currentUser?.*` reads → three fields (`isAuthenticated`,
+  `onboarding_completed_at`, `is_admin`). Paired each with every
+  backend mutation that touches user-scoped state. Two real bugs
+  found and fixed in this session:
+  1. `web_app/src/pages/settings/UsersAdminSettings.vue` —
+     `patch()` never refreshed `authStore.currentUser` when the
+     admin was editing themselves, so self-demote / rename / email
+     change left the router guard + MainLayout + SettingsShell +
+     admin pages reading stale state until a hard reload.
+  2. `web_app/src/pages/settings/AdminDataBackupRestore.vue` — a
+     successful restore that included the users section could
+     invalidate `currentUser`; the report dialog's "Reload now"
+     button was the only path to sync, and "Close" left the guard
+     lying. Close now refreshes `authStore.currentUser` as a
+     belt-and-braces safety net (the "Reload now" affordance still
+     covers the rest of the stores).
+- **All-clear list (verified during the audit — refresh already in place
+  or refresh not applicable):**
+  - `POST /onboarding/complete` (WelcomeWizard: `onSkipEverything`,
+    `complete`) — both call `authStore.refreshAsync()`.
+  - `POST /onboarding/restart` (AboutSettings + DashboardPage
+    Continue-onboarding) — both refresh.
+  - `PATCH /auth/me` — `authStore.updateMeAsync` writes the response
+    DTO straight into `currentUser`.
+  - `POST /auth/me/email` — deliberate no-op on `currentUser`;
+    address flips only after the confirmation link, next `/me`
+    probe picks it up.
+  - Password change — no cached-field mutation.
+  - Session-expired 401 — interceptor clears `currentUser`.
+  - `POST /data/import/spreadsheet/commit` — never touches users.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry for the full method +
+  findings.
+
+## [RESOLVED] FU-314 — Retire grandfathered `lazy="selectin"` overrides on `Recipe.cuisine` / `.category`
+- **Raised:** 2026-06-28 (R-019 / ADR-014 adoption — "no magic" rule).
+- **Type:** finding / engineering-standards cleanup.
+- **Resolved:** 2026-07-03. Both relationships flipped to `lazy="noload"`
+  in `dora_api/persistence/table_mappings.py:1246-1247`; every read site
+  that touches `recipe.cuisine` / `recipe.category` after a
+  `repository.get(Recipe)` now chains an explicit `.include(...)`.
+  Sites updated: `features/recipes/get_recipes.py::_base_query`,
+  `features/recipes/new_recipe_version.py`,
+  `features/meal_plans/get_meal_plans.py::_base_query` (via sibling
+  `then_include` off entry.recipe), `features/search/global_search.py`,
+  `features/categories/manage_categories.py`,
+  `features/cuisines/manage_cuisines.py`,
+  `features/assistant/tools.py` (search_recipes, suggest_recipes,
+  recipes_using_item, recipe_detail, meal_detail).
+  `create_recipe.py` / `update_recipe.py` / `import_recipe_from_url.py`
+  reviewed but not updated — they only write to those relationships or
+  reference request-side ids.
+  No new N+1 test needed: the FU-138 e2e query-count test
+  (`tests/e2e/dora_api/test_recipes_query_count.py`) already asserts
+  that adding 10 recipes doesn't add ~10 SELECTs to `GET /recipes`,
+  which is precisely the regression the FU warned about.
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+
+## [RESOLVED] FU-315 — Verify auto-add-when-low toast + line indicator (F1)
+- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F1 — (b) + line indicator).
+- **Type:** verification / cleanup.
+- **Resolved:** 2026-07-03. The verify part found a real bug: the SPA
+  typed `stockItemApiService.updateAsync` as `Promise<void>` and threw
+  away the server's `{ auto_added: {...} }` payload, so **no toast ever
+  fired** on the auto-add-when-low trigger. Fixed by exposing a new
+  `UpdateStockItemResponse` type on the API service, returning it
+  through both `updateStockLevelAsync` and `updateStockItemAsync` in the
+  store, and adding a shared `handleAutoAddedResponse` helper that
+  refreshes the shopping-list store and fires a Quasar Notify
+  ("Added *<item>* to *<list>*.") whenever the server reports an
+  auto-add. The line's `auto: low stock` chip on
+  `ShoppingListDetail.vue` `addedViaLabel` was already correctly wired
+  (L2299-2316) — the remaining density-check is a browser-verify item.
+- **Where landed:**
+  `web_app/src/services/api/stockItemApiService.ts` (new
+  `UpdateStockItemResponse` type + `updateAsync` return type),
+  `web_app/src/stores/stockItemStore.ts` (`handleAutoAddedResponse`
+  helper called from both PATCH paths).
+- **See:** `DORA_WORKLOG.md` 2026-07-03 entry.
+- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F1;
+  FU-320 (help-copy pass) still gates on remaining F-block items.
+
+## [RESOLVED] FU-316 — Quick-add "remembered list": per-add toast names the destination + "always ask" setting (F3)
+- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F3 — combo (b)+(c)).
+- **Type:** UX / cleanup + settings.
+- **Resolved:** 2026-07-03. Shipped in one slice — see `DORA_WORKLOG.md`
+  entry for the same date. Toast now names the destination list
+  (`useStockItemActions.addToList` resolves `display_name` off the store
+  summaries for all three code paths); new
+  `User.always_ask_which_shopping_list` per-user boolean (default False,
+  migration `c6d2a8e3b9f1`) surfaced as a **Preferences → Shopping
+  lists → Always ask which list** toggle. When on, the picker fires
+  every quick-add — the composable still `save()`s the pick during the
+  call so the bulk-add caller in `AddToListButton` keeps working, then
+  `clear()`s it in `finally` so the next add re-prompts.
+- **Where landed:**
+  `dora_api/persistence/migrations/versions/c6d2a8e3b9f1_20260703_user_always_ask_list.py`,
+  `dora_api/domain/entities/user.py`, `dora_api/persistence/table_mappings.py`,
+  `dora_api/features/auth/register_user.py`, `dora_api/features/auth/update_me.py`,
+  `web_app/src/models/auth.ts`, `web_app/src/services/api/authApiService.ts`,
+  `web_app/src/composables/useStockItemActions.ts`,
+  `web_app/src/pages/settings/PreferencesSettings.vue`.
+- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F3;
+  `DORA_FOLLOWUPS.md` FU-320 (help-copy pass) still gates on this + the
+  other F-block siblings.
+
 ## [RESOLVED] FU-438 — P8-06 Wait-or-Buy: `wait_hint` on the buy-verdict endpoint shipped
 - **Raised:** 2026-07-02 (P8-05 close, forward-look).
 - **Type:** deferred job (champion sequence).

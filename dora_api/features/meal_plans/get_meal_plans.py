@@ -84,11 +84,23 @@ class GetMealPlansHandler:
         self.repository = SqlAlchemyRepository()
 
     def _base_query(self):
+        # FU-314 — Recipe.cuisine / Recipe.category are noload now; the
+        # MealPlanEntryDto reads both, so chain sibling then_includes off
+        # the entry.recipe path. Re-`include(ENTRIES)` resets the chain
+        # so each `then_include` starts fresh (see get_recipes._base_query
+        # for the same idiom on Recipe.INGREDIENTS).
+        from dora_api.domain.entities.recipe import Recipe
         return (
             self.repository
             .get(MealPlan)
             .include(MealPlan.Fields.ENTRIES)
                 .then_include(MealPlanEntry.Fields.RECIPE)
+            .include(MealPlan.Fields.ENTRIES)
+                .then_include(MealPlanEntry.Fields.RECIPE)
+                .then_include(Recipe.Fields.CUISINE)
+            .include(MealPlan.Fields.ENTRIES)
+                .then_include(MealPlanEntry.Fields.RECIPE)
+                .then_include(Recipe.Fields.CATEGORY)
         )
 
     def _hydrate_entry_has_image(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:

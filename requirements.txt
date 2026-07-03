@@ -17,7 +17,10 @@ Flask_Cors==4.0.0
 Flask_Migrate==4.0.5
 flask_sqlalchemy==3.1.1
 Flask[Async]==3.0.2
-fuzzywuzzy==0.18.0
+# FU-196 (d2) — rapidfuzz replaces the unmaintained fuzzywuzzy. Same
+# `process` + `fuzz` surface, MIT-licensed (fuzzywuzzy is GPL), actively
+# maintained, no python-Levenshtein warning noise.
+rapidfuzz==3.9.6
 ijson==3.2.3
 Jinja2==3.1.2
 openpyxl==3.1.2
@@ -26,7 +29,8 @@ pydantic==2.6.0
 pytest-asyncio==0.25.3
 pytest==8.3.4
 requests_cache==1.1.1
-Requests==2.31.0
+# FU-196 (d1) — CVE-2024-35195 fix requires ≥2.32.4.
+Requests==2.32.4
 rich==13.7.0
 SQLAlchemy_Utils==0.41.1
 SQLAlchemy==2.0.25

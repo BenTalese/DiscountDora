@@ -358,7 +358,7 @@
                     </q-expansion-item>
                 </q-card-section>
                 <template #actions>
-                    <BaseButton variant="ghost" label="Close" @click="reportOpen = false" />
+                    <BaseButton variant="ghost" label="Close" @click="onCloseReport" />
                     <BaseButton
                         v-if="report?.ok"
                         :icon="ICONS.refresh"
@@ -505,8 +505,10 @@
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { refreshImagePolicy } from 'src/composables/useImagePolicy';
+    import { useAuthStore } from 'src/stores/authStore';
 
     const $q = useQuasar();
+    const authStore = useAuthStore();
 
     // FU-342 — library-facing state. Old download-only path retired;
     // "Create backup" now POSTs the library create endpoint, and the
@@ -1365,5 +1367,24 @@
         // Hard reload — cheapest way to make sure every store reflects the
         // new data with zero risk of stale in-memory state.
         window.location.reload();
+    }
+
+    // FU-016 — a successful restore can invalidate `authStore.currentUser`
+    // (users table restored ⇒ different `is_admin`, or the caller's row is
+    // gone entirely). "Reload now" is the operator's recommended path, but
+    // if they hit Close instead, at least sync the auth cache so the router
+    // guard + admin surfaces stop believing the stale identity. Other
+    // stores stay potentially stale — the "Reload now" affordance still
+    // exists for that. A 401 from a deleted-user refresh is handled by
+    // the axios interceptor (clears currentUser → login redirect).
+    async function onCloseReport() {
+        reportOpen.value = false;
+        if (report.value?.ok) {
+            try {
+                await authStore.refreshAsync();
+            } catch {
+                // Swallow — interceptor handles auth-invalidating errors.
+            }
+        }
     }
 </script>

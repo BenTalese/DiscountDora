@@ -217,6 +217,15 @@ class User(BaseEntity):
     # "to cook by" sidebar line. Fresh households see a pure scheduling
     # surface; batch households opt in to the extra layer.
     batch_features_enabled: bool = False
+    # FU-316 — per-user "always ask which draft list on quick-add" toggle.
+    # Default False → the SPA's `useQuickAddTargetPick` remembers the picked
+    # list for the tab session (current behaviour). True → the picker fires
+    # every quick-add when more than one draft exists.
+    always_ask_which_shopping_list: bool = False
+    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # NULL = not set → the SPA falls back to its `BUILDER_TARGET_MEALS`
+    # constant (7). Bounds (1–21) enforced at the update-me boundary.
+    meals_per_week: int | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # `off` | `simple` | `complex`; default `off`. `complex` is a
     # reserved seam (validated against `AppSetting.nutrition_db_source`
@@ -302,6 +311,8 @@ class User(BaseEntity):
         VOICE_ID = "voice_id"
         MONEY_FEATURES_ENABLED = "money_features_enabled"
         BATCH_FEATURES_ENABLED = "batch_features_enabled"
+        ALWAYS_ASK_WHICH_SHOPPING_LIST = "always_ask_which_shopping_list"
+        MEALS_PER_WEEK = "meals_per_week"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         SHOW_STOCK_IMAGES = "show_stock_images"

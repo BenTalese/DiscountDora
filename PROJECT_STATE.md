@@ -1,6 +1,10 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-02** (workstream states **verified against the codebase**,
+**Regenerated: 2026-07-03** (hand-edit close-gate for FU-016 guard-race
+audit + FU-181 meals-per-week pref + FU-314 lazy-loader retirement +
+FU-315 auto-add toast wiring + FU-316 quick-add polish + several stale-FU
+resolves (052/065/134/144/170/423); prior full rebuild 2026-07-02
+verified against the codebase,
 not just the docs). This is the single front door: where every phase and workstream
 is up to, and what needs your attention. For *where things stand* this doc wins; for
 *how/why* a decision was made, follow the linked planning doc. It is regenerated
@@ -93,6 +97,15 @@ a decision or a running-app check *now*, most important first.
 
 ## Recently shipped (newest first)
 
+- **Windows + macOS desktop build scripts** — `packaging/build-windows.ps1` (PowerShell) and `packaging/build-macos.sh` mirror `build-linux.sh` step-for-step; README's Desktop-bundle section rewritten to cover all three platforms; cross-platform verify user-driven (closes FU-327; installer packaging still deferred alongside FU-337) — 2026-07-03
+- **iOS/WKWebView audio-unlock primer for Dora voice** — `useSpeechOutput` now claims the browser's autoplay credit on first user gesture via a 44-byte silent muted WAV; fixes chat replies going silent on iPhone/iPad after the LLM `await` + Piper synth (closes FU-287; iOS browser-verify pending device access) — 2026-07-03
+- **Security + hardening batch** — Requests bumped past CVE-2024-35195 (2.31.0 → 2.32.4); fuzzywuzzy → rapidfuzz (MIT + maintained); global handler rolls back DB session on 500; dead `SelectComponent.vue` + pnpm-only `.npmrc` deleted; FU-196 umbrella disassembled into targeted FU-456..462 (closes FU-196) — 2026-07-03
+- **Per-user "Meals per week" preference** — sequential builder's target count is now the user's `meals_per_week` pref (bounds 1-21, null = 7 fallback); wired via new `useMealsPerWeek` composable; Preferences → Meal planning gains a number input (closes FU-181 loose-end 2; loose-end 1 stale) — 2026-07-03
+- **Dashboard drops dead `recipeStore.ensureLoadedAsync()` prefetch** — one fewer `GET /recipes` round-trip per dashboard load; nothing on the page consumed it (closes FU-455; FU-052 also resolved by audit) — 2026-07-03
+- **Stale-cache guard-race audit** — admin self-patch and post-restore `currentUser` now refresh; onboarding + `/auth/me` paths verified already-correct (closes FU-016) — 2026-07-03
+- **Retired last two `lazy="selectin"` overrides** (R-019 / ADR-014) — `Recipe.cuisine` / `Recipe.category` flipped to `noload`; every read site now names its `.include()` (closes FU-314) — 2026-07-03
+- **Auto-add-when-low toast wired up** — SPA now surfaces the server's `auto_added` payload as a positive Notify + refreshes the shopping list (closes FU-315) — 2026-07-03
+- **Quick-add toast names the destination list + "always ask" pref** (closes FU-316) — 2026-07-03
 - **P8-06 Wait-or-Buy** — `wait_hint` on `wait` verdicts + BuyVerdictCard wired into stock-item detail overview (closes FU-437, FU-438) — 2026-07-02
 - Onboarding starter-data: per-name checklists + inline paste-rows (FU-195) — 2026-07-02
 - StockLevel collapsed to 3 bands: Stocked / Low / Out — 2026-07-02

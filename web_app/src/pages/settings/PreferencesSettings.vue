@@ -94,6 +94,27 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
+            <template #title>Shopping lists</template>
+            <template #description>
+                Controls how quick-add ("Add to list") behaves when you have
+                more than one draft shopping list open.
+            </template>
+
+            <SettingsRow
+                label="Always ask which list"
+                help="When on, the picker fires every time — Dora won't remember the last list you picked for the tab session."
+            >
+                <q-toggle
+                    :model-value="currentUser.always_ask_which_shopping_list"
+                    :disable="savingAlwaysAsk"
+                    @update:model-value="onAlwaysAskChange"
+                />
+            </SettingsRow>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
             <template #title>Meal planning</template>
             <template #description>
                 Cooking style controls what the meal planner shows.
@@ -108,6 +129,24 @@
                     :model-value="batchEnabled ? 'batch' : 'fresh'"
                     :options="cookingStyleOptions"
                     @update:model-value="onCookingStyleChange"
+                />
+            </SettingsRow>
+
+            <SettingsRow
+                label="Meals per week"
+                help="How many meals the sequential builder aims for. Leave blank to use the default of 7."
+            >
+                <q-input
+                    v-model.number="mealsPerWeekDraft"
+                    outlined
+                    dense
+                    type="number"
+                    :min="1"
+                    :max="21"
+                    style="max-width: 100px"
+                    :placeholder="String(BUILDER_TARGET_MEALS_FALLBACK)"
+                    :disable="savingMealsPerWeek"
+                    @change="onMealsPerWeekChange"
                 />
             </SettingsRow>
         </SettingsSection>
@@ -133,6 +172,7 @@
     } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { BUILDER_TARGET_MEALS_FALLBACK } from 'src/composables/useMealPlanner';
     import { ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -150,6 +190,58 @@
         { label: 'Fresh', value: 'fresh' },
         { label: 'Batch', value: 'batch' },
     ];
+    // FU-316 — "always ask which list" quick-add opt-in. Optimistic flip
+    // with rollback on error, same shape as the other single-toggle prefs
+    // on this page.
+    const savingAlwaysAsk = ref(false);
+    async function onAlwaysAskChange(value: boolean) {
+        savingAlwaysAsk.value = true;
+        try {
+            await authStore.updateMeAsync({ always_ask_which_shopping_list: value });
+            notifySuccess(
+                value ? 'Dora will always ask which list.' : 'Dora will remember your pick.',
+            );
+        } catch (err) {
+            notifyError('Could not save shopping-list preference.', err);
+        } finally {
+            savingAlwaysAsk.value = false;
+        }
+    }
+
+    // FU-181 loose-end 2 — meals-per-week input. Null / cleared → server
+    // stores NULL and the builder falls back to
+    // BUILDER_TARGET_MEALS_FALLBACK. Validated 1–21 server-side.
+    const mealsPerWeekDraft = ref<number | null>(currentUser.value?.meals_per_week ?? null);
+    const savingMealsPerWeek = ref(false);
+    watch(currentUser, (u) => {
+        if (u) mealsPerWeekDraft.value = u.meals_per_week ?? null;
+    });
+    async function onMealsPerWeekChange() {
+        const raw = mealsPerWeekDraft.value;
+        const next: number | null =
+            typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 && raw <= 21
+                ? Math.round(raw)
+                : null;
+        // Normalise the local field so a blanked / out-of-range input
+        // reverts to the placeholder shape immediately.
+        mealsPerWeekDraft.value = next;
+        if (next === (currentUser.value?.meals_per_week ?? null)) return;
+        savingMealsPerWeek.value = true;
+        try {
+            await authStore.updateMeAsync({ meals_per_week: next });
+            notifySuccess(
+                next === null
+                    ? `Meals per week reset to the default (${BUILDER_TARGET_MEALS_FALLBACK}).`
+                    : `Meals per week set to ${next}.`,
+            );
+        } catch (err) {
+            notifyError('Could not save meals per week.', err);
+            mealsPerWeekDraft.value = currentUser.value?.meals_per_week ?? null;
+        } finally {
+            savingMealsPerWeek.value = false;
+        }
+    }
+
     async function onCookingStyleChange(next: CookingStyle) {
         try {
             await setBatchEnabled(next === 'batch');

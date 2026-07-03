@@ -207,9 +207,11 @@ Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs
 
   **Network topology — important on multi-machine setups:** the Dora **backend** reaches the LLM, not your browser. On a single-laptop install (backend + LLM on the same box), the base URL is just `http://localhost:11434`. On a household setup with the backend on a NAS/Pi and an LLM on a different desktop, the backend has to be able to reach that desktop (LAN routing, Tailscale, or a port forward) — the URL you save in Settings is from the *backend's* point of view, not your phone's.
 
-### Desktop bundle (Linux AppImage)
+### Desktop bundle
 
-Builds a single-file `Dora-vX.Y.Z-x86_64.AppImage`. System deps (apt-installed, not in `requirements.txt`):
+The desktop app is [pywebview](https://pywebview.flowrl.com/) wrapping the SPA — GTK/WebKit on Linux, WebView2 on Windows, WKWebView on macOS. One PyInstaller spec (`dora.spec`); three thin platform build scripts under `packaging/`. Only the Linux path is CI-verified today — Windows and macOS scripts are checked in but browser-verify is user-driven (see `DORA_VERIFY.md`).
+
+**Linux (AppImage):** ships as a single-file `Dora-vX.Y.Z-x86_64.AppImage`. System deps (apt-installed, not in `requirements.txt`):
 
 ```bash
 sudo apt install python3.11-dev libpython3.11 \
@@ -225,7 +227,27 @@ pip install -r requirements.txt          # adds pywebview + pyinstaller
 chmod +x dist/Dora-v*-x86_64.AppImage && ./dist/Dora-v*-x86_64.AppImage
 ```
 
-The build script preflights the apt deps and tells you what's missing rather than failing deep inside PyInstaller. Data persists to `~/.local/share/Dora/`.
+The Linux script preflights the apt deps and tells you what's missing rather than failing deep inside PyInstaller. Data persists to `~/.local/share/Dora/`.
+
+**Windows** (PowerShell, from the repo root):
+
+```powershell
+pip install -r requirements.txt          # adds pywebview + pyinstaller
+.\packaging\build-windows.ps1 -Clean
+.\dist\Dora\Dora.exe
+```
+
+Produces `dist\Dora\Dora.exe` + its sibling DLL tree. Uses WebView2 at runtime, which ships with Windows 10/11 (older Windows 10 may need the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) installer). Data persists to `%LOCALAPPDATA%\Dora\`. Single-file `.exe` installer is not built yet — the bundle is a directory tree.
+
+**macOS** (from the repo root):
+
+```bash
+pip install -r requirements.txt          # adds pywebview + pyinstaller
+./packaging/build-macos.sh --clean
+./dist/Dora/Dora
+```
+
+Auto-detects Apple Silicon vs Intel from `uname -m` and fetches the matching Piper binary; pass `--arch macos_x64` or `--arch macos_aarch64` to override for cross-arch builds. Requires Xcode command-line tools (`xcode-select --install`) — PyInstaller shells out to `codesign` / `lipo`. Data persists to `~/Library/Application Support/Dora/`. Notarised `.dmg` is not built yet — the bundle is a directory tree.
 
 ### Releasing (manual, push-the-button)
 

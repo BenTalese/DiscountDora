@@ -23,7 +23,11 @@ from uuid import UUID
 
 import requests
 from bs4 import BeautifulSoup
-from fuzzywuzzy import process as fuzz_process
+# FU-196 (d2) — rapidfuzz's `process` module is a drop-in replacement for
+# fuzzywuzzy's; same call shape (`extractOne(query, choices, score_cutoff)`
+# returns `(match, score, index)` in rapidfuzz vs `(match, score)` in
+# fuzzywuzzy — see the two call sites' unpacking below).
+from rapidfuzz import process as fuzz_process
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.category import Category
@@ -376,7 +380,9 @@ class ImportRecipeFromUrlHandler:
             match_name: str | None = None
             match_score = 0
             if all_names and remainder:
-                # `extractOne` returns (best_name, score) or None.
+                # `extractOne` returns (best_name, score, index) with
+                # rapidfuzz (fuzzywuzzy returned (best_name, score));
+                # we only read [0] and [1] so both wire-shapes work.
                 result = fuzz_process.extractOne(remainder, all_names)
                 if result is not None:
                     candidate, score = result[0], int(result[1])

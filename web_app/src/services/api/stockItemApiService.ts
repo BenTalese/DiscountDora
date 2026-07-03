@@ -87,9 +87,19 @@ export default class StockItemApiService {
     getDetailAsync = async (stockItemID: string): Promise<StockItemDetail> =>
         await this.httpClient.get<StockItemDetail>(`/stock-items/${stockItemID}/detail`);
 
-    updateAsync = async (stockItemToUpdate: UpdateStockItemCommand): Promise<void> => {
+    /** FU-315 — the server returns a 200 with `{ auto_added: { line_id,
+     *  shopping_list_id } }` when a level transition to Low/Out fires the
+     *  auto-add-when-low hook (`update_stock_item.py:255-263`). Non-trigger
+     *  updates come back as 204 (undefined). Callers use this to toast
+     *  "Added <item> to <list>" + refresh the shopping-list store. */
+    updateAsync = async (
+        stockItemToUpdate: UpdateStockItemCommand,
+    ): Promise<UpdateStockItemResponse> => {
         const { stock_item_id, ...payload } = stockItemToUpdate;
-        await this.httpClient.patch<void>(`/stock-items/${stock_item_id}`, payload);
+        return await this.httpClient.patch<UpdateStockItemResponse>(
+            `/stock-items/${stock_item_id}`,
+            payload,
+        );
     };
 
     linkProductAsync = async (stockItemID: string, productID: string): Promise<void> =>
@@ -202,6 +212,16 @@ export type CreateStockItemCommand = {
      *  null/omitted for none. */
     image?: string | null;
 };
+
+/** FU-315 — server-populated payload on a level-transition PATCH that fires
+ *  the auto-add-when-low hook. Undefined body means no trigger fired (server
+ *  returned 204). See `update_stock_item.py` `_try_auto_add`. */
+export type UpdateStockItemResponse = {
+    auto_added?: {
+        line_id: string;
+        shopping_list_id: string;
+    };
+} | undefined;
 
 export type UpdateStockItemCommand = {
     stock_item_id: string;

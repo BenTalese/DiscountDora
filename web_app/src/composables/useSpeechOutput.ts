@@ -36,7 +36,93 @@ function probePiperConfigured(): Promise<boolean> {
     return piperConfiguredProbe;
 }
 
+// FU-287 — iOS / WKWebView audio-unlock primer.
+//
+// iOS Safari (and the macOS WKWebView the desktop bundle uses on Mac)
+// enforce a strict user-gesture rule for `HTMLAudioElement.play()`. The
+// gesture-permission "credit" is consumed the first time `play()` is
+// called after user interaction, and it can be REVOKED by an intervening
+// `await` that spans more than ~a few hundred ms. Two flows this bites:
+//   - Dora chat reply: LLM round-trip (`await`) → Piper synth fetch
+//     (`await`) → new `<audio>` → `audio.play()`. On iOS, by the time
+//     we call `play()` the gesture is often gone.
+//   - Cook-mode timer-fired narration: no gesture at all (timer callback
+//     is not a user activation). This can't be fixed by a primer alone;
+//     documented at the caller.
+//
+// Fix: on the first user interaction in the tab session, play a very-
+// short silent muted audio blob to prime the browser's autoplay policy.
+// Subsequent `Audio.play()` calls in the same session inherit the
+// credit — including calls that happen across `await`s. On every other
+// platform this is a harmless no-op (Chrome/Firefox/Android don't gate
+// on gesture-per-play for muted audio).
+//
+// A 44-byte WAV header + one zero PCM sample encoded as a data URL.
+// Chosen over `AudioContext.createBuffer` because AudioContext.resume()
+// hits the same iOS gesture wall and adds a heavier dep for a one-time
+// primer. Keeping it as a data URL means no fetch, no CORS, no delay.
+const SILENT_WAV_DATA_URL =
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+let audioUnlocked = false;
+let audioUnlockRegistered = false;
+function unlockAudioOnFirstGesture(): void {
+    if (audioUnlockRegistered || typeof document === 'undefined') return;
+    audioUnlockRegistered = true;
+
+    const events: Array<keyof DocumentEventMap> =
+        ['pointerdown', 'touchstart', 'keydown', 'click'];
+    const cleanup = (): void => {
+        for (const type of events) document.removeEventListener(type, primer, true);
+    };
+    const primer = (): void => {
+        // One-shot: drop listeners immediately so subsequent gestures
+        // don't re-run this no-op. The listeners survive `once: false`
+        // because we register on multiple event types — cleanup removes
+        // them from all types together.
+        cleanup();
+        if (audioUnlocked) return;
+        try {
+            const audio = new Audio(SILENT_WAV_DATA_URL);
+            audio.muted = true;
+            const p = audio.play();
+            if (p && typeof p.then === 'function') {
+                p.then(() => {
+                    audioUnlocked = true;
+                    // Stop immediately — we only needed the play() call
+                    // itself to claim the gesture credit.
+                    audio.pause();
+                }).catch(() => {
+                    // A play() rejection here means the gesture didn't
+                    // count (e.g. programmatic dispatch, unusual browser
+                    // state). We accept the one-shot cost — trying every
+                    // gesture would leak listeners on non-iOS platforms
+                    // that never needed the primer in the first place.
+                });
+            } else {
+                // Legacy browsers where play() returned undefined.
+                audioUnlocked = true;
+            }
+        } catch {
+            // Some environments throw before returning a promise —
+            // treat the same as a rejected promise (one-shot done).
+        }
+    };
+    for (const type of events) {
+        document.addEventListener(type, primer, {
+            passive: true,
+            capture: true,
+        });
+    }
+}
+
 export function useSpeechOutput() {
+    // FU-287 — register the iOS audio-unlock primer once per session on
+    // the first `useSpeechOutput()` instantiation (which is early — the
+    // MainLayout mounts Dora chat + cook mode both consume this).
+    // Idempotent across composable instances.
+    unlockAudioOnFirstGesture();
+
     const browserAvailable =
         typeof window !== 'undefined' && 'speechSynthesis' in window;
     const available = ref<boolean>(browserAvailable);

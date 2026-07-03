@@ -62,6 +62,13 @@ export type UpdateMeCommand = {
      *  posture. Default off ("fresh"); when on, the meal-planner reveals
      *  cook-pool affordances + shortfall warning. */
     batch_features_enabled?: boolean;
+    /** FU-316 — when true, quick-add prompts every time (skips the
+     *  session-remembered pick). Only matters when the user has >1 draft. */
+    always_ask_which_shopping_list?: boolean;
+    /** FU-181 loose-end 2 — target meal count for the sequential builder.
+     *  Positive int 1..21 sets it; `null` clears back to the SPA fallback
+     *  (BUILDER_TARGET_MEALS_FALLBACK = 7). */
+    meals_per_week?: number | null;
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';

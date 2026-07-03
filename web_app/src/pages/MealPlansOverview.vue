@@ -301,7 +301,7 @@
         <SequentialBuilderDialog
             v-model="builderOpen"
             :recipes="planner.recipes.value"
-            :target-count="BUILDER_TARGET_MEALS"
+            :target-count="mealsPerWeek"
             :build-plan="planner.builderBuildPlan"
             :generate-list="planner.generateListForWeek"
             :print-week="planner.printFocusedWeek"
@@ -356,7 +356,10 @@
     import MealPlanWeekDayCard from 'src/components/MealPlanWeekDayCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import SequentialBuilderDialog from 'components/SequentialBuilderDialog.vue';
-    import { BUILDER_TARGET_MEALS, useMealPlanner } from 'src/composables/useMealPlanner';
+    import { useMealPlanner } from 'src/composables/useMealPlanner';
+    // FU-181 — target-count sourced from the user's `meals_per_week` pref
+    // via this composable (fallback 7 when unset).
+    import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
     import { resolvePlannerView, setPlannerView } from 'src/composables/useMealPlannerView';
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
@@ -364,6 +367,7 @@
     import { computed, onMounted, ref } from 'vue';
 
     const planner = useMealPlanner();
+    const { mealsPerWeek } = useMealsPerWeek();
     const route = useRoute();
     const router = useRouter();
     const $q = useQuasar();

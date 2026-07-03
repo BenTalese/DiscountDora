@@ -42,7 +42,11 @@ class GetCategoriesHandler:
 
     def handle(self) -> List[CategoryDto]:
         categories: List[Category] = self.repository.get(Category).all()
-        recipes = self.repository.get(Recipe).all()
+        # FU-314 — Recipe.category is noload now; eager-load so the
+        # per-category count below sees the real FK entity.
+        recipes = (
+            self.repository.get(Recipe).include(Recipe.Fields.CATEGORY).all()
+        )
         counts: dict[UUID, int] = {}
         for r in recipes:
             if r.category is not None:

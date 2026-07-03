@@ -85,6 +85,11 @@ class AuthenticatedUserDto:
     # posture. Default False ("fresh"); when True the meal-planner reveals
     # the cook-pool affordances + shortfall warning.
     batch_features_enabled: bool
+    # FU-316 — "always ask which draft list on quick-add".
+    always_ask_which_shopping_list: bool
+    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # None = not set (SPA falls back to 7).
+    meals_per_week: int | None
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
     # `complex` (complex requires admin-configured nutrition source).
     nutrition_mode: str
@@ -150,6 +155,10 @@ class AuthenticatedUserDto:
             voice_id=user.voice_id,
             money_features_enabled=bool(user.money_features_enabled),
             batch_features_enabled=bool(user.batch_features_enabled),
+            always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
+            meals_per_week=(
+                int(user.meals_per_week) if user.meals_per_week is not None else None
+            ),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
             show_stock_images=bool(user.show_stock_images),

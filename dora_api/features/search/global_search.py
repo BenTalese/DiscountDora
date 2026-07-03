@@ -8,17 +8,18 @@ title so the frontend can highlight matches.
 Powers the command palette (S1) and the locations "find item" overlay.
 """
 import logging
-import warnings
 from dataclasses import dataclass
 from typing import List, Sequence
 from uuid import UUID
 
 from flask import request
 
-# fuzzywuzzy warns on import when python-Levenshtein isn't present — we don't
-# care about its raw speed at this scale, and the warning is noisy in tests.
-warnings.filterwarnings("ignore", message="Using slow pure-python SequenceMatcher")
-from fuzzywuzzy import fuzz  # noqa: E402
+# FU-196 (d2) — rapidfuzz's `fuzz` module is a drop-in for fuzzywuzzy's;
+# same scoring functions (ratio, partial_ratio, token_set_ratio, etc.) at
+# the same 0-100 scale. Actively maintained, MIT-licensed, ships a C
+# extension so no python-Levenshtein warning noise (the old
+# `warnings.filterwarnings` dance is retired with the import).
+from rapidfuzz import fuzz
 
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.product import Product
@@ -175,13 +176,19 @@ class GlobalSearchHandler:
             )
 
         if "recipe" in wanted:
-            recipes = self.repository.get(Recipe).all()
+            # FU-314 — cuisine + category flipped to noload; explicit
+            # eager-load so the subtitle read below doesn't silently see None.
+            recipes = (
+                self.repository.get(Recipe)
+                .include(Recipe.Fields.CUISINE)
+                .include(Recipe.Fields.CATEGORY)
+                .all()
+            )
             results.extend(
                 self._score_and_collect(
                     query, "recipe", limit,
                     [(r.id, r.name) for r in recipes],
                     subtitle_by_id={
-                        # cuisine/category are FK entities (selectin-loaded).
                         r.id: (
                             (r.cuisine.name if r.cuisine else None)
                             or (r.category.name if r.category else None)

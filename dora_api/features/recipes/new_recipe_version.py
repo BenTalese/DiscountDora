@@ -59,6 +59,10 @@ class NewRecipeVersionHandler:
             self.repository
             .get(Recipe)
             .include(Recipe.Fields.INGREDIENTS)
+            # FU-314 — cuisine + category are noload now; the clone below
+            # reads both off `source`, so eager-load them.
+            .include(Recipe.Fields.CUISINE)
+            .include(Recipe.Fields.CATEGORY)
             .one(EntityField(Recipe, "id").eq(source_id))
         )
         if source is None:

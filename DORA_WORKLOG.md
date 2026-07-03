@@ -9,6 +9,745 @@ next.
 
 ---
 
+## 2026-07-03 — FU-327 shipped (Windows + macOS desktop build scripts; verify user-driven)
+
+**Why:** User asked to do FU-327 and leave testing to them when
+they can get to a Windows/macOS box. Same shape as FU-287 — code
+can land now, cross-platform verify lives in DORA_VERIFY.
+
+**What shipped:**
+- **`packaging/build-windows.ps1`** — PowerShell script mirroring
+  `build-linux.sh` step-for-step: SPA build (with `npm install`
+  when `node_modules` missing), sanity-check
+  `web_app\dist\spa\index.html`, preflight `pyinstaller` on PATH,
+  fetch Piper (`fetch_piper.py` auto-detects and picks
+  `windows_amd64`), fetch default voice, run
+  `pyinstaller --noconfirm dora.spec`, smoke-check
+  `dist\Dora\Dora.exe` exists and is non-empty. Flags:
+  `-SkipSpa`, `-SkipPyInstaller`, `-Clean`. Chose PowerShell over
+  `.bat` per the FU's "or PowerShell" option — modern Windows
+  default, better error handling, matches user's shell (per
+  session env).
+- **`packaging/build-macos.sh`** — bash script mirroring
+  `build-linux.sh`. Auto-detects target arch via `uname -m`
+  (arm64/aarch64 → `macos_aarch64`; x86_64 → `macos_x64`); passes
+  the explicit `--platform` to `fetch_piper.py` so the correct
+  Piper tarball lands. Extra flag `--arch <macos_aarch64|macos_x64>`
+  for cross-arch scenarios (documented that the pyinstaller
+  interpreter arch still governs the bundle output arch — a
+  cross-arch build needs a matching Python venv). `chmod +x`
+  set via `git update-index --chmod=+x`.
+- **README** — Desktop-bundle section rewritten to cover all three
+  platforms with per-platform prereqs and data-directory paths.
+  Notes that Linux is the only CI-verified path; Windows/macOS
+  scripts checked in but user-verified.
+- **DORA_VERIFY.md** — new "Windows desktop build script" +
+  "macOS desktop build script" sections under Build/install/desktop,
+  8 + 8 verify checkboxes each covering: dep install, script run,
+  binary produced, launches, WebView2/WKWebView audio works
+  (also exercises the FU-287 primer), data persists to the right
+  OS-specific folder, `--skip-*` flags behave.
+
+**Design notes:**
+- **Not shipping `.exe` installer / `.dmg` yet.** Both platforms
+  produce directory-tree bundles. Building a single-file
+  installer is a follow-on that belongs with FU-337 (which the
+  audit note on FU-327 already flags — README/copy references to
+  `.exe`/`.dmg` need aligning; the audit is the source-of-truth
+  doc, `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`).
+- **Cross-arch macOS.** Auto-detection reads current arch; the
+  `--arch` override lets a user cross-fetch Piper. But the
+  PyInstaller output arch matches the Python interpreter's arch
+  (documented in the script header) — a real cross-arch build
+  needs a matching venv. Rosetta covers x86_64 builds on Apple
+  Silicon; native builds are the norm.
+- **CI matrix deferred.** FU-327 itself flagged CI as
+  double-blocked behind FU-169 (currently-commented-out
+  `.github/workflows/ci.yml` — user policy to preserve free-tier
+  minutes). Not un-commenting anything here; the scripts sit
+  as documented-not-CI-verified until FU-169 gets a decision.
+
+**Charter / rules check:**
+- **Distribution posture (§7.5):** same artifact, different
+  platform bootstrap scripts. No divergence in `dora.spec` or in
+  the runtime code — the platform difference is entirely in the
+  build-orchestration wrapper. Matches "one codebase, self-
+  hostable, SaaS-style" shape.
+- **R-007 scope discipline:** landed only the two platform
+  scripts + a README refresh + a verify. Did NOT: unpause CI, land
+  a `.dmg` builder, land an `.exe` installer builder, or touch
+  the FU-337 README/copy audit — those are their own FUs.
+- **Charter P3 Honesty:** README explicitly says which paths are
+  CI-verified (Linux + Docker) vs which are checked-in-only
+  (Windows + macOS scripts, pending user verify).
+
+**Followups:** none new. FU-337 (README AppImage/.exe/.dmg copy
+alignment) still open — pair with the first release-cut that
+actually produces installers.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-287 shipped (iOS audio-unlock primer)
+
+**Why:** User asked to tackle FU-287 without iOS device access. Fix
+shape is safe cross-platform (silent muted primer is a no-op on
+Android/desktop), so code can land now with iOS verify pending
+device access.
+
+**What shipped:**
+- `useSpeechOutput.ts` — new module-level `unlockAudioOnFirstGesture()`
+  registers one-shot document listeners (`pointerdown`, `touchstart`,
+  `keydown`, `click`, capture phase) at the first
+  `useSpeechOutput()` mount. On the first gesture it plays a very-
+  short muted `data:audio/wav` blob (44-byte silent WAV, inline data
+  URL — no fetch, no CORS, no AudioContext dep). This claims the
+  browser's autoplay credit for the tab session; subsequent
+  `audio.play()` calls (including across `await`s in the chat
+  reply's LLM round-trip + Piper synth fetch) inherit it. Idempotent
+  (`audioUnlocked` + `audioUnlockRegistered` flags) so multiple
+  composable instances or repeated calls are cheap.
+- `RecipeCookMode.vue::startTimer` — added a comment on the
+  `speak('Timer finished')` + `playTimerFinishTone()` calls noting
+  that both are subject to the autoplay gate from a timer callback
+  and are best-effort; the visible Notify is the load-bearing
+  "timer done" signal.
+- `DORA_VERIFY.md` — new "iOS / macOS-WKWebView audio-unlock primer"
+  section under Cross-cutting listing seven scenarios (chat reply
+  Piper, chat reply browser voice, cook-mode step narration,
+  timer-narration edge case, macOS desktop bundle, non-iOS
+  no-regression check, session-scoped reload check).
+
+**Design notes:**
+- Chose the primer approach from the FU's recommended fix shape.
+  Considered the alternative "single long-lived `<audio>` element
+  reused across utterances" but that requires restructuring
+  playPiper's handler lifecycle. Primer alone is what the FU
+  actually spec'd — ship the smaller safe fix first; if browser
+  verify shows it's not enough on iOS, do the reuse refactor as
+  a follow-up.
+- The 44-byte WAV data URL is preferred over
+  `AudioContext.createBuffer` because `AudioContext.resume()` hits
+  the same iOS gesture wall and adds heavier deps for a one-time
+  primer.
+- Chose one-shot semantics (cleanup at the *start* of the primer
+  callback, not conditional on play() success) to avoid leaking
+  listeners forever on non-iOS platforms that don't need this
+  primer. The trade-off: if the very first gesture's `play()`
+  rejects due to some unusual state, the primer is gone for the
+  session. Acceptable — iOS voice would have been broken anyway;
+  Android/desktop don't need the primer at all.
+
+**Charter / rules check:**
+- **Charter P1 Effortless:** silent fix on non-iOS (invisible primer
+  on first gesture); iOS users get voice that works instead of
+  mysteriously not working.
+- **Charter P3 Honesty:** the timer-narration edge case is
+  documented in-code as "best-effort" rather than pretended to be
+  fully solved — the primer helps if the user has interacted
+  recently, but a timer that fires long after the last gesture may
+  still be silent. Notify remains the reliable signal.
+- **R-016 lazy hydration:** primer sets up on `useSpeechOutput()`
+  first mount, not module load — no listener registered for pages
+  that never speak.
+- **R-020 (avoid destructive shortcuts):** listeners removed after
+  first fire regardless of outcome (no perpetual listener leak).
+
+**Followups:** none. The iOS browser-verify is pending device
+access (checklist in DORA_VERIFY.md); when it happens, either
+walk-and-tick, or reopen a fresh FU if the fix proves insufficient.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-208 moved to RESOLVED (code done 2026-06-17; verify convention aligned)
+
+Same shape as FU-186 earlier this session. Code was fixed 2026-06-17
+(`MyProductsPage.vue::confirmLink` now posts to
+`/stock-items/{id}/products` via `linkProductAsync` instead of the
+dead `link_product_id` navigation) and re-verified statically
+2026-06-29. FU was sitting OPEN pending browser click-through.
+Under current ledger conventions
+([[feedback-browser-verify-not-an-fu]]) that belongs in
+`DORA_VERIFY.md` — and it already does, at L912-914 (happy path +
+error path). Moved FU-208 to RESOLVED with the fix summary
+preserved. No code change.
+
+---
+
+## 2026-07-03 — FU-196 umbrella disassembled (easy wins landed + 7 targeted FUs)
+
+**Why:** User asked to tackle FU-196 (the senior-review hardening
+umbrella). Audit-first: verified each of the umbrella's 5 sub-items
+against current code, stratified by cost/value, landed the easy
+wins now and split the rest into targeted FUs so each residual can
+be triaged / scheduled / declined on its own merits (avoids the
+umbrella-drag pattern the user's called out multiple times this
+session).
+
+**Easy wins landed (single pass):**
+- **(d1) Requests CVE-2024-35195.** `requirements.txt`:
+  `Requests==2.31.0` → `Requests==2.32.4`.
+- **(d2) fuzzywuzzy → rapidfuzz.** `requirements.txt`:
+  `fuzzywuzzy==0.18.0` → `rapidfuzz==3.9.6`. Two swaps:
+  `features/recipes/import_recipe_from_url.py` (`from fuzzywuzzy
+  import process as fuzz_process` → `from rapidfuzz import process
+  as fuzz_process`; call sites already unpack `result[0]/result[1]`
+  which is portable across both wire-shapes — rapidfuzz's tuple
+  adds a third `index` element but we never touch it), and
+  `features/search/global_search.py` (`from fuzzywuzzy import fuzz`
+  → `from rapidfuzz import fuzz`; also retired the
+  `warnings.filterwarnings` dance that suppressed fuzzywuzzy's
+  "pure-python SequenceMatcher" warning — rapidfuzz ships a C
+  extension so the warning doesn't fire).
+- **(f1) Dead component delete.**
+  `web_app/src/components/SelectComponent.vue` deleted (grep-verified
+  zero non-self callers).
+- **(f2) `.npmrc` delete.** `web_app/.npmrc` held only
+  pnpm-specific keys that warn on every `npm` command; repo is on
+  npm. Deleted.
+- **(b partial) Global handler rollback.**
+  `startup.py::handle_global_exception` now calls
+  `db.session.rollback()` before returning 500. Doesn't replace
+  the full unit-of-work refactor of `create_recipe.py`'s
+  5×`save_changes()` (that's FU-456), but closes the
+  dirty-session-leak half.
+
+**Split off into targeted FUs (numbered FU-456 … FU-462 to
+match the umbrella's remaining sub-item shape):**
+- **FU-456** — Unit-of-work refactor for multi-commit handlers
+  (`create_recipe.py` 5×`save_changes` + sweep).
+- **FU-457** — Boot-time resolved-route assertion for
+  reflection-based wiring.
+- **FU-458** — Rate-limit assistant endpoints.
+- **FU-459** — App-wide security headers (CSP /
+  X-Frame-Options / X-Content-Type-Options / Referrer-Policy).
+- **FU-460** — `SESSION_COOKIE_SECURE` default policy call
+  (currently defaults off; document boot-time warning vs flip).
+- **FU-461** — Account-deletion endpoint (GDPR) — design + build.
+- **FU-462** — Sweep ~237 prompt-ID comments from shipped source
+  (duplicates FU-424's Tier-2 sub-item — same finding, noted in
+  the FU).
+
+**Charter / rules check:**
+- **R-007 (scope discipline):** landed only the small safe items;
+  each larger item got its own FU rather than a "while we're here"
+  scope-creep. Umbrella disassembled to per-item ownership.
+- **R-020 (avoid destructive shortcuts):** deleted files are
+  grep-verified zero-consumer. `.npmrc` was giving *incorrect*
+  advice (pnpm keys on an npm repo), so removal is a bug-fix delete
+  rather than a "clean it up because it looks unused" delete.
+- **Charter P3 Honesty:** CVE-2024-35195 was a known-fixed-upstream
+  security issue we hadn't picked up. Straightforward to close.
+
+**Followups (out-of-scope for this pass):** FU-456 to FU-462 (see
+above); each carries its own resolution trigger.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-186 moved to RESOLVED (code done 2026-06-17; verify convention aligned)
+
+**Why:** User asked "anything to do on FU-186?" — code has been fully
+shipped since 2026-06-17 (Phase D), the FU was sitting under a
+`[RESOLVED?]` heading pending browser-verify. Under current ledger
+conventions (memory: browser-verify goes in DORA_VERIFY, not FUs),
+gating the FU's resolution on the browser walk is a stale-convention
+artifact. Two unchecked verify items already live under
+"Decommission scraping (Phase D) — re-pointed nav — origin FU-186"
+in `DORA_VERIFY.md` (L803-805) — walked on the user's own time.
+
+Moved FU-186 to `DORA_FOLLOWUPS_RESOLVED.md`, preserving the full
+Phase-D land-time inventory + the 2026-06-17 products-as-overlay
+pivot context. No code change.
+
+---
+
+## 2026-07-03 — FU-181 shipped (meals_per_week pref; loose-end 1 stale)
+
+**Why:** User asked to plan and do FU-181 (two loose ends from C-2.J
+sequential builder: plan email + meals_per_week).
+
+**Investigation before planning:**
+- **Loose-end #1 (plan email) is stale.** Grep across all meal-plan
+  surfaces returns zero email references. The disabled Email button
+  the FU cited was **removed** from
+  `SequentialBuilderDialog.vue`'s done-step; the current step shows
+  only "Generate shopping list" + "Print this week". Removing the
+  button was an implicit product decision — print-view → Save-as-PDF
+  is the export path (see `useMealPlanExport.ts:1-4`, which also
+  notes FU-168 similarly retired CSV). Not adding it back
+  on my own initiative.
+- **Loose-end #2 (meals_per_week) is real.**
+  `BUILDER_TARGET_MEALS = 7` still hardcoded in
+  `web_app/src/composables/useMealPlanner.ts:24`, consumed by both
+  `MealPlansBoardPage` and `MealPlansOverview` via `:target-count`.
+
+**What shipped (loose-end #2):**
+- **Backend:** migration
+  `d7e3b9f4a1c2_20260703_user_meals_per_week.py` (chains off
+  `c6d2a8e3b9f1` FU-316) adds `User.meals_per_week int | null`;
+  wired through the entity + Fields, `AuthenticatedUserDto`,
+  `UpdateMeRequest` (bounds `ge=1, le=21`) + handler, and the
+  `User` table mapping. `null` payload clears back to the SPA
+  fallback (7) — no server-side default to keep the source of truth
+  in one place (the SPA constant).
+- **Frontend model:** field added to `AuthenticatedUser`
+  (`models/auth.ts`) and `UpdateMeCommand`
+  (`services/api/authApiService.ts`).
+- **Composable:** new `useMealsPerWeek()` in
+  `composables/useMealsPerWeek.ts` — same shape as `useBatchEnabled`.
+  Returns a reactive `mealsPerWeek` computed that reads
+  `currentUser.meals_per_week ?? BUILDER_TARGET_MEALS_FALLBACK`,
+  plus a `setMealsPerWeek(next: number | null)` writer.
+- **Rename for clarity:** `BUILDER_TARGET_MEALS` renamed to
+  `BUILDER_TARGET_MEALS_FALLBACK`. Both consumers
+  (`MealPlansBoardPage`, `MealPlansOverview`) switched to
+  `useMealsPerWeek`; the constant remains as the single source of
+  the fallback so no other file re-hardcodes 7. No legacy alias
+  export — grep confirmed zero remaining consumers of the old name.
+- **Settings UI:** new **Preferences → Meal planning → Meals per
+  week** input (`q-input type="number"`, min 1 / max 21,
+  placeholder = "7"). Empty / out-of-range collapses to null →
+  clears the pref → falls back to 7. Optimistic-flip-with-rollback
+  matching the shape of the FU-316 quick-add toggle above it.
+
+**Charter / rules check:**
+- **R-003 single source:** the fallback constant lives in exactly
+  one place; the server carries only the user's explicit override.
+- **R-014 (reveal-and-disable):** N/A — this feature has no
+  install-configuration dependency to gate.
+- **Charter P8 Anti-creep:** small, well-scoped user pref; matches
+  the shape of already-established prefs (batch_features_enabled,
+  household_headcount, nutrition_mode).
+
+**Follow-ups:** FU-181 moved to `DORA_FOLLOWUPS_RESOLVED.md` with
+loose-end #1 noted as stale (button removed). No new follow-ups
+spun off. If plan-emailing does return as an ask later, that's a
+fresh feature request grounded in current SMTP/email infra —
+resurrecting the deleted button in-place would be the wrong entry
+point.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-170 resolved as planned-and-declined (knob doesn't pay its rent)
+
+**Why:** User asked to plan FU-170 (app-wide 3-way button display
+preference: icon_only / icon_text / mixed) and then do it. Planning
+turned up a design bind:
+- 651 button sites, 119 icon-only. The FU's proposed "per-button
+  policy registry" is what already exists implicitly in each call
+  site's shape.
+- Neither non-default mode is usable: `icon_only` strips labels
+  off Save/Cancel/Delete (words = affordance); `icon_text` forces
+  labels onto ± steppers / modal-close X / week-nav arrows /
+  hamburger, breaking density-driven layouts.
+- "Mixed" default is what the code already does; formalising it
+  into a Settings knob nobody meaningfully flips adds permanent
+  audit tax for zero user-observable payoff (Charter P8
+  Anti-creep).
+- FU's original trigger (Cook button on recipe card feels
+  icon-only) is a one-liner fix if a real complaint arrives; none
+  has since the button landed.
+
+Presented three options (recommend skip / ship full / ship narrow
+boolean-only). User picked skip. Full analysis preserved in the
+RESOLVED archive so a future revisit inherits the reasoning.
+
+No code change.
+
+---
+
+## 2026-07-03 — FU-134 resolved as audit-complete-nothing-to-do
+
+**Why:** User asked to do FU-134 (audit three named
+`autoGenerateAsync` call sites for Axis-B routing).
+
+**Audit result — grep-verified against current code:**
+- `NewListDialog.vue:418` still calls `autoGenerateAsync` and is
+  already Axis-B-aware (`merge_into_list_id: targetListId`
+  resolved upstream). Original FU verdict unchanged.
+- `RecipesOverview.vue` "add all missing" **no longer calls
+  `autoGenerateAsync`** — the flow was reworked into a per-
+  ingredient picker (`pickerOpen`) that emits an explicit
+  `targetListId` then routes through `addItems`. Axis-B-aware by
+  construction.
+- `MainLayout.vue` **no longer calls `autoGenerateAsync`** — the
+  command palette was retired 2026-06-12 (comment in-file at ~L183).
+  Remaining global shortcuts are pure navigation.
+
+Only three `autoGenerateAsync` hits remain in the codebase:
+service definition, `useMealPlanner.ts` (Chunk-4 Axis-B-aware
+surface), and `NewListDialog.vue`. All three are Axis-B-aware.
+
+Moved to `DORA_FOLLOWUPS_RESOLVED.md` with the audit result
+preserved. No code change.
+
+---
+
+## 2026-07-03 — FU-144 resolved as trigger-not-fired
+
+**Why:** User asked to do FU-144 (cart-state awareness for
+product-anchored `AddToListButton`). Verified the state before
+touching anything — same pattern as FU-052 earlier this session.
+
+**Verify:**
+- Grep for `variant="inline-product"` — still one consumer
+  (`MyProductsPage.vue:351`), gated on unlinked products only.
+- Backend dedup in `manage_shopping_list_lines.py:107-113` already
+  returns `already_on_list=true` on repeat product-anchored click
+  on the same list. Real double-add bug: does not exist.
+- FU's own triggers ("third consumer" OR "user-reported double-add
+  problem"): neither has fired.
+
+Presented the trade-off to the user. User picked
+"skip / resolve as trigger-not-fired" (Recommended in the ask).
+
+Moved to `DORA_FOLLOWUPS_RESOLVED.md` with the full trigger
+conditions preserved so a future consumer / bug report can reopen
+with the analysis intact. No code change.
+
+---
+
+## 2026-07-03 — FU-065 resolved as superseded (stale on three axes)
+
+**Why:** User flagged FU-065 as probably-stale before redoing the
+Finish-and-restock modal. Verified against the current code:
+`ShoppingListShopMode.vue` no longer exists (folded into the Detail
+page — no duplication remaining); the "will be bumped to
+Well-Stocked" string is gone entirely (the M12 restock-review modal
+replaced the bullet summary with per-item level tweaks); and
+"Well-Stocked" itself was retired 2026-07-02 in the 3-band collapse.
+Moved to `DORA_FOLLOWUPS_RESOLVED.md` with the three-point
+supersededness note. No code change — the FU was describing code
+that has since been rewritten twice.
+
+---
+
+## 2026-07-03 — FU-455 shipped (drop dead recipeStore prefetch on dashboard)
+
+**Why:** Side-finding from the FU-052 audit earlier this session. The
+dashboard's `loadAll` fan-out called `recipeStore.ensureLoadedAsync()`
+but nothing on the page read `recipes.value`. Grep-verified across
+the whole file.
+
+**What shipped:**
+- Removed `recipeStore.ensureLoadedAsync()` from the `loadAll`
+  Promise.all block in `web_app/src/pages/DashboardPage.vue`.
+- Removed the `const recipeStore = useRecipeStore()` binding.
+- Removed the `import { useRecipeStore }` line.
+- Grep-verified no residual `recipeStore` / `useRecipeStore`
+  references in the file.
+
+**Charter / rules check:**
+- R-016 (lazy hydration): each page hydrates the stores it actually
+  reads. The dashboard's "Cookable tonight" is meal-plan-driven
+  now (FU-298) and no other card consumes the recipe list.
+- Charter P8 Anti-creep: dead code is drift; removing it is exactly
+  the shape of change to make.
+
+**Follow-ups:** FU-455 moved to `DORA_FOLLOWUPS_RESOLVED.md`. No new
+follow-ups spun off.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-052 resolved (audit-only; no code needed at current scale)
+
+**Why:** User asked to do FU-052 "only if genuinely an improvement".
+FU-052's own author had it deferred as premature at current scale
+(R-007). Audit needed to check whether that's still true.
+
+**Audit result — three sub-items, three verdicts:**
+1. **Dashboard "Cookable tonight" server-side — already done.**
+   Card is meal-plan-driven via `summary.meal_plan.upcoming_entries`,
+   capped at 3 server-side (FU-298 landed this shape). No fetch-all
+   + client-sort remaining. FU description is stale on this point.
+2. **RecipesOverview cookable toggle → server-side query — declined.**
+   The cookbook applies ~20 client-side filter axes over a hydrated
+   store. Moving one axis (cookable) to the server while the other
+   ~19 stay client-side creates a confusing local invariant on
+   `recipes.value`. Full server-side-query cookbook rewrite is the
+   coherent version of this and is outside FU-052's scope. At
+   ~200-recipe scale the multi-axis client filter is the right
+   architecture.
+3. **`load_recipe_cookability` → SQL `COUNT ... GROUP BY` — declined.**
+   Portable (no engine-specific `FILTER`), technically cleaner. But
+   at current scale not a measurable win, and it duplicates the
+   "is_missing" rule into SQL — the domain module is R-003's single
+   source; a SQL copy is precisely the drift R-003 exists to prevent.
+
+**FU-052 moved to RESOLVED** with the full audit result preserved
+in the archive. Point 1 already done (FU-298); points 2/3 declined
+with reasons. The "revisit when scale demands" trigger will
+re-surface itself (perf becoming a measurable hot path) — no
+persistent open loop needed.
+
+**Side-finding logged as FU-455:** `DashboardPage.vue:1931` calls
+`recipeStore.ensureLoadedAsync()` but nothing on the dashboard reads
+`recipes.value`. Grep-verified. Looks like leftover pre-hydration
+from a pre-FU-298 design. Deferred — opportunistic cleanup next
+dashboard touch; small dead round-trip until then.
+
+**No code change this unit.** Charter P8 Anti-creep: doing a refactor
+that fails the "genuinely better" bar just to close an FU line is
+exactly the shape of change to *not* land.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-016 shipped (cache-vs-mutation guard-race audit)
+
+**Why:** User asked for FU-016. Cross-cutting audit spun off from the
+B5 onboarding "dead button" bug (stale `authStore.currentUser` after
+`POST /onboarding/complete`). Task: walk every router / layout guard
+that reads `currentUser?.*` and pair it with the backend mutation
+that should refresh it.
+
+**Audit method:**
+1. Grep for `currentUser` in `web_app/src/router/` and
+   `web_app/src/layouts/` → three read points:
+   `isAuthenticated()`, `onboarding_completed_at`, `is_admin`
+   (via layout + SettingsShell + every AdminSystem* page's
+   `isAdmin` computed).
+2. Enumerate every backend mutation that touches those fields:
+   `POST /onboarding/complete`, `POST /onboarding/restart`,
+   `PATCH /auth/me`, `POST /auth/me/email`, password change,
+   `PATCH /admin/users/<id>`, `POST /data/backup/restore`,
+   `POST /data/import/*`, session-expired 401.
+3. For each, check whether the SPA refreshes `authStore.currentUser`
+   after the mutation succeeds.
+
+**Findings:**
+- **Real bug — admin self-patch.** `UsersAdminSettings.vue::patch`
+  calls `PATCH /admin/users/<id>` then `loadUsers()` (which refreshes
+  the admin-user *list*), but never touches `authStore.currentUser`.
+  When the caller is editing themselves — self-demote, rename, email
+  change — router guard, MainLayout, SettingsShell and every admin
+  page keep reading stale `is_admin`/`username`/`has_image` until a
+  hard reload. Backend prevents removing the last admin so no
+  lockout risk. Fix: refresh currentUser when `user.user_id ===
+  currentUser.user_id` after a successful patch.
+- **Real bug — restore may invalidate currentUser.**
+  `AdminDataBackupRestore.vue` completes a restore and shows a
+  report dialog with a "Reload now" button. If the operator hits
+  "Close" instead, `authStore.currentUser` may reference a row that
+  now has a different `is_admin` (or no longer exists at all —
+  users section optional, off by default, but choosable). Fix: on
+  Close, refresh currentUser as a safety net. Other stores stay
+  potentially stale; the "Reload now" affordance remains for that
+  (and the interceptor 401 handles the deleted-user case).
+
+**All-clear list (verified refresh in place or refresh not needed):**
+- `POST /onboarding/complete` — WelcomeWizard `onSkipEverything` +
+  `complete` both call `authStore.refreshAsync()` after the
+  backend commits.
+- `POST /onboarding/restart` — AboutSettings + DashboardPage
+  Continue-onboarding both refresh.
+- `PATCH /auth/me` — `authStore.updateMeAsync` writes the response
+  DTO straight into `currentUser`.
+- `POST /auth/me/email` (verified email change) — deliberate no-op
+  on `currentUser`; the address only flips server-side after the
+  confirmation link, and the next `/me` probe picks it up.
+- `changePasswordAsync` — doesn't mutate any cached user field.
+- Session-expired 401 — axios interceptor calls
+  `handleSessionExpired()` which clears `currentUser`.
+- `POST /data/import/spreadsheet/commit` — importer doesn't touch
+  users / auth state.
+
+**Rules check:**
+- R-003 (state ownership): the fix keeps `authStore` as the single
+  reader of `/auth/me`; other surfaces still consume via the store,
+  not their own probes.
+- Charter P3 Honesty: a demoted admin should stop seeing admin
+  surfaces immediately — the guard was silently lying, that's the
+  category of "hidden state" the charter says to close.
+
+**Follow-ups:** FU-016 moved to `DORA_FOLLOWUPS_RESOLVED.md`. No new
+follow-ups spun off.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-314 shipped (retired lazy="selectin" on Recipe.cuisine/.category)
+
+**Why:** User asked for FU-314. R-019 / ADR-014's "no magic" rule flagged
+the two grandfathered per-entity `lazy="selectin"` overrides in
+`table_mappings.py:1246-1247` as the last remaining lazy-loader magic:
+the read site no longer reflects what it loads. Flip both to `noload`
+and walk every read site to add an explicit `.include(...)`.
+
+**Read sites updated (grep-driven sweep):**
+- `features/recipes/get_recipes.py::_base_query` — the list + detail
+  handler. `RecipeDto.from_entity` reads both. Chained
+  `.include(Recipe.Fields.CUISINE).include(Recipe.Fields.CATEGORY)` on
+  the base query.
+- `features/recipes/new_recipe_version.py` — reads `source.cuisine` /
+  `source.category` when cloning; added both to the `.one()` query.
+- `features/meal_plans/get_meal_plans.py::_base_query` — the
+  `MealPlanEntryDto` reads through `entry.recipe.cuisine/.category`.
+  Sibling `then_include` paths chained off the recipe include (same
+  `.include(ENTRIES).then_include(RECIPE).then_include(CUISINE)` idiom
+  the query builder supports — resetting via a second `.include(ENTRIES)`).
+- `features/search/global_search.py` — the recipe subtitle read.
+- `features/categories/manage_categories.py` — the per-category recipe
+  count walk.
+- `features/cuisines/manage_cuisines.py` — the per-cuisine recipe
+  count walk.
+- `features/assistant/tools.py` — five query sites:
+  - `search_recipes` (both — filter + response body)
+  - `suggest_recipes` (both — `_recipe_matches_keywords` reads
+    `.category` too, initial pass missed this; corrected)
+  - `recipes_using_item` (cuisine only)
+  - `recipe_detail` (both — ambiguous-candidates list also reads
+    cuisine)
+  - `meal_detail` (cuisine only)
+- `create_recipe.py` / `update_recipe.py` / `import_recipe_from_url.py`
+  reviewed but not updated — they *write* to `.cuisine` / `.category`
+  or reference request-side ids only; no read regressions possible.
+
+**Mapper change:** flipped both relationships to `lazy="noload"` in
+`table_mappings.py:1246-1247` and replaced the "always-wanted lookup"
+comment with an R-019 / FU-314 note pointing at the required
+`.include()` calls.
+
+**Charter / rules check:**
+- R-019 / ADR-014 (no magic): the whole point of this FU. Every read
+  is now local, every include is greppable.
+- R-007 (scope discipline): swept only the two flagged relationships;
+  other `noload` FKs left alone.
+- N+1 guard: the FU-138 e2e query-count test
+  (`tests/e2e/dora_api/test_recipes_query_count.py`) already asserts
+  that adding 10 recipes doesn't add ~10 SELECTs to
+  `GET /recipes` — that's exactly the trap the FU warned about, so
+  the guard is already in place; no new test needed.
+
+**Follow-ups:** FU-314 moved to `DORA_FOLLOWUPS_RESOLVED.md`. No new
+follow-ups spun off.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-03 — FU-315 shipped (auto-add-when-low toast wired up)
+
+**Why:** User asked for FU-315 right after FU-316 landed. Same F-block
+(magic-behaviour audit F1). The backend has always returned a 200 with
+`{ auto_added: { line_id, shopping_list_id } }` on level-transition
+PATCHes that fire the auto-add hook (`update_stock_item.py:355-367`),
+but the SPA typed `stockItemApiService.updateAsync` as `Promise<void>`
+so the payload was silently thrown away — no toast ever surfaced. The
+line chip (`auto: low stock`) was already wired correctly.
+
+**What shipped:**
+- `stockItemApiService.updateAsync` now returns
+  `UpdateStockItemResponse = { auto_added?: {...} } | undefined` (new
+  exported type). Callers get either an object (auto-add fired) or
+  undefined (204 no-content).
+- `stockItemStore` gains a private `handleAutoAddedResponse` helper:
+  refreshes the shopping-list store so the new line renders live,
+  resolves the item name from `stockItems.value` and the list's
+  `display_name` from the summaries, and fires a positive Quasar
+  Notify — **"Added *<item>* to *<list>*."** with caption
+  **"Auto-added because it went low."**. Both `updateStockLevelAsync`
+  (the direct level-swap path used by rows + cook mode) and
+  `updateStockItemAsync` (the general-purpose PATCH used by the detail
+  page's `saveField`, which does carry `stock_level_id`) now call it
+  after the API round-trip.
+- Response-shape guards handle every branch: `null`/`""` (204),
+  `{ queued: true }` (offline queue), and `{ auto_added: undefined }`
+  (server returned 200 for a non-hook reason — currently impossible
+  but the code is defensive).
+
+**Charter / rules check:**
+- R-003 (state ownership): the shopping list `display_name` and the
+  stock item name are both server-owned reads; the SPA composes the
+  toast string from those known values, no client-side name synthesis.
+- R-024 (single source of truth per surface): the auto-add toast now
+  lives in ONE place (the store), so every level-change caller —
+  row +/-, detail page, cook mode, quick actions — gets the same
+  behaviour without duplicating the wiring in each caller.
+- Charter P3 Honesty: silent auto-add was the original bug —
+  the server was doing something the user could only discover by
+  opening the list. Toast + line chip together make it visible.
+
+**Follow-ups:** FU-315 moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+`DORA_VERIFY.md` gets a new "Auto-add-when-low toast + line chip"
+checklist under Stock. FU-320 (help-copy pass) still gates on the
+remaining F-block items (FU-317, FU-318, FU-319).
+
+**Next up:** whatever the user picks. FU-319 (inline-create pantry
+toast) is the last opportunistic F-block UX cleanup in the same
+audit block; the others require design (FU-317) or their own touch
+of the recipe editor (FU-318).
+
+---
+
+## 2026-07-03 — FU-316 shipped (quick-add toast names list + "always ask" pref)
+
+**Why:** User asked for FU-316. Covers the F3 audit's combo (b)+(c) —
+the quick-add toast should name the destination list, and users who
+regularly juggle 2+ drafts should be able to opt out of the tab-session
+memory so the picker fires every time.
+
+**What shipped:**
+- Backend: new `User.always_ask_which_shopping_list bool` column
+  (default False). Migration `c6d2a8e3b9f1_20260703_user_always_ask_list.py`
+  hangs off the current head `a1c7d9e42be0` (drop-sufficient-stock-band).
+  Wired through the entity (`domain/entities/user.py`), the response DTO
+  (`register_user.py` `AuthenticatedUserDto`), the update-me request +
+  handler (`features/auth/update_me.py`), and the `User` table mapping.
+  Same shape as `batch_features_enabled` — pure per-user boolean opt-in,
+  no closed-set validation.
+- Frontend model: field added to `AuthenticatedUser` (`models/auth.ts`)
+  and to the `UpdateMeCommand` (`services/api/authApiService.ts`).
+- Toast wording: `useStockItemActions.addToList` now resolves the
+  destination list's `display_name` off the shoppingListStore summaries
+  ("Added to *Sunday shop*." / "Already on *Sunday shop*."). Covers all
+  three paths — explicit `listId`, single-draft membership target, and
+  the ambiguous-then-picked path (uses `outcome.shopping_list_id`).
+  Fallback string "your list" if the store isn't hydrated (defensive
+  only; shouldn't happen in practice).
+- "Always ask" behaviour: when the pref is on, `pick.load()` is
+  ignored so the picker fires; the pick is still `save()`d during
+  the call so the bulk-add caller in `AddToListButton` can batch
+  items 2..N into the same list, then `clear()`d in `finally` so
+  the *next* quick-add re-prompts. Dialog copy also updated so the
+  "we'll remember it" line doesn't lie when the pref is on.
+- Settings UI: new `Shopping lists` section on
+  `PreferencesSettings.vue` with a single `q-toggle`. Optimistic
+  flip with rollback-toast on error, same shape as the other
+  single-toggle prefs on that page.
+
+**Charter / rules check:**
+- R-003 (state ownership): the destination-list *name* is server-owned
+  (`ShoppingListSummary.display_name`, already computed server-side per
+  the SoT); the SPA only reads it off the store — no client string
+  synthesis of the list name.
+- R-010 (closed-set sentinels): the new field is a plain boolean, no
+  sentinel guarding needed.
+- Charter P1 Effortless: default off keeps the frictionless
+  "remember my pick" flow the current app already offers; power users
+  who want the visibility opt in.
+
+**Follow-ups:** FU-316 moved to `DORA_FOLLOWUPS_RESOLVED.md`. FU-320
+still gates on this + siblings before the help-copy pass can run.
+
+**Next up:** whatever the user picks. FU-315 (auto-add-when-low toast
+verify) and FU-319 (inline-create pantry toast) are the other two
+audit-driven UX items in the same F-block if they want to keep
+walking that list; otherwise wait for direction.
+
+---
+
 ## 2026-07-02 — P8-06 Wait-or-Buy shipped + FU-437 closed
 
 **Why:** User asked to move onto P8-06. Unblocked by the earlier P8-04

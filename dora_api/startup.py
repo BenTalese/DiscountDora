@@ -181,6 +181,18 @@ def handle_global_exception(error: Exception):
     # Only genuinely unhandled exceptions become 500s.
     if isinstance(error, HTTPException):
         return error
+    # FU-196 (b, partial) — a handler that raises after add()/flush() but
+    # before commit leaves dirty state on the request-scoped session.
+    # Flask-SQLAlchemy's teardown does eventually `session.remove()`
+    # (which rolls back), but doing it explicitly here removes the
+    # window where a later teardown-time SQL error could obscure the
+    # original one, and makes the "500 means clean" contract obvious to
+    # anyone reading the handler. Full unit-of-work refactor of the
+    # multi-commit `create_recipe.py` path stays as its own FU.
+    try:
+        db.session.rollback()
+    except Exception:  # noqa: BLE001
+        logging.getLogger().exception("rollback in global handler failed")
     logging.getLogger().exception("Unhandled exception", exc_info=error)
     return internal_server_error("An unexpected error occurred.")
 

@@ -6,6 +6,138 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Windows + macOS desktop build scripts (FU-327, 2026-07-03).** New
+  `packaging/build-windows.ps1` (PowerShell) and
+  `packaging/build-macos.sh` mirror `build-linux.sh` step-for-step:
+  SPA build → fetch Piper (auto-detected platform key on Windows;
+  auto-detected + `--arch` override on macOS) → fetch default voice
+  → `pyinstaller --noconfirm dora.spec` → smoke-check the output
+  binary. README's Desktop-bundle section updated to cover all three
+  platforms. Only Linux is CI-verified — the Windows/macOS scripts
+  are checked in but their first cross-platform smoke stays a
+  user-driven verify (`DORA_VERIFY.md` under
+  "Windows desktop build script" / "macOS desktop build script").
+
+### Fixed
+- **iOS / WKWebView audio-unlock primer for Dora voice (FU-287,
+  2026-07-03).** iOS Safari and the macOS WKWebView the desktop
+  bundle uses gate `HTMLAudioElement.play()` on user gestures — and
+  the gesture credit can be revoked by an intervening `await`
+  longer than ~a few hundred ms. The Dora chat reply flow
+  (LLM round-trip → Piper synth fetch → `audio.play()`) blew past
+  that window; iOS users heard silence. `useSpeechOutput` now
+  registers a one-shot document listener at first
+  `useSpeechOutput()` mount that primes the browser's autoplay
+  policy on the first user gesture by playing a very-short silent
+  muted `data:audio/wav` blob. Subsequent `audio.play()` calls in
+  the same session inherit the credit — including across `await`s.
+  No-op on Chrome/Firefox/Android. The cook-mode timer-narration
+  edge case (timer callback isn't a user activation) is documented
+  as best-effort — the visible Notify remains the load-bearing
+  "timer done" signal. iOS browser-verify pending device access
+  (checklist in `DORA_VERIFY.md` under "iOS / macOS-WKWebView
+  audio-unlock primer").
+
+### Security
+- **`Requests` bumped 2.31.0 → 2.32.4 (FU-196 d1, 2026-07-03).** Closes
+  CVE-2024-35195 (session verification bypass after first request).
+
+### Changed
+- **`fuzzywuzzy` → `rapidfuzz` (FU-196 d2, 2026-07-03).** Actively
+  maintained, MIT-licensed (fuzzywuzzy is GPL), ships a C extension
+  so the "using slow pure-Python SequenceMatcher" warning noise is
+  gone. Drop-in swap at two call sites
+  (`features/recipes/import_recipe_from_url.py`,
+  `features/search/global_search.py`) — rapidfuzz's `process` +
+  `fuzz` modules use the compatible surface both sites needed.
+- **Global exception handler now rolls back the DB session
+  (FU-196 b partial, 2026-07-03).** `startup.py`'s
+  `handle_global_exception` calls `db.session.rollback()` before
+  returning 500 so a handler that raises after `add()`/`flush()`
+  can't leak dirty session state past the request boundary.
+  Belt-and-braces for the multi-commit sites; the full unit-of-work
+  refactor is tracked as FU-456.
+
+### Removed
+- **Dead `SelectComponent.vue` deleted (FU-196 f1, 2026-07-03).**
+  Grep confirmed zero non-self callers.
+- **`web_app/.npmrc` deleted (FU-196 f2, 2026-07-03).** Only held
+  pnpm-specific keys (`shamefully-hoist`, `strict-peer-dependencies`,
+  `resolution-mode=highest`) which warned on every `npm` command;
+  the repo is on npm.
+
+### Added
+- **Per-user "Meals per week" preference for the sequential builder
+  (FU-181, 2026-07-03).** The meal-plan sequential builder's target
+  count was hardcoded to 7. Added `User.meals_per_week int | null`
+  (bounds 1–21, null = use the 7 fallback) with a new **Preferences
+  → Meal planning → Meals per week** input. Consumed reactively via
+  a new `useMealsPerWeek` composable so both `MealPlansBoardPage`
+  and `MealPlansOverview` pick up a Preferences change without a
+  reload. The old export `BUILDER_TARGET_MEALS` was renamed to
+  `BUILDER_TARGET_MEALS_FALLBACK` — the single source of the fallback,
+  no other file re-hardcodes 7.
+
+### Changed
+- **Dashboard drops dead `recipeStore.ensureLoadedAsync()` prefetch
+  (FU-455, 2026-07-03).** The dashboard's `loadAll` fan-out
+  hydrated the recipe store on every visit, but grep confirmed
+  nothing on the page reads `recipes.value` — leftover from a
+  pre-FU-298 design where the "Cookable tonight" card walked the
+  full recipe list. Removed the prefetch + the unused
+  `useRecipeStore` import. Saves one `GET /recipes` round-trip per
+  dashboard load.
+
+### Fixed
+- **Stale-cache guard races swept (FU-016, 2026-07-03).** Full audit of
+  `authStore.currentUser` reads in router / layout / admin guards paired
+  with every backend mutation that can touch user-scoped state. Two real
+  gaps closed: (1) when an admin edits *themselves* through **Settings →
+  Admin → Users** (self-demote, rename, email change), the admin-user
+  list refresh didn't touch `authStore.currentUser`, so the router
+  guard + MainLayout + SettingsShell + every admin page kept reading a
+  stale `is_admin` / `username` until the next hard reload — a demoted
+  admin still saw admin surfaces. Now refreshes when the target row is
+  the caller. (2) After **Settings → Admin → Data → Restore**,
+  `authStore.currentUser` can be invalid (users table restored ⇒
+  different `is_admin`, or the caller's row is gone) — the "Reload now"
+  button was the only recommended path, but hitting Close left the
+  guard lying. Close now refreshes the auth cache as a belt-and-braces
+  safety net. Onboarding-complete, restart-onboarding (both surfaces),
+  `PATCH /auth/me`, email-change, and password-change paths were all
+  verified as already-correct.
+
+### Changed
+- **Retired the grandfathered `lazy="selectin"` on `Recipe.cuisine` /
+  `Recipe.category` (FU-314, 2026-07-03).** R-019 / ADR-014's "no magic"
+  rule flagged these as the last two per-entity lazy overrides in the
+  codebase; each read site now names the eager-load it needs. No
+  behaviour change — the same cuisine + category data lands in the same
+  DTOs, but the query intent is now local to each handler instead of
+  hidden in the mapper. The FU-138 e2e query-count test already guards
+  `GET /recipes` against N+1 regressions, so a missed include would
+  fail loudly rather than silently.
+
+### Added
+- **Auto-add-when-low toast now fires + names the list (FU-315, 2026-07-03).**
+  When a stocktake transitions a stock item to Low/Out and its
+  `auto_add_when_low` flag is on, the server has always dropped the item
+  onto the unambiguous draft list and returned an `auto_added` payload —
+  but the SPA typed the PATCH response as `void` and threw the payload
+  away, so no toast ever fired. The `PATCH /stock-items/<id>` response is
+  now surfaced through `stockItemStore` and every level-change path
+  (row +/-, detail-page level swap, cook-mode consume, quick actions)
+  shows a positive **"Added *<item>* to *<list>*"** toast + refreshes the
+  shopping-list store so the new line renders live. The `auto: low stock`
+  chip on the line was already wired.
+- **Quick-add toast names the destination list + "always ask" pref (FU-316,
+  2026-07-03).** When Dora adds a stock item to a shopping list via the
+  quick-add path, the confirmation toast now names the target list
+  ("Added to *Sunday shop*") instead of a generic "Added to your list."
+  Also adds a new **Preferences → Shopping lists → Always ask which list**
+  toggle (default off, current behaviour preserved). When on, the
+  "which list?" picker fires every quick-add for users with more than one
+  draft — Dora won't remember the last pick for the tab session.
 - **P8-06 — Dora tells you *when* to buy, not just whether (2026-07-02).**
   When the buy-verdict oracle lands on `wait`, Dora now adds a time-boxed
   hint: "Expect a dip around Nov 15" with a sub-caption explaining the

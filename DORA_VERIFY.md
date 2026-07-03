@@ -203,6 +203,14 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Meal plans
 
+### Meals-per-week preference — origin FU-181
+- [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`, min 1 / max 21
+- [ ] With the field blank, open the sequential builder on `/meal-plans` (list view) or `/meal-plans/board` → the header count still reads `/ 7`, matching the fallback
+- [ ] Set the input to **5** → save toast reads "Meals per week set to 5." → **without reloading**, reopen the sequential builder → header count now reads `/ 5`
+- [ ] Clear the input (or type a value outside 1–21) → save toast reads "Meals per week reset to the default (7)." → builder count returns to `/ 7`; the field snaps to blank (placeholder shows again)
+- [ ] Type a decimal (e.g. `3.7`) → server rounds it, saved value is the rounded integer; a value <1 or >21 collapses to null (reset toast)
+- [ ] `PATCH /auth/me { meals_per_week: 22 }` from DevTools returns 400 (server-side bounds guard)
+
 ### In-context Print on the Board page — origin FU-338
 - [ ] Open `/meal-plans/board` on desktop with a focused week that has at least one meal planned. The top strip shows a small **Print** icon-button (printer glyph) between the recipe-picker/Templates buttons and the Templates label — tooltip on hover reads "Print this week"
 - [ ] Click the Print button → a **new tab** opens the meal-plan print view for the focused week (calendar layout with the week's meals). The Board page tab is unchanged (no navigation on it)
@@ -241,6 +249,16 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Shopping lists
+
+### Quick-add toast + "always ask" pref — origin FU-316
+- [ ] Have exactly one draft list open → quick-add a stock item (chip / bulk / detail toolbar) → toast reads **"Added to *<display_name>*."** (destination named — not "Added to your list.")
+- [ ] Item already on that list → toast reads **"Already on *<display_name>*."**
+- [ ] Open 2+ draft lists → quick-add → picker fires → pick one → toast still names the picked list
+- [ ] Same tab session, second quick-add → no picker (session-remembered), toast still names the list
+- [ ] **Preferences → Shopping lists → Always ask which list** → toggle on → save toast "Dora will always ask which list."
+- [ ] With "always ask" on and 2+ drafts → every quick-add re-prompts (session pick is not remembered); dialog copy reads "Dora will ask again next time (you can change this in Preferences)."
+- [ ] Bulk-add a batch of items from Stock Overview with 2+ drafts and "always ask" on → picker fires once on the first item → all remaining items land on the *same* picked list (batch doesn't silently drop items 2..N)
+- [ ] Toggle "always ask" back off → save toast "Dora will remember your pick." → next quick-add prompts once, then remembers again
 
 ### Receipt-photo attachments — origin FU-334 + R-024 follow-on
 - [ ] Open a `draft` list → no Receipts section visible (correct — must Start shopping first)
@@ -381,6 +399,19 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Stock
+
+### Auto-add-when-low toast + line chip — origin FU-315
+*Requires a stock item with `auto_add_when_low` on and exactly one open draft shopping list.*
+- [ ] From stock overview, tap the stock-level chip on a Stocked item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)
+- [ ] Same setup but set to **Out** on an item that was already Stocked → same toast fires
+- [ ] Open the draft list → the new line renders **without a manual refresh** (the store refreshed itself)
+- [ ] Line shows an `auto: low stock` chip at normal density — visible next to the item name, not crowded out by price / quantity chips
+- [ ] Turn `auto_add_when_low` off on the item, set it to Stocked → then Low → **no toast fires** (server-side hook doesn't trigger)
+- [ ] Set item to Low when it's already on any active shopping list → no toast (server dedup: "user already knows")
+- [ ] Set item to Low when the user has **0 draft lists** or **2+ draft lists** → no toast (server only auto-adds when the target is unambiguous)
+- [ ] Item level change on the detail page (Level row) → toast fires the same way (`updateStockItemAsync` path)
+- [ ] Cook mode's per-ingredient level decrement that flips an ingredient to Low → toast fires per triggered item (multiple toasts stack — verify readability)
+- [ ] Offline stock-level flip → queued (blue "Queued: Update stock level" toast); when back online + queue drains → auto-add toast fires *if* the flipped item genuinely transitions on the server side
 
 ### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
 - [ ] Finishing a shopping list — every ticked item flips to "Stocked" (was "Well-Stocked"). No level-override UI still labels a "Sufficient" middle option
@@ -611,6 +642,12 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Settings
+
+### Admin cache-race safety net — origin FU-016
+*Requires at least two admins in the system (the backend blocks removing the last admin).*
+- [ ] As Admin-A on `/settings/admin/users`: toggle **your own** Admin switch off → immediately the sidebar admin section (System · Data · Users · Audit) disappears from Settings, the router refuses `/settings/admin/*` (bounces to `/settings/account`), and the "Admin" pill on your row in the list is gone
+- [ ] Same pre-condition, edit **your own** username or email through the admin surface → the header avatar tooltip + Settings → Account username reflect the new name **without a hard reload**
+- [ ] Restore a backup that includes the **users** section, then hit **Close** on the report dialog (not "Reload now") → the header identity + admin sidebar reflect whatever the restored state says about *your* row (e.g. if you were demoted in the backup, admin surfaces disappear). Then hit **Reload now** on a subsequent restore to confirm both paths keep the guards honest
 
 ### Backup library — origin FU-342 (2026-07-01)
 - [ ] As admin on `/settings/admin/data/backup`: the top card is **Backup library** (not the old "Create backup" tile). Empty state text appears until the first backup exists
@@ -898,6 +935,31 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Build / install / desktop
 
+### Windows desktop build script — origin FU-327
+*Requires a Windows box with Python 3.11, Node + npm, and Xcode-free
+PowerShell 5+. Author has no Windows dev machine at this session
+close-time; walked opportunistically.*
+- [ ] `pip install -r requirements.txt` completes (pywebview + pyinstaller install cleanly on Windows Python 3.11)
+- [ ] `.\packaging\build-windows.ps1 -Clean` runs SPA build, fetches Piper (`fetch_piper.py` auto-detects and picks `windows_amd64`), fetches default voice, runs `pyinstaller --noconfirm dora.spec` — no crashes past the "OK. Bundle at dist\Dora\Dora.exe" line
+- [ ] `dist\Dora\Dora.exe` exists and launches — Dora window opens, SPA loads
+- [ ] With WebView2 Runtime installed (Windows 10 or 11): the WebView2 process spawns; no "MissingWebView2Runtime" error dialog
+- [ ] Piper voice works out-of-box: Settings → Voice → Amy shows `status: ready`; cook-mode narration plays through WebView2 audio
+- [ ] Data persists to `%LOCALAPPDATA%\Dora\` (check the folder exists after first save)
+- [ ] `-SkipSpa` reuses an existing `web_app\dist\spa\` build (skip SPA build step; PyInstaller step still runs)
+- [ ] `-SkipPyInstaller` runs only the SPA build (early-exit before PyInstaller)
+
+### macOS desktop build script — origin FU-327
+*Requires a macOS box with Python 3.11, Node + npm, and Xcode command-
+line tools (`xcode-select --install`). Author has no macOS dev
+machine at this session close-time; walked opportunistically.*
+- [ ] `pip install -r requirements.txt` completes on the target Python (Apple Silicon: arm64 Python; Intel: x86_64 Python — the interpreter arch determines the bundle arch)
+- [ ] `./packaging/build-macos.sh --clean` runs SPA build, auto-detects arch (arm64 → `macos_aarch64`, x86_64 → `macos_x64`) and fetches matching Piper, fetches default voice, runs `pyinstaller --noconfirm dora.spec` — no crashes past the "OK. Bundle at dist/Dora/Dora" line
+- [ ] `dist/Dora/Dora` exists, is executable (`ls -l` shows `-rwxr-xr-x`), and launches — Dora window opens, SPA loads
+- [ ] Piper voice works out-of-box: Settings → Voice → Amy shows `status: ready`; cook-mode narration plays through WKWebView audio (also exercises the FU-287 iOS/WKWebView primer)
+- [ ] Data persists to `~/Library/Application Support/Dora/` (check the folder exists after first save)
+- [ ] `--arch macos_x64` on an Apple Silicon Mac fetches the Intel Piper tarball (verify `packaging/piper/piper` is `Mach-O x86_64` via `file`); the bundle interpreter arch still matches the venv you're building in
+- [ ] `--skip-spa` and `--skip-pyinstaller` flags behave the same as `build-linux.sh`
+
 ### Fresh-install first-admin bootstrap — origin FU-200
 *Requires a clean DB — delete `data/dora.db` (or point `DORA_DB_PATH` at a fresh file) and restart the API.*
 - [ ] Cold-load the SPA → lands on `/setup` (NOT `/login`); page shows the "One-time setup" pill, "Create the first admin account" copy, and an **Email** field that's required (not optional like /register)
@@ -931,6 +993,18 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Cross-cutting
+
+### iOS / macOS-WKWebView audio-unlock primer — origin FU-287
+*Needs iPhone / iPad (Safari) or the macOS desktop bundle (WKWebView).
+User doesn't have iOS device access as of 2026-07-03 — sits until then.
+Every other platform: no visible effect; already worked.*
+- [ ] iOS Safari, `speechEnabled` on, `voice_engine=piper`: open Dora chat → type a message → tap send → **Dora's reply plays audibly** (this is the flow that used to lose the gesture credit across the LLM `await` + synth fetch)
+- [ ] Same setup, `voice_engine=browser`: reply plays via browser SpeechSynthesis (browser voice was more forgiving but subject to the same gate; primer helps here too)
+- [ ] Cook mode on iOS Safari: **start the app, tap around a bit (any interaction), then enter cook mode → "next step" narration plays** — no gesture is needed on the "next" tap itself; the session-level primer covers subsequent voice narration
+- [ ] Timer-narration edge case (documented, best-effort): start a timer in cook mode, leave the tab open several minutes without interacting → timer completes → **visible Notify still fires** (load-bearing signal); audio narration + finish tone may or may not — do not treat their absence as a regression
+- [ ] macOS desktop bundle (WKWebView): same three checks as iOS — chat reply, cook-mode step narration, in-session timer narration
+- [ ] Android Chrome + desktop Chrome/Firefox: **no regression** — voice output still works, nothing sounds different. First-gesture briefly plays a silent muted `data:audio/wav` primer (44 bytes); should be inaudible and invisible in DevTools' network tab
+- [ ] Reload the page → primer fires again on the next gesture (session-scoped, not persisted)
 
 ### Filters button toolbar alignment (R-027 fix, 2026-07-02)
 - [ ] `/stock` — the Filters button (right end of the top toolbar row) sits **flush** with New item / Scan / Stocktake / Bulk select / Export. Zoom in if needed: their tops + bottoms line up pixel-for-pixel

@@ -21,7 +21,11 @@ import { useStockLevelStore } from 'src/stores/stockLevelStore';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-export const BUILDER_TARGET_MEALS = 7;
+// Fallback used when the user hasn't set a `meals_per_week` preference
+// (FU-181 loose-end 2). Callers should prefer `useMealsPerWeek()` — this
+// constant stays as the single source of the fallback so no other file
+// re-hardcodes 7.
+export const BUILDER_TARGET_MEALS_FALLBACK = 7;
 const RECIPE_TRAY_CAP = 10;
 
 export type RecipeTray = {

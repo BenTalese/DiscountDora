@@ -202,14 +202,9 @@
         position: relative;
         width: clamp(200px, 50vw, 280px);
     }
-    /* C-19 glyph retune: scenes now render on AuthShell's midnight canvas
-       (WelcomeLayout wraps in AuthShell backdrop=blobs). Glyph fills read
-       against the shell's auth-shell-* tokens; fallbacks preserve the
-       original brand-token behaviour if a scene ever renders outside the
-       shell. */
     .story-glyph--scatter .g {
         position: absolute;
-        color: var(--auth-shell-card-border, var(--text-muted));
+        color: var(--text-muted);
         opacity: 0.6;
     }
     .story-glyph--scatter .g--a {
@@ -232,7 +227,7 @@
         left: 50%;
         top: 46%;
         transform: translate(-50%, -50%);
-        color: var(--auth-shell-blob-2, var(--brand-accent));
+        color: var(--brand-accent);
         opacity: 0.95;
     }
     .story-glyph--control {
@@ -241,7 +236,7 @@
     }
     .story-glyph--control .g--big {
         font-size: 84px;
-        color: var(--auth-shell-accent-strong, var(--brand-primary));
+        color: var(--brand-primary);
     }
     .story-pills {
         display: flex;
@@ -251,12 +246,12 @@
     }
     .story-pill {
         padding: 4px var(--space-3);
-        border: 1px solid var(--auth-shell-card-border, var(--border-default));
+        border: 1px solid var(--border-default);
         border-radius: var(--radius-pill);
         font-size: 0.82rem;
         font-weight: 600;
-        color: var(--auth-shell-text, var(--text-secondary));
-        background: var(--auth-shell-card-bg, var(--surface-component));
+        color: var(--text-secondary);
+        background: var(--surface-component);
     }
 
     /* ── Scene cross-fade ──────────────────────────────────────────── */

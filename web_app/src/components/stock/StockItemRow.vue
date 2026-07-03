@@ -97,7 +97,7 @@
                             <q-item-section avatar>
                                 <q-avatar
                                     :color="colourForSequence(level.sequence) ?? undefined"
-                                    :class="{ 'dora-bg-sunken': !colourForSequence(level.sequence) }"
+                                    :class="{ 'dora-bg-neutral': !colourForSequence(level.sequence) }"
                                     size="14px"
                                 />
                             </q-item-section>
@@ -389,7 +389,7 @@
         const seq = levelSequence.value;
         if (seq === null) return '';
         const colour = colourForSequence(seq);
-        return colour ? `bg-${colour}` : 'dora-bg-sunken';
+        return colour ? `bg-${colour}` : 'dora-bg-neutral';
     });
     const levelButtonStyle = computed(() => {
         // Empty-level fallback — dashed outline + page surface so the
@@ -719,6 +719,7 @@
            keeping the gap+padding that gave it breathing room. */
         min-height: 56px;
         position: relative;
+        border-radius: 8px;
         overflow: hidden; /* clip the essential stripe to the rounded border */
         transition:
             box-shadow var(--motion-fast) var(--motion-ease),

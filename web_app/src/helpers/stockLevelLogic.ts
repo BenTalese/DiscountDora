@@ -7,9 +7,9 @@ import type { ThemePalette } from 'src/services/themeService';
 import nameOf from './nameOf';
 
 // "Out of stock" / unknown returns `null` so callers route the neutral
-// branch through the theme-token classes (`dora-bg-sunken` /
-// `dora-text-muted`) per R-002, rather than a Quasar `grey-N` literal
-// that breaks dark themes. The saturated branches stay on Quasar
+// branch through the theme-token class `dora-bg-neutral` (mid-grey via
+// --text-muted, stays visible on both themes) per R-002, rather than a
+// Quasar `grey-N` literal. The saturated branches stay on Quasar
 // semantics — those are theme-stable.
 const COLOUR_BY_SEQUENCE: Record<number, string | null> = {
     [STOCKED_SEQUENCE]: nameOf<ThemePalette>('positive'),

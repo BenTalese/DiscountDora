@@ -40,6 +40,10 @@
 .dora-bg-page          { background-color: var(--surface-page) !important; }
 .dora-bg-sunken        { background-color: var(--surface-sunken) !important; }
 .dora-bg-elevated      { background-color: var(--surface-elevated) !important; }
+// Neutral mid-grey swatch — reads as "depleted but visible" on both
+// light and dark themes (surface-sunken drops near-black on dark, so
+// the out-of-stock dot needs its own token).
+.dora-bg-neutral       { background-color: var(--text-muted) !important; }
 
 .dora-bg-positive-soft { background-color: var(--semantic-positive-soft) !important; }
 .dora-bg-negative-soft { background-color: var(--semantic-negative-soft) !important; }

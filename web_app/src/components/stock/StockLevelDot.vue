@@ -1,7 +1,7 @@
 <template>
     <q-avatar
         :color="colour ?? undefined"
-        :class="[{ 'dora-bg-sunken': !colour }, dotClass]"
+        :class="[{ 'dora-bg-neutral': !colour }, dotClass]"
         :size="size"
     />
 </template>

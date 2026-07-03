@@ -154,8 +154,7 @@
     const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 
     const levelRows = [
-        { label: 'Well-stocked', colour: 'positive', summary: 'You have plenty.' },
-        { label: 'Sufficient', colour: 'warning', summary: 'Not full, not low — fine for now.' },
+        { label: 'Stocked', colour: 'positive', summary: 'You have enough.' },
         { label: 'Low', colour: 'negative', summary: 'Running short. If essential, the row outlines amber.' },
         { label: 'Out', colour: 'grey', summary: 'Gone. If essential, the row outlines red; otherwise the row dims.' },
     ];
@@ -167,7 +166,7 @@
         dim: boolean;
     };
     const cheatRows: CheatRow[] = [
-        { state: 'Well-stocked / Sufficient, no expiry issue', outline: 'none', attention: false, dim: false },
+        { state: 'Stocked, no expiry issue', outline: 'none', attention: false, dim: false },
         { state: 'Low — not essential', outline: 'none', attention: false, dim: false },
         { state: 'Low — essential', outline: 'warn', attention: true, dim: false },
         { state: 'Out — not essential', outline: 'none', attention: false, dim: true },

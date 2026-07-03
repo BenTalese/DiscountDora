@@ -789,7 +789,6 @@ class GetStockItemDetailHandler:
         # store has been deleted (the FK is SET NULL).
         _UsualStoreName: str | None = None
         if _StockItem.usual_store_id is not None:
-            from dora_api.domain.entities.store import Store
             _UsualStore = self.repository.get(Store).by_id(_StockItem.usual_store_id)
             if _UsualStore is not None:
                 _UsualStoreName = _UsualStore.name

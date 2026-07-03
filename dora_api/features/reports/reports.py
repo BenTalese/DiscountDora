@@ -193,6 +193,11 @@ class StockValueOverTimeHandler:
             for _Obs in self.repository.get(StockItemPriceObservation).all(
                 EntityField(StockItemPriceObservation, "stock_item_id").in_(_ItemIds)
             ):
+                # SQLite drops tzinfo on DateTime(timezone=True); coerce so the
+                # observed_at compares cleanly against the tz-aware cursor in
+                # get_stock_item_unit_cost_at.
+                if _Obs.observed_at is not None and _Obs.observed_at.tzinfo is None:
+                    _Obs.observed_at = _Obs.observed_at.replace(tzinfo=timezone.utc)
                 observations_by_item.setdefault(_Obs.stock_item_id, []).append(_Obs)
 
         # Bucket boundaries.

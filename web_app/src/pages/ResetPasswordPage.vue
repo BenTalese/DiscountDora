@@ -12,7 +12,7 @@
             This reset link is missing a token. Request a fresh one
             from Forgot password.
         </q-banner>
-        <q-form v-else-if="!done" @submit.prevent="onSubmit" class="q-gutter-md">
+        <q-form v-else-if="!done" @submit.prevent="onSubmit" class="q-gutter-y-md">
             <q-input
                 v-model="password"
                 outlined

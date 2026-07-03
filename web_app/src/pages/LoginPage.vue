@@ -9,7 +9,7 @@
             </div>
         </template>
 
-        <q-form ref="formRef" @submit.prevent="onSubmit" class="q-gutter-md">
+        <q-form ref="formRef" @submit.prevent="onSubmit" class="q-gutter-y-md">
             <q-input
                 outlined
                 autofocus

@@ -47,6 +47,14 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 _LOGGER = logging.getLogger(__name__)
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 # ── Tunables (single source, easy to iterate) ─────────────────────────
 
 # Thin-data thresholds — see the proposal §2.3.
@@ -525,7 +533,7 @@ def _gather_inputs(
         )
         for l in lists:
             if l.status == SHOPPING_LIST_STATUS_DONE:
-                completed_lookup[l.id] = l.completed_at
+                completed_lookup[l.id] = _as_utc(l.completed_at)
             else:
                 open_list_ids.add(l.id)
 
@@ -550,7 +558,7 @@ def _gather_inputs(
     )
     waste_in_window = sum(
         1 for e in waste_events
-        if e.occurred_at and e.occurred_at >= horizon_start
+        if e.occurred_at and _as_utc(e.occurred_at) >= horizon_start
     )
 
     is_on_open_list = any(

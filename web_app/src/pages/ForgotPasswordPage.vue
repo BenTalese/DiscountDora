@@ -8,7 +8,7 @@
             </div>
         </template>
 
-        <q-form v-if="!submitted" @submit.prevent="onSubmit" class="q-gutter-md">
+        <q-form v-if="!submitted" @submit.prevent="onSubmit" class="q-gutter-y-md">
             <q-input
                 v-model="email"
                 type="email"

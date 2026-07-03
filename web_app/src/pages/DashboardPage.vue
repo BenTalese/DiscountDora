@@ -92,8 +92,11 @@
 
         <!-- Phase 5 quick actions (decision §9): the home screen *does*, not just
              routes. Lightweight inline dialogs — Add item opens the shared
-             CreateStockItemDialog; Add to list pops the global QuickAddSheet.
-             No navigation. (Log-price is a future add — needs a product target.) -->
+             CreateStockItemDialog; Add to list pops the global QuickAddSheet;
+             Log price (FU-300) pops the global LogPriceSheet which picks a
+             stock item first, then hands off to the shared PriceEntry form.
+             Log price is money-gated to match the row-level "Log a price"
+             button (ADR-005). -->
         <div class="dora-quick-actions">
             <BaseButton
                 variant="secondary"
@@ -106,6 +109,13 @@
                 :icon="ICONS.shopping_cart"
                 label="Add to list"
                 @click="openQuickAdd()"
+            />
+            <BaseButton
+                v-if="moneyEnabled"
+                variant="secondary"
+                :icon="ICONS.cash_plus"
+                label="Log price"
+                @click="openLogPrice()"
             />
         </div>
 
@@ -624,9 +634,15 @@
                 class="col-12 col-sm-6 col-lg-4"
                 :style="{ order: cardCssOrder('stock_items') }"
             >
-                <DashboardCard icon="inventory_2" title="Pantry" :to="'/stock'">
+                <!-- FU-299 — the card is no longer a single link; low + out
+                     legend rows / donut segments deep-link to the filtered
+                     stock view (?level_id=…). The "View →" action keeps the
+                     unfiltered pantry link for the "show me everything" case. -->
+                <DashboardCard icon="inventory_2" title="Pantry">
                     <template #action>
-                        <span class="dora-card-action">View →</span>
+                        <router-link class="dora-card-action dora-card-link" to="/stock">
+                            View →
+                        </router-link>
                     </template>
                     <div class="dora-stock-body">
                         <svg
@@ -646,8 +662,15 @@
                                 :stroke="seg.colour"
                                 :stroke-dasharray="`${seg.percent} ${100 - seg.percent}`"
                                 :stroke-dashoffset="seg.offset"
-                                :style="{ transitionDelay: `${i * 60}ms` }"
+                                :style="{ transitionDelay: `${i * 60}ms`, cursor: seg.link ? 'pointer' : undefined }"
+                                :role="seg.link ? 'link' : undefined"
+                                :tabindex="seg.link ? 0 : undefined"
+                                :aria-label="seg.link ? `View ${seg.label} items` : undefined"
                                 class="dora-donut-seg"
+                                :class="{ 'dora-donut-seg--link': seg.link }"
+                                @click="seg.link && goTo(seg.link)"
+                                @keydown.enter="seg.link && goTo(seg.link)"
+                                @keydown.space.prevent="seg.link && goTo(seg.link)"
                             />
                             <text x="18" y="17" text-anchor="middle" class="dora-donut-big">
                                 {{ summary.stock_items.total }}
@@ -661,14 +684,18 @@
                                 <span class="dora-legend-label">in stock</span>
                             </li>
                             <li>
-                                <span class="dora-dot dora-dot-warn"></span>
-                                <span class="dora-legend-num">{{ summary.stock_items.low_stock }}</span>
-                                <span class="dora-legend-label">running low</span>
+                                <router-link class="dora-legend-link" :to="stockLowLink">
+                                    <span class="dora-dot dora-dot-warn"></span>
+                                    <span class="dora-legend-num">{{ summary.stock_items.low_stock }}</span>
+                                    <span class="dora-legend-label">running low</span>
+                                </router-link>
                             </li>
                             <li>
-                                <span class="dora-dot dora-dot-bad"></span>
-                                <span class="dora-legend-num">{{ summary.stock_items.out_of_stock }}</span>
-                                <span class="dora-legend-label">out</span>
+                                <router-link class="dora-legend-link" :to="stockOutLink">
+                                    <span class="dora-dot dora-dot-bad"></span>
+                                    <span class="dora-legend-num">{{ summary.stock_items.out_of_stock }}</span>
+                                    <span class="dora-legend-label">out</span>
+                                </router-link>
                             </li>
                         </ul>
                     </div>
@@ -947,6 +974,71 @@
                 </DashboardCard>
             </div>
 
+            <!-- ───── Price drops (Phase 4 — Money zone, product-gated) ──── -->
+            <div
+                v-if="isCardVisible('price_drops')"
+                class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('price_drops') }"
+            >
+                <DashboardCard :icon="ICONS.trending_down" title="Price drops">
+                    <template #action>
+                        <router-link
+                            v-if="priceDropRows.length > 0"
+                            class="dora-card-action dora-card-link"
+                            to="/my-products"
+                        >
+                            My products →
+                        </router-link>
+                    </template>
+                    <ul v-if="priceDropRows.length > 0" class="dora-deal-list">
+                        <li
+                            v-for="row in priceDropRows"
+                            :key="row.product_id"
+                            class="dora-deal-row"
+                        >
+                            <q-avatar rounded size="36px" class="dora-bg-sunken dora-deal-img">
+                                <img
+                                    v-if="row.has_image"
+                                    :src="`/api/products/${row.product_id}/image`"
+                                    :alt="row.name"
+                                />
+                                <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
+                            </q-avatar>
+                            <div class="dora-deal-text">
+                                <div class="dora-deal-name">{{ row.name }}</div>
+                                <div class="dora-deal-meta">
+                                    {{ row.store_name }}
+                                    <span v-if="row.linked_stock_item_id">
+                                        ·
+                                        <router-link
+                                            class="text-primary"
+                                            :to="`/stock/${row.linked_stock_item_id}`"
+                                        >
+                                            {{ row.linked_stock_item_name }}
+                                        </router-link>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="dora-deal-price">
+                                <span class="dora-deal-now">
+                                    ${{ row.price_now.toFixed(2) }}
+                                </span>
+                                <span class="dora-deal-was">
+                                    was ${{ row.previous_low.toFixed(2) }}
+                                </span>
+                            </div>
+                            <q-badge class="dora-deal-badge" color="negative" text-color="white">
+                                {{ row.drop_percent }}% off
+                            </q-badge>
+                        </li>
+                    </ul>
+                    <div v-else class="dora-empty">
+                        Nothing at a new low right now — I'll flag one when a
+                        tracked product drops.
+                    </div>
+                </DashboardCard>
+            </div>
+
             <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
                  counter cards were cut — raw totals answer no question the user
                  has. `shopping_lists` merged into the primary-list card above
@@ -1013,14 +1105,22 @@
         type StoreSpendResponse,
         type StockValueResponse,
         type KeepsRunningOutResponse,
+        type PriceDropsResponse,
     } from 'src/services/api/reportsApiService';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import {
+        LOW_STOCK_SEQUENCE,
+        OUT_OF_STOCK_SEQUENCE,
+        findLevelBySequence,
+    } from 'src/helpers/stockStatus';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useLogPrice } from 'src/composables/useLogPrice';
     import { useDragDropList } from 'src/composables/useDragDropList';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
@@ -1039,6 +1139,7 @@
         | 'savings'
         | 'spend_trend'
         | 'pantry_value'
+        | 'price_drops'
         // Phase 5 — predictive restock.
         | 'restock'
         // Phase 6 — unified fortnight calendar (D7).
@@ -1093,6 +1194,10 @@
         // money features off — same posture as savings / spend / pantry value.
         { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money', gate: 'money' },
         { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money', gate: 'products' },
+        // Product-data-gated (FU-296) — surfaces only genuine new lows so the
+        // claim "price drop" is honest (§2.4). Opt-in like the other secondary
+        // money widgets.
+        { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, zone: 'money', gate: 'products', defaultHidden: true },
         { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
@@ -1112,6 +1217,7 @@
     // list / create behave identically to the rest of the app (R-011).
     const { addToList } = useStockItemActions();
     const { openQuickAdd } = useQuickAdd();
+    const { openLogPrice } = useLogPrice();
 
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
@@ -1124,6 +1230,11 @@
     const shoppingListApi = new ShoppingListApiService();
 
     const shoppingListStore = useShoppingListStore();
+    // FU-299 — donut segments deep-link to /stock?level_id=<id>. The stock
+    // overview already reads `level_id` from the query; we just need the two
+    // level ids (low / out) that match the canonical status sequences.
+    const stockLevelStore = useStockLevelStore();
+    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
@@ -1199,6 +1310,7 @@
     const savingsRange = ref<ReportRange>('30d');
     const spendByStore = ref<StoreSpendResponse | null>(null);
     const pantryValue = ref<StockValueResponse | null>(null);
+    const priceDrops = ref<PriceDropsResponse | null>(null);
     // Phase 5 — restock radar (items the user keeps running out of) + the
     // "Add item" quick-action dialog state.
     const keepsRunningOut = ref<KeepsRunningOutResponse | null>(null);
@@ -1410,7 +1522,19 @@
         return Math.max(0, s.total - s.low_stock - s.out_of_stock);
     });
 
-    type DonutSegment = { label: string; percent: number; offset: number; colour: string };
+    // FU-299 — pre-computed deep-link targets for each donut bucket. Falls
+    // back to the un-filtered `/stock` when the levels aren't loaded yet, so
+    // clicks never dead-end.
+    const stockLowLink = computed(() => {
+        const lvl = findLevelBySequence(stockLevels.value, LOW_STOCK_SEQUENCE);
+        return lvl ? `/stock?level_id=${lvl.stock_level_id}` : '/stock';
+    });
+    const stockOutLink = computed(() => {
+        const lvl = findLevelBySequence(stockLevels.value, OUT_OF_STOCK_SEQUENCE);
+        return lvl ? `/stock?level_id=${lvl.stock_level_id}` : '/stock';
+    });
+
+    type DonutSegment = { label: string; percent: number; offset: number; colour: string; link: string | null };
     const stockSegments = computed<DonutSegment[]>(() => {
         if (!summary.value || summary.value.stock_items.total === 0) return [];
         const total = summary.value.stock_items.total;
@@ -1423,10 +1547,10 @@
         // 12-o'clock position. stroke-dashoffset walks clockwise.
         let cursor = 0;
         const segs: DonutSegment[] = [];
-        const push = (label: string, count: number, colour: string) => {
+        const push = (label: string, count: number, colour: string, link: string | null) => {
             if (count <= 0) return;
             const p = pct(count);
-            segs.push({ label, percent: p, offset: cursor, colour });
+            segs.push({ label, percent: p, offset: cursor, colour, link });
             // Negative offsets walk clockwise around the circle.
             cursor = (cursor - p + 100) % 100;
         };
@@ -1436,9 +1560,12 @@
         const okColour = cs.getPropertyValue('--semantic-positive').trim() || '#6ba368';
         const warnColour = cs.getPropertyValue('--semantic-warning').trim() || '#e89a45';
         const badColour = cs.getPropertyValue('--semantic-negative').trim() || '#c85a4f';
-        push('in stock', inStock, okColour);
-        push('low', low, warnColour);
-        push('out', out, badColour);
+        // "In stock" has no bucket-filter — it's the residual; clicking the
+        // segment does nothing (would need `?level_id != low/out`, which the
+        // page doesn't model). Low + out link to their filtered view.
+        push('in stock', inStock, okColour, null);
+        push('low', low, warnColour, stockLowLink.value);
+        push('out', out, badColour, stockOutLink.value);
         return segs;
     });
 
@@ -1786,6 +1913,18 @@
         }
     }
 
+    // FU-296 — price-drops is product-gated (not money-gated); still cheap to
+    // load, hides itself when empty.
+    async function loadPriceDrops() {
+        if (!productsEnabled.value) { priceDrops.value = null; return; }
+        try {
+            priceDrops.value = await reportsApi.getPriceDropsAsync(5);
+        } catch {
+            priceDrops.value = null;
+        }
+    }
+    const priceDropRows = computed(() => priceDrops.value?.rows ?? []);
+
     // ── Restock radar (Phase 5) ──────────────────────────────────────────
     async function loadKeepsRunningOut() {
         try {
@@ -1921,12 +2060,16 @@
             loadSavings(),
             loadSpendByStore(),
             loadPantryValue(),
+            loadPriceDrops(),
             loadKeepsRunningOut(),
             // Calendar is opt-in — only fetch the (heavier) aggregation when
             // the card is actually shown (R-016 lazy hydration).
             isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
             suggestionStore.refreshAsync(),
             shoppingListStore.ensureLoadedAsync(),
+            // FU-299 — the donut's low/out segments deep-link to
+            // /stock?level_id=<id>; the store hydrates those ids.
+            stockLevelStore.ensureLoadedAsync(),
         ]);
         // Primary list detail depends on the shoppingListStore refresh
         // having landed, so it runs after.
@@ -2107,7 +2250,25 @@
         stroke-width: 4;
     }
     .dora-donut-seg {
-        transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease;
+        transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease, opacity 0.15s ease;
+    }
+    /* FU-299 — clickable low/out segments. Slight hover feedback so the
+       affordance reads; keyboard focus mirrors it for parity. */
+    .dora-donut-seg--link:hover,
+    .dora-donut-seg--link:focus {
+        opacity: 0.8;
+        outline: none;
+    }
+    /* Legend rows deep-link to the filtered pantry view; low/out are the
+       "act" segments — underline on hover, keep the row layout stable. */
+    .dora-legend-link {
+        display: contents;
+        color: inherit;
+        text-decoration: none;
+    }
+    .dora-legend-link:hover .dora-legend-label,
+    .dora-legend-link:focus .dora-legend-label {
+        text-decoration: underline;
     }
     /* SVG text inherits the parent's -90deg rotation; rotate the text nodes
        back so the centre label reads normally. */

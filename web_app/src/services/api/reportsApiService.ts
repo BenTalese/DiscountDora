@@ -72,6 +72,24 @@ export interface SavingsListBreakdown {
     savings: number;
 }
 
+export interface PriceDropRow {
+    product_id: string;
+    name: string;
+    store_id: string | null;
+    store_name: string;
+    has_image: boolean;
+    price_now: number;
+    previous_low: number;
+    drop_amount: number;
+    drop_percent: number;
+    linked_stock_item_id: string | null;
+    linked_stock_item_name: string | null;
+}
+
+export interface PriceDropsResponse {
+    rows: PriceDropRow[];
+}
+
 export interface SavingsCapturedResponse {
     range: ReportRange;
     total_savings: number;
@@ -103,4 +121,7 @@ export default class ReportsApiService {
 
     getSavingsCapturedAsync = (range: ReportRange) =>
         this.httpClient.get<SavingsCapturedResponse>(`/reports/savings-captured?range=${range}`);
+
+    getPriceDropsAsync = (limit = 5) =>
+        this.httpClient.get<PriceDropsResponse>(`/reports/price-drops?limit=${limit}`);
 }

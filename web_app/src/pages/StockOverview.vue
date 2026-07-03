@@ -497,6 +497,7 @@
     import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useLocationStore } from 'src/stores/locationStore';
     import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
     import { computed, onMounted, ref, watch } from 'vue';
@@ -526,6 +527,9 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
+    // P8-07 — inferred-pantry beliefs, loaded once on mount; StockItemRow
+    // reads from the shared cache.
+    const pantryBeliefs = usePantryBeliefs();
     const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
     const slActions = useShoppingListActions();
@@ -1110,6 +1114,9 @@
             recipeStore.ensureLoadedAsync(),
             loadStockGroups(),
             loadStocktakeCount(),
+            // P8-07 — load the inferred-pantry beliefs once; rows read them
+            // from the shared cache. Non-blocking-safe (fails soft).
+            pantryBeliefs.loadAsync(),
         ]);
         // Apply *after* the supporting data is loaded so the filter chips
         // visibly snap to the linked-from state on the first render.

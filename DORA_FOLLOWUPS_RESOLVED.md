@@ -10,6 +10,74 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-449 — P6-07 cook→consume: `consumption_events` writes never landed
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type:** finding (loop-integrity gap).
+- **Resolved:** 2026-07-03, as the foundation leg of P8-07 (the flagship
+  depends on cadence quality — champion plan §5). Shipped:
+  - New `ConsumptionEvent` entity + `ConsumptionEvent` table + migration
+    `f2a9c4d7e1b8` (stock-item-scoped depletion log; distinct from the
+    recipe-scoped `CookEvent`). FKs SET NULL, denormalised names, indexed
+    on stock_item_id.
+  - Written on a cook-driven level **drop** via the existing
+    `PATCH /stock-items/<id>` path (new `consumption_source` /
+    `consumption_recipe_id` fields; the cook-mode finish dialog tags its
+    per-item drops `source='cook'`). Keeping it on the one level-change
+    site preserves R-001/R-003.
+  - Consumed by the new P8-07 belief service (`pantry_belief.py`):
+    `cooks_since_purchase` advances depletion, so the run-out inference
+    **demonstrably shifts when cooked vs only bought** (unit-tested in
+    `tests/test_pantry_belief.py::test__cooking_shifts_prediction_earlier`),
+    and the reason chip reads "cooked with N× since" — the done-when bonus.
+- **Scope note:** the separate buy-verdict `_cadence_detail` was left
+  purchase-cadence (its "should I buy" purpose); the belief service is the
+  canonical run-out inference that blends cooking. Logged in
+  `PROPOSAL_ZERO_INPUT_PANTRY.md §4`. Server-env verify (migration + pytest)
+  pending a Python box.
+
+## [RESOLVED] FU-300 — Dashboard quick actions: add "Log price"
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up.
+- **Resolved:** 2026-07-03. Shipped a global `LogPriceSheet.vue` +
+  `useLogPrice` composable mounted alongside `QuickAddSheet` in
+  `MainLayout.vue`. Dashboard quick-action bar now has a third button
+  "Log price" (money-gated to match `StockItemRowPriceButton`); it pops a
+  bottom sheet with the same shortlist ordering as QuickAddSheet (low/out
+  first), then hands off to the shared `PriceEntry` component in shelf mode
+  with the item's `price_entry_prefill` seeded lazily. No new API — reuses
+  `stockItemApi.addPriceObservationAsync`.
+
+## [RESOLVED] FU-299 — Dashboard stock donut: deep-link buckets to filtered /stock
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up (enhancement).
+- **Resolved:** 2026-07-03. No new query-param needed — `StockOverview.vue`
+  already reads `?level_id=<id>` (lines 1081-1088). Dashboard donut now
+  computes low/out `stock_level_id`s via `findLevelBySequence` on the
+  hydrated `stockLevelStore` and links each of: (a) the donut segment (SVG
+  `<circle>` with `role="link"` + keyboard handlers), and (b) the legend
+  row (`<router-link>`). The card-level `:to="/stock"` was removed; a
+  "View →" action link keeps the unfiltered path. "In stock" is
+  intentionally not clickable (no matching filter — it's the residual).
+
+## [RESOLVED] FU-296 — Dashboard "price drops" widget
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
+- **Type:** deferred job.
+- **Resolved:** 2026-07-03. Server-side verify is user-driven (no Python
+  env on this box); code landed:
+  - **Server:** new `PriceDropsHandler` + `GET /api/reports/price-drops?limit=N`
+    in `reports.py`. Definition of "new low": `current_offer.price_now`
+    strictly less than the minimum of that product's
+    `ProductHistoricOffer.price_now` values — Honesty (§2.4). Products with
+    no history skip (a first-ever price isn't a drop). Ranked by drop
+    percent desc; slice done server-side (state-ownership §8.2). Stamps
+    `has_image` + `linked_stock_item_*` only against the sliced set to
+    avoid touching the deferred image blob for the tail.
+  - **Client:** `reportsApiService.getPriceDropsAsync`, new `price_drops`
+    card def in `DashboardPage.vue` (zone `'money'`, `gate: 'products'`,
+    `defaultHidden: true`), rendered next to Best deals. Empty state:
+    "Nothing at a new low right now — I'll flag one when a tracked product
+    drops." Added to `DORA_VERIFY.md` under Dashboard.
+
 ## [RESOLVED] FU-327 — Windows + macOS desktop build scripts for the Piper bundle
 - **Raised:** 2026-06-24 (Piper platform audit). Renumbered from
   FU-288 on 2026-06-29 to resolve a ledger numbering collision.

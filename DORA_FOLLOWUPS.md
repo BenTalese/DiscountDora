@@ -53,6 +53,13 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-463 — Auto-add-when-low threshold is stale after the 3-band collapse (`>= 2` = Out only)
+- **Raised:** 2026-07-03 (spotted while wiring P8-07 consumption events into `update_stock_item.py`).
+- **Type:** finding (real bug — behaviour drift).
+- **What:** [`update_stock_item.py`](dora_api/features/stock_items/update_stock_item.py) auto-add hook fires on `_NewLevelSeq >= 2` with a stale comment `# 2 = Low, 3 = Out (see seed)`. That comment reflects the OLD 4-band sequences (0 Stocked / 1 Sufficient / 2 Low / 3 Out). After the 2026-07-02 Sufficient-band collapse the canonical sequences are **0 Stocked / 1 Low / 2 Out** (`dora_api/domain/stock_status.py`). So `>= 2` now means **Out only** — an item transitioning to **Low** no longer auto-adds, even with `auto_add_when_low` set. The intent is low-or-out (`needs_restock`, seq ≥ 1).
+- **Why not fixed here:** out of P8-07 scope (R-007); touches the auto-add behaviour which has its own DORA_VERIFY coverage. Flagged per the engineering-standards close-gate (R-003 — a bare `2` literal duplicating a domain threshold).
+- **Recommended resolution:** now/opportunistic — replace the `>= 2` + `< 2` literals with `needs_restock(...)` / `LOW_STOCK_SEQUENCE` from `stock_status.py` (server-side single source), and re-verify the auto-add-when-low DORA_VERIFY item. Small, high-value fix.
+
 ## [OPEN] FU-462 — Sweep the ~237 prompt-ID comments (`P[0-9]-` / `C-[0-9]` / `B[0-9]`) from shipped source
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
 - **Type:** deferred job / pre-release polish.
@@ -122,13 +129,6 @@ long session summary. Distinct from the other logs:
 - **What:** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history (`lowest_price`, `is_lowest_in_window`, percentile, **`fake_markdown` flag**, 0–100 `deal_score`), a `good_deal` alert type with one-tap add-to-list + per-user threshold + throttle, and a lowest/median overlay on `PriceHistoryPage.vue`. Zero code hits for `deal_score`, `fake_markdown`, or `is_lowest_in_window`; `find_deals` in `dora_api/features/assistant/tools.py` still returns raw offers. **Superseded framing:** the **P8-05 buy-verdict oracle** (shipped 2026-07-02) answers "is this a good price" with a verdict badge on rows + shopping-lines — different shape, same intent. **Missing pieces still valuable:** (a) the **`fake_markdown` flag** (detects inflated "was" prices — truth-in-advertising for a product literally called Dora that tracks *discounts*); (b) the **`good_deal` alert type** with one-tap add-to-list + throttle (proactive, not just passive on-page).
 - **Why deferred:** framing moved from "score" to "verdict" (P8-05); the leftover pieces weren't back-ported.
 - **Recommended resolution:** opportunistic — fold the `fake_markdown` detection into `BuyVerdictCard` (also un-wires FU-437), and add the `good_deal` alert type to `get_alerts.py`. Skip the 0–100 score + percentile UI — P8-05 replaces that surface. Feeds FU-451 (budget defense wants a deal-quality signal to rank product swaps).
-
-## [OPEN] FU-449 — P6-07 cook→consume: `consumption_events` writes never landed
-- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** finding (loop-integrity gap — the UX shipped but the persisted event did not).
-- **What:** `PROMPT_PLAN_PART_6_POLISH.md:479` specified a `consumption_events` table (id, user_id, household_id, stock_item_id, recipe_id, consumed_on, created_at) written on every recipe finish, so run-out prediction can blend **consumption cadence with purchase cadence**. The **UX half shipped** — `RecipeCookMode.vue` (C-3 Chunk 1 rewrite) has the finish dialog with per-ingredient level control, "Down one level" default, per-row add-to-list, meals-cooked counter (`finishRows`, `finishMealsCooked`, `confirmFinish` ~L1208). Level changes go through `update_stock_level` and auto-add-when-low fires correctly. **The persisted event is missing:** zero grep hits for `consumption_events` / `ConsumptionEvent` anywhere in `dora_api/`. As a consequence, the P6-07 done-when *"run-out prediction demonstrably shifts when an item is cooked vs only bought"* is **not true** — run-out prediction sees purchase cadence only. That's the whole point of the P6 close-the-loop story; without it, "loop closed" is optimistic (`PROJECT_STATE.md` currently reports Phase 1 ✅ ~95%).
-- **Why deferred:** the finish dialog was scoped as a UX rewrite (C-3 Chunk 1); the analytics/prediction wire was in a different scope and never followed.
-- **Recommended resolution:** later during Phase 1 mop-up (small — one entity + migration + write in the existing finish confirm path; the reason chip on run-out predictions is a bonus). Consider before Phase 3 opens — P8-07 Zero-Input Pantry depends on cadence quality (per `RECONCILED_FINISHING_PLAN.md §5`).
 
 ## [OPEN] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece never built)
 - **Raised:** 2026-07-02 (surfaced while checking whether P2-05 was done).
@@ -1497,49 +1497,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **What:** `DASHY_DORA_CHAMPION_PLAN.md` §§334, 346, 444–447 treat waste as one of four Dora Score pillars ("low waste, on-budget, fresh, few run-outs"). The C-waste design deliberately de-emphasises waste as a UI feature — the `/waste` page is deleted, the capture flow shrinks to a single row dropdown action with no money/note capture, no Reports card. The *signal* is preserved (events still logged + queryable) so the Score can read it. But the de-emphasis is a quiet vote that the Score model itself may want re-weighting — perhaps waste shrinks to a smaller pillar, or merges with another (e.g. "fresh + low-waste" → one freshness pillar). This is a **charter-level** decision, not a UI cleanup, and was explicitly out of scope for C-waste.
 - **Why deferred:** the Score isn't designed yet (Phase 3 / champion phase); doing the weighting now would be speculative. Better to revisit when the Score model is being built and the full pillar picture is on the table.
 - **Recommended resolution:** later during pre-Phase 3 (when the Dora Score model is actually being designed; the reassessment is an input to that design, not its own deliverable).
-
-## [OPEN] FU-300 — Dashboard quick actions: add "Log price" (needs a product target)
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
-- **Type:** follow-up.
-- **What:** the Phase-5 quick-action bar ships **Add item** (CreateStockItemDialog)
-  and **Add to list** (QuickAddSheet). Decision §9 also listed **Log price**, but a
-  standalone log-price action has no obvious target (price is logged against a
-  specific product/stock item) — it needs an item/product picker first.
-- **Why deferred:** unclear UX without a target picker; the other two quick actions
-  delivered the "home screen does, not just routes" value.
-- **Recommended resolution:** opportunistic — add a Log-price quick action that
-  first picks a stock item (reuse the QuickAddSheet search) then opens the existing
-  `PriceEntry` flow.
-
-## [OPEN] FU-299 — Dashboard stock donut: deep-link buckets to filtered /stock
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
-- **Type:** follow-up (enhancement) — was slated as a Phase-5 item.
-- **What:** the critique wanted the Pantry donut's low/out segments to deep-link to
-  a filtered stock view (`/stock?status=low|out`). The donut card is currently a
-  whole-card link to `/stock`. `StockOverviewPage` has **no status query-param
-  filter**, so the deep-link target doesn't exist yet.
-- **Why deferred:** adding query-driven filtering to the stock overview is out of
-  the dashboard's scope (R-007).
-- **Recommended resolution:** when touching the stock overview — add `?status=`
-  query support there, then de-clickable the donut card and link each legend
-  row/segment to the matching filtered view.
-
-## [OPEN] FU-296 — Dashboard "price drops" widget (needs server "new low" signal)
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
-- **Type:** deferred job.
-- **What:** the Money-zone **price-drops** widget (§2.4) — tracked products at a
-  genuine new low / recent drop — was **not built**. Savings / spend / pantry
-  value shipped (existing reports endpoints), but price-drops needs a new
-  server-side "new low since last seen" signal (Honesty: the claim must be true)
-  that doesn't exist yet, plus the product-data-presence gate (the `gate:
-  'products'` seam + `cardAvailable` are already in place for it).
-- **Why deferred:** requires a new backend endpoint (price-history analysis) that
-  can't be built+verified without a Python env here; the other three Money
-  widgets delivered the phase's value on existing endpoints.
-- **Recommended resolution:** when on a Python-capable machine — add a
-  `/reports/price-drops` (or extend price-trends) endpoint returning products at
-  a new low, then add the `price_drops` card (zone 'money', `gate: 'products'`,
-  `defaultHidden: true`) consuming it.
 
 ## [OPEN] FU-295 — Confirm the Alerts page (D5) no longer 404s
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 3).

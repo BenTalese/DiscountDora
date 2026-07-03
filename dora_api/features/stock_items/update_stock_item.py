@@ -6,6 +6,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.consumption_event import (
+    CONSUMPTION_SOURCE_COOK, CONSUMPTION_SOURCE_MANUAL,
+    CONSUMPTION_SOURCE_WASTE, ConsumptionEvent,
+)
+from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_expiry_event import (
     StockItemExpiryEvent, classify_expiry_transition,
@@ -61,6 +66,16 @@ class UpdateStockItemRequest(BaseModel):
     # quirk so the picker's X button actually persists.
     clear_stock_location: bool = False
     clear_stock_group: bool = False
+    # P8-07 / FU-449 — consumption context. When a level DROP accompanies
+    # this update (e.g. the cook-mode finish dialog marking an ingredient
+    # down), the handler records a ConsumptionEvent so run-out prediction +
+    # the Zero-Input Pantry belief can blend cooking with purchases. Only
+    # honoured when the level actually drops; a valid `consumption_source`
+    # is one of the CONSUMPTION_SOURCE_* markers. `consumption_recipe_id`
+    # attributes the depletion to a recipe (denormalised name captured
+    # server-side so history survives a recipe delete).
+    consumption_source: str | None = None
+    consumption_recipe_id: UUID | None = None
 
 
 @dataclass(slots=True)
@@ -124,6 +139,13 @@ class UpdateStockItemHandler:
                     stock_level_name = _StockLevel.name,
                     changed_at = datetime.now(UTC),
                 ))
+            # P8-07 / FU-449 — record a ConsumptionEvent when this level
+            # change is a DROP (higher sequence = more depleted) tagged with
+            # a consumption source. This is the depletion leg of the loop:
+            # cooking with an item now feeds run-out prediction + the belief,
+            # not only buying it. A level RISE (restock) or an unchanged/
+            # unsourced update records nothing.
+            self._maybe_record_consumption(request, _StockItem, _PreviousLevelSeq, _StockLevel)
 
         # stock_location: same lazy="noload" trap as stock_group below — a
         # relationship-only None assignment doesn't dirty the FK column, so
@@ -261,6 +283,45 @@ class UpdateStockItemHandler:
                 auto_added_to_list_id=list_id,
             )
         return UpdateStockItemResponse()
+
+    _VALID_CONSUMPTION_SOURCES = frozenset({
+        CONSUMPTION_SOURCE_COOK,
+        CONSUMPTION_SOURCE_MANUAL,
+        CONSUMPTION_SOURCE_WASTE,
+    })
+
+    def _maybe_record_consumption(
+        self,
+        request: "UpdateStockItemRequest",
+        stock_item: StockItem,
+        previous_seq: int | None,
+        new_level: StockLevel,
+    ) -> None:
+        """P8-07 / FU-449 — persist a ConsumptionEvent when a sourced level
+        DROP happens. Higher sequence = more depleted, so a drop is
+        `new.sequence > previous.sequence`. A restock (rise), an unchanged
+        level, or an update with no `consumption_source` records nothing.
+        """
+        source = request.consumption_source
+        if source not in self._VALID_CONSUMPTION_SOURCES:
+            return
+        new_seq = new_level.sequence
+        if previous_seq is None or new_seq <= previous_seq:
+            return
+        recipe_name: str | None = None
+        if request.consumption_recipe_id is not None:
+            recipe = self.repository.get(Recipe).by_id(request.consumption_recipe_id)
+            recipe_name = recipe.name if recipe else None
+        self.repository.add(ConsumptionEvent(
+            stock_item_id = stock_item.id,
+            stock_item_name = stock_item.name,
+            recipe_id = request.consumption_recipe_id,
+            recipe_name = recipe_name,
+            source = source,
+            from_sequence = previous_seq,
+            to_sequence = new_seq,
+            occurred_at = datetime.now(UTC),
+        ))
 
     def _try_auto_add(self, stock_item: StockItem) -> tuple[UUID, UUID] | None:
         """Adds the stock item to the primary shopping list, X5-style.

@@ -25,6 +25,10 @@ Endpoints:
   GET /api/reports/savings-captured?range=...
       Aggregated picked-vs-RRP savings across archived lists.
 
+  GET /api/reports/price-drops?limit=N
+      Tracked products whose current offer is at a genuine new all-time low
+      vs their historic offers.
+
 Conventions:
 - `range=all` is accepted everywhere a range is and means "no lower bound".
 - Prices use the moment-of-pick snapshot pair on ShoppingListLine
@@ -829,3 +833,132 @@ def savings_captured():
     _Result = get_container().inject(SavingsCapturedHandler).handle(_Since)
     _Result["range"] = request.args.get("range", "30d")
     return ok(_Result)
+
+
+# ───── 7. Price drops (new-low) ───────────────────────────────────────────
+
+@dataclass(slots=True)
+class PriceDropRow:
+    product_id: UUID
+    name: str
+    store_id: UUID | None
+    store_name: str
+    has_image: bool
+    price_now: float
+    previous_low: float
+    drop_amount: float
+    drop_percent: int
+    linked_stock_item_id: UUID | None
+    linked_stock_item_name: str | None
+
+
+class PriceDropsHandler:
+    """Active products whose current offer is strictly below every prior
+    historic price on record — Honesty (§2.4): the claim "new low" must be
+    true, not "cheapest right now". Ranked by drop percent, sliced server-side
+    (state-ownership §8.2)."""
+
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, limit: int) -> list[PriceDropRow]:
+        products = (
+            self.repository
+            .get(Product)
+            .include(Product.Fields.CURRENT_OFFER)
+            .include(Product.Fields.STORE)
+            .all()
+        )
+        active = [p for p in products if p.is_active and p.current_offer is not None]
+        if not active:
+            return []
+
+        product_ids = [p.id for p in active]
+        session = self.repository.session
+        historic_rows = session.execute(
+            select(
+                ProductHistoricOffer._product_id,  # noqa: SLF001
+                ProductHistoricOffer.price_now,
+            ).where(ProductHistoricOffer._product_id.in_(product_ids))
+        ).all()
+        prev_low_by_product: Dict[UUID, float] = {}
+        for pid, price_now in historic_rows:
+            if price_now is None:
+                continue
+            price = float(price_now)
+            existing = prev_low_by_product.get(pid)
+            if existing is None or price < existing:
+                prev_low_by_product[pid] = price
+
+        rows: list[PriceDropRow] = []
+        for product in active:
+            prev_low = prev_low_by_product.get(product.id)
+            # No prior history → the current price can't be a "new low" —
+            # it's the only price we've seen. Skip.
+            if prev_low is None or prev_low <= 0:
+                continue
+            current = float(product.current_offer.price_now)
+            if current <= 0 or current >= prev_low:
+                continue
+            drop_amount = round(prev_low - current, 2)
+            drop_percent = int(round((prev_low - current) / prev_low * 100))
+            rows.append(PriceDropRow(
+                product_id=product.id,
+                name=product.name,
+                store_id=product.store.id if product.store else None,
+                store_name=product.store.name if product.store else "Unknown",
+                has_image=False,
+                price_now=current,
+                previous_low=round(prev_low, 2),
+                drop_amount=drop_amount,
+                drop_percent=drop_percent,
+                linked_stock_item_id=None,
+                linked_stock_item_name=None,
+            ))
+        rows.sort(key=lambda r: (r.drop_percent, r.drop_amount), reverse=True)
+        rows = rows[:limit]
+
+        # Stamp has_image + linked_stock_item_* against the sliced set only,
+        # so we never load the deferred image blob for the unsliced tail.
+        # These live on Product; a lightweight direct SQL pass mirrors the
+        # products list (get_products.stamp_has_image / stamp_linked_stock_items)
+        # but on `PriceDropRow` shape (no shared DTO between the two).
+        if rows:
+            from dora_api.app import db  # local to avoid module-load cycles
+            sliced_ids = [r.product_id for r in rows]
+            product_table = db.metadata.tables["Product"]
+            image_rows = session.execute(
+                select(product_table.c.id, product_table.c.image.isnot(None))
+                .where(product_table.c.id.in_(sliced_ids))
+            ).all()
+            has_image_by_id = {row[0]: bool(row[1]) for row in image_rows}
+            assoc = db.metadata.tables["StockItemProduct"]
+            link_rows = session.execute(
+                select(assoc.c.product_id, assoc.c.stock_item_id)
+                .where(assoc.c.product_id.in_(sliced_ids))
+            ).all()
+            product_to_stock: Dict[UUID, UUID] = {row[0]: row[1] for row in link_rows}
+            stock_ids = list({sid for sid in product_to_stock.values()})
+            name_by_stock: Dict[UUID, str] = {}
+            if stock_ids:
+                for item in self.repository.get(StockItem).all(
+                    EntityField(StockItem, "id").in_(stock_ids)
+                ):
+                    name_by_stock[item.id] = item.name
+            for row in rows:
+                row.has_image = has_image_by_id.get(row.product_id, False)
+                stock_id = product_to_stock.get(row.product_id)
+                if stock_id is not None:
+                    row.linked_stock_item_id = stock_id
+                    row.linked_stock_item_name = name_by_stock.get(stock_id)
+        return rows
+
+
+@REPORTS_ROUTER.route("/price-drops", methods=["GET"])
+def price_drops():
+    try:
+        _Limit = max(1, min(int(request.args.get("limit", "5")), 20))
+    except (TypeError, ValueError):
+        _Limit = 5
+    _Rows = get_container().inject(PriceDropsHandler).handle(_Limit)
+    return ok({"rows": [asdict(r) for r in _Rows]})

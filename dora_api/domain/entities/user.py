@@ -226,6 +226,11 @@ class User(BaseEntity):
     # NULL = not set → the SPA falls back to its `BUILDER_TARGET_MEALS`
     # constant (7). Bounds (1–21) enforced at the update-me boundary.
     meals_per_week: int | None = None
+    # P8-07 — Zero-Input Pantry opt-out. Default True: inferred stock
+    # levels (the belief overlay) are the headline experience. Charter 10 —
+    # some users want purely manual control, so this toggle switches the
+    # belief chip + inference-driven quick-checks off.
+    inferred_pantry_enabled: bool = True
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # `off` | `simple` | `complex`; default `off`. `complex` is a
     # reserved seam (validated against `AppSetting.nutrition_db_source`
@@ -313,6 +318,7 @@ class User(BaseEntity):
         BATCH_FEATURES_ENABLED = "batch_features_enabled"
         ALWAYS_ASK_WHICH_SHOPPING_LIST = "always_ask_which_shopping_list"
         MEALS_PER_WEEK = "meals_per_week"
+        INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         SHOW_STOCK_IMAGES = "show_stock_images"

@@ -1,5 +1,6 @@
 import type { StockItem } from 'src/models/stockItem';
 import type { StockItemDetail } from 'src/models/stockItemDetail';
+import type { PantryBeliefsResponse } from 'src/models/pantryBelief';
 import type { StockItemPriceHistory } from './priceHistoryApiService';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
@@ -86,6 +87,11 @@ export default class StockItemApiService {
 
     getDetailAsync = async (stockItemID: string): Promise<StockItemDetail> =>
         await this.httpClient.get<StockItemDetail>(`/stock-items/${stockItemID}/detail`);
+
+    /** P8-07 — inferred pantry beliefs for every stock item (keyed by id).
+     *  `enabled: false` when the user has inference switched off. */
+    getPantryBeliefsAsync = async (): Promise<PantryBeliefsResponse> =>
+        await this.httpClient.get<PantryBeliefsResponse>('/stock-items/beliefs');
 
     /** FU-315 — the server returns a 200 with `{ auto_added: { line_id,
      *  shopping_list_id } }` when a level transition to Low/Out fires the
@@ -248,4 +254,10 @@ export type UpdateStockItemCommand = {
      *  doesn't actually persist. The SPA sends these from the picker's X. */
     clear_stock_location?: boolean;
     clear_stock_group?: boolean;
+    /** P8-07 / FU-449 — consumption context. When a level DROP is the result
+     *  of cooking (or another depletion), the server records a
+     *  ConsumptionEvent so run-out prediction + the belief blend cooking with
+     *  purchases. `consumption_source` ∈ 'cook' | 'manual' | 'waste'. */
+    consumption_source?: 'cook' | 'manual' | 'waste';
+    consumption_recipe_id?: string;
 };

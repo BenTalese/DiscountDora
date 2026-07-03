@@ -74,6 +74,8 @@ class UpdateMeRequest(BaseModel):
     # Present-in-body sets it (null clears back to the 7 fallback); bounds
     # 1–21 enforced here so the request never persists an out-of-range value.
     meals_per_week: int | None = Field(default=None, ge=1, le=21)
+    # P8-07 — Zero-Input Pantry opt-out (default True on the entity).
+    inferred_pantry_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # Validated against NUTRITION_MODE_VALUES at the boundary
     # (R-010 carve-out for closed-set sentinels).
@@ -216,6 +218,12 @@ class UpdateMeHandler:
         # validated by the request model above.
         if "meals_per_week" in _SetFields:
             _User.meals_per_week = request.meals_per_week
+        # P8-07 — Zero-Input Pantry opt-out.
+        if (
+            "inferred_pantry_enabled" in _SetFields
+            and request.inferred_pantry_enabled is not None
+        ):
+            _User.inferred_pantry_enabled = request.inferred_pantry_enabled
 
         # C-cross Chunk 3 — per-user nutrition mode. R-010 carve-out: a
         # closed-set sentinel validated at this single boundary point

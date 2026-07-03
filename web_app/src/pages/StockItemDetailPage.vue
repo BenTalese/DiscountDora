@@ -193,6 +193,11 @@
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
                                             </span>
                                         </div>
+                                        <!-- P8-07 — inferred level (additive;
+                                             beside the recorded level above). -->
+                                        <div v-if="belief" class="q-mt-xs">
+                                            <PantryBeliefChip :belief="belief" />
+                                        </div>
                                     </q-item-section>
                                 </q-item>
 
@@ -1019,6 +1024,8 @@
     import BaseDropdown from 'src/components/BaseDropdown.vue';
     import BuyVerdictCard from 'src/components/stock/BuyVerdictCard.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import PantryBeliefChip from 'src/components/stock/PantryBeliefChip.vue';
+    import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -1082,6 +1089,11 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
+    // P8-07 — inferred belief for this item (shared cache).
+    const pantryBeliefs = usePantryBeliefs();
+    const belief = computed(() =>
+        detail.value ? pantryBeliefs.beliefFor(detail.value.stock_item_id) : null,
+    );
     const locationStore = useLocationStore();
     const recipeStore = useRecipeStore();
     const shoppingListStore = useShoppingListStore();
@@ -1524,6 +1536,10 @@
         // P8-05/06 — stock band feeds `_need_axis`; drop the cached
         // verdict so the card re-fetches the new answer.
         buyVerdictInvalidate();
+        // P8-07 — a manual level change is a fresh hard signal; refresh the
+        // belief so the chip reflects "override wins" immediately.
+        pantryBeliefs.invalidate();
+        void pantryBeliefs.loadAsync(true);
     }
 
     // ── Expiry ───────────────────────────────────────────────────────────
@@ -2195,6 +2211,9 @@
             stockItemStore.ensureLoadedAsync(),
             recipeStore.ensureLoadedAsync(),
             shoppingListStore.ensureLoadedAsync(),
+            // P8-07 — load inferred beliefs (shared cache; idempotent when
+            // the overview already loaded them).
+            pantryBeliefs.loadAsync(),
         ]);
         await loadDetail();
     });

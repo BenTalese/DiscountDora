@@ -10,6 +10,60 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-335 — Migrate StoresSettings logo upload to ImageSourcePicker
+- **Raised:** 2026-06-30 (FU-334 follow-on — image-source-picker rollout)
+- **Type:** leftover
+- **What:** [`web_app/src/pages/settings/StoresSettings.vue`](web_app/src/pages/settings/StoresSettings.vue) still uses Quasar `q-file` for its store-logo upload. Every other image-upload site now routes through the shared `ImageSourcePicker` primitive (R-0NN), which gives users the **Take photo** vs **Choose image** split. Migrating means dropping `q-file` (loses its drag-drop visual + clearable affordance, gains the consistent UX). The store-logo surface also has its own bespoke chrome (preview + max-file-size hint + reject toast wiring) that needs careful re-housing.
+- **Why deferred:** the `q-file` → custom-buttons swap is the only bespoke part of the chrome; the rest (preview + clear) belongs in `ImageUploadField` if we want it. Doing it right is a 30-line refactor with one cross-cutting concern (drag-drop equivalent), not trivial enough to slip into the FU-334 sweep. Charts as a quality follow-on, not a blocker.
+- **Recommended resolution:** opportunistic, next time settings is touched OR when a second store-logo bug forces us into that file.
+- **State note (2026-07-04):** migrated to `ImageSourcePicker` directly (not `ImageUploadField`) — the store-specific `StoreLogo` preview with fallback swatch is deliberately retained, so the picker-only shape fits better than the generic wrapper. Chrome mapped 1:1: `q-file` → `<ImageSourcePicker accept="image/png,image/jpeg,image/webp" @pick @error>`; local `MAX_BYTES = 6_000_000` + local `ACCEPT` constants dropped in favour of the install-wide image policy that `processImageFile` reads (R-003 single source of truth); `@rejected` toast replaced with an inline `pickError` caption under the picker (same shape ImageUploadField uses on other sites — one visual language for "your file didn't fit"); `imageFile: File | null` ref and the local `FileReader` code both deleted (the picker returns a `ProcessedImage` with a ready `dataUrl` — the resize/re-encode happens in `imageService.processImageFile`). A new `pickerVerb` computed toggles the two button labels between "Add logo" and "Change logo" to match the language ImageUploadField uses elsewhere. The "Remove existing logo" button + `clearImage` flow is unchanged. `vue-tsc --noEmit` clean. Verify item covers the browser check.
+
+## [RESOLVED] FU-426 — Waste-page scratch assessment: confirm fully absorbed by C-waste
+- **Raised:** 2026-07-01 (docs audit).
+- **Type:** finding (audit trail).
+- **What:** `docs/99_scratch/WASTE_PAGE_ASSESSMENT_2026-06-24.md` became `PROPOSAL_WASTE_MINIMISATION.md` + `IMPL_PLAN_WASTE_MINIMISATION.md`. Confirm every keep-item from the scratch note is either in the shipped proposal, a landed FU, or explicitly-dropped-with-rationale. If clean, archive the scratch note.
+- **Why deferred:** low risk, just a delta-check.
+- **Recommended resolution:** opportunistic; also fold the archive step into it (move to `06_legacy_prompt_plans/` or delete).
+- **State note (2026-07-04):** delta check **clean**; scratch note deleted. Every recommendation from the assessment is absorbed with rationale in the shipped proposal:
+  - **Rename to "Use soon" / "Rescue"** → superseded by a stronger call: **dissolve `/waste` entirely** (D10 route deleted, D11 no nav-slot replacement). `WastePage.vue` is gone from the tree; capture moved to StockItemRow expiry dropdown `Mark as wasted` (D1/D2 tile-grid + Undo toast).
+  - **Push insights into Reports as a card** → explicitly dropped with rationale (D12: no Reports waste card; the cheap most/recently-wasted view lives only inside the simplified `waste_insights` Dora tool).
+  - **Decide layered vs duplicated Dashboard "Use soon"** → resolved to *cut* (D9: `Use soon` card removed; `Needs your attention` absorbs).
+  - **Don't invest further until Dora Score lands** → charter tie-break of the proposal quotes this directly: "keep the signal, shed the surface." Dora Score subsequently shipped as P8-08 (Kitchen health card).
+  - Explicit don'ts from the scratch (no bulk logging, no photo capture, no freezer-zone modelling, no shame UI) all preserved in the proposal (D1/D2 minimalist capture, D7 freezer is "a physical move, not an app state", charter tie-break §"shame-free by design").
+  - **One real leftover found + fixed inline:** [DoraScoreCard.vue:143](web_app/src/components/dashboard/DoraScoreCard.vue) linked the waste component-action to `/waste` — a stale route from P8-08 (which was written after the /waste page was deleted). Set to `null` (R-014 reveal-and-disable: the score row still explains the number, just without a dead button). `vue-tsc --noEmit` clean.
+  - Scratch note deleted; source-assessment pointer in the proposal updated to name the deletion; PROJECT_STATE doc-register updated (99_scratch count 6 → 5).
+
+## [RESOLVED] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
+- **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).
+- **Type:** finding (pre-existing, not touched by P8-02).
+- **What:** `vue-tsc --noEmit` reports two errors in [`AdminDataImport.vue:33,35`](web_app/src/pages/settings/AdminDataImport.vue): a `find(...)` result assigned to `ImportTemplate` without narrowing the possible `undefined`. Fires under `exactOptionalPropertyTypes: true`. Confirmed pre-existing (git status was clean at session start; `git diff` empty on the file).
+- **Why deferred:** out of scope for P8-02; the file works at runtime (find over a fixed template list that always has entries).
+- **Recommended resolution:** opportunistic — next Admin/Data touch, fix with either an assertion or an explicit fallback. Two-line fix.
+- **State note (2026-07-04):** already fixed by prior work — investigation on FU-434 pickup found `vue-tsc --noEmit` runs **clean** (0 errors). File now uses `templates[0]!` non-null assertions on lines 33 + 35 (the "two-line fix" the FU suggested); the assertion is honest because the outer `v-if="templates.length === 1"` on line 28 gates the whole block. Landed in an intervening commit (likely `0642548` recipe-importer overhaul which touched the file). Confirmed the shape is stable + reader-obvious (no source comment needed per R-008 — the v-if guard is right there). Closing without code change; the fix is in the tree.
+
+## [RESOLVED] FU-454 — BuyVerdictCard `mark_stocked` + `remove_from_list` one-tap actions unwired
+- **Raised:** 2026-07-02 (P8-06 close, spotted while closing FU-437).
+- **Type:** deferred job (polish; nice-to-have).
+- **What:** the card's one-tap-action button now renders in `StockItemDetailPage.vue` overview tab, and the `add_to_list` variant is fully wired. The other two variants (`mark_stocked` when wastes-often + stocked → "Already stocked"; `remove_from_list` when the item is already on an open list → "Remove from list") emit their `@action` events but the handler in `onBuyVerdictAction` is a no-op nudge — the fact editors immediately below the card *are* the primary way to change level or remove a list line. Tapping the button is silent, which is quietly-broken UX (Charter P3).
+- **Why deferred:** wiring these needs the "Well-Stocked" `StockLevel` id lookup (from `stockLevelStore`) + a specific list-line target (find the open list containing this item + drop that line). Neither is difficult; it just wasn't the P8-06 story and the fact editors cover both cases.
+- **Recommended resolution:** opportunistic — either wire both handlers properly, OR hide the card's one-tap button for these two `kind` values (reveal-and-disable, R-014) so users don't tap a dead button. Small either way.
+- **State note (2026-07-04):** wired end-to-end (option A). New shared composable [useBuyVerdictActions.ts](web_app/src/composables/useBuyVerdictActions.ts) exposes `markStocked(stockItemId)` and `removeFromAllOpenLists(stockItemId)` — same seams the row card + detail card + shopping-list card all now delegate to (R-001 componentisation-first, R-003 single source of truth for mutation paths). `markStocked` reuses `stockItemStore.updateStockLevelAsync` (the same call the row's stock-level dropdown makes) with the "Well-Stocked" band looked up via `STOCKED_SEQUENCE === 0` on `stockLevelStore.stockLevels`; on success invalidates the buy-verdict + refreshes pantry beliefs; toasts positive on success, negative on failure. `removeFromAllOpenLists` fans out via `useShoppingListActions.removeFromAllLists` over every non-`done` list summary — the server's `by-stock-item` DELETE is a safe no-op on lists that don't contain the item, so no per-list membership probe is needed. Three call sites updated: [StockItemDetailPage.vue:1521](web_app/src/pages/StockItemDetailPage.vue) reloads detail after `markStocked` so the level chip repaints; [StockOverview.vue:702](web_app/src/pages/StockOverview.vue) replaces the "use the row controls" nudge toast with real mutations; [ShoppingListDetail.vue:2216](web_app/src/pages/ShoppingListDetail.vue) wires `mark_stocked` (its `remove_from_list` was already correctly line-specific and left as-is). `vue-tsc --noEmit` clean; 41/42 backend buy-verdict tests still green (the pre-existing FU-444 failure is unrelated).
+
+## [RESOLVED] FU-442 — §LOGIN password-policy feedback still uncovered
+- **Raised:** 2026-07-02 (C-19 audit — spotted while writing coverage table).
+- **Type:** finding.
+- **What:** feedback bullet "Password policy feels too restrictive, do minimum of 8 characters, and allow admins to turn the restrictions off." C-19 explicitly left this alone (out of shell-styling scope).
+- **Why deferred:** doesn't belong in an auth-shell styling proposal; needs its own decision.
+- **Recommended resolution:** later during `PROPOSAL_CONFIG_AND_OPTINS.md` extension, or spin a small standalone prompt. Not blocking C-19.
+- **State note (2026-07-04):** shipped as a **NIST SP 800-63B / ISO/IEC 27002:2022 §5.17 aligned** policy in [auth_helpers.py:43-108](dora_api/infrastructure/auth_helpers.py). Changes:
+  - `MIN_PASSWORD_LENGTH` **10 → 8** (matches feedback request + NIST minimum).
+  - **Composition rules dropped** — no forced letter + digit mix. NIST removed these in 2017 (SP 800-63B §5.1.1.2 rationale: they push users toward predictable substitutions like `Password1!` which reduce real entropy).
+  - **Breach-list check added** — a bundled frozenset of the top ~60 known-compromised passwords (`password123`, `qwerty`, `letmein1`, `dashydora`, etc.) is rejected case-insensitively, with a friendly message ("appears on public breach lists — pick something less common").
+  - **Admin override deliberately NOT added** — the user's explicit call. An install-wide toggle would defeat the compliance posture; keeping the policy fixed is what makes the ISO/NIST citation truthful.
+  - Frontend copy updated on SetupAdminPage, LoginPage, ResetPasswordPage, AccountSettings — hint text now reads "at least 8 characters, a passphrase works well" (no composition-rule language). AccountSettings' stale `>= 4` client rule tightened to `>= 8` to match.
+  - **23/23 pytest green** on `tests/test_password_policy.py` covering min-length boundary, no composition rules (letters-only + digits-only pass), breach-list rejection (case-insensitive), and the policy-doc text. `vue-tsc --noEmit` clean.
+  - Rationale + full policy documented inline in `auth_helpers.py` as an R-008 header block so a future reader can see the ISO/NIST citation without hunting the changelog.
+
 ## [RESOLVED] FU-411 — PLATFORM_BUILDS_AUDIT target-matrix: not acted on
 - **Raised:** 2026-07-01 (investigations audit).
 - **Type:** deferred job.

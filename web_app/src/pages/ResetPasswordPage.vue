@@ -4,7 +4,7 @@
             <q-icon :name="ICONS.password" size="56px" :style="'color: var(--auth-shell-accent)'" />
             <div class="text-h6 q-mt-md">Choose a new password</div>
             <div class="text-caption q-mt-xs auth-aux-sub">
-                Must be at least 10 characters and include a letter and a digit.
+                Must be at least 8 characters. A short passphrase works well.
             </div>
         </template>
 

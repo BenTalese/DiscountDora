@@ -1072,6 +1072,7 @@
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
     import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
+    import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useQuasar, type QVirtualScroll } from 'quasar';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useDragDropList } from 'src/composables/useDragDropList';
@@ -2203,11 +2204,14 @@
         }
     }
 
-    // P8-05 — buy-verdict action for an in-shop line. First slice wires
-    // `remove_from_list` (the killer case: pantry says you're already
-    // stocked + waste history says you throw this away — remove before
-    // checkout). Other action kinds nudge the user toward the row's
-    // existing controls (R-003: no duplicate mutation seams).
+    // P8-05 — buy-verdict action for an in-shop line.
+    // - `remove_from_list` targets THIS specific line (line-level intent).
+    // - `mark_stocked` closes FU-454: routes through the shared
+    //   `useBuyVerdictActions.markStocked` seam so the item flips to the
+    //   Well-Stocked band and the verdict cache refreshes.
+    // - `add_to_list` / `skip` / `none` are no-ops here — the line is
+    //   already on this list; no meaningful mutation.
+    const verdictActions = useBuyVerdictActions();
     async function onLineVerdictAction(
         line: ShoppingListLine,
         kind: 'add_to_list' | 'skip' | 'mark_stocked'
@@ -2218,13 +2222,11 @@
             if (line.stock_item_id) invalidateBuyVerdict(line.stock_item_id);
             return;
         }
-        $q.notify({
-            type: 'info',
-            position: 'bottom-right',
-            message: kind === 'mark_stocked'
-                ? 'Use the stock-level control on the item to mark as stocked.'
-                : 'Use the line controls to update this line.',
-        });
+        if (kind === 'mark_stocked' && line.stock_item_id) {
+            await verdictActions.markStocked(line.stock_item_id);
+            return;
+        }
+        // `add_to_list` / `skip` / `none` — no mutation. Silent by design.
     }
 
     async function onRemoveLine(lineId: string) {

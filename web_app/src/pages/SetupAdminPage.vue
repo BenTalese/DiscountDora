@@ -48,7 +48,7 @@
                 @update:model-value="clearField('password')"
                 :rules="[
                     (v: string) => !!v || 'Password is required',
-                    (v: string) => v.length >= 10 || 'At least 10 characters',
+                    (v: string) => v.length >= 8 || 'At least 8 characters',
                 ]"
             >
                 <template #append>
@@ -77,8 +77,9 @@
                 register normally.
             </div>
             <div class="setup-fineprint q-mt-xs">
-                Passwords must be at least 10 characters and include
-                a letter and a digit.
+                Passwords must be at least 8 characters. A short
+                passphrase of a few words is easier to remember and
+                just as safe.
             </div>
         </template>
     </AuthShell>

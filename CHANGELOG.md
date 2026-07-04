@@ -5,6 +5,55 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **StoresSettings logo upload adopts the shared image picker — FU-335
+  (2026-07-04).** The store-logo file-picker in Settings → Stores was
+  the last remaining Quasar `q-file` upload; every other image-upload
+  site (recipes, stock items, shopping-list receipts, recipe steps)
+  already routed through `ImageSourcePicker` for the "Take photo vs
+  Choose image" split. Migrated the dialog to the shared picker,
+  dropped the local `MAX_BYTES = 6_000_000` + `ACCEPT` constants in
+  favour of the install-wide policy that `processImageFile` reads
+  (R-003), and swapped the `@rejected` toast for an inline caption
+  under the buttons (same shape as elsewhere). The `StoreLogo` swatch
+  preview + "Remove existing logo" button are unchanged. `vue-tsc` clean.
+
+### Fixed
+- **BuyVerdictCard one-tap actions now fully wired — FU-454 (2026-07-04).**
+  The card's `mark_stocked` (wastes-often + stocked → "Already stocked")
+  and `remove_from_list` (already on an open list → "Remove from list")
+  variants previously emitted the intent but the handler was a silent
+  no-op / a "use the row controls" toast — quietly-broken UX (Charter
+  P3). New shared composable
+  [useBuyVerdictActions.ts](web_app/src/composables/useBuyVerdictActions.ts)
+  exposes `markStocked(stockItemId)` (flips to the Well-Stocked band via
+  the same `updateStockLevelAsync` seam the row dropdown uses;
+  invalidates the buy-verdict + pantry-belief caches; positive toast) and
+  `removeFromAllOpenLists(stockItemId)` (fans out to every non-`done`
+  list via `useShoppingListActions.removeFromAllLists`). Wired in all
+  three card mounts — Stock Overview row card, Stock Item Detail card,
+  Shopping-list line card. `vue-tsc` clean.
+
+### Changed
+- **Password policy realigned to NIST SP 800-63B / ISO/IEC 27002:2022 §5.17
+  (FU-442, 2026-07-04).** `MIN_PASSWORD_LENGTH` dropped from **10 → 8**
+  (matches the standard minimum and the user's original request); the
+  forced letter-and-digit composition rules were **removed** (NIST retired
+  these in 2017 because they push users toward low-entropy substitutions
+  like `Password1!`); a bundled breach-list of the top ~60 known-
+  compromised passwords is now rejected outright (`password123`,
+  `qwerty123`, `letmein1`, `dashydora`, etc., case-insensitive), with a
+  friendly message directing users to pick something less common.
+  **No admin toggle** — the policy is install-wide and non-overridable,
+  which is what makes the ISO/NIST citation honest. Frontend copy on
+  SetupAdminPage, LoginPage, ResetPasswordPage and AccountSettings
+  refreshed to match ("at least 8 characters, a passphrase works well");
+  AccountSettings' stale `>= 4` client rule tightened to `>= 8`.
+  Rate-limiting on `auth.login` (5/min) already covered the NIST §5.2.2
+  throttle requirement. Werkzeug scrypt/pbkdf2 hashing sidesteps bcrypt's
+  72-byte truncation trap, so the 255-char field cap is real. Full
+  policy + citations live inline in [auth_helpers.py:43-108](dora_api/infrastructure/auth_helpers.py).
+
 ### Added
 - **Native mobile app scaffold — Android build + iOS Xcode project
   (P8-10, 2026-07-04).** Capacitor 8 wraps the Quasar SPA for iOS

@@ -41,25 +41,73 @@ from dora_api.domain.entities.auth_token import (
 
 
 # ── Password rules ─────────────────────────────────────────────────────
+#
+# Policy shape follows NIST SP 800-63B (which ISO/IEC 27002:2022 §5.17 defers
+# to as the standard for authentication-secret rules):
+#
+#   - Minimum length 8 (§5.1.1.2 "SHALL require at least 8 characters").
+#   - No composition rules — no forced upper/lower/digit/symbol mix.
+#     Composition rules push users toward predictable substitutions
+#     (`Password1!`) that harm real entropy; NIST removed them in 2017.
+#   - Reject the top ~60 known-compromised / trivially-guessed passwords
+#     ("SHALL check against a list of values known to be commonly used").
+#     We ship a small bundled list rather than a HIBP round-trip so
+#     self-hosted installs stay offline-clean (R-005).
+#   - Max 255 chars enforced upstream by the pydantic `Field(max_length=255)`
+#     on every auth request body — well above the NIST-recommended 64+
+#     ceiling. Werkzeug's `generate_password_hash` uses scrypt/pbkdf2
+#     (not bcrypt), so there's no 72-byte silent-truncation trap.
+#   - Rate-limiting per identity/IP is enforced separately by
+#     `rate_limit("auth.login", max_per_minute=5)` in `features/auth/login.py`
+#     (NIST §5.2.2 throttling).
+#
+# **No admin override.** The rules apply install-wide; making them
+# operator-toggleable defeats the compliance posture that motivated
+# adopting the NIST/ISO shape in the first place.
 
-MIN_PASSWORD_LENGTH = 10
-_LETTER_RE = re.compile(r"[A-Za-z]")
-_DIGIT_RE = re.compile(r"\d")
+MIN_PASSWORD_LENGTH = 8
+
+# Top ~60 breach-list offenders (2024 NCSC/HIBP annual review). Membership
+# check is case-insensitive; any hit is rejected outright with a clear
+# message. Keep this list conservative — its job is to catch the "would be
+# guessed in ten tries" tier, not to enforce a full deny-list.
+_COMMON_PASSWORDS: frozenset[str] = frozenset({
+    "123456", "12345678", "123456789", "1234567890", "12345",
+    "password", "password1", "password12", "password123", "password1234",
+    "qwerty", "qwerty123", "qwertyuiop", "1q2w3e4r", "1q2w3e4r5t",
+    "abc123", "abcd1234", "abcdefgh", "111111", "11111111",
+    "iloveyou", "letmein", "welcome", "welcome1", "welcome123",
+    "monkey", "dragon", "sunshine", "princess", "football",
+    "admin", "admin123", "administrator", "root", "toor",
+    "master", "passw0rd", "p@ssw0rd", "p@ssword", "trustno1",
+    "starwars", "computer", "internet", "changeme", "test1234",
+    "baseball", "superman", "batman", "shadow", "michael",
+    "jennifer", "hunter2", "letmein1", "asdfghjkl", "zxcvbnm",
+    "qazwsx", "1qaz2wsx", "!qaz2wsx", "0987654321", "987654321",
+    "dashydora", "dashy_dora", "dashy-dora", "dora", "dorapassword",
+})
 
 PASSWORD_RULES_DOC = (
-    f"Password must be at least {MIN_PASSWORD_LENGTH} characters and "
-    "include at least one letter and one digit."
+    f"Passwords must be at least {MIN_PASSWORD_LENGTH} characters. "
+    "Longer is safer — a memorable passphrase of a few words is fine. "
+    "Avoid common passwords like ‘password123’ or ‘qwerty’."
 )
 
 
 def validate_password(value: str) -> str | None:
-    """Returns an error message, or None if the password is acceptable."""
+    """Return an error message, or None if the password is acceptable.
+
+    Policy: NIST SP 800-63B — min 8, no composition rules, reject bundled
+    breach-list offenders (case-insensitive). No admin override; the rules
+    apply install-wide.
+    """
     if not value or len(value) < MIN_PASSWORD_LENGTH:
         return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
-    if not _LETTER_RE.search(value):
-        return "Password must include at least one letter."
-    if not _DIGIT_RE.search(value):
-        return "Password must include at least one digit."
+    if value.lower() in _COMMON_PASSWORDS:
+        return (
+            "That password appears on public breach lists. Pick something "
+            "less common — a short phrase you'd remember works well."
+        )
     return None
 
 

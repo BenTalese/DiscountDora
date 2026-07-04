@@ -495,6 +495,7 @@
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
+    import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
@@ -689,14 +690,11 @@
     }
 
     // ── P8-05 buy-verdict actions ────────────────────────────────────────
-    // The badge emits its one-tap intent up here so we can reuse the
-    // existing shopping-list + stock-level mutation seams. R-003: no new
-    // mutation paths; verdict = suggestion, cart/level buttons = action.
-    // First-slice scope: `add_to_list` calls the quick-add-target path
-    // (matches the cart button's default) and `remove_from_list` clears
-    // this item from every open list. The remaining actions
-    // (`mark_stocked`, `none`) show a notice and defer to the row's
-    // existing controls; tracked as FU-437.
+    // FU-437 (add_to_list) and FU-454 (mark_stocked + remove_from_list)
+    // both closed — the card's one-tap intents now round-trip through the
+    // shared `useBuyVerdictActions` composable, which reuses the row's
+    // existing mutation seams (R-003: no duplicated paths).
+    const verdictActions = useBuyVerdictActions();
     async function onVerdictAction(
         stockItemId: string,
         kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
@@ -715,18 +713,15 @@
             invalidateBuyVerdict(stockItemId);
             return;
         }
-        // `remove_from_list` / `mark_stocked` / `skip` / `none` — the
-        // row already owns these mutations via the cart button and the
-        // stock-level dropdown (R-003: no new mutation seams). The
-        // verdict is a *nudge* toward those controls; tracked as FU-437
-        // for a follow-up slice that wires them end-to-end here.
-        $q.notify({
-            type: 'info',
-            position: 'bottom-right',
-            message: kind === 'remove_from_list'
-                ? 'Use the cart button to remove from your list.'
-                : 'Use the row controls to update the stock level.',
-        });
+        if (kind === 'mark_stocked') {
+            await verdictActions.markStocked(stockItemId);
+            return;
+        }
+        if (kind === 'remove_from_list') {
+            await verdictActions.removeFromAllOpenLists(stockItemId);
+            return;
+        }
+        // `skip` / `none` — no server change; the user's dismissing the nudge.
     }
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────

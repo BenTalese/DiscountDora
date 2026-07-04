@@ -139,8 +139,14 @@
     function actionLinkFor(key: DoraScoreComponentKey): ActionLink | null {
         switch (key) {
             case 'waste':
-                // The waste tab is where the user reviews / logs waste.
-                return { to: '/waste', label: 'Waste tab' };
+                // No dedicated action link — PROPOSAL_WASTE_MINIMISATION
+                // dissolved the /waste page (D10). Users log waste inline
+                // via the StockItemRow expiry dropdown's "Mark as wasted"
+                // action, and review history per-item on StockItemDetail's
+                // History tab; there is no aggregated "waste review" surface
+                // to link to. R-014: score row still explains the number,
+                // just without a dead button.
+                return null;
             case 'budget':
                 // The budget input lives in Preferences → Money.
                 return { to: '/settings/preferences', label: 'Set a budget' };

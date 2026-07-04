@@ -228,56 +228,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** unrelated to the Sufficient-band axe; pre-existed on `main`. Small enough to be a single unit later.
 - **Recommended resolution:** opportunistic — next time buy-verdict is opened for change (P8-06 wait-until work looks likely; see FU-438). Not blocking anything.
 
-## [OPEN] FU-442 — §LOGIN password-policy feedback still uncovered
-- **Raised:** 2026-07-02 (C-19 audit — spotted while writing coverage table).
-- **Type:** finding.
-- **What:** feedback bullet "Password policy feels too restrictive, do
-  minimum of 8 characters, and allow admins to turn the restrictions
-  off." C-19 explicitly leaves this alone (out of shell-styling scope).
-  Not tracked by any Wave-A prompt or existing proposal — grep for
-  "password polic|8 char|admin.*toggle" only hits the C-19 note that
-  says it's out-of-scope. Real gap.
-- **Why deferred:** doesn't belong in an auth-shell styling proposal;
-  needs its own decision (default min length, admin override storage —
-  `AppSetting` config; C-cross may already own the settings shell).
-- **Recommended resolution:** later during `PROPOSAL_CONFIG_AND_OPTINS.md`
-  extension, or spin a small standalone prompt. Not blocking C-19.
-
-## [OPEN] FU-454 — BuyVerdictCard `mark_stocked` + `remove_from_list` one-tap actions unwired
-- **Raised:** 2026-07-02 (P8-06 close, spotted while closing FU-437).
-- **Type:** deferred job (polish; nice-to-have).
-- **What:** the card's one-tap-action button now renders in
-  `StockItemDetailPage.vue` overview tab, and the `add_to_list` variant is
-  fully wired. The other two variants (`mark_stocked` when
-  wastes-often + stocked → "Already stocked"; `remove_from_list` when the
-  item is already on an open list → "Remove from list") emit their
-  `@action` events but the handler in `onBuyVerdictAction` is a no-op
-  nudge — the fact editors immediately below the card *are* the primary
-  way to change level or remove a list line. Tapping the button is silent,
-  which is quietly-broken UX (Charter P3).
-- **Why deferred:** wiring these needs the "Well-Stocked" `StockLevel` id
-  lookup (from `stockLevelStore`) + a specific list-line target (find the
-  open list containing this item + drop that line). Neither is difficult;
-  it just wasn't the P8-06 story and the fact editors cover both cases.
-- **Recommended resolution:** opportunistic — either wire both handlers
-  properly, OR hide the card's one-tap button for these two `kind` values
-  (reveal-and-disable, R-014) so users don't tap a dead button. Small
-  either way.
-
-## [OPEN] FU-434 — Pre-existing `AdminDataImport.vue` `exactOptional` errors
-- **Raised:** 2026-07-02 (P8-02 close-gate — spotted via `vue-tsc`).
-- **Type:** finding (pre-existing, not touched by P8-02).
-- **What:** `vue-tsc --noEmit` reports two errors in
-  [`AdminDataImport.vue:33,35`](web_app/src/pages/settings/AdminDataImport.vue):
-  a `find(...)` result assigned to `ImportTemplate` without narrowing
-  the possible `undefined`. Fires under `exactOptionalPropertyTypes:
-  true`. Confirmed pre-existing (git status was clean at session start;
-  `git diff` empty on the file).
-- **Why deferred:** out of scope for P8-02; the file works at runtime
-  (find over a fixed template list that always has entries).
-- **Recommended resolution:** opportunistic — next Admin/Data touch,
-  fix with either an assertion or an explicit fallback. Two-line fix.
-
 ## [OPEN] FU-432 — Recipe Detail residual polish: uncovered NO_HOME bullets
 - **Raised:** 2026-07-01 (12-June feedback-audit delta).
 - **Type:** deferred job (small residual cluster).
@@ -317,13 +267,6 @@ long session summary. Distinct from the other logs:
 - **What:** `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` proposes **one capability registry + two renderers** to collapse the three overlapping decision systems ([tools.py](dora_api/features/assistant/tools.py) server-side, [doraIntents.ts](web_app/src/services/doraIntents.ts) client rule engine, [doraContextualActions.ts](web_app/src/services/doraContextualActions.ts) client contextual chips) — none of which agree on what Dora can do. Proposal has been *augmented* multiple times (§2.2.1 mutation-confirmation model, §7 LLM-provider/connectivity) but **the structural refactor was never built** — all three systems still exist, no `CapabilityRegistry` exists anywhere, and `DoraChat.vue`'s missing-ingredients recompute (the Type-A duplication called out in §1) hasn't been deleted. **Collides with the in-flight SLM replacement** (memory `project_dora_slm_assistant`): the SLM direction may supersede parts of this proposal (rule-engine deletion becomes trivial once the SLM is always available), keep others (the capability registry is still the right shape for the SLM to call), or invalidate the whole thing. Nobody has reconciled the two directions.
 - **Why deferred:** the SLM work was in-flight when the proposal was drafted; sequencing was never firmed up.
 - **Recommended resolution:** **discussion first, not build** — a short session to reconcile: (a) which parts of the proposal survive the SLM pivot, (b) whether the capability registry lands before/after the SLM, (c) fate of the client-side rule engine (`doraIntents.ts`) once the SLM is the default. Outcome should either be a refreshed proposal or an explicit "superseded by SLM work, close" call. Tightly coupled to [[FU-390]] (P5-05 eval suite — tests whichever architecture wins) and [[FU-386]] (dangling client-only `doraContextualActions.ts` handle from the state-ownership plan).
-
-## [OPEN] FU-426 — Waste-page scratch assessment: confirm fully absorbed by C-waste
-- **Raised:** 2026-07-01 (docs audit).
-- **Type:** finding (audit trail).
-- **What:** `docs/99_scratch/WASTE_PAGE_ASSESSMENT_2026-06-24.md` became `PROPOSAL_WASTE_MINIMISATION.md` + `IMPL_PLAN_WASTE_MINIMISATION.md`. Confirm every keep-item from the scratch note is either in the shipped proposal, a landed FU, or explicitly-dropped-with-rationale. If clean, archive the scratch note.
-- **Why deferred:** low risk, just a delta-check.
-- **Recommended resolution:** opportunistic; also fold the archive step into it (move to `06_legacy_prompt_plans/` or delete).
 
 ## [OPEN] FU-425 — Pricing reassessment handoff: confirm fully executed
 - **Raised:** 2026-07-01 (docs audit).
@@ -1035,26 +978,6 @@ long session summary. Distinct from the other logs:
   platform move in the audit** — install-to-home-screen on every
   modern mobile + desktop with zero new code. Tagged "now" for the
   next platform-targeted session.
-
-## [OPEN] FU-335 — Migrate StoresSettings logo upload to ImageSourcePicker
-- **Raised:** 2026-06-30 (FU-334 follow-on — image-source-picker rollout)
-- **Type:** leftover
-- **What:** [`web_app/src/pages/settings/StoresSettings.vue`](web_app/src/pages/settings/StoresSettings.vue)
-  still uses Quasar `q-file` for its store-logo upload. Every other
-  image-upload site now routes through the shared `ImageSourcePicker`
-  primitive (R-0NN), which gives users the **Take photo** vs **Choose
-  image** split. Migrating means dropping `q-file` (loses its drag-drop
-  visual + clearable affordance, gains the consistent UX). The store-logo
-  surface also has its own bespoke chrome (preview + max-file-size hint +
-  reject toast wiring) that needs careful re-housing.
-- **Why deferred:** the `q-file` → custom-buttons swap is the only
-  bespoke part of the chrome; the rest (preview + clear) belongs in
-  `ImageUploadField` if we want it. Doing it right is a 30-line
-  refactor with one cross-cutting concern (drag-drop equivalent), not
-  trivial enough to slip into the FU-334 sweep. Charts as a quality
-  follow-on, not a blocker.
-- **Recommended resolution:** opportunistic, next time settings is
-  touched OR when a second store-logo bug forces us into that file.
 
 ---
 

@@ -100,29 +100,28 @@
                 />
                 <div class="col">
                     <div class="text-caption dora-text-muted q-mb-xs">
-                        Optional logo (PNG/JPG/WebP, up to ~6 MB).
+                        Optional logo (PNG/JPG/WebP).
                     </div>
-                    <q-file
-                        v-model="imageFile"
-                        outlined
-                        dense
-                        :accept="ACCEPT"
-                        :max-file-size="MAX_BYTES"
-                        @rejected="onImageRejected"
-                        @update:model-value="onPickImage"
-                        clearable
-                    >
-                        <template #prepend>
-                            <q-icon :name="ICONS.upload" />
-                        </template>
-                    </q-file>
-                    <BaseButton
-                        v-if="editing?.has_image && !clearImage && !draft.image"
-                        variant="danger-ghost"
-                        dense
-                        label="Remove existing logo"
-                        @click="clearImage = true"
-                    />
+                    <div class="row items-center q-gutter-sm">
+                        <ImageSourcePicker
+                            variant="secondary"
+                            :take-photo-label="pickerVerb + ' (camera)'"
+                            :pick-label="pickerVerb + ' (file)'"
+                            accept="image/png,image/jpeg,image/webp"
+                            @pick="onPickImage"
+                            @error="onPickError"
+                        />
+                        <BaseButton
+                            v-if="editing?.has_image && !clearImage && !draft.image"
+                            variant="danger-ghost"
+                            dense
+                            label="Remove existing logo"
+                            @click="clearImage = true"
+                        />
+                    </div>
+                    <div v-if="pickError" class="text-caption text-negative q-mt-xs">
+                        {{ pickError }}
+                    </div>
                 </div>
             </div>
         </template>
@@ -141,13 +140,15 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useQuasar } from 'quasar';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useStoresStore } from 'src/stores/storesStore';
     import { ICONS } from 'src/style/icons';
+    import type { ProcessedImage } from 'src/services/files/imageService';
     import { storeToRefs } from 'pinia';
-    import { onMounted, reactive, ref } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import type { Store } from 'src/models/store';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
@@ -165,11 +166,17 @@
         name: '',
         image: null,
     });
-    const imageFile = ref<File | null>(null);
     const clearImage = ref(false);
+    const pickError = ref<string | null>(null);
 
-    const ACCEPT = 'image/png, image/jpeg, image/webp';
-    const MAX_BYTES = 6_000_000;
+    // FU-335 — the picker verb tracks the current state so screen-reader
+    // users hear "Add" for a new store and "Change" for one that already
+    // has a logo. Matches the language ImageUploadField uses on the other
+    // upload surfaces.
+    const pickerVerb = computed(() => {
+        const hasExisting = !!editing.value?.has_image && !clearImage.value;
+        return hasExisting || draft.image ? 'Change logo' : 'Add logo';
+    });
 
     function reload(): void {
         loading.value = true;
@@ -201,8 +208,8 @@
     function resetDraft(): void {
         draft.name = '';
         draft.image = null;
-        imageFile.value = null;
         clearImage.value = false;
+        pickError.value = null;
         editing.value = null;
     }
 
@@ -218,32 +225,19 @@
         dialogOpen.value = true;
     }
 
-    function onImageRejected(): void {
-        $q.notify({
-            type: 'warning',
-            message: `Image must be PNG/JPG/WebP, under ${(MAX_BYTES / 1_000_000).toFixed(0)} MB.`,
-        });
+    function onPickImage(image: ProcessedImage): void {
+        // ImageSourcePicker → processImageFile() already resized + re-encoded
+        // to JPEG using the install-wide image policy (R-003). We just hold
+        // the data URL for the save round-trip; the backend accepts it as-is
+        // (`POST /stores` / `PUT /stores/<id>` store the bytes verbatim and
+        // serve them via `GET /stores/<id>/image`).
+        clearImage.value = false;
+        pickError.value = null;
+        draft.image = image.dataUrl;
     }
 
-    async function onPickImage(file: File | null): Promise<void> {
-        if (!file) {
-            draft.image = null;
-            return;
-        }
-        clearImage.value = false;
-        // Read as data URL (same convention as stock-item / product / recipe
-        // image upload). The backend stores the UTF-8 bytes verbatim and
-        // serves them back via `GET /stores/<id>/image`.
-        draft.image = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const result = reader.result;
-                resolve(typeof result === 'string' ? result : '');
-            };
-            reader.onerror = () =>
-                reject(reader.error ?? new Error('Failed to read image.'));
-            reader.readAsDataURL(file);
-        });
+    function onPickError(message: string): void {
+        pickError.value = message;
     }
 
     async function onSave(): Promise<void> {

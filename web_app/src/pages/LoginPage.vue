@@ -46,7 +46,7 @@
                 :rules="[
                     (v: string) => !!v || 'Password is required',
                     (v: string) =>
-                        mode === 'login' || v.length >= 4 || 'At least 4 characters'
+                        mode === 'login' || v.length >= 8 || 'At least 8 characters'
                 ]"
             >
                 <template #append>
@@ -82,8 +82,8 @@
                     @click="router.push('/forgot-password')"
                 />
                 <div v-if="mode === 'register'" class="login-fineprint">
-                    Passwords must be at least 10 characters and include
-                    a letter and a digit.
+                    Passwords must be at least 8 characters. A short
+                    passphrase of a few words works well.
                 </div>
             </div>
         </template>

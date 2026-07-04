@@ -1,7 +1,7 @@
 # Proposal — Waste Minimisation (C-waste)
 
 **Status:** Decisions resolved 2026-06-24 (co-designed in-session) · **Date:** 2026-06-24 · Changes NO code.
-**Source assessment:** `docs/99_scratch/WASTE_PAGE_ASSESSMENT_2026-06-24.md`.
+**Source assessment:** an in-session scratch read on 2026-06-24 (deleted 2026-07-04 after FU-426 confirmed every keep-item was absorbed here or explicitly dropped with rationale — this proposal is the authoritative record).
 **Headline:** the `/waste` page is dissolved into smaller, lighter surfaces. The data signal (the
 `StockItemWasteEvent` stream) is preserved end-to-end so the future Dora Score can still read it;
 only the page surface and the heavy capture flow are removed.

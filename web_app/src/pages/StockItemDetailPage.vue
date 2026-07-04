@@ -1040,6 +1040,7 @@
     import { relativeTime } from 'src/helpers/relativeTime';
     import { humaniseWasteReason } from 'src/helpers/wasteReasons';
     import { useBuyVerdict } from 'src/composables/useBuyVerdict';
+    import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -1103,6 +1104,9 @@
 
     const actions = useStockItemActions();
     const slActions = useShoppingListActions();
+    // FU-454 — shared handlers for the BuyVerdictCard's mark_stocked +
+    // remove_from_list actions. Same seams the row card uses.
+    const verdictActions = useBuyVerdictActions();
 
     const stockItemId = computed(() => props.idOverride ?? (route.params.id as string));
 
@@ -1510,9 +1514,10 @@
         // changed. Invalidate so a re-render fetches a fresh answer.
         buyVerdictInvalidate();
     }
-    // P8-05/06 — closes FU-437. Delegates the card's one-tap action to
-    // the same per-page handlers used elsewhere and drops the verdict
-    // cache after any mutation.
+    // P8-05/06 — closes FU-437 (add_to_list) and FU-454 (mark_stocked +
+    // remove_from_list). Delegates to the shared `useBuyVerdictActions`
+    // composable so the same math runs from every card mount (row card,
+    // detail-page card, shopping-list card).
     async function onBuyVerdictAction(
         kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
     ) {
@@ -1520,10 +1525,15 @@
             await onAddToList();  // already invalidates
             return;
         }
-        // `mark_stocked` + `remove_from_list` need the "Well-Stocked"
-        // level lookup / a specific list-line target; both are handled
-        // through the fact editors below the card, so the card's action
-        // for these variants is a no-op nudge for now (FU-454).
+        if (kind === 'mark_stocked') {
+            const ok = await verdictActions.markStocked(stockItemId.value);
+            if (ok) await loadDetail();  // reload so the level chip repaints
+            return;
+        }
+        if (kind === 'remove_from_list') {
+            await verdictActions.removeFromAllOpenLists(stockItemId.value);
+            return;
+        }
         // `skip` / `none` — nothing to do.
     }
     async function onChangeStockLevel(stockLevelId: string) {

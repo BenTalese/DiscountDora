@@ -140,7 +140,7 @@
                         type="password"
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
-                        :rules="[(v) => !v || v.length >= 4 || 'At least 4 characters']"
+                        :rules="[(v) => !v || v.length >= 8 || 'At least 8 characters']"
                     />
                     <q-input
                         v-model="confirmPassword"

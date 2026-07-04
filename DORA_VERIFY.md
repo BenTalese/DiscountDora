@@ -18,6 +18,32 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Settings → Notifications → Push toggle reads as **Unsupported** on the native app (no browser Push API in the WebView); PWA-install path still exposes push
 - [ ] iOS platform folder (`src-capacitor/ios/`) exists but is deliberately unbuilt on this Linux dev box — verify only that the folder is present + committed; the actual Xcode build is a future prompt
 
+## StoresSettings logo upload — origin FU-335
+- [ ] Settings → Stores → **Add store** → the dialog's logo row now shows two buttons (`Add logo (camera)` + `Add logo (file)`) instead of the old drag-drop file input; the `StoreLogo` swatch preview above remains
+- [ ] Pick a real PNG / JPEG / WebP from the file browser → preview updates immediately; typing a name + Save creates the store with the logo
+- [ ] Retry with an unsupported file (e.g. a PDF) → a red inline caption appears under the picker with a friendly message; no `q-notify` toast, no crash
+- [ ] Edit an existing store with a logo → the two buttons now read `Change logo (camera)` + `Change logo (file)`; the "Remove existing logo" button still shows and clears the image
+- [ ] After Remove is tapped and a new image picked, the buttons flip back to "Change" labels (the draft has a fresh image)
+- [ ] On mobile (or with `forceCamera` on): the camera button opens the OS camera picker directly
+
+## BuyVerdictCard one-tap actions — origin FU-454
+- [ ] Find a stock item whose card verdict returns kind `mark_stocked` ("Already stocked" — e.g. an item with waste history that got set back to Well-Stocked accidentally, or engineered by dropping the level from Well-Stocked to Low with waste events present) → tap the button on both Stock Overview AND Stock Item Detail → item flips to Well-Stocked, positive toast fires, verdict card re-renders with the fresh answer
+- [ ] Same on Shopping List Detail line card → tap `mark_stocked` → item flips to Well-Stocked; the shopping-list line stays put (line-level removal is a separate action)
+- [ ] Find an item whose card verdict returns kind `remove_from_list` ("Remove from list" — item is skip-recommended AND is currently on an open list) → tap on Stock Overview → summary toast reports "Removed from N list" ; verdict card no longer surfaces the button; the line is gone from every open list containing it
+- [ ] Same on Stock Item Detail → same behaviour
+- [ ] On Shopping List Detail, `remove_from_list` removes ONLY the current line (not other lists — that's the correct per-line semantic)
+- [ ] Confirm no "use the row controls" or "use the stock-level control" fallback toasts fire from the card any more — those were the dead-button symptom
+
+## Password policy (NIST/ISO alignment) — origin FU-442
+- [ ] Register a new user with password `abcdefgh` (8 chars, letters only) → succeeds (no more "must include a digit")
+- [ ] Register with `passphrase please` (a real phrase with a space) → succeeds
+- [ ] Register with `abc123` (6 chars) → rejected with "at least 8 characters"
+- [ ] Register with `password123` → rejected with the "appears on public breach lists" message; try `QWERTY123` (uppercase) → same rejection (case-insensitive breach check)
+- [ ] Reset-password flow shows the updated fineprint ("at least 8 characters, a passphrase works well"); no "letter and digit" language anywhere
+- [ ] Settings → Account → Change password inline validator says "At least 8 characters" (not 4)
+- [ ] Log in with an existing pre-policy password (e.g. an old 6-char account) still works — the new policy only applies at set-time, not at login
+- [ ] No admin toggle exists to loosen the rules (grep the Settings tree in the browser — Preferences, Admin, Security should have no password-policy option)
+
 ## Runtime backend URL (browser + PWA) — origin P8-10
 - [ ] In a browser tab (dev or PWA), Settings → About → **Dora API endpoint** shows the current URL; clicking **Change** opens the prompt with the current URL pre-filled
 - [ ] Save a bogus URL → toast "Instance URL saved", full reload, network banner drops (server unreachable) — confirm the app doesn't hard-crash and the About page still lets you re-open the prompt to fix it

@@ -60,6 +60,15 @@
                         <q-item-label>Dora API endpoint</q-item-label>
                         <q-item-label caption class="text-mono">{{ doraApiUrl }}</q-item-label>
                     </q-item-section>
+                    <q-item-section side>
+                        <BaseButton
+                            variant="secondary"
+                            size="sm"
+                            :icon="ICONS.edit"
+                            label="Change"
+                            @click="onChangeInstance"
+                        />
+                    </q-item-section>
                 </q-item>
             </q-list>
         </SettingsSection>
@@ -109,6 +118,11 @@
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import {
+        getBackendBaseUrl,
+        isNativePlatform,
+        setBackendBaseUrl,
+    } from 'src/services/api/backendUrl';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -154,15 +168,62 @@
         }
     }
 
-    const doraApiUrl = computed(() => {
-        const env = import.meta.env.VITE_API_BASE_URL;
-        if (env) return env;
-        if (typeof window !== 'undefined') {
-            const { protocol, hostname } = window.location;
-            return `${protocol}//${hostname}:5170/api`;
+    // P8-10 — surface the live backend URL (which now includes the
+    // Capacitor/localStorage runtime override), not just the build-time
+    // env, so a user who swapped instances from Settings sees the change.
+    const currentBackend = ref(getBackendBaseUrl());
+    const doraApiUrl = computed(() => currentBackend.value || 'not configured');
+
+    async function onChangeInstance() {
+        const initial = getBackendBaseUrl();
+        const url = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: 'Change instance URL',
+                message:
+                    "Point this app at a different Dora backend. Enter the "
+                    + "full URL you'd type in a browser — we'll add /api "
+                    + "automatically if you leave it off.",
+                prompt: {
+                    model: initial,
+                    type: 'url',
+                    isValid: (v: string) => v.trim().length > 0,
+                },
+                ok: { label: 'Save', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((v: string) => resolve(v))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!url) return;
+        try {
+            const normalised = await setBackendBaseUrl(url);
+            currentBackend.value = normalised;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: 'Instance URL saved. Refreshing…',
+                timeout: 1500,
+            });
+            // Full reload so every cached query + auth state is rebuilt
+            // against the new backend — a soft nav would keep the old
+            // Pinia stores alive and cause hard-to-debug staleness.
+            setTimeout(() => {
+                if (isNativePlatform()) {
+                    void router.replace('/');
+                    window.location.reload();
+                } else {
+                    window.location.reload();
+                }
+            }, 400);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save the URL.',
+                caption: toastCaption(err),
+            });
         }
-        return 'http://localhost:5170/api';
-    });
+    }
 
     const buildLabel = computed(() => (import.meta.env.PROD ? 'production' : 'dev'));
 </script>

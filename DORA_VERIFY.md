@@ -3,6 +3,28 @@
 Things that can only be confirmed by running the app and clicking. Grouped by
 surface — pick a surface, walk it top-to-bottom.
 
+---
+
+## Native Android build (P8-10) — origin P8-10
+- [ ] `web_app/src-capacitor/android/` opens cleanly in Android Studio (File → Open → point at the folder); Gradle sync completes with no errors
+- [ ] `./gradlew assembleDebug` from `src-capacitor/android/` produces `app/build/outputs/apk/debug/app-debug.apk` (after `npx quasar build -m capacitor -T android` has synced the SPA into `assets/public/`)
+- [ ] APK installs on a real Pixel / Samsung device (or Android Studio emulator) — icon shows the Dora mascot on the yellow (#f5c462) adaptive background; app name reads **Dashy Dora**
+- [ ] First launch opens `/setup/backend` (before any login prompt); entering the LAN URL of a running Dora backend (e.g. `http://192.168.x.x:5170`) → toast "Connected. Welcome to Dora!" → app navigates to `/` and the normal login flow appears
+- [ ] Second launch (kill + reopen) skips the setup gate — the persisted URL is remembered
+- [ ] Settings → About → **Dora API endpoint** shows the saved URL; **Change** button opens the URL prompt; saving a different URL triggers a full reload and hits the new backend
+- [ ] Barcode scan (Stock Overview → Scan) triggers Android's Camera permission prompt; scanning a real EAN populates the Add-a-stock-item flow
+- [ ] Open a recipe → **Cook mode** → screen stays awake through the whole session (no auto-lock) even with no touch input for 2+ min
+- [ ] Open a shopping list → **Start shopping** → screen stays awake for the shop session; leaving shop mode (Finish & restock, or navigating away) releases the lock and the screen dims normally
+- [ ] Settings → Notifications → Push toggle reads as **Unsupported** on the native app (no browser Push API in the WebView); PWA-install path still exposes push
+- [ ] iOS platform folder (`src-capacitor/ios/`) exists but is deliberately unbuilt on this Linux dev box — verify only that the folder is present + committed; the actual Xcode build is a future prompt
+
+## Runtime backend URL (browser + PWA) — origin P8-10
+- [ ] In a browser tab (dev or PWA), Settings → About → **Dora API endpoint** shows the current URL; clicking **Change** opens the prompt with the current URL pre-filled
+- [ ] Save a bogus URL → toast "Instance URL saved", full reload, network banner drops (server unreachable) — confirm the app doesn't hard-crash and the About page still lets you re-open the prompt to fix it
+- [ ] Re-save the original URL → app recovers cleanly on reload; API traffic goes back to normal
+
+
+
 **Workflow:**
 - Newest within each surface is at the top.
 - Delete items as you verify them — no archive needed, the end-of-pre-release

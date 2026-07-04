@@ -544,6 +544,7 @@
     // mixing bowl while saying "next" / "start timer".
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
+    import { useWakeLock } from 'src/composables/useWakeLock';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
     import type { Substitute } from 'src/models/stockItemDetail';
@@ -572,6 +573,12 @@
     const stockItemApi = new StockItemApiService();
     const slActions = useShoppingListActions();
     const authStore = useAuthStore();
+
+    // P8-10 — hold the screen awake for the whole cook session (both the
+    // running timer and the read-along steps assume a visible screen the
+    // user isn't tapping). Released automatically on unmount.
+    const wakeLockWanted = ref(true);
+    useWakeLock(wakeLockWanted);
 
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);

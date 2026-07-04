@@ -10,6 +10,22 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-411 — PLATFORM_BUILDS_AUDIT target-matrix: not acted on
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md` recommends a target-matrix (which platforms to prioritise for native builds). Nothing acted on; overlaps with P8-10 native and P5-04 mobile field-test.
+- **Why deferred:** Phase 3 flagship-adjacent.
+- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens.
+- **State note (2026-07-04, P8-10):** matrix decision landed with the P8-10 build. Prioritised: **Android (Capacitor, buildable on Linux)** + **PWA install (already working)**. Deferred: **iOS** (scaffolded via `cap add ios` but never built — needs a Mac session and $99/yr Apple Developer account when there's a real user). Skipped: Electron (PyInstaller path is better), Cordova, BEX. Full setup and rationale in [packaging/BUILD_NATIVE.md](packaging/BUILD_NATIVE.md).
+
+## [RESOLVED] FU-418 — Distribution Spec §4 open questions
+- **Raised:** 2026-07-01 (investigations audit).
+- **Type:** deferred job.
+- **What:** `docs/05_investigations/Distribution Spec - Desktop App & Mobile Client.md` §4 has explicit open questions for the user. Not answered; overlaps with PLATFORM_BUILDS_AUDIT and P8-10 native.
+- **Why deferred:** Phase 3 / commercialization territory.
+- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens; answer the §4 questions inline there.
+- **State note (2026-07-04, P8-10):** answered in practice during P8-10 scope-lock. (1) Backend URL is user-configurable at runtime via a first-run screen + Settings → About edit control (@capacitor/preferences persistence). (2) Push notifications on native = **unsupported today**; VAPID web push kept for browser + PWA only, native FCM bridge deferred as [[FU-465]]. (3) Wake-lock via the standard `navigator.wakeLock` Web API in cook + shop mode. (4) Store submission not attempted; draft copy landed in [docs/04_proposals/PLAY_STORE_LISTING.md](docs/04_proposals/PLAY_STORE_LISTING.md).
+
 ## [RESOLVED] FU-104 — Move the URL recipe importer into the private companion app (legal posture)
 - **Raised:** 2026-06-10 (user, during Cookbook Chunk 7 review)
 - **Type:** policy / distribution-posture decision (cross-cutting)

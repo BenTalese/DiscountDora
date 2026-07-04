@@ -1,6 +1,7 @@
 import type { Axios, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
 import { Notify } from 'quasar';
+import { getBackendBaseUrl } from 'src/services/api/backendUrl';
 
 class ApiErrorResponse extends Error {
     detail!: string;
@@ -86,14 +87,11 @@ export interface HttpClient {
     delete<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>>;
 }
 
+// P8-10 — thin adapter kept for the handful of callers that still read the
+// base URL synchronously (network-status ping, About settings). New code
+// should import `getBackendBaseUrl` from `services/api/backendUrl` directly.
 export function resolveBaseURL(): string {
-    const envValue = import.meta.env.VITE_API_BASE_URL;
-    if (envValue && envValue.length > 0) return envValue.replace(/\/+$/, '');
-    if (typeof window !== 'undefined' && window.location) {
-        const { protocol, hostname } = window.location;
-        return `${protocol}//${hostname}:5170/api`;
-    }
-    return 'http://localhost:5170/api';
+    return getBackendBaseUrl();
 }
 
 // ─── Correlation id ──────────────────────────────────────────────────
@@ -162,7 +160,6 @@ export default class AxiosHttpClient implements HttpClient {
 
     constructor() {
         this.axios = axios.create({
-            baseURL: resolveBaseURL(),
             headers: { 'Content-Type': 'application/json' },
             // withCredentials lets the browser send/receive the dora_session
             // cookie on cross-origin requests (dev: 5174 → 5170).
@@ -172,6 +169,12 @@ export default class AxiosHttpClient implements HttpClient {
         // ── Request interceptor: correlation id + CSRF token ───────
         this.axios.interceptors.request.use((config) => {
             const cfg = config as DoraRequestConfig;
+            // P8-10 — resolve baseURL per-request so a runtime change
+            // (Settings → save new instance URL) takes effect immediately
+            // without rebuilding the axios instance. Empty string is a
+            // valid answer on native before the setup gate completes; the
+            // router prevents API calls in that window.
+            cfg.baseURL = getBackendBaseUrl();
             if (!cfg.__correlationId) cfg.__correlationId = newCorrelationId();
             cfg.headers.set?.('X-Request-Id', cfg.__correlationId);
 

@@ -1,24 +1,25 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-04** (hand-edit close-gate for **Recipe importer
-Chunk 5** — paste importer replaces the URL fetcher; endpoint reshaped
-`/import-from-url` → `/import-from-content`; `import_recipe_from_url.py`
-deleted; SPA dialog switches to a paste textarea + optional "where's
-this from?" URL; **FU-104 + FU-199 close**. Merged with the other-box
-line, so this doc combines: today's Chunks 1-5 landing (corpus + parser
-20/20 green + schema migration + tri-state cookability sweep + endpoint
-reshape) and 2026-07-03's ⭐ **P8-07 Zero-Input Pantry** flagship +
-**FU-449** cook→consume depletion (P6-07) + FU-296 price-drops widget +
-FU-299 stock-donut deep-links + FU-300 log-price quick action + FU-327
-cross-platform build scripts + FU-016 guard-race audit + FU-181
-meals-per-week pref + FU-314 lazy-loader retirement + FU-315 auto-add
-toast wiring + FU-316 quick-add polish + several stale-FU resolves
-(052/065/134/134/144/170/423); prior full rebuild 2026-07-02 verified
-against the codebase, not just the docs). This is the single front door: where every phase and workstream
-is up to, and what needs your attention. For *where things stand* this doc wins; for
-*how/why* a decision was made, follow the linked planning doc. It is regenerated
-after each chunk of work — if it looks out of date, the last session skipped its
-close-gate (trust `DORA_WORKLOG.md` + `CHANGELOG.md` and regenerate).
+**Regenerated: 2026-07-04** (hand-edit close-gate for **P8-10 Native
+mobile app** — Capacitor 8 scaffold with Android platform fully built
+locally + iOS platform scaffolded for a future Mac session; runtime-
+configurable backend URL via `@capacitor/preferences` + a first-run
+`/setup/backend` gate + Settings→About edit control; screen wake-lock
+composable wired into cook mode + shop mode; adaptive Android launcher
+icons regenerated from the mascot on a `#F5C462` background; `CAMERA
+/ WAKE_LOCK / VIBRATE / POST_NOTIFICATIONS` manifest permissions;
+`packaging/BUILD_NATIVE.md` + `docs/04_proposals/PLAY_STORE_LISTING.md`
+docs land; **FU-411 + FU-418 close**, **FU-465 new** — native FCM
+push bridge deferred. Champion sequence P8-01..P8-10 now complete
+(P8-03/P8-04 formally cut per §7). Rolls forward from earlier today's
+P8-09 Memory reports + P8-08 Dora Score + Recipe importer chunks 1-6 +
+2026-07-03's ⭐ P8-07 Zero-Input Pantry flagship. This is the single
+front door: where every phase and workstream is up to, and what needs
+your attention. For *where things stand* this doc wins; for *how/why*
+a decision was made, follow the linked planning doc. It is regenerated
+after each chunk of work — if it looks out of date, the last session
+skipped its close-gate (trust `DORA_WORKLOG.md` + `CHANGELOG.md` and
+regenerate).
 
 Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progress ·
 🔵 designed, not built · ⚪ not started · 🔴 needs your decision · 🕸 stale doc.
@@ -28,31 +29,26 @@ Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progres
 ## Where we are right now
 
 Phases 0 and 2 are effectively **done**: foundations, and the ingestion API +
-standalone companion (the June baseline that called Phase 2 "0%" is stale — it's
-backend-green now). **Phase 1** is closer to **~85%** than the earlier "95%" call:
-a 2026-07-02 cross-check against `PROMPT_PLAN_PART_6_POLISH.md` found six real gaps
-(FU-449..452 plus the existing FU-351/352) — notably `consumption_events` was never
-persisted, so run-out prediction still sees purchases only, not cooking (the loop
-is closed in the UX but not yet in the data). **Phase 3 is now ~55%**: the flagship
-**⭐ P8-07 Zero-Input Pantry** was built this session (inferred belief per
-stock item — band + confidence + reason from purchases + cooking + cadence +
-time-decay; additive chip; per-user opt-out; ask-when-it-matters quick-checks),
-riding on **FU-449** which finally closed the P6-07 cook→consume leg
-(`ConsumptionEvent` now persists, so run-out prediction shifts when you cook,
-not only buy). P8-06 Wait-or-Buy + BuyVerdictCard shipped earlier; P8-03/P8-04
-were cut. Champion sequence:
-`P8-01 → P8-02 → P8-05 → P8-06 → P8-07 (flagship, built) → P8-08 → P8-09 → P8-10`.
-**Everything P8-07 is written but NOT yet run** — no Python env on the dev box —
-so migrations + pytest + the belief endpoint need a server-env pass, and the
-belief chip / quick-check / toggle need a browser walk (`DORA_VERIFY.md` §Stock).
-**Next up:** verify P8-07 (the gate on calling the flagship done),
-then **P8-10 Native app** — the last remaining champion prompt (wrap
-the SPA in Capacitor for iOS/Android, native camera/push/wake-lock,
-one codebase). Today added P8-09 Culinary memory (Memory section on
-/reports + three assistant tools), P8-08 Dora Score, and the six-chunk
-recipe-importer rebuild. Browser-verify these three surfaces (paste
-importer + bulk-linker, Kitchen health card, Memory reports) when back
-at the running app.
+standalone companion. **Phase 1** sits at **~88%** — a 2026-07-02 cross-check
+against `PROMPT_PLAN_PART_6_POLISH.md` found five real gaps (FU-450..452 plus
+FU-351/352); the sixth (FU-449 cook→consume depletion) closed with P8-07.
+**Phase 3 is now ~95%** — the **champion sequence P8-01..P8-10 is complete**.
+Today's session finished P8-08 Dora Score + P8-09 Memory reports and closed
+with **P8-10 Native mobile app**: Capacitor 8 wraps the SPA (`web_app/src-capacitor/`),
+Android platform fully scaffolded on this Linux box with adaptive icons +
+manifest permissions, iOS scaffolded config-only for a future Mac session,
+runtime backend URL persisted via `@capacitor/preferences` with a first-run
+gate + Settings→About edit control, screen wake-lock wired into cook + shop
+mode. P8-03/P8-04 formally cut per §7 Decisions 6/7. Champion sequence:
+`P8-01 → P8-02 → P8-05 → P8-06 → ⭐ P8-07 → P8-08 → P8-09 → P8-10` — all built.
+**Nothing champion is left to build.**
+**Next up:** three surfaces need browser-verify — P8-07 flagship
+(`DORA_VERIFY.md` §Stock), P8-08 Kitchen health card + P8-09 Memory reports,
+and today's P8-10 Native Android build (`DORA_VERIFY.md` — new sections at
+top). Beyond verify, the natural next direction is **Phase 4 kick-off**
+(commercialisation report → per-recommendation FUs / plans; email setup;
+multi-tenant readiness) or FU-465 native push (FCM bridge) if on-phone
+notifications matter before Phase 4.
 
 ---
 
@@ -63,7 +59,7 @@ at the running app.
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/430/431/432). |
 | **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~88% | **FU-449 now closed** — P6-07 cook→consume `ConsumptionEvent` persists (built with P8-07); the loop is genuinely closed (prediction shifts on cooking). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (→ P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~80% | **⭐ P8-07 Zero-Input Pantry BUILT** (verify pending). **P8-08 Dora Score BUILT** (Kitchen health dashboard card + endpoint). **P8-09 Culinary memory BUILT** (Memory section on /reports: meals cooked over time, spend by category, year-over-year — plus three new assistant tools + range vocab extended to 2y/5y). P8-02 + P8-05 + P8-06 shipped. **P8-10 native app next** (last champion prompt). P8-03 + P8-04 cut (§7 Decisions 6/7). |
+| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and now **P8-10 Native mobile app** all BUILT (Capacitor 8 wraps the SPA; Android platform scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode; adaptive icons + Play Store draft). P8-01 + P8-02 + P8-05 + P8-06 shipped earlier. P8-03 + P8-04 cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
 
 ---
@@ -118,6 +114,7 @@ a decision or a running-app check *now*, most important first.
 
 ## Recently shipped (newest first)
 
+- **P8-10 Native mobile app scaffold (2026-07-04).** Capacitor 8 wraps the Quasar SPA — one codebase, no fork. Android platform fully scaffolded on this Linux dev box (`web_app/src-capacitor/android/`, adaptive launcher icons regenerated from the mascot on a `#F5C462` background, manifest permissions `CAMERA / WAKE_LOCK / VIBRATE / POST_NOTIFICATIONS`, `allowMixedContent` on for LAN `http` self-hosts). iOS platform scaffolded (`src-capacitor/ios/`) but never built here — awaits a Mac session. Runtime-configurable backend URL via new `services/api/backendUrl.ts` (persists to `@capacitor/preferences` on native, `localStorage` in the browser; axios interceptor prepends per-request); a first-run `/setup/backend` gate blocks every route until the user picks an instance; Settings → About gains a **Change** button + full-reload wiring. Screen wake-lock via new `useWakeLock` composable (standard `navigator.wakeLock`), held during cook mode and while a shopping list is `status === 'shopping'`. New docs: [packaging/BUILD_NATIVE.md](packaging/BUILD_NATIVE.md) (Android APK how-to, prerequisites, live-reload) + [docs/04_proposals/PLAY_STORE_LISTING.md](docs/04_proposals/PLAY_STORE_LISTING.md) (draft copy + screenshot plan; no submission). Push on native intentionally stays 'unsupported' (Android WebView has no Push API); FCM bridge deferred as [[FU-465]]. **FU-411 + FU-418 close** — target-matrix and Distribution Spec §4 questions answered in P8-10 scope-lock. `vue-tsc --noEmit` clean. Final APK build lives as a browser-verify step (no Android SDK on this dev box).
 - **P8-09 Household culinary memory (2026-07-04).** A new **Memory · what you actually did** section on `/reports` with three cards: (1) Meals cooked — cook-count + meals-worth timeline over the range + top-N recipes by cook frequency, (2) Spend by category — donut + legend rolling up archived shopping-list lines through `StockItem.stock_group`, (3) Year-over-year — total + per-category delta vs. the same-length prior window (rate is `null` not `+∞%` for new-category cases — P3 Honest). Range vocabulary extended to `2y` / `5y` on every reports endpoint. Three new assistant tools (`meals_cooked_in_range`, `spend_by_category`, `spend_year_over_year`) compose over the same endpoints so chat answers "what did we make last Christmas?" and "how has dairy changed year on year?" with real stored data — no invention. Single-household scope, per the champion plan; multi-tenant (Path A SaaS) is a separate deployment posture and doesn't gate this. **22/22 pytest green** on the new report math + range vocab + grouping.
 - **P8-08 The Dora Score (2026-07-04).** A single kitchen-health composite (0-100) computed server-side over a rolling 30-day window from five signals: waste (`StockItemWasteEvent` count), on-budget (reuses `/budget/status`), freshness (% of expiry-tracked items past their date), unplanned run-outs (`ConsumptionEvent` to Out with no active shopping-list line), and stocktake staleness (% checked in the window). Components with no data are excluded from the mean, never zeroed (charter P3 Honest). A trend arrow (score vs. same score 7 days ago, ±2-point hysteresis) travels with the DTO. Renders as a new **Kitchen health** card at the top of the dashboard's Your Kitchen zone with a big number, trend chip, and per-component mini-bar breakdown; each component's weak-side action links to the feature that improves it (waste → waste tab, budget → preferences, freshness → expiring stock, run-outs → shopping lists, stocktake → stocktake mode). New endpoint `GET /api/dashboard/dora-score`. **30/30 pytest green** on the pure decision core; SPA `vue-tsc` clean.
 - **Recipe importer — paste-based rebuild complete, Chunks 1-6 (2026-07-04).** The URL importer is retired end-to-end. Chunks 1-3 stood up a 20/20-green corpus + text-first parser (Class A JSON-LD-free sites like RecipeTin, AllRecipes, HBH, Sally's, Simply, Woolworths, Taste; Class B `<h3>`/`<h4>`-headed sites like Smitten Kitchen). Chunk 4 added a schema-level "unlinked ingredient" affordance (persistable `raw_text` with tri-state cookability that renders neutral until every row is linked). Chunk 5 replaced `POST /api/recipes/import-from-url` with `POST /api/recipes/import-from-content` — server no longer fetches; the user pastes the recipe page and optionally types the source URL for provenance (closes **FU-104** + **FU-199**). Chunk 6 lands the "smart importer" speed thesis: a new **Settings → Admin → Data → Unlinked ingredients** page groups every unmatched ingredient by normalised raw_text and links a whole group with one click (or one click to create a new stock item pre-populated with the raw_text and link in the same request); a PWA `share_target` in `manifest.json` drops the OS Share sheet's title/text/url into `/cookbook`, auto-opening the paste dialog pre-filled; and a paste-friendly hint on the recipe-detail freeform-instructions field covers L261.
@@ -240,6 +237,7 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | SHOPPING_LIST_REDESIGN_PROPOSAL | 📦 superseded | v1 shipped (P6-01) → UX_V2 presentation |
 | IMPL_PLAN_* (Alerts, Cart, Cookbook, Cook-Mode, Dashboard, Error-Handling, Ingestion, Meal-Plans, Meal-Plans-Rebuild, State-Ownership, Stock-Item-Detail, Stock-Overview, Waste, Your-Prices, Settings-Rebuild, Shopping-Lists, Shopping-List-Receipts, Config, Auth-Shell) | ✅ done | All executed & shipped. ~13 carry stale "no code yet" headers (FU-445). MEAL_PLANS_REBUILD is the live meal-plans authority. |
 | IMPL_PLAN_RECIPE_IMPORTER | 🔵 designed | 2026-07-04. Six-chunk paste-based rebuild; supersedes IMPL_PLAN_COOKBOOK §Chunk 7's URL-importer scope. Closes FU-104 / FU-199 / FU-396 (importer half). |
+| PLAY_STORE_LISTING | 🔵 designed | 2026-07-04 (P8-10). Play Store copy draft, 6-shot screenshot plan, adaptive-icon note. **No submission** — reference for the day one happens. |
 
 ## 05_investigations — reports (16)
 

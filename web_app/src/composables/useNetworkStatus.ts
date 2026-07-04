@@ -12,20 +12,16 @@
 
 import { Notify } from 'quasar';
 import { computed, readonly, ref } from 'vue';
+import { getBackendBaseUrl } from 'src/services/api/backendUrl';
 
-// Match the dora-backend resolution that `axiosHttpClient` uses. Replicated
-// here (rather than imported) so the probe can run with `fetch` directly,
-// sidestepping the AxiosHttpClient interceptors / retry layer.
+// Reads the runtime backend URL (env-baked, capacitor Preferences, or the
+// browser localStorage override — see `services/api/backendUrl.ts`) and
+// appends /health. Uses `fetch` directly so the probe sidesteps the
+// AxiosHttpClient interceptors / retry layer.
 function resolveHealthUrl(): string {
-    const envBase = import.meta.env.VITE_API_BASE_URL;
-    if (envBase && typeof envBase === 'string' && envBase.length > 0) {
-        return `${envBase.replace(/\/+$/, '')}/health`;
-    }
-    if (typeof window !== 'undefined' && window.location) {
-        const { protocol, hostname } = window.location;
-        return `${protocol}//${hostname}:5170/api/health`;
-    }
-    return 'http://localhost:5170/api/health';
+    const base = getBackendBaseUrl();
+    if (base && base.length > 0) return base + '/health';
+    return '';
 }
 
 // Poll cadence: when believed reachable we tick once every 30s — the UI
@@ -50,10 +46,15 @@ let booted = false;
 // scary-looking unhandled rejections in the console.
 async function probeOnce(): Promise<boolean> {
     if (!online.value) return false;
+    const url = resolveHealthUrl();
+    // P8-10 — on native before the user has picked an instance, the URL
+    // resolves to empty; skip the probe cleanly rather than firing a
+    // relative fetch at the WebView origin.
+    if (!url) return false;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
-        const res = await fetch(resolveHealthUrl(), {
+        const res = await fetch(url, {
             method: 'GET',
             // The health endpoint is open and cookie-less — no need to
             // attach credentials. Keeps the request preflight-free in

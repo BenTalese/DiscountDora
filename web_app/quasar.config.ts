@@ -25,7 +25,8 @@ export default defineConfig((ctx): any => {
             'i18n',
             'notifyTypeRegistration',
             'pwaLifecycle',
-            'theme'
+            'theme',
+            'capacitor'
         ],
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css

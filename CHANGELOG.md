@@ -6,6 +6,37 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Native mobile app scaffold — Android build + iOS Xcode project
+  (P8-10, 2026-07-04).** Capacitor 8 wraps the Quasar SPA for iOS
+  and Android; **one codebase, no SPA fork**. Android platform is
+  fully scaffolded (`web_app/src-capacitor/android/`) with adaptive
+  launcher icons regenerated from the Dora mascot, `#F5C462`
+  background swatch, and `INTERNET / CAMERA / WAKE_LOCK / VIBRATE /
+  POST_NOTIFICATIONS` permissions declared. iOS platform is
+  scaffolded (`src-capacitor/ios/`) but never built — needs a Mac
+  session. Full build instructions in
+  [packaging/BUILD_NATIVE.md](packaging/BUILD_NATIVE.md); Play Store
+  draft copy in [docs/04_proposals/PLAY_STORE_LISTING.md](docs/04_proposals/PLAY_STORE_LISTING.md).
+  Native gets three functional additions along with the shell:
+  (1) a **runtime-configurable backend URL** — new
+  `services/api/backendUrl.ts` reads / writes via
+  `@capacitor/preferences` on native and `localStorage` in the
+  browser, the axios request interceptor prepends it per-request so
+  changing instances doesn't require a rebuild, and a first-run
+  `/setup/backend` gate blocks every route until the user picks a
+  URL. Settings → About gains an in-place **Change instance URL**
+  affordance (also usable in the browser to override the env
+  default). (2) A **screen wake lock** composable
+  (`composables/useWakeLock.ts`, standard `navigator.wakeLock`
+  API) keeps the display on during cook mode and while a shopping
+  list is in `status === 'shopping'` (shop mode). (3) A Capacitor
+  boot file (`src/boot/capacitor.ts`) hides the splash screen
+  cleanly and loads the persisted backend URL before router mounts.
+  Push notifications intentionally still travel over VAPID web push
+  today — Android WebView doesn't expose the Push API, so on native
+  the toggle stays 'unsupported' until a future prompt wires
+  `@capacitor/push-notifications` + FCM.
+
 - **⭐ The Dora Score — one honest kitchen-health number
   (P8-08, 2026-07-04).** A new **Kitchen health** card at the top
   of the dashboard's Your Kitchen zone shows a single 0-100

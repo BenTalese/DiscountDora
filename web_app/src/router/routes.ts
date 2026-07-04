@@ -28,6 +28,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/SetupAdminPage.vue'),
         meta: { title: 'Set up Dashy Dora' },
     },
+    // P8-10 — native app first-run instance picker. Only reachable when
+    // Capacitor.isNativePlatform() is true and no backend URL is stored
+    // yet; the router guard bounces web visitors to /settings/about.
+    {
+        path: '/setup/backend',
+        component: () => import('pages/setup/BackendSetupPage.vue'),
+        meta: { title: 'Choose your instance' },
+    },
     // ── A1 out-of-band auth flows. Each one lives outside MainLayout so
     // signed-out users (or someone clicking a verify link in a fresh
     // browser) doesn't see the nav chrome.

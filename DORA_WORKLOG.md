@@ -9,6 +9,195 @@ next.
 
 ---
 
+## 2026-07-04 — P8-10 Native mobile app scaffolded (Capacitor 8, Android + iOS; runtime backend URL, wake-lock, adaptive icons)
+
+**Why:** Last remaining prompt in the champion sequence, picked up
+immediately after P8-09 landed earlier this session. STEP-0 recon
+found the ground was fertile: Quasar's Capacitor config stanza already
+existed, backend CORS already permits `capacitor://localhost`, the
+push subscription composable + backend VAPID were already end-to-end.
+What was missing: the actual `src-capacitor/` scaffold, a runtime
+backend URL story (the SPA was env-baked), wake-lock, and Android
+icons.
+
+**Scope-lock (four Qs asked before touching code):**
+- **Platforms**: Android build here on Linux + iOS scaffolded config-
+  only (no Mac available). Recommended path — the user picked it.
+- **Push**: keep VAPID web push. No Firebase / FCM plugin. Native
+  build's push toggle stays 'unsupported' until a future prompt
+  wires `@capacitor/push-notifications`.
+- **Backend URL**: first-run modal + Settings → About edit control,
+  persisted via `@capacitor/preferences` (native) and localStorage
+  (web override).
+- **Store assets**: adaptive Android icons + Play Store copy draft;
+  no submission.
+
+Machine constraint I flagged upfront: this dev box has no Android
+SDK and no Mac, so I could scaffold and typecheck everything but the
+final APK build is a browser-verify step (Android Studio → Gradle
+sync → Debug APK) — captured in DORA_VERIFY.
+
+**What shipped — Capacitor scaffold:**
+- `web_app/src-capacitor/` with `capacitor.config.json`
+  (`io.github.bentalese.dashydora`, `Dashy Dora`, `webDir: www`,
+  `server.androidScheme: https`, `android.allowMixedContent: true`
+  so LAN-hosted `http://` backends work). Inquirer refused piped
+  stdin so the standard `quasar mode add capacitor` scaffold was
+  laid down file-by-file (same content, no interactive prompt).
+- `npx cap add android` produced the full Gradle project at
+  `src-capacitor/android/`; `npx cap add ios` did the same for
+  `src-capacitor/ios/`. Both plug-in installs succeeded.
+- Deps installed (SPA side + native side):
+  - `web_app/package.json` — `@capacitor/core`, `@capacitor/app`,
+    `@capacitor/preferences`, `@capacitor/status-bar`,
+    `@capacitor/splash-screen` (so the SPA can import them at
+    build time regardless of build mode).
+  - `web_app/src-capacitor/package.json` — same set + `@capacitor/cli`,
+    `@capacitor/android`, `@capacitor/ios` (native-only linking).
+- `AndroidManifest.xml` gained `CAMERA`, `WAKE_LOCK`, `VIBRATE`,
+  `POST_NOTIFICATIONS`, plus `<uses-feature ... camera required=false />`
+  so the Play listing doesn't exclude tablets without a camera.
+- Adaptive launcher icons regenerated from the 512 mascot at every
+  density (mdpi 48 / hdpi 72 / xhdpi 96 / xxhdpi 144 / xxxhdpi 192)
+  via ImageMagick: `ic_launcher.png` (legacy square), `ic_launcher_round.png`
+  (circle-masked), `ic_launcher_foreground.png` (transparent, 66%
+  safe-zone). Background swatch flipped from `#FFFFFF` to `#F5C462`
+  in `values/ic_launcher_background.xml`.
+
+**What shipped — runtime backend URL system:**
+- New module `web_app/src/services/api/backendUrl.ts` — owns the URL
+  cache, Preferences (native) / localStorage (web) persistence, and
+  a normaliser that adds `https://` + `/api` if the user omits
+  either. Exports `getBackendBaseUrl`, `setBackendBaseUrl`,
+  `clearBackendBaseUrl`, `loadBackendBaseUrl`, `isNativePlatform`,
+  `hasBackendBaseUrl`.
+- `axiosHttpClient.ts` — dropped the `baseURL` on axios.create; the
+  request interceptor now calls `getBackendBaseUrl()` per request
+  and writes `config.baseURL`. So a user changing instances from
+  Settings takes effect on the very next API call, no rebuild.
+- `resolveBaseURL()` kept as a thin adapter for the two remaining
+  callers (About screen, network probe). Everything else new goes
+  through the module directly.
+- `useNetworkStatus.ts` — swapped its inline env-reading for
+  `getBackendBaseUrl()` + `/health`. Returns empty on native
+  pre-URL and short-circuits the probe cleanly (no phantom fetch
+  against the WebView origin).
+- New boot file `src/boot/capacitor.ts` — awaits `loadBackendBaseUrl()`
+  before the router mounts, and (native only) dismisses the splash
+  screen + sets the status bar style via dynamically-imported
+  plugins so the web bundle stays clean.
+- Router guard: on native + no URL saved, every route funnels to
+  `/setup/backend` (including `/login`); on web, `/setup/backend`
+  bounces to `/settings/about` so a nosy URL-typer doesn't see it.
+- New page `pages/setup/BackendSetupPage.vue` — AuthShell-styled
+  URL input; on submit, provisionally saves the URL, probes
+  `/api/auth/me` (200/401 both count as "backend answered"), and
+  rolls back on failure so the app never gets stuck pointing at a
+  dead host.
+- `AboutSettings.vue` — the "Dora API endpoint" row now reads the
+  live runtime URL, and a **Change** button opens a Quasar prompt
+  dialog that calls `setBackendBaseUrl` then forces a full
+  `window.location.reload()` (soft-nav would keep stale Pinia
+  stores).
+
+**What shipped — wake lock:**
+- New composable `useWakeLock.ts` — thin wrapper around
+  `navigator.wakeLock.request('screen')`. Takes a reactive
+  `enabled` flag; watches it (immediate); reacquires on
+  `visibilitychange` back to visible; releases on unmount. Silent
+  no-op on unsupported platforms (older Safari, private-mode
+  Firefox pre-126). WebView on Android Chromium supports it.
+- `RecipeCookMode.vue` — holds the lock for the whole cook session
+  (`wakeLockWanted = ref(true)` on setup).
+- `ShoppingListDetail.vue` — computed on `detail.value?.status === 'shopping'`
+  so entering / leaving shop mode toggles the lock without any
+  imperative acquire/release call.
+
+**Docs + store scaffolding:**
+- `packaging/BUILD_NATIVE.md` — prerequisites (Java 21, Android SDK
+  34, Node 20), the two commands to produce a debug APK, the
+  first-run flow explanation, declared permissions with rationale,
+  the deliberate iOS "scaffolded but never built" note, live-reload
+  instructions with `CAPACITOR_SERVER_URL`.
+- `docs/04_proposals/PLAY_STORE_LISTING.md` — full listing draft:
+  metadata, short + full description, 6-shot screenshot plan with
+  captions, feature-graphic sketch. No submission.
+
+**Tests + quality gates:**
+- `vue-tsc --noEmit` **clean** (one caught error — `errorMessage`
+  null-vs-undefined on the setup page — fixed inline).
+- `pytest tests/test_dora_score.py tests/test_reports_memory.py -q`
+  → **52/52 green** (this session's most-recent backend work still
+  passes; no backend files touched by P8-10).
+- Manifest / gradle sync + APK build are the browser-verify step
+  the user picks up in Android Studio — I don't have the SDK here.
+
+**Engineering-standards close-gate:**
+- **R-001 componentisation-first** — new logic lives in reusable
+  units (`useWakeLock`, `backendUrl` module), no duplication into
+  pages.
+- **R-002 theme tokens only** — the new setup page uses
+  `--auth-shell-accent*` + `--text-secondary` + `--surface-sunken`;
+  no raw hex except the intentional `#F5C462` in the Android
+  adaptive-icon *background colour* (Android needs a hex there;
+  documented as a R-002 carve-out via source-file comment in the
+  values XML would be overkill, so it lives with the value inline).
+- **R-003 single source of truth** — `backendUrl.ts` is the ONE
+  place the base URL resolves; axios interceptor, `useNetworkStatus`,
+  `AboutSettings` all read it. `resolveBaseURL()` collapsed to a
+  thin adapter.
+- **R-005 portable data access & distribution posture** — the
+  native app is a **sync client** to the same backend, no fork.
+  Runtime-configurable URL matches §7.5 discipline #2 (env/config-
+  driven differences, not code differences). No new tenancy fields;
+  no self-hosted-only assumption.
+- **R-010 strong types** — booleans stay boolean; `isNativePlatform`
+  is a proper predicate; URL is `string`. No sentinels.
+- **R-014 reveal-and-disable** — Change-instance button is always
+  visible in About (browser + native); native push toggle reads
+  `unsupported` explicitly rather than being hidden.
+- **No new violations. No new ADR** — Capacitor doesn't overturn
+  any standing rule; it's an additional distribution posture.
+
+**Follow-ups:**
+- **[FU-465 new] Native push (FCM bridge)** — Android WebView has
+  no Push/PushManager API, so VAPID doesn't reach the native app.
+  When there's a real user asking for on-phone notifications, wire
+  `@capacitor/push-notifications` + Firebase + a parallel native-
+  endpoint store in the backend. Roughly half a day of work.
+- **[FU-411 resolved]** PLATFORM_BUILDS_AUDIT target-matrix — P8-10
+  answered it: **Android + PWA today, iOS scaffolded for a Mac
+  session**, Electron/BEX/Cordova skipped. Moved to `_RESOLVED`
+  with the state note.
+- **[FU-418 resolved]** Distribution Spec §4 open questions —
+  answered in practice during P8-10 scope-lock (runtime URL, VAPID
+  push retained, wake-lock via Web API, no submission). Moved to
+  `_RESOLVED`.
+- **DORA_VERIFY** gained a new **Native Android build** section (11
+  checkbox items) + a **Runtime backend URL (browser + PWA)**
+  section (3 items).
+
+**Anti-drift check:** P8-10 touches the additive surfaces — new
+`src-capacitor/`, new `backendUrl.ts`, new `useWakeLock.ts`, new
+boot file, new setup page, new `PLAY_STORE_LISTING.md` + `BUILD_NATIVE.md`
+— plus **surgical** edits to `axiosHttpClient.ts`, `useNetworkStatus.ts`,
+`AboutSettings.vue`, `RecipeCookMode.vue`, `ShoppingListDetail.vue`,
+`router/index.ts`, `router/routes.ts`, `quasar.config.ts`. No schema
+touched; no backend code changed; no existing endpoint reshaped.
+
+**Next up:** the champion sequence is now **complete** — P8-01
+through P8-10 all built (P8-03 and P8-04 formally cut per §7
+Decisions 6/7). Outstanding work is browser-verify: today's Native
+Android build + Runtime URL, plus the pre-existing checklists for
+P8-07 flagship, P8-08 Kitchen health, P8-09 Memory reports, and
+the recipe-importer chunks. Once verify is walked, the next
+meaningful direction is a **Phase 4 kick-off** (commercialisation
+report → per-recommendation FUs / plans; email setup; multi-tenant
+readiness), OR the FU-465 native push follow-up if the user wants
+to close that gap first.
+
+---
+
 ## 2026-07-04 — P8-09 Household culinary memory built (Memory section on /reports + assistant tools)
 
 **Why:** Next champion prompt after P8-08 landed earlier this session.

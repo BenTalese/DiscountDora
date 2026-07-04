@@ -1079,6 +1079,7 @@
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
+    import { useWakeLock } from 'src/composables/useWakeLock';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { STOCKED_SEQUENCE } from 'src/helpers/stockStatus';
     import {
@@ -1123,6 +1124,13 @@
 
     const listId = computed(() => String(route.params.id ?? ''));
     const detail = ref<ShoppingListDetail | null>(null);
+
+    // P8-10 — shop-mode wake lock. Holds the screen on while the list is
+    // in 'shopping' status so the phone doesn't blank between aisles. The
+    // computed reads `detail.value?.status` so entering / leaving shop
+    // mode toggles the lock without any explicit acquire/release call.
+    const shopModeActive = computed(() => detail.value?.status === 'shopping');
+    useWakeLock(shopModeActive);
     // Starts true: the first painted frame must be the skeleton, never the
     // "list isn't available" fallback (the S6 flash) — onMounted's load()
     // hasn't had a chance to set it yet on that first frame.

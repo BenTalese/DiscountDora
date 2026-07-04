@@ -1,6 +1,7 @@
 import { defineRouter } from '#q-app/wrappers';
 import { Notify } from 'quasar';
 import { useAuthStore } from 'src/stores/authStore';
+import { hasBackendBaseUrl, isNativePlatform } from 'src/services/api/backendUrl';
 import { createMemoryHistory, createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
 
 import routes from './routes';
@@ -10,6 +11,10 @@ const PUBLIC_ROUTES = new Set<string>([
     // FU-200 — fresh-install first-admin setup. Reachable without a
     // session by definition.
     '/setup',
+    // P8-10 — native app first-run instance picker. Reachable before any
+    // backend is configured (there is no backend to authenticate against
+    // until this step completes).
+    '/setup/backend',
     // A1 out-of-band auth surfaces — reachable from email links without
     // an existing session.
     '/verify-email',
@@ -82,6 +87,17 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     // route needs a session), or redirects to / (when an already-logged-in
     // user lands on /login).
     ROUTER.beforeEach(async (to) => {
+        // P8-10 — native app first-run gate. On Capacitor the app is served
+        // from https://localhost with no backend behind it; block every
+        // route (including /login) until the user has picked an instance.
+        if (isNativePlatform() && !hasBackendBaseUrl()) {
+            if (to.path !== '/setup/backend') return { path: '/setup/backend' };
+            return true;
+        }
+        if (to.path === '/setup/backend' && !isNativePlatform()) {
+            return { path: '/settings/about' };
+        }
+
         const authStore = useAuthStore();
         if (!authStore.isBootstrapped) {
             await authStore.bootstrapAsync();

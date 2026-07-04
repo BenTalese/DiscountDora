@@ -53,6 +53,13 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-465 — Native push notifications (FCM bridge) not wired
+- **Raised:** 2026-07-04 (P8-10 close-gate).
+- **Type:** deferred job.
+- **What:** VAPID web push works in the browser + PWA install path but Android's WebView doesn't expose the Push / PushManager / Notification APIs, so the Capacitor build's push toggle reads `unsupported`. To make proactive alerts (deal-for-you, run-out, expiry) work on the native app, wire `@capacitor/push-notifications` + Firebase Cloud Messaging on Android (and APNS on iOS when that platform is built). Server-side: a native-endpoint subscription store parallel to the web-push VAPID one, plus a fan-out in `push_sender.py`. Manifest already declares `POST_NOTIFICATIONS`.
+- **Why deferred:** user picked "keep VAPID web push" at P8-10 scope-lock — smallest surface, avoids a Firebase dependency, matches self-host posture. Native push is only worth the FCM/Firebase cost once there's actual demand.
+- **Recommended resolution:** when someone actually installs the native app and complains about missing notifications (or when Phase 4 commercialisation starts). Firebase project setup + `google-services.json` + backend fan-out is roughly a half-day of work.
+
 ## [OPEN] FU-464 — Auto-add-when-low threshold is stale after the 3-band collapse (`>= 2` = Out only)
 - **Raised:** 2026-07-03 (spotted while wiring P8-07 consumption events into `update_stock_item.py`).
 - **Type:** finding (real bug — behaviour drift).
@@ -360,13 +367,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** de-emphasised when nutrition was scoped to off+simple.
 - **Recommended resolution:** discussion — decide whether this is (a) a distinct healthiness dimension, (b) subsumed by the nutrition-complex mode when eventually built, or (c) dropped. Not now; revisit when nutrition or Cookbook next opens.
 
-## [OPEN] FU-418 — Distribution Spec §4 open questions
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** deferred job.
-- **What:** `docs/05_investigations/Distribution Spec - Desktop App & Mobile Client.md` §4 has explicit open questions for the user. Not answered; overlaps with PLATFORM_BUILDS_AUDIT and P8-10 native.
-- **Why deferred:** Phase 3 / commercialization territory.
-- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens; answer the §4 questions inline there.
-
 ## [OPEN] FU-417 — MAGIC_BEHAVIOUR_AUDIT verdicts — confirm each landed
 - **Raised:** 2026-07-01 (investigations audit).
 - **Type:** finding (delta check).
@@ -408,13 +408,6 @@ long session summary. Distinct from the other logs:
 - **What:** `docs/05_investigations/COMMERCIALIZATION_REPORT.md` is a Phase 4 planning input. Not translated into a plan or prompts.
 - **Why deferred:** Phase 4 territory.
 - **Recommended resolution:** at Phase 4 kick-off — read the report top-to-bottom, spawn per-recommendation FUs / plans.
-
-## [OPEN] FU-411 — PLATFORM_BUILDS_AUDIT target-matrix: not acted on
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** deferred job.
-- **What:** `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md` recommends a target-matrix (which platforms to prioritise for native builds). Nothing acted on; overlaps with P8-10 native and P5-04 mobile field-test.
-- **Why deferred:** Phase 3 flagship-adjacent.
-- **Recommended resolution:** roll into the P8-10 native-app brief when Phase 3 opens.
 
 ## [OPEN] FU-410 — MULTI_USER_READINESS §5 open questions
 - **Raised:** 2026-07-01 (investigations audit).

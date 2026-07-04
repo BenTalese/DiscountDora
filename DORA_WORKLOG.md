@@ -9,6 +9,118 @@ next.
 
 ---
 
+## 2026-07-04 — Stocktake redesign Chunk 1: backend engine
+
+**Why:** User asked to start building the new stocktake mode
+(`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Chunk 1 = the backend
+engine: everything the server needs so the *new* queue behaviour is
+serving up correct data, before any UI change. Chunk 2 is the runner
+rewrite; Chunk 3 covers Settings + Overview surfacing.
+
+**What shipped (Chunk 1, backend only — no SPA change):**
+
+- **Single new alembic revision `d1f9c3a8b2e4`** that also serves as
+  the **merge revision** between the two 07-03/07-04 open heads
+  (`a3e8b1f6c2d9` user_inferred_pantry + `c5a8e1f7d3b2`
+  recipe_ingredient_unlinked). Adds:
+  - `StockItem.snoozed_until` (nullable timestamp, indexed) — backs
+    the new Push 3-day snooze.
+  - `AppSetting.stocktake_default_cadence_band` (String(16), default
+    'fortnightly').
+  - `AppSetting.stocktake_auto_tuning_enabled` (Boolean, default
+    true — "auto = speed" per the user's design call).
+- **New pure module `dora_api/features/stocktake/cadence.py`** — the
+  band-resolution engine. Weekly (7d) / Fortnightly (14d) / Monthly
+  (30d) enum with `.days`; `parse_band` for tolerant AppSetting
+  reads; `auto_band_from_history` (trailing-90d avg gap:
+  ≤10d→Weekly, 11–24d→Fortnightly, ≥25d→Monthly, need ≥2 changes
+  or return None so the baseline stands); `resolve_band` combines
+  baseline → Auto (if enabled) → Low/Out bump → Essential bump,
+  clamped at Weekly. Pure, R-003 single-source, DB-free.
+- **`stocktake.py` rewritten** — new engagement gate (`_is_engaged`
+  now asks *one* question: "do you actually keep this item?" — in
+  stock / opened / adjusted-in-60d / on-a-list-in-60d; `is_flagged`
+  and `auto_add_when_low` DROPPED as gate signals). New
+  `_overdue_baseline` = `COALESCE(last_checked_at, stock_level_last_
+  updated)` — no more 9999 sentinel, brand-new items get a natural
+  grace period. Queue DTO gains `cadence_band` + `cadence_days`.
+  Push (`snoozed_until > now`) filters items out. Mute
+  (`stocktake_alerts_are_enabled=False`) unchanged.
+- **New `POST /stock-items/<id>/snooze`** — fixed 3-day snooze;
+  deliberately does NOT bump `last_checked_at` (Push makes no truth
+  claim about the stock).
+- **`/check` + `/bulk-check` + `review/complete`** — all three now
+  clear any active snooze on success. A Check is a stronger claim
+  than a Push, so a Check must supersede.
+- **Settings endpoints** (`get_app_settings.py` / `update_app_settings.py`)
+  expose the two new fields with enum validation on the band string.
+- **Task 1.8** (Change-level bumps `last_checked_at`) — **already
+  done** in `update_stock_item.py:131-133` with an explicit "X1: a
+  level change is implicitly a check" comment. No code needed.
+
+**Task tracking:** used TaskCreate/TaskUpdate to walk 10 sub-tasks; all 10
+completed. See DORA_FOLLOWUPS.md for the one new open item (unrelated
+pre-existing test failure).
+
+**Deliberately deferred:**
+
+- The **per-item `days_until_stocktake_alert` column is NOT dropped
+  yet.** It's superseded by the band system but left in place so
+  old writers don't error mid-transition. Drop is chained to Chunk 2
+  once the SPA no longer references it.
+
+**Quality gates:**
+
+- **New `tests/test_stocktake_cadence.py` — 18/18 pytest green.**
+  Covers: band → days mapping; default band = Fortnightly;
+  `parse_band` tolerant of missing/invalid; Auto no-signal / fast
+  / mid / slow / ignore-ancient; Auto off → baseline only; Auto
+  on but no history → keeps baseline; Auto two-way (relaxes AND
+  tightens); Low/Out bump; Essential bump; both-bumps stack +
+  clamp at Weekly; clamp holds at Weekly.
+- **Adjacent test suite** (`tests/test_*.py` minus e2e): 297/298
+  pass; the 1 failure is `test_buy_verdict.py::test__all_axes_
+  thin__collapses_to_single_not_enough_history`, confirmed
+  **pre-existing on main-state via `git stash`** — not caused by
+  Chunk 1. Logging as an open FU.
+- **Alembic head count:** 1 (was 2 — this revision merged them).
+- No SPA change; `vue-tsc` not re-run.
+
+**Engineering-standards close-gate:**
+
+- **R-001 componentisation** — cadence logic is a dedicated pure
+  module reused across `stocktake.py`, `test_stocktake_cadence.py`,
+  and `update_app_settings.py`'s band validation. Not duplicated.
+- **R-003 SoT** — bands + Auto thresholds + engagement windows +
+  Low/Out window each defined in exactly one place. Queue DTO
+  carries resolved band; SPA (Chunk 2) will never re-derive.
+- **R-005 distribution** — `batch_alter_table` for SQLite; new
+  settings are config/DB-driven; repository-routed throughout.
+- **R-006 clean migrations** — single revision, merges heads,
+  non-null columns have server_defaults, downgrade path complete.
+- **R-007 scope** — didn't touch `update_stock_item.py` (already
+  correct); didn't drop the deprecated column (belongs to Chunk 2).
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the files this chunk needed —
+1 new migration, 2 domain entities, 1 table_mappings block, 3
+app-settings files, 1 rewritten stocktake feature module, 1 new
+cadence module, 1 new test file. No SPA, no unrelated backend.
+
+**Follow-ups opened:**
+- **FU-455 (new)** — `test_buy_verdict.py::test__all_axes_thin__
+  collapses_to_single_not_enough_history` fails on main-state.
+  Composer expects 1 reason for the "all thin axes" case; getting
+  0. Unrelated to stocktake. Type: bug.
+- **Chunk 2 (Stocktake runner rewrite)** — chained; do not open as a
+  FU (it's the next natural work unit under the same brief).
+
+**Next up:** Chunk 2 (SPA — runner rebuild, new buttons, landing-
+page retirement, `(?)` help, completion-screen batch add-to-list),
+per PROPOSAL_STOCKTAKE_MODE §5/§5.1/§5.2. Awaits user go-ahead.
+
+---
+
 ## 2026-07-04 — Stock Overview bulk-select gets "Log waste…"
 
 **Why:** During the FU-226 stocktake redesign chat, we cut expiry+Waste from

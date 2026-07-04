@@ -100,6 +100,15 @@ class AppSetting(BaseEntity):
     # longest edge in pixels; images above are scaled down first.
     image_quality: int = 85
     image_max_dimension: int = 1920
+    # PROPOSAL_STOCKTAKE_MODE §4 + §8 — the two global stocktake knobs.
+    # `stocktake_default_cadence_band` is the baseline cadence when Auto
+    # is off, and the fallback for items with no movement history.
+    # Values: `'weekly'` (7d) / `'fortnightly'` (14d) / `'monthly'` (30d).
+    # `stocktake_auto_tuning_enabled` is the master switch for the
+    # movement-history self-tuner ("auto = speed" per the user's design
+    # call) — on by default so a fresh install "just works".
+    stocktake_default_cadence_band: str = "fortnightly"
+    stocktake_auto_tuning_enabled: bool = True
 
     class Fields(BaseEntity.Fields):
         MASTER_LLM_ENABLED = "master_llm_enabled"
@@ -120,3 +129,5 @@ class AppSetting(BaseEntity):
         BACKUP_STORAGE_PATH = "backup_storage_path"
         IMAGE_QUALITY = "image_quality"
         IMAGE_MAX_DIMENSION = "image_max_dimension"
+        STOCKTAKE_DEFAULT_CADENCE_BAND = "stocktake_default_cadence_band"
+        STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"

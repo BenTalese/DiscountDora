@@ -6,6 +6,54 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Stocktake queue engine rebuilt (Chunk 1 of the redesign) — 2026-07-04.**
+  Backend-only chunk; the runner UX rebuild is Chunk 2. The queue's
+  "who / how often / snooze" is now driven by
+  [PROPOSAL_STOCKTAKE_MODE](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md):
+  - **Engagement gate — one question.** An item enters the queue only
+    when it shows a *current* sign the user manages it (in stock /
+    opened / adjusted-in-60d / on-a-shopping-list-in-60d). The
+    per-item `is_flagged` / `auto_add_when_low` flags are **no
+    longer** gate signals — a flag never forces a not-actually-kept
+    item into the queue (fixes "essential + never bought doesn't
+    make sense"). The two history signals gained a **60-day window**
+    so an item touched a year ago no longer nags forever.
+  - **Cadence bands + self-tuning.** Weekly (7d) / Fortnightly (14d)
+    / Monthly (30d) resolved server-side from a global default
+    (**Fortnightly**) + a new **Auto** self-tuner (**on by default**;
+    reads each item's trailing-90d level-change history: ≤10-day
+    avg gap → Weekly, ≥25-day → Monthly, middle → Fortnightly).
+    Low/Out in the last 14 days bumps one band faster. Essential
+    (`is_flagged`) bumps one more, clamped at Weekly. Replaces the
+    deprecated per-item `days_until_stocktake_alert` dial.
+  - **Grace period for new items.** The `9999` never-checked
+    sentinel is retired. Overdue baseline =
+    `COALESCE(last_checked_at, stock_level_last_updated)` — "when
+    did the user last touch this?" — so a freshly-added stub gets
+    exactly one band of grace before it surfaces.
+  - **Push (3-day snooze).** New `POST
+    /api/stock-items/{id}/snooze` sets `snoozed_until = now + 3d`;
+    queue excludes anything with `snoozed_until > now`. Push
+    deliberately does **not** stamp `last_checked_at` — it makes
+    no truth claim about the stock, so it must not corrupt the
+    verification audit. A subsequent Check / Set-level clears the
+    snooze automatically.
+  - **Two new install-wide settings** — `stocktake_default_cadence_
+    band` and `stocktake_auto_tuning_enabled` — exposed on
+    `GET`/`PATCH /api/app-settings`. The Settings UI wires them in
+    Chunk 3.
+
+  New alembic revision `d1f9c3a8b2e4` also **merges the two open
+  heads** (`a3e8b1f6c2d9` + `c5a8e1f7d3b2`) so the DB tracks a single
+  linear history again. Migration adds `StockItem.snoozed_until`
+  (nullable, indexed) + the two `AppSetting` columns. Non-null
+  columns ship with server-defaults so existing rows adopt sensible
+  values on upgrade. 18/18 new pytest green
+  (`tests/test_stocktake_cadence.py` covers the pure resolver end
+  to end); wider suite regression-clean (one pre-existing
+  `test_buy_verdict.py` failure logged as [FU-455](DORA_FOLLOWUPS.md)).
+
+### Added
 - **Bulk "Log waste…" on Stock Overview — (2026-07-04).** The Stock Overview
   bulk-select bar gains a **Log waste…** action alongside "Add to list…",
   "Remove from list…", "Move location", and "Restock". Select N items, pick a

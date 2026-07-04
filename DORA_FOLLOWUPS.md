@@ -53,6 +53,13 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-455 — Pre-existing test failure in `test_buy_verdict.py` (all-thin-axes case returns 0 reasons)
+- **Raised:** 2026-07-04 (Stocktake Chunk 1 close-gate — surfaced by running the full test suite after the change).
+- **Type:** bug (not a stocktake regression).
+- **What:** `tests/test_buy_verdict.py::test__all_axes_thin__collapses_to_single_not_enough_history` fails on main-state (confirmed by `git stash` isolation). The test builds a "min viable" input for the buy-verdict composer and asserts `len(verdict.reasons) == 1` (a single "not enough history yet" reason). The composer currently returns `reasons=[]` for that shape, so either the composer stopped emitting the placeholder reason for thin-axes input, or the test's expectation drifted from the current design. `verdict='unsure'` and `confidence='low'` are still both correct.
+- **Why deferred:** cleanly out of scope for Chunk 1 (backend engine for stocktake). Surfaced only because the chunk's close-gate ran the full pytest suite. Fixing it inline would smear scope.
+- **Recommended resolution:** opportunistic — next time the buy-verdict composer opens for change, read `compose_verdict` + the test to decide whether the emit or the assertion is right. Either fix should be a one-line change.
+
 ## [OPEN] FU-465 — Native push notifications (FCM bridge) not wired
 - **Raised:** 2026-07-04 (P8-10 close-gate).
 - **Type:** deferred job.

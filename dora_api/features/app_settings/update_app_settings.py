@@ -64,6 +64,12 @@ class UpdateAppSettingsRequest(BaseModel):
     # request schema kicks in first).
     image_quality: int | None = Field(default=None, ge=30, le=100)
     image_max_dimension: int | None = Field(default=None, ge=512, le=8192)
+    # PROPOSAL_STOCKTAKE_MODE §4 + §8 — the two stocktake knobs.
+    # Cadence band is one of {'weekly','fortnightly','monthly'}; the
+    # handler validates against the enum below so a typo can't silently
+    # degrade the queue.
+    stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
+    stocktake_auto_tuning_enabled: bool | None = None
 
 
 @dataclass(slots=True)
@@ -173,6 +179,31 @@ class UpdateAppSettingsHandler:
             setting.image_quality = request.image_quality
         if "image_max_dimension" in set_fields and request.image_max_dimension is not None:
             setting.image_max_dimension = request.image_max_dimension
+
+        # PROPOSAL_STOCKTAKE_MODE §4 + §8 — cadence band + Auto toggle.
+        # Band is validated against the enum so a typo can't degrade
+        # the queue to the fallback silently (R-010).
+        if (
+            "stocktake_default_cadence_band" in set_fields
+            and request.stocktake_default_cadence_band is not None
+        ):
+            from dora_api.features.stocktake.cadence import CadenceBand
+            _Band = request.stocktake_default_cadence_band.strip().lower()
+            try:
+                CadenceBand(_Band)
+            except ValueError:
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{_Band}' is not a valid cadence band. "
+                        f"Allowed: {[b.value for b in CadenceBand]}."
+                    ),
+                )
+            setting.stocktake_default_cadence_band = _Band
+        if (
+            "stocktake_auto_tuning_enabled" in set_fields
+            and request.stocktake_auto_tuning_enabled is not None
+        ):
+            setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
 
         # FU-153 §7.1 — the install-wide setting is now a master kill-
         # switch only; the per-user "have you finished setting up?"

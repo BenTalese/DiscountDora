@@ -2,44 +2,48 @@
 
   GET  /api/stocktake/queue?limit=50          — items needing a check
   POST /api/stock-items/<id>/check            — bump last_checked_at only
+  POST /api/stock-items/<id>/snooze           — Push 3 days
   POST /api/stocktake/bulk-check              — body {ids}
   POST /api/shopping-lists/<id>/review/complete — bulk-set ticked items
                                                   to Stocked (used by the
                                                   shopping-list review
                                                   mode).
 
-The queue's ordering is:
-  1. items with stocktake_alerts_are_enabled=True AND most-overdue first
-  2. items never checked (last_checked_at IS NULL) treated as maximally
-     overdue (so brand-new pantries surface immediately).
-  3. tiebreak by name.
+Round-19 (2026-07-04) reboots the queue engine for the new stocktake
+design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
 
-Per-item `days_until_stocktake_alert` is the per-item check cadence; an
-item with `stocktake_alerts_are_enabled=False` is excluded from the
-queue entirely (the user has opted it out — typically items they manage
-manually).
+1.  **Engagement gate — one honest question.** An item enters the queue
+    only when it shows a *current* sign the user manages it. The old
+    flag-based signals (`is_flagged`, `auto_add_when_low`) are dropped
+    — a flag never forces a not-actually-kept item into the queue —
+    and the two history signals gain a **60-day window** so an item
+    touched a year ago no longer nags forever. Signals:
+      • In stock right now (`stock_level.sequence < OUT`).
+      • Ever opened (`opened_on` non-null).
+      • Level adjusted in the last 60 days.
+      • On a shopping list in the last 60 days (active list, or a
+        closed list with `completed_at` inside the window).
 
-Round-18 (2026-06-19) — engagement filter: an item must show signs the
-user actually manages it before it enters the queue. Items the user
-created and never touched ("nachos I don't keep in stock") would
-previously surface immediately as "never-checked = maximally overdue";
-now they're filtered out unless one of these signals fires:
+2.  **Cadence bands + Auto self-tuning.** Per-item overdue is measured
+    against a *resolved band* (Weekly/Fortnightly/Monthly, see
+    `cadence.py`), not the deprecated per-item
+    `days_until_stocktake_alert` column. Baseline = the global
+    `AppSetting.stocktake_default_cadence_band`; Auto (on by default)
+    overrides from movement history; Low/Out in the last 14 days bumps
+    one band faster; Essential (`is_flagged`) bumps one more.
+    Change-level *implicitly* checks the item (already done in
+    `update_stock_item.py`), so the grace-period baseline for a
+    never-checked item is `COALESCE(last_checked_at,
+    stock_level_last_updated)` — the "when did the user last touch
+    this" timestamp. No 9999 sentinel.
 
-  • Essential / Auto-add — explicit "this matters" flags.
-  • Currently in stock (level sequence < OUT) — if it's actually
-    present in the pantry, it's managed.
-  • Ever opened — `opened_on` is non-null.
-  • Level has been moved off the default — at least one
-    `StockLevelChange` row exists (created on every level change).
-  • On a shopping list now, or ever was — any `ShoppingListLine`
-    row references this stock_item_id.
-
-The existing overdue-days logic still applies on top; the engagement
-filter just decides "is this worth surfacing at all".
+    Push (snooze) filters out items whose `snoozed_until > now`;
+    Mute is unchanged (`stocktake_alerts_are_enabled=False` still
+    excludes).
 """
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import List
 from uuid import UUID
 
@@ -47,13 +51,20 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from dora_api.app import db
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE,
+)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import (OUT_OF_STOCK_SEQUENCE, StockStatus,
+from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
+                                          OUT_OF_STOCK_SEQUENCE, StockStatus,
                                           level_for_status)
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
+from dora_api.features.stocktake.cadence import (CadenceBand, ItemHistory,
+                                                 parse_band, resolve_band)
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
@@ -61,7 +72,19 @@ from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-# ── Queue ──────────────────────────────────────────────────────────────
+# ── Windows ────────────────────────────────────────────────────────────
+# History-signal windows for the engagement gate + Auto's Low/Out bump.
+# All in one place so the queue, the tests, and any future assistant
+# tool resolve to the same numbers (R-003).
+_ENGAGEMENT_WINDOW_DAYS = 60
+_LOW_OUT_BUMP_WINDOW_DAYS = 14
+_AUTO_HISTORY_WINDOW_DAYS = 90  # mirrors cadence.py's _AUTO_HISTORY_WINDOW_DAYS
+
+# Push (snooze) window — fixed 3 days per §5 (open-decision resolved).
+_SNOOZE_DAYS = 3
+
+
+# ── Queue DTO ──────────────────────────────────────────────────────────
 
 @dataclass(frozen=True, slots=True)
 class StocktakeQueueItemDto:
@@ -69,62 +92,161 @@ class StocktakeQueueItemDto:
     name: str
     stock_level_name: str | None
     stock_location_name: str | None
-    days_until_stocktake_alert: int
+    # Resolved band the runner shows next to the item ("checked every
+    # week / fortnight / month"). Server-owned (R-003) — the SPA never
+    # re-derives a band.
+    cadence_band: str
+    # Effective cadence in days (matches `cadence_band` — sent for
+    # convenience so the SPA doesn't need to map the string itself).
+    cadence_days: int
     last_checked_at: str | None
     overdue_days: int
 
 
-def _compute_overdue(item: StockItem, now: datetime) -> int:
-    """Days the item is past its alert window. Items that have never
-    been checked are treated as massively overdue so they surface first
-    on a fresh install / new account."""
-    window = item.days_until_stocktake_alert or 0
-    if item.last_checked_at is None:
-        # 9999 keeps never-checked items above any plausible window.
-        return 9999
-    elapsed = (now.date() - item.last_checked_at.date()).days
-    return max(0, elapsed - window)
+# ── Overdue baseline ───────────────────────────────────────────────────
 
+def _overdue_baseline(item: StockItem) -> datetime | None:
+    """The timestamp we measure overdue from.
 
-def _engaged_item_ids(item_ids: list[UUID]) -> tuple[set[UUID], set[UUID]]:
-    """Pre-compute the engagement signals that require a DB lookup, in
-    bulk — doing it per-item would explode into N+M queries on a big
-    pantry. Returns (items_with_level_history, items_on_any_list).
+    `COALESCE(last_checked_at, stock_level_last_updated)` — "when did
+    the user last touch this?" Change-level bumps `last_checked_at`
+    (see `update_stock_item.py`), so any item the user has ever
+    touched has a `last_checked_at`; only a truly never-touched item
+    falls back to `stock_level_last_updated` (which equals its
+    creation moment, since a StockItem is always created with a
+    level).
 
-    The remaining engagement signals (essential / auto-add / in-stock /
-    opened) are plain attributes on `StockItem` and are read directly in
-    the filter below.
+    Replaces the old 9999-sentinel behaviour: brand-new items now
+    have a natural grace period equal to one cadence band, not "top
+    of the queue on turn zero".
     """
+    if item.last_checked_at is not None:
+        return item.last_checked_at
+    return item.stock_level_last_updated
+
+
+def _compute_overdue_days(
+    item: StockItem, band_days: int, now: datetime,
+) -> int:
+    """Days past the resolved band since the overdue baseline. 0 if
+    the item is not yet due; `_overdue_baseline` returning None (a
+    genuinely-orphan row with no level) also reads as 0 — the item
+    just doesn't surface, which is the safe fallback."""
+    baseline = _overdue_baseline(item)
+    if baseline is None:
+        return 0
+    elapsed = (now.date() - baseline.date()).days
+    return max(0, elapsed - band_days)
+
+
+# ── Engagement gate ────────────────────────────────────────────────────
+
+@dataclass(frozen=True, slots=True)
+class _EngagementSignals:
+    """Bulk pre-computed signals for the engagement gate + Auto tuner.
+    Assembling per-item would explode into N+M queries on a big
+    pantry."""
+    items_with_recent_level_change: set[UUID]
+    items_on_recent_list: set[UUID]
+    # Per-item trailing-90d list of change timestamps for the Auto
+    # self-tuner (`cadence.py::auto_band_from_history`).
+    change_timestamps_by_item: dict[UUID, list[datetime]]
+    # Per-item flag: any StockLevelChange in the last
+    # _LOW_OUT_BUMP_WINDOW_DAYS whose target level's sequence is ≥
+    # LOW_STOCK. Bumps one band faster.
+    items_hit_low_or_out_recently: set[UUID]
+
+
+def _gather_engagement_signals(
+    item_ids: list[UUID],
+    now: datetime,
+) -> _EngagementSignals:
+    empty = _EngagementSignals(set(), set(), {}, set())
     if not item_ids:
-        return set(), set()
+        return empty
+
     slc_table = db.metadata.tables["StockLevelChange"]
+    sl_table = db.metadata.tables["StockLevel"]
     line_table = db.metadata.tables["ShoppingListLine"]
-    items_with_changes = {
-        row[0] for row in db.session.execute(
-            select(slc_table.c.stock_item_id)
-            .where(slc_table.c.stock_item_id.in_(item_ids))
-            .distinct()
-        ).all()
-    }
-    items_on_lists = {
-        row[0] for row in db.session.execute(
-            select(line_table.c.stock_item_id)
-            .where(line_table.c.stock_item_id.in_(item_ids))
-            .distinct()
-        ).all()
-    }
-    return items_with_changes, items_on_lists
+    list_table = db.metadata.tables["ShoppingList"]
+
+    engagement_cutoff = now - timedelta(days=_ENGAGEMENT_WINDOW_DAYS)
+    auto_history_cutoff = now - timedelta(days=_AUTO_HISTORY_WINDOW_DAYS)
+    low_out_cutoff = now - timedelta(days=_LOW_OUT_BUMP_WINDOW_DAYS)
+
+    # Level-change rows for the trailing Auto-history window (which is
+    # a superset of the engagement window, so one query covers both).
+    # Join levels to know each change's sequence for the Low/Out bump.
+    change_rows = db.session.execute(
+        select(
+            slc_table.c.stock_item_id,
+            slc_table.c.changed_at,
+            sl_table.c.sequence,
+        )
+        .select_from(
+            slc_table.outerjoin(
+                sl_table, slc_table.c.stock_level_id == sl_table.c.id,
+            )
+        )
+        .where(
+            slc_table.c.stock_item_id.in_(item_ids),
+            slc_table.c.changed_at >= auto_history_cutoff,
+        )
+    ).all()
+
+    change_timestamps_by_item: dict[UUID, list[datetime]] = {}
+    items_with_recent_level_change: set[UUID] = set()
+    items_hit_low_or_out_recently: set[UUID] = set()
+    for stock_item_id, changed_at, seq in change_rows:
+        change_timestamps_by_item.setdefault(stock_item_id, []).append(changed_at)
+        if changed_at >= engagement_cutoff:
+            items_with_recent_level_change.add(stock_item_id)
+        if (
+            seq is not None
+            and seq >= LOW_STOCK_SEQUENCE
+            and changed_at >= low_out_cutoff
+        ):
+            items_hit_low_or_out_recently.add(stock_item_id)
+
+    # Shopping-list membership within the engagement window. Active
+    # lists (status ≠ 'done') always qualify; closed lists count if
+    # their completed_at is within the window. This is what makes
+    # "on a list once 5 months ago" stop nagging.
+    list_rows = db.session.execute(
+        select(line_table.c.stock_item_id)
+        .select_from(
+            line_table.join(
+                list_table,
+                line_table.c.shopping_list_id == list_table.c.id,
+            )
+        )
+        .where(
+            line_table.c.stock_item_id.in_(item_ids),
+            (
+                (list_table.c.status != SHOPPING_LIST_STATUS_DONE)
+                | (list_table.c.completed_at >= engagement_cutoff)
+            ),
+        )
+        .distinct()
+    ).all()
+    items_on_recent_list = {row[0] for row in list_rows}
+
+    return _EngagementSignals(
+        items_with_recent_level_change=items_with_recent_level_change,
+        items_on_recent_list=items_on_recent_list,
+        change_timestamps_by_item=change_timestamps_by_item,
+        items_hit_low_or_out_recently=items_hit_low_or_out_recently,
+    )
 
 
-def _is_engaged(
-    item: StockItem,
-    items_with_changes: set[UUID],
-    items_on_lists: set[UUID],
-) -> bool:
-    """True when the item shows ANY sign the user actively manages it.
-    Round-18 — see module docstring for the rationale."""
-    if item.is_flagged or item.auto_add_when_low:
-        return True
+def _is_engaged(item: StockItem, signals: _EngagementSignals) -> bool:
+    """The single question: *do you actually keep this item?*
+
+    Any one of four in-play signs is enough. Flag columns
+    (`is_flagged` / `auto_add_when_low`) are **not** signals here —
+    they cover how an in-play item is treated, not whether the item
+    is in play at all. See §2 of the brief.
+    """
     if (
         item.stock_level is not None
         and item.stock_level.sequence < OUT_OF_STOCK_SEQUENCE
@@ -132,12 +254,14 @@ def _is_engaged(
         return True
     if item.opened_on is not None:
         return True
-    if item.id in items_with_changes:
+    if item.id in signals.items_with_recent_level_change:
         return True
-    if item.id in items_on_lists:
+    if item.id in signals.items_on_recent_list:
         return True
     return False
 
+
+# ── Queue endpoint ─────────────────────────────────────────────────────
 
 @STOCKTAKE_ROUTER.route("/queue", methods=["GET"])
 def get_stocktake_queue():
@@ -150,6 +274,14 @@ def get_stocktake_queue():
         return bad_request("limit must be between 1 and 500.")
 
     repo = SqlAlchemyRepository()
+    app_setting = get_or_create_app_setting(repo)
+    default_band = parse_band(
+        getattr(app_setting, "stocktake_default_cadence_band", None)
+    )
+    auto_enabled = bool(
+        getattr(app_setting, "stocktake_auto_tuning_enabled", True)
+    )
+
     items = (
         repo.get(StockItem)
         .include("stock_level")
@@ -158,37 +290,46 @@ def get_stocktake_queue():
     )
     now = datetime.now(UTC)
 
-    # Bulk-fetch the engagement signals so the per-item filter below stays
-    # O(1) per item.
-    items_with_changes, items_on_lists = _engaged_item_ids(
-        [item.id for item in items]
-    )
+    signals = _gather_engagement_signals([item.id for item in items], now)
 
-    overdue: list[tuple[int, StockItem]] = []
+    overdue: list[tuple[int, CadenceBand, StockItem]] = []
     for item in items:
+        # Mute
         if not item.stocktake_alerts_are_enabled:
             continue
-        if not _is_engaged(item, items_with_changes, items_on_lists):
+        # Push (snooze)
+        if item.snoozed_until is not None and item.snoozed_until > now:
             continue
-        days = _compute_overdue(item, now)
+        if not _is_engaged(item, signals):
+            continue
+        history = ItemHistory(
+            change_timestamps=tuple(
+                signals.change_timestamps_by_item.get(item.id, ())
+            ),
+            hit_low_or_out_recently=item.id in signals.items_hit_low_or_out_recently,
+            is_essential=bool(item.is_flagged),
+        )
+        band = resolve_band(
+            default_band=default_band,
+            auto_enabled=auto_enabled,
+            history=history,
+            now=now,
+        )
+        days = _compute_overdue_days(item, band.days, now)
         if days <= 0:
             continue
-        overdue.append((days, item))
+        overdue.append((days, band, item))
 
-    overdue.sort(key=lambda pair: (
-        -pair[0],
-        pair[1].last_checked_at or datetime.min.replace(tzinfo=UTC),
-        pair[1].name.lower(),
+    overdue.sort(key=lambda triple: (
+        -triple[0],
+        _overdue_baseline(triple[2]) or datetime.min.replace(tzinfo=UTC),
+        triple[2].name.lower(),
     ))
     total = len(overdue)
     page = overdue[:limit]
 
     dtos: List[StocktakeQueueItemDto] = []
-    for days, item in page:
-        # Cap the "never checked" sentinel at -1 so the SPA can render
-        # "never checked" specially without subtracting 9999 from a day
-        # count it'll only confuse a user.
-        display_days = days if days < 9999 else -1
+    for days, band, item in page:
         dtos.append(StocktakeQueueItemDto(
             stock_item_id=item.id,
             name=item.name,
@@ -196,12 +337,13 @@ def get_stocktake_queue():
             stock_location_name=(
                 item.stock_location.name if item.stock_location else None
             ),
-            days_until_stocktake_alert=item.days_until_stocktake_alert,
+            cadence_band=band.value,
+            cadence_days=band.days,
             last_checked_at=(
                 item.last_checked_at.isoformat()
                 if item.last_checked_at is not None else None
             ),
-            overdue_days=display_days,
+            overdue_days=days,
         ))
     return ok({"items": dtos, "total": total})
 
@@ -211,18 +353,45 @@ def get_stocktake_queue():
 @STOCK_ITEM_ROUTER.route("/<stock_item_id>/check", methods=["POST"])
 def mark_stock_item_checked(stock_item_id: UUID):
     """Confirm the current level is still correct. Bumps last_checked_at
-    only — does NOT touch stock_level_last_updated. Idempotent."""
+    AND clears any active Push snooze (a Check is a stronger claim than
+    a Push — the user just looked). Does NOT touch stock_level_last_
+    updated. Idempotent."""
     _Logger = logging.getLogger(__name__)
     repo = SqlAlchemyRepository()
     item = repo.get(StockItem).by_id(stock_item_id)
     if item is None:
         return not_found("StockItem", stock_item_id)
     item.last_checked_at = datetime.now(UTC)
+    item.snoozed_until = None
     repo.save_changes()
     _Logger.debug("Stocktake check: %s", stock_item_id)
     return ok({
         "stock_item_id": str(stock_item_id),
         "last_checked_at": item.last_checked_at.isoformat(),
+    })
+
+
+# ── /snooze (single) — Push 3 days ────────────────────────────────────
+
+@STOCK_ITEM_ROUTER.route("/<stock_item_id>/snooze", methods=["POST"])
+def snooze_stock_item(stock_item_id: UUID):
+    """PROPOSAL_STOCKTAKE_MODE §5 — the honest defer. Hides the item
+    from the queue for the fixed 3-day window. Deliberately does NOT
+    bump last_checked_at — Push makes no claim the stock is right, so
+    a Push must not corrupt the "when was this last verified" audit."""
+    _Logger = logging.getLogger(__name__)
+    repo = SqlAlchemyRepository()
+    item = repo.get(StockItem).by_id(stock_item_id)
+    if item is None:
+        return not_found("StockItem", stock_item_id)
+    item.snoozed_until = datetime.now(UTC) + timedelta(days=_SNOOZE_DAYS)
+    repo.save_changes()
+    _Logger.debug(
+        "Stocktake snooze: %s until %s", stock_item_id, item.snoozed_until,
+    )
+    return ok({
+        "stock_item_id": str(stock_item_id),
+        "snoozed_until": item.snoozed_until.isoformat(),
     })
 
 
@@ -239,8 +408,12 @@ def bulk_check():
     body: BulkCheckRequest = get_request_body()
     table = db.metadata.tables["StockItem"]
     now = datetime.now(UTC)
+    # Bulk-check also clears any active snoozes, mirroring the
+    # single-item /check path — a Check is stronger than a Push.
     result = db.session.execute(
-        table.update().where(table.c.id.in_(body.ids)).values(last_checked_at=now)
+        table.update()
+        .where(table.c.id.in_(body.ids))
+        .values(last_checked_at=now, snoozed_until=None)
     )
     db.session.commit()
     return ok({"checked": int(result.rowcount or 0)})
@@ -297,6 +470,7 @@ def shopping_list_review_complete(shopping_list_id: UUID):
     checked_count = db.session.execute(
         item_table.update().where(item_table.c.id.in_(item_ids)).values(
             last_checked_at=now,
+            snoozed_until=None,
         )
     ).rowcount or 0
 

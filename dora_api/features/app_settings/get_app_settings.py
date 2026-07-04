@@ -45,6 +45,9 @@ class AppSettingsDto:
     # FU-345 — image compression knobs. See AppSetting entity.
     image_quality: int
     image_max_dimension: int
+    # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
+    stocktake_default_cadence_band: str
+    stocktake_auto_tuning_enabled: bool
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -67,6 +70,12 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         backup_storage_path=getattr(setting, "backup_storage_path", None) or "",
         image_quality=int(getattr(setting, "image_quality", 85) or 85),
         image_max_dimension=int(getattr(setting, "image_max_dimension", 1920) or 1920),
+        stocktake_default_cadence_band=(
+            getattr(setting, "stocktake_default_cadence_band", None) or "fortnightly"
+        ),
+        stocktake_auto_tuning_enabled=bool(
+            getattr(setting, "stocktake_auto_tuning_enabled", True)
+        ),
     )
 
 

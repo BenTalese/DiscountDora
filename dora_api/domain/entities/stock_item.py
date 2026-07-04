@@ -44,8 +44,16 @@ class StockItem(BaseEntity):
     # confirming the current level is correct without changing it.
     # Updating the level updates BOTH timestamps; clicking "Still
     # correct" in stocktake mode only moves this one. None = never
-    # checked (treated as maximally overdue by the stocktake queue).
+    # checked — under the redesigned stocktake engine (PROPOSAL_
+    # STOCKTAKE_MODE §4.1) the queue baselines against
+    # COALESCE(last_checked_at, stock_level_last_updated), so a never-
+    # checked item gets a natural grace period from its creation moment.
     last_checked_at: datetime | None = None
+    # PROPOSAL_STOCKTAKE_MODE §5 — the "Push 3 days" resolution verb.
+    # Queue excludes items where snoozed_until > now. Cleared when the
+    # item is later Checked / Set level / Muted (via those endpoints,
+    # not here). Nullable = "not snoozed".
+    snoozed_until: datetime | None = None
     # Merchant products linked to this stock item, used by the product-search
     # flow to surface deals and by the detail view to show "what merchant
     # SKUs are tracked here". Default empty so callers that don't care about
@@ -73,4 +81,5 @@ class StockItem(BaseEntity):
         STOCK_LOCATION = "stock_location"
         STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
         LAST_CHECKED_AT = "last_checked_at"
+        SNOOZED_UNTIL = "snoozed_until"
         USUAL_STORE_ID = "usual_store_id"

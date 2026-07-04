@@ -18,6 +18,10 @@ def get_or_create_app_setting(repository: SqlAlchemyRepository) -> AppSetting:
     setting = AppSetting(
         master_llm_enabled=True, scanning_enabled=False,
         buy_verdict_enabled=True,
+        # PROPOSAL_STOCKTAKE_MODE §8 — fresh installs get Fortnightly +
+        # Auto-on so the queue "just works" without a Settings visit.
+        stocktake_default_cadence_band="fortnightly",
+        stocktake_auto_tuning_enabled=True,
     )
     repository.add(setting)
     repository.save_changes()

@@ -123,6 +123,12 @@ def configure_mappings(db: SQLAlchemy):
         # upload time to every image surface.
         Column("image_quality", Integer, nullable=False, server_default="85"),
         Column("image_max_dimension", Integer, nullable=False, server_default="1920"),
+        # PROPOSAL_STOCKTAKE_MODE §4 + §8 — the two global stocktake knobs.
+        # `stocktake_default_cadence_band` = 'weekly' | 'fortnightly' |
+        # 'monthly'. `stocktake_auto_tuning_enabled` = master switch for
+        # the movement-history self-tuner ("auto = speed"), on by default.
+        Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
+        Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
     )
 
     product_offer_table = Table(
@@ -209,6 +215,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_location_id", UUIDType, ForeignKey("StockLocation.id", ondelete="SET NULL"), nullable=True),
         Column("stocktake_alerts_are_enabled", Boolean),
         Column("last_checked_at", DateTime(timezone=True), nullable=True),
+        # PROPOSAL_STOCKTAKE_MODE §5 — Push (3-day snooze). Queue filter
+        # excludes items where snoozed_until > now. Indexed to keep the
+        # filter cheap on big pantries.
+        Column("snoozed_until", DateTime(timezone=True), nullable=True),
         # FU-189 — usual store hint. SET NULL on store delete so the item
         # survives the store going away (R-005 referential safety).
         Column("usual_store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),

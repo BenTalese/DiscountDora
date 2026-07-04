@@ -5,6 +5,19 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Bulk "Log waste…" on Stock Overview — (2026-07-04).** The Stock Overview
+  bulk-select bar gains a **Log waste…** action alongside "Add to list…",
+  "Remove from list…", "Move location", and "Restock". Select N items, pick a
+  single reason from the existing reason-picker dialog, and every selected item
+  gets its own reason-only `StockItemWasteEvent` (Charter P2). Any selected item
+  that had an expiry date has it cleared, matching the single-item row action.
+  One summary toast with a batch **Undo** that restores every event + expiry.
+  This is the anchor for the "expiry+waste stays on Stock Overview, not
+  stocktake" split from the FU-226 stocktake redesign — one surface for waste,
+  now with efficient bulk. R-001 reuse of `MarkAsWastedDialog`; no new dialog
+  or component. `vue-tsc` clean.
+
 ### Changed
 - **StoresSettings logo upload adopts the shared image picker — FU-335
   (2026-07-04).** The store-logo file-picker in Settings → Stores was

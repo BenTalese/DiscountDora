@@ -471,6 +471,17 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Stock
 
+### Bulk "Log waste…" on Stock Overview — origin FU-226 chat
+*Verifies the new bulk waste action in the Stock Overview bulk-select bar.*
+- [ ] Enter bulk-select mode (long-press a row on mobile, or the toolbar toggle on desktop) → select 3 items, at least one with an expiry date set and at least one without → the "Log waste…" button in the bulk bar is enabled and shows the trash icon
+- [ ] Tap "Log waste…" → the MarkAsWastedDialog opens with the header **"Why did this go to waste?"**, subject line reads **"3 items"**, and a subline **"One reason applies to every selected item."**
+- [ ] Tap one of the four primary reason tiles (e.g. **Spoiled**) → dialog closes; bulk-select mode exits; one summary toast fires **"Logged 3 items as wasted."** with an **Undo** action
+- [ ] Open **Reports → waste-insights** (or the Dashboard "recently wasted" surface): the 3 items appear with reason `spoiled` and the same `occurred_at`; the item that had an expiry date now shows expiry cleared on Stock Overview
+- [ ] Repeat the flow with **4 items** → tap **Undo** on the summary toast → *all 4* waste events are removed from insights and any previously-set expiry dates are restored on the affected rows (positive "Undone." toast)
+- [ ] With 0 items selected, the "Log waste…" button is **disabled** (grey, no click) — matches the other bulk actions
+- [ ] "Log waste…" with a single item selected → summary reads **"Logged 1 item as wasted."** (singular)
+- [ ] Sanity — the single-item "Log waste" from the row's expiry menu still works and still shows the per-item toast + Undo (bulk path didn't regress the single path)
+
 ### Auto-add-when-low toast + line chip — origin FU-315
 *Requires a stock item with `auto_add_when_low` on and exactly one open draft shopping list.*
 - [ ] From stock overview, tap the stock-level chip on a Stocked item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)

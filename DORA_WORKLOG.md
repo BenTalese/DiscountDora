@@ -9,6 +9,136 @@ next.
 
 ---
 
+## 2026-07-04 — Stock Overview bulk-select gets "Log waste…"
+
+**Why:** During the FU-226 stocktake redesign chat, we cut expiry+Waste from
+stocktake with the reasoning that the Stock Overview's expiring quick-filter is
+the single surface for wasting things. That immediately implies a **bulk waste**
+action there — you'd filter to expiring, select-all, and log the whole batch in
+one go. User asked to build it now.
+
+**What shipped:** one new bulk action in the Stock Overview bulk-select bar
+(`web_app/src/pages/StockOverview.vue`), labelled "Log waste…". Opens the
+existing `MarkAsWastedDialog` (R-001 reuse — no per-batch variant); one reason
+applies to every selected item. Per-item it fires the same
+`wasteApi.logEventAsync` + expiry-clear the single-item row action does, so
+history/insights count the events identically. Batch Undo restores every event
++ expiry in one toast action.
+
+**Design choices:**
+- **One reason for the whole batch** — matches the mental model of "these
+  all went off / were overbought"; you can always run the flow twice if a
+  couple of items had different reasons. Keeps the dialog untouched.
+- **Reused `MarkAsWastedDialog` verbatim** — passed `"N items"` as the
+  "item name" and a small subline "One reason applies to every selected
+  item." No new component (R-001).
+- **Partial-failure tolerant** — a per-item try/catch collects successes;
+  toast summarises "Logged X items… (Y could not be logged)" if any fail.
+  Undo only touches the ones that succeeded.
+- **Expiry clear only on items that had one** — mirrors the single-item
+  path exactly (same field, same store call, same restore-on-undo).
+- **No level flip to Out** — the single-item row action doesn't do this
+  either. Waste captures *the event* (Charter P2 reason-only); level
+  changes stay a separate concern (the user does that manually if needed).
+
+**Quality gates:**
+- `vue-tsc --noEmit` — only the pre-existing Capacitor typings errors from
+  the P8-10 native scaffold on this box; **no new errors** from the change.
+- No backend change (the `POST /waste/events` endpoint is unchanged; bulk
+  is N sequential single-event POSTs, matching how `bulkRestock` and
+  `bulkAddToPrimary` neighbours do it).
+
+**Engineering-standards close-gate:**
+- **R-001 componentisation-first** — reused `MarkAsWastedDialog` +
+  `wasteReasons.ts` + `wasteApi.logEventAsync` unchanged.
+- **R-003 SoT** — one waste-capture path (the API + reason vocab). No
+  duplication of the "clear expiry on log" side effect either; same
+  `stockItemStore.updateStockItemAsync({expiry_date: null})` call as
+  `StockItemRow.onMarkAsWasted`.
+- **R-007 scope** — added one bulk button + wiring; neighbours untouched.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only `web_app/src/pages/StockOverview.vue`.
+Backend, tests, other pages untouched. No new FUs opened (this closes a
+verbal loop from the FU-226 chat; not previously ledgered).
+
+**Verify checklist to append to `DORA_VERIFY.md`** — see next hunk.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — FU-226 + FU-430 closed: Stocktake redesign brief written
+
+**Why:** User asked to knock out FU-226 (assess the round-18 stocktake
+engagement rule so he could decide keep/looser/stricter). It was a UX-policy
+finding waiting on a *decision*, not a code task — so this was a design
+discussion, not a build.
+
+**What happened:** worked the whole system out with the user across **four
+question-waves** (engine → cascaded logic → surfacing → placement). Untangled
+three concerns that had been smeared into one rule set: **who** gets nagged
+(gate), **how often** (cadence), **what you can do** (verbs). All decisions
+locked — the brief is now designed-not-built/decisions-locked, ready for an impl
+plan. Final design:
+
+- **Gate → one question: "do you actually keep this item?"** In stock / opened /
+  adjusted-in-60d / on-a-list-in-60d. Essential + `auto_add_when_low` DROPPED as
+  gate signals (fixes "essential + never bought"). History signals gain a
+  **60-day window**.
+- **Essential** = cadence-only, one band faster; the **sole per-item lever** —
+  the user was emphatic there's **no per-item W/F/M picker ever** (nobody tunes
+  200 items).
+- **Cadence = Weekly/Fortnightly/Monthly bands.** Global default **Fortnightly**
+  + **Auto ON by default**, full two-way self-tuning from trailing-90d avg gap
+  between `StockLevelChange` rows (≤10d→Weekly, 11–24d→Fortnightly,
+  ≥25d→Monthly; Low/Out in 14d bumps faster). Server-owned (R-003).
+- **Never-checked → grace period:** `created_at` baseline, **`9999` sentinel
+  dropped** (new items no longer instantly top of queue).
+- **Verbs:** two big primaries (**Still correct** | **Change level** — the
+  latter shows current level+colour+"(change)", resolving SK-8/9) + three
+  smaller (**Skip** session-only / **Push** flat 3-day snooze, no truth-claim /
+  **Mute** w/ confirm, un-mute on item detail). **Dropped:** Out-of-stock
+  button, keyboard shortcuts (SK-4/10), per-item Add-to-list.
+- **No landing page** — straight into the runner + a `(?)` help affordance
+  (SK-1/2 resolved by removing the screen). Add-to-list → **completion-screen
+  batch** (SK-7).
+- **Expiry & Waste CUT from stocktake** — the user's call: filter-to-expiring on
+  the Overview + log waste there is the single surface. This **retires the
+  2026-07-02 FU-226 extension** (no dual-mode queue, no Waste verb, no
+  entry_reason-for-expiry).
+- **Settings:** new "Stocktake" block (default cadence + Auto toggle).
+- **Stock Overview:** pulsing outline around overdue rows' stock-level button
+  (matches stocktake glow) + "Needs check" quick-filter (original-spec keep).
+
+**Deliverable:** `docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`, fully rewritten
+to the locked design. Grounded in real `stocktake.py` + `StocktakePage.vue` +
+`StocktakeRunner.vue` + the original-spec Taskboard note. Mandatory SK-1..SK-11
+coverage table (all resolved except SK-3 text-size, out of scope). §11 records
+every resolved decision; only impl-level call left = drop-vs-dead-column
+`days_until_stocktake_alert`.
+
+**Ledger surgery:** FU-226 moved to `_RESOLVED` with a full decision note;
+**FU-430 merged into it** (its brief-ask is satisfied by the same doc) rather
+than given its own archive entry. No dangling `[[FU-430]]` backlinks remain.
+
+**Engineering-standards close-gate:** doc-only unit, no code. Brief itself
+embeds the R-003 (state-ownership: band + expiry logic server-owned) and R-005
+(portable data access, config-driven settings) checks for the *future* build.
+No violations introduced, no new ADR.
+
+**Anti-drift check:** touched only the new proposal + three ledger files
+(`DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`, this log). No code, no tests,
+COVERAGE_GAPS has no SK rows to flip.
+
+**Next up:** whatever the user picks. `PROPOSAL_STOCKTAKE_MODE.md` is now a
+complete, decisions-locked spec — the natural next step is an
+`IMPL_PLAN_STOCKTAKE_MODE.md` chunking the build (gate 60-day windows + grace
+period, band/Auto engine + settings block, runner verb rework, no-landing route
+change, completion batch add-to-list, Overview pulse + Needs-check filter).
+
+---
+
 ## 2026-07-04 — FU-335 closed: StoresSettings logo migrated to ImageSourcePicker
 
 **Why:** Last remaining `q-file` in the codebase — every other image-

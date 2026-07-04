@@ -304,6 +304,15 @@
                         @click="bulkRestock"
                     />
                     <BaseButton
+                        variant="ghost"
+                        dense
+                        :icon="ICONS.wasted"
+                        label="Log waste…"
+                        :loading="bulkBusy"
+                        :disable="bulkSelection.size === 0"
+                        @click="openBulkWasteDialog"
+                    />
+                    <BaseButton
                         v-if="scanningEnabled"
                         variant="ghost"
                         dense
@@ -449,6 +458,17 @@
             @confirm="bulkMove"
         />
 
+        <!-- Bulk "Log waste" — reuses the single-item reason picker
+             (R-001). One reason applies to every selected item; each
+             item gets its own StockItemWasteEvent (reason-only per
+             PROPOSAL_WASTE_MINIMISATION §5). -->
+        <MarkAsWastedDialog
+            v-model="bulkWasteOpen"
+            :item-name="bulkWasteItemName"
+            :subline="bulkWasteSubline"
+            @submit="onBulkMarkAsWasted"
+        />
+
         <!-- ── Scan (N5) — jumps to the matching item's detail page ── -->
         <ScanOverlay
             v-model="overviewScanOpen"
@@ -471,6 +491,7 @@
     import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
+    import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
@@ -489,6 +510,7 @@
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService from 'src/services/api/stocktakeApiService';
+    import WasteApiService, { type WasteReason } from 'src/services/api/wasteApiService';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -819,6 +841,124 @@
         } finally {
             bulkBusy.value = false;
         }
+    }
+
+    // ── Bulk log waste ──────────────────────────────────────────────────
+    // Reuses the single-item MarkAsWastedDialog (R-001). One reason
+    // applies to the whole selection ("these all went off"). Each
+    // selected item gets its own StockItemWasteEvent + its expiry
+    // cleared (same shape as the single-item flow in StockItemRow).
+    const wasteApi = new WasteApiService();
+    const bulkWasteOpen = ref(false);
+    const bulkWasteItemName = computed(() => {
+        const n = bulkSelection.value.size;
+        return `${n} item${n === 1 ? '' : 's'}`;
+    });
+    const bulkWasteSubline = computed(() =>
+        'One reason applies to every selected item.',
+    );
+    function openBulkWasteDialog() {
+        if (bulkSelection.value.size === 0) return;
+        bulkWasteOpen.value = true;
+    }
+    async function onBulkMarkAsWasted(reason: WasteReason) {
+        if (bulkSelection.value.size === 0) return;
+        // Snapshot ids + their expiry state BEFORE any await — the
+        // store may re-fetch and mutate rows mid-flight (matches the
+        // per-row pattern in StockItemRow.onMarkAsWasted).
+        const targets = [...bulkSelection.value].map((id) => {
+            const row = stockItems.value.find(
+                (i) => i.stock_item_id === id,
+            );
+            return {
+                stock_item_id: id,
+                original_expiry: row?.expiry_date ?? null,
+            };
+        });
+        bulkBusy.value = true;
+        const succeeded: Array<{
+            event_id: string;
+            stock_item_id: string;
+            original_expiry: string | null;
+        }> = [];
+        try {
+            for (const t of targets) {
+                try {
+                    const { event_id } = await wasteApi.logEventAsync({
+                        stock_item_id: t.stock_item_id,
+                        reason,
+                    });
+                    if (t.original_expiry) {
+                        await stockItemStore.updateStockItemAsync({
+                            stock_item_id: t.stock_item_id,
+                            expiry_date: null,
+                        });
+                    }
+                    succeeded.push({
+                        event_id,
+                        stock_item_id: t.stock_item_id,
+                        original_expiry: t.original_expiry,
+                    });
+                } catch {
+                    // Swallow per-item failure — the summary toast reports
+                    // the discrepancy so a network blip on one item doesn't
+                    // abandon the rest of the batch.
+                }
+            }
+        } finally {
+            bulkBusy.value = false;
+        }
+        const okCount = succeeded.length;
+        const failCount = targets.length - okCount;
+        if (okCount === 0) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not log any as wasted.',
+            });
+            return;
+        }
+        const failSuffix = failCount > 0
+            ? ` (${failCount} could not be logged)`
+            : '';
+        $q.notify({
+            type: 'info',
+            position: 'bottom-right',
+            message: `Logged ${okCount} item${okCount === 1 ? '' : 's'} as wasted${failSuffix}.`,
+            timeout: 6000,
+            actions: [{
+                label: 'Undo',
+                color: 'white',
+                handler: () => {
+                    void (async () => {
+                        try {
+                            for (const s of succeeded) {
+                                await wasteApi.deleteEventAsync(s.event_id);
+                                if (s.original_expiry) {
+                                    await stockItemStore.updateStockItemAsync({
+                                        stock_item_id: s.stock_item_id,
+                                        expiry_date: s.original_expiry,
+                                    });
+                                }
+                            }
+                            $q.notify({
+                                type: 'positive',
+                                position: 'bottom-right',
+                                message: 'Undone.',
+                            });
+                        } catch (err) {
+                            $q.notify({
+                                type: 'negative',
+                                position: 'bottom-right',
+                                message: 'Could not undo.',
+                                caption: toastCaption(err),
+                            });
+                        }
+                    })();
+                },
+            }],
+        });
+        cancelBulk();
     }
 
     // ── Bulk add to list ────────────────────────────────────────────────

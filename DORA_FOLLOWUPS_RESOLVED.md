@@ -10,6 +10,176 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
+- **Resolved:** 2026-07-04 — assessed with the user across four question-waves; every decision locked into `docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md` (status: designed-not-built, decisions-locked). Final design: (1) **Gate** simplified to one question — "do you actually keep this item?" (in stock / opened / adjusted-in-60d / on-a-list-in-60d). Essential + auto-add DROPPED as gate signals; the two history signals gain a **60-day window**. (2) **Essential** = cadence-only, one band faster; the *sole* per-item lever — **no per-item Weekly/Fortnightly/Monthly picker ever**. (3) **Cadence** = Weekly/Fortnightly/Monthly bands; global default **Fortnightly** + **Auto** self-tuning **ON by default** (trailing-90d avg gap between level changes: ≤10d→Weekly, 11–24d→Fortnightly, ≥25d→Monthly; Low/Out in 14d bumps faster). (4) **Never-checked → grace period** (`created_at` baseline, `9999` sentinel dropped). (5) **Verbs:** two primary (Still correct | Change level — the latter shows current level+colour+"(change)") + three secondary (Skip session-only / Push 3-day snooze / Mute w/ confirm). Out-of-stock button + keyboard shortcuts + per-item Add-to-list all dropped; add-to-list becomes a **completion-screen batch**. (6) **No landing page** — straight into the runner + a `(?)` help affordance. (7) New **"Stocktake" settings block** (default cadence + Auto toggle). (8) **Expiry & Waste CUT from stocktake** (retires the 2026-07-02 extension — Overview expiring-filter + log-waste-there is the single surface). (9) Stock Overview gets a **pulsing outline** on overdue rows' stock-level button + a "Needs check" quick-filter. **Merged [[FU-430]]** (the redesign-brief ask). Only impl-level call left: drop-vs-dead-column `days_until_stocktake_alert`. Build is future phase work, not this FU.
+- **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)
+- **Type:** finding (UX policy — needs user judgement)
+- **What:** Round-18 swapped the stocktake queue's filter from "anything overdue
+  surfaces" to a stricter engagement-based rule. The user wants this written down
+  so they can sit with it and decide whether it's right, looser, or stricter
+  before any more code lands.
+
+### What it WAS (pre-round-18)
+
+  In `dora_api/features/stocktake/stocktake.py::get_stocktake_queue`:
+
+  An item entered the queue when **both** were true:
+  1. `stocktake_alerts_are_enabled == True` (per-item manual opt-out).
+  2. `_compute_overdue(item) > 0`, where overdue is:
+     - **`9999`** if `last_checked_at is None` (never-checked sentinel — items
+       always surfaced as "maximally overdue").
+     - Otherwise: `max(0, days_since_last_check − days_until_stocktake_alert)`.
+       The per-item cadence is `days_until_stocktake_alert` (default 14, set on
+       create).
+
+  Ordering: most-overdue first → oldest `last_checked_at` → name.
+
+  Pain point the user reported: a freshly-created stub item ("nachos I don't
+  really keep in stock") immediately landed at the top of the queue because
+  it'd never been checked → 9999 overdue. Dora pestered the user about every
+  item they'd ever typed into the system, including items they'd long ago
+  decided not to manage.
+
+### What it IS NOW (round-18, 2026-06-19)
+
+  Same two existing gates (per-item opt-out + `overdue > 0`), PLUS a new
+  **engagement gate** that runs before either. An item must show ≥1 sign the
+  user actually manages it:
+
+  1. `is_flagged` (Essential) **or** `auto_add_when_low` — explicit "this
+     matters" flags.
+  2. Currently in stock — `stock_level.sequence < OUT_OF_STOCK_SEQUENCE`.
+  3. Ever opened — `opened_on is not None`.
+  4. Level was changed at least once — any `StockLevelChange` row exists for
+     this stock_item_id. (The history table only grows when a level actually
+     moves, so this distinguishes "never touched" from "touched once and back
+     to default".)
+  5. On any shopping list, ever — any `ShoppingListLine` row references this
+     stock_item_id, regardless of list status (active or done).
+
+  Signals 4 + 5 are bulk-fetched in one DISTINCT query each, so the queue
+  endpoint stays cheap on big pantries.
+
+  The `9999` never-checked sentinel is **kept**. The intent: engaged-but-
+  never-checked items (essential / on a list / in-stock / etc.) still surface
+  first; the engagement gate just stops the queue from drowning in unengaged
+  stubs.
+
+### Things to weigh when assessing
+
+  - **False negatives** — items the user DOES care about but that fail every
+    engagement signal. Likeliest case: an item that's normally well-stocked
+    but is genuinely depleted right now, and the user never opened it (not a
+    sealed product they "open"), never flagged it essential, never put it on
+    a list, never moved the level. Possibly: a recurring seasonal item the
+    user wants to be reminded to restock but hasn't engaged with recently.
+  - **False positives** — items that pass engagement but shouldn't really
+    nag. Likeliest case: items that were on ONE shopping list once five
+    months ago and have been ignored since. Signal 5 ("ever on a list") is
+    intentionally permissive — should it be "on a recent list" instead?
+    (e.g. last 60 days.) Trade-off: DB needs a join on list lifecycle
+    timestamps; not free.
+  - **Tuning knobs to consider**:
+    - Time-bound the "on a list" signal (last N days).
+    - Time-bound "level was changed" similarly (only count level changes in
+      the last N days as engagement).
+    - Add a "snooze for N days" affordance on the queue row so the user can
+      mute individual items without flipping the binary `stocktake_alerts_
+      are_enabled` flag.
+    - Replace the global cadence with a smarter default (e.g. shorter for
+      essentials, longer for "in-stock but lots of headroom" items).
+    - Promote `stocktake_alerts_are_enabled` from "manual opt-out only" to
+      "auto-set false when engagement decays past N days" so the data
+      self-cleans.
+  - **Candidate rule 4 — expiry as an engagement signal** (added
+    2026-07-02, user feedback): the current engagement filter treats
+    "opened" as a signal but does NOT treat "near-expiry" as one. Yet
+    stocktake is exactly the moment the user walks the pantry and
+    reviews expiring items, and near-expiry is arguably a stronger
+    version of "in play" — a countdown ends in the discard bin.
+    Currently near-expiry items surface via a **separate** flow
+    ([`waste/rescue`](dora_api/features/waste/waste.py) endpoint + the
+    Dashboard's "Needs your attention" card), so users have to check
+    two surfaces for the same walk. Proposal to weigh: add "`expiry_date`
+    within N days" (default 7, reusing `EXPIRING_SOON_WINDOW_DAYS`) as
+    a sixth engagement signal.
+    * **Frequency mismatch worth thinking through:** item-cadence is
+      typically weekly-plus, but expiry-driven review wants **daily**
+      surfacing. Two options:
+      * (a) one queue, but expiring items get a synthetic-overdue score
+        that pins them to the top regardless of `last_checked_at`. Simple;
+        risks noise on a pantry with lots of dated items.
+      * (b) two queue "modes" surfaced from the same page ("Overdue"
+        cadence-driven + "Expiring" daily-driven, mode toggle on the
+        header). Same list UI, filtered by mode. Cleaner UX; small
+        extra API surface (`GET /stocktake/queue?mode=expiring`).
+    * **Queue row shape:** whichever way, the queue row needs an
+      `entry_reason` so the UI can render *why* it surfaced ("expiring
+      in 2 days" vs "10 days overdue for a check"). The user shouldn't
+      have to guess.
+    * **R-003 check:** `waste/rescue` and the Dashboard expiry card
+      stay — they're glance-surfaces (Dashboard) and cook-what-you-can
+      rescue (rescue recipes matched to expiring ingredients).
+      Stocktake would be the walk-the-pantry-and-decide surface. Shared
+      SoT lives on a server-side `get_expiring_items` helper; UI cards
+      read from it rather than duplicating expiry logic. Not a
+      collision — three verbs (glance / cook / decide) on the same
+      underlying data.
+  - **Candidate verb 3 — waste as a stocktake resolution + bulk waste
+    API** (added 2026-07-02, user feedback): today stocktake has two
+    resolutions per item — Check (keep, bumps `last_checked_at`) and
+    Set level (adjust). There's no **Waste** verb. If Rule 4 lands and
+    expiring items enter the queue, the natural resolution for "past
+    date" is bin-it → and the user shouldn't have to leave the
+    stocktake flow to log it. Proposal to weigh:
+    * Add "Waste" as a per-item resolution that logs a
+      [`StockItemWasteEvent`](dora_api/domain/entities/stock_item_waste_event.py)
+      AND flips the level to Out AND bumps `last_checked_at`, in one
+      action. Charter P2 preserved — waste-capture stays
+      reason-only (no quantity, no value, no note per
+      `PROPOSAL_WASTE_MINIMISATION §5`).
+    * New endpoint `POST /waste/events/bulk` taking a list of
+      `{stock_item_id, reason}`. Bulk-select mode gains "Log waste on
+      selected" alongside "Bulk check."
+    * **Interaction with the check verb:** if an item is
+      near-expiry AND the user hits "Check" (level still correct, not
+      binning it yet), does it stay on the expiring queue? Probably
+      yes — Check bumps `last_checked_at`, but expiry is unchanged.
+      Worth surfacing this explicitly so a checked-but-still-close-to-
+      expiry item doesn't silently drop off the rescue card.
+  - **The combined framing worth naming:** stocktake and waste-rescue
+    are two halves of the same walk (open the fridge → eyeball each
+    item → resolve it), currently split into two surfaces. The clean
+    long-term shape is stocktake as a *review* mode with three
+    resolutions per item (Keep / Set level / Waste) and a queue that
+    includes both cadence-overdue and expiry-imminent items. That's
+    proposal-scope — probably belongs in a proper
+    `PROPOSAL_STOCKTAKE_MODE.md` brief (see [[FU-430]]) rather than
+    piecemeal, and the expiry+waste angle is a stronger anchor to
+    build that brief around than the four remaining SK NO_HOME
+    items alone.
+  - **No-change cost**: if the round-18 rule turns out to be roughly right,
+    the only required follow-on is the browser-verify pass (FU-222 covers
+    the SPA side; this rule lives in the backend and wants its own dataset
+    walk-through).
+
+- **Why deferred:** the user explicitly wants to sit with this and decide
+  later. No code change pending here yet — this entry is the substrate for
+  that decision. **Extended 2026-07-02** with two candidate additions
+  (expiry as an engagement signal, waste as a stocktake resolution + bulk
+  API) surfaced from user feedback; the underlying framing is that
+  stocktake and waste-rescue are two halves of the same walk. This
+  extension is *for careful consideration*, not a build ask.
+- **Recommended resolution:** opportunistic — re-open when the user has
+  walked their pantry through the new queue and decided whether the
+  engagement rule is too tight, too loose, or right. Coordinate with
+  [[FU-430]] when either opens: the expiry+waste extension above is a
+  stronger anchor for the missing `PROPOSAL_STOCKTAKE_MODE.md` brief
+  than the four remaining SK NO_HOME items alone. Do not action either
+  FU in isolation.
+
+
+
 ## [RESOLVED] FU-335 — Migrate StoresSettings logo upload to ImageSourcePicker
 - **Raised:** 2026-06-30 (FU-334 follow-on — image-source-picker rollout)
 - **Type:** leftover

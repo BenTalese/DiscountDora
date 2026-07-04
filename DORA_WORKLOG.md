@@ -9,6 +9,147 @@ next.
 
 ---
 
+## 2026-07-04 — P8-08 Dora Score built (kitchen-health composite + dashboard card)
+
+**Why:** Champion sequence next up after P8-07 flagship + the six-chunk
+importer plan closed earlier this session. The user said "continue";
+STEP-0 recon confirmed all five champion-plan input signals are
+already tracked (waste ✅, budget ✅, freshness ✅, stocktake ✅,
+run-outs partial — derivable). Asked the user three focused Qs before
+building; all three defaults confirmed: **30-day rolling window**,
+**unplanned run-out = ConsumptionEvent → Out with no active list
+line**, **new dashboard card at top of Your Kitchen zone**.
+
+**What shipped — backend:**
+- New **pure decision core** `dora_api/domain/dora_score.py`. Same
+  R-027 pattern as `pantry_belief` / `buy_verdict`: takes a
+  `DoraScoreInputs` dataclass → returns a `DoraScoreDto` with
+  composite + 5 components (each with `score: int | None` +
+  `reason: str`) + trend arrow. Component keys form an R-010 closed
+  set (`waste`/`budget`/`freshness`/`runouts`/`stocktake`). Per-
+  component formulas:
+  - Waste: `100 - count*10`, floored at 0. Charter-honest (any waste
+    = signal); the 10-point step is presentation granularity.
+  - Budget: 100 when under, `100 - overage%` when over, excluded
+    when no budget is set. Reuses `/budget/status`.
+  - Freshness: `100 - (expired / total_with_expiry * 100)`, excluded
+    when no items track expiry.
+  - Run-outs: `100 - unplanned_count*10`, always applicable.
+  - Stocktake: `checked_in_window / total_stock_items * 100`,
+    excluded when no stock items exist.
+  - **Composite = equal-weight mean of *applicable* components**
+    (excluded ones drop out of the denominator, not zeroed) —
+    charter P3 Honest, so a user without a budget doesn't get
+    dragged down by a fake 5th signal.
+- Trend arrow: `compose_with_trend(current, lagged)` compares the
+  current 30-day window against a second 30-day window ending 7
+  days ago; ±2-point hysteresis so a 1-point drift is "flat", not a
+  false arrow.
+- New handler `features/dashboard/get_dora_score.py`. Owns the
+  input-gathering (repository queries only live here — the core is
+  DB-free). Notable: gathers `unplanned_runout_count` by pulling
+  every ConsumptionEvent whose `to_sequence == OUT_OF_STOCK_SEQUENCE`
+  in the window, then set-differencing against the `stock_item_id`s
+  on lines of every non-done shopping list. `is_planned` = "on any
+  active list" (simpler and honest — the per-event date-scoped join
+  would be brittle and only edge-case different). The lagged-window
+  pass deliberately marks **budget as dormant** — the trend arrow
+  should reflect loop signals, not a calendar-boundary crossing
+  cluttering the delta.
+- New endpoint `GET /api/dashboard/dora-score`. Session-authed
+  (mirrors `/budget/status`); returns the full DTO with trend.
+
+**What shipped — frontend:**
+- Wire types `web_app/src/models/doraScore.ts` — mirrors the
+  server DTOs 1:1.
+- API `DashboardApiService.getDoraScoreAsync()` (separate from
+  `getSummaryAsync` so a slow score query doesn't gate the rest
+  of the dashboard).
+- Module-singleton composable
+  `web_app/src/composables/useDoraScore.ts` — same 5-min stale
+  window shape as `useBuyVerdict`. No manual invalidation hooks:
+  the score moves over 30 days, so mutation-time freshness is
+  overkill.
+- Card `components/dashboard/DoraScoreCard.vue` — big number,
+  optional up/down trend chip in the card action slot, per-
+  component list with mini-bars (traffic-light banded good/fair/
+  weak) + reason + a right-side action link that routes to the
+  remediating surface (waste → `/waste`, budget →
+  `/settings/preferences`, freshness → `/stock?expiring=1`,
+  run-outs → `/shopping-lists`, stocktake → `/stock?stocktake=1`).
+  Empty states: brand-new install ("appears once you've been using
+  Dora for a bit") and zero-scoring ("nothing to score yet") both
+  land calmly — never a nagging tone.
+- `DashboardPage.vue` gets a new `dora_score` card def in Your
+  Kitchen zone, ordered before `stock_items` by default so the
+  score sits above the pantry donut. Follows the existing
+  `isCardVisible` + `cardCssOrder` pattern — the user can reorder
+  it within-zone or hide it via the Cards menu like any other
+  card.
+
+**Tests:**
+- `tests/test_dora_score.py` — **30/30 green**. Covers each
+  component's boundary behaviour (zero → 100, penalty scaling,
+  clamps), applicability rules (no budget / no expiry / no stock =
+  excluded, not zeroed), composite integrity (all-applicable →
+  clean mean; brand-new install with all-signals-dormant → None),
+  and trend behaviour (up/down/flat, hysteresis, no-lagged
+  passthrough).
+- Full recipe + score suite: **92/92 green** (no regressions from
+  today's chunk 5-6 work).
+- `npx vue-tsc --noEmit` **clean**.
+
+**Engineering-standards close-gate:**
+- **R-003** (server owns derived facts): score, thresholds,
+  formulas, trend hysteresis all server-side. Client only paints
+  what the server hands back — even the traffic-light bar banding
+  is a *display* map over server-computed scores, not a client
+  derivation.
+- **R-010** (closed-set sentinels): `DoraScoreComponentKey` enum
+  with the five keys; TypeScript wire type mirrors it as a string
+  literal union.
+- **R-005** (distribution posture): no outbound HTTP, no self-
+  hosted-only surface, no new tenancy-shaped state. Portable
+  Postgres/SQLite via the repository layer.
+- **R-027** (pure-decision-core + thin repo-gather, unit-tested
+  without a DB): third independent use after `buy_verdict` and
+  `pantry_belief`. Reinforces the ADR pattern.
+- **No new violations.** No new ADR — this is a straight
+  application of the standing rules.
+
+**Follow-up loose ends:**
+- **Budget-in-lagged-window scoring** — deliberately dormant on
+  the lagged pass. If the trend arrow feels too muted for
+  budget-active households, the alternative is to score against
+  the previous budget-period (last week / last month) instead of a
+  30d-shifted window. Not worth building until we see the arrow
+  in real use. FU deferred.
+- **Score invalidation hooks** — currently rely on the 5-min stale
+  window. If the SPA later needs mutation-time freshness (e.g. an
+  explicit "kitchen health just updated" toast after a waste log),
+  add `invalidateDoraScore()` calls at the mutation sites. Not
+  needed for v1.
+- **Stocktake action route** — links to `/stock?stocktake=1` on
+  the assumption stock overview honours that query param. If it
+  doesn't yet, this is a browser-verify item.
+
+**Anti-drift check:** P8-08 touches only new files
+(`dora_score.py`, `get_dora_score.py`, `test_dora_score.py`,
+`doraScore.ts`, `useDoraScore.ts`, `DoraScoreCard.vue`) plus
+additive changes to `dashboardApiService.ts` and
+`DashboardPage.vue`. No existing endpoint reshaped, no schema
+touched, no other dashboard card modified. Verified against the
+champion plan §P8-08 DO / DONE-WHEN list.
+
+**Next up:** the champion sequence's next step is **P8-09
+Household culinary memory** (a "history / memory" surface that
+recalls past meals, prices, seasonal patterns via the assistant).
+Also open: the user's P8-07 flagship verify + today's browser-
+verify checklist for the importer end-to-end + the new Kitchen
+health card.
+
+---
+
 ## 2026-07-04 — Recipe importer rebuild: Chunk 6 landed (bulk-linker + PWA share; six-chunk plan complete)
 
 **Why:** Continuing the six-chunk plan in

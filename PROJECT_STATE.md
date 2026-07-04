@@ -45,11 +45,12 @@ were cut. Champion sequence:
 **Everything P8-07 is written but NOT yet run** — no Python env on the dev box —
 so migrations + pytest + the belief endpoint need a server-env pass, and the
 belief chip / quick-check / toggle need a browser walk (`DORA_VERIFY.md` §Stock).
-**Next up:** verify P8-07 (the gate on calling the flagship done), then
-**P8-08 Dora Score**. Recipe importer landed end-to-end today
-(Chunks 1-6 — paste rebuild, unlinked-ingredient schema affordance,
-bulk-linker page, PWA share target); browser-verify a couple of pasted
-imports + the bulk-linker walkthrough when back at the running app.
+**Next up:** verify P8-07 (the gate on calling the flagship done),
+then **P8-09 Culinary memory** (recall surface — meals cooked, prices,
+seasonal patterns) per the collapsed champion sequence. Recipe
+importer + P8-08 Dora Score both landed today; browser-verify the
+pasted-imports flow, the bulk-linker, and the dashboard's new
+Kitchen health card when back at the running app.
 
 ---
 
@@ -60,7 +61,7 @@ imports + the bulk-linker walkthrough when back at the running app.
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/430/431/432). |
 | **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~88% | **FU-449 now closed** — P6-07 cook→consume `ConsumptionEvent` persists (built with P8-07); the loop is genuinely closed (prediction shifts on cooking). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (→ P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~55% | **⭐ P8-07 Zero-Input Pantry BUILT** (belief service + consumption events + additive chip + quick-checks + pref; verify pending — no py env). P8-02 + P8-05 + P8-06 shipped; BuyVerdictCard wired (FU-437). **P8-08 Dora Score next**; P8-09/10 not started. P8-03 + P8-04 cut (§7 Decisions 6/7). |
+| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~65% | **⭐ P8-07 Zero-Input Pantry BUILT** (belief service + consumption events + additive chip + quick-checks + pref; verify pending). **P8-08 Dora Score BUILT** (five-signal 30d rolling composite + trend arrow + per-component remediation links; new dashboard "Kitchen health" card in the Your Kitchen zone). P8-02 + P8-05 + P8-06 shipped; BuyVerdictCard wired (FU-437). **P8-09 culinary memory next**; P8-10 not started. P8-03 + P8-04 cut (§7 Decisions 6/7). |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
 
 ---
@@ -115,6 +116,7 @@ a decision or a running-app check *now*, most important first.
 
 ## Recently shipped (newest first)
 
+- **P8-08 The Dora Score (2026-07-04).** A single kitchen-health composite (0-100) computed server-side over a rolling 30-day window from five signals: waste (`StockItemWasteEvent` count), on-budget (reuses `/budget/status`), freshness (% of expiry-tracked items past their date), unplanned run-outs (`ConsumptionEvent` to Out with no active shopping-list line), and stocktake staleness (% checked in the window). Components with no data are excluded from the mean, never zeroed (charter P3 Honest). A trend arrow (score vs. same score 7 days ago, ±2-point hysteresis) travels with the DTO. Renders as a new **Kitchen health** card at the top of the dashboard's Your Kitchen zone with a big number, trend chip, and per-component mini-bar breakdown; each component's weak-side action links to the feature that improves it (waste → waste tab, budget → preferences, freshness → expiring stock, run-outs → shopping lists, stocktake → stocktake mode). New endpoint `GET /api/dashboard/dora-score`. **30/30 pytest green** on the pure decision core; SPA `vue-tsc` clean.
 - **Recipe importer — paste-based rebuild complete, Chunks 1-6 (2026-07-04).** The URL importer is retired end-to-end. Chunks 1-3 stood up a 20/20-green corpus + text-first parser (Class A JSON-LD-free sites like RecipeTin, AllRecipes, HBH, Sally's, Simply, Woolworths, Taste; Class B `<h3>`/`<h4>`-headed sites like Smitten Kitchen). Chunk 4 added a schema-level "unlinked ingredient" affordance (persistable `raw_text` with tri-state cookability that renders neutral until every row is linked). Chunk 5 replaced `POST /api/recipes/import-from-url` with `POST /api/recipes/import-from-content` — server no longer fetches; the user pastes the recipe page and optionally types the source URL for provenance (closes **FU-104** + **FU-199**). Chunk 6 lands the "smart importer" speed thesis: a new **Settings → Admin → Data → Unlinked ingredients** page groups every unmatched ingredient by normalised raw_text and links a whole group with one click (or one click to create a new stock item pre-populated with the raw_text and link in the same request); a PWA `share_target` in `manifest.json` drops the OS Share sheet's title/text/url into `/cookbook`, auto-opening the paste dialog pre-filled; and a paste-friendly hint on the recipe-detail freeform-instructions field covers L261.
 - **⭐ P8-07 The Zero-Input Pantry (FLAGSHIP)** — inferred inventory: a server-owned confidence-weighted belief (Out/Low/Stocked band + confidence + reason) per stock item from purchases + cooking + cadence + time-decay; additive "Dora: ~Low" chip beside the recorded level; manual check always wins; single targeted quick-checks only when a decision hinges on an uncertain item; per-user opt-out (default on). New `/api/stock-items/beliefs`. Verify pending (no py env) — 2026-07-03
 - **P6-07 cook→consume depletion (FU-449)** — `ConsumptionEvent` now persists on recipe-finish level drops, so run-out prediction shifts when you cook, not only buy (the previously-missing loop leg) — 2026-07-03

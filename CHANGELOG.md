@@ -6,6 +6,27 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **⭐ The Dora Score — one honest kitchen-health number
+  (P8-08, 2026-07-04).** A new **Kitchen health** card at the top
+  of the dashboard's Your Kitchen zone shows a single 0-100
+  composite over a rolling 30-day window, plus a trend arrow
+  (score vs. the same 30-day view 7 days ago). Under the number,
+  five per-signal mini-bars break the composite down: **Waste**
+  (from `StockItemWasteEvent`), **Budget** (reuses the
+  `/budget/status` calculation), **Freshness** (% of expiry-
+  tracked items not past their date), **Run-outs** (unplanned =
+  `ConsumptionEvent` hit Out AND the item wasn't on any active
+  shopping list), **Stocktake** (% of items checked in the last
+  30 days). Signals with no data are *excluded* from the mean,
+  never zeroed — a household without a budget set gets a
+  four-signal score, not a fake fifth (Charter P3 Honest). Every
+  weak component links to the feature that improves it — waste
+  tab, preferences (budget), expiring stock filter, shopping
+  lists, stocktake — no nag copy anywhere (Charter P1 Effortless).
+  New endpoint `GET /api/dashboard/dora-score`. Card can be hidden
+  / reordered via the dashboard's Cards menu like any other card.
+
+### Added
 - **Bulk-linker for unlinked recipe ingredients
   (IMPL_PLAN_RECIPE_IMPORTER Chunk 6, 2026-07-04).** New
   **Settings → Admin → Data → Unlinked ingredients** page lists

@@ -628,6 +628,15 @@
                 </DashboardCard>
             </div>
 
+            <!-- ───── Kitchen health (P8-08 Dora Score) ─────────────────── -->
+            <div
+                v-if="isCardVisible('dora_score')"
+                class="col-12 col-sm-6 col-lg-4"
+                :style="{ order: cardCssOrder('dora_score') }"
+            >
+                <DoraScoreCard />
+            </div>
+
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div
                 v-if="isCardVisible('stock_items')"
@@ -1070,6 +1079,7 @@
     import AnimatedNumber from 'src/components/AnimatedNumber.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
+    import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
     import { storeToRefs } from 'pinia';
     import {
         actionsFor as alertActionsFor,
@@ -1143,7 +1153,9 @@
         // Phase 5 — predictive restock.
         | 'restock'
         // Phase 6 — unified fortnight calendar (D7).
-        | 'calendar';
+        | 'calendar'
+        // P8-08 — kitchen-health score (top of Your kitchen zone).
+        | 'dora_score';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
     // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
@@ -1200,6 +1212,11 @@
         { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, zone: 'money', gate: 'products', defaultHidden: true },
         { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
+        // P8-08 — sits above 'Pantry' in the Kitchen zone by default;
+        // the composite score is the summary, the pantry donut is the
+        // detail underneath. `favorite` icon (♥) reads as "health" and
+        // isn't already used on the dashboard.
+        { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite, zone: 'kitchen' },
         { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
     ];
 

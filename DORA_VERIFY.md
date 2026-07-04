@@ -17,6 +17,20 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Cookbook & recipes
 
+### Recipe importer — bulk-linker + PWA share target (Chunk 6) — origin IMPL_PLAN_RECIPE_IMPORTER
+- [ ] Settings → Admin → Data → **Unlinked ingredients** appears in the sidebar under the Data subheader beside Backup & restore and Import
+- [ ] With no unlinked rows in the DB, the page shows the empty-state ("Every recipe ingredient is linked to a stock item.")
+- [ ] Import a recipe with 2–3 unlinked ingredients → open the bulk-linker → each unlinked ingredient shows as a group row with `raw_text • Used in N recipes`; count matches the number of distinct recipes using that text
+- [ ] Two recipes that both paste-imported the same ingredient (e.g. one from AllRecipes, one from HBH — same base name but different casing/whitespace) collapse into ONE group row, count = 2
+- [ ] Groups sort by count desc, then alphabetically by display text (case-insensitive)
+- [ ] Pick a stock item from the autocomplete → click **Link** → toast confirms "Linked '<raw_text>' in N recipe(s)"; the group disappears from the page
+- [ ] Open each affected recipe → the row that was unlinked is now linked to the picked stock item; cookability chip flips from neutral to a real True/False if that recipe had no other unlinked rows
+- [ ] Click **Create new** on a group → a new stock item is created (defaulted to the most-stocked level) with `name = raw_text`, and the group's rows link to it in the same tap; toast names the created item
+- [ ] Auto-complete typing filters to matches; empty search shows the top of the alphabetical list (capped at 50)
+- [ ] **PWA share target — Android Chrome only.** After installing Dora as a PWA (from the browser's Install prompt), open a recipe on RecipeTin Eats in Chrome → hit Share → **Dashy Dora** appears in the sheet → tap it → Dora opens on the cookbook overview, the paste dialog pops with the page text pre-filled in the textarea + the recipe URL in "Where's this from?" → hit Import → new recipe lands in the cookbook
+- [ ] Refresh the page after the share flow — the `?share_text=…&share_url=…` params are gone from the URL, so the dialog doesn't re-open on refresh
+- [ ] Recipe-detail edit mode → Freeform steps → textarea shows the hint *"Paste the recipe text or type freeform — Ctrl+V works."* below the box
+
 ### Recipe importer — paste-based rebuild (Chunk 5) — origin IMPL_PLAN_RECIPE_IMPORTER
 - [ ] Open Cookbook overview → "Import" button opens the paste dialog. Caption names the paste flow (Ctrl+A / Ctrl+C on the source, Ctrl+V into Dora)
 - [ ] Copy a RecipeTin Eats page (Ctrl+A → Ctrl+C in the browser) → paste into the textarea → optionally type the source URL → "Import" → new recipe lands with name + servings + ingredients + steps; navigator lands on detail

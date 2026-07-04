@@ -624,6 +624,7 @@
                                 type="textarea"
                                 autogrow
                                 placeholder="One step per line. Cook mode will split on newlines."
+                                hint="Paste the recipe text or type freeform — Ctrl+V works."
                                 @update:model-value="markDirty"
                             />
 

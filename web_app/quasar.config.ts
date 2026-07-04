@@ -257,6 +257,27 @@ export default defineConfig((ctx): any => {
                         sizes: '512x512', type: 'image/png', purpose: 'maskable',
                     },
                 ];
+                // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — PWA share target.
+                // Installed on Android, Dashy Dora shows up in the system
+                // Share sheet on any recipe page; sharing hands us the
+                // page's title/text/url, and we land on /cookbook, which
+                // reads the query params and auto-opens the paste import
+                // dialog pre-filled with the shared content. GET-mode
+                // (URL query params) because Workbox's service worker
+                // doesn't need to intercept a POST body — the SPA route
+                // just reads `?share_text=…&share_url=…&share_title=…`.
+                // No new route: RecipesOverview owns the create-from-
+                // imported flow already, so anything else would just
+                // duplicate it.
+                json.share_target = {
+                    action: '/cookbook',
+                    method: 'GET',
+                    params: {
+                        title: 'share_title',
+                        text: 'share_text',
+                        url: 'share_url',
+                    },
+                };
                 json.shortcuts = [
                     {
                         name: 'Primary shopping list',

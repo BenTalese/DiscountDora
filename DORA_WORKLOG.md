@@ -9,6 +9,144 @@ next.
 
 ---
 
+## 2026-07-04 — Recipe importer rebuild: Chunk 6 landed (bulk-linker + PWA share; six-chunk plan complete)
+
+**Why:** Continuing the six-chunk plan in
+`docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md`. Chunk 5 shipped the
+paste importer + endpoint reshape earlier this session; Chunk 6 is the
+speed-thesis closer — a bulk-linker page for the unlinked ingredient
+rows Chunk 5 lets through, a PWA share target so the paste flow
+starts from the OS Share sheet on Android, and the L261 copy tweak
+for freeform-instructions.
+
+**What shipped — Chunk 6 backend:**
+- New file `features/recipes/unlinked_ingredients.py`:
+  - `GET /api/recipes/unlinked-ingredients` — every
+    `RecipeIngredient` row where `stock_item_id IS NULL` grouped by
+    the normalised `raw_text` (case-insensitive trim + collapsed
+    whitespace). Sorted by count desc, alpha asc. Recipe IDs
+    de-duped within a group so "1 onion, diced" + "1 onion, sliced"
+    (both normalising to "1 onion") count the recipe once. Returns
+    `{ unlinked: [{ raw_text, used_in_recipe_ids, count }, ...] }`.
+  - `POST /api/recipes/unlinked-ingredients/bulk-link` — atomically
+    flips the FK on every unlinked row whose normalised `raw_text`
+    matches, in one request. Returns `{ linked_count }`. Cookability
+    re-derives at the next `GET /recipes` (server-owned, R-003) —
+    no explicit re-materialise step needed.
+- `normalise_raw_text` is the sole comparison helper; both the
+  grouper (GET) and the matcher (POST) import it so a normalisation
+  drift can't silently split what the user sees as one group.
+  Whitespace normalisation is done in Python (not SQL) because
+  SQLite and Postgres don't express "trim + collapse-internal-ws"
+  identically without a stored generated column; if this becomes a
+  scale concern later, adding a `raw_text_normalised` column is the
+  Chunk-7 candidate.
+- Route auto-registers via the existing
+  `get_attributes_ending_with('router', …)` sweep — no
+  `startup.py` edit needed.
+
+**What shipped — Chunk 6 frontend:**
+- New page `pages/settings/AdminDataUnlinkedIngredients.vue`
+  (route `/settings/admin/data/unlinked-ingredients`, registered
+  in the SettingsShell Data subheader beside Backup + Import).
+  Each group renders as one row: `raw_text • Used in N recipes`,
+  a stock-item autocomplete picker (typed `use-input` q-select
+  filtered against `stockItemStore`, capped at 50 matches per
+  keystroke), an inline **Link** action, and a **Create new**
+  action that calls `stockItemStore.createStockItemAsync` seeded
+  with the raw_text as name (defaulting to the most-stocked level
+  so it doesn't immediately count as "missing" — same defensible
+  default as `RecipeDetailPage.vue`) and then bulk-links in the
+  same click.
+- `RecipeApiService` gains
+  `getUnlinkedIngredientsAsync` / `bulkLinkUnlinkedIngredientsAsync`
+  + the matching `UnlinkedIngredientGroup` / `UnlinkedIngredients`
+  wire types.
+- PWA share target: `quasar.config.ts` `extendManifestJson` now
+  writes `share_target = { action: '/cookbook', method: 'GET',
+  params: { title: 'share_title', text: 'share_text', url:
+  'share_url' } }`. Deliberately points at the existing cookbook
+  overview instead of a bespoke landing page — `RecipesOverview`
+  already owns the create-from-imported handoff, so a second page
+  would just duplicate it. Overview's `onMounted` now reads the
+  `share_*` query params, seeds new prefill props on
+  `RecipeImportDialog`, pops the dialog, and strips the params via
+  `router.replace` so a refresh doesn't re-open the flow.
+- `RecipeImportDialog.vue` grew two optional props
+  (`prefillContent` / `prefillSourceUrl`) that seed the textarea +
+  URL input on open. Manual reopens (props blank) reset to empty as
+  before — no regression to the pure paste flow.
+- L261 coverage: `RecipeDetailPage.vue`'s freeform-mode
+  instructions textarea gains
+  `hint="Paste the recipe text or type freeform — Ctrl+V works."` —
+  the plan called for "the quick-create dialog" but the codebase
+  routes quick-creates through the detail page's edit mode, so
+  the hint lands there.
+
+**Tests:**
+- `tests/test_unlinked_ingredients.py` — **12/12 green**. Covers
+  `normalise_raw_text` (case + trim + whitespace collapse + tabs +
+  newlines + empty), and the grouping logic (same-key merge,
+  count-desc/alpha-asc sort, recipe-id de-dupe within a group,
+  empty-key skip, first-seen display casing, empty input).
+- `pytest tests/test_parse_recipe_from_text.py
+   tests/test_recipe_cookability.py tests/test_recipe_filters.py`
+  still **62/62 green** (no regressions from the Chunk 6 additions).
+- `npx vue-tsc --noEmit` **clean** (no TypeScript errors — the
+  q-select filter callback signature needed an inline arrow wrapper
+  because Quasar emits `(value, update)` and the Vue template
+  parser refuses inline arrow type annotations; simple `(value,
+  update) => onFilter(...)` works).
+
+**Engineering-standards close-gate:**
+- **R-001** (state ownership) — `normalise_raw_text` is a single
+  server-side function used by both the grouper and the matcher.
+  No client-side normalisation of `raw_text` for display purposes;
+  the SPA renders whatever the server hands back.
+- **R-003** (server owns derived facts) — cookability re-derives
+  at the next read; the bulk-link endpoint doesn't need to poke
+  `is_cookable_now` on affected recipes. Chunk 4's tri-state
+  cookability already handles the "any → all linked" transition
+  via the domain rule in `recipe_cookability.py`.
+- **R-005** (distribution posture) — no new outbound-HTTP surface,
+  no self-hosted-only carve-out. PWA share target is a manifest
+  declaration; server-side is exactly the same paste endpoint.
+- **R-010** (closed-set sentinels) — `stock_item_id: None` on an
+  unlinked row is the documented sentinel; the bulk-link endpoint
+  writes a valid FK via the mapped `stock_item` relationship, so
+  the domain object stays consistent with the row.
+- **No new ADR** — this chunk composes existing rules; no
+  recurring decision worth promoting.
+
+**Follow-up loose ends (not blocking anything):**
+- **Browser-verify pending** — walk the bulk-linker on an install
+  that has actually-unlinked rows (added to `DORA_VERIFY.md`
+  under Cookbook), and verify Android's system Share sheet lists
+  "Dashy Dora" after PWA install. Neither is testable without a
+  physical device / an installed PWA.
+- Post-import "resolve linking now?" prompt: the plan didn't spec
+  it and the bulk-linker is where the user is meant to converge
+  the queue. If it turns out users forget the bulk-linker page
+  exists, add a small "N unlinked ingredients waiting" chip to
+  the cookbook overview toolbar as a discoverability nudge.
+
+**Anti-drift check:** Chunk 6 touches only new files
+(`unlinked_ingredients.py`, `AdminDataUnlinkedIngredients.vue`,
+`test_unlinked_ingredients.py`) plus small additive changes to
+`recipeApiService.ts`, `RecipeImportDialog.vue`,
+`RecipesOverview.vue`, `RecipeDetailPage.vue`, `routes.ts`,
+`SettingsShell.vue`, and `quasar.config.ts`. Verified against the
+plan's Chunk 6 deliverable list.
+
+**Next up:** the six-chunk importer plan is complete. The natural
+next moves are (a) walk the browser-verify list for both the P8-07
+flagship and the importer (parser + bulk-linker + share target)
+when back at the running app, and (b) **P8-08 Dora Score** — the
+next champion prompt per the collapsed sequence in
+`RECONCILED_FINISHING_PLAN.md §5`.
+
+---
+
 ## 2026-07-04 — Recipe importer rebuild: Chunk 5 landed (paste importer replaces URL fetcher; FU-104 + FU-199 close)
 
 **Why:** Continuing the six-chunk plan in

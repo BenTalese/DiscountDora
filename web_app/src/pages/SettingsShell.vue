@@ -100,6 +100,8 @@
             items: [
                 { path: '/settings/admin/data/backup', label: 'Backup & restore', icon: ICONS.cloud_download },
                 { path: '/settings/admin/data/import', label: 'Import', icon: ICONS.file_upload },
+                // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker page.
+                { path: '/settings/admin/data/unlinked-ingredients', label: 'Unlinked ingredients', icon: ICONS.link },
             ],
         },
         { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.fact_check },

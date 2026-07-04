@@ -55,9 +55,16 @@
 
         <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe
              surface. FU-102: dialog chrome extracted to a shared component;
-             this page wires the imported DTO to `createAsync` + nav. -->
+             this page wires the imported DTO to `createAsync` + nav.
+             IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — the PWA share target
+             (manifest.json `share_target.action: /cookbook`) drops
+             `?share_text=…&share_url=…` onto this route; on mount we
+             read them, auto-open the dialog, and pre-fill the fields
+             so the user only has to hit Import. -->
         <RecipeImportDialog
             v-model="importOpen"
+            :prefill-content="sharePrefillContent"
+            :prefill-source-url="sharePrefillSourceUrl"
             @imported="onRecipeImported"
         />
 
@@ -1128,8 +1135,18 @@
     // unlinked ones at their leisure. Toast surfaces the count so the
     // user knows.
     const importOpen = ref(false);
+    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — PWA share-target landing.
+    // The manifest points `share_target.action: /cookbook` and maps
+    // the OS share sheet's title/text/url into ?share_title / ?share_text
+    // / ?share_url. On mount we lift them into the dialog's prefill
+    // props and pop it. Cleared after read so a refresh doesn't
+    // re-open the dialog forever.
+    const sharePrefillContent = ref('');
+    const sharePrefillSourceUrl = ref('');
 
     function onImportClick() {
+        sharePrefillContent.value = '';
+        sharePrefillSourceUrl.value = '';
         importOpen.value = true;
     }
 
@@ -1359,6 +1376,23 @@
             loading.value = false;
         }
         applyQuery();
+        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — PWA share target landed
+        // us here with the OS-share payload in the query string. Lift
+        // the text / URL into the dialog's prefill, pop it, and strip
+        // the params so a subsequent refresh doesn't re-open.
+        const shareText = (route.query.share_text ?? '').toString();
+        const shareTitle = (route.query.share_title ?? '').toString();
+        const shareUrl = (route.query.share_url ?? '').toString();
+        if (shareText || shareUrl) {
+            sharePrefillContent.value = shareText || shareTitle;
+            sharePrefillSourceUrl.value = shareUrl;
+            importOpen.value = true;
+            const cleaned = { ...route.query };
+            delete cleaned.share_text;
+            delete cleaned.share_title;
+            delete cleaned.share_url;
+            void router.replace({ path: route.path, query: cleaned });
+        }
     });
 </script>
 

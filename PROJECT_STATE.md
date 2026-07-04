@@ -46,10 +46,10 @@ were cut. Champion sequence:
 so migrations + pytest + the belief endpoint need a server-env pass, and the
 belief chip / quick-check / toggle need a browser walk (`DORA_VERIFY.md` §Stock).
 **Next up:** verify P8-07 (the gate on calling the flagship done), then
-**P8-08 Dora Score**. Recipe importer Chunks 1-5 also landed today
-(paste-based rebuild — parser 20/20 green; endpoint reshaped, SSRF surface
-deleted; browser-verify a couple of pasted imports end-to-end before
-Chunk 6's bulk-linker + PWA share).
+**P8-08 Dora Score**. Recipe importer landed end-to-end today
+(Chunks 1-6 — paste rebuild, unlinked-ingredient schema affordance,
+bulk-linker page, PWA share target); browser-verify a couple of pasted
+imports + the bulk-linker walkthrough when back at the running app.
 
 ---
 
@@ -86,7 +86,7 @@ Chunk 6's bulk-linker + PWA share).
 | Data/Backup admin | ✅ | Collapsed under Settings→Admin→Data; backup library + admin-gating (code committed) | FU-341/342/198 |
 | Auth shell | ➗ | Shared `AuthShell.vue` + `AuthButton.vue` across 8 pre-auth surfaces (no standalone register page) | `PROPOSAL_AUTH_SHELL.md` |
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
-| Recipe importer (paste-based rebuild) | 🟡 | **Chunks 1-5 landed 2026-07-04.** Chunks 1-3: parser green on 20/20 corpus. Chunk 4: schema migration for persistable unlinked ingredients + tri-state cookability sweep (backend + frontend). **Chunk 5: paste importer replaces the URL fetcher** — endpoint reshaped `/import-from-url` → `/import-from-content` (deletes outbound HTTP; SSRF surface gone by construction); SPA dialog swaps URL field for a paste textarea + optional "where's this from?" URL; **FU-104 + FU-199 close**. Still ahead: bulk-linker + PWA share (Chunk 6). | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
+| Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Chunks 1-3: parser green on 20/20 corpus. Chunk 4: schema migration for persistable unlinked ingredients + tri-state cookability sweep. Chunk 5: paste importer replaces the URL fetcher (FU-104 + FU-199 closed). **Chunk 6: bulk-linker page + PWA share target** — `Settings → Admin → Data → Unlinked ingredients` groups every unmatched ingredient by normalised raw_text, one-request-per-group bulk-link (12/12 pytest); PWA `share_target` in `manifest.json` drops the OS share sheet payload into `/cookbook` which auto-opens the paste dialog pre-filled; recipe-detail freeform-instructions gains a paste-friendly hint (L261). Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Commercialization (P7) | ⚪ | Tenancy/Stripe/billing not started; zero such code yet | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
 
 ---
@@ -115,7 +115,7 @@ a decision or a running-app check *now*, most important first.
 
 ## Recently shipped (newest first)
 
-- **Recipe importer — paste-based rebuild, Chunks 1-5 (2026-07-04).** The URL importer is retired. Chunks 1-3 stood up a 20/20-green corpus + text-first parser (Class A JSON-LD-free sites like RecipeTin, AllRecipes, HBH, Sally's, Simply, Woolworths, Taste; Class B `<h3>`/`<h4>`-headed sites like Smitten Kitchen). Chunk 4 added a schema-level "unlinked ingredient" affordance (persistable `raw_text` with tri-state cookability that renders neutral until every row is linked). Chunk 5 replaced `POST /api/recipes/import-from-url` with `POST /api/recipes/import-from-content` — server no longer fetches; the user pastes the recipe page and optionally types the source URL for provenance. Closes **FU-104** (legal posture — no companion split, no third-party fetch) and **FU-199** (SSRF — surface deleted by construction). Bulk-linker + PWA share target land in Chunk 6.
+- **Recipe importer — paste-based rebuild complete, Chunks 1-6 (2026-07-04).** The URL importer is retired end-to-end. Chunks 1-3 stood up a 20/20-green corpus + text-first parser (Class A JSON-LD-free sites like RecipeTin, AllRecipes, HBH, Sally's, Simply, Woolworths, Taste; Class B `<h3>`/`<h4>`-headed sites like Smitten Kitchen). Chunk 4 added a schema-level "unlinked ingredient" affordance (persistable `raw_text` with tri-state cookability that renders neutral until every row is linked). Chunk 5 replaced `POST /api/recipes/import-from-url` with `POST /api/recipes/import-from-content` — server no longer fetches; the user pastes the recipe page and optionally types the source URL for provenance (closes **FU-104** + **FU-199**). Chunk 6 lands the "smart importer" speed thesis: a new **Settings → Admin → Data → Unlinked ingredients** page groups every unmatched ingredient by normalised raw_text and links a whole group with one click (or one click to create a new stock item pre-populated with the raw_text and link in the same request); a PWA `share_target` in `manifest.json` drops the OS Share sheet's title/text/url into `/cookbook`, auto-opening the paste dialog pre-filled; and a paste-friendly hint on the recipe-detail freeform-instructions field covers L261.
 - **⭐ P8-07 The Zero-Input Pantry (FLAGSHIP)** — inferred inventory: a server-owned confidence-weighted belief (Out/Low/Stocked band + confidence + reason) per stock item from purchases + cooking + cadence + time-decay; additive "Dora: ~Low" chip beside the recorded level; manual check always wins; single targeted quick-checks only when a decision hinges on an uncertain item; per-user opt-out (default on). New `/api/stock-items/beliefs`. Verify pending (no py env) — 2026-07-03
 - **P6-07 cook→consume depletion (FU-449)** — `ConsumptionEvent` now persists on recipe-finish level drops, so run-out prediction shifts when you cook, not only buy (the previously-missing loop leg) — 2026-07-03
 - **Dashboard "Log price" quick action** — third button on the dashboard quick-action bar (money-gated); global `LogPriceSheet` mounted alongside `QuickAddSheet` picks a stock item then hands off to the shared `PriceEntry` in shelf mode (closes FU-300) — 2026-07-03

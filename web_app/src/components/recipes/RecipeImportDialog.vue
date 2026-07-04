@@ -95,8 +95,20 @@
              *  overwritten with the imported fields." here; the overview
              *  surface leaves it null. */
             degradedHint?: string | null;
+            /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — content pre-fill for
+             *  the PWA share-target landing. When the OS Share sheet
+             *  drops a page into Dora, the overview reads the query
+             *  params and passes them here so the user only has to hit
+             *  Import. Applied on dialog open; a subsequent open
+             *  without these props resets to blank as before. */
+            prefillContent?: string;
+            prefillSourceUrl?: string;
         }>(),
-        { degradedHint: null },
+        {
+            degradedHint: null,
+            prefillContent: '',
+            prefillSourceUrl: '',
+        },
     );
 
     const emit = defineEmits<{
@@ -116,13 +128,15 @@
     const importing = ref(false);
 
     // Reset draft state every time the dialog reopens so a cancelled
-    // attempt doesn't leak into the next one.
+    // attempt doesn't leak into the next one. Share-target prefill
+    // (Chunk 6) seeds the fields on open when the props are non-empty;
+    // manual reopens (props blank) reset to empty as before.
     watch(
         () => props.modelValue,
         (isOpen) => {
             if (!isOpen) return;
-            content.value = '';
-            sourceUrl.value = '';
+            content.value = props.prefillContent ?? '';
+            sourceUrl.value = props.prefillSourceUrl ?? '';
             error.value = null;
             importing.value = false;
         },

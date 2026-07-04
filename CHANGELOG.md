@@ -5,6 +5,36 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Bulk-linker for unlinked recipe ingredients
+  (IMPL_PLAN_RECIPE_IMPORTER Chunk 6, 2026-07-04).** New
+  **Settings → Admin → Data → Unlinked ingredients** page lists
+  every recipe ingredient that landed unlinked from the paste
+  importer, grouped by normalised `raw_text` (case-insensitive
+  trim + collapsed whitespace) with the affected recipe count.
+  One click on a group's stock-item picker + Link runs a single
+  atomic `POST /api/recipes/unlinked-ingredients/bulk-link`
+  request that flips the FK on every matching row; **Create new**
+  seeds a fresh stock item from the raw_text and links in the
+  same click. Recipes flip back to a real cookable / not-cookable
+  state on the next read (server-owned tri-state, R-003).
+- **PWA share target for recipe pages
+  (IMPL_PLAN_RECIPE_IMPORTER Chunk 6, 2026-07-04).** With Dora
+  installed as a PWA on Android, the system Share sheet on any
+  recipe page now lists "Dashy Dora". Sharing hands the page's
+  title / text / URL to `/cookbook`, which auto-opens the paste
+  import dialog pre-filled with the shared content — one tap to
+  Import. Manifest declares
+  `share_target: { action: '/cookbook', method: 'GET', … }`;
+  GET-mode so the service worker doesn't need to intercept a POST
+  body. No new server code — the paste endpoint from Chunk 5 owns
+  the parse.
+- **Freeform-instructions hint for paste flexibility (L261,
+  2026-07-04).** The recipe-detail edit mode's freeform
+  instructions textarea gains a hint — *"Paste the recipe text or
+  type freeform — Ctrl+V works."* — matching the paste-first
+  posture of the Chunk 5 importer.
+
 ### Changed
 - **Recipe importer — paste-based rebuild (IMPL_PLAN_RECIPE_IMPORTER,
   Chunks 1-5, 2026-07-04).** The URL-fetching importer is retired.

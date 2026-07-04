@@ -240,7 +240,39 @@ export default class RecipeApiService {
             '/recipes/import-from-content',
             { content, source_url: sourceUrl ?? '' },
         );
+
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker page reads.
+     *  Returns every unlinked RecipeIngredient row grouped by
+     *  normalised raw_text (server-owned normalisation — see
+     *  `normalise_raw_text` in the backend), sorted by count desc /
+     *  text asc. */
+    getUnlinkedIngredientsAsync = async (): Promise<UnlinkedIngredients> =>
+        await this.httpClient.get<UnlinkedIngredients>('/recipes/unlinked-ingredients');
+
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — atomically link every
+     *  unlinked RecipeIngredient row whose normalised raw_text
+     *  matches to `stockItemId`. One round-trip per group; cookability
+     *  re-derives at the next `GET /recipes` (server-owned, R-003). */
+    bulkLinkUnlinkedIngredientsAsync = async (
+        rawText: string,
+        stockItemId: string,
+    ): Promise<{ linked_count: number }> =>
+        await this.httpClient.post<{ linked_count: number }, { raw_text: string; stock_item_id: string }>(
+            '/recipes/unlinked-ingredients/bulk-link',
+            { raw_text: rawText, stock_item_id: stockItemId },
+        );
 }
+
+/** IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — mirrors
+ *  `UnlinkedIngredientGroupDto` / `UnlinkedIngredientsDto`. */
+export type UnlinkedIngredientGroup = {
+    raw_text: string;
+    used_in_recipe_ids: string[];
+    count: number;
+};
+export type UnlinkedIngredients = {
+    unlinked: UnlinkedIngredientGroup[];
+};
 
 // Mirrors ImportedRecipeDto / ImportedIngredientDto from
 // dora_api/features/recipes/imported_recipe_dtos.py.

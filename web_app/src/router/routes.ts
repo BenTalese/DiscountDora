@@ -393,6 +393,15 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/data/import',
                         component: () => import('pages/settings/AdminDataImport.vue'),
                         meta: { title: 'Import' }
+                    },
+                    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker
+                    // for paste-imported ingredients that landed unlinked.
+                    // Lives under Data because it's a data-cleanup surface
+                    // shaped like Backup / Import, not a per-recipe editor.
+                    {
+                        path: 'admin/data/unlinked-ingredients',
+                        component: () => import('pages/settings/AdminDataUnlinkedIngredients.vue'),
+                        meta: { title: 'Unlinked ingredients' }
                     }
                 ]
             }

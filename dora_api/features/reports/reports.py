@@ -55,6 +55,8 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
+from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
@@ -74,9 +76,16 @@ _Logger = logging.getLogger(__name__)
 # ───── Range helpers ──────────────────────────────────────────────────────
 
 # Range tokens accepted on every endpoint with a `range=` query. Mapped to
-# a lower bound (UTC) or None for "all time". `1y` is a flat 365-day window
-# rather than calendar-year so the chart axis is stable.
-_RANGE_DAYS = {"30d": 30, "90d": 90, "1y": 365}
+# a lower bound (UTC) or None for "all time". `1y`/`2y`/`5y` are flat
+# 365-day multiples rather than calendar years so the chart axis is stable.
+# P8-09 added 2y/5y so the Memory section can answer "dairy up 8% over 2 years".
+_RANGE_DAYS = {
+    "30d": 30,
+    "90d": 90,
+    "1y": 365,
+    "2y": 730,
+    "5y": 1825,
+}
 
 
 def _parse_range(raw: str | None) -> datetime | None:
@@ -91,14 +100,27 @@ def _parse_range(raw: str | None) -> datetime | None:
     return datetime.now(timezone.utc) - timedelta(days=days)
 
 
+def _range_days(raw: str | None) -> int | None:
+    """Number of days the range spans, or None for 'all'. Used by
+    endpoints that need to compute a same-length prior window (YoY)."""
+    token = (raw or "30d").strip().lower()
+    if token == "all":
+        return None
+    return _RANGE_DAYS.get(token, 30)
+
+
 def _bucket_size_days(since: datetime | None) -> int:
     """Pick a day-bucket size that keeps the time series readable.
-    30d → daily, 90d → daily, 1y → weekly. all-time also gets weekly.
+    30d → daily, 90d → daily, 1y → weekly. 2y/5y/all-time → monthly.
     """
     if since is None:
-        return 7
+        return 30
     span = (datetime.now(timezone.utc) - since).days
-    return 7 if span > 120 else 1
+    if span > 500:
+        return 30    # monthly-ish for 2y/5y/all
+    if span > 120:
+        return 7     # weekly for 1y
+    return 1         # daily for 30d/90d
 
 
 # ───── 1. Stock value over time ───────────────────────────────────────────
@@ -962,3 +984,404 @@ def price_drops():
         _Limit = 5
     _Rows = get_container().inject(PriceDropsHandler).handle(_Limit)
     return ok({"rows": [asdict(r) for r in _Rows]})
+
+
+# ───── 8. Meals cooked over time (P8-09 memory) ───────────────────────────
+# What was actually cooked in this window. Every CookEvent = one POST to
+# /recipes/<id>/cook, so a Sunday batch-cook that fed the week leaves ONE
+# row (not seven) — the count is honest about intent-events, not portions.
+# `meals_cooked` on each event is the *portion count* the user entered on
+# that cook, and the report sums those separately for "how many
+# meals-worth" (rather than "how many cooking sessions").
+
+@dataclass(slots=True)
+class MealsCookedTopRow:
+    recipe_id: UUID | None
+    recipe_name: str
+    cook_count: int      # number of CookEvent rows for this recipe
+    meals_total: int     # sum of meals_cooked across those rows
+
+
+@dataclass(slots=True)
+class MealsCookedBucketPoint:
+    date: str            # ISO date at the start of the bucket
+    cook_count: int
+    meals_total: int
+
+
+class MealsCookedHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, since: datetime | None, limit: int) -> dict:
+        session = self.repository.session
+
+        query = select(
+            CookEvent.recipe_id,
+            CookEvent.recipe_name,
+            CookEvent.meals_cooked,
+            CookEvent.occurred_at,
+        )
+        if since is not None:
+            query = query.where(CookEvent.occurred_at >= since)
+        rows = session.execute(query).all()
+        if not rows:
+            return {
+                "cook_count": 0,
+                "meals_total": 0,
+                "top_recipes": [],
+                "timeline": [],
+            }
+
+        # Top-N recipes by cook_count (with meals_total as tiebreak signal
+        # so a rice cooker cooked once feeding 8 doesn't outrank a nightly
+        # curry). Group by recipe_id when non-null, else by the denorm name
+        # so deleted-recipe events still land in a labelled bucket.
+        by_key: dict[tuple, dict] = {}
+        for row in rows:
+            key = (row.recipe_id, row.recipe_name)
+            bucket = by_key.setdefault(key, {
+                "recipe_id": row.recipe_id,
+                "recipe_name": row.recipe_name,
+                "cook_count": 0,
+                "meals_total": 0,
+            })
+            bucket["cook_count"] += 1
+            bucket["meals_total"] += int(row.meals_cooked or 0)
+
+        top = sorted(
+            by_key.values(),
+            key=lambda b: (-b["cook_count"], -b["meals_total"], b["recipe_name"].lower()),
+        )[:limit]
+        top_rows = [
+            MealsCookedTopRow(
+                recipe_id=b["recipe_id"],
+                recipe_name=b["recipe_name"],
+                cook_count=b["cook_count"],
+                meals_total=b["meals_total"],
+            )
+            for b in top
+        ]
+
+        # Timeline — bucket by the shared _bucket_size_days helper so
+        # 30d/90d get daily, 1y weekly, 2y+/all monthly. Deterministic
+        # bucket edges relative to *now* (not the event stream) keep the
+        # chart's x-axis stable across refreshes.
+        bucket_days = _bucket_size_days(since)
+        now = datetime.now(timezone.utc)
+        # Strip tz for arithmetic against timestamps that may be tz-naive
+        # (SQLite doesn't preserve tz; the mapper stores naive UTC).
+        now_naive = now.replace(tzinfo=None)
+        buckets: dict[str, dict[str, int]] = {}
+        for row in rows:
+            ts = row.occurred_at
+            if ts is None:
+                continue
+            ts_naive = ts.replace(tzinfo=None) if ts.tzinfo else ts
+            delta_days = (now_naive - ts_naive).days
+            bucket_index = delta_days // bucket_days
+            bucket_start = (now_naive - timedelta(days=(bucket_index + 1) * bucket_days - 1)).date()
+            key = bucket_start.isoformat()
+            b = buckets.setdefault(key, {"cook_count": 0, "meals_total": 0})
+            b["cook_count"] += 1
+            b["meals_total"] += int(row.meals_cooked or 0)
+
+        timeline = [
+            MealsCookedBucketPoint(
+                date=date_key,
+                cook_count=v["cook_count"],
+                meals_total=v["meals_total"],
+            )
+            for date_key, v in sorted(buckets.items())
+        ]
+
+        return {
+            "cook_count": len(rows),
+            "meals_total": sum(int(r.meals_cooked or 0) for r in rows),
+            "top_recipes": [asdict(r) for r in top_rows],
+            "timeline": [asdict(p) for p in timeline],
+        }
+
+
+@REPORTS_ROUTER.route("/meals-cooked", methods=["GET"])
+def meals_cooked():
+    since = _parse_range(request.args.get("range"))
+    try:
+        limit = max(1, min(int(request.args.get("limit", "10")), 50))
+    except (TypeError, ValueError):
+        limit = 10
+    payload = get_container().inject(MealsCookedHandler).handle(since, limit)
+    return ok({
+        "range": request.args.get("range", "30d"),
+        **payload,
+    })
+
+
+# ───── 9. Spend by category (P8-09 memory) ────────────────────────────────
+# Category = StockItem.stock_group (name). Aggregates paid unit price ×
+# quantity on ticked lines of archived (done) lists in the range, joined
+# through stock_item to its group. Lines with no stock_item, or whose stock
+# item has no group, roll up into an "Uncategorised" bucket so nothing is
+# silently dropped.
+
+_UNCATEGORISED_LABEL = "Uncategorised"
+
+
+@dataclass(slots=True)
+class SpendByCategoryRow:
+    category: str
+    spent: float
+    item_count: int  # distinct stock items contributing to this category
+    share_pct: float
+
+
+class SpendByCategoryHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, since: datetime | None) -> tuple[List[SpendByCategoryRow], float]:
+        session = self.repository.session
+
+        list_query = select(ShoppingList.id).where(
+            ShoppingList.status == SHOPPING_LIST_STATUS_DONE
+        )
+        if since is not None:
+            list_query = list_query.where(ShoppingList.completed_at >= since)
+        list_ids = [row[0] for row in session.execute(list_query).all()]
+        if not list_ids:
+            return [], 0.0
+
+        # Same actual→picked ladder as spend-by-store; same "silently skip
+        # lines with no captured price" rule. This is genuine spend, so
+        # unticked lines are excluded.
+        line_rows = session.execute(
+            select(
+                ShoppingListLine.stock_item_id,
+                ShoppingListLine.quantity,
+                ShoppingListLine.picked_offer_price,
+                ShoppingListLine.actual_unit_price,
+            ).where(
+                ShoppingListLine.shopping_list_id.in_(list_ids),
+                ShoppingListLine.is_ticked == True,  # noqa: E712
+                or_(
+                    ShoppingListLine.picked_offer_price.isnot(None),
+                    ShoppingListLine.actual_unit_price.isnot(None),
+                ),
+            )
+        ).all()
+        if not line_rows:
+            return [], 0.0
+
+        # Fetch every stock item referenced + its group name in one pass.
+        # Duplicate keys collapse via dict comprehension.
+        stock_ids = {r.stock_item_id for r in line_rows if r.stock_item_id is not None}
+        group_by_item: dict[UUID, str] = {}
+        if stock_ids:
+            items = self.repository.get(StockItem).include("stock_group").all(
+                EntityField(StockItem, "id").in_(list(stock_ids))
+            )
+            for item in items:
+                group_name = (
+                    item.stock_group.name.strip()
+                    if item.stock_group is not None and item.stock_group.name
+                    else _UNCATEGORISED_LABEL
+                )
+                group_by_item[item.id] = group_name
+
+        by_category: dict[str, dict] = {}
+        for row in line_rows:
+            qty = row.quantity if row.quantity is not None else 1
+            if qty <= 0:
+                continue
+            unit_price = (
+                float(row.actual_unit_price)
+                if row.actual_unit_price is not None
+                else float(row.picked_offer_price)
+            )
+            spent = unit_price * qty
+            category = (
+                group_by_item.get(row.stock_item_id, _UNCATEGORISED_LABEL)
+                if row.stock_item_id is not None
+                else _UNCATEGORISED_LABEL
+            )
+            bucket = by_category.setdefault(
+                category, {"spent": 0.0, "items": set()},
+            )
+            bucket["spent"] += spent
+            if row.stock_item_id is not None:
+                bucket["items"].add(row.stock_item_id)
+
+        total = sum(b["spent"] for b in by_category.values())
+        rows = [
+            SpendByCategoryRow(
+                category=category,
+                spent=round(b["spent"], 2),
+                item_count=len(b["items"]),
+                share_pct=round((b["spent"] / total) * 100, 1) if total > 0 else 0.0,
+            )
+            for category, b in by_category.items()
+        ]
+        rows.sort(key=lambda r: (-r.spent, r.category.lower()))
+        return rows, round(total, 2)
+
+
+@REPORTS_ROUTER.route("/spend-by-category", methods=["GET"])
+def spend_by_category():
+    since = _parse_range(request.args.get("range"))
+    rows, total = get_container().inject(SpendByCategoryHandler).handle(since)
+    return ok({
+        "range": request.args.get("range", "30d"),
+        "total_spent": total,
+        "rows": [asdict(r) for r in rows],
+    })
+
+
+# ───── 10. Spend year-over-year (P8-09 memory) ────────────────────────────
+# Compares total spend + per-category spend between two same-length
+# windows: the CURRENT window (range=N days ending now) and the PRIOR
+# window immediately preceding it. E.g. range=1y → this year vs last
+# year, category-by-category. Range=all is rejected — YoY needs a
+# bounded window.
+
+@dataclass(slots=True)
+class SpendYoYCategoryRow:
+    category: str
+    current: float
+    previous: float
+    delta: float          # current - previous
+    delta_pct: float | None  # None when previous == 0 (undefined)
+
+
+class SpendYoYHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(
+        self,
+        current_since: datetime,
+        previous_since: datetime,
+        previous_until: datetime,
+    ) -> dict:
+        def _for_window(since: datetime, until: datetime | None) -> tuple[dict[str, float], float]:
+            session = self.repository.session
+            list_query = select(ShoppingList.id).where(
+                ShoppingList.status == SHOPPING_LIST_STATUS_DONE,
+                ShoppingList.completed_at >= since,
+            )
+            if until is not None:
+                list_query = list_query.where(ShoppingList.completed_at < until)
+            list_ids = [row[0] for row in session.execute(list_query).all()]
+            if not list_ids:
+                return {}, 0.0
+
+            line_rows = session.execute(
+                select(
+                    ShoppingListLine.stock_item_id,
+                    ShoppingListLine.quantity,
+                    ShoppingListLine.picked_offer_price,
+                    ShoppingListLine.actual_unit_price,
+                ).where(
+                    ShoppingListLine.shopping_list_id.in_(list_ids),
+                    ShoppingListLine.is_ticked == True,  # noqa: E712
+                    or_(
+                        ShoppingListLine.picked_offer_price.isnot(None),
+                        ShoppingListLine.actual_unit_price.isnot(None),
+                    ),
+                )
+            ).all()
+            if not line_rows:
+                return {}, 0.0
+
+            stock_ids = {r.stock_item_id for r in line_rows if r.stock_item_id is not None}
+            group_by_item: dict[UUID, str] = {}
+            if stock_ids:
+                items = self.repository.get(StockItem).include("stock_group").all(
+                    EntityField(StockItem, "id").in_(list(stock_ids))
+                )
+                for item in items:
+                    group_by_item[item.id] = (
+                        item.stock_group.name.strip()
+                        if item.stock_group is not None and item.stock_group.name
+                        else _UNCATEGORISED_LABEL
+                    )
+
+            by_category: dict[str, float] = {}
+            for row in line_rows:
+                qty = row.quantity if row.quantity is not None else 1
+                if qty <= 0:
+                    continue
+                unit_price = (
+                    float(row.actual_unit_price)
+                    if row.actual_unit_price is not None
+                    else float(row.picked_offer_price)
+                )
+                category = (
+                    group_by_item.get(row.stock_item_id, _UNCATEGORISED_LABEL)
+                    if row.stock_item_id is not None
+                    else _UNCATEGORISED_LABEL
+                )
+                by_category[category] = by_category.get(category, 0.0) + unit_price * qty
+            return by_category, sum(by_category.values())
+
+        current_totals, current_total = _for_window(current_since, None)
+        previous_totals, previous_total = _for_window(previous_since, previous_until)
+
+        categories = set(current_totals) | set(previous_totals)
+        rows: list[SpendYoYCategoryRow] = []
+        for category in categories:
+            current = current_totals.get(category, 0.0)
+            previous = previous_totals.get(category, 0.0)
+            delta = current - previous
+            delta_pct: float | None
+            if previous > 0:
+                delta_pct = round((delta / previous) * 100, 1)
+            else:
+                # Undefined when the prior window had zero spend in this
+                # category — a "new" category has no rate-of-change. P3
+                # Honest: don't render "+∞%" or "+100%" for that case.
+                delta_pct = None
+            rows.append(SpendYoYCategoryRow(
+                category=category,
+                current=round(current, 2),
+                previous=round(previous, 2),
+                delta=round(delta, 2),
+                delta_pct=delta_pct,
+            ))
+        # Rank by absolute delta magnitude so the biggest movers surface
+        # first, positive OR negative — the user cares "what moved?".
+        rows.sort(key=lambda r: (-abs(r.delta), r.category.lower()))
+
+        overall_delta = current_total - previous_total
+        overall_delta_pct: float | None
+        if previous_total > 0:
+            overall_delta_pct = round((overall_delta / previous_total) * 100, 1)
+        else:
+            overall_delta_pct = None
+
+        return {
+            "current_total": round(current_total, 2),
+            "previous_total": round(previous_total, 2),
+            "delta": round(overall_delta, 2),
+            "delta_pct": overall_delta_pct,
+            "rows": [asdict(r) for r in rows],
+        }
+
+
+@REPORTS_ROUTER.route("/spend-year-over-year", methods=["GET"])
+def spend_year_over_year():
+    raw = request.args.get("range", "1y")
+    days = _range_days(raw)
+    if days is None:
+        return bad_request("range=all is not supported for spend-year-over-year — pick a bounded window.")
+    now = datetime.now(timezone.utc)
+    current_since = now - timedelta(days=days)
+    previous_since = now - timedelta(days=days * 2)
+    previous_until = current_since
+    payload = get_container().inject(SpendYoYHandler).handle(
+        current_since, previous_since, previous_until,
+    )
+    return ok({
+        "range": raw,
+        "window_days": days,
+        **payload,
+    })

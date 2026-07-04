@@ -163,6 +163,173 @@
                 </div>
             </article>
 
+            <!-- ═══════ P8-09 memory section ══════════════════════════ -->
+            <!-- Section divider. Full-width row so the "Memory" band
+                 reads as a category header for the three cards below. -->
+            <div class="reports-memory-band">
+                <q-icon :name="ICONS.history" size="20px" />
+                <span>Memory · what you actually did</span>
+                <span class="reports-memory-band__hint">
+                    Uses your own cook history + finished shopping lists.
+                    Nothing invented.
+                </span>
+            </div>
+
+            <!-- Meals cooked over time -->
+            <article class="report-card report-card-wide">
+                <header class="report-card-head">
+                    <q-icon :name="ICONS.restaurant_menu" size="22px" class="report-card-icon" />
+                    <h3 class="report-card-title">Meals cooked</h3>
+                    <span
+                        v-if="mealsCooked && mealsCooked.cook_count > 0"
+                        class="report-card-note"
+                    >
+                        {{ mealsCooked.cook_count }} cook{{ mealsCooked.cook_count === 1 ? '' : 's' }}
+                        · {{ mealsCooked.meals_total }} meals-worth
+                    </span>
+                </header>
+                <div v-if="loading.mealsCooked" class="report-card-loading">
+                    <AppSpinner size="32px" />
+                </div>
+                <div
+                    v-else-if="(mealsCooked?.cook_count ?? 0) > 0"
+                    class="meals-cooked-body"
+                >
+                    <v-chart
+                        v-if="(mealsCooked?.timeline.length ?? 0) > 0"
+                        class="report-chart"
+                        :option="mealsTimelineOption"
+                        autoresize
+                    />
+                    <ul class="report-list meals-cooked-top">
+                        <li
+                            v-for="row in mealsCooked!.top_recipes"
+                            :key="row.recipe_id ?? row.recipe_name"
+                        >
+                            <a
+                                class="report-list-name"
+                                @click="row.recipe_id && goToRecipe(row.recipe_id)"
+                            >{{ row.recipe_name }}</a>
+                            <span class="report-list-count">
+                                ×{{ row.cook_count }} · {{ row.meals_total }} meals
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+                <div v-else class="report-empty">
+                    No cooks logged in this range yet. Finish a recipe in
+                    cook mode to start building your memory.
+                </div>
+            </article>
+
+            <!-- Spend by category -->
+            <article class="report-card">
+                <header class="report-card-head">
+                    <q-icon :name="ICONS.donut_large" size="22px" class="report-card-icon" />
+                    <h3 class="report-card-title">Spend by category</h3>
+                    <span
+                        v-if="spendByCategory && spendByCategory.total_spent > 0"
+                        class="report-card-note"
+                    >
+                        ${{ spendByCategory.total_spent.toFixed(2) }} total
+                    </span>
+                </header>
+                <div v-if="loading.spendByCategory" class="report-card-loading">
+                    <AppSpinner size="32px" />
+                </div>
+                <div
+                    v-else-if="(spendByCategory?.rows.length ?? 0) > 0"
+                    class="store-row"
+                >
+                    <v-chart
+                        class="report-donut"
+                        :option="spendByCategoryOption"
+                        autoresize
+                    />
+                    <ul class="store-legend">
+                        <li v-for="row in spendByCategory!.rows" :key="row.category">
+                            <span class="store-dot" :style="{ background: colourFor(row.category) }" />
+                            <span class="store-name">{{ row.category }}</span>
+                            <span class="store-spend">${{ row.spent.toFixed(2) }}</span>
+                            <span class="store-count">{{ row.share_pct }}%</span>
+                        </li>
+                    </ul>
+                </div>
+                <div v-else class="report-empty">
+                    No spend recorded in this range yet. Finish a shopping
+                    list with prices to see where your money's going.
+                </div>
+            </article>
+
+            <!-- Year-over-year spend -->
+            <article class="report-card">
+                <header class="report-card-head">
+                    <q-icon :name="ICONS.compare_arrows" size="22px" class="report-card-icon" />
+                    <h3 class="report-card-title">Year-over-year</h3>
+                    <span v-if="spendYoY" class="report-card-note">
+                        this
+                        <template v-if="range === '30d'">30 days</template>
+                        <template v-else-if="range === '90d'">90 days</template>
+                        <template v-else-if="range === '1y'">year</template>
+                        <template v-else-if="range === '2y'">2 years</template>
+                        <template v-else-if="range === '5y'">5 years</template>
+                        vs. prior
+                    </span>
+                </header>
+                <div v-if="loading.spendYoY" class="report-card-loading">
+                    <AppSpinner size="32px" />
+                </div>
+                <div v-else-if="range === 'all'" class="report-empty">
+                    Pick a bounded range (30d–5y) to compare it against
+                    the same-length prior window.
+                </div>
+                <div
+                    v-else-if="spendYoY && (spendYoY.current_total > 0 || spendYoY.previous_total > 0)"
+                    class="yoy-body"
+                >
+                    <div class="yoy-total">
+                        <div class="yoy-total__current">
+                            ${{ spendYoY.current_total.toFixed(2) }}
+                        </div>
+                        <div class="yoy-total__delta">
+                            <template v-if="spendYoY.delta_pct === null">
+                                (no prior data)
+                            </template>
+                            <template v-else>
+                                <span
+                                    :class="spendYoY.delta > 0 ? 'yoy-up' : (spendYoY.delta < 0 ? 'yoy-down' : '')"
+                                >
+                                    {{ spendYoY.delta_pct > 0 ? '+' : '' }}{{ spendYoY.delta_pct }}%
+                                </span>
+                                vs. ${{ spendYoY.previous_total.toFixed(2) }}
+                            </template>
+                        </div>
+                    </div>
+                    <ul class="yoy-rows">
+                        <li v-for="row in spendYoY.rows.slice(0, 8)" :key="row.category">
+                            <span class="yoy-cat">{{ row.category }}</span>
+                            <span
+                                class="yoy-delta"
+                                :class="row.delta > 0 ? 'yoy-up' : (row.delta < 0 ? 'yoy-down' : '')"
+                            >
+                                <template v-if="row.delta_pct === null">new</template>
+                                <template v-else>
+                                    {{ row.delta_pct > 0 ? '+' : '' }}{{ row.delta_pct }}%
+                                </template>
+                            </span>
+                            <span class="yoy-amount">
+                                ${{ row.current.toFixed(2) }}
+                                <span class="yoy-prev">vs ${{ row.previous.toFixed(2) }}</span>
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+                <div v-else class="report-empty">
+                    Not enough history yet to compare periods. Finish
+                    lists over time and this fills in.
+                </div>
+            </article>
+
             <!-- Price trends -->
             <article class="report-card report-card-wide">
                 <header class="report-card-head">
@@ -231,6 +398,11 @@
         type ReportRange,
         type SavingsCapturedResponse,
         type StockValueResponse,
+        // P8-09 memory
+        type MealsCookedResponse,
+        type SpendByCategoryResponse,
+        type SpendYoYResponse,
+        type YoYReportRange,
     } from 'src/services/api/reportsApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { computed, onMounted, ref } from 'vue';
@@ -259,6 +431,11 @@
         { label: '30 days', value: '30d' },
         { label: '90 days', value: '90d' },
         { label: '1 year', value: '1y' },
+        // P8-09 — multi-year windows unlock the culinary-memory section
+        // ("what did we cook in the last two years", "how has dairy
+        // trended over 5 years").
+        { label: '2 years', value: '2y' },
+        { label: '5 years', value: '5y' },
         { label: 'All time', value: 'all' },
     ];
 
@@ -272,6 +449,10 @@
         keepsOut: false,
         savings: false,
         priceTrends: false,
+        // P8-09 memory
+        mealsCooked: false,
+        spendByCategory: false,
+        spendYoY: false,
     });
 
     const stockValue = ref<StockValueResponse | null>(null);
@@ -280,6 +461,12 @@
     const keepsOut = ref<KeepsRunningOutResponse | null>(null);
     const savings = ref<SavingsCapturedResponse | null>(null);
     const priceTrends = ref<PriceTrendsResponse | null>(null);
+    // P8-09 memory — read from the range picker like every other card.
+    const mealsCooked = ref<MealsCookedResponse | null>(null);
+    const spendByCategory = ref<SpendByCategoryResponse | null>(null);
+    // YoY only accepts bounded windows; if the user picks "All time",
+    // we skip the YoY fetch and the card renders its own explanation.
+    const spendYoY = ref<SpendYoYResponse | null>(null);
 
     const selectedProductIds = ref<string[]>([]);
     const productOptions = ref<{ label: string; value: string }[]>([]);
@@ -402,6 +589,52 @@
         (priceTrends.value?.series ?? []).some((s) => s.points.length > 0),
     );
 
+    // ── P8-09 memory chart options ──────────────────────────────────
+    const mealsTimelineOption = computed(() => ({
+        tooltip: {
+            trigger: 'axis',
+            formatter: (rows: Array<{ data: number; axisValueLabel?: string }>) => {
+                if (!rows.length) return '';
+                const row = rows[0]!;
+                return `${row.axisValueLabel ?? ''}<br/>${row.data} cook${row.data === 1 ? '' : 's'}`;
+            },
+        },
+        grid: { left: 40, right: 16, top: 24, bottom: 32 },
+        xAxis: {
+            type: 'category',
+            data: mealsCooked.value?.timeline.map((p) => p.date) ?? [],
+            axisLabel: { fontSize: 10 },
+        },
+        yAxis: { type: 'value', minInterval: 1 },
+        series: [{
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            areaStyle: { opacity: 0.15 },
+            lineStyle: { width: 2 },
+            data: mealsCooked.value?.timeline.map((p) => p.cook_count) ?? [],
+            color: chartPalette.value.primary,
+        }],
+    }));
+
+    const spendByCategoryOption = computed(() => ({
+        tooltip: {
+            trigger: 'item',
+            valueFormatter: (v: number) => `$${v.toFixed(2)}`,
+        },
+        series: [{
+            type: 'pie',
+            radius: ['55%', '80%'],
+            avoidLabelOverlap: true,
+            label: { show: false },
+            data: (spendByCategory.value?.rows ?? []).map((row) => ({
+                name: row.category,
+                value: row.spent,
+                itemStyle: { color: colourFor(row.category) },
+            })),
+        }],
+    }));
+
     const priceTrendsOption = computed(() => {
         const series = priceTrends.value?.series ?? [];
         const allDates = new Set<string>();
@@ -482,6 +715,34 @@
         }
     }
 
+    // ── P8-09 memory loaders ────────────────────────────────────────
+    async function loadMealsCooked() {
+        loading.value.mealsCooked = true;
+        try { mealsCooked.value = await reportsApi.getMealsCookedAsync(range.value, 10); }
+        finally { loading.value.mealsCooked = false; }
+    }
+    async function loadSpendByCategory() {
+        loading.value.spendByCategory = true;
+        try { spendByCategory.value = await reportsApi.getSpendByCategoryAsync(range.value); }
+        finally { loading.value.spendByCategory = false; }
+    }
+    async function loadSpendYoY() {
+        // YoY skips the "all" range — it needs a bounded window to
+        // compare against the same-length prior window. Blank the card
+        // when the user's chosen "all" so it can render an explanation.
+        if (range.value === 'all') {
+            spendYoY.value = null;
+            return;
+        }
+        loading.value.spendYoY = true;
+        try {
+            spendYoY.value = await reportsApi.getSpendYearOverYearAsync(
+                range.value as YoYReportRange,
+            );
+        }
+        finally { loading.value.spendYoY = false; }
+    }
+
     async function loadAll() {
         loadError.value = null;
         try {
@@ -492,6 +753,10 @@
                 loadKeepsOut(),
                 loadSavings(),
                 loadPriceTrends(),
+                // P8-09 memory
+                loadMealsCooked(),
+                loadSpendByCategory(),
+                loadSpendYoY(),
             ]);
         } catch {
             loadError.value = 'Could not load reports. Try refreshing.';
@@ -500,6 +765,12 @@
 
     function goToStock(id: string) {
         void router.push(`/stock/${id}`);
+    }
+
+    function goToRecipe(id: string) {
+        // Cookbook detail; the top-recipes list from meals-cooked links
+        // straight into it so "what did I cook a lot?" → "open it".
+        void router.push(`/cookbook/${id}`);
     }
 
     async function markAllEssential() {
@@ -694,4 +965,88 @@
         margin-top: 12px;
     }
     .price-picker { margin-bottom: 12px; }
+
+    /* P8-09 memory section ─────────────────────────────────────── */
+    .reports-memory-band {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+    .reports-memory-band__hint {
+        color: var(--text-secondary);
+        font-weight: 400;
+        font-size: 0.85rem;
+    }
+    .meals-cooked-body {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr);
+        gap: 16px;
+        align-items: start;
+    }
+    @media (max-width: 900px) {
+        .meals-cooked-body { grid-template-columns: 1fr; }
+    }
+    .meals-cooked-top {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .yoy-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .yoy-total {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+    }
+    .yoy-total__current {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .yoy-total__delta {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+    .yoy-rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .yoy-rows li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 12px;
+        align-items: baseline;
+        font-size: 0.9rem;
+    }
+    .yoy-cat { color: var(--text-primary); }
+    .yoy-delta {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+    }
+    .yoy-up { color: var(--semantic-negative, #b43c3c); }
+    .yoy-down { color: var(--semantic-positive, #228b22); }
+    .yoy-amount {
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .yoy-prev {
+        opacity: 0.65;
+        margin-left: 4px;
+    }
 </style>

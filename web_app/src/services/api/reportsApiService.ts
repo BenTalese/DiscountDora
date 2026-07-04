@@ -1,6 +1,10 @@
 import AxiosHttpClient from './axiosHttpClient';
 
-export type ReportRange = '30d' | '90d' | '1y' | 'all';
+export type ReportRange = '30d' | '90d' | '1y' | '2y' | '5y' | 'all';
+
+// P8-09 — YoY only accepts bounded windows. Enforce at the type level
+// so callers can't hand the endpoint a range=all it will reject.
+export type YoYReportRange = Exclude<ReportRange, 'all'>;
 
 export interface StockValuePoint {
     date: string;
@@ -97,6 +101,58 @@ export interface SavingsCapturedResponse {
     lists: SavingsListBreakdown[];
 }
 
+// P8-09 — culinary memory. Three new report shapes that back the new
+// "Memory" section on /reports.
+export interface MealsCookedTopRow {
+    recipe_id: string | null;
+    recipe_name: string;
+    cook_count: number;
+    meals_total: number;
+}
+export interface MealsCookedBucketPoint {
+    date: string;   // ISO date at the start of the bucket
+    cook_count: number;
+    meals_total: number;
+}
+export interface MealsCookedResponse {
+    range: ReportRange;
+    cook_count: number;
+    meals_total: number;
+    top_recipes: MealsCookedTopRow[];
+    timeline: MealsCookedBucketPoint[];
+}
+
+export interface SpendByCategoryRow {
+    category: string;
+    spent: number;
+    item_count: number;
+    share_pct: number;
+}
+export interface SpendByCategoryResponse {
+    range: ReportRange;
+    total_spent: number;
+    rows: SpendByCategoryRow[];
+}
+
+export interface SpendYoYCategoryRow {
+    category: string;
+    current: number;
+    previous: number;
+    delta: number;
+    /** null when previous == 0 — a new-category is undefined YoY, not
+     *  +∞% or +100%. UI renders "new" in that case. */
+    delta_pct: number | null;
+}
+export interface SpendYoYResponse {
+    range: YoYReportRange;
+    window_days: number;
+    current_total: number;
+    previous_total: number;
+    delta: number;
+    delta_pct: number | null;
+    rows: SpendYoYCategoryRow[];
+}
+
 export default class ReportsApiService {
     private httpClient = new AxiosHttpClient();
 
@@ -124,4 +180,20 @@ export default class ReportsApiService {
 
     getPriceDropsAsync = (limit = 5) =>
         this.httpClient.get<PriceDropsResponse>(`/reports/price-drops?limit=${limit}`);
+
+    // ── P8-09 memory ────────────────────────────────────────────────
+    getMealsCookedAsync = (range: ReportRange, limit = 10) =>
+        this.httpClient.get<MealsCookedResponse>(
+            `/reports/meals-cooked?range=${range}&limit=${limit}`,
+        );
+
+    getSpendByCategoryAsync = (range: ReportRange) =>
+        this.httpClient.get<SpendByCategoryResponse>(
+            `/reports/spend-by-category?range=${range}`,
+        );
+
+    getSpendYearOverYearAsync = (range: YoYReportRange) =>
+        this.httpClient.get<SpendYoYResponse>(
+            `/reports/spend-year-over-year?range=${range}`,
+        );
 }

@@ -847,6 +847,94 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
+    # P8-09 — culinary memory: recall queries over the household's own
+    # accumulated data. All three tools are read-only wrappers over the
+    # new /api/reports memory endpoints, composed here so the assistant
+    # can answer "what did we make last Christmas?" and "how has dairy
+    # spending changed year on year?" with real stored data (Charter P12
+    # No-invent).
+    {
+        "type": "function",
+        "function": {
+            "name": "meals_cooked_in_range",
+            "description": (
+                "Recall what was actually cooked over a time window — a "
+                "count of cooking sessions, meals-worth cooked, and the "
+                "top recipes by frequency. Use for 'what did we make "
+                "last month?', 'what did we cook last Christmas?', "
+                "'what are we eating a lot of lately?', 'how many "
+                "meals did I cook this year?'. Bases only on the "
+                "household's own CookEvent history — no invention."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "range": {
+                        "type": "string",
+                        "enum": ["30d", "90d", "1y", "2y", "5y", "all"],
+                        "description": "The window to look back over. Default 90d for 'lately'-shaped questions; 1y for seasonal ('last Christmas'); 5y or all for 'ever'.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many top recipes to return (default 10, max 50).",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spend_by_category",
+            "description": (
+                "Total grocery spend broken down by stock-item category "
+                "(dairy, meat, produce, etc.) over a window. Use for "
+                "'what did I spend on dairy this year?', 'where does my "
+                "grocery money actually go?', 'what's my biggest category?'. "
+                "Uses actual paid prices on finished shopping lists — "
+                "the exact same figures Budget uses, not estimates."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "range": {
+                        "type": "string",
+                        "enum": ["30d", "90d", "1y", "2y", "5y", "all"],
+                        "description": "The window to aggregate over. Default 90d.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spend_year_over_year",
+            "description": (
+                "Compare grocery spend this period vs. the same-length "
+                "prior period, per category (e.g. 'dairy up 8% over the "
+                "last year'). Use for 'has grocery cost gone up?', 'am "
+                "I spending more on meat than a year ago?', 'which "
+                "category is inflating fastest?'. Requires a bounded "
+                "window (range=all not supported). Categories with zero "
+                "spend in the prior window are surfaced with a null "
+                "percentage — no fabricated 'up 100%' rates."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "range": {
+                        "type": "string",
+                        "enum": ["30d", "90d", "1y", "2y", "5y"],
+                        "description": "Length of each window (current and prior). Default 1y.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # Action (mutating) tools are handled outside the read-only path: the model
@@ -2589,6 +2677,75 @@ def recipe_for_occasion(args: dict) -> list[dict]:
     }]
 
 
+# P8-09 — culinary memory tools. Thin wrappers over the reports
+# handlers so the assistant answers recall questions from the same
+# aggregation logic the /reports page renders (single source, R-003).
+def meals_cooked_in_range(args: dict) -> list[dict]:
+    from datetime import datetime, timedelta, timezone
+    from dora_api.features.reports.reports import (
+        MealsCookedHandler, _parse_range,
+    )
+    range_token = args.get("range") or "90d"
+    limit_raw = args.get("limit")
+    try:
+        limit = max(1, min(int(limit_raw) if limit_raw is not None else 10, 50))
+    except (TypeError, ValueError):
+        limit = 10
+    since = _parse_range(range_token)
+    payload = get_container().inject(MealsCookedHandler).handle(since, limit)
+    return [{
+        "range": range_token,
+        "cook_count": payload["cook_count"],
+        "meals_total": payload["meals_total"],
+        "top_recipes": payload["top_recipes"],
+        # Deliberately omit the per-bucket timeline — the model doesn't
+        # need it for phrasing the answer, and it inflates the tool
+        # response. The /reports page consumes it separately.
+    }]
+
+
+def spend_by_category(args: dict) -> list[dict]:
+    from dataclasses import asdict as _asdict
+    from dora_api.features.reports.reports import (
+        SpendByCategoryHandler, _parse_range,
+    )
+    range_token = args.get("range") or "90d"
+    since = _parse_range(range_token)
+    rows, total = get_container().inject(SpendByCategoryHandler).handle(since)
+    return [{
+        "range": range_token,
+        "total_spent": total,
+        "rows": [_asdict(r) for r in rows],
+    }]
+
+
+def spend_year_over_year(args: dict) -> list[dict]:
+    from datetime import datetime, timedelta, timezone
+    from dora_api.features.reports.reports import (
+        SpendYoYHandler, _range_days,
+    )
+    range_token = args.get("range") or "1y"
+    days = _range_days(range_token)
+    if days is None:
+        # The schema restricts the enum, but be defensive — a bad model
+        # response shouldn't 500 the assistant path.
+        return [{
+            "status": "error",
+            "message": "spend_year_over_year needs a bounded window (30d/90d/1y/2y/5y).",
+        }]
+    now = datetime.now(timezone.utc)
+    current_since = now - timedelta(days=days)
+    previous_since = now - timedelta(days=days * 2)
+    payload = get_container().inject(SpendYoYHandler).handle(
+        current_since, previous_since, current_since,
+    )
+    return [{
+        "range": range_token,
+        "window_days": days,
+        **payload,
+    }]
+
+
 _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "search_stock": search_stock,
     "search_products": search_products,
@@ -2617,6 +2774,10 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "waste_insights": waste_insights,
     "list_suggestions": list_suggestions,
     "recipe_for_occasion": recipe_for_occasion,
+    # P8-09 memory tools.
+    "meals_cooked_in_range": meals_cooked_in_range,
+    "spend_by_category": spend_by_category,
+    "spend_year_over_year": spend_year_over_year,
 }
 
 # Where the UI should offer to navigate after answering, per tool.
@@ -2650,6 +2811,12 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     # list_suggestions intentionally has no nav target — the SPA reads
     # primary_action off each suggestion and routes from there.
     "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},
+    # P8-09 — recall queries hand the user off to the /reports Memory
+    # section for the full timeline / bars / drill-down. The chat itself
+    # already carries the answer; the nav is the "and see more" affordance.
+    "meals_cooked_in_range": {"path": "/reports", "label": "Open Reports"},
+    "spend_by_category": {"path": "/reports", "label": "Open Reports"},
+    "spend_year_over_year": {"path": "/reports", "label": "Open Reports"},
     # convert_measurement / suggest_substitution / seasonal_picks need no nav.
 }
 

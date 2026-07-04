@@ -9,6 +9,159 @@ next.
 
 ---
 
+## 2026-07-04 — P8-09 Household culinary memory built (Memory section on /reports + assistant tools)
+
+**Why:** Next champion prompt after P8-08 landed earlier this session.
+STEP-0 recon confirmed ~60% of the recall data was already tracked
+(CookEvent, StockItemPriceObservation, ShoppingListLine with paid
+prices) with a partial reports layer; missing pieces were the
+aggregation endpoints for meals-cooked-over-range, spend-by-category,
+and multi-year YoY comparison, plus assistant tools for each.
+
+Also captured a **language correction from the user**: what I'd been
+calling "household extension" is actually the SaaS **multi-tenant
+Path A** (multi-household in one instance). The app IS for a
+household — the champion plan's "single-user memory" carve-out really
+means "single-tenant". Adjusted my wording going forward.
+
+**User's scope decisions (before build):**
+- Surface: **new section under /reports** (not a standalone /memory
+  page) + assistant tools. Slotted in with the existing
+  ReportsPage's cards.
+- Recall scope: **all four** classes — meals cooked, price history,
+  spend-by-category, multi-year YoY.
+- Household: single-household for now; the multi-tenant Path-A
+  extension is a separate deployment concern.
+
+**What shipped — backend (`features/reports/reports.py`):**
+- **Range vocab extended** — `_RANGE_DAYS` now includes `2y` (730)
+  and `5y` (1825); every reports endpoint accepts them for free.
+  `_bucket_size_days` gained a third tier (monthly-ish, 30d
+  buckets) for 2y / 5y / all-time so chart axes stay readable.
+  New helper `_range_days(raw)` returns the raw day count (or
+  `None` for `all`) — YoY uses this to compute the prior-window
+  offset.
+- **`GET /api/reports/meals-cooked?range=…&limit=…`** — aggregates
+  `CookEvent` rows in the window. Returns:
+  - `cook_count` (rows), `meals_total` (sum of `meals_cooked`),
+  - `top_recipes[]` — grouped by `(recipe_id, recipe_name)`,
+    sorted by cook_count desc / meals_total desc / alpha,
+  - `timeline[]` — per-bucket cook_count + meals_total (bucket
+    size picked by the extended `_bucket_size_days`).
+  - Recipes deleted since the cook still land under their
+    denormalised `recipe_name` (charter honesty over normalisation).
+- **`GET /api/reports/spend-by-category?range=…`** — rolls up
+  actual-paid prices (`actual_unit_price` then `picked_offer_price`,
+  the same ladder budget uses) on ticked lines of archived lists,
+  joined through `StockItem.stock_group.name`. Uncategorised /
+  unlinked lines roll into a shared "Uncategorised" bucket so
+  nothing gets silently dropped. Returns per-category
+  `{ category, spent, item_count, share_pct }` + a total; sorted
+  by spend desc.
+- **`GET /api/reports/spend-year-over-year?range=…`** — compares
+  the same-length prior window against the current one, per
+  category. `range=all` is explicitly rejected (400) since YoY
+  needs a bounded window. Per-category `delta_pct` is `null`
+  (not `+100%` or `+∞`) when the prior window had zero spend in
+  that category — Charter P3 Honest, no fabricated rates. Rows
+  sorted by absolute delta magnitude so the biggest movers
+  surface first.
+
+**What shipped — assistant tools (`features/assistant/tools.py`):**
+- Three new read-only tools registered in `TOOL_SCHEMAS`, `_TOOLS`,
+  and `_TOOL_NAV`, each with a `range` enum matching the extended
+  vocab:
+  - `meals_cooked_in_range` → thin wrapper over
+    `MealsCookedHandler`. Deliberately omits the `timeline` array
+    from the tool response (the model doesn't need it for
+    phrasing; the /reports page consumes it separately).
+  - `spend_by_category` → wraps `SpendByCategoryHandler`.
+  - `spend_year_over_year` → wraps `SpendYoYHandler` with a
+    defensive fallback if the model passes an invalid range.
+- Every tool routes users to `/reports` after answering so the
+  "see more" affordance is consistent.
+
+**What shipped — frontend:**
+- `ReportsApiService` gained `MealsCookedResponse` /
+  `SpendByCategoryResponse` / `SpendYoYResponse` types + three
+  fetcher methods. New `ReportRange` union includes `2y|5y`; new
+  `YoYReportRange` (excludes `all`) so the SPA can't hand the
+  YoY endpoint a range it will reject.
+- `ReportsPage.vue` — three new cards under a labelled **Memory ·
+  what you actually did** band:
+  - Meals cooked — line chart over the timeline + a top-recipes
+    list linking to each recipe's detail page.
+  - Spend by category — donut chart + legend (share_pct + total).
+  - Year-over-year — big current-total number, delta ratio, and
+    a per-category list showing `±%` (or "new" when the prior
+    was zero) + `current vs previous`.
+  - All three subscribe to the page's shared `range` picker; YoY
+    self-blanks when the user picks "All time" and explains why.
+- `DashboardPage.vue` — `RANGE_LABEL` extended to 2y/5y so
+  `Record<ReportRange, string>` stays exhaustive (compile-time
+  guard caught this the moment vue-tsc ran).
+
+**Tests (`tests/test_reports_memory.py`):**
+- **22/22 green.** Covers:
+  - Range parsing — `_range_days` for the new tokens + fallback
+    + `all → None`; `_parse_range("2y")` lands ~730 days back.
+  - Bucket sizing — 30d/90d → 1, 1y → 7, 2y/5y/all → 30.
+  - YoY math — flat, +8%, new category (`null`), dropped
+    category (-100%), sort by absolute delta magnitude, brand-
+    new household (all zeros, `null` overall).
+  - Meals-cooked grouping — empty, group-by-recipe, top-N sort
+    (cook_count desc / meals_total tiebreak).
+- Full recipe + score + memory suite: **114/114 green**. `vue-tsc
+  --noEmit` clean.
+
+**Engineering-standards close-gate:**
+- **R-003** — reports handlers own the aggregation logic; the SPA
+  only renders. Assistant tools compose over the same handlers,
+  not a second aggregation path.
+- **R-005** — no new outbound HTTP, no tenancy state, no self-
+  hosted carve-out. All read paths.
+- **R-010** — YoY `delta_pct = null` sentinel is documented for
+  the "new category" case and preserved through the SPA
+  (`delta_pct: number | null` on the wire type). No stringly-typed
+  "N/A" or magic `-999`.
+- **R-027** — pure math is unit-tested without a DB (range parsing,
+  bucket sizing, YoY delta). The DB-touching pieces are logged
+  for browser-verify.
+- **No new violations. No new ADR.**
+
+**Follow-up loose ends:**
+- **Multi-tenant Path A extension** (previously called "household
+  extension" in error). When SaaS multi-tenancy lands, memory
+  queries need a `tenant_id`/`household_id` scope filter so one
+  household's meals-cooked history doesn't bleed into another's
+  report or assistant answer. Logged as an FU under the P7
+  Commercialisation workstream.
+- **Occasion tagging** on CookEvent — the champion plan named
+  "what did we make last Christmas?" and my build answers it via
+  date range on `meals_cooked_in_range`, not an explicit
+  `occasion` field. Cheap add if the date-range framing feels
+  awkward in real use; opportunistic.
+- **/reports Memory browser-verify** — three new cards + range
+  vocab changes + assistant tool wiring. Added to `DORA_VERIFY.md`.
+
+**Anti-drift check:** P8-09 touches only new files
+(`test_reports_memory.py`) plus additive changes to
+`features/reports/reports.py`, `features/assistant/tools.py`,
+`web_app/src/services/api/reportsApiService.ts`,
+`web_app/src/pages/ReportsPage.vue`, and one `RANGE_LABEL` update
+in `DashboardPage.vue`. No schema touched, no other tool
+reshaped, no existing endpoint changed. Verified against the
+champion plan §P8-09 DO / DONE-WHEN list.
+
+**Next up:** the champion sequence's last remaining prompt is
+**P8-10 Native mobile app** (Capacitor-wrap the SPA for iOS /
+Android with native camera / push / wake-lock, keeping one
+codebase). Also open: the P8-07 flagship verify + today's
+browser-verify list (importer end-to-end, Kitchen health card,
+Memory reports section).
+
+---
+
 ## 2026-07-04 — P8-08 Dora Score built (kitchen-health composite + dashboard card)
 
 **Why:** Champion sequence next up after P8-07 flagship + the six-chunk

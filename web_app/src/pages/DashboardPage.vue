@@ -1898,6 +1898,8 @@
         '30d': 'last 30 days',
         '90d': 'last 90 days',
         '1y': 'last year',
+        '2y': 'last 2 years',
+        '5y': 'last 5 years',
         'all': 'all time',
     };
     const savingsRangeLabel = computed(() => RANGE_LABEL[savingsRange.value]);

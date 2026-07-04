@@ -1741,18 +1741,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   location if Help also uses it (e.g. `components/dora/AppLoopDiagram.vue`).
 
 
-## [OPEN] FU-199 — SSRF in recipe import-from-URL
-- **Raised:** 2026-06-16 (senior/tech-lead review)
-- **Type:** finding (security, HIGH)
-- **What:** `POST /api/recipes/import-from-url` fetches an arbitrary user URL with no scheme/host
-  validation and `allow_redirects=True` (`import_recipe_from_url.py:66` accepts a bare string; `:310-314`
-  `requests.get(...)`). Any authed user can reach cloud metadata (169.254.169.254), localhost services
-  (the Ollama LLM), or intranet hosts. Byte cap + timeout exist; destination filtering does not.
-- **Why deferred:** read-only review; new finding.
-- **Recommended resolution:** **before managed/SaaS (Path A/B) deploy** — validate scheme; resolve
-  hostname and reject RFC-1918/loopback/link-local before connecting; re-validate each redirect hop.
-  **Confirm in a running app.**
-
 ## [OPEN] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5)
 - **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)
 - **Type:** deferred job
@@ -1965,76 +1953,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   user's, not the data's.
 - **Recommended resolution:** opportunistic — fold into the next
   pass that touches this template. 10-minute job.
-
-## [OPEN] FU-104 — Move the URL recipe importer into the private companion app (legal posture)
-- **Raised:** 2026-06-10 (user, during Cookbook Chunk 7 review)
-- **Type:** policy / distribution-posture decision (cross-cutting)
-- **What:** The URL importer (`features/recipes/import_recipe_from_url.py`
-  + the SPA dialogs added in Cookbook Chunk 7) **fetches third-party
-  pages and extracts content** — schema.org JSON-LD for the happy path,
-  raw `<title>` + body text in the degraded path. That's
-  user-initiated, single-page, and modest-scale, but it's still:
-  - **automated retrieval of copyrighted content** (recipe text /
-    instructions are often editorial copyright, even if individual
-    ingredient lists aren't);
-  - **likely against most recipe-site ToS** (which boilerplate-ban
-    scraping / automated access);
-  - **fetched from our server's IP** in the current shape, not the
-    user's browser — so the *operator* of a hosted Dora instance is
-    the one making the request, not the user. That's the part most
-    likely to attract a takedown letter / IP block / CFAA-style
-    claim if it ever runs at scale on a public managed instance.
-  - **CDN-fingerprintable** at scale via the `_FETCH_HEADERS`
-    user-agent.
-  The IMPL_PLAN_COOKBOOK shape lets it live anywhere; the master
-  `RECONCILED_FINISHING_PLAN.md` Decision 1 already moved the
-  **retailer scraper** out of the core app for the same reason (the
-  precedent is established).
-- **What this FU is asking us to decide:**
-  - **Move the importer into the private companion app** (the same
-    self-hosted / "personal-use, off-by-default, runs on the user's
-    machine, hits sites from the user's own IP" surface that owns the
-    retailer scraper). Core Dora keeps the schema (Recipe.source,
-    structured steps, the create endpoint that accepts the parsed
-    DTO) — the *fetcher* is what relocates.
-  - **Or:** keep it in core but switch the architecture so the
-    *browser* fetches the URL (CORS-permitting only — recipe sites
-    rarely allow CORS, so practical coverage drops to maybe 10%) and
-    posts the HTML up to the parser. Lower legal exposure but a much
-    worse import experience.
-  - **Or:** keep as-is, scope it as a personal-instance feature
-    documented as "use only on URLs you have permission to scrape"
-    + drop the named-site list in the dialog copy so we're not seen
-    as encouraging it.
-- **Why discuss now (not later):** the importer just got a more
-  visible surface (overview button) in Chunk 7 + a graceful-degrade
-  path that *succeeds* even on no-JSON-LD pages, which broadens the
-  set of URLs it'll get pointed at. Better to settle the posture
-  before users get used to the current shape and the named-site copy.
-- **Constraints to honour in the decision:**
-  - **Distribution posture (R-005):** core stays SaaS-style /
-    self-hostable from one codebase. Moving the importer to the
-    companion app means defining a clean "companion sends parsed
-    DTO to core" boundary (companion is its own deployable; core
-    treats it as an authenticated source of preview DTOs).
-  - **Charter principle P10 Anti-creep:** don't bake "scrape any
-    URL" into core if the legal answer is uncertain.
-  - **Charter principle P1 Effortless:** users still expect the
-    feature to work — the answer can't be "we removed it"; it can be
-    "you run a companion locally and it stays effortless from your
-    perspective".
-- **Recommended resolution:** **discuss + design with user before
-  next prompt that touches the importer.** Surface to a proposal
-  doc (`docs/04_proposals/IMPORTER_DISTRIBUTION_POSTURE.md` or
-  similar) once a direction is picked. Likely outcome: move the
-  *fetcher* to the companion app (precedent: retailer scraper),
-  keep the *parser* + Recipe.source schema in core. Until then, no
-  new public-facing surface should advertise the importer (so:
-  Chunk 7's overview button + named-site copy is fine for the
-  self-hosted single-user case but should be flagged on any
-  managed-instance / multi-user deployment as the next prompt
-  here.) — see also `RECONCILED_FINISHING_PLAN.md §7.5` for the
-  distribution-posture checklist this needs to pass.
 
 ## [OPEN] FU-095 — RecipeEditDialog (quick-create) has no structured-steps surface
 - **Raised:** 2026-06-09 (Cookbook Chunk 6 impl)

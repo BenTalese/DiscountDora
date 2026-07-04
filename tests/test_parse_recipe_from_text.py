@@ -49,7 +49,7 @@ _TIME_TOLERANCE_MIN = 2
 @pytest.mark.unit
 @pytest.mark.parametrize("fixture_name", sorted(EXPECTATIONS.keys()))
 def test__parse_recipe_from_text__meets_minimum_shape(fixture_name: str) -> None:
-    text = (_FIXTURE_DIR / f"{fixture_name}.txt").read_text()
+    text = (_FIXTURE_DIR / f"{fixture_name}.txt").read_text(encoding="utf-8")
     expected = EXPECTATIONS[fixture_name]
 
     try:

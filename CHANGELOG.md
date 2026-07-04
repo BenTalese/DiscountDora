@@ -5,6 +5,28 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Recipe importer — paste-based rebuild (IMPL_PLAN_RECIPE_IMPORTER,
+  Chunks 1-5, 2026-07-04).** The URL-fetching importer is retired.
+  `POST /api/recipes/import-from-url` is replaced by
+  `POST /api/recipes/import-from-content` — the server no longer
+  makes outbound HTTP requests, the user pastes the recipe page
+  (Ctrl+A / Ctrl+C on the recipe site, Ctrl+V into Dora) and
+  optionally types a "Where's this from?" URL for provenance
+  (stamped on `Recipe.source`; never fetched). The new text parser
+  (Class A JSON-LD-free layouts like RecipeTin / AllRecipes / Half
+  Baked Harvest / Sally's / Simply / Woolworths / Taste, Class B
+  `<h3>`/`<h4>`-headed layouts like Smitten Kitchen) is
+  fixture-green on all 20 corpus recipes. Ingredients that don't
+  fuzzy-match a tracked stock item now save unlinked (`raw_text`
+  only, `stock_item_id: null`) — a Chunk 4 affordance that lets the
+  recipe save fast even when the pantry side isn't fully aligned,
+  and lets cookability render as a neutral tri-state until the row
+  is linked. Closes **FU-104** (legal posture — no companion split,
+  no third-party fetch by the operator) and **FU-199** (SSRF surface
+  deleted, not patched). Bulk-linker + PWA share target land in
+  Chunk 6.
+
 ### Added
 - **⭐ The Zero-Input Pantry — inferred inventory (P8-07 flagship,
   2026-07-03).** Dora now holds a confidence-weighted *belief* about each

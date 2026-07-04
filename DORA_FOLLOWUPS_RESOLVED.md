@@ -10,6 +10,30 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-104 — Move the URL recipe importer into the private companion app (legal posture)
+- **Raised:** 2026-06-10 (user, during Cookbook Chunk 7 review)
+- **Type:** policy / distribution-posture decision (cross-cutting)
+- **Resolved:** 2026-07-04 by IMPL_PLAN_RECIPE_IMPORTER Chunk 5 —
+  **legalized in place, no companion split needed**. The URL fetcher
+  (`import_recipe_from_url.py`) was deleted outright; the endpoint
+  reshaped to `POST /api/recipes/import-from-content` accepting user-
+  pasted text. The operator of a hosted Dora instance no longer touches
+  third-party sites — the fetch moved to the user's browser via paste.
+  Core keeps `Recipe.source` (metadata only; never fetched). Distribution
+  posture (R-005) satisfied by construction — no outbound HTTP, no
+  ambient IP surface, no user-agent fingerprint.
+
+## [RESOLVED] FU-199 — SSRF in recipe import-from-URL
+- **Raised:** 2026-06-16 (senior/tech-lead review).
+- **Type:** finding (security, HIGH).
+- **Resolved:** 2026-07-04 by IMPL_PLAN_RECIPE_IMPORTER Chunk 5 —
+  **closed by construction**. The URL-fetching endpoint
+  (`POST /api/recipes/import-from-url`) is deleted; the replacement
+  `POST /api/recipes/import-from-content` accepts user-pasted text only.
+  There is no `requests.get()`, no host, no redirect, no scheme to
+  validate. No allow-list / block-list needed because there is no
+  outbound HTTP.
+
 ## [RESOLVED] FU-449 — P6-07 cook→consume: `consumption_events` writes never landed
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
 - **Type:** finding (loop-integrity gap).

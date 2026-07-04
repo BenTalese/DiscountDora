@@ -17,6 +17,15 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Cookbook & recipes
 
+### Recipe importer — paste-based rebuild (Chunk 5) — origin IMPL_PLAN_RECIPE_IMPORTER
+- [ ] Open Cookbook overview → "Import" button opens the paste dialog. Caption names the paste flow (Ctrl+A / Ctrl+C on the source, Ctrl+V into Dora)
+- [ ] Copy a RecipeTin Eats page (Ctrl+A → Ctrl+C in the browser) → paste into the textarea → optionally type the source URL → "Import" → new recipe lands with name + servings + ingredients + steps; navigator lands on detail
+- [ ] Repeat with an AllRecipes page and a Half Baked Harvest page — verify each imports without the "couldn't auto-structure" degraded banner
+- [ ] Paste a page that fuzzy-matches < all ingredients → save works with unlinked rows present; recipe detail shows a neutral cookability chip (not True/False) until every row is linked
+- [ ] Confirm `Recipe.source` on the imported recipe carries the URL you typed (if any) and is blank when omitted — nothing was fetched server-side
+- [ ] Old `POST /api/recipes/import-from-url` returns 404 (route deleted); the new `POST /api/recipes/import-from-content` is the only import path
+- [ ] From RecipeDetailPage → kebab → "Import over this recipe" → paste flow, confirm-overwrite dialog, fields patched
+
 ### Ingredient DnD — reorder + cross-section move — origin FU-118
 - [ ] Open a recipe in edit mode that has 2+ sections + several ingredients in each. Each ingredient row has a drag handle (`drag_indicator` icon) on the far left, with grab cursor on hover
 - [ ] Grab an ingredient by the handle (NOT by the row body — text inputs and selects should keep their normal click/drag-to-select behaviour); the source row dims to ~50% opacity while dragging

@@ -9,6 +9,151 @@ next.
 
 ---
 
+## 2026-07-04 — Recipe importer rebuild: Chunk 5 landed (paste importer replaces URL fetcher; FU-104 + FU-199 close)
+
+**Why:** Continuing the six-chunk plan in
+`docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md`. Chunk 4 shipped the
+schema for persistable unlinked ingredients + tri-state cookability
+(invisible on ship). Chunk 5 is the legalization landing — the
+endpoint reshape that deletes the URL-fetching surface and swaps the
+dialog to a paste flow. Also folded in doc-merge cleanup from a
+pull-before-work miss on the other box (PROJECT_STATE.md had two
+concatenated `Regenerated:` headers; WORKLOG top entry was the older
+P8-07 from the other machine).
+
+**Prior-session state:** Chunks 1-5 code landed in commit `06425489`
+("Recipe importer overhaul part 1") — the previous session hit its
+usage limit right before running the end-to-end verify. That's this
+session's first job: confirm the parser is actually green on the corpus.
+
+**What shipped — Chunk 5 backend:**
+- New file `features/recipes/import_recipe_from_content.py` with
+  `POST /api/recipes/import-from-content` accepting
+  `{ content: string, source_url?: string }`. Old
+  `import_recipe_from_url.py` deleted — no `requests.get`, no
+  `_FETCH_HEADERS`, no `_FETCH_TIMEOUT`, no `_MAX_BYTES`, no
+  `_degraded_import`, no `_first_recipe_from_html`, no
+  `_iter_recipe_objects`. **SSRF surface deleted, not fixed** — FU-199
+  closes by construction.
+- New file `features/recipes/imported_recipe_dtos.py` — shared DTO
+  module so both the parser (`_parse_recipe_from_text.py`) and the
+  new handler can import `ImportedRecipeDto` / `ImportedIngredientDto`
+  / `ImportedStepDto` without the parser depending on the handler.
+- `_parse_qty_unit` moved inline into `_parse_recipe_from_text.py`
+  (its only remaining caller). Grammar unchanged — the pre-Chunk-5
+  regex vocab (`cups?|tbsps?|...`) is preserved bit-for-bit.
+- Handler is thin: parse text → resolve cuisine/category vocab by name
+  (read-only lookup; no vocab-row creation) → fuzzy-match each
+  ingredient's `raw_text` against `StockItem` via RapidFuzz (score ≥
+  70, same threshold as pre-Chunk-5) → stamp `source_url` on the DTO
+  as metadata. `dataclasses.replace` preserves the frozen DTO
+  invariant.
+
+**What shipped — Chunk 5 frontend:**
+- `RecipeApiService.importFromContentAsync(content, sourceUrl?)`
+  replaces `importFromUrlAsync`. New wire types `ImportedRecipe` /
+  `ImportedIngredient` / `ImportedStep` mirror the backend DTOs 1:1.
+- `RecipeImportDialog.vue` rewritten around a paste textarea (14-row
+  autogrow) + an optional "Where's this from? (optional)" URL input.
+  Caption explains **Ctrl+A / Ctrl+C** on the recipe page → paste.
+  Names the sites known to work well (RecipeTin, AllRecipes, HBH,
+  Sally's, Simply, Taste, Woolworths, Smitten). Emits
+  `@imported(dto)` on success — callers decide next step (create +
+  navigate vs. confirm-then-patch).
+- `RecipesOverview.vue` + `RecipeDetailPage.vue` call sites updated
+  to consume `ImportedRecipe` (was `ImportedRecipeFromUrl`) and use
+  `source_url` for the recipe's `source` field.
+
+**Verify — this session:**
+- Ran `pytest tests/test_parse_recipe_from_text.py`: **20/20 green**
+  (the fixture read needed `encoding="utf-8"` on Windows — cp1252
+  choked on UTF-8 bytes; one-line fix). This is the meaningful
+  end-to-end proof for Chunk 5 — the parser feeding the handler is
+  green on every corpus fixture (RecipeTin ×3, AllRecipes ×3, HBH ×3,
+  Sally's ×2, Simply ×3, Woolworths ×1, Taste ×2, Smitten ×3).
+- Ran `pytest tests/test_recipe_cookability.py tests/test_recipe_filters.py`: **30/30 green**. Chunk 4's tri-state cookability + Chunk 5's endpoint reshape don't regress the surrounding recipe stack.
+- Handler imports resolve after `pip install rapidfuzz`. The full
+  container-boot import fails only because psycopg isn't installed on
+  this box — unrelated to Chunk 5 and consistent with the memory note
+  (backend pytest IS runnable, container boot is not).
+
+**Docs merge repair:**
+- `PROJECT_STATE.md` had two concatenated `**Regenerated:**` headers
+  (one from this box's 2026-07-04 Chunk 4 close-gate, one from the
+  other box's 2026-07-03 P8-07 close-gate) left tangled by the manual
+  4-file conflict resolve. Collapsed into a single 2026-07-04 header
+  that names both bodies of work; updated the Recipe-importer
+  workstream row to say "Chunks 1-5 landed"; added the importer to
+  "Recently shipped"; adjusted "Where we are right now" so the next-up
+  section names both the P8-07 verify and the importer browser walk.
+- `DORA_WORKLOG.md` top entry was the older 2026-07-03 P8-07 line
+  (rules: newest at top). Left the P8-07 body in place — the ordering
+  fix is this new entry going above it.
+- `x.txt` (an accidentally committed transcript of the previous
+  session's chunk-5 work) removed.
+
+**FU close-outs (moved to `DORA_FOLLOWUPS_RESOLVED.md`):**
+- **FU-104** — legal posture. "Legalized in place. The fetcher was
+  deleted; the parser accepts user-supplied content only. The operator
+  of a hosted Dora instance no longer touches third-party sites — the
+  fetch moved to the user's browser via paste. No companion split
+  needed."
+- **FU-199** — SSRF in import-from-URL. "Closed by construction. No
+  outbound HTTP in the importer path; the URL-fetching surface is
+  deleted (not patched). There is no host / redirect / scheme to
+  validate."
+- FU-396 (importer half) was already RESOLVED (2026-07-03 by the
+  FU-196 RapidFuzz swap); no change here.
+
+**Engineering-standards close-gate:**
+- **R-005** (distribution posture) — the new endpoint has no outbound
+  HTTP, no ambient IP surface, no `_FETCH_HEADERS` UA fingerprint. The
+  legalization move keeps core SaaS-safe (the operator no longer fetches
+  third-party pages).
+- **R-001** (state ownership, framework discipline) — DTOs live in a
+  single shared module (`imported_recipe_dtos.py`) instead of being
+  redefined at both call sites. Parser depends on the DTO module, not
+  on the handler; handler depends on the parser through a stable text
+  → DTO contract.
+- **R-003** (server owns derived facts) — fuzzy-match score threshold
+  (70) lives server-side; the client renders `match_score` for display
+  only. `is_degraded` is a server-owned tri-state.
+- **R-010** (closed-set sentinels) — `stock_item_id: None` on an
+  `ImportedIngredientDto` is the documented "unlinked" sentinel; the
+  Chunk 4 CreateRecipe endpoint accepts it, so the round-trip stays
+  clean.
+- **No new violations introduced.** No new ADR — the pattern here is a
+  straight application of `R-001` + `R-005`.
+
+**Follow-up loose ends (not blocking Chunk 6):**
+- **Browser-verify pending** — end-to-end paste of 2-3 corpus fixtures
+  into the running app (create + save with unlinked ingredients
+  present). The parser tests prove the parse; the SPA wiring needs a
+  real dialog walk. Added under Cookbook in `DORA_VERIFY.md`.
+- The stale built `web_app/dist/spa/assets/recipeApiService-*.js`
+  still references `import-from-url` — will regenerate on next `npm
+  run build`, not a code issue.
+
+**Anti-drift check:** Chunk 5 touches only
+`features/recipes/import_recipe_from_content.py` (new),
+`features/recipes/imported_recipe_dtos.py` (new),
+`features/recipes/_parse_recipe_from_text.py` (parser inline
+integration), the SPA API service + dialog + two call sites, and
+`test_parse_recipe_from_text.py` (Windows UTF-8 fix). The plan asked
+for the endpoint reshape + SPA reshape — nothing extra crept in.
+Verified against IMPL_PLAN_RECIPE_IMPORTER.md §Chunk 5 deliverable
+list.
+
+**Next up:** Chunk 6 — bulk-linker page (`Settings → Data →
+Unlinked ingredients`, groups by normalised `raw_text` with a
+StockItem picker + "Create new stock item" action + bulk-apply) +
+PWA share target (`manifest.json`'s `share_target` block + a
+`/recipes/import` route that pre-fills the paste dialog). Also
+covers L261's "paste flexibility" bullet at the recipe-edit dialog
+level.
+
+---
+
 ## 2026-07-03 — ⭐ P8-07 Zero-Input Pantry (FLAGSHIP) + P6-07/FU-449 cook→consume shipped
 
 **Why:** User asked to do P8-07. STEP-0 dependency check (champion plan:

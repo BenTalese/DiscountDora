@@ -86,7 +86,7 @@ function unlockAudioOnFirstGesture(): void {
             const audio = new Audio(SILENT_WAV_DATA_URL);
             audio.muted = true;
             const p = audio.play();
-            if (p && typeof p.then === 'function') {
+            if (p != null && typeof p.then === 'function') {
                 p.then(() => {
                     audioUnlocked = true;
                     // Stop immediately — we only needed the play() call

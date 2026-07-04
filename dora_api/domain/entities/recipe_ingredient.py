@@ -9,7 +9,11 @@ from dora_api.domain.entities.stock_item import StockItem
 class RecipeIngredient(BaseEntity):
     notes: str | None
     quantity: float | None
-    stock_item: StockItem
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — an ingredient anchors on
+    # either a linked StockItem OR a persisted ``raw_text`` label. The
+    # CHECK constraint on the table enforces at-least-one; the parser
+    # and importer flow may hand back either.
+    stock_item: StockItem | None
     unit: str | None
     # C-4 Chunk 10 — nullable section grouping (DEC-3 option A). NULL means
     # the ingredient sits in the implicit "main" group; FK → RecipeSection
@@ -22,6 +26,13 @@ class RecipeIngredient(BaseEntity):
     # the shopping-list picker under an Optional separator, unchecked by
     # default regardless of stock level.
     is_optional: bool = False
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — the ingredient text as the
+    # user pasted / imported it. Backfilled from ``StockItem.name`` for
+    # existing rows so pre-Chunk-4 recipes still render meaningful
+    # labels even when their StockItem is later renamed / unlinked /
+    # deleted. Preserved even when a row is linked — the raw text is
+    # often more informative than the bare stock-item name.
+    raw_text: str | None = None
 
     class Fields(BaseEntity.Fields):
         NOTES = "notes"
@@ -30,3 +41,4 @@ class RecipeIngredient(BaseEntity):
         UNIT = "unit"
         SECTION_ID = "section_id"
         IS_OPTIONAL = "is_optional"
+        RAW_TEXT = "raw_text"

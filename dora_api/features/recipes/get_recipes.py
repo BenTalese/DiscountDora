@@ -11,8 +11,10 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.recipe_tags import RECIPE_TAG_DISCLAIMER
-from dora_api.domain.recipe_cookability import (missing_count_for,
-                                                 missing_stock_item_names_for)
+from dora_api.domain.recipe_cookability import (cookability_state,
+                                                 missing_count_for,
+                                                 missing_stock_item_names_for,
+                                                 unlinked_count_for)
 from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.stock_status import (get_stock_item_unit_cost_at, is_low_stock,
                                           is_missing)
@@ -47,8 +49,15 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(frozen=True, slots=True)
 class RecipeIngredientDto:
     recipe_ingredient_id: UUID
-    stock_item_id: UUID
-    stock_item_name: str
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — nullable so unlinked
+    # (paste-imported, no fuzzy match) rows round-trip. The SPA renders
+    # unlinked rows with an "Unlinked · Link" pill. When null,
+    # ``stock_item_name``, ``stock_level_id``, ``stock_location_id``,
+    # ``stock_location_name`` are all null; ``raw_text`` carries the
+    # ingredient label; ``is_missing`` / ``is_low_stock`` are False (we
+    # can't say what's missing about an ingredient we haven't linked).
+    stock_item_id: UUID | None
+    stock_item_name: str | None
     stock_level_id: UUID | None
     # Direct location only — the frontend resolves the full breadcrumb via
     # the cached locations tree so recipe queries stay cheap.
@@ -70,6 +79,11 @@ class RecipeIngredientDto:
     # optional rows; they're surfaced here only so the edit dialog,
     # picker modal, and cook-mode UI can render them differently.
     is_optional: bool = False
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — the ingredient text as
+    # pasted / imported. Persists even when linked; the SPA prefers it
+    # for the label when non-empty ("1 pound ground turkey" is more
+    # informative than "ground turkey").
+    raw_text: str | None = None
 
     @classmethod
     def from_entity(cls, ingredient: RecipeIngredient) -> 'RecipeIngredientDto':
@@ -78,18 +92,19 @@ class RecipeIngredientDto:
         _Level = _Item.stock_level if _Item else None
         return RecipeIngredientDto(
             recipe_ingredient_id = ingredient.id,
-            stock_item_id = _Item.id,
-            stock_item_name = _Item.name,
+            stock_item_id = _Item.id if _Item else None,
+            stock_item_name = _Item.name if _Item else None,
             stock_level_id = _Level.id if _Level else None,
             stock_location_id = _Loc.id if _Loc else None,
             stock_location_name = _Loc.name if _Loc else None,
             quantity = ingredient.quantity,
             unit = ingredient.unit,
             notes = ingredient.notes,
-            is_missing = is_missing(_Level),
-            is_low_stock = is_low_stock(_Level),
+            is_missing = is_missing(_Level) if _Item else False,
+            is_low_stock = is_low_stock(_Level) if _Item else False,
             section_id = getattr(ingredient, "section_id", None),
             is_optional = getattr(ingredient, "is_optional", False),
+            raw_text = getattr(ingredient, "raw_text", None),
         )
 
 
@@ -196,8 +211,14 @@ class RecipeDto:
     ingredients: List[RecipeIngredientDto]
     # Server-owned cookability — computed once from the already-loaded
     # ingredient tree (§3.2 state-ownership refactor).
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: ``cookable`` is now tri-state
+    # (bool | None). ``None`` fires when any required ingredient is
+    # unlinked; the SPA renders the badge dimmed with a "link
+    # ingredients to check" tooltip. ``missing_count`` and
+    # ``missing_stock_item_names`` count only LINKED-missing rows, so
+    # they can safely be zero / empty on a None-cookable recipe.
     missing_count: int
-    cookable: bool
+    cookable: bool | None
     # Distinct, alphabetised names of the missing stock items — lets the
     # client render a "Missing: flour, eggs" hint without rejoining the
     # ingredient tree or the stock-level table.
@@ -205,6 +226,11 @@ class RecipeDto:
     # C-4 Chunk 5: whether the recipe has an image (the bytes are served via
     # GET /recipes/<id>/image, never inlined in list/detail JSON).
     has_image: bool
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of REQUIRED ingredients
+    # whose ``stock_item_id`` is null. Drives the recipe-detail
+    # "N ingredients need linking" prompt and the shopping-list
+    # "add missing" flow's linking-first message.
+    unlinked_ingredient_count: int = 0
     # C-4 Chunk 2/5: dietary tag + tool ids. Empty list when none. Hydrated by
     # the handler after the base query — mutable so `from_entity` stays
     # agnostic of association loading.
@@ -266,6 +292,10 @@ class RecipeDto:
         # Distinct missing stock items via the shared cookability rule (R-003) —
         # an ingredient listed on multiple rows is still one shopping line.
         _Missing = missing_count_for(recipe.ingredients)
+        # Tri-state cookability (Chunk 4): None fires when any required
+        # ingredient is unlinked. Rule owned by ``cookability_state``.
+        _Cookable = cookability_state(recipe.ingredients)
+        _Unlinked = unlinked_count_for(recipe.ingredients)
         return RecipeDto(
             recipe_id = recipe.id,
             name = recipe.name,
@@ -294,8 +324,9 @@ class RecipeDto:
             created_at = recipe.created_at,
             ingredients = _IngDtos,
             missing_count = _Missing,
-            cookable = _Missing == 0,
+            cookable = _Cookable,
             missing_stock_item_names = missing_stock_item_names_for(recipe.ingredients),
+            unlinked_ingredient_count = _Unlinked,
             # FU-090 — `image` is now a deferred column; accessing
             # `recipe.image` here would trigger N+1 lazy loads on the
             # list path. Default False and let the handler hydrate
@@ -375,10 +406,24 @@ class RecipeFilters:
         """True when a filter axis requires per-recipe missing counts."""
         return self.cookable is not None or self.max_missing is not None
 
-    def matches_missing(self, missing: int) -> bool:
-        """Whether a recipe with ``missing`` missing ingredients passes the
-        cookability axes. ``cookable`` matches the DTO field exactly (missing
-        == 0, so an empty recipe qualifies); ``max_missing`` caps the count."""
+    def matches_cookability(self, missing: int, unlinked: int) -> bool:
+        """Whether a recipe with ``missing`` linked-missing ingredients and
+        ``unlinked`` unlinked-required ingredients passes the cookability
+        axes.
+
+        IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 tri-state semantics: a recipe
+        with any unlinked required ingredient reads as cookability
+        ``None`` (unknown). ``?cookable=true`` and ``?cookable=false``
+        both exclude None recipes — the filter answers "definitely yes"
+        or "definitely no", not "I don't know". ``?max_missing=N``
+        similarly excludes unknown recipes because the count is
+        meaningless when some required ingredients aren't linked.
+        """
+        if unlinked > 0:
+            # Tri-state None — excluded from every cookability axis.
+            if self.cookable is not None or self.max_missing is not None:
+                return False
+            return True
         if self.cookable is True and missing != 0:
             return False
         if self.cookable is False and missing == 0:
@@ -448,14 +493,21 @@ def count_expiring_ingredients_per_recipe(
     return at_risk_ids, counts
 
 
-def load_recipe_cookability(repository) -> dict[UUID, tuple[int, int]]:
-    """Map every recipe id -> ``(missing_count, ingredient_count)``.
+def load_recipe_cookability(
+    repository,
+) -> dict[UUID, tuple[int, int, int]]:
+    """Map every recipe id -> ``(missing_count, ingredient_count, unlinked_count)``.
 
     One eager-loaded query, shared by the ``?cookable`` / ``?max_missing`` recipe
     filter and the dashboard's ``cookable_count`` so the cookability rule lives in
-    one place (R-003, via :func:`missing_count_for`). The ingredient count lets a
-    caller distinguish "cookable" (nothing missing — an empty recipe qualifies)
-    from "cookable *and* has something to cook" (the dashboard's notion).
+    one place (R-003, via :func:`missing_count_for`).
+
+    * ``missing_count`` — distinct linked stock items missing (§3.2).
+    * ``ingredient_count`` — total ingredient rows on the recipe.
+    * ``unlinked_count`` — required ingredients with no ``stock_item_id``
+      (Chunk 4). Callers gate the cookable-now count on this being zero:
+      a recipe with any unlinked required ingredient is tri-state None,
+      not True, and is excluded from the dashboard tally.
     """
     recipes = (
         repository
@@ -466,7 +518,11 @@ def load_recipe_cookability(repository) -> dict[UUID, tuple[int, int]]:
         .all()
     )
     return {
-        r.id: (missing_count_for(r.ingredients), len(r.ingredients or []))
+        r.id: (
+            missing_count_for(r.ingredients),
+            len(r.ingredients or []),
+            unlinked_count_for(r.ingredients),
+        )
         for r in recipes
     }
 
@@ -555,14 +611,18 @@ class GetRecipesHandler:
             allowed -= self._ingredient_excluded_recipe_ids(filters.ingredient_exclude)
 
         if filters.needs_cookability and allowed:
-            # `?cookable` matches the DTO `cookable` field exactly (missing == 0,
-            # so an empty recipe is cookable); `?max_missing=N` keeps recipes with
-            # at most N missing ingredients. One shared query (R-003).
+            # `?cookable` matches the DTO `cookable` field exactly (missing == 0
+            # AND every required ingredient linked, so an empty recipe is
+            # cookable); `?max_missing=N` keeps recipes with at most N missing
+            # ingredients; both exclude tri-state None (unlinked) per
+            # ``matches_cookability``. One shared query (R-003).
             cookability = load_recipe_cookability(self.repository)
-            allowed = {
-                rid for rid in allowed
-                if filters.matches_missing(cookability.get(rid, (0, 0))[0])
-            }
+            _kept: set[UUID] = set()
+            for rid in allowed:
+                missing, _ingr_count, unlinked = cookability.get(rid, (0, 0, 0))
+                if filters.matches_cookability(missing, unlinked):
+                    _kept.add(rid)
+            allowed = _kept
 
         if filters.expiring_within_days is not None and allowed:
             # C-waste W4 — narrow to recipes that use ≥1 in-stock ingredient
@@ -688,28 +748,23 @@ class GetRecipesHandler:
         NULL` does the work; the wire shape ends up the same as before
         but the recipe-list query no longer loads megabytes of bytes
         per row just to set a boolean.
+
+        Routes through the ORM-mapped `Recipe` (not raw `text()`) so the
+        SQLAlchemy UUID type handles the BINARY(16)-on-SQLite id column;
+        raw `text('... IN :ids')` bound with str-UUIDs silently returns
+        zero rows there (blob != string), yielding `has_image=False`
+        across the board.
         """
         if not dtos:
             return dtos
         import dataclasses
-        from sqlalchemy import bindparam, text
+        from sqlalchemy import select
         from dora_api.app import db
 
-        ids = [str(d.recipe_id) for d in dtos]
-        stmt = text(
-            'SELECT id, image IS NOT NULL AS has_image '
-            'FROM "Recipe" '
-            "WHERE id IN :ids"
-        ).bindparams(bindparam("ids", expanding=True))
-        rows = db.session.execute(stmt, {"ids": ids}).all()
-
-        def _key(v) -> str:
-            if isinstance(v, UUID):
-                return str(v)
-            if isinstance(v, bytes):
-                return str(UUID(bytes=v))
-            return str(v)
-        flag_by_id = {_key(row[0]): bool(row[1]) for row in rows}
+        ids = [d.recipe_id for d in dtos]
+        stmt = select(Recipe.id, Recipe.image.is_not(None)).where(Recipe.id.in_(ids))
+        rows = db.session.execute(stmt).all()
+        flag_by_id = {str(row[0]): bool(row[1]) for row in rows}
         return [
             dataclasses.replace(d, has_image=flag_by_id.get(str(d.recipe_id), False))
             for d in dtos

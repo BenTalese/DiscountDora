@@ -1643,12 +1643,19 @@
         return `${day} ${entry.slot.toLowerCase()}`;
     }
     function nextToCookBadgeLabel(entry: UpcomingMealPlanEntry): string {
+        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — a null missing_count now
+        // has two flavours: "empty recipe" (no ingredients) and
+        // "unlinked" (tri-state None). Distinguish via the count.
+        if (entry.unlinked_ingredient_count > 0) {
+            return `${entry.unlinked_ingredient_count} to link`;
+        }
         if (entry.missing_count === null) return 'No ingredients';
         if (entry.missing_count === 0) return 'Ready';
         return `Missing ${entry.missing_count}`;
     }
     function nextToCookBadgeColor(entry: UpcomingMealPlanEntry): string {
         if (entry.missing_count === 0) return 'positive';
+        if (entry.unlinked_ingredient_count > 0) return 'grey-6';
         if (entry.missing_count === null) return 'grey-6';
         return 'warning';
     }

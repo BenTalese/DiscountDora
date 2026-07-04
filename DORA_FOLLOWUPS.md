@@ -53,6 +53,15 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-463 — Sibling `text() + str(uuid) IN :ids` queries silently returning zero rows on SQLite
+- **Raised:** 2026-07-03 (spotted during FU-171 resolution).
+- **Type:** finding (latent bug on SQLite deployments; harmless on Postgres).
+- **What:** Two remaining call sites use the same broken shape that FU-171 fixed:
+  - `dora_api/features/stock_items/get_stock_items.py:_hydrate_linked_product_count` — the `linked_product_count` on every stock-item DTO defaults to 0 on SQLite because the `WHERE stock_item_id IN :ids` bind never matches BINARY(16) ids.
+  - `dora_api/features/recipes/get_recipes.py:_compute_estimated_cost` — recipe-detail cost estimation joins through `StockItemProduct` on `stock_item_id IN :ids`; same reason it silently returns no rows on SQLite, so `estimated_cost` is always None.
+- **Why deferred:** neither is on the surface the user reported (FU-171 was strictly the recipe-image toggle); rewrites are less mechanical than the recipe one (aggregations across a link table). Postgres deployments were never affected.
+- **Recommended resolution:** now-ish — same pattern as FU-171's fix (drop raw `text()`, use ORM `select()` with SQLAlchemy Core so UUIDType coerces the bindings). Small pass; verify by curl against a SQLite-backed dev instance that `linked_product_count > 0` for a stock item with linked products, and `estimated_cost != null` for a recipe whose ingredients have priced products.
+
 ## [OPEN] FU-462 — Sweep the ~237 prompt-ID comments (`P[0-9]-` / `C-[0-9]` / `B[0-9]`) from shipped source
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
 - **Type:** deferred job / pre-release polish.
@@ -504,13 +513,6 @@ long session summary. Distinct from the other logs:
 - **What:** P7-04 — replace dev server with gunicorn/uwsgi, split web vs worker. Env-driven per §7.5 discipline #3.
 - **Why deferred:** Phase 4.
 - **Recommended resolution:** paired with [[FU-398]] Redis + [[FU-405]] Ops as the production-stack work-unit.
-
-## [OPEN] FU-396 — P7-02 fuzzywuzzy → RapidFuzz (GPL dependency blocker)
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (real blocker).
-- **What:** `fuzzywuzzy==0.18.0` still in [requirements.txt:20](requirements.txt) and used in [global_search.py:21](dora_api/features/search/global_search.py:21) + [import_recipe_from_url.py:26](dora_api/features/recipes/import_recipe_from_url.py:26). fuzzywuzzy is GPL — **blocks any commercial license path**. RapidFuzz is MIT-licensed drop-in.
-- **Why deferred:** hasn't been forced yet; small ~1-day task.
-- **Recommended resolution:** **before any commercialization** (Phase 4 kickoff at the latest, ideally sooner). Swap import + confirm score-scale compatibility (both return 0-100). No API change.
 
 ## [OPEN] FU-395 — P5-11 Production readiness review
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -1889,29 +1891,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   the next touch of each gated surface, and update ADR-002's note to point at
   R-014 for the presentation of the off state.
 
-## [OPEN] FU-171 — Recipe image hide/show toggle reported broken — no static repro
-- **Raised:** 2026-06-13 (FU-088 → Cookbook card revision Chunk A §1.1)
-- **Type:** finding (reported defect; didn't reproduce in code)
-- **What:** User reported the "Hide/show recipe photos" toggle on the
-  Cookbook overview doesn't work (FU-088 bullet 1). Static trace through
-  the full chain looked correct end-to-end:
-  - `RecipesOverview.vue:21-33` — `BaseButton` with reactive `:icon` and
-    `@click="onToggleRecipeImages"`.
-  - `onToggleRecipeImages` → `setRecipeImages` → `authStore.updateMeAsync`
-    reassigns `currentUser.value` from the PATCH response (`authStore.ts:81-83`).
-  - `useImagePrefs.ts:23-25` — `showRecipeImages` computed reads
-    `currentUser.value?.show_recipe_images`.
-  - `RecipeCard.vue:15` — `v-if="showRecipeImages && recipe.has_image && !imgFailed"`.
-  - Backend `update_me.py:162-163` writes the field;
-    `register_user.py:112` (DTO) always emits it.
-- **Recommended resolution:** **confirm in browser** after Chunk A ships.
-  If still broken, capture: (a) does the icon flip on click? (b) does the
-  PATCH succeed (network tab)? (c) does the response body include
-  `show_recipe_images`? (d) does any card re-render? — that will pinpoint
-  which link in the chain breaks at runtime.
-- **State note:** open — no code change in Chunk A (no repro to fix). The
-  Chunk A card rewrite preserves the same `v-if` gate.
-
 ## [OPEN] FU-169 — Implement the test-suite improvements proposal
 - **Raised:** 2026-06-13 (post-FU-166 proposal)
 - **Type:** deferred job
@@ -2146,23 +2125,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   FU-085 itself stays OPEN until items 3 (selectin), 5 (filters
   end-to-end), 6 (FU-147 fix verified), 8 (backup), 9 (FU-150
   minimal fix verified in-browser) are all green.
-
-## [OPEN] FU-312 — Pre-existing eslint error in `StockItemRow.vue` waste-undo handler
-- **Raised:** 2026-06-26 (surfaced during FU-209 verification)
-- **Type:** finding (pre-existing lint regression)
-- **What:** `web_app/src/components/stock/StockItemRow.vue:635` — the Undo
-  action handler on the wasted-item toast is an `async () => { ... }`,
-  passed where Quasar's notify action expects a `void`-returning handler.
-  eslint flags: `@typescript-eslint/no-misused-promises — Promise-
-  returning function provided to property where a void return was
-  expected`. Confirmed pre-existing (stash-test against `ecd24e5` reproduces
-  it without any of today's changes); the regression came in with the waste
-  feature back in commit `318e98f`.
-- **Why deferred:** out of scope for FU-209; the waste surface isn't being
-  touched in this session.
-- **Recommended resolution:** wrap the awaited block in a synchronous
-  fire-and-forget (`void (async () => { ... })()`) or drop the `async`
-  and use `.then()/.catch()` so the handler returns `void`. ~5 line fix.
 
 ## [OPEN] FU-056 (partial) — Phase 2 ingestion EAN auto-populate
 - **Raised:** 2026-06-07 (P6-02); slice 1 closed 2026-06-28 (hybrid model)

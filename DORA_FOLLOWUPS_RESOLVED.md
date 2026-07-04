@@ -10,6 +10,78 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-396 — P7-02 fuzzywuzzy → RapidFuzz (already shipped by FU-196; ledger stale)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job (real blocker) — turned out to be a stale duplicate.
+- **What:** ledger claimed `fuzzywuzzy==0.18.0` was still in `requirements.txt` and used in `global_search.py` + `import_recipe_from_url.py`; RapidFuzz swap was gated as a Phase 4 kickoff task.
+- **Resolved:** 2026-07-04 (discovered during
+  `IMPL_PLAN_RECIPE_IMPORTER` Chunk 3). Verified with `grep`:
+  * `requirements.txt` line 23 → `rapidfuzz==3.9.6` (no fuzzywuzzy line).
+  * `global_search.py` line 22 → `from rapidfuzz import fuzz`.
+  * `import_recipe_from_url.py` line 30 → `from rapidfuzz import process as fuzz_process`.
+  Every "fuzzywuzzy" mention that remains is in a docstring or an
+  inline comment explaining the historical swap (FU-196 shipped it).
+  GPL blocker is gone. No commit needed.
+
+## [RESOLVED] FU-171 — Recipe image hide/show toggle + save broken on SQLite — `has_image` always false
+- **Raised:** 2026-06-13 (FU-088 → Cookbook card revision Chunk A §1.1)
+- **Type:** finding (real backend bug on SQLite deployments)
+- **What:** User reported the Cookbook "Hide/show recipe photos" toggle
+  didn't work — positive toast fired but cards kept showing images — plus
+  recipe-image upload on the detail page appeared to reset immediately
+  after Save. Stock overview's image toggle worked, deepening the mystery.
+- **Root cause (2026-07-03):** `_hydrate_has_image` in
+  `dora_api/features/recipes/get_recipes.py` used raw
+  `text('… WHERE id IN :ids')` bound with `[str(uuid), …]`. On SQLite the
+  `Recipe.id` column is `sqlalchemy_utils.UUIDType` → stored as
+  `BINARY(16)`; the string IN-list never matches a blob, so the query
+  returns zero rows and every DTO gets `has_image=False`. Symptoms line
+  up perfectly:
+    - Cookbook cards always fall back to the coloured-initial tile
+      (`v-if="showRecipeImages && recipe.has_image && ..."` short-circuits
+      false), so the show/hide toggle is invisible because there are no
+      real images to hide.
+    - Recipe-detail upload works while the editor is *dirty* (the preview
+      reads `form.image` directly), but the post-save `loadRecipe()`
+      refetches a DTO with `has_image=false`, so the preview flips to the
+      placeholder. Looks like "poof, it's gone" even though the bytes are
+      safely in `Recipe.image`.
+    - Stock overview worked because `get_stock_items._hydrate_has_image`
+      had already been rewritten as an ORM `select()` (see the
+      `project_sqlite_uuid_text_binding` memory) — same class of bug,
+      caught earlier for that surface.
+- **Evidence:** curl round-trip against the live dev server on 2026-07-03:
+  1. `PATCH /api/recipes/<id>` with a data-URL image → 204; DB
+     `Recipe.image` blob went from NULL to 114 bytes.
+  2. `GET /api/recipes/<id>` still returned `"has_image": false`.
+  3. Standalone ORM `select(Recipe.id, Recipe.image.is_not(None))
+     .where(Recipe.id.in_([uuid]))` from Python REPL returned
+     `[(UUID('…'), True)]` under the same SQLite path.
+- **Resolved:** 2026-07-03. Two edits:
+    - `get_recipes.py` `_hydrate_has_image` — switched to
+      `select(Recipe.id, Recipe.image.is_not(None)).where(Recipe.id.in_(ids))`
+      so SQLAlchemy's UUIDType adapts the bindings to the column's
+      native storage.
+    - `get_meal_plans.py` `_hydrate_entry_has_image` — same rewrite;
+      identical bug pattern that would have hidden recipe images on the
+      meal-plan surface too.
+  Two sibling `text() + str(uuid)` queries remain in
+  `get_stock_items._hydrate_linked_product_count` and
+  `get_recipes._compute_estimated_cost` — logged as [[FU-463]] because
+  they're not on the reported surface and the rewrites are non-trivial.
+  Backend restart required to pick up the change.
+
+## [RESOLVED] FU-312 — Pre-existing eslint error in `StockItemRow.vue` waste-undo handler
+- **Raised:** 2026-06-26 (surfaced during FU-209 verification)
+- **Type:** finding (pre-existing lint regression)
+- **What:** `web_app/src/components/stock/StockItemRow.vue:635` — the Undo
+  action handler on the wasted-item toast was an `async () => { ... }`,
+  passed where Quasar's notify action expects a `void`-returning handler.
+  eslint flagged `@typescript-eslint/no-misused-promises`.
+- **Resolved:** 2026-07-03. Handler already wrapped the awaited work in a
+  synchronous `handler: () => { void (async () => { ... })(); }` closure —
+  file lints clean. Ledger caught up.
+
 ## [RESOLVED] FU-327 — Windows + macOS desktop build scripts for the Piper bundle
 - **Raised:** 2026-06-24 (Piper platform audit). Renumbered from
   FU-288 on 2026-06-29 to resolve a ledger numbering collision.

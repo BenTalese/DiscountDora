@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
@@ -47,7 +47,14 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class CreateRecipeIngredientRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    stock_item_id: UUID
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — either ``stock_item_id`` or
+    # ``raw_text`` MUST be set; both may be set. The validator below
+    # enforces the invariant. Paste-based imports whose fuzzy match
+    # missed a StockItem send raw_text only; the user can link later
+    # via the bulk-linker (Chunk 6). Existing "quick-add" flows send
+    # stock_item_id only and don't need to change.
+    stock_item_id: UUID | None = None
+    raw_text: str | None = Field(default = None, max_length = 500)
     quantity: float | None = None
     unit: str | None = Field(default = None, max_length = 50)
     notes: str | None = Field(default = None, max_length = 255)
@@ -63,6 +70,15 @@ class CreateRecipeIngredientRequest(BaseModel):
     # cookability rule. Default false keeps the existing client contract
     # backward-compatible (omitting the field = required ingredient).
     is_optional: bool = False
+
+    @model_validator(mode="after")
+    def _require_anchor(self) -> "CreateRecipeIngredientRequest":
+        if self.stock_item_id is None and not (self.raw_text or "").strip():
+            raise ValueError(
+                "CreateRecipeIngredientRequest requires either stock_item_id "
+                "or raw_text; both are null."
+            )
+        return self
 
 
 class CreateRecipeStepRequest(BaseModel):
@@ -214,16 +230,22 @@ class CreateRecipeHandler:
         _IngredientPairs: List[tuple[str | None, RecipeIngredient]] = []
         _MissingIds: List[UUID] = []
         for _IngredientRequest in request.ingredients:
-            _StockItem = self.repository.get(StockItem).by_id(_IngredientRequest.stock_item_id)
-            if not _StockItem:
-                _MissingIds.append(_IngredientRequest.stock_item_id)
-                continue
+            # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — a request row may be
+            # linked (stock_item_id), unlinked (raw_text only), or both.
+            # Model validator upstream guarantees at least one is set.
+            _StockItem = None
+            if _IngredientRequest.stock_item_id is not None:
+                _StockItem = self.repository.get(StockItem).by_id(_IngredientRequest.stock_item_id)
+                if not _StockItem:
+                    _MissingIds.append(_IngredientRequest.stock_item_id)
+                    continue
             _NewIngredient = RecipeIngredient(
                 notes = _IngredientRequest.notes,
                 quantity = _IngredientRequest.quantity,
                 stock_item = _StockItem,
                 unit = _IngredientRequest.unit,
                 is_optional = _IngredientRequest.is_optional,
+                raw_text = (_IngredientRequest.raw_text or None),
             )
             _Ingredients.append(_NewIngredient)
             _IngredientPairs.append((_IngredientRequest.client_id, _NewIngredient))

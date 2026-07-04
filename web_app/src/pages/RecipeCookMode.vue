@@ -258,7 +258,20 @@
                                         <span class="text-caption dora-text-muted ingredient-quantity">
                                             {{ displayQuantity(row.ingredient.quantity, row.ingredient.unit) }}
                                         </span>
-                                        <template v-if="sessionSwaps.has(row.ingredient.stock_item_id)">
+                                        <!-- IMPL_PLAN_RECIPE_IMPORTER §Chunk 4:
+                                             unlinked ingredients (stock_item_id === null) render
+                                             as read-only raw_text — no substitute machinery, no
+                                             swap chip, since there's no stock item to swap FROM.
+                                             No existing recipe has unlinked ingredients on
+                                             Chunk-4 ship; the paste importer (Chunk 5) is the
+                                             first source. -->
+                                        <template v-if="row.ingredient.stock_item_id === null">
+                                            <span class="ingredient-name">{{ row.ingredient.raw_text ?? 'Unlinked ingredient' }}</span>
+                                            <q-chip dense outline color="grey-6" text-color="grey-8" class="q-ml-xs">
+                                                Unlinked
+                                            </q-chip>
+                                        </template>
+                                        <template v-else-if="sessionSwaps.has(row.ingredient.stock_item_id)">
                                             <q-chip
                                                 dense
                                                 color="secondary"
@@ -274,7 +287,7 @@
                                                 variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.undo"
-                                                @click="clearSwap(row.ingredient.stock_item_id)"
+                                                @click="clearSwap(row.ingredient.stock_item_id!)"
                                             >
                                                 <q-tooltip>Undo substitute</q-tooltip>
                                             </BaseButton>
@@ -291,7 +304,7 @@
                                                 variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.swap_horiz"
-                                                @click="openSwapPicker(row.ingredient.stock_item_id, row.ingredient.stock_item_name)"
+                                                @click="openSwapPicker(row.ingredient.stock_item_id!, row.ingredient.stock_item_name!)"
                                             >
                                                 <q-tooltip>Use a substitute for this cook</q-tooltip>
                                             </BaseButton>
@@ -858,7 +871,11 @@
         const text = step.text.toLowerCase();
         const matched = new Set<string>();
         for (const ing of recipe.value?.ingredients ?? []) {
-            if (text.includes(ing.stock_item_name.toLowerCase())) {
+            // Chunk 4 — unlinked ingredients have no stock_item_name.
+            // Fall back to raw_text for matching so paste-imported
+            // recipes still get highlighted where possible.
+            const name = ing.stock_item_name ?? ing.raw_text ?? '';
+            if (name && text.includes(name.toLowerCase())) {
                 matched.add(ing.recipe_ingredient_id);
             }
         }
@@ -1118,12 +1135,20 @@
         // C-3 Chunk 5 — finish ranges over every ingredient on the recipe,
         // applying any session swaps. The user no longer ticks ingredients
         // mid-cook; cooking the recipe implies using all of them.
+        //
+        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — unlinked ingredients
+        // (stock_item_id === null) can't participate in the finish flow
+        // (no stock item to decrement). They're skipped here; the cook
+        // still succeeds for the linked ingredients. On Chunk-4 ship no
+        // existing recipe has unlinked ingredients so this branch is
+        // exercised only by paste-imported recipes from Chunk 5 onward.
         const rows: FinishRow[] = [];
         for (const ing of recipe.value?.ingredients ?? []) {
+            if (ing.stock_item_id === null) continue;
             const swap = sessionSwaps.value.get(ing.stock_item_id);
             const targetId = swap?.substituteId ?? ing.stock_item_id;
             const item = stockItems.value.find((si) => si.stock_item_id === targetId);
-            const fallbackName = swap?.substituteName ?? ing.stock_item_name;
+            const fallbackName = swap?.substituteName ?? ing.stock_item_name ?? ing.raw_text ?? '';
             rows.push({
                 targetStockItemId: targetId,
                 targetName: item?.name ?? fallbackName,

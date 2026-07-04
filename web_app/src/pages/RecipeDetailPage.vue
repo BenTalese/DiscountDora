@@ -581,7 +581,7 @@
                                         class="text-primary"
                                         @click.prevent="onImportFromUrl"
                                     >
-                                        import from a URL
+                                        paste a recipe
                                     </a>.
                                 </q-item-section>
                             </q-item>
@@ -700,29 +700,25 @@
                         flat
                         bordered
                         class="q-mb-md"
-                        :class="cookableNow ? 'dora-bg-positive-soft text-positive' : 'dora-bg-warning-soft text-warning'"
+                        :class="cookableCardClass"
                     >
                         <q-card-section>
                             <div class="row items-center q-gutter-sm">
-                                <q-icon
-                                    :name="cookableNow ? ICONS.check_circle : ICONS.shopping_cart"
-                                    size="28px"
-                                />
+                                <q-icon :name="cookableIcon" size="28px" />
                                 <div>
                                     <div class="text-subtitle1">
-                                        {{ cookableNow
-                                            ? 'Cookable now'
-                                            : `Missing ${missingIngredients.length} ingredient${
-                                                missingIngredients.length === 1 ? '' : 's'
-                                            }`
-                                        }}
+                                        {{ cookableHeadline }}
                                     </div>
                                     <div class="text-caption dora-text-secondary">
-                                        {{ inStockCount }} of {{ trackedCount }} in stock
+                                        {{ cookableCaption }}
                                     </div>
                                 </div>
                             </div>
                         </q-card-section>
+                        <q-tooltip v-if="cookableNow === null">
+                            Link ingredients to check cookability — this
+                            is a stock-item feature.
+                        </q-tooltip>
                     </q-card>
 
                     <!-- FU-083 — read-only "last cooked". The cook + log-cook
@@ -853,12 +849,12 @@
                         <q-list dense separator>
                             <q-item clickable @click="onImportFromUrl">
                                 <q-item-section avatar>
-                                    <q-icon :name="ICONS.link" />
+                                    <q-icon :name="ICONS.content_paste" />
                                 </q-item-section>
                                 <q-item-section>
-                                    <q-item-label>Import from URLâ€¦</q-item-label>
+                                    <q-item-label>Paste a recipe…</q-item-label>
                                     <q-item-label caption>
-                                        Pulls structured recipe data from the page.
+                                        Ctrl+A / Ctrl+C on the recipe page, paste here.
                                     </q-item-label>
                                 </q-item-section>
                             </q-item>
@@ -1006,7 +1002,10 @@
             <q-card-section>
                 <ul class="q-mt-sm q-mb-none dora-text-secondary">
                     <li v-if="isDirty">You have unsaved changes.</li>
-                    <li v-if="!cookableNow">
+                    <li v-if="cookableNow === null">
+                        Cookability is unknown — {{ unlinkedCount }} ingredient{{ unlinkedCount === 1 ? '' : 's' }} still need linking.
+                    </li>
+                    <li v-else-if="cookableNow === false">
                         This recipe isn't cookable now —
                         {{ missingIngredients.length }} ingredient{{ missingIngredients.length === 1 ? '' : 's' }} missing.
                     </li>
@@ -1390,12 +1389,20 @@
     // and each ingredient carries `is_missing`. We read those off the saved
     // recipe rather than recomputing from stock data â€” the summary reflects the
     // persisted recipe and refreshes after each save (`loadRecipe`).
+    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — unlinked ingredients
+    // (stock_item_id === null) can't be "missing" in the stock-status
+    // sense; they're filtered here so the downstream "add missing to
+    // list" and "find substitutes" flows never see a null id. The
+    // "N ingredients need linking" prompt is shown separately when
+    // unlinked_ingredient_count > 0.
     const missingIngredients = computed(() => {
         const r = recipe.value;
         if (!r) return [];
         return r.ingredients
-            .filter((i) => i.is_missing)
-            // Dedupe â€” an ingredient on multiple rows is still one shopping line.
+            .filter((i): i is typeof i & { stock_item_id: string; stock_item_name: string } =>
+                i.is_missing && i.stock_item_id !== null,
+            )
+            // Dedupe — an ingredient on multiple rows is still one shopping line.
             .filter((i, idx, arr) => arr.findIndex((x) => x.stock_item_id === i.stock_item_id) === idx);
     });
 
@@ -1411,7 +1418,41 @@
                     .filter(Boolean),
             ).size,
     );
-    const cookableNow = computed(() => recipe.value?.cookable ?? false);
+    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — cookableNow is now tri-state.
+    // ``null`` fires when the recipe has any unlinked required ingredient.
+    // The card renders dimmed with a tooltip; the "Cook mode" guard
+    // downstream (line ~1791) treats null as "not cookable" for the
+    // "confirm before starting" prompt, but the *label* on the guard's
+    // prompt is different — see cookableHeadline / cookableCaption below.
+    const cookableNow = computed<boolean | null>(
+        () => recipe.value?.cookable ?? false,
+    );
+    const unlinkedCount = computed(
+        () => recipe.value?.unlinked_ingredient_count ?? 0,
+    );
+    const cookableCardClass = computed(() => {
+        if (cookableNow.value === null) return 'dora-bg-sunken dora-text-muted';
+        return cookableNow.value
+            ? 'dora-bg-positive-soft text-positive'
+            : 'dora-bg-warning-soft text-warning';
+    });
+    const cookableIcon = computed(() => {
+        if (cookableNow.value === null) return ICONS.help_outline;
+        return cookableNow.value ? ICONS.check_circle : ICONS.shopping_cart;
+    });
+    const cookableHeadline = computed(() => {
+        if (cookableNow.value === null) {
+            return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to link`;
+        }
+        if (cookableNow.value) return 'Cookable now';
+        return `Missing ${missingIngredients.value.length} ingredient${missingIngredients.value.length === 1 ? '' : 's'}`;
+    });
+    const cookableCaption = computed(() => {
+        if (cookableNow.value === null) {
+            return 'Cookability check needs every ingredient linked to a stock item.';
+        }
+        return `${inStockCount.value} of ${trackedCount.value} in stock`;
+    });
 
     // â”€â”€ Picker (autocomplete + inline create) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ingredientFilter = ref('');
@@ -1883,11 +1924,12 @@
         }
     }
 
-    // ── Import from URL ─────────────────────────────────────────────────
-    // FU-102 — the dialog (RecipeImportDialog) owns URL input, error
-    // display, loading state, and the `importFromUrlAsync` call. This
-    // page opens it via v-model and handles the result: confirm-overwrite
-    // → patch form fields → close + toast.
+    // ── Import a recipe (paste) ─────────────────────────────────────────
+    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — the dialog (RecipeImportDialog)
+    // now owns a paste textarea + optional source URL, and calls
+    // `importFromContentAsync`. This page opens it via v-model and
+    // handles the result: confirm-overwrite → patch form fields →
+    // close + toast.
     const importOpen = ref(false);
 
     function onImportFromUrl() {
@@ -1937,14 +1979,18 @@
         // "Source: <url>" to the instructions blob.
         form.instructions = imported.instructions || null;
         form.source = imported.source_url || null;
+        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4/5 — every ingredient rides
+        // through save now. Linked rows send stock_item_id; unlinked
+        // rows send raw_text and stock_item_id: null. The user resolves
+        // unlinked rows later via the recipe editor's picker OR the
+        // bulk-linker page (Chunk 6). Pre-Chunk-4 this branch coerced
+        // stock_item_id to '' which no longer parses server-side.
         form.ingredients = imported.ingredients.map((i) => ({
-            stock_item_id: i.stock_item_id ?? '',
+            stock_item_id: i.stock_item_id,
+            raw_text: i.raw_text,
             quantity: i.quantity,
             unit: i.unit,
-            notes:
-                i.stock_item_id
-                    ? i.notes ?? null
-                    : `Raw: ${i.raw_text}` + (i.notes ? ` (${i.notes})` : ''),
+            notes: i.notes,
             client_id: newClientId(),
             // Cookbook revision §1.9 — importer v1 makes no attempt to
             // detect optional from the source text (parsing "or to
@@ -1977,26 +2023,30 @@
         }
         markDirty();
         importOpen.value = false;
-        // C-4 Chunk 7 — distinct toast when we fell back to scraping
-        // raw page text (no JSON-LD found). The user knows to clean
-        // up rather than assume the structured fields are accurate.
+        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — distinct toast when the
+        // parser fell back to its lowest-shape output (typically < 3
+        // ingredients found). The user knows to clean up rather than
+        // assume the structured fields are accurate.
         if (imported.is_degraded) {
             $q.notify({
                 type: 'warning',
                 position: 'bottom-right',
                 timeout: 6000,
-                message: 'Couldn’t auto-structure that page',
+                message: 'Couldn’t auto-structure that paste',
                 caption:
-                    'Pulled the page text into Instructions and saved the URL. ' +
+                    'Pulled the text into Instructions and saved the URL. ' +
                     'Review and edit to clean it up.',
             });
         } else {
+            const unlinkedCount = imported.ingredients.filter((i) => !i.stock_item_id).length;
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
                 message:
-                    `Imported "${imported.name}". ` +
-                    `${imported.ingredients.filter((i) => !i.stock_item_id).length} ingredients need a stock-item match.`,
+                    `Imported "${imported.name}".` +
+                    (unlinkedCount === 0
+                        ? ''
+                        : ` ${unlinkedCount} ingredient${unlinkedCount === 1 ? '' : 's'} unlinked — link later from the recipe.`),
             });
         }
     }

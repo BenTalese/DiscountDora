@@ -198,7 +198,7 @@
             ) ?? null;
             byId.set(ing.stock_item_id, {
                 stock_item_id: ing.stock_item_id,
-                stock_item_name: ing.stock_item_name,
+                stock_item_name: ing.stock_item_name ?? ing.raw_text ?? '',
                 stockItem: si,
                 is_missing: ing.is_missing,
                 is_low_stock: ing.is_low_stock,

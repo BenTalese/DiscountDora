@@ -5,9 +5,9 @@
         class="recipe-card cursor-pointer column no-wrap"
         @click="onCardClick"
     >
-        <div class="recipe-card__media" :style="mediaStyle">
+        <div v-if="showRecipeImages" class="recipe-card__media" :style="mediaStyle">
             <img
-                v-if="showRecipeImages && recipe.has_image && !imgFailed"
+                v-if="recipe.has_image && !imgFailed"
                 class="recipe-card__img"
                 :src="imageUrl"
                 alt=""
@@ -101,26 +101,20 @@
                 round
                 dense
                 :icon="ICONS.chef_hat"
-                :color="cookable ? 'primary' : 'warning'"
+                :color="cookButtonColor"
                 @click.stop="emit('cook', recipe.recipe_id)"
             >
-                <q-tooltip>
-                    {{ cookable ? 'Cook' : `Cook anyway — missing ${missingIds.length} ingredient(s)` }}
-                </q-tooltip>
+                <q-tooltip>{{ cookButtonTooltip }}</q-tooltip>
             </q-btn>
             <q-space />
             <BaseButton
                 variant="icon"
-                :icon="cookable ? ICONS.add_shopping_cart : ICONS.remove_shopping_cart"
-                :color="cookable ? undefined : 'warning'"
+                :icon="cookable === true ? ICONS.add_shopping_cart : ICONS.remove_shopping_cart"
+                :color="cookable === false ? 'warning' : undefined"
                 :disable="recipe.ingredients.length === 0"
                 @click.stop="onAddToList"
             >
-                <q-tooltip>
-                    {{ cookable
-                        ? 'Add ingredients to a list'
-                        : `Add ${missingIds.length} missing to a list` }}
-                </q-tooltip>
+                <q-tooltip>{{ addListTooltip }}</q-tooltip>
             </BaseButton>
         </q-card-actions>
     </q-card>
@@ -187,13 +181,38 @@
     const missingIds = computed(() => [
         ...new Set(
             props.recipe.ingredients
-                .filter((i) => i.is_missing)
-                .map((i) => i.stock_item_id)
-                .filter(Boolean),
+                .filter((i) => i.is_missing && i.stock_item_id !== null)
+                .map((i) => i.stock_item_id as string),
         ),
     ]);
 
     const cookable = computed(() => props.recipe.cookable);
+    const unlinkedCount = computed(() => props.recipe.unlinked_ingredient_count ?? 0);
+
+    // Tri-state cook-button colour (IMPL_PLAN_RECIPE_IMPORTER §Chunk 4):
+    //   true  → primary (green-ish, "ready to cook")
+    //   false → warning (amber, "missing some ingredients but you can try")
+    //   null  → grey ("we don't know — link ingredients to check")
+    const cookButtonColor = computed(() => {
+        if (cookable.value === null) return 'grey';
+        return cookable.value ? 'primary' : 'warning';
+    });
+    const cookButtonTooltip = computed(() => {
+        if (cookable.value === null) {
+            return `Link ${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to check cookability — this is a stock-item feature`;
+        }
+        return cookable.value
+            ? 'Cook'
+            : `Cook anyway — missing ${missingIds.value.length} ingredient(s)`;
+    });
+    const addListTooltip = computed(() => {
+        if (cookable.value === null) {
+            return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} need linking first`;
+        }
+        return cookable.value
+            ? 'Add ingredients to a list'
+            : `Add ${missingIds.value.length} missing to a list`;
+    });
 
     const totalTime = computed(() => {
         if (

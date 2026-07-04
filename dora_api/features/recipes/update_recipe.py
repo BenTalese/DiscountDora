@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
@@ -44,7 +44,14 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class UpdateRecipeIngredientRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    stock_item_id: UUID
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — either stock_item_id or
+    # raw_text MUST be set (validator below). Existing linked rows send
+    # stock_item_id only; unlinked rows imported via paste send
+    # raw_text only. Both-set is legal (e.g. after the bulk-linker
+    # promotes an unlinked ingredient — the raw_text audit trail
+    # survives the link).
+    stock_item_id: UUID | None = None
+    raw_text: str | None = Field(default = None, max_length = 500)
     quantity: float | None = None
     unit: str | None = Field(default = None, max_length = 50)
     notes: str | None = Field(default = None, max_length = 255)
@@ -58,6 +65,15 @@ class UpdateRecipeIngredientRequest(BaseModel):
     section_client_id: str | None = Field(default = None, max_length = 64)
     # Cookbook revision §1.9 — optional flag (default false).
     is_optional: bool = False
+
+    @model_validator(mode="after")
+    def _require_anchor(self) -> "UpdateRecipeIngredientRequest":
+        if self.stock_item_id is None and not (self.raw_text or "").strip():
+            raise ValueError(
+                "UpdateRecipeIngredientRequest requires either stock_item_id "
+                "or raw_text; both are null."
+            )
+        return self
 
 
 class UpdateRecipeStepRequest(BaseModel):
@@ -274,10 +290,15 @@ class UpdateRecipeHandler:
             _NewPairs: List[tuple[str | None, RecipeIngredient]] = []
             _MissingIds: List[UUID] = []
             for _IngredientRequest in request.ingredients:
-                _StockItem = self.repository.get(StockItem).by_id(_IngredientRequest.stock_item_id)
-                if not _StockItem:
-                    _MissingIds.append(_IngredientRequest.stock_item_id)
-                    continue
+                # Chunk 4 — the row may be linked (stock_item_id),
+                # unlinked (raw_text only), or both. Validator upstream
+                # guarantees at least one is set.
+                _StockItem = None
+                if _IngredientRequest.stock_item_id is not None:
+                    _StockItem = self.repository.get(StockItem).by_id(_IngredientRequest.stock_item_id)
+                    if not _StockItem:
+                        _MissingIds.append(_IngredientRequest.stock_item_id)
+                        continue
                 _NewIngredient = RecipeIngredient(
                     notes = _IngredientRequest.notes,
                     quantity = _IngredientRequest.quantity,
@@ -285,6 +306,7 @@ class UpdateRecipeHandler:
                     unit = _IngredientRequest.unit,
                     section_id = _resolve_section(_IngredientRequest.section_client_id),
                     is_optional = _IngredientRequest.is_optional,
+                    raw_text = (_IngredientRequest.raw_text or None),
                 )
                 _NewIngredients.append(_NewIngredient)
                 _NewPairs.append((_IngredientRequest.client_id, _NewIngredient))

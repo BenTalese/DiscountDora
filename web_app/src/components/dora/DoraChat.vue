@@ -1351,7 +1351,7 @@
         for (const ing of recipe.ingredients) {
             if (!ing.stock_item_id || seen.has(ing.stock_item_id) || !ing.is_missing) continue;
             seen.add(ing.stock_item_id);
-            missing.push({ id: ing.stock_item_id, name: ing.stock_item_name });
+            missing.push({ id: ing.stock_item_id, name: ing.stock_item_name ?? ing.raw_text ?? '' });
         }
         return missing;
     }

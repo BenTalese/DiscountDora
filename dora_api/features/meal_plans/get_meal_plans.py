@@ -116,20 +116,16 @@ class GetMealPlansHandler:
             return plans
 
         from dora_api.app import db
-        stmt = text(
-            'SELECT id, image IS NOT NULL AS has_image '
-            'FROM "Recipe" '
-            "WHERE id IN :ids"
-        ).bindparams(bindparam("ids", expanding=True))
-        rows = db.session.execute(stmt, {"ids": list(recipe_ids)}).all()
-
-        def _key(v) -> str:
-            if isinstance(v, UUID):
-                return str(v)
-            if isinstance(v, bytes):
-                return str(UUID(bytes=v))
-            return str(v)
-        flag_by_id = {_key(row[0]): bool(row[1]) for row in rows}
+        from sqlalchemy import select
+        from dora_api.domain.entities.recipe import Recipe as _Recipe
+        # ORM select() — raw text() with str-UUID bindings silently returns
+        # zero rows on SQLite's BINARY(16) id column (bug class fixed with
+        # get_recipes._hydrate_has_image).
+        stmt = select(_Recipe.id, _Recipe.image.is_not(None)).where(
+            _Recipe.id.in_([UUID(r) for r in recipe_ids])
+        )
+        rows = db.session.execute(stmt).all()
+        flag_by_id = {str(row[0]): bool(row[1]) for row in rows}
 
         return [
             dataclasses.replace(

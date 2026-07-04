@@ -10,6 +10,13 @@ Cookbook revision §1.9 — **optional ingredients are ignored entirely** by eve
 function in this module. A recipe with three missing optional items is still
 cookable; the missing-name list and missing count both exclude optional rows.
 There is no `cookable_with_optional` half-state.
+
+IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — cookability is now **tri-state**: True /
+False / None. ``None`` fires when any required ingredient is *unlinked*
+(``stock_item_id IS NULL``) — the app admits "I don't know" instead of
+fabricating True or False. Charter P3 Honest. R-010 closed-set. The plain
+:func:`is_cookable` predicate that pre-dates this chunk still returns bool;
+new code should call :func:`cookability_state` for the tri-state answer.
 """
 from __future__ import annotations
 
@@ -26,6 +33,18 @@ def _required(ingredients):
         for ingredient in (ingredients or [])
         if not getattr(ingredient, "is_optional", False)
     ]
+
+
+def unlinked_count_for(ingredients) -> int:
+    """Number of *required* ingredients whose ``stock_item`` is None
+    (unlinked). Optional rows are excluded — an unlinked optional
+    ingredient doesn't gate cookability the way an unlinked required
+    one does.
+    """
+    return sum(
+        1 for ingredient in _required(ingredients)
+        if getattr(ingredient, "stock_item", None) is None
+    )
 
 
 def missing_count_for(ingredients) -> int:
@@ -46,7 +65,31 @@ def missing_count_for(ingredients) -> int:
 
 def is_cookable(ingredients) -> bool:
     """True when nothing required is missing. An empty (or all-optional)
-    ingredient list is cookable."""
+    ingredient list is cookable.
+
+    NOTE: this is the pre-Chunk-4 boolean predicate — it treats unlinked
+    required ingredients as "not missing" (no stock_item ⇒ no stock level
+    ⇒ can't be missing). New code should call :func:`cookability_state`
+    which returns ``None`` when any required ingredient is unlinked, so
+    the honest "unknown" state propagates through the DTO / filter chain.
+    """
+    return missing_count_for(ingredients) == 0
+
+
+def cookability_state(ingredients) -> bool | None:
+    """Tri-state cookability: True / False / None.
+
+    * ``None`` — at least one *required* ingredient is unlinked
+      (``stock_item is None``). The app can't answer "can I cook this?"
+      without knowing what item to check the stock level of. P3 Honest.
+    * ``True`` — every required ingredient links to a StockItem, none of
+      which are missing. An empty (or all-optional) ingredient list is
+      cookable (same as :func:`is_cookable`).
+    * ``False`` — every required ingredient links to a StockItem, and at
+      least one is missing.
+    """
+    if unlinked_count_for(ingredients) > 0:
+        return None
     return missing_count_for(ingredients) == 0
 
 
@@ -56,7 +99,9 @@ def missing_stock_item_names_for(ingredients) -> list[str]:
     Built off the already-loaded ingredient tree — never re-queries — so the
     recipe-list endpoint can surface "what's missing?" without an N+1. Sorted
     for deterministic output (client list rendering + test stability). Optional
-    ingredients are excluded (§1.9).
+    ingredients are excluded (§1.9). Unlinked ingredients contribute nothing
+    to this list — the caller reads ``cookability_state()`` to know when
+    "missing" is meaningful.
     """
     seen: dict[str, None] = {}
     for ingredient in _required(ingredients):

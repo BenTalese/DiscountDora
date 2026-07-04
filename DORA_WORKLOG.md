@@ -9,6 +9,409 @@ next.
 
 ---
 
+## 2026-07-04 — Recipe importer rebuild: Chunk 4 landed (schema + tri-state cookability, invisible on ship)
+
+**Why:** Continuing the six-chunk plan in
+`docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md`. This is the schema
+foundation the paste importer needs — nothing user-visible fires until
+Chunk 5 introduces the first unlinked ingredient, but the whole
+cookability surface now handles the tri-state True / False / None
+consistently.
+
+**What shipped — persistence:**
+- **New migration** `c5a8e1f7d3b2_20260704_recipe_ingredient_unlinked.py`
+  (down_revision `d7e3b9f4a1c2`):
+    * `RecipeIngredient.stock_item_id` → nullable. FK stays
+      `ondelete=RESTRICT` for linked rows.
+    * New column `raw_text: String(500), nullable`.
+    * Backfill `raw_text` from joined `StockItem.name` for existing
+      rows so labels survive future unlinking / renaming.
+    * CHECK constraint `ck_recipe_ingredient_anchor` — at least one of
+      `stock_item_id` / `raw_text` must be non-null.
+    * Downgrade fails loudly if any unlinked rows exist (P3 Honest —
+      "you can't go back from a schema loosening").
+- **Entity** at `dora_api/domain/entities/recipe_ingredient.py` —
+  `stock_item: StockItem | None`, added `raw_text: str | None`.
+- **Mapping** at `dora_api/persistence/table_mappings.py` matches; the
+  CHECK constraint name follows the `NAMING_CONVENTION` in
+  `dora_api/app.py` so batch_alter_table can reproduce it on SQLite.
+
+**What shipped — cookability tri-state (server-side):**
+- **`dora_api/domain/recipe_cookability.py`** — added
+  `cookability_state(ingredients) -> bool | None` and
+  `unlinked_count_for(ingredients) -> int`. `is_cookable` kept as the
+  boolean predicate for callers that shouldn't handle None; new call
+  sites use the tri-state.
+- **`RecipeDto.cookable`** flipped from `bool` to `bool | None`; added
+  `unlinked_ingredient_count: int = 0` at the end of the dataclass so
+  field ordering stays valid.
+- **`RecipeIngredientDto`** — `stock_item_id`, `stock_item_name`,
+  `stock_level_id`, `stock_location_id`, `stock_location_name` all
+  nullable; `raw_text` added; `is_missing` / `is_low_stock` return
+  False for unlinked rows.
+- **`load_recipe_cookability`** now returns
+  `dict[UUID, tuple[int, int, int]]` (missing, ingredient_count,
+  unlinked_count). Both callers updated.
+- **`RecipeFilters.matches_missing` → `matches_cookability(missing,
+  unlinked)`** — recipes with `unlinked > 0` are tri-state None,
+  excluded from every cookability axis (`?cookable=true`,
+  `?cookable=false`, `?max_missing=N`). P3 Honest: the filter
+  answers "definitely yes/no", not "unknown".
+- **Dashboard `RecipeSummary`** gained `needs_linking_count: int = 0`;
+  the `cookable_recipes` tally now excludes tri-state None recipes,
+  and upcoming meal-plan entries carry an
+  `unlinked_ingredient_count` so the frontend distinguishes the two
+  null cases ("empty recipe" vs "unlinked").
+- **`CreateRecipeIngredientRequest` / `UpdateRecipeIngredientRequest`**
+  — `stock_item_id: UUID | None`, added `raw_text: str | None`,
+  Pydantic `model_validator(mode="after")` enforcing at-least-one.
+  The create/update handlers now accept unlinked rows.
+
+**What shipped — cookability tri-state (frontend):**
+- **`web_app/src/models/recipe.ts`** — `RecipeIngredient.stock_item_id`
+  / `stock_item_name` / `stock_level_id` / `stock_location_*` all
+  nullable; `raw_text` added; `Recipe.cookable: boolean | null`;
+  `unlinked_ingredient_count: number` added.
+- **`web_app/src/models/dashboard.ts`** — `RecipeSummary.needs_linking_count`
+  added; `UpcomingMealPlanEntry.unlinked_ingredient_count` added.
+- **`RecipeCard.vue`** — Cook button + Add-to-list button render
+  tri-state:
+    * `cookable === true` → primary/positive tooltips as before.
+    * `cookable === false` → warning + "N missing" tooltips.
+    * `cookable === null` → grey button with "Link N ingredients to
+      check cookability — this is a stock-item feature" tooltip.
+- **`RecipeDetailPage.vue`** — cookability card renders
+  `dora-bg-sunken dora-text-muted` for the null state with a
+  "Cookability check needs every ingredient linked" caption; the
+  cook-mode confirm dialog surfaces "Cookability is unknown — N
+  ingredients need linking" for the null case.
+- **`DashboardPage.vue`** — the "Next to cook" badge label +
+  colour helpers now handle `unlinked_ingredient_count > 0`
+  explicitly ("N to link" grey badge) so users see the difference
+  between an empty recipe and an unresolved one.
+- **`RecipeCookMode.vue`** — cook-mode row + swap picker render
+  unlinked ingredients as read-only `raw_text` with an "Unlinked"
+  chip (no swap machinery, since there's no stock item to swap
+  from); `buildFinishRows()` skips unlinked ingredients so
+  finish-list generation still works.
+- **`RecipeIngredientPickerDialog.vue`** / **`DoraChat.vue`** /
+  **`RecipesOverview.vue`** — narrow null guards + raw_text fallbacks
+  so downstream flows never see a null id.
+- **`CreateRecipeIngredientCommand`** — `stock_item_id: string | null`
+  + optional `raw_text` field for future paste-import call sites.
+
+**Verification:**
+- `pytest tests/ --ignore=tests/e2e -q` — 180 passed, 2 failed. Both
+  failures are the pre-existing date-sensitive buy-verdict cases
+  (FU-444 + `test__wait_hint__regular_fortnightly_cycle`), unchanged
+  from before this landing. **180 up from 172 in Chunk 3** — 4 new
+  tri-state cookability tests + 4 new unlinked filter-exclusion tests.
+- `pytest tests/test_recipe_cookability.py tests/test_recipe_filters.py -q`
+  — 30/30 passing. Existing cookability tests untouched; new tests
+  cover: unlinked required → None, multiple unlinked, unlinked
+  optional does not gate, unlinked + missing coexist.
+- `npx vue-tsc --noEmit` — clean.
+- `npx eslint .` — clean.
+
+**Anti-drift check:** No user-visible change on ship. Existing recipes
+have every ingredient linked (schema was NOT NULL until this migration);
+the null branches in RecipeCard / RecipeDetailPage / DashboardPage /
+RecipeCookMode never execute until the paste importer starts creating
+unlinked rows (Chunk 5). Every place a null-check was added carries a
+"Chunk 4" inline comment so future readers know when the branch
+becomes reachable.
+
+**Engineering-standards close-gate:** R-003 respected — the tri-state
+rule lives in `cookability_state`, exposed via
+`load_recipe_cookability`, consumed by the DTO, the filter, and the
+dashboard tally. No client-side recomputation. R-010 (closed-set
+sentinels) — cookability tri-state is explicitly `True | False | None`,
+never untyped null. R-014 (feature-flag / shown-disabled) — dimmed
+neutral rendering with an explaining tooltip, not a hidden surface.
+
+**Follow-up loose ends (not blocking Chunk 5, but worth naming):**
+- Assistant `_stock_coverage` doesn't yet surface unlinked ingredients
+  in its answer clause — the plan calls for "Also, K recipes have
+  unlinked ingredients — link them at Settings → Data → Unlinked
+  ingredients." This is best folded into Chunk 6 when the bulk-linker
+  page exists (the jump target needs to be real).
+- "Add missing to shopping list" today already skips unlinked
+  ingredients by construction (they have no `stock_item_id` and the
+  RecipeCard's `missingIds` filter uses `!== null`); a Chunk-4-shaped
+  "N ingredients need linking first — link them?" prompt should ride
+  with Chunk 6 when there's a jump-to-linker action.
+
+**Next up:** Chunk 5 — endpoint reshape + SPA paste importer. Rename
+`POST /api/recipes/import-from-url` → `import-from-content`; delete
+the fetcher (FU-199 SSRF closes by construction) and _degraded_import;
+wire the Chunk 2/3 parser; SPA dialog switches to a paste textarea.
+FU-104 closes as "legalised in place, no companion split needed".
+
+---
+
+## 2026-07-04 — Recipe importer rebuild: Chunk 3 landed (Class B parser; RapidFuzz already shipped, FU-396 closed)
+
+**Why:** Continuing the six-chunk plan in
+`docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md`. Chunk 2 shipped the
+Class A parser; Chunk 3 handles Smitten-Kitchen-shaped sites (no
+`Ingredients` / `Instructions` headers). Also plans-in RapidFuzz swap;
+turned out to be already done.
+
+**What shipped:**
+- **Class B block finder** in
+  `dora_api/features/recipes/_parse_recipe_from_text.py` — new module-
+  level regexes for the anchor (`Serves|Servings?|Yield|Makes` at
+  line start), notes ("Note:" / "Always " / "Tip:"), bare sub-section
+  headers ("Sauce", "Meatballs", "For the chicken",
+  "To finish, if desired"), numbered-step markers (`1. ...`), and
+  the cooking-verb prefix set (`make|heat|bring|mix|stir|...`).
+- **`_find_class_b_blocks`** — grammar-driven scan: anchor → forward-
+  skip notes and sub-section headers to find the first ingredient
+  line → collect ingredient-shape lines downward → stop at first
+  numbered-step / verb-prefix prose / stop marker. Returns
+  `(ing_start, ing_end, step_start, step_end)` in the same shape the
+  Class A path produces.
+- **Main-function dispatch** — Class A first (`_find_ingredient_block`
+  returns non-negative); on miss, fall through to Class B. Both paths
+  share `_extract_ingredients` and `_extract_steps`, so downstream
+  wire shape is identical.
+- **Sub-section header skip** in `_extract_ingredients` — the bare
+  Class B pattern ("Sauce", "Meatballs") is now filtered inline with
+  the Class A colon-terminated variant. The bare-title-case branch of
+  the regex uses `(?-i:...)` to force case-sensitive matching — that
+  rejects "Nonstick cooking spray" (Simply Recipes 2's first
+  ingredient, where "cooking" starts lowercase) while accepting real
+  sub-section headers whose words all lead with capitals.
+
+**RapidFuzz swap (FU-396) — turned out to be already done.** The
+ledger claimed fuzzywuzzy was still in `requirements.txt` and in
+`global_search.py` + `import_recipe_from_url.py`. `grep` said
+otherwise:
+- `requirements.txt:23` → `rapidfuzz==3.9.6` (no fuzzywuzzy line).
+- `global_search.py:22` → `from rapidfuzz import fuzz`.
+- `import_recipe_from_url.py:30` → `from rapidfuzz import process as fuzz_process`.
+FU-196 shipped the swap; FU-396 was a stale duplicate. Moved to
+`DORA_FOLLOWUPS_RESOLVED.md` with the verification trail.
+
+**Verification:**
+- `pytest tests/test_parse_recipe_from_text.py` — **20/20 passed.**
+  All three Smitten Kitchen fixtures now green (SK1 scallion
+  meatballs, SK2 potato tortilla, SK3 skillet turkey chili).
+- `pytest tests/ --ignore=tests/e2e -q` — 172 passed, 2 failed.
+  Both failures are the pre-existing date-sensitive buy-verdict
+  cases (FU-444 + `test__wait_hint__regular_fortnightly_cycle`),
+  unchanged from before this landing.
+
+**Anti-drift check:** Chunk 3 touches only
+`_parse_recipe_from_text.py` (Class B additions) and the follow-up
+ledger. No endpoint changes, no SPA changes, no schema migrations.
+Parser is still a pure function tested in isolation.
+
+**Engineering-standards close-gate:** none of `R-001..R-021` touched.
+The Class B regexes stay at module scope alongside the Class A
+patterns; each has a docstring naming the fixture shape it exists
+for (SK1 / SK2 / SK3). Test suite remains the objective floor.
+
+**Next up:** Chunk 4 — schema for persistable unlinked ingredients
+(`RecipeIngredient.stock_item_id` → nullable, add `raw_text` column,
+CHECK `stock_item_id IS NOT NULL OR raw_text IS NOT NULL`) plus the
+cookability tri-state sweep across backend + frontend. The plan calls
+this "invisible until Chunk 5 activates it" — existing recipes are
+all-linked so nothing goes neutral on ship. The riskiest chunk in the
+plan because it touches ≥6 files across the cookability surface.
+
+**Learnings for the impl plan:**
+- The Class B algorithm turned out cleaner than the plan sketched.
+  The plan called for grammar-based ingredient-line detection
+  ("starts with fraction / decimal / integer + optional unit, OR
+  starts with `A|An`, OR is under ~120 chars"). The final shape uses
+  `_looks_like_ingredient` from Chunk 2 unchanged — same shape guard
+  handles Class A and Class B ingredients. The Class-B-specific work
+  is the BLOCK BOUNDARY detection (anchor + stop signal), not the
+  per-line shape.
+- The `(?-i:...)` inline case-flag trick is what makes the bare
+  title-case sub-section pattern precise enough. Without it, `re.I`
+  would consider "Nonstick cooking spray" to match `[A-Z][a-z]+
+  \s+[A-Z][a-z]+`, and a Simply Recipes first ingredient would fall
+  into the sub-section skip.
+- FU-396 turned out to be stale duplicate of FU-196 — worth spot-
+  checking these ledger claims via `grep` before committing to a
+  swap that might already have shipped.
+
+---
+
+## 2026-07-04 — Recipe importer rebuild: Chunk 2 landed (Class A parser)
+
+**Why:** Continuing the six-chunk plan in
+`docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md`. Chunk 1 shipped
+earlier the same day; Chunk 2 implements the header-anchored text
+parser and gets the corpus fence to its expected floor.
+
+**What shipped:**
+- **DTO extension** in `dora_api/features/recipes/import_recipe_from_url.py`:
+  added `total_time_minutes: int | None = None` to `ImportedRecipeDto`.
+  Additive at the end of the dataclass (no field-order break); many
+  fixtures publish only Total (Simply Recipes 3, HBH 2/3, Woolworths,
+  RecipeTin 1/3, Smitten 3) and dropping it would lose real info.
+  Explicitly *not* derived from prep+cook (P12 No-invent).
+- **Parser** at
+  `dora_api/features/recipes/_parse_recipe_from_text.py` — replaced the
+  stub with the full Class A implementation:
+    * **Meta sweep** — two-branch regex; line-start branch handles
+      Woolworths / Taste bare labels, HBH's "Prep Time 25 minutes
+      minutes", AllRecipes' "Prep Time:", and RecipeTin's no-space
+      "Servings4 – 5"; inline branch handles Sally's all-one-line
+      meta (labels must be followed by a colon). Bare `time` is
+      excluded from the inline branch after tracing the "Resting time:"
+      trap in Simply Recipes 2/3 — that would have stolen the total.
+    * **Time value** — `_time_to_minutes` scans first non-empty line
+      of the chunk for hours + minutes (HBH3 slots "chill time 2
+      hours" between prep and total; without the first-line
+      restriction prep would land on 130 instead of 10).
+    * **Ingredient block selection** — pick the LAST `Ingredients`
+      anchor before the first `Instructions` / `Method` / `Directions`
+      anchor. Rejects nav-menu `Ingredients` entries (top-nav on
+      AllRecipes, Sally's "Browse By Ingredient") and footer nav.
+    * **Ingredient line parsing** — reuses the existing `_parse_qty_unit`
+      grammar from the JSON-LD importer; strips ▢/-/*/• bullet prefixes;
+      de-dups Woolworths' double-listed pairs by comparing consecutive
+      lines' `rest` fields; filters scaling widgets (`1/2x`, `1x`, `2x`),
+      "Original recipe..." lines, "Cook Mode" widgets, and unit
+      toggles.
+    * **Step block** — first `Instructions` / `Directions` / `Method`
+      anchor after the ingredient block; strips numbered prefixes;
+      filters "Step N" markers (Taste, Woolworths), "ABBREVIATED
+      RECIPE:" / "FULL RECIPE:" (RecipeTin), photographer credits
+      (Dotdash Meredith, Simply Recipes / X), and photo-alt patterns.
+    * **Name extraction** — three-strategy stack:
+        1. **Breadcrumb**: last segment after `»` (HBH) or `·` (Sally's).
+        2. **Top-window candidate ranking**: strict `_looks_like_title`
+           filter (8-90 chars, 2-15 words, no quotes/parens/mid-line
+           colon-space/camel-artifact/end-punct), then rank by
+           (length DESC → count DESC → position ASC) among candidates
+           with occurrence count ≥ 2. Solves the RecipeTin "Fast Prep,
+           Big Flavours" tagline trap (count 1, filtered) and the
+           Simply Recipes related-post grid trap (King Ranch 27 chars
+           beats Lasso Up 63 chars on count only; length-first picks
+           Lasso Up correctly).
+        3. **Backwards scan from meta anchor** — last-resort fallback.
+- **Corpus fence** — 17 of 20 fixtures now pass minimum-shape (all
+  Class A). The 3 remaining failures are all Smitten Kitchen — Class B
+  territory. Chunk 3 will add the grammar-based fallback for those.
+
+**Verification:**
+- `pytest tests/test_parse_recipe_from_text.py -v` — 17 passed,
+  3 failed (all `smittenkitchen*` on `0 ingredients`).
+- `pytest tests/ --ignore=tests/e2e -q` — 169 passed, 5 failed. Of the
+  5 failures: 3 are the Chunk-2-expected Smitten cases; 2 are the
+  pre-existing date-sensitive buy-verdict failures unrelated to this
+  landing (FU-444 + `test__wait_hint__regular_fortnightly_cycle`).
+- Corpus expectations updated for `woolworths2`: parser correctly
+  extracts the breadcrumb (which spells "bourguignon" right) rather
+  than the fixture body (which has the "bourguinon" typo). Expectation
+  flipped to match parser honesty.
+
+**Anti-drift check:** Chunk 2 explicitly touches only
+`_parse_recipe_from_text.py` (stub → real) + one additive field on
+`ImportedRecipeDto`. No endpoint wiring, no SPA changes, no schema
+migrations. Parser is a pure function tested in isolation.
+
+**Engineering-standards close-gate:** none of `R-001..R-021` touched.
+The parser file is self-contained; helpers named after site shapes
+(grep-friendly if a fixture regresses). Regexes at module scope
+(compile-once). All docstrings pin the specific site quirk each
+heuristic exists for.
+
+**Next up:** Chunk 3 — Class B grammar-based fallback (Smitten
+Kitchen). Trigger: no `Ingredients` anchor found. Anchor on
+`Serves N` / `Yield:` / `Servings:` line. Ingredient-line grammar
+downward with `For the X` / bare-noun sub-section header inference.
+Stop at first long prose paragraph or footer marker
+(`Print Recipe`, `Related`, `Post navigation`). Also RapidFuzz swap
+(FU-396 partial close).
+
+**Learnings for the impl plan (worth noting in the doc later):**
+- The two-branch meta regex is more robust than a single lookahead-
+  laden pattern — the "line-start" vs "inline-with-colon" distinction
+  captures the corpus shapes without prose false-positives.
+- The three-strategy name extractor is unexpectedly powerful:
+  breadcrumb catches HBH/Sally, top-window ranking catches everything
+  else clean. Backwards scan (originally the main strategy) ends up
+  as a rarely-fired fallback — I only kept it because Class B (Chunk 3)
+  might need it for anchor-less shapes.
+- Length-first ranking beats count-first for the SR2 "related-post
+  grid" case. Count-first would have picked "King Ranch Chicken
+  Casserole" over the H1 because the grid entry appears 3 times.
+
+---
+
+## 2026-07-04 — Recipe importer rebuild: Chunk 1 landed (corpus + baseline tests)
+
+**Why:** Session was tail-end of a long recipe-importer discussion. Three
+open FUs (FU-104 legal, FU-199 SSRF, FU-396 GPL blocker in importer file)
+converged on the same fix: legalize in place by deleting the outbound
+fetcher and switching the SPA to a paste-based flow. User confirmed the
+approach + endorsed persistable unlinked ingredients (schema B). Impl
+plan filed at `docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md` (six
+chunks). This entry is the Chunk 1 close.
+
+**What shipped (Chunk 1 — pure test infra, no production wire):**
+- `tests/fixtures/recipe_paste_corpus/` — 20 verbatim Ctrl+A/C+V
+  fixtures moved from `docs/99_scratch/recipes/` (which was cleared
+  after). Spans AllRecipes ×3, Half Baked Harvest ×3, RecipeTin Eats ×3,
+  Sally's Baking ×2, Simply Recipes ×3, Smitten Kitchen ×3,
+  Taste.com.au ×1, Woolworths ×2 — 17 Class A + 3 Class B.
+- `tests/fixtures/recipe_paste_corpus/_expectations.py` — ground-truth
+  minimum-shape assertions per fixture. Loose fences by design
+  (`min_ingredients` / `min_steps` lower bounds, `first_ingredient_
+  contains` substring match, ±2 min tolerance on time fields). Every
+  fixture has a `notes` field explaining its shape quirks (inline meta
+  on one line for Sally's, double-listed ingredients for Woolworths,
+  no headers at all for Smitten, related-post-link title trap for HBH2,
+  etc.). Read each fixture end-to-end before writing.
+- `tests/fixtures/recipe_paste_corpus/README.md` — how to add a fixture
+  + Class A vs Class B distinction.
+- `dora_api/features/recipes/_parse_recipe_from_text.py` — stub for
+  `parse_recipe_from_text(text: str) -> ImportedRecipeDto`. Raises
+  `NotImplementedError` with a message pointing at Chunk 2. Reuses
+  the existing `ImportedRecipeDto` shape so downstream fuzzy-match +
+  preview + save all stay wire-compatible.
+- `tests/test_parse_recipe_from_text.py` — parametrized over the
+  20 fixtures. Each test tries the parser, catches
+  `NotImplementedError`, and `pytest.skip`s with a clear message.
+
+**Verification:**
+- `pytest tests/test_parse_recipe_from_text.py -v` — 20 collected,
+  20 skipped, exit 0.
+- `pytest tests/ --ignore=tests/e2e -q` — 152 passed, 20 skipped
+  (new), 2 pre-existing failures unchanged (FU-444
+  `test__all_axes_thin__collapses_to_single_not_enough_history` +
+  `test__wait_hint__regular_fortnightly_cycle` — both date-sensitive
+  and unrelated to this landing).
+
+**Anti-drift check:** Chunk 1 explicitly does not touch production
+code (parser stub raises immediately; imports the existing
+`ImportedRecipeDto` from `import_recipe_from_url` for now — that
+file will be renamed in Chunk 5). No entity changes, no schema
+migrations, no SPA changes. Nothing user-visible.
+
+**Engineering-standards close-gate:** none of `R-001..R-021` touched
+— pure test scaffolding.
+
+**Next up:** Chunk 2 — Class A parser (anchor-based extraction).
+Implementation goes in `_parse_recipe_from_text.py`; success gate is
+17/20 fixtures passing (Smitten fails, expected — that's Chunk 3).
+Impl plan §Chunk 2 has the full acceptance criteria.
+
+**Open questions for the user (none blocking):**
+- File-layout: keep parser at
+  `_parse_recipe_from_text.py` beside `import_recipe_from_url.py`
+  (current), or fold into the eventual renamed
+  `import_recipe_from_content.py` in Chunk 5? Plan says "TBD by
+  file-layout preference at review" — Chunk 2 will surface it.
+
+---
+
 ## 2026-07-03 — FU-327 shipped (Windows + macOS desktop build scripts; verify user-driven)
 
 **Why:** User asked to do FU-327 and leave testing to them when

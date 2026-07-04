@@ -635,7 +635,6 @@ Toilet paper, Toiletries, Bathroom"
     import { useQuasar } from 'quasar';
     import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
     import type {
-        LocationNode,
         OnboardingCatalog,
         OnboardingState,
         StarterPack,
@@ -1030,15 +1029,6 @@ Toilet paper, Toiletries, Bathroom"
         }
         return [...set].sort((a, b) => a.localeCompare(b));
     }
-    function flattenLocationNames(nodes: LocationNode[]): string[] {
-        const names: string[] = [];
-        for (const node of nodes) {
-            names.push(node.name);
-            names.push(...flattenLocationNames(node.children));
-        }
-        return names;
-    }
-
     // The pack items the user has ticked (catalog packs ∩ packItemSelected),
     // deduped by name (the server dedupes again on create).
     const selectedPackItemsList = computed<StarterPackItem[]>(() => {

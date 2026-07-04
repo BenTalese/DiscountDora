@@ -23,7 +23,13 @@ export function recipeStepImageUrl(
 }
 
 export type CreateRecipeIngredientCommand = {
-    stock_item_id: string;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — send `stock_item_id` when
+     *  the ingredient is linked, `raw_text` when it's unlinked, or both
+     *  (after a bulk-link operation). At least one is required
+     *  server-side. Existing "quick-add" flows still send stock_item_id
+     *  only; the paste importer (Chunk 5) sends raw_text only. */
+    stock_item_id: string | null;
+    raw_text?: string | null;
     quantity: number | null;
     unit: string | null;
     notes: string | null;
@@ -221,15 +227,23 @@ export default class RecipeApiService {
             { delta },
         );
 
-    importFromUrlAsync = async (url: string): Promise<ImportedRecipe> =>
-        await this.httpClient.post<ImportedRecipe, { url: string }>(
-            '/recipes/import-from-url',
-            { url },
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — replaces `importFromUrlAsync`.
+     *  Server no longer fetches URLs; the user pastes the recipe text
+     *  and (optionally) types the source URL for provenance.
+     *  ``source_url`` is metadata only — stamped on the response but
+     *  never opened by the server. */
+    importFromContentAsync = async (
+        content: string,
+        sourceUrl?: string,
+    ): Promise<ImportedRecipe> =>
+        await this.httpClient.post<ImportedRecipe, { content: string; source_url: string }>(
+            '/recipes/import-from-content',
+            { content, source_url: sourceUrl ?? '' },
         );
 }
 
 // Mirrors ImportedRecipeDto / ImportedIngredientDto from
-// dora_api/features/recipes/import_recipe_from_url.py.
+// dora_api/features/recipes/imported_recipe_dtos.py.
 export type ImportedIngredient = {
     raw_text: string;
     stock_item_id: string | null;
@@ -267,8 +281,8 @@ function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
 
 export type ImportedRecipe = {
     name: string;
-    // C-4 Chunk 2: importer resolves scraped names to existing vocab ids when
-    // it can; the id is null (with the scraped name kept) when there's no match.
+    // C-4 Chunk 2: importer resolves parsed names to existing vocab ids when
+    // it can; the id is null (with the parsed name kept) when there's no match.
     cuisine_id: string | null;
     cuisine_name: string | null;
     category_id: string | null;
@@ -277,17 +291,24 @@ export type ImportedRecipe = {
     servings: number | null;
     prep_time_minutes: number | null;
     cook_time_minutes: number | null;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 2 — some sites publish only a
+     *  total time. Populated only when the parser explicitly extracts
+     *  one; never derived from prep + cook. */
+    total_time_minutes: number | null;
     instructions: string | null;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — echoes whatever URL the
+     *  user typed in the "Where's this from?" field of the paste dialog.
+     *  Metadata only; the server never fetched it. Empty string when
+     *  the user didn't provide one. */
     source_url: string;
     ingredients: ImportedIngredient[];
-    /** C-4 Chunk 6 — schema.org HowToStep / HowToSection parsed into
-     *  structured steps ready to feed into the create endpoint's `steps[]`.
-     *  Empty when the source uses a plain string for `recipeInstructions`;
-     *  the freeform `instructions` field above stays populated as fallback. */
+    /** C-4 Chunk 6 — parsed structured steps ready to feed into the
+     *  create endpoint's `steps[]`. Empty when the parser produced a
+     *  freeform ``instructions`` blob only. */
     steps: ImportedStep[];
-    /** C-4 Chunk 7 — true when no schema.org/Recipe was found and we fell
-     *  back to scraping `<title>` / `og:image` / body text. The SPA shows a
-     *  "couldn't auto-structure" banner so the user knows to clean up. */
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — true when the parser fell
+     *  back to its lowest-shape output (typically < 3 ingredients).
+     *  SPA shows a "couldn't auto-structure — review and edit" banner. */
     is_degraded: boolean;
 };
 

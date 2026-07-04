@@ -56,6 +56,12 @@ class RecipeSummary:
     # dashboard show the count without the client pulling + joining every recipe
     # against the whole pantry (state-ownership §3.3).
     cookable_count: int
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — recipes with ≥1 unlinked
+    # required ingredient. Server-derived so the Dashboard card can
+    # render "N cookable · M need linking" copy without asking the SPA
+    # to walk the ingredient tree. Zero when no paste-imported recipes
+    # exist yet.
+    needs_linking_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,9 +82,16 @@ class UpcomingMealPlanEntry:
     servings: int
     # FU-298 — cookability flag for the dashboard's "Next to cook" card.
     # Derived from the shared cookability map (R-003), so the rule lives in one
-    # place. `None` for empty recipes (no ingredients to evaluate); otherwise
-    # the count of missing ingredients (0 = ready to cook).
+    # place. `None` for empty recipes (no ingredients to evaluate) OR for
+    # recipes with unlinked required ingredients (Chunk 4 tri-state); the
+    # SPA distinguishes via ``unlinked_ingredient_count`` — non-zero means
+    # "needs linking" (not "empty recipe"). Otherwise the count of missing
+    # ingredients (0 = ready to cook).
     missing_count: Optional[int]
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of the recipe's required
+    # ingredients that have no ``stock_item_id``. Non-zero ⇒ this entry
+    # renders "N need linking" in the dashboard, not "No ingredients".
+    unlinked_ingredient_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,10 +165,23 @@ class GetDashboardSummaryHandler:
         )
         # Cookable-now count via the shared cookability query (same rule the
         # recipe DTO + `?cookable` filter use — R-003). Excludes empty recipes.
+        # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: also excludes recipes with any
+        # unlinked required ingredient — those are tri-state None
+        # (unknown), never counted as cookable. The frontend Dashboard
+        # card can render "N cookable · M need linking" from the API's
+        # per-recipe unlinked_ingredient_count.
         cookability = load_recipe_cookability(self.repository)
         cookable_recipes = sum(
-            1 for missing, ingredient_count in cookability.values()
-            if missing == 0 and ingredient_count > 0
+            1 for missing, ingredient_count, unlinked in cookability.values()
+            if missing == 0 and ingredient_count > 0 and unlinked == 0
+        )
+        # Recipes that would be cookable if the user linked their unlinked
+        # ingredients (raw + StockItem all set, plus nothing linked-missing).
+        # The Dashboard uses this for the "M need linking" copy so the
+        # user knows the pipe: link → cookable count grows.
+        needs_linking_recipes = sum(
+            1 for _missing, ingredient_count, unlinked in cookability.values()
+            if unlinked > 0 and ingredient_count > 0
         )
 
         # ── Meals ─────────────────────────────────────────────────────────
@@ -184,16 +210,26 @@ class GetDashboardSummaryHandler:
         upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))
         # FU-298 — reuse the cookability map already computed for the recipe
         # summary above so we don't load ingredients twice.
+        # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: an upcoming meal-plan entry
+        # whose recipe has ANY unlinked required ingredient reads
+        # missing_count as null (unknown) — the SPA renders the
+        # calendar chip dimmed rather than "N missing", same neutral
+        # state as RecipeCard.
         upcoming_entries_dto: List[UpcomingMealPlanEntry] = []
         for e in upcoming_entries_entities:
-            missing, ingredient_count = cookability.get(e.recipe.id, (0, 0))
+            missing, ingredient_count, unlinked = cookability.get(e.recipe.id, (0, 0, 0))
+            if ingredient_count == 0 or unlinked > 0:
+                _missing_for_entry = None
+            else:
+                _missing_for_entry = missing
             upcoming_entries_dto.append(UpcomingMealPlanEntry(
                 recipe_id = e.recipe.id,
                 recipe_name = e.recipe.name,
                 scheduled_for = e.scheduled_for,
                 slot = e.slot,
                 servings = e.servings,
-                missing_count = missing if ingredient_count > 0 else None,
+                missing_count = _missing_for_entry,
+                unlinked_ingredient_count = unlinked,
             ))
 
         return DashboardSummaryDto(
@@ -211,6 +247,7 @@ class GetDashboardSummaryHandler:
                 total = total_recipes,
                 favourites = favourite_recipes,
                 cookable_count = cookable_recipes,
+                needs_linking_count = needs_linking_recipes,
             ),
             meals = MealSummary(
                 total_definitions = int(total_meal_definitions),

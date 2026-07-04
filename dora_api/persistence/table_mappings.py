@@ -692,7 +692,13 @@ def configure_mappings(db: SQLAlchemy):
         Column("notes", String(255), nullable=True),
         Column("quantity", Float, nullable=True),
         Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
-        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="RESTRICT"), nullable=False),
+        # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — nullable so unlinked rows
+        # (parser couldn't fuzzy-match a StockItem) persist. The FK stays
+        # ondelete=RESTRICT: for LINKED rows, deleting the StockItem still
+        # blocks; unlinked rows have NULL and don't touch the FK. The
+        # anchor CHECK below requires at least one of stock_item_id /
+        # raw_text to be set per row.
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="RESTRICT"), nullable=True),
         Column("unit", String(50), nullable=True),
         # C-4 Chunk 10 — nullable section grouping (ON DELETE SET NULL so
         # removing a section keeps its ingredients, just unsectioned).
@@ -701,6 +707,14 @@ def configure_mappings(db: SQLAlchemy):
         # cookability rule (no second cookable value). Server-default `0`
         # keeps existing rows valid through the migration.
         Column("is_optional", Boolean, nullable=False, server_default=false()),
+        # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — the ingredient text as the
+        # user pasted / imported it. Backfilled from ``StockItem.name`` for
+        # pre-Chunk-4 rows so labels survive unlinking / renaming.
+        Column("raw_text", String(500), nullable=True),
+        CheckConstraint(
+            "stock_item_id IS NOT NULL OR raw_text IS NOT NULL",
+            name="recipe_ingredient_anchor",
+        ),
     )
 
     # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`

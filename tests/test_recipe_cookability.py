@@ -169,3 +169,77 @@ def test__missing_names_includes_no_level_items():
     # No stock-level record → counts as missing per the contract.
     dto = RecipeDto.from_entity(_recipe(_ingredient(None, name="salt")))
     assert dto.missing_stock_item_names == ["salt"]
+
+
+# ── IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: tri-state cookability ────────────────
+# A recipe with any unlinked required ingredient (``stock_item is None``)
+# reads as cookable = None, not True or False. The DTO fields
+# `missing_count` and `missing_stock_item_names` still count only the
+# LINKED-missing rows — an unlinked ingredient contributes to
+# `unlinked_ingredient_count` instead.
+
+
+def _unlinked_ingredient(is_optional=False, raw_text="1 pound something"):
+    """Recipe ingredient stub for the unlinked case (stock_item is None)."""
+    return SimpleNamespace(
+        id=uuid4(),
+        stock_item=None,
+        raw_text=raw_text,
+        quantity=None,
+        unit=None,
+        notes=None,
+        is_optional=is_optional,
+    )
+
+
+def test__unlinked_required_ingredient_makes_cookable_none():
+    """One unlinked required ingredient → cookable is tri-state None,
+    regardless of how many other ingredients are stocked."""
+    dto = RecipeDto.from_entity(_recipe(
+        _ingredient(0),                            # stocked
+        _ingredient(1),                            # low
+        _unlinked_ingredient(),                    # unlinked
+    ))
+    assert dto.cookable is None
+    # Linked-missing count remains honest — nothing linked is missing here.
+    assert dto.missing_count == 0
+    assert dto.missing_stock_item_names == []
+    assert dto.unlinked_ingredient_count == 1
+
+
+def test__multiple_unlinked_still_reports_none():
+    dto = RecipeDto.from_entity(_recipe(
+        _unlinked_ingredient(),
+        _unlinked_ingredient(),
+        _unlinked_ingredient(),
+    ))
+    assert dto.cookable is None
+    assert dto.unlinked_ingredient_count == 3
+    assert dto.missing_count == 0
+
+
+def test__unlinked_optional_ingredient_does_not_gate_cookability():
+    """Optional ingredients are ignored by the cookability rule (§1.9).
+    An unlinked OPTIONAL ingredient shouldn't push a recipe to None —
+    the required ingredients still get a definitive True/False answer."""
+    dto = RecipeDto.from_entity(_recipe(
+        _ingredient(0),                            # required, stocked
+        _unlinked_ingredient(is_optional=True),    # optional, unlinked → ignored
+    ))
+    assert dto.cookable is True
+    assert dto.unlinked_ingredient_count == 0
+
+
+def test__unlinked_plus_missing_still_reports_none():
+    """When both an unlinked ingredient AND a linked-missing ingredient
+    coexist, the unlinked one wins (None) — we can't answer definitively
+    until every required ingredient is linked."""
+    dto = RecipeDto.from_entity(_recipe(
+        _ingredient(2, name="tomato"),             # linked-missing
+        _unlinked_ingredient(),                    # unlinked
+    ))
+    assert dto.cookable is None
+    # Linked-missing is still reported honestly on its own field.
+    assert dto.missing_count == 1
+    assert dto.missing_stock_item_names == ["tomato"]
+    assert dto.unlinked_ingredient_count == 1

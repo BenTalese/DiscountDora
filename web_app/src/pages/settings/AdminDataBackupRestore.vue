@@ -987,9 +987,9 @@
         if (mb < 1024) return `${mb.toFixed(1)} MB`;
         return `${(mb / 1024).toFixed(2)} GB`;
     }
-    function summarizeRestore(body: any): string {
-        const created = body?.created ?? {};
-        const total = Object.values(created).reduce((a: number, b: any) => a + Number(b || 0), 0);
+    function summarizeRestore(body: unknown): string {
+        const created = (body as { created?: Record<string, unknown> } | null)?.created ?? {};
+        const total = Object.values(created).reduce((a: number, b: unknown) => a + Number(b || 0), 0);
         return total === 0
             ? 'No new rows — every section skipped as duplicates.'
             : `${total} row${total === 1 ? '' : 's'} imported.`;
@@ -1148,11 +1148,6 @@
         if (!header) return null;
         const match = /filename="?([^";]+)"?/i.exec(header);
         return match?.[1] ?? null;
-    }
-
-    function defaultFilename(): string {
-        const today = new Date().toISOString().slice(0, 10);
-        return `dora-backup-${today}.json`;
     }
 
     function triggerSave(blob: Blob, filename: string) {

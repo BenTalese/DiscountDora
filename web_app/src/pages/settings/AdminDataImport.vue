@@ -30,9 +30,9 @@
                         :icon="ICONS.file_download"
                         label="Download template"
                         :loading="templatesLoading"
-                        @click="onDownloadTemplate(templates[0])"
+                        @click="onDownloadTemplate(templates[0]!)"
                     >
-                        <q-tooltip>{{ templates[0].caption }}</q-tooltip>
+                        <q-tooltip>{{ templates[0]!.caption }}</q-tooltip>
                     </BaseButton>
                     <BaseButton
                         v-else

@@ -46,6 +46,7 @@ export const ICONS = {
     close: 'mdi-close',
     compare: 'mdi-compare-horizontal',
     content_copy: 'mdi-content-copy',
+    content_paste: 'mdi-content-paste',
     dark_mode: 'mdi-weather-night',
     delete: 'mdi-delete',
     delete_outline: 'mdi-delete-outline',

@@ -1,10 +1,15 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-03** (hand-edit close-gate for FU-016 guard-race
-audit + FU-181 meals-per-week pref + FU-314 lazy-loader retirement +
-FU-315 auto-add toast wiring + FU-316 quick-add polish + several stale-FU
-resolves (052/065/134/144/170/423); prior full rebuild 2026-07-02
-verified against the codebase,
+**Regenerated: 2026-07-04** (hand-edits accumulated same day: filed
+`IMPL_PLAN_RECIPE_IMPORTER`, then Chunks 1-4 landed — corpus + parser
+20/20 green plus schema migration + tri-state cookability sweep
+(invisible on ship, ready for Chunk 5's paste importer) — and FU-396
+closed as stale-duplicate of FU-196 (RapidFuzz swap already shipped);
+prior hand-edit 2026-07-03 for FU-016 guard-race audit + FU-181 meals-per-week pref +
+FU-314 lazy-loader retirement + FU-315 auto-add toast wiring + FU-316
+quick-add polish + several stale-FU resolves
+(052/065/134/144/170/423); full rebuild 2026-07-02 verified against the
+codebase,
 not just the docs). This is the single front door: where every phase and workstream
 is up to, and what needs your attention. For *where things stand* this doc wins; for
 *how/why* a decision was made, follow the linked planning doc. It is regenerated
@@ -69,6 +74,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | Data/Backup admin | ✅ | Collapsed under Settings→Admin→Data; backup library + admin-gating (code committed) | FU-341/342/198 |
 | Auth shell | ➗ | Shared `AuthShell.vue` + `AuthButton.vue` across 8 pre-auth surfaces (no standalone register page) | `PROPOSAL_AUTH_SHELL.md` |
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
+| Recipe importer (paste-based rebuild) | 🟡 | **Chunks 1-4 landed 2026-07-04.** Chunks 1-3: parser green on 20/20 corpus. Chunk 4: schema migration for persistable unlinked ingredients + tri-state cookability sweep (backend + frontend), invisible on ship. Still ahead: endpoint reshape (Chunk 5, closes FU-104/199), bulk-linker + PWA share (Chunk 6). | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Commercialization (P7) | ⚪ | Tenancy/Stripe/billing not started; zero such code yet | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
 
 ---
@@ -210,6 +216,7 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | PROPOSAL_SIMPLE_MODE | 📦 superseded | → products-as-overlay |
 | SHOPPING_LIST_REDESIGN_PROPOSAL | 📦 superseded | v1 shipped (P6-01) → UX_V2 presentation |
 | IMPL_PLAN_* (Alerts, Cart, Cookbook, Cook-Mode, Dashboard, Error-Handling, Ingestion, Meal-Plans, Meal-Plans-Rebuild, State-Ownership, Stock-Item-Detail, Stock-Overview, Waste, Your-Prices, Settings-Rebuild, Shopping-Lists, Shopping-List-Receipts, Config, Auth-Shell) | ✅ done | All executed & shipped. ~13 carry stale "no code yet" headers (FU-445). MEAL_PLANS_REBUILD is the live meal-plans authority. |
+| IMPL_PLAN_RECIPE_IMPORTER | 🔵 designed | 2026-07-04. Six-chunk paste-based rebuild; supersedes IMPL_PLAN_COOKBOOK §Chunk 7's URL-importer scope. Closes FU-104 / FU-199 / FU-396 (importer half). |
 
 ## 05_investigations — reports (16)
 

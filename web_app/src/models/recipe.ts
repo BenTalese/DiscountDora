@@ -1,7 +1,12 @@
 export type RecipeIngredient = {
     recipe_ingredient_id: string;
-    stock_item_id: string;
-    stock_item_name: string;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — nullable so unlinked
+     *  (paste-imported, no fuzzy match) rows round-trip. When null, the
+     *  ingredient shows an "Unlinked · Link" pill; ``stock_item_name``,
+     *  ``stock_level_id``, ``stock_location_*`` and the stock-status
+     *  booleans are all null / false. ``raw_text`` carries the label. */
+    stock_item_id: string | null;
+    stock_item_name: string | null;
     stock_level_id: string | null;
     stock_location_id: string | null;
     stock_location_name: string | null;
@@ -10,7 +15,8 @@ export type RecipeIngredient = {
     notes: string | null;
     /** Server-derived stock status for this ingredient (§3.1 contract).
      *  `is_missing` = out-of-stock or untracked; the client reads these
-     *  instead of matching a stock-level name. */
+     *  instead of matching a stock-level name. False on unlinked rows —
+     *  we can't say what's missing about an ingredient we haven't linked. */
     is_missing: boolean;
     is_low_stock: boolean;
     /** C-4 Chunk 10 — nullable section grouping. NULL = implicit "main"
@@ -22,6 +28,11 @@ export type RecipeIngredient = {
      *  shopping-list picker (unchecked by default), and dimmed in cook
      *  mode. Default false (column is NOT NULL server-side). */
     is_optional: boolean;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — the ingredient text as the
+     *  user pasted or imported. Persists even after linking. UI prefers
+     *  it when non-empty for the ingredient label ("1 pound ground
+     *  turkey" is more informative than "ground turkey"). */
+    raw_text: string | null;
 };
 
 /** C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).
@@ -91,11 +102,22 @@ export type Recipe = {
     /** C-4 Chunk 5 — whether an image exists (bytes served via
      *  GET /recipes/<id>/image, never inlined here). */
     has_image: boolean;
-    /** Server-owned cookability (§3.2). `missing_count` = distinct
-     *  out-of-stock/untracked ingredients; `cookable` = `missing_count === 0`.
-     *  The client reads these instead of recomputing from stock data. */
-    cookable: boolean;
+    /** Server-owned cookability (§3.2). Tri-state per
+     *  IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: `true` (nothing missing),
+     *  `false` (something linked-missing), `null` (at least one required
+     *  ingredient is unlinked — the app admits "we don't know"). UI
+     *  renders the badge dimmed with a "Link ingredients to check
+     *  cookability — this is a stock-item feature" tooltip when null.
+     *  `missing_count` counts only LINKED-missing rows and is safe to
+     *  read on any state (zero when cookable is null). */
+    cookable: boolean | null;
     missing_count: number;
+    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of required
+     *  ingredients whose `stock_item_id` is null (unlinked).
+     *  When > 0, the recipe reads `cookable === null`. Drives the
+     *  detail-page "N ingredients need linking" prompt and the
+     *  shopping-list "Add missing" flow's linking-first message. */
+    unlinked_ingredient_count: number;
     /** C-4 Chunk 6 — structured steps. The list endpoint sets
      *  `has_structured_steps` (cheap existence check); the detail endpoint
      *  hydrates `steps[]`. Empty `steps[]` + `has_structured_steps === false`

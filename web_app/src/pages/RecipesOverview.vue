@@ -33,8 +33,8 @@
             </BaseButton>
             <BaseButton
                 variant="ghost"
-                :icon="ICONS.link"
-                label="Import from URL"
+                :icon="ICONS.content_paste"
+                label="Import"
                 class="q-mr-sm"
                 @click="onImportClick"
             />
@@ -779,7 +779,7 @@
             }
             if (usesStockItemIds.value.length > 0) {
                 const wanted = new Set(usesStockItemIds.value);
-                if (!r.ingredients.some((i) => wanted.has(i.stock_item_id))) return false;
+                if (!r.ingredients.some((i) => i.stock_item_id !== null && wanted.has(i.stock_item_id))) return false;
             }
             if (searchText.value) {
                 const q = searchText.value.toLowerCase();
@@ -1119,14 +1119,14 @@
     // C-4 Chunk 7 — overview-side URL importer. Mirrors the detail-page
     // flow (which overwrites the current recipe); here we *create* a new
     // recipe from the import preview and route into its detail page so the
-    // user can finish the cleanup. Ingredients whose names couldn't be
-    // fuzzy-matched to a stock item are skipped server-side (the create
-    // endpoint requires a stock_item_id per ingredient); we surface the
-    // count in the success toast so the user knows to add them manually.
-    // FU-102 — the dialog (RecipeImportDialog) owns url/error/loading
-    // state and the `importFromUrlAsync` call. This page only opens it
-    // and handles what to do with the result: build a create payload,
-    // POST it, navigate to the new recipe, and toast.
+    // user can finish the cleanup.
+    //
+    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4/5 — every ingredient rides
+    // through create now: matched ones as linked (stock_item_id set),
+    // unmatched ones as unlinked (raw_text set, stock_item_id null).
+    // The Chunk-6 bulk-linker page is where the user resolves the
+    // unlinked ones at their leisure. Toast surfaces the count so the
+    // user knows.
     const importOpen = ref(false);
 
     function onImportClick() {
@@ -1135,18 +1135,16 @@
 
     async function onRecipeImported(imported: ImportedRecipe) {
         try {
-            // Only ingredients with a fuzzy-matched stock_item_id can ship
-            // through create (FK constraint). The rest stay as a counter in
-            // the toast.
-            const matchedIngredients = imported.ingredients.filter(
-                (i): i is typeof i & { stock_item_id: string } => Boolean(i.stock_item_id),
-            );
-            const unmatchedCount = imported.ingredients.length - matchedIngredients.length;
+            const unmatchedCount = imported.ingredients.filter(
+                (i) => !i.stock_item_id,
+            ).length;
 
-            // Map each ingredient + step to a client_id so the create's
-            // nested steps can reference them.
-            const ingredientPayload = matchedIngredients.map((i) => ({
+            // Map every ingredient through — Chunk 4 made both branches
+            // legal at the create endpoint. Client_ids are fresh for
+            // structured-step linkage.
+            const ingredientPayload = imported.ingredients.map((i) => ({
                 stock_item_id: i.stock_item_id,
+                raw_text: i.raw_text ?? null,
                 quantity: i.quantity,
                 unit: i.unit,
                 notes: i.notes,
@@ -1197,14 +1195,15 @@
                         'Review and clean it up.',
                 });
             } else {
+                const matchedCount = imported.ingredients.length - unmatchedCount;
                 $q.notify({
                     type: 'positive',
                     position: 'bottom-right',
                     timeout: 5000,
                     message: `Imported "${imported.name}".`,
                     caption: unmatchedCount === 0
-                        ? `${matchedIngredients.length} ingredient${matchedIngredients.length === 1 ? '' : 's'} matched.`
-                        : `${unmatchedCount} ingredient${unmatchedCount === 1 ? '' : 's'} couldn’t be matched — add them manually.`,
+                        ? `${matchedCount} ingredient${matchedCount === 1 ? '' : 's'} matched.`
+                        : `${matchedCount} matched · ${unmatchedCount} unlinked — link them later from the recipe.`,
                 });
             }
             if (newId) void router.push(`/cookbook/${newId}`);

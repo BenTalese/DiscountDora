@@ -9,6 +9,183 @@ next.
 
 ---
 
+## 2026-07-03 — ⭐ P8-07 Zero-Input Pantry (FLAGSHIP) + P6-07/FU-449 cook→consume shipped
+
+**Why:** User asked to do P8-07. STEP-0 dependency check (champion plan:
+"only after the P6 loop is solid") found P6-07 cook→consume was the shaky
+leg — `consumption_events` was never persisted (FU-449), so run-out
+prediction saw purchases only. That signal is one of P8-07's four named
+belief inputs, so FU-449 was built as the foundation of this unit.
+
+**Decisions taken (asked the user, 3 Qs):** full flagship in one pass ·
+**additive** belief chip (recorded level stays primary — big UX risk
+removed) · per-user opt-out **default ON**. No Python env on this box, so
+all backend + migration + pytest is written but **not run** — verify-later
+per the user's standing preference; browser + server-env checklist in
+`DORA_VERIFY.md` under Stock.
+
+**Foundation state confirmed (recon agent):** P6-01 intake ✅, P6-04
+cadence ✅ (purchase-only), P6-13 stocktake ✅ (`/check`, `last_checked_at`
+separate from `stock_level_last_updated`), P6-07 depletion ⚠️→ built here.
+
+**What shipped — FU-449 (cook→consume):**
+- `ConsumptionEvent` entity + table + migration `f2a9c4d7e1b8` + mapper.
+  Stock-item-scoped depletion log (distinct from recipe-scoped `CookEvent`);
+  FKs SET NULL, denormalised names, `from/to_sequence`, indexed on
+  stock_item_id. Not in backup SECTIONS (consistent with CookEvent — event
+  logs aren't backed up).
+- Written on a cook-driven level **drop** via the existing
+  `PATCH /stock-items/<id>` path — new `consumption_source` /
+  `consumption_recipe_id` request fields + `_maybe_record_consumption`
+  helper (records only when new seq > prev seq). Cook-mode finish dialog
+  (`RecipeCookMode.confirmFinish`) tags its per-item drops `source='cook'`.
+
+**What shipped — P8-07 (Zero-Input Pantry):**
+- **Belief core** `features/stock_items/pantry_belief.py` — pure
+  `compute_belief(BeliefInputs)->PantryBelief` (band + confidence + reason)
+  from intake + cadence + cooking + time-decay; manual override (recent
+  `last_checked_at`/level change) wins. Batched `gather_beliefs_for_items`
+  (no N+1). Server-owned (R-003) — client only renders.
+- **Endpoint** `GET /api/stock-items/beliefs` (gated on the pref).
+- **Pref** `User.inferred_pantry_enabled` default True — entity, mapping,
+  migration `a3e8b1f6c2d9`, update_me, `/me` DTO, TS model + payload,
+  Preferences → Pantry toggle.
+- **Ask-when-it-matters** — new `pantry_check` suggestion generator: a
+  single targeted quick-check when a decision hinges on an uncertain item
+  (on an open list OR in a meal planned this week), capped at 3, reuses
+  P6-13 `/check`. Gated on the pref.
+- **SPA** — `usePantryBeliefs` (shared cache, one fetch/overview),
+  `PantryBeliefChip.vue` (additive, alongside `StockLevelDot`) on stock
+  rows + item detail; belief cache invalidated on manual level change so
+  "override wins" shows immediately.
+- **Tests** `tests/test_pantry_belief.py` — pure-fixture suite covering
+  each signal, cooking-shifts-prediction, override precedence, time decay,
+  thin/no data, coarse-band invariant. (Traced by hand; not run — no py env.)
+- **Doc** `docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md` — full Charter
+  mapping (all 12, flagship requirement) + architecture + feedback-coverage
+  table + out-of-scope log.
+
+**Engineering-standards close-gate:**
+- R-003 — belief + consumption rules server-owned; reused
+  `stock_status.py` sequences/predicates (no bare literals in new code).
+- R-001 — consumption write reuses the single level-change site; reused
+  `PriceEntry`/`BaseDialog`/`StockLevelDot`/base components on the SPA.
+- R-005 — repository/session data access only; portable.
+- **Violation flagged (not fixed — R-007 scope):** FU-463 — the auto-add
+  hook's `>= 2` threshold + `# 2 = Low` comment in `update_stock_item.py`
+  are stale after the 3-band collapse (now = Out only, should be low-or-out
+  via `needs_restock`). Logged as an [OPEN] finding citing R-003.
+- **ADR evaluation:** the "pure decision core + thin repo-gather, unit-
+  tested without a DB" pattern now has two independent uses (buy_verdict,
+  pantry_belief) — a real recurring decision. Promoted to **R-027 + ADR**
+  in `ENGINEERING_STANDARDS.md`.
+
+**Next up:** browser + server-env verify of P8-07 (the checklist is the
+gate on calling the flagship done), then the champion sequence continues to
+**P8-08 Dora Score** (which FU-352/FU-296 already earmark a dashboard card
+for). FU-463 is a small high-value fix to grab opportunistically.
+
+---
+
+## 2026-07-03 — FU-296 / FU-299 / FU-300 shipped (dashboard price-drops, donut deep-links, log-price quick action)
+
+**Why:** User asked to do all three follow-ups in one pass. Same
+dashboard surface; the three sit nicely together — one Money-zone
+card, one Kitchen-zone interaction refinement, one quick-action
+addition. FU-296 verify is Python-driven (no Python on this box);
+299 + 300 are pure front-end and browser-verifiable.
+
+**What shipped:**
+
+- **FU-296 — Price-drops widget (server + client).**
+  - `dora_api/features/reports/reports.py` → new `PriceDropsHandler`
+    + `GET /api/reports/price-drops?limit=N`. Definition of "new
+    low": `current_offer.price_now` strictly less than the minimum of
+    that product's `ProductHistoricOffer.price_now` values. Products
+    with no history are excluded — a first-ever price isn't a drop
+    (Honesty, §2.4). Ranked by drop percent desc, then drop amount
+    desc; sliced server-side (state-ownership §8.2). `limit` clamps
+    to `[1, 20]`, default 5. Post-slice: stamps `has_image` +
+    `linked_stock_item_*` against only the sliced set, via a direct
+    metadata-table pass mirroring
+    `features/products/get_products.stamp_has_image` /
+    `stamp_linked_stock_items` — kept as a local mini-implementation
+    rather than sharing a DTO (the two response shapes are different
+    enough that unifying would leak fields both ways).
+  - `web_app/src/services/api/reportsApiService.ts` → new
+    `PriceDropRow` / `PriceDropsResponse` types +
+    `getPriceDropsAsync(limit)`.
+  - `web_app/src/pages/DashboardPage.vue` → new `price_drops` card
+    def (zone `'money'`, `gate: 'products'`, `defaultHidden: true`).
+    Rendered similarly to Best deals — product avatar (or shopping-
+    bag placeholder), name + store, optional linked-stock-item link,
+    price-now with "was $prev_low", and a `-N% off` negative badge.
+    Loader added to `loadAll()`.
+
+- **FU-299 — Stock donut deep-links.**
+  - Investigation first: `StockOverview.vue` already reads
+    `?level_id=<id>` (lines 1081-1088). No new query-param needed —
+    the FU's original recommendation to add `?status=low|out` was
+    superseded by that pre-existing hook. Better to link with the
+    canonical id than a status word.
+  - Level ids resolved via
+    `findLevelBySequence(stockLevels, LOW_STOCK_SEQUENCE / OUT_OF_STOCK_SEQUENCE)`
+    on `stockLevelStore` (added to `loadAll()`). Renamed levels
+    still route correctly (R-003 — key off sequence, not name).
+  - Removed `:to="/stock"` from the outer `DashboardCard`. Added a
+    "View →" action link for the unfiltered pantry (so the whole-app
+    "just show me pantry" muscle memory still works). Each donut
+    segment is now an SVG `<circle>` with `role="link"`, `tabindex`,
+    keyboard handlers, and a click that calls `goTo(seg.link)`; each
+    legend low/out row is a `<router-link display: contents>`.
+    Considered wrapping the SVG segments in `<router-link custom>` +
+    an inline `<a>` — but HTML `<a>` inside SVG is namespace-mixed
+    and behaves inconsistently, so the click-handler + role="link"
+    combo is cleaner.
+  - "In stock" segment / legend row deliberately not clickable —
+    there's no matching filter (`level_id` is a specific level, and
+    "in stock" is the residual, not a level). Left as plain text.
+
+- **FU-300 — Log-price quick action.**
+  - New composable `useLogPrice` + component `LogPriceSheet.vue`
+    (mounted globally in `MainLayout.vue` alongside `QuickAddSheet`).
+    Mirrors QuickAddSheet's two-step shape: pick a stock item
+    (search + shortlist with low/out first), then the shared
+    `PriceEntry` component in shelf mode. Item's
+    `price_entry_prefill` fetched lazily from the detail endpoint on
+    selection. Submits via `stockItemApi.addPriceObservationAsync`
+    with a success toast.
+  - Dashboard quick-action bar now has three buttons (Add item · Add
+    to list · Log price). Log-price is money-gated to match
+    `StockItemRowPriceButton`'s posture (ADR-005) — price entry is a
+    money surface.
+
+**Verify:** three new sections in `DORA_VERIFY.md` under Dashboard
+(price-drops · donut deep-links · log-price quick action). FU-296
+server behaviour needs a Python-capable box for the endpoint smoke
++ endpoint-level rank/exclusion checks.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation) — reused `BaseButton`, `BaseDialog`,
+  `PriceEntry`, `DashboardCard`, `AppSpinner`; new `LogPriceSheet`
+  itself is a reusable base for any future "pick item then act" flow.
+- R-002 (theme tokens) — no hex/rgba introduced; new CSS relies on
+  semantic tokens (`--semantic-*`) and inherits `.dora-*` chrome.
+- R-003 (single source of truth) — server owns the "new low" rule;
+  client renders only. Stock-level ids resolved via the canonical
+  `findLevelBySequence` helper — no name-string literals.
+- R-005 (portable data access) — new SQL uses the repository +
+  session pattern the other report handlers already use; nothing
+  vendor-specific.
+
+**Follow-ups moved:** FU-296, FU-299, FU-300 → `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Next up:** whatever the user asks. Nothing spun off from this
+work — the surrounding dashboard code was clean and the shared
+`PriceEntry` extraction (FU-227) paid off exactly as designed.
+
+---
+
 ## 2026-07-04 — Recipe importer rebuild: Chunk 4 landed (schema + tri-state cookability, invisible on ship)
 
 **Why:** Continuing the six-chunk plan in
@@ -3764,7 +3941,7 @@ together.
   rebuilt around the verified flow: a `Current password` input next to
   the address field, a "Send confirmation" button (the old "Save" was
   misleading — nothing saves until the user confirms in the new
-  inbox), description text spelling out the UX. `onSaveEmail` → 
+  inbox), description text spelling out the UX. `onSaveEmail` →
   `onRequestEmailChange`. `canRequestEmailChange` computed gates the
   button on email-changed + password-typed.
 

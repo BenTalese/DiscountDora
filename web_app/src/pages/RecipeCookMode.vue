@@ -1226,11 +1226,22 @@
         try {
             // Fan out per-row level updates with fail-soft semantics: one
             // failed item doesn't take down the rest of the batch.
+            // P8-07 / FU-449 — tag each finish-driven level change as a
+            // `cook` consumption so the server persists a ConsumptionEvent
+            // (the depletion leg of the loop). The server only records one
+            // when the level actually drops, so an "unchanged"/manual-up row
+            // that slips through carries no false consumption signal.
+            const recipeId = recipe.value?.recipe_id;
             const updates = finishRows.value
                 .map((row) => {
                     const target = resolveTargetLevel(row);
                     if (!target || target === row.currentLevelId) return null;
-                    return { stock_item_id: row.targetStockItemId, stock_level_id: target };
+                    return {
+                        stock_item_id: row.targetStockItemId,
+                        stock_level_id: target,
+                        consumption_source: 'cook' as const,
+                        ...(recipeId ? { consumption_recipe_id: recipeId } : {}),
+                    };
                 })
                 .filter((u): u is NonNullable<typeof u> => u !== null);
             await Promise.allSettled(

@@ -48,6 +48,7 @@ from dora_api.domain.entities.alert_interaction import AlertInteraction
 from dora_api.domain.entities.alert_preference import AlertPreference
 from dora_api.domain.entities.push_subscription import PushSubscription
 from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.consumption_event import ConsumptionEvent
 from dora_api.domain.entities.stock_item_expiry_event import StockItemExpiryEvent
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
@@ -534,6 +535,25 @@ def configure_mappings(db: SQLAlchemy):
         Column("occurred_at", DateTime(timezone=True), nullable=False),
     )
 
+    # P6-07 / FU-449 — append-only log of a stock item being drawn DOWN
+    # (by cooking, manual level-drop, or waste). The missing depletion leg
+    # of the loop: purchases record intake, this records outflow, so
+    # run-out prediction + the P8-07 belief blend consumption rhythm with
+    # purchase rhythm. FKs SET NULL so history survives item/recipe delete;
+    # denormalised names keep rows legible. See entity docstring.
+    consumption_event_table = Table(
+        "ConsumptionEvent", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="SET NULL"), nullable=True),
+        Column("stock_item_name", String(255), nullable=False),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="SET NULL"), nullable=True),
+        Column("recipe_name", String(255), nullable=True),
+        Column("source", String(16), nullable=False),
+        Column("from_sequence", Integer, nullable=True),
+        Column("to_sequence", Integer, nullable=True),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+    )
+
     # FU-342 — persisted backup library. One row per generated backup;
     # `storage_path` points at the file on disk. See entity docstring.
     backup_table = Table(
@@ -869,6 +889,9 @@ def configure_mappings(db: SQLAlchemy):
         # NULL = not set → SPA falls back to `BUILDER_TARGET_MEALS` (7).
         # Bounds enforced at the update-me boundary (1–21).
         Column("meals_per_week", Integer, nullable=True),
+        # P8-07 — Zero-Input Pantry opt-out. Default True (inference is the
+        # headline experience); users switch it off for purely manual levels.
+        Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
         Column("nutrition_mode", String(16), nullable=False, server_default="off"),
         # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
@@ -1089,6 +1112,11 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(CookEvent, cook_event_table, properties={
         "_id_col": cook_event_table.c.id,
         "id": cook_event_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(ConsumptionEvent, consumption_event_table, properties={
+        "_id_col": consumption_event_table.c.id,
+        "id": consumption_event_table.c.id,
     })
 
     _mapper_registry.map_imperatively(Backup, backup_table, properties={

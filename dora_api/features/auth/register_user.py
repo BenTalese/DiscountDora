@@ -90,6 +90,8 @@ class AuthenticatedUserDto:
     # FU-181 loose-end 2 — target meal count for the sequential builder.
     # None = not set (SPA falls back to 7).
     meals_per_week: int | None
+    # P8-07 — Zero-Input Pantry opt-out (default True).
+    inferred_pantry_enabled: bool
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
     # `complex` (complex requires admin-configured nutrition source).
     nutrition_mode: str
@@ -156,6 +158,7 @@ class AuthenticatedUserDto:
             money_features_enabled=bool(user.money_features_enabled),
             batch_features_enabled=bool(user.batch_features_enabled),
             always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
+            inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
             meals_per_week=(
                 int(user.meals_per_week) if user.meals_per_week is not None else None
             ),

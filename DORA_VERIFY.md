@@ -413,6 +413,21 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Cook mode's per-ingredient level decrement that flips an ingredient to Low → toast fires per triggered item (multiple toasts stack — verify readability)
 - [ ] Offline stock-level flip → queued (blue "Queued: Update stock level" toast); when back online + queue drains → auto-add toast fires *if* the flipped item genuinely transitions on the server side
 
+### ⭐ Zero-Input Pantry — inferred inventory (P8-07) — origin champion plan
+Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8` (ConsumptionEvent) + `a3e8b1f6c2d9` (User.inferred_pantry_enabled) on SQLite **and** Postgres; `verify_mappings()` passes for `ConsumptionEvent`; `pytest tests/test_pantry_belief.py` green.
+- [ ] Preferences → Pantry: "Infer stock levels" toggle is present and defaults ON for a fresh account; flipping it persists across reload
+- [ ] With inference ON, stock overview rows show a "Dora: ~Band · confidence" chip beside items that have purchase history; tooltip shows the reason (e.g. "~Low — bought 11 days ago; you usually finish in about 14 days")
+- [ ] With inference OFF, no belief chip renders anywhere and `GET /api/stock-items/beliefs` returns `{enabled:false, beliefs:{}}`
+- [ ] Items with no history / freshly-created show either no chip or a low-confidence "not enough history" reason — never a confident wrong band
+- [ ] Buy an item (finish a shop with it ticked + priced), reload → its belief reads Stocked with a recent-purchase reason
+- [ ] Cook a recipe using that item (finish dialog → mark it "down one"/"out") → a ConsumptionEvent is written; the item's belief drifts more depleted than purchase cadence alone would, and the reason mentions "cooked with N× since"
+- [ ] Manually change an item's level (or run a stocktake quick-check) → the chip immediately reflects the recorded level at HIGH confidence with "You confirmed this…"/"Updated…" and no "differs" outline (override wins)
+- [ ] Let an item go well past its usual cadence with no check → belief drifts to ~Out; if the recorded level still says Stocked the chip shows the warning outline ("differs from recorded")
+- [ ] Add an uncertain item to a draft shopping list → a single "Still have X?" quick-check appears in the suggestions inbox (not a bulk prompt); its action opens the item; dismiss/snooze work; capped at 3 across all in-play items
+- [ ] Plan a meal this week whose ingredient is uncertain → same quick-check fires via the cook-decision path
+- [ ] Dark-mode + non-money themes: chip colours ride semantic tokens (positive/warning/negative dots), no hardcoded colour
+- [ ] Backup → restore: ConsumptionEvent is an event log (like CookEvent) and intentionally NOT in the backup sections — confirm restore still succeeds and beliefs recompute from surviving purchases/cooks
+
 ### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
 - [ ] Finishing a shopping list — every ticked item flips to "Stocked" (was "Well-Stocked"). No level-override UI still labels a "Sufficient" middle option
 - [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out)
@@ -564,6 +579,40 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Dashboard
+
+### Log-price quick action — origin FU-300
+- [ ] Money features ON: dashboard quick-action bar shows three buttons — Add item · Add to list · Log price
+- [ ] Money features OFF: Log price button is hidden (matches row-level Log-a-price posture)
+- [ ] Click Log price → bottom sheet titled "Log a price" opens with a search input and a shortlist of stock items (low/out first)
+- [ ] Type a partial item name → results filter in real time
+- [ ] Pick an item → the sheet title updates to "Log a price · {name}"; PriceEntry form renders in shelf mode with the item's `price_entry_prefill` seeded (if any)
+- [ ] Back arrow returns to the picker with the search input cleared
+- [ ] Submit a valid entry → success toast ("Logged a price for X."); sheet closes; the observation appears on the stock item's detail Your-Prices widget
+- [ ] Cancel from within PriceEntry → sheet closes without a request
+- [ ] Sheet dismissed via backdrop / close-X → next open starts fresh (no stale selection or query)
+
+### Dashboard stock donut deep-links — origin FU-299
+- [ ] Pantry card no longer navigates as a whole card on click — only the "View →" action link, donut low/out segments, and legend low/out rows are clickable
+- [ ] Click the yellow low segment (SVG) → routes to `/stock?level_id=<low>`; the Level filter chip in the FilterBar shows Low Stock and only low items render
+- [ ] Click the red out segment → routes to `/stock?level_id=<out>`; only out-of-stock items render
+- [ ] Click the "running low" legend row → same low-filtered view
+- [ ] Click the "out" legend row → same out-filtered view
+- [ ] Click the green in-stock segment or legend row → nothing happens (no filter for the residual bucket)
+- [ ] "View →" action still opens the unfiltered `/stock`
+- [ ] Keyboard: Tab focuses the low/out segments; Enter/Space navigates to the filtered view
+- [ ] Screen reader announces "View low items" / "View out items" for the linkable segments
+
+### Dashboard price-drops widget — origin FU-296
+- [ ] Products feature ON: "Price drops" appears in the Cards menu under the Money zone (defaultHidden — enable it from there)
+- [ ] Products feature OFF: card is absent from both the dashboard and the Cards menu
+- [ ] With no historic offers on any product → card shows the empty state ("Nothing at a new low right now…")
+- [ ] Seed a product where `current_offer.price_now` < `min(historic_offers.price_now)` → card lists it with store name, "was $X" from the previous low, "−N%" badge, and a link to the linked stock item when one exists
+- [ ] Product with `is_active=false` or with a `null` current offer → excluded from the list
+- [ ] Product with no historic offers → excluded (Honesty — the first-ever price isn't a "drop")
+- [ ] Rank order: highest drop-% first (ties broken by drop-amount)
+- [ ] `/api/reports/price-drops?limit=N` clamps to `[1, 20]`; default is 5
+- [ ] Product images: `has_image=true` rows fetch `/api/products/{id}/image`; otherwise show the shopping_bag placeholder
+- [ ] Dark-mode + non-money theme themes: colours ride semantic tokens (no hardcoded red/green)
 
 ### Dashboard rebuild — full walk Phases 0–7 — origin FU-301
 - [ ] **Phase 0** — cards keyboard-focus + middle-click; the dark-mode question reads correctly

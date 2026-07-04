@@ -118,6 +118,10 @@
              useQuickAdd().openQuickAdd(). -->
         <QuickAddSheet v-if="currentUser" />
 
+        <!-- FU-300 — global log-price sheet. Mounted once; any screen pops
+             it via useLogPrice().openLogPrice(). -->
+        <LogPriceSheet v-if="currentUser" />
+
         <!-- Keyboard-shortcut cheatsheet (opened with "?"). -->
         <ShortcutsCheatsheet v-if="currentUser" />
     </q-layout>
@@ -134,6 +138,7 @@
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
+    import LogPriceSheet from 'src/components/LogPriceSheet.vue';
     import ShortcutsCheatsheet from 'src/components/ShortcutsCheatsheet.vue';
     import ApplicationLogo from 'src/components/menu/ApplicationLogo.vue';
     import HamburgerButton from 'src/components/menu/HamburgerButton.vue';

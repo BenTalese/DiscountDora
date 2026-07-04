@@ -21,13 +21,17 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
+from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.stock_items.pantry_belief import gather_beliefs_for_items
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -45,6 +49,7 @@ KIND_USE_SOON = "use_soon"
 KIND_OVER_BUDGET = "over_budget"
 KIND_LIKELY_DUE = "likely_due"
 KIND_FREQUENT_WASTER = "frequent_waster"
+KIND_PANTRY_CHECK = "pantry_check"
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +309,115 @@ def generate_frequent_waster(repository: SqlAlchemyRepository) -> list[Suggestio
     return out
 
 
+# ── 5. Pantry quick-check (P8-07 "ask only when it matters") ────────────
+# The Zero-Input Pantry never bulk-prompts a stocktake. It asks a SINGLE
+# targeted quick-check only when a *decision* hinges on an item whose
+# inferred level we're genuinely unsure about — you're drafting a shop
+# (buy decision) or a planned meal needs it (cook decision), and the belief
+# confidence is low. Gated on the per-user `inferred_pantry_enabled` opt-out.
+
+_PANTRY_CHECK_HORIZON_DAYS = 7   # planned meals within a week are "imminent"
+_PANTRY_CHECK_MAX = 3            # never a bulk prompt — a few at most
+
+
+def generate_pantry_check(
+    repository: SqlAlchemyRepository, user_id: UUID | None
+) -> list[Suggestion]:
+    if user_id is None:
+        return []
+    user: User | None = repository.get(User).by_id(user_id)
+    if user is None or not user.inferred_pantry_enabled:
+        return []
+
+    today = household_today(repository)
+
+    # ── Which items does a pending decision hinge on? ──
+    # (a) On an open (non-archived) shopping list → a buy decision.
+    open_lists = repository.get(ShoppingList).all(
+        EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
+    )
+    in_play: set[UUID] = set()
+    decision_by_item: dict[UUID, str] = {}
+    if open_lists:
+        open_lines = repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID)
+            .in_([l.id for l in open_lists])
+        )
+        for line in open_lines:
+            if line.stock_item_id is not None:
+                in_play.add(line.stock_item_id)
+                decision_by_item.setdefault(line.stock_item_id, "it's on a shopping list you're building")
+
+    # (b) In a meal planned within the next week → a cook decision. Read the
+    #     entry's `_recipe_id` FK directly to avoid lazy-loading each recipe.
+    horizon = today + timedelta(days=_PANTRY_CHECK_HORIZON_DAYS)
+    entries = repository.get(MealPlanEntry).all(
+        EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR).gte(today)
+        & EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR).lte(horizon)
+    )
+    recipe_ids = {e._recipe_id for e in entries if getattr(e, "_recipe_id", None)}  # noqa: SLF001
+    if recipe_ids:
+        ingredients = repository.get(RecipeIngredient).all(
+            EntityField(RecipeIngredient, "_recipe_id").in_(list(recipe_ids))
+        )
+        for ing in ingredients:
+            sid = getattr(ing, "_stock_item_id", None)  # noqa: SLF001
+            if sid is not None and not ing.is_optional:
+                in_play.add(sid)
+                decision_by_item.setdefault(sid, "a meal you've planned this week needs it")
+
+    if not in_play:
+        return []
+
+    # ── Compute belief for just the in-play set; ask about the uncertain. ──
+    items = repository.get(StockItem).include(StockItem.Fields.STOCK_LEVEL).all(
+        EntityField(StockItem, "id").in_(list(in_play))
+    )
+    beliefs = gather_beliefs_for_items(repository, items)
+    name_by_id = {i.id: i.name for i in items}
+
+    candidates: list[tuple[float, UUID]] = []
+    for item_id, belief in beliefs.items():
+        # "Uncertain enough to be worth a decision-time question": low
+        # confidence, or the inference disagrees with the recorded level
+        # without being highly confident. High-confidence beliefs (incl.
+        # freshly-checked items) never nag.
+        uncertain = (
+            belief.confidence_band == "low"
+            or (belief.differs_from_recorded and belief.confidence_band != "high")
+        )
+        if uncertain:
+            candidates.append((belief.confidence, item_id))
+
+    # Least-confident first; cap so this is a targeted nudge, not a queue.
+    candidates.sort(key=lambda t: t[0])
+    out: list[Suggestion] = []
+    for _confidence, item_id in candidates[:_PANTRY_CHECK_MAX]:
+        belief = beliefs[item_id]
+        name = name_by_id.get(item_id, "an item")
+        why_decision = decision_by_item.get(item_id, "a decision depends on it")
+        out.append(Suggestion(
+            kind=KIND_PANTRY_CHECK,
+            dedup_key=str(item_id),
+            severity=SEVERITY_LOW,
+            title=f"Still have {name}?",
+            body=f"I think it's {belief.believed_band} — {why_decision}. A quick check keeps me honest.",
+            reason=(
+                f"{belief.reason} Confidence is {belief.confidence_band}, and "
+                f"{why_decision}, so a one-tap confirm resolves the uncertainty "
+                f"before you rely on it."
+            ),
+            primary_action={"path": f"/stock/{item_id}", "label": "Quick check"},
+            payload={
+                "stock_item_id": str(item_id),
+                "item_name": name,
+                "believed_band": belief.believed_band,
+                "confidence": belief.confidence_band,
+            },
+        ))
+    return out
+
+
 # ── Orchestrator ────────────────────────────────────────────────────────
 
 def generate_all(repository: SqlAlchemyRepository, user_id: UUID | None) -> list[Suggestion]:
@@ -312,4 +426,5 @@ def generate_all(repository: SqlAlchemyRepository, user_id: UUID | None) -> list
     out.extend(generate_over_budget(repository, user_id))
     out.extend(generate_likely_due(repository))
     out.extend(generate_frequent_waster(repository))
+    out.extend(generate_pantry_check(repository, user_id))
     return out

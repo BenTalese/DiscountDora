@@ -96,6 +96,9 @@ export type AuthenticatedUser = {
     // null = not set → the SPA falls back to `BUILDER_TARGET_MEALS_FALLBACK` (7).
     // Bounds 1–21 enforced server-side.
     meals_per_week: number | null;
+    // P8-07 — Zero-Input Pantry opt-out. Default true (inferred stock
+    // levels are the headline experience); false hides the belief overlay.
+    inferred_pantry_enabled: boolean;
     // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
     // the composable layers this with install `features.nutrition`.

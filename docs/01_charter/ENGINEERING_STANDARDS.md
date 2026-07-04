@@ -1070,6 +1070,34 @@ exceptions, which still must be commented) · **Source** (where it was establish
   promoted because the same mistake is easy to make on any future
   paired-primitive component.
 
+### R-028 — Domain inference = pure decision core + thin repo-gather
+- **Rule:** A feature that *derives a domain judgement* (a verdict, a belief,
+  a score, a prediction) splits into two pieces: a **pure function** that takes
+  an already-gathered inputs dataclass and returns the result — no repository,
+  no HTTP, no clock reads passed in as an arg — and a **thin gather layer**
+  that does the repo access and calls the pure core. The endpoint calls the
+  gather layer; unit tests call the pure core directly with fixture inputs.
+- **Why:** Domain judgements are where the subtle rules live (cadence cuts,
+  confidence decay, override precedence) and where regressions hide. A pure
+  core is exhaustively unit-testable without a DB or Flask, so the rules get
+  pinned cheaply; mixing repo access into the logic forces slow, brittle e2e
+  setup for what is really arithmetic. It also keeps the judgement **server-
+  owned** (R-003) with one obvious home.
+- **Apply:** New derivation features follow `get_buy_verdict.compose_verdict`
+  / `pantry_belief.compute_belief`: an `XInputs` dataclass, a pure
+  `compute_x(inputs)`, a `gather_x_inputs(repo, …)` (batched — no N+1 for
+  list overlays), and a `tests/test_x.py` that drives the pure fn with
+  fixtures. Pass `today`/clock values *into* the inputs so time-dependent
+  logic is deterministic in tests.
+- **Violation signal:** a handler that queries the repo and computes the
+  judgement inline; a domain-judgement test that needs the Flask test client
+  or a seeded DB to assert a branch.
+- **Carve-outs:** trivial one-line derivations don't need the split — the rule
+  is for judgements with ≥2 interacting rules.
+- **Source:** established from `get_buy_verdict` (P8-05) and re-applied in
+  `pantry_belief` (P8-07); promoted 2026-07-03 (ADR-024) once the second use
+  confirmed the pattern.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1791,6 +1819,19 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   - Existing paired-button components get an audit: `git grep 'q-gutter' web_app/src/components/` surfaces candidates. Each hit is checked against "is this component ever mounted inside a parent that also carries a Quasar gutter class?" — if yes, migrate to multi-root or `gap`.
   - The rule extends R-001 (componentise first) — R-001 said *create the primitive*; R-027 adds *and don't sabotage it with wrapper DOM that fights the caller's layout*.
 - **Promotes rule:** R-027.
+
+### ADR-024 — Domain inference = pure decision core + thin repo-gather
+- **Date / task:** 2026-07-03 (P8-07 Zero-Input Pantry belief service).
+- **Status:** accepted
+- **Context:** P8-07 needed a per-item belief (band + confidence + reason) derived from four interacting signals (intake, cadence, cooking, time decay) with subtle rules — override precedence, confidence decay, coarse-band cuts. This is the same *shape* as the P8-05 buy-verdict, which had already split into a pure `compose_verdict(_AxisInputs)` + a thin `_gather_inputs` repo walk, and whose rules are pinned by `tests/test_buy_verdict.py` with zero DB. Building the belief the same way (pure `compute_belief(BeliefInputs)` + `gather_beliefs_for_items`) meant the tricky logic got a fast fixture-driven unit suite (`tests/test_pantry_belief.py`) while the repo access stayed a thin, separately-verified layer. Two independent uses of the pattern = the "don't do it twice differently" bar.
+- **Decision:** Adopt R-028. Domain-judgement features split into a pure function over an inputs dataclass (no repo / HTTP / ambient clock) + a thin gather layer that the endpoint calls; tests drive the pure core with fixtures. Time values are passed *into* the inputs for determinism. Keeps the judgement server-owned (R-003) with one testable home.
+- **Alternatives considered:**
+  - **Compute inline in the endpoint handler.** Rejected — forces slow, brittle e2e setup to exercise arithmetic branches, and buries the domain rules in repo plumbing.
+  - **Leave it as a one-off (don't promote).** Rejected — two independent uses (buy_verdict, pantry_belief) is exactly when a pattern should become a rule so the next derivation feature (e.g. P8-08 Dora Score) follows it by default rather than re-discovering it.
+- **Consequences:**
+  - P8-08 Dora Score and any future prediction/score feature start from this shape.
+  - The gather layer must still batch for list overlays (no N+1) — called out in R-028's Apply.
+- **Promotes rule:** R-028.
 
 ---
 

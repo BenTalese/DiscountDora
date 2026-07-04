@@ -10,6 +10,14 @@ FU-314 lazy-loader retirement + FU-315 auto-add toast wiring + FU-316
 quick-add polish + several stale-FU resolves
 (052/065/134/144/170/423); full rebuild 2026-07-02 verified against the
 codebase,
+**Regenerated: 2026-07-03** (hand-edit close-gate for ⭐ **P8-07 Zero-Input
+Pantry** flagship + **FU-449** cook→consume depletion (P6-07) + FU-296
+price-drops widget + FU-299 stock-donut deep-links + FU-300 log-price quick
+action + FU-327 cross-platform build scripts + FU-016 guard-race audit + FU-181
+meals-per-week pref + FU-314 lazy-loader retirement + FU-315 auto-add
+toast wiring + FU-316 quick-add polish + several stale-FU
+resolves (052/065/134/144/170/423); prior full rebuild 2026-07-02
+verified against the codebase,
 not just the docs). This is the single front door: where every phase and workstream
 is up to, and what needs your attention. For *where things stand* this doc wins; for
 *how/why* a decision was made, follow the linked planning doc. It is regenerated
@@ -29,16 +37,20 @@ backend-green now). **Phase 1** is closer to **~85%** than the earlier "95%" cal
 a 2026-07-02 cross-check against `PROMPT_PLAN_PART_6_POLISH.md` found six real gaps
 (FU-449..452 plus the existing FU-351/352) — notably `consumption_events` was never
 persisted, so run-out prediction still sees purchases only, not cooking (the loop
-is closed in the UX but not yet in the data). **Phase 3 is now ~35%**: P8-06
-Wait-or-Buy (`wait_hint` on the buy-verdict endpoint) shipped this session,
-BuyVerdictCard is wired into the stock-item detail page (FU-437 closed), and
-P8-03/P8-04 were cut so the champion sequence collapses to
-`P8-01 → P8-02 → P8-05 → P8-06 → P8-07 (flagship) → P8-08 → P8-09 → P8-10` —
-Zero-Input Pantry is genuinely next. The most recent work was
-the onboarding starter-data rework (per-name checklists + paste-rows). **Next up:**
-browser-verify the new onboarding flow, then continue the champion sequence toward
-the flagship **Zero-Input Pantry (P8-07)** — but a governance call on crowd-sourced
-prices (**FU-436**) is pending and blocks two of the champion features.
+is closed in the UX but not yet in the data). **Phase 3 is now ~55%**: the flagship
+**⭐ P8-07 Zero-Input Pantry** was built this session (inferred belief per
+stock item — band + confidence + reason from purchases + cooking + cadence +
+time-decay; additive chip; per-user opt-out; ask-when-it-matters quick-checks),
+riding on **FU-449** which finally closed the P6-07 cook→consume leg
+(`ConsumptionEvent` now persists, so run-out prediction shifts when you cook,
+not only buy). P8-06 Wait-or-Buy + BuyVerdictCard shipped earlier; P8-03/P8-04
+were cut. Champion sequence:
+`P8-01 → P8-02 → P8-05 → P8-06 → P8-07 (flagship, built) → P8-08 → P8-09 → P8-10`.
+**Everything P8-07 is written but NOT yet run** — no Python env on the dev box —
+so migrations + pytest + the belief endpoint need a server-env pass, and the
+belief chip / quick-check / toggle need a browser walk (`DORA_VERIFY.md` §Stock).
+**Next up:** verify P8-07 (the gate on calling the flagship done), then
+**P8-08 Dora Score**.
 
 ---
 
@@ -47,9 +59,9 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/430/431/432). |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~85% | Six P6 items partial or unbuilt (surfaced 2026-07-02 legacy-plan cross-check): **FU-449** P6-07 `consumption_events` writes missing (UX shipped, prediction still purchase-only); **FU-450** P6-03 `fake_markdown` flag + `good_deal` alert type (P8-05 superseded framing but left pieces); **FU-451** P6-09 budget-defense swaps ("negotiator" half); **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (folded into P8-08 Dora Score). |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~88% | **FU-449 now closed** — P6-07 cook→consume `ConsumptionEvent` persists (built with P8-07); the loop is genuinely closed (prediction shifts on cooking). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (→ P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~35% | P8-02 + P8-05 + **P8-06 wait_hint** shipped; **BuyVerdictCard wired into detail-page overview** (FU-437 closed). Flagship P8-07 next; P8-08/09/10 not started. P8-03 + P8-04 cut (§7 Decisions 6/7). |
+| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | 🟡 ~55% | **⭐ P8-07 Zero-Input Pantry BUILT** (belief service + consumption events + additive chip + quick-checks + pref; verify pending — no py env). P8-02 + P8-05 + P8-06 shipped; BuyVerdictCard wired (FU-437). **P8-08 Dora Score next**; P8-09/10 not started. P8-03 + P8-04 cut (§7 Decisions 6/7). |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
 
 ---
@@ -66,6 +78,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 | Cook Mode | ✅ | Chunks 1–6 (84% of feedback) | `C_big_rock_design_briefs.md` |
 | Cookbook | ➗ | Chunks 1–10 shipped; 5 Recipe-Detail bullets remain (FU-432); tag-taxonomy needs env verify (FU-085) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Stock Overview | ✅ | 32/41 bullets; 3-band StockLevel; buy-verdict badge wired | `PROPOSAL_STOCK_OVERVIEW` |
+| ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end (belief service `pantry_belief.py` + `ConsumptionEvent`/FU-449 + `/stock-items/beliefs` + additive `PantryBeliefChip` + `pantry_check` quick-check + per-user pref). **Server-env + browser verify pending** (no py env on dev box). | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
 | Buy-verdict oracle (P8-05 + P8-06) | ✅ | Row + shopping-line badges + full `BuyVerdictCard` wired into stock-item detail overview (FU-437 closed 2026-07-02); P8-06 `wait_hint` on `wait` verdicts landed 2026-07-02 (FU-438 closed). Only opportunistic polish left (FU-454 — two card action variants unwired). | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
 | Barcode-to-add (P8-02) | ✅ | OFF lookup for unknown EANs, gated by `scanning_enabled` | [PROPOSAL](docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md) |
 | Onboarding | 🟡 | Per-name picks + paste-rows just shipped; **verify pending**; preferred-stores step not built (FU-383) | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
@@ -81,7 +94,7 @@ prices (**FU-436**) is pending and blocks two of the champion features.
 
 ## ⚠️ Needs your attention now
 
-Full backlog is 155 open items in `DORA_FOLLOWUPS.md`; these are the ones that want
+Full backlog is 152 open items in `DORA_FOLLOWUPS.md`; these are the ones that want
 a decision or a running-app check *now*, most important first.
 
 0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work.
@@ -89,7 +102,7 @@ a decision or a running-app check *now*, most important first.
 2. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering. This is the blocker you flagged.
 3. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
 4. **🔴 FU-353 — Rename GitHub repo + local checkout to DashyDora.** Your action (`gh repo rename` + `mv`); until then release-check URLs + README badges 404.
-5. **FU-195 — verify onboarding** (`DORA_VERIFY.md §Onboarding`). Walk the just-shipped per-name picks + paste-rows happy path.
+5. **⭐ Verify P8-07 Zero-Input Pantry** — the gate on calling the flagship done. Server-env: run migrations `f2a9c4d7e1b8` + `a3e8b1f6c2d9` + `pytest tests/test_pantry_belief.py`; then the browser walk in `DORA_VERIFY.md §Stock` (chip, quick-check, override-wins, cooking-shifts-belief, toggle). All code written on a box with no Python — nothing has been executed. Also grab **FU-463** while in `update_stock_item.py` (auto-add-when-low threshold went stale after the 3-band collapse — `>= 2` = Out only; small fix). **FU-195 onboarding verify** still open too.
 6. **FU-085 — Cookbook tag-taxonomy never run in a real env.** Verify the migration on SQLite + Postgres before building on it.
 7. **🕸 FU-178 — Fresh-SQLite boot is broken.** Migration chain dies at `d7c9e4a8c2b1`; tests bypass it via `drop_all+create_all`, so this hides until a real fresh boot.
 8. **FU-434 — Pre-existing `AdminDataImport.vue` tsc errors.** Two `exactOptional` errors pollute the close-gate every session; two-line fix.
@@ -103,6 +116,11 @@ a decision or a running-app check *now*, most important first.
 
 ## Recently shipped (newest first)
 
+- **⭐ P8-07 The Zero-Input Pantry (FLAGSHIP)** — inferred inventory: a server-owned confidence-weighted belief (Out/Low/Stocked band + confidence + reason) per stock item from purchases + cooking + cadence + time-decay; additive "Dora: ~Low" chip beside the recorded level; manual check always wins; single targeted quick-checks only when a decision hinges on an uncertain item; per-user opt-out (default on). New `/api/stock-items/beliefs`. Verify pending (no py env) — 2026-07-03
+- **P6-07 cook→consume depletion (FU-449)** — `ConsumptionEvent` now persists on recipe-finish level drops, so run-out prediction shifts when you cook, not only buy (the previously-missing loop leg) — 2026-07-03
+- **Dashboard "Log price" quick action** — third button on the dashboard quick-action bar (money-gated); global `LogPriceSheet` mounted alongside `QuickAddSheet` picks a stock item then hands off to the shared `PriceEntry` in shelf mode (closes FU-300) — 2026-07-03
+- **Dashboard stock donut deep-links** — Pantry donut low/out segments + legend rows now deep-link to `/stock?level_id=<id>`; card-level whole-card link replaced by a "View →" action for the unfiltered path (closes FU-299) — 2026-07-03
+- **Dashboard "Price drops" widget** — new Money-zone card (product-gated, opt-in) + `GET /api/reports/price-drops?limit=N` returning tracked products whose current offer is strictly below every prior historic price (closes FU-296; endpoint smoke pending a Python-capable box) — 2026-07-03
 - **Windows + macOS desktop build scripts** — `packaging/build-windows.ps1` (PowerShell) and `packaging/build-macos.sh` mirror `build-linux.sh` step-for-step; README's Desktop-bundle section rewritten to cover all three platforms; cross-platform verify user-driven (closes FU-327; installer packaging still deferred alongside FU-337) — 2026-07-03
 - **iOS/WKWebView audio-unlock primer for Dora voice** — `useSpeechOutput` now claims the browser's autoplay credit on first user gesture via a 44-byte silent muted WAV; fixes chat replies going silent on iPhone/iPad after the LLM `await` + Piper synth (closes FU-287; iOS browser-verify pending device access) — 2026-07-03
 - **Security + hardening batch** — Requests bumped past CVE-2024-35195 (2.31.0 → 2.32.4); fuzzywuzzy → rapidfuzz (MIT + maintained); global handler rolls back DB session on 500; dead `SelectComponent.vue` + pnpm-only `.npmrc` deleted; FU-196 umbrella disassembled into targeted FU-456..462 (closes FU-196) — 2026-07-03
@@ -132,7 +150,7 @@ a decision or a running-app check *now*, most important first.
 
 - **`DORA_WORKLOG.md`** — per-session handoff narrative (what ran, decisions, what's next).
 - **`CHANGELOG.md`** — product/code changes that shipped.
-- **`DORA_FOLLOWUPS.md`** — the full 155-item open backlog (this dashboard shows only the top).
+- **`DORA_FOLLOWUPS.md`** — the full 152-item open backlog (this dashboard shows only the top).
 - **`DORA_VERIFY.md`** — your browser-verify checklist (walk + delete as you confirm).
 - **The full per-doc register is below** — every planning doc's verified state.
 - **Charter / how & why:** `docs/01_charter/` (vision, standards, master plan).

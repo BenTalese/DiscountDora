@@ -115,6 +115,31 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
+            <template #title>Pantry</template>
+            <template #description>
+                The <strong>Zero-Input Pantry</strong> infers each item's level
+                from your shopping, cooking, and buying rhythm — so you don't
+                have to keep it up to date by hand. Dora shows what it thinks
+                beside the level you last recorded, with its confidence and
+                reasoning, and only asks a quick check when a decision depends
+                on something it's unsure about.
+            </template>
+
+            <SettingsRow
+                label="Infer stock levels"
+                help="When on, Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels — your recorded level is always what's used to shop and cook."
+            >
+                <q-toggle
+                    :model-value="currentUser.inferred_pantry_enabled"
+                    :disable="savingInferredPantry"
+                    @update:model-value="onInferredPantryChange"
+                />
+            </SettingsRow>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
             <template #title>Meal planning</template>
             <template #description>
                 Cooking style controls what the meal planner shows.
@@ -205,6 +230,25 @@
             notifyError('Could not save shopping-list preference.', err);
         } finally {
             savingAlwaysAsk.value = false;
+        }
+    }
+
+    // P8-07 — Zero-Input Pantry opt-out. Same optimistic-flip shape as the
+    // other single-toggle prefs. Default true on a fresh account.
+    const savingInferredPantry = ref(false);
+    async function onInferredPantryChange(value: boolean) {
+        savingInferredPantry.value = true;
+        try {
+            await authStore.updateMeAsync({ inferred_pantry_enabled: value });
+            notifySuccess(
+                value
+                    ? 'Dora will infer your stock levels.'
+                    : 'Inference off — levels are now purely manual.',
+            );
+        } catch (err) {
+            notifyError('Could not save pantry preference.', err);
+        } finally {
+            savingInferredPantry.value = false;
         }
     }
 

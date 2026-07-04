@@ -117,19 +117,26 @@
             ────────────────────────────────────────────────────────── -->
             <div class="stock-row__name-zone column items-start">
                 <div class="stock-row__name">{{ item.name }}</div>
-                <button
-                    v-if="locationName"
-                    type="button"
-                    class="stock-row__zone"
-                    @click.stop="emit('filter-location', item.stock_location_id!)"
-                >
-                    <q-icon :name="ICONS.place" size="14px" class="q-mr-xs" />
-                    {{ locationName }}
-                    <q-tooltip v-if="locationHasFullDetail">
-                        {{ locationFull }} · Filter to this location
-                    </q-tooltip>
-                    <q-tooltip v-else>Filter to this location</q-tooltip>
-                </button>
+                <!-- flex `gap` (not q-gutter) so the wrapper can't collide
+                     with any parent gutter scheme — R-027/ADR-023. -->
+                <div class="row items-center no-wrap" style="gap: 6px">
+                    <button
+                        v-if="locationName"
+                        type="button"
+                        class="stock-row__zone"
+                        @click.stop="emit('filter-location', item.stock_location_id!)"
+                    >
+                        <q-icon :name="ICONS.place" size="14px" class="q-mr-xs" />
+                        {{ locationName }}
+                        <q-tooltip v-if="locationHasFullDetail">
+                            {{ locationFull }} · Filter to this location
+                        </q-tooltip>
+                        <q-tooltip v-else>Filter to this location</q-tooltip>
+                    </button>
+                    <!-- P8-07 — Zero-Input Pantry inferred level (additive;
+                         beside the recorded level, never replacing it). -->
+                    <PantryBeliefChip :belief="belief" />
+                </div>
             </div>
 
             <q-space />
@@ -289,6 +296,7 @@
     import RowActionButton from 'src/components/RowActionButton.vue';
     import BuyVerdictBadge from 'src/components/stock/BuyVerdictBadge.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
+    import PantryBeliefChip from 'src/components/stock/PantryBeliefChip.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
@@ -296,6 +304,7 @@
     import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
+    import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
@@ -341,6 +350,10 @@
     // composable keeps re-mounts free). Show only medium/high
     // confidence: low-confidence noise on every row breaks Charter P3.
     const { verdict } = useBuyVerdict(props.item.stock_item_id);
+    // P8-07 — inferred belief for this row (shared module-level cache;
+    // loaded once by the overview). Null when inference is off or absent.
+    const { beliefFor } = usePantryBeliefs();
+    const belief = computed(() => beliefFor(props.item.stock_item_id));
     const verdictShouldShow = computed(() =>
         buyVerdictEnabled.value
         && verdict.value !== null

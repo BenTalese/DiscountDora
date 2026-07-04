@@ -6,6 +6,53 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **⭐ The Zero-Input Pantry — inferred inventory (P8-07 flagship,
+  2026-07-03).** Dora now holds a confidence-weighted *belief* about each
+  stock item's level — a coarse band (Out / Low / Stocked) + a confidence
+  + a plain-English reason — inferred from the closed loop instead of
+  manual upkeep: last purchase (intake), buy cadence, cooking depletion,
+  and time decay. It renders as an additive "Dora: ~Low · medium" chip
+  **beside** the recorded level on the stock overview + item detail (the
+  recorded level stays the source of truth for shopping/cooking); the
+  tooltip explains the reason. A recent manual check always wins and resets
+  confidence. Dora asks a single targeted quick-check only when a decision
+  hinges on an uncertain item (it's on a list you're building, or in a
+  meal planned this week) — never a bulk stocktake prompt. New endpoint
+  `GET /api/stock-items/beliefs`; per-user opt-out in Preferences → Pantry
+  (default on). Server-env verify (migrations + pytest + endpoint) pending;
+  browser checklist in `DORA_VERIFY.md`. See
+  `docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md` for the full
+  Charter mapping.
+- **Cook→consume depletion events (P6-07 / FU-449, 2026-07-03).** Closes
+  the missing leg of the loop: finishing a recipe now persists a
+  `ConsumptionEvent` per ingredient it draws down, so run-out prediction
+  (and the Zero-Input Pantry belief) shift when you *cook* with something,
+  not only when you *buy* it — previously prediction saw purchases only.
+- **Dashboard "Log price" quick action (FU-300, 2026-07-03).** Third
+  button in the dashboard quick-action bar (money-gated to match the
+  row-level Log-a-price posture, ADR-005). Pops a global
+  `LogPriceSheet` (mounted alongside `QuickAddSheet` in `MainLayout`)
+  that lists stock items low/out first, then hands off to the shared
+  `PriceEntry` component in shelf mode with the item's
+  `price_entry_prefill` seeded. Reuses
+  `stockItemApi.addPriceObservationAsync` — no new API.
+- **Dashboard stock donut deep-links (FU-299, 2026-07-03).** Pantry
+  donut low/out segments and legend rows now deep-link to the
+  filtered stock view (`/stock?level_id=<id>`). No new query-param —
+  the stock overview already reads `?level_id`. Level ids resolved
+  via `findLevelBySequence` on `stockLevelStore` so a renamed level
+  still routes correctly (R-003). The card-level whole-card link was
+  removed; a "View →" action link keeps the unfiltered path. "In
+  stock" is intentionally not clickable (no filter for the residual).
+- **Dashboard "Price drops" widget (FU-296, 2026-07-03).** New
+  Money-zone card (product-data-gated, opt-in) surfacing tracked
+  products whose current offer is strictly below every prior
+  historic price. Ranked by drop percent, sliced server-side (5 by
+  default). New endpoint `GET /api/reports/price-drops?limit=N`
+  (`PriceDropsHandler` in `reports.py`). Honesty (§2.4): products
+  with no prior history are excluded — a first-ever price isn't a
+  drop. Verify pending Python-capable machine
+  (checklist in `DORA_VERIFY.md`).
 - **Windows + macOS desktop build scripts (FU-327, 2026-07-03).** New
   `packaging/build-windows.ps1` (PowerShell) and
   `packaging/build-macos.sh` mirror `build-linux.sh` step-for-step:

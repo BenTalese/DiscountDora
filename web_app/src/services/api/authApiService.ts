@@ -69,6 +69,9 @@ export type UpdateMeCommand = {
      *  Positive int 1..21 sets it; `null` clears back to the SPA fallback
      *  (BUILDER_TARGET_MEALS_FALLBACK = 7). */
     meals_per_week?: number | null;
+    /** P8-07 — Zero-Input Pantry opt-out. `false` hides the inferred-level
+     *  belief overlay; default `true`. */
+    inferred_pantry_enabled?: boolean;
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';

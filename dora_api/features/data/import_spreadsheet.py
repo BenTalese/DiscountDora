@@ -471,7 +471,6 @@ class CommitSpreadsheetHandler:
                     name=row_name,
                     notes=None,
                     image=None,
-                    days_until_stocktake_alert=0,
                     stocktake_alerts_are_enabled=False,
                     stock_level_id=stock_level_id,
                     stock_location_id=stock_location_id,

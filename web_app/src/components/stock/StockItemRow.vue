@@ -76,7 +76,11 @@
             <BaseButton
                 variant="ghost"
                 dense
-                :class="['stock-row__level-btn', levelButtonClass]"
+                :class="[
+                    'stock-row__level-btn',
+                    levelButtonClass,
+                    { 'stock-row__level-btn--needs-check': needsCheck },
+                ]"
                 :style="levelButtonStyle"
                 :aria-label="`Stock level: ${levelName || 'unset'}`"
                 @click.stop
@@ -324,6 +328,15 @@
         selected?: boolean;
         focused?: boolean;
         peeking?: boolean;
+        /**
+         * PROPOSAL_STOCKTAKE_MODE §7 — passes the "this item is currently
+         * in the stocktake queue" signal down from the page (the page
+         * owns the server round-trip; the row just draws the outline).
+         * When true, the stock-level button gets a pulsing outline that
+         * matches the toolbar's Stocktake attention glow so overdue rows
+         * are discoverable without opening the runner.
+         */
+        needsCheck?: boolean;
     }>();
 
     const emit = defineEmits<{
@@ -803,6 +816,33 @@
         min-height: 32px;
         border-radius: var(--radius-sm, 4px);
         padding: 0;
+        /* Needed so the pulse box-shadow doesn't get clipped by any
+           overflow parent — the shadow radiates outside the 32px box. */
+        position: relative;
+    }
+
+    /* PROPOSAL_STOCKTAKE_MODE §7 — passive discovery outline for items
+       currently in the stocktake queue. Same "brand-accent pulse" the
+       toolbar's Stocktake attention glow uses (see BaseButton
+       `dora-btn--attention`), scoped to the tiny 32px level button.
+       Users notice a due item on the Overview without having to open
+       the runner. */
+    .stock-row__level-btn--needs-check {
+        animation: stock-row__level-needs-check-pulse 2s ease-in-out infinite;
+    }
+    @keyframes stock-row__level-needs-check-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-accent) 55%, transparent);
+        }
+        50% {
+            box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-accent) 0%, transparent);
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .stock-row__level-btn--needs-check {
+            animation: none;
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-accent) 45%, transparent);
+        }
     }
 
     /* Name + zone — emphasised name (L79), light zone with hover

@@ -80,8 +80,13 @@ const routes: RouteRecordRaw[] = [
             // Dashboard is the landing page; stock overview moves to /stock.
             { path: '', component: () => import('pages/DashboardPage.vue'), meta: { title: 'Dashboard' } },
             { path: 'stock', component: () => import('pages/StockOverview.vue'), meta: { title: 'Stock' } },
-            { path: 'stocktake', component: () => import('pages/StocktakePage.vue'), meta: { title: 'Stocktake' } },
-            { path: 'stocktake/run', component: () => import('pages/StocktakeRunner.vue'), meta: { title: 'Stocktake · running' } },
+            // PROPOSAL_STOCKTAKE_MODE §5.1 — no landing page. Tapping
+            // Stocktake drops straight into the focused runner; empty-
+            // queue state is handled inside the runner itself. The
+            // legacy `/stocktake/run` sub-route is redirected below for
+            // any bookmark / deep link that predates this change.
+            { path: 'stocktake', component: () => import('pages/StocktakeRunner.vue'), meta: { title: 'Stocktake' } },
+            { path: 'stocktake/run', redirect: '/stocktake' },
             { path: 'stock/:id', component: () => import('pages/StockItemDetailPage.vue'), meta: { title: 'Stock item' } },
             // Phase D / FU-186 — the in-app `/product-search` route is gone.
             // The Product Search nav entry now opens `AppSetting.product_search_url`
@@ -370,6 +375,15 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/system/features',
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
+                    },
+                    // PROPOSAL_STOCKTAKE_MODE §8 — new focused page for the
+                    // two global stocktake dials (default cadence + Auto
+                    // self-tuning). The old "Default stocktake reminder"
+                    // section on the Alerts page is superseded by this.
+                    {
+                        path: 'admin/system/stocktake',
+                        component: () => import('pages/settings/AdminSystemStocktakeSettings.vue'),
+                        meta: { title: 'System: Stocktake' }
                     },
                     {
                         // Old single System page → first of the four.

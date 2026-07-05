@@ -1,46 +1,34 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-04** (hand-edit close-gate for **Stocktake redesign
-Chunk 1 — backend engine**: new engagement gate (drops Essential/auto-add as
-signals; +60-day windows), band-based cadence + Auto self-tuning ON by default,
-grace period via COALESCE baseline (9999 sentinel dropped), Push 3-day snooze +
-endpoint, two new AppSetting columns, single alembic revision `d1f9c3a8b2e4`
-also merges two open heads. 18/18 new pytest green; one pre-existing
-buy_verdict failure logged as FU-455. Chained on **Stock Overview bulk "Log
-waste…"** — spun off the FU-226 chat, reuses `MarkAsWastedDialog` for
-batch reason capture with per-item events + expiry-clear + batch Undo. Chained
-on **FU-226 + FU-430 → `PROPOSAL_STOCKTAKE_MODE.md`**, decisions-locked — gate
-simplified to "do you actually keep this item?" (+60-day window), Essential →
-cadence-only (the sole per-item lever), Weekly/Fortnightly/Monthly bands + Auto
-self-tuning on by default, never-checked → grace period, verbs =
-Still-correct/Change-level + Skip/Push/Mute, expiry & Waste **cut** from
-stocktake, no landing page. Both FUs closed to `_RESOLVED`. Chained on **FU-454
-BuyVerdictCard
-one-tap actions wired end-to-end** — new shared `useBuyVerdictActions`
-composable, `mark_stocked` + `remove_from_list` both do real mutations
-across StockOverview / StockItemDetail / ShoppingListDetail. Chained on
-**FU-442 password policy → NIST/ISO alignment** — min 10→8, composition
-rules dropped, bundled breach-list check added, no admin toggle by
-explicit user call; 23/23 pytest green. Chained on **P8-10 Native mobile app** earlier the
-same session — Capacitor 8 scaffold with Android platform fully built
-locally + iOS platform scaffolded for a future Mac session; runtime-
-configurable backend URL via `@capacitor/preferences` + a first-run
-`/setup/backend` gate + Settings→About edit control; screen wake-lock
-composable wired into cook mode + shop mode; adaptive Android launcher
-icons regenerated from the mascot on a `#F5C462` background; `CAMERA
-/ WAKE_LOCK / VIBRATE / POST_NOTIFICATIONS` manifest permissions;
-`packaging/BUILD_NATIVE.md` + `docs/04_proposals/PLAY_STORE_LISTING.md`
-docs land; **FU-411 + FU-418 close**, **FU-465 new** — native FCM
-push bridge deferred. Champion sequence P8-01..P8-10 now complete
-(P8-03/P8-04 formally cut per §7). Rolls forward from earlier today's
-P8-09 Memory reports + P8-08 Dora Score + Recipe importer chunks 1-6 +
-2026-07-03's ⭐ P8-07 Zero-Input Pantry flagship. This is the single
-front door: where every phase and workstream is up to, and what needs
-your attention. For *where things stand* this doc wins; for *how/why*
-a decision was made, follow the linked planning doc. It is regenerated
-after each chunk of work — if it looks out of date, the last session
-skipped its close-gate (trust `DORA_WORKLOG.md` + `CHANGELOG.md` and
-regenerate).
+**Regenerated: 2026-07-04** — full dashboard rebuild after a long session
+that shipped the **Stocktake mode redesign trilogy** (Chunks 1–3
+end-to-end from `PROPOSAL_STOCKTAKE_MODE.md`), the **stocktake
+housekeeping pass** (retired the dead `locations/attention.py` heatmap +
+dropped two deprecated columns via alembic `e5c8b3a1f4d2`), and
+resolved **7 follow-ups**: FU-226 (queue-rules assessment → became the
+proposal), FU-430 (redesign brief written), FU-455 (buy-verdict
+all-thin-axes test drift fixed), FU-464 (auto-add-when-low regression
+from the 3-band collapse), FU-463 (two more SQLite `text()+str(uuid)`
+zero-row sites rewritten), FU-458 (per-user rate limits on
+`/assistant/ask` + `/act` + `/confirm`, extending `auth_helpers.rate_limit`
+with an optional `subject` arg), and FU-421 (closed as
+already-satisfied — existing expiry surface covers the "remind me to
+use this" spec ask). Backend pytest: **303/303 green** (was 297/298 at
+session start — 5 new tests, 1 pre-existing failure eliminated).
+`vue-tsc --noEmit`: clean throughout (only pre-existing Capacitor
+typing errors from the P8-10 native scaffold on this dev box).
+Migration head-count: 1 (was 2 — Chunk 1's `d1f9c3a8b2e4` merged the
+divergent 07-03/07-04 heads and Chunk-house `e5c8b3a1f4d2` chained
+cleanly). Session's front-door is the single **PROPOSAL_STOCKTAKE_MODE.md**
+brief; every decision it locks is live in code.
+
+This is the single front door: where every phase and workstream is up
+to, and what needs your attention. For *where things stand* this doc
+wins; for *how/why* a decision was made, follow the linked planning
+doc. Regenerated after each substantive close-gate (see
+`CLAUDE.md → Regenerating PROJECT_STATE.md`); if it looks out of date,
+the last session skipped its close-gate — trust `DORA_WORKLOG.md` +
+`CHANGELOG.md` over it.
 
 Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progress ·
 🔵 designed, not built · ⚪ not started · 🔴 needs your decision · 🕸 stale doc.
@@ -49,27 +37,26 @@ Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progres
 
 ## Where we are right now
 
-Phases 0 and 2 are effectively **done**: foundations, and the ingestion API +
-standalone companion. **Phase 1** sits at **~88%** — a 2026-07-02 cross-check
-against `PROMPT_PLAN_PART_6_POLISH.md` found five real gaps (FU-450..452 plus
-FU-351/352); the sixth (FU-449 cook→consume depletion) closed with P8-07.
-**Phase 3 is now ~95%** — the **champion sequence P8-01..P8-10 is complete**.
-Today's session finished P8-08 Dora Score + P8-09 Memory reports and closed
-with **P8-10 Native mobile app**: Capacitor 8 wraps the SPA (`web_app/src-capacitor/`),
-Android platform fully scaffolded on this Linux box with adaptive icons +
-manifest permissions, iOS scaffolded config-only for a future Mac session,
-runtime backend URL persisted via `@capacitor/preferences` with a first-run
-gate + Settings→About edit control, screen wake-lock wired into cook + shop
-mode. P8-03/P8-04 formally cut per §7 Decisions 6/7. Champion sequence:
-`P8-01 → P8-02 → P8-05 → P8-06 → ⭐ P8-07 → P8-08 → P8-09 → P8-10` — all built.
-**Nothing champion is left to build.**
-**Next up:** three surfaces need browser-verify — P8-07 flagship
-(`DORA_VERIFY.md` §Stock), P8-08 Kitchen health card + P8-09 Memory reports,
-and today's P8-10 Native Android build (`DORA_VERIFY.md` — new sections at
-top). Beyond verify, the natural next direction is **Phase 4 kick-off**
-(commercialisation report → per-recommendation FUs / plans; email setup;
-multi-tenant readiness) or FU-465 native push (FCM bridge) if on-phone
-notifications matter before Phase 4.
+Phases **0** and **2** are effectively done: foundations, and the
+ingestion API + standalone companion. **Phase 1** just closed a big
+outstanding piece — the **stocktake-mode redesign shipped end-to-end**
+(new engagement gate + cadence bands + Auto self-tuning; runner rebuilt
+around Still-correct/Change-level primaries + Skip/Push/Mute
+secondaries + completion-screen batch add-to-list; Settings block +
+Stock Overview "Needs check" filter + pulsing outline on overdue rows).
+That closes SK-1..11 from the feedback pass; loop-progression items
+FU-450/451/452/351/352 remain. **Phase 3 sits at ~95%** — the champion
+sequence `P8-01 → P8-02 → P8-05 → P8-06 → ⭐ P8-07 → P8-08 → P8-09 →
+P8-10` is fully built. Nothing champion is left to construct; three
+surfaces still need a browser walk (P8-07 flagship, P8-08 Kitchen
+health card + P8-09 Memory reports, P8-10 Native Android).
+**Next up:** either a **browser-verify sweep** across the pending
+surfaces (P8-07 flagship + the two new stocktake redesign blocks +
+P8-10 native), or **Phase 4 kick-off** (commercialisation report →
+per-recommendation FUs; email setup; multi-tenant readiness). Also
+worth grabbing while surfaces are open: FU-464 auto-add re-verify
+(fixed this session but e2e-only coverage) and FU-355 sign-out
+list-state clear.
 
 ---
 
@@ -77,11 +64,11 @@ notifications matter before Phase 4.
 
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
-| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~98% | Residual polish clusters (FU-359/360/361/362/363/431/432); FU-430 closed → `PROPOSAL_STOCKTAKE_MODE.md`. |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~88% | **FU-449 now closed** — P6-07 cook→consume `ConsumptionEvent` persists (built with P8-07); the loop is genuinely closed (prediction shifts on cooking). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (→ P8-08 Dora Score). |
+| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-359/360/361/362/363/431/432); FU-421 + FU-430 closed to `_RESOLVED`. |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~90% | **Stocktake mode redesign shipped end-to-end** (Chunks 1–3 + housekeeping); SK-1..11 resolved. **FU-449 closed** — P6-07 cook→consume `ConsumptionEvent` persists. Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping; **FU-351** P6-10 "Draft my shop" entry point; **FU-352** P6-12 daily briefing (→ P8-08 Dora Score). |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and now **P8-10 Native mobile app** all BUILT (Capacitor 8 wraps the SPA; Android platform scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode; adaptive icons + Play Store draft). P8-01 + P8-02 + P8-05 + P8-06 shipped earlier. P8-03 + P8-04 cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
-| **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. |
+| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence P8-01..P8-10 complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and P8-10 Native mobile app all BUILT (Capacitor 8 wraps the SPA; Android scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode). P8-01/02/05/06 shipped earlier. P8-03 + P8-04 formally cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
+| **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. Rate-limit primitives extended for per-user bucketing (FU-458 — one Phase-4 hardening item pulled forward this session). |
 
 ---
 
@@ -96,45 +83,52 @@ notifications matter before Phase 4.
 | Shopping Lists | ✅ | 8/8 bullets; DRAFT→SHOPPING→DONE loop | [PROPOSAL](docs/04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md) |
 | Cook Mode | ✅ | Chunks 1–6 (84% of feedback) | `C_big_rock_design_briefs.md` |
 | Cookbook | ➗ | Chunks 1–10 shipped; 5 Recipe-Detail bullets remain (FU-432); tag-taxonomy needs env verify (FU-085) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
-| Stock Overview | ✅ | 32/41 bullets; 3-band StockLevel; buy-verdict badge wired | `PROPOSAL_STOCK_OVERVIEW` |
-| ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end (belief service `pantry_belief.py` + `ConsumptionEvent`/FU-449 + `/stock-items/beliefs` + additive `PantryBeliefChip` + `pantry_check` quick-check + per-user pref). **Server-env + browser verify pending** (no py env on dev box). | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
-| Buy-verdict oracle (P8-05 + P8-06) | ✅ | Row + shopping-line badges + full `BuyVerdictCard` wired into stock-item detail overview (FU-437 closed 2026-07-02); P8-06 `wait_hint` on `wait` verdicts landed 2026-07-02 (FU-438 closed). Only opportunistic polish left (FU-454 — two card action variants unwired). | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
+| Stock Overview | ✅ | 32/41 bullets; 3-band StockLevel; buy-verdict badge wired; new "Needs check" filter + pulsing overdue outline (FU-226 tail) | `PROPOSAL_STOCK_OVERVIEW` |
+| **Stocktake Mode redesign** | ✅ | **Built end-to-end 2026-07-04.** Chunk 1 backend engine (new engagement gate, cadence bands, Auto self-tuning, grace-period baseline, Push snooze endpoint) + Chunk 2 SPA runner (Still-correct/Change-level primaries + Skip/Push/Mute secondaries + `(?)` help + completion-screen batch add-to-list; landing page retired) + Chunk 3 Settings + Overview surfacing. Housekeeping pass extracted `resolve_overdue_map` shared authority for alerts feed (was a two-authority R-003 drift) and deleted the dead `locations/attention.py` heatmap system. Alembic `d1f9c3a8b2e4` + `e5c8b3a1f4d2`. 18/18 cadence pytest green. SK-1..11 feedback resolved. | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
+| ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end (belief service `pantry_belief.py` + `ConsumptionEvent`/FU-449 + `/stock-items/beliefs` + additive `PantryBeliefChip` + `pantry_check` quick-check + per-user pref). **Browser verify pending.** | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
+| Buy-verdict oracle (P8-05 + P8-06) | ✅ | Row + shopping-line badges + full `BuyVerdictCard` wired into stock-item detail overview (FU-437 closed); P8-06 `wait_hint` on `wait` verdicts (FU-438 closed); one-tap `mark_stocked` + `remove_from_list` actions wired (FU-454). | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
 | Barcode-to-add (P8-02) | ✅ | OFF lookup for unknown EANs, gated by `scanning_enabled` | [PROPOSAL](docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md) |
-| Onboarding | 🟡 | Per-name picks + paste-rows just shipped; **verify pending**; preferred-stores step not built (FU-383) | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
+| Native mobile app (P8-10) | 🟡 | Capacitor 8 wraps the SPA; Android scaffolded on this Linux dev box (adaptive icons, `CAMERA/WAKE_LOCK/VIBRATE/POST_NOTIFICATIONS` manifest, `allowMixedContent` for LAN self-hosts); iOS scaffolded for a Mac session. Runtime backend URL persists to `@capacitor/preferences`; first-run `/setup/backend` gate; wake-lock in cook + shop mode. **Final APK build + on-device browser-verify pending** (no Android SDK on this dev box). FCM push deferred as [[FU-465]]. | [BUILD_NATIVE.md](packaging/BUILD_NATIVE.md) |
+| Onboarding | 🟡 | Per-name picks + paste-rows shipped; **verify pending**; preferred-stores step not built (FU-383) | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
 | Meal Plans | ➗ | **Built end-to-end** (3 pages, 13 components, board/calendar/templates/shortfall + backend). Waiting on **your screen-style pick + feedback**, not construction | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) + `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
-| Alerts control centre | ✅ | **Fully built**: `/alerts` hub, `ALERT_ROUTER` API, price-watch + email-digest + push delivery | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
+| Alerts control centre | ✅ | **Fully built**: `/alerts` hub, `ALERT_ROUTER` API, price-watch + email-digest + push delivery. `stocktake_overdue` alert kind now routes through the shared `resolve_overdue_map` (FU-464 housekeeping — was drifting from the runner's authority). | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
+| Assistant surface | ✅ | Per-user rate limits wired (FU-458) — `/ask` 20/min, `/act` + `/confirm` 60/min. `rate_limit` helper extended with a `subject` override so a shared household IP doesn't cross-count users. | `ask_assistant.py`, `auth_helpers.py` |
 | Data/Backup admin | ✅ | Collapsed under Settings→Admin→Data; backup library + admin-gating (code committed) | FU-341/342/198 |
 | Auth shell | ➗ | Shared `AuthShell.vue` + `AuthButton.vue` across 8 pre-auth surfaces (no standalone register page) | `PROPOSAL_AUTH_SHELL.md` |
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
-| Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Chunks 1-3: parser green on 20/20 corpus. Chunk 4: schema migration for persistable unlinked ingredients + tri-state cookability sweep. Chunk 5: paste importer replaces the URL fetcher (FU-104 + FU-199 closed). **Chunk 6: bulk-linker page + PWA share target** — `Settings → Admin → Data → Unlinked ingredients` groups every unmatched ingredient by normalised raw_text, one-request-per-group bulk-link (12/12 pytest); PWA `share_target` in `manifest.json` drops the OS share sheet payload into `/cookbook` which auto-opens the paste dialog pre-filled; recipe-detail freeform-instructions gains a paste-friendly hint (L261). Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
+| Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Parser green on 20/20 corpus; schema migration for unlinked-ingredient tri-state cookability; paste importer replaces the URL fetcher (FU-104 + FU-199 closed); bulk-linker page + PWA share target. Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Commercialization (P7) | ⚪ | Tenancy/Stripe/billing not started; zero such code yet | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
 
 ---
 
 ## ⚠️ Needs your attention now
 
-Full backlog is 152 open items in `DORA_FOLLOWUPS.md`; these are the ones that want
-a decision or a running-app check *now*, most important first.
+Full backlog is **128 open items** in `DORA_FOLLOWUPS.md`; these are the
+ones that want a decision or a running-app check *now*, most important
+first.
 
-0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work.
-1. **🔴 FU-436 — Crowd-prices (P8-04): KEEP / SHRINK / CUT?** Ledger recommends **CUT** (privacy + incentive + freshness + broker-role). One-word confirmation closes it and unlocks the collapsed champion sequence **P8-05 (shipped) → P8-06 → P8-07 (Zero-Input Pantry) → …**. (P8-03 email ingestion **CUT** 2026-07-02, [FU-453](DORA_FOLLOWUPS_RESOLVED.md) resolved; §7 Decision 6.)
-2. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering. This is the blocker you flagged.
-3. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
-4. **🔴 FU-353 — Rename GitHub repo + local checkout to DashyDora.** Your action (`gh repo rename` + `mv`); until then release-check URLs + README badges 404.
-5. **⭐ Verify P8-07 Zero-Input Pantry** — the gate on calling the flagship done. Server-env: run migrations `f2a9c4d7e1b8` + `a3e8b1f6c2d9` + `pytest tests/test_pantry_belief.py`; then the browser walk in `DORA_VERIFY.md §Stock` (chip, quick-check, override-wins, cooking-shifts-belief, toggle). All code written on a box with no Python — nothing has been executed. Also grab **FU-463** while in `update_stock_item.py` (auto-add-when-low threshold went stale after the 3-band collapse — `>= 2` = Out only; small fix). **FU-195 onboarding verify** still open too.
-6. **FU-085 — Cookbook tag-taxonomy never run in a real env.** Verify the migration on SQLite + Postgres before building on it.
-7. **🕸 FU-178 — Fresh-SQLite boot is broken.** Migration chain dies at `d7c9e4a8c2b1`; tests bypass it via `drop_all+create_all`, so this hides until a real fresh boot.
-8. **FU-434 — Pre-existing `AdminDataImport.vue` tsc errors.** Two `exactOptional` errors pollute the close-gate every session; two-line fix.
-9. **FU-444 — `test_buy_verdict.py::test__all_axes_thin` fails (pre-existing).** One deselected test each run; needs a call on trigger vs. fixture.
-10. **FU-442 — Login password-policy feedback has no design home.** Real gap (min-8 + admin toggle).
-11. **FU-214 — Products-overlay Phase F verify + bulk-select/hard-delete.** Last real gate on that effort; needs the running app.
-12. **FU-429 — Assistant-architecture proposal collides with in-flight SLM work.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` proposes a capability registry that the SLM pivot may supersede; needs a reconcile-or-close decision.
-13. **FU-025 follow-on — component labels ignore the text-scale tokens.** Button/input/toggle labels don't track the A6 scale; small global sweep.
+0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work. Tracked as [FU-447](DORA_FOLLOWUPS.md).
+1. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering.
+2. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
+3. **🔴 FU-353 — Rename GitHub repo + local checkout to DashyDora.** Your action (`gh repo rename` + `mv`); until then release-check URLs + README badges 404.
+4. **⭐ Verify the champion sequence in-browser.** Four surfaces stacked and untested on this dev box: **P8-07 Zero-Input Pantry** (walk `DORA_VERIFY.md §Stock`); **P8-08 Kitchen health card**; **P8-09 Memory reports**; **P8-10 Native Android APK** (final build + device walk). The stocktake redesign's Chunks 2 + 3 verify blocks in `DORA_VERIFY.md` also want the same walk.
+5. **FU-085 — Cookbook tag-taxonomy never run in a real env.** Verify the migration on SQLite + Postgres before building on it.
+6. **FU-214 — Products-overlay Phase F verify + bulk-select/hard-delete.** Last real gate on that effort; needs the running app.
+7. **FU-429 — Assistant-architecture proposal collides with in-flight SLM work.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` proposes a capability registry that the SLM pivot may supersede; needs a reconcile-or-close decision.
+8. **FU-025 follow-on — component labels ignore the text-scale tokens.** Button/input/toggle labels don't track the A6 scale; small global sweep.
 
 ---
 
 ## Recently shipped (newest first)
 
+- **FU-421 closed as already-satisfied (2026-07-04).** No code change. The "remind me to use this on opened items" ask from the original spec is already implemented via the existing expiry surface — [item detail](web_app/src/pages/StockItemDetailPage.vue)'s Expiry row exposes `+1d`/`+7d`/`+14d` shift chips + a Set date-picker + Clear, and the Open toggle's tooltip explicitly documents the workflow ("for perishables it's the cue to set or shorten"). A user-set "use within 2 months" IS an expiry semantically, so reusing avoids duplicating a whole reminder infrastructure (R-003). Free alerts via the existing `expired`/`expiring_soon` kinds. Free auto-clear on waste. Only real gap is month-scale shift chips (`+1m`/`+3m` not there today) — user picked "close as-is" since he hasn't hit the pain; a ~10-line SPA change is available as an off-ramp if it becomes annoying.
+- **FU-458 resolved — per-user rate limits on the assistant surface (2026-07-04).** Defense-in-depth against runaway LLM-cost loops. Extended `auth_helpers.rate_limit` with an optional `subject` arg — pre-auth callers keep the historic per-IP bucket, post-auth surfaces (assistant) pass `str(session.user_id)` so a shared household IP doesn't cross-count users. Wired 20/min on `/assistant/ask` (LLM round-trip), 60/min on `/assistant/act` + `/assistant/confirm`. 429 responses match the RFC 6585 §4 shape (Retry-After header). Also fixed a misleading "per-user" comment on `/assistant/probe` — the code was per-IP; now matches the comment. New `test_rate_limit_subject.py` (5 tests) locks subject isolation + IP-fallback back-compat. **303/303 pytest green** (was 298 → 5 new).
+- **FU-463 resolved — SQLite `text()+str(uuid) IN :ids` zero-row regression in two hydration passes (2026-07-04).** Latent bug on SQLite self-hosts (Postgres unaffected). [`_hydrate_linked_product_count`](dora_api/features/stock_items/get_stock_items.py) and [`_compute_estimated_cost`](dora_api/features/recipes/get_recipes.py) both used raw `text()` binds with string uuids that never matched the `UUIDType` BINARY(16) storage — every stock-item DTO's `linked_product_count` was 0 and every recipe's `estimated_cost` was None on SQLite. Rewrote both as ORM `select()` against `db.metadata.tables[…]` — same shape `_hydrate_has_image` uses since FU-171. Verified via a live REPL round-trip against `data/dora.test.db` under `app.app_context()`. The `project_sqlite_uuid_text_binding` memory now covers three fixed surfaces + FU-171's pair; the pattern to grep for remains any `text() + str(uuid) IN :ids` combination.
+- **FU-464 resolved — auto-add-when-low regression on Low transitions (2026-07-04).** Real user-visible bug that landed silently with the 2026-07-02 Sufficient-band collapse (`a1c7d9e42be0`). The auto-add hook in [`update_stock_item.py`](dora_api/features/stock_items/update_stock_item.py) was firing on `_NewLevelSeq >= 2` with the stale comment "2 = Low, 3 = Out". Under the new 3-band sequences (0 Stocked / 1 Low / 2 Out), `>= 2` = Out only — Stocked → Low transitions on `auto_add_when_low`-flagged items did NOT auto-add despite the whole point of the setting. Replaced the two literal-sequence comparisons with `needs_restock(level)` from `stock_status.py` (R-003, one authority for "restock-needing"). Sanity-tabled: `needs_restock` returns True for Low+Out, False for Stocked+None — correct semantics restored. Auto-add coverage is e2e-only, so the fix will be re-walked via the FU-315 auto-add block on the next browser session (heading nudged with a pointer).
+- **FU-455 resolved — buy-verdict all-thin-axes test fixed (2026-07-04).** The failing `test__all_axes_thin__collapses_to_single_not_enough_history` was wrong, not the composer. Its inputs (`waste_events_12mo=0, purchases_12mo=1`) hit the composer's `no_waste_history` branch — a positive signal that "you've never wasted this" — not `thin_data`. Only 2 of 3 axes were thin, so the composer correctly didn't fire the `len(thin) == 3` collapse. `no_waste_history` vs `thin_data` is a real R-003 distinction (one is knowledge, one is absence-of-knowledge); merging them would have broken the composer's ability to nudge toward buying on a clean waste record. Fixed the test to use `waste_events_12mo=1, purchases_12mo=1` (waste seen but too few purchases to compute a rate) so the waste axis really is thin. Docstring gained a "waste-axis nuance" note. **298/298 pytest green** for the first time since Chunk 1.
+- **Stocktake housekeeping — R-003 drift fixed, dead heatmap deleted, deprecated columns dropped (2026-07-04).** Survey after Chunk 3 found the `stocktake_overdue` alert kind + the location-attention heatmap were still computing overdue from the old per-item threshold — two authorities for the same fact. Extracted `stocktake.resolve_overdue_map(items, now)` from the queue endpoint; alerts feed now consumes the same map. Deleted the whole `locations/attention.py` heatmap system: `attention_score` / `attention_reasons` fields gone from both the location-tree DTO and stock-item-detail DTO, `AttentionReasons` type + helpers gone from SPA models (zero Vue consumers — it was pure dead code). New alembic revision `e5c8b3a1f4d2` drops `StockItem.days_until_stocktake_alert` and `AppSetting.default_days_until_stocktake_alert`; every backend + SPA caller pruned in the same pass (~14 file edits + 1 delete + 1 new migration). Backend pytest 297/298 (FU-455 unrelated); `vue-tsc` clean.
+- **Stocktake redesign — Chunk 3 Settings + Stock Overview surfacing (2026-07-04).** Peripheral surfaces (§7 + §8) that close the redesign trilogy. New **Settings → Admin → System → Stocktake** page with `q-btn-toggle` cadence selector (Weekly / Fortnightly / Monthly) and a `q-toggle` for Auto self-tuning — eager-saves on change, reverts on failure. The old numeric "Default stocktake reminder" section on Alert thresholds is removed (superseded by the band system; column stays in the DB for now). **Stock Overview** gains a **"Needs check" FilterChip** in the chip strip (narrows to items currently in the stocktake queue — server-owned set via bumping the existing queue fetch from `limit=1` → `500`; no new endpoint), and **overdue rows get a 2-second brand-accent pulse outline around the stock-level button** (matches the toolbar Stocktake attention glow byte-for-byte; `prefers-reduced-motion` degrades to a static ring). One transient tsc error caught inline (`q-btn-toggle` wanted a mutable options array). `vue-tsc` clean; no backend change. Two housekeeping FUs deferred, not opened: drop `default_days_until_stocktake_alert` and `StockItem.days_until_stocktake_alert` columns whenever the next stocktake/alerts work opens.
+- **Stocktake redesign — Chunk 2 SPA runner rebuild (2026-07-04).** The user-visible half of PROPOSAL_STOCKTAKE_MODE. Landing page retired ([StocktakePage.vue] deleted; `/stocktake` now loads the runner directly; empty state is a state of the runner). New button layout — two big primaries (**Still correct** | **Change level**, the latter tinted to the current level's colour with a "(change)" hint, resolving SK-8/9) + three small secondaries (**Skip** session-only / **Push 3 days** hits the Chunk-1 snooze endpoint / **Mute** with confirmation). Level picker gains coloured dots. `(?)` help affordance in the topbar opens a plain-English "how it works" dialog. Completion screen shows five counters (checked / changed / skipped / pushed / muted) + a batch **Add to list…** prompt for anything that went Low or Out during the session (resolves SK-7 — the old per-item button is gone). Dropped the standalone Out-of-stock button, all keyboard shortcuts + their `(1)/(2)/s` labels (SK-4/10), and the per-item Add-to-list. `vue-tsc` clean; no backend change.
 - **Stocktake redesign — Chunk 1 backend engine (2026-07-04).** Ships PROPOSAL_STOCKTAKE_MODE §2 (new engagement gate — one honest question, no more flag-based signals, 60-day windows on the two history signals), §4 (Weekly/Fortnightly/Monthly bands + Auto self-tuning ON by default, driven by trailing-90d StockLevelChange history), §4.1 (grace period via `COALESCE(last_checked_at, stock_level_last_updated)` — `9999` sentinel dropped), §5 Push verb (fixed 3-day snooze; makes no truth claim so no `last_checked_at` stamp; cleared by any subsequent Check). Single new alembic revision `d1f9c3a8b2e4` also **merges the two open heads** (`a3e8b1f6c2d9` + `c5a8e1f7d3b2`) so the DB tracks a single linear history again. New pure module [cadence.py](dora_api/features/stocktake/cadence.py) with 18/18 pytest green ([test_stocktake_cadence.py](tests/test_stocktake_cadence.py)). Backend-only chunk; runner UX rebuild is Chunk 2. One pre-existing `test_buy_verdict` failure surfaced by the wider-suite run — logged as FU-455, not a stocktake regression.
 - **Stock Overview bulk "Log waste…" (2026-07-04).** Spun off the FU-226 chat: since expiry+waste stays *out* of stocktake and lives on the Stock Overview instead, bulk-select gains a `Log waste…` button that reuses the existing single-item reason-picker (R-001) — one reason applies to every selected item, each gets its own reason-only `StockItemWasteEvent`, expiry dates cleared, batch Undo. New verify checklist in `DORA_VERIFY.md` under Stock; `vue-tsc` clean.
 - **Stocktake Mode redesign brief — FU-226 + FU-430 (2026-07-04).** Design deliverable, no code; **all decisions locked** across four question-waves with the user. Untangled three concerns: **who** gets nagged (gate → one question "do you actually keep this item?" — in stock / opened / adjusted-in-60d / on-a-list-in-60d; Essential + auto-add dropped as gate signals; **60-day window** on the history signals), **how often** (Weekly/Fortnightly/Monthly **bands** — global default Fortnightly + full two-way **Auto** self-tuning **ON by default** from trailing-90d level-change frequency; Essential = one band faster and the *only* per-item lever, no per-item picker ever; never-checked → **grace period** not instant-top), and **what you can do** (two primaries Still-correct | Change-level + three smaller Skip / **Push** 3-day snooze / **Mute** — no Out-of-stock button, no keyboard shortcuts). **Expiry & Waste CUT from stocktake** (Overview expiring-filter is the single waste surface). No landing page (straight to runner + `(?)` help); add-to-list → completion-screen batch; new "Stocktake" settings block; Stock Overview overdue rows get a pulsing outline + "Needs check" filter. [PROPOSAL_STOCKTAKE_MODE.md](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) fully rewritten to the locked design + SK-1..11 coverage. Both FUs closed; next step an impl plan.
@@ -248,7 +242,7 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | C_big_rock_design_briefs.md | 🔵→built | 14 briefs → proposals; most built via IMPL_PLANs |
 | INV_investigations.md | 🔵→done | INV-1..8,10 produced memos; INV-9 superseded |
 
-## 04_proposals — designs, impl-plans, runbook (48)
+## 04_proposals — designs, impl-plans, runbook (49)
 
 | Doc | State | Notes |
 |---|---|---|
@@ -264,6 +258,7 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | IMPL_PLAN_* (Alerts, Cart, Cookbook, Cook-Mode, Dashboard, Error-Handling, Ingestion, Meal-Plans, Meal-Plans-Rebuild, State-Ownership, Stock-Item-Detail, Stock-Overview, Waste, Your-Prices, Settings-Rebuild, Shopping-Lists, Shopping-List-Receipts, Config, Auth-Shell) | ✅ done | All executed & shipped. ~13 carry stale "no code yet" headers (FU-445). MEAL_PLANS_REBUILD is the live meal-plans authority. |
 | IMPL_PLAN_RECIPE_IMPORTER | 🔵 designed | 2026-07-04. Six-chunk paste-based rebuild; supersedes IMPL_PLAN_COOKBOOK §Chunk 7's URL-importer scope. Closes FU-104 / FU-199 / FU-396 (importer half). |
 | PLAY_STORE_LISTING | 🔵 designed | 2026-07-04 (P8-10). Play Store copy draft, 6-shot screenshot plan, adaptive-icon note. **No submission** — reference for the day one happens. |
+| PROPOSAL_STOCKTAKE_MODE | ✅ done | 2026-07-04. Full stocktake-mode redesign — decisions-locked brief AND shipped end-to-end (Chunks 1–3 backend engine + SPA runner + Settings/Overview surfacing + housekeeping). Anchor for FU-226/430 close-out; SK-1..11 feedback resolved. |
 
 ## 05_investigations — reports (16)
 

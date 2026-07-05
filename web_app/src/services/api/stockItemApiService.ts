@@ -233,7 +233,6 @@ export type UpdateStockItemCommand = {
     stock_item_id: string;
     name?: string;
     notes?: string | null;
-    days_until_stocktake_alert?: number;
     stocktake_alerts_are_enabled?: boolean;
     stock_level_id?: string;
     stock_location_id?: string | null;

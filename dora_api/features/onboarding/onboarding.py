@@ -520,7 +520,6 @@ class SeedItemsHandler:
                 if entry.location_name else None
             )
             self.repository.add(StockItem(
-                days_until_stocktake_alert=0,
                 image=None,
                 name=name,
                 notes=None,
@@ -624,7 +623,6 @@ class SeedDemoHandler:
                 ingredient_items.append(existing)
                 continue
             item = StockItem(
-                days_until_stocktake_alert=0,
                 image=None,
                 name=str(name),
                 notes=None,

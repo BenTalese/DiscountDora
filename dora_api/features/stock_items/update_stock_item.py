@@ -18,6 +18,7 @@ from dora_api.domain.entities.stock_item_expiry_event import (
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import needs_restock
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   entity_existence_failure,
@@ -38,7 +39,9 @@ class UpdateStockItemRequest(BaseModel):
 
     name: str | None = Field(default = None, min_length = 1, max_length = 255)
     notes: str | None = Field(default = None, max_length = 255)
-    days_until_stocktake_alert: int | None = Field(default = None, ge = 0)
+    # PROPOSAL_STOCKTAKE_MODE — the old per-item `days_until_stocktake_alert`
+    # dial was retired in the 2026-07-04 cleanup. `stocktake_alerts_are_
+    # enabled` is now the only per-item stocktake field (Mute toggle).
     stocktake_alerts_are_enabled: bool | None = None
     stock_level_id: UUID | None = None
     stock_location_id: UUID | None = None
@@ -103,13 +106,18 @@ class UpdateStockItemHandler:
 
         _SetFields = request.model_fields_set
 
-        # Capture the *previous* stock level sequence so we can detect the
+        # Capture the *previous* stock level so we can detect the
         # specific transition the auto-add hook cares about (something
-        # stocked dropping to low/out).
+        # not-yet-restock-needing dropping to low/out). Kept as the
+        # loaded StockLevel entity so both branches — the transition
+        # check below and the level-change history append — read from
+        # the same object; also lets the auto-add predicate go through
+        # `needs_restock` (R-003) rather than a raw sequence literal.
+        _PreviousLevel: StockLevel | None = _StockItem.stock_level
         _PreviousLevelSeq: int | None = (
-            _StockItem.stock_level.sequence if _StockItem.stock_level else None
+            _PreviousLevel.sequence if _PreviousLevel else None
         )
-        _PreviousLevelId = _StockItem.stock_level.id if _StockItem.stock_level else None
+        _PreviousLevelId = _PreviousLevel.id if _PreviousLevel else None
 
         if "stock_level_id" in _SetFields and request.stock_level_id is not None:
             _StockLevel = self.repository.get(StockLevel).by_id(request.stock_level_id)
@@ -174,9 +182,6 @@ class UpdateStockItemHandler:
 
         if "notes" in _SetFields:
             _StockItem.notes = request.notes
-
-        if "days_until_stocktake_alert" in _SetFields and request.days_until_stocktake_alert is not None:
-            _StockItem.days_until_stocktake_alert = request.days_until_stocktake_alert
 
         if "stocktake_alerts_are_enabled" in _SetFields and request.stocktake_alerts_are_enabled is not None:
             _StockItem.stocktake_alerts_are_enabled = request.stocktake_alerts_are_enabled
@@ -263,15 +268,19 @@ class UpdateStockItemHandler:
         # current primary list. Skipped silently if there's no primary,
         # or if the item is already on ANY non-archived list — the user
         # already knows; double-add would be annoying.
-        _NewLevelSeq: int | None = (
-            _StockItem.stock_level.sequence if _StockItem.stock_level else None
-        )
+        #
+        # FU-464 — was `>= 2` / `< 2` against the OLD 4-band sequences
+        # (0 Stocked / 1 Sufficient / 2 Low / 3 Out). After the
+        # 2026-07-02 Sufficient-band collapse (`a1c7d9e42be0`) canonical
+        # sequences are 0 Stocked / 1 Low / 2 Out, so `>= 2` meant Out
+        # only — Low transitions were silently dropped. Route through
+        # `needs_restock` (R-003, one authority in `stock_status.py`)
+        # so this stays correct across any future band changes too.
         _AutoAddResult: tuple[UUID, UUID] | None = None
         if (
             _StockItem.auto_add_when_low
-            and _NewLevelSeq is not None
-            and _NewLevelSeq >= 2  # 2 = Low, 3 = Out (see seed)
-            and (_PreviousLevelSeq is None or _PreviousLevelSeq < 2)
+            and needs_restock(_StockItem.stock_level)
+            and not needs_restock(_PreviousLevel)
         ):
             _AutoAddResult = self._try_auto_add(_StockItem)
 

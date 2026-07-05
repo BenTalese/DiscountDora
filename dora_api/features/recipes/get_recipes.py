@@ -652,9 +652,18 @@ class GetRecipesHandler:
         Stays server-side (DEC-5 / R-003 — domain math owned by the
         server, never duplicated on the client). Only the detail path
         triggers this; lists stay cheap.
+
+        FU-463 — built with the ORM `select()` (not raw `text()`) so
+        SQLAlchemy adapts UUID bindings to whatever the column type uses
+        on each engine. The original raw-SQL version silently never
+        matched on SQLite because the string IDs in the IN clause didn't
+        compare against the UUIDType column (see
+        `project_sqlite_uuid_text_binding` memory + FU-171). Symptom was
+        `estimated_cost=None` on every recipe on SQLite deployments,
+        regardless of whether the ingredients had priced products.
         """
         import dataclasses
-        from sqlalchemy import bindparam, text
+        from sqlalchemy import func, select
         from dora_api.app import db
 
         if not dto.ingredients:
@@ -667,18 +676,30 @@ class GetRecipesHandler:
         # If a stock item links to >1 product, pick the cheapest current
         # offer (simple heuristic; the user can override via favourite
         # products in a later pass — out of scope for Chunk 9).
-        stock_item_ids = [str(i.stock_item_id) for i in dto.ingredients]
-        stmt = text(
-            'SELECT sip.stock_item_id, p.size_value, MIN(po.price_now) AS price_now '
-            'FROM "StockItemProduct" sip '
-            'JOIN "Product" p ON p.id = sip.product_id '
-            'JOIN "ProductOffer" po ON po.product_id = p.id '
-            'WHERE sip.stock_item_id IN :ids '
-            '  AND p.is_active '
-            '  AND po.price_now IS NOT NULL '
-            'GROUP BY sip.stock_item_id, p.size_value'
-        ).bindparams(bindparam("ids", expanding=True))
-        rows = db.session.execute(stmt, {"ids": stock_item_ids}).all()
+        link_table = db.metadata.tables["StockItemProduct"]
+        product_table = db.metadata.tables["Product"]
+        offer_table = db.metadata.tables["ProductOffer"]
+
+        stock_item_ids = [i.stock_item_id for i in dto.ingredients]
+        stmt = (
+            select(
+                link_table.c.stock_item_id,
+                product_table.c.size_value,
+                func.min(offer_table.c.price_now).label("price_now"),
+            )
+            .select_from(
+                link_table
+                .join(product_table, product_table.c.id == link_table.c.product_id)
+                .join(offer_table, offer_table.c.product_id == product_table.c.id)
+            )
+            .where(
+                link_table.c.stock_item_id.in_(stock_item_ids),
+                product_table.c.is_active.is_(True),
+                offer_table.c.price_now.isnot(None),
+            )
+            .group_by(link_table.c.stock_item_id, product_table.c.size_value)
+        )
+        rows = db.session.execute(stmt).all()
 
         def _key(v) -> str:
             if isinstance(v, UUID):

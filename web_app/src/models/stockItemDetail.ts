@@ -172,13 +172,10 @@ export type YourPrices = {
     offers_sidecar: OfferSidecar[];
 };
 
-import type { AttentionReasons } from 'src/models/location';
-
 export type StockItemDetail = {
     stock_item_id: string;
     name: string;
     notes: string | null;
-    days_until_stocktake_alert: number;
     stocktake_alerts_are_enabled: boolean;
     stock_level_id: string | null;
     stock_level_name: string | null;
@@ -201,8 +198,6 @@ export type StockItemDetail = {
      *  product-fallback). Drives whether the image field reads "Add" /
      *  "Change + Remove" — a fallback preview shouldn't show Remove. */
     has_own_image?: boolean;
-    attention_score: number;
-    attention_reasons: AttentionReasons;
     products: LinkedProduct[];
     recipes: LinkedRecipe[];
     substitutes: Substitute[];

@@ -6,6 +6,169 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Per-user rate limits on the assistant surface — FU-458 (2026-07-04).**
+  Defence-in-depth against a runaway loop (accidental or malicious)
+  burning upstream LLM tokens on an authenticated session. Three
+  endpoints gained limits, all bucketed by `session.user_id` (falling
+  back to IP when unauthenticated):
+  - `POST /assistant/ask` — **20/min** (LLM round-trip, most expensive)
+  - `POST /assistant/act` — **60/min** (commit-add, no LLM)
+  - `POST /assistant/confirm` — **60/min** (Tier-2 action dispatch)
+  
+  Failures return an RFC 6585 §4 shaped 429 with a `Retry-After`
+  header, matching the auth surface's shape. The existing `rate_limit`
+  helper in [`auth_helpers.py`](dora_api/infrastructure/auth_helpers.py)
+  gained an optional `subject` argument so a shared household IP
+  doesn't count multiple users against the same bucket — pre-auth
+  callers (login/register/verify) keep the historical per-IP
+  fallback via `subject=None`. Also fixed a doc/code drift on
+  `/assistant/probe`: its comment claimed per-user bucketing but the
+  code was per-IP; now that the helper supports it, the code matches
+  the comment. New pytest [`test_rate_limit_subject.py`](tests/test_rate_limit_subject.py)
+  locks the two-line behavioural contract (subject isolation +
+  IP-fallback back-compat) so it can't silently regress. Full
+  backend suite 303/303 green.
+
+### Fixed
+- **SQLite `text() + str(uuid) IN :ids` regressions — FU-463 (2026-07-04).**
+  Latent bug on SQLite self-host deployments (Postgres was unaffected).
+  Two hydration passes used raw `text()` with a string-uuid IN clause
+  that never matched the `UUIDType` column's BINARY(16) storage on
+  SQLite, silently returning zero rows:
+  - [`get_stock_items.py::_hydrate_linked_product_count`](dora_api/features/stock_items/get_stock_items.py) — every stock-item DTO's `linked_product_count` was `0` regardless of the actual link-table contents.
+  - [`get_recipes.py::_compute_estimated_cost`](dora_api/features/recipes/get_recipes.py) — every recipe's `estimated_cost` was `None` regardless of whether its ingredients had priced products.
+  
+  Rewrote both as ORM `select()` against `db.metadata.tables[…]` so
+  SQLAlchemy Core adapts UUID bindings correctly on either engine —
+  same idiom `_hydrate_has_image` already uses since FU-171. Verified
+  by executing the rewritten queries against a real SQLite database
+  under `app.app_context()`. `pytest` 298/298 green.
+
+- **Auto-add-when-low now fires on Low transitions again — FU-464 (2026-07-04).**
+  Real user-visible bug that landed silently with the 2026-07-02
+  Sufficient-band collapse. The auto-add hook was gated on a raw
+  sequence literal `>= 2` — under the OLD 4-band scheme that was
+  Low-or-Out, but the collapse renumbered levels to 0/1/2 (Stocked /
+  Low / Out), so `>= 2` meant **Out only**. An item flagged
+  `auto_add_when_low` and set from Stocked → Low was NOT auto-added
+  despite the whole point of the setting.
+  Replaced the two sequence-literal comparisons in the auto-add hook
+  with `needs_restock(level)` from `stock_status.py` (R-003 — one
+  server-side authority for "restock-needing"). The predicate returns
+  True for both Low and Out, False for Stocked and None, so the hook
+  now fires on the intended Stocked→Low, Stocked→Out, and None→Low/Out
+  transitions. Backend pytest 298/298 green; auto-add coverage is
+  e2e-only, will be re-verified via the FU-315 auto-add block on the
+  next browser walk.
+
+### Changed
+- **Stocktake housekeeping — R-003 alerts drift fixed, dead heatmap deleted, deprecated columns dropped — 2026-07-04.**
+  Closes the stocktake redesign trilogy properly. A survey after Chunk 3
+  found two lingering callers of the "deprecated" per-item cadence
+  column: the `stocktake_overdue` alert kind (bell + Alerts page +
+  assistant tool filter) and the location "attention" heatmap. Both
+  were computing overdue from the old per-item threshold, meaning the
+  bell could disagree with the runner as soon as Auto self-tuning
+  promoted a fast mover — R-003 drift shipped in Chunk 1's own tail.
+  - **Alerts rewired to the queue's authority.** New shared helper
+    `stocktake.resolve_overdue_map` factored out; both the queue
+    endpoint and the alerts feed consume the same
+    band-resolved map. The bell + runner now surface identical
+    sets of items by construction.
+  - **Dead heatmap system deleted.** `locations/attention.py` gone
+    entirely; `attention_score` + `attention_reasons` +
+    `primary_reason` removed from the location tree DTOs and the
+    stock-item detail DTO; matching `AttentionReasons` type +
+    `summarizeReasons` / `attentionColor` / `attentionBackground`
+    helpers removed from the SPA models. Zero external consumers —
+    it was computed on every location fetch but never rendered.
+  - **Deprecated columns dropped.** Alembic revision
+    `e5c8b3a1f4d2` drops `StockItem.days_until_stocktake_alert`
+    and `AppSetting.default_days_until_stocktake_alert`.
+    Symmetrical downgrade rehydrates both at historical defaults
+    if needed. All backend + SPA callers pruned in the same pass
+    (create/update/detail stock item, onboarding, spreadsheet
+    import, seed, settings get/update, entity + table mappings,
+    two SPA type files).
+
+  Backend pytest 297/298 pass (the one failure is pre-existing
+  FU-455, unrelated). `vue-tsc` clean. No UX change — the two
+  surfaces now agree, which they should have been all along.
+
+- **Stocktake redesign — Settings + Stock Overview surfacing (Chunk 3) — 2026-07-04.**
+  The peripheral half of PROPOSAL_STOCKTAKE_MODE §7 + §8. Closes the
+  redesign trilogy — the engine (Chunk 1), the runner (Chunk 2), and
+  now the surfaces the user actually finds it from:
+  - **New Settings → Stocktake page.** `q-btn-toggle` cadence selector
+    (Weekly / Fortnightly / Monthly, default Fortnightly) and a
+    `q-toggle` for Auto self-tuning (on by default — "auto = speed").
+    Eager-saves on change. Lives at
+    `/settings/admin/system/stocktake` under the System nav group,
+    beside Timezone / Alert thresholds / AI assistant / Features.
+  - **Old "Default stocktake reminder" section removed** from Alert
+    thresholds — the numeric-days input backing
+    `default_days_until_stocktake_alert` is superseded by the band
+    system (Chunk 1 §7). Column stays in the DB for now (deferred drop).
+  - **Stock Overview "Needs check" quick-filter.** New FilterChip
+    alongside Essential / Auto-add / Open / Needs-attention. Narrows
+    the visible rows to items currently in the stocktake queue
+    (server-owned overdue set — R-003).
+  - **Stock Overview row pulse outline.** Items in the stocktake queue
+    get a 2-second brand-accent pulse around their **stock-level
+    button**, matching the toolbar's Stocktake attention glow. Passive
+    discovery — you notice a due item without opening the runner.
+    Respects `prefers-reduced-motion` (static outline instead of the
+    animation).
+
+  Server signal shape: reused the existing `GET /stocktake/queue`
+  endpoint — the Overview's queue fetch bumped from `limit=1` → `500`
+  (the server cap) so the count + the full ID set arrive in one
+  round-trip. No new endpoint. `vue-tsc` clean.
+
+- **Stocktake mode redesigned (Chunk 2: SPA runner rebuild) — 2026-07-04.**
+  The user-visible half of the
+  [stocktake redesign](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md).
+  - **No more landing page.** Tapping Stocktake drops straight into
+    the focused runner. The old "N items need a check" landing is
+    gone — the count lives in the runner's progress strip and adds
+    no value up front. Empty state ("You're all caught up.") is a
+    state of the runner. Resolves the SK-1 (Refresh) and SK-2
+    (top-of-queue text) feedback by removing the screen that hosted
+    them. Legacy `/stocktake/run` sub-route redirects to
+    `/stocktake` so bookmarks / worklog links still work.
+  - **New button layout.** Two big primaries — **Still correct**
+    and **Change level** — side-by-side. The Change-level button
+    is **tinted to the current level's colour** with a small
+    "(change)" hint underneath, so it doubles as the level readout
+    (resolves SK-8/SK-9). Three smaller secondaries below:
+    **Skip** (session-only "later today, keep reminding me"),
+    **Push 3 days** (fixed snooze — makes no truth claim about the
+    stock, so does NOT stamp `last_checked_at`), and **Mute**
+    (danger-ghost styled; confirmation dialog before firing;
+    reversible only from the item's detail page).
+  - **Dropped:** the standalone Out-of-stock button (Out is a level
+    in the picker), all keyboard shortcuts + their `(1)/(2)/s`
+    labels (SK-4, SK-10), and the per-item Add-to-list button.
+  - **Level picker** renders a
+    [StockLevelDot](web_app/src/components/stock/StockLevelDot.vue)
+    next to each level name so the picker matches the Stock
+    Overview visual language.
+  - **`(?)` help affordance** in the runner topbar opens a plain-
+    English "How stocktake works" dialog explaining all five verbs
+    plus a note on cadence bands / Auto self-tuning.
+  - **Completion screen** shows five counters (checked / changed /
+    skipped / pushed / muted). If any items were flipped to Low or
+    Out during the session, an inline **"Add to list…"** button
+    adds the whole set to any active shopping list in one action
+    (resolves SK-7 — the old per-item Add-to-list button is
+    gone). Uses the same picker + bulk-add path the Stock Overview
+    bulk-add flow uses.
+
+  `vue-tsc --noEmit` clean (only pre-existing Capacitor typings
+  errors from the P8-10 native scaffold on this dev box). Backend
+  unchanged.
+
+### Added
 - **Stocktake queue engine rebuilt (Chunk 1 of the redesign) — 2026-07-04.**
   Backend-only chunk; the runner UX rebuild is Chunk 2. The queue's
   "who / how often / snooze" is now driven by

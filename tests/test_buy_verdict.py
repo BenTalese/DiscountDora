@@ -207,13 +207,21 @@ def test__stocked_plus_usual_price__is_unsure_low():
 
 def test__all_axes_thin__collapses_to_single_not_enough_history():
     """Charter §2.3.4: three thin axes ⇒ one honest reason, not three
-    absent-signal messages."""
+    absent-signal messages.
+
+    Waste-axis nuance: `waste_events_12mo=0` would branch to
+    `no_waste_history` (a meaningful positive signal — "you've never
+    wasted this"), NOT to `thin_data`. To truly get three thin axes
+    we need a waste event PLUS fewer purchases than
+    `_MIN_PURCHASES_FOR_WASTE_RATE` — i.e. "waste has happened but we
+    can't yet compute a rate".
+    """
     inputs = _AxisInputs(
         price_samples=[(3.80, _dt(4))],   # 1 sample → thin
         unique_purchase_dates=[_today() - timedelta(days=4)],
-        waste_events_12mo=0,
-        purchases_12mo=1,
-        stock_level_band="unknown",
+        waste_events_12mo=1,              # some waste seen…
+        purchases_12mo=1,                 # …but too few purchases to compute a rate → thin
+        stock_level_band="unknown",       # thin on need
         is_on_open_list=False,
         today=_today(),
     )

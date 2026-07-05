@@ -105,21 +105,32 @@ class GetStockItemsHandler:
         """C-7 Chunk 2 — bulk-count linked products per stock item. Same
         cost class as `_hydrate_has_image` (a single GROUP BY against
         the link table); kept as its own pass so callers can read the
-        intent on the call site."""
+        intent on the call site.
+
+        FU-463 — built with the ORM `select()` (not raw `text()`) so
+        SQLAlchemy adapts UUID bindings to whatever the column type uses
+        on each engine. The original raw-SQL version silently never
+        matched on SQLite because the string IDs in the IN clause didn't
+        compare against the UUIDType column (see
+        `project_sqlite_uuid_text_binding` memory + FU-171). Symptom was
+        `linked_product_count=0` on every DTO on SQLite deployments,
+        regardless of link-table contents.
+        """
         if not dtos:
             return dtos
         import dataclasses
-        from sqlalchemy import bindparam, text
+        from sqlalchemy import func, select
         from dora_api.app import db
 
-        ids = [str(d.stock_item_id) for d in dtos]
-        stmt = text(
-            'SELECT stock_item_id, COUNT(*) AS n '
-            'FROM "StockItemProduct" '
-            'WHERE stock_item_id IN :ids '
-            'GROUP BY stock_item_id'
-        ).bindparams(bindparam("ids", expanding=True))
-        rows = db.session.execute(stmt, {"ids": ids}).all()
+        link_table = db.metadata.tables["StockItemProduct"]
+
+        ids = [d.stock_item_id for d in dtos]
+        stmt = (
+            select(link_table.c.stock_item_id, func.count().label("n"))
+            .where(link_table.c.stock_item_id.in_(ids))
+            .group_by(link_table.c.stock_item_id)
+        )
+        rows = db.session.execute(stmt).all()
 
         def _key(v) -> str:
             if isinstance(v, UUID):

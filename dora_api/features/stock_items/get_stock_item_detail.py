@@ -3,14 +3,14 @@
 The list endpoint at `GET /api/stock-items` returns a compact DTO suitable
 for the overview grid. This one is used by the detail page and includes:
   * everything on the list DTO
-  * notes, days_until_stocktake_alert, stocktake_alerts_are_enabled
+  * notes, stocktake_alerts_are_enabled (Mute)
   * the location name and stock-level name (so the page doesn't need to
     cross-reference lookups)
   * linked products with their store + current offer info
   * linked recipes (just id + name) — derived via the RecipeIngredient join
 """
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import List
 from uuid import UUID
@@ -20,7 +20,6 @@ from sqlalchemy import select
 from dora_api.app import db
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.shopping_list import (
     SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine,
 )
@@ -34,10 +33,7 @@ from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import (effective_expiring_soon_window,
-                                          get_stock_item_unit_cost_at)
-from dora_api.features.app_settings.clock import household_today
-from dora_api.features.locations.attention import reasons_for_item
+from dora_api.domain.stock_status import get_stock_item_unit_cost_at
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.your_prices import build_your_prices_for_item
 from dora_api.infrastructure.api_response import not_found, ok
@@ -255,7 +251,6 @@ class StockItemDetailDto:
     stock_item_id: UUID
     name: str
     notes: str | None
-    days_until_stocktake_alert: int
     stocktake_alerts_are_enabled: bool
     stock_level_id: UUID | None
     stock_level_name: str | None
@@ -275,8 +270,6 @@ class StockItemDetailDto:
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) when set.
     usual_store_id: UUID | None
     usual_store_name: str | None
-    attention_score: int
-    attention_reasons: dict
     products: List[LinkedProductDto]
     recipes: List[LinkedRecipeDto]
     substitutes: List[SubstituteDto]
@@ -793,13 +786,6 @@ class GetStockItemDetailHandler:
             if _UsualStore is not None:
                 _UsualStoreName = _UsualStore.name
 
-        # C-9.2 — same household-configured expiring-soon window as the alerts
-        # list + heatmap (R-003), falling back to the default.
-        _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
-        _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
-        # R-021 — calendar boundary uses household-tz today.
-        _Reasons = reasons_for_item(_StockItem, today=household_today(self.repository), expiring_soon_window=_Window)
-
         # FU-056 — gather every barcode that resolves to this stock item.
         # Two sources, merged + sorted by created_at descending:
         #   1. Direct registrations (Barcode.stock_item_id == this id)
@@ -839,7 +825,6 @@ class GetStockItemDetailHandler:
             stock_item_id = _StockItem.id,
             name = _StockItem.name,
             notes = _StockItem.notes,
-            days_until_stocktake_alert = _StockItem.days_until_stocktake_alert,
             stocktake_alerts_are_enabled = _StockItem.stocktake_alerts_are_enabled,
             stock_level_id = _StockItem.stock_level.id if _StockItem.stock_level else None,
             stock_level_name = _StockItem.stock_level.name if _StockItem.stock_level else None,
@@ -856,8 +841,6 @@ class GetStockItemDetailHandler:
             auto_add_when_low = bool(_StockItem.auto_add_when_low),
             usual_store_id = _StockItem.usual_store_id,
             usual_store_name = _UsualStoreName,
-            attention_score = _Reasons.score(),
-            attention_reasons = asdict(_Reasons),
             products = _LinkedProducts,
             recipes = _LinkedRecipes,
             substitutes = _Substitutes,

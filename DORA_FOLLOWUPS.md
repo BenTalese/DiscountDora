@@ -53,35 +53,12 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-455 — Pre-existing test failure in `test_buy_verdict.py` (all-thin-axes case returns 0 reasons)
-- **Raised:** 2026-07-04 (Stocktake Chunk 1 close-gate — surfaced by running the full test suite after the change).
-- **Type:** bug (not a stocktake regression).
-- **What:** `tests/test_buy_verdict.py::test__all_axes_thin__collapses_to_single_not_enough_history` fails on main-state (confirmed by `git stash` isolation). The test builds a "min viable" input for the buy-verdict composer and asserts `len(verdict.reasons) == 1` (a single "not enough history yet" reason). The composer currently returns `reasons=[]` for that shape, so either the composer stopped emitting the placeholder reason for thin-axes input, or the test's expectation drifted from the current design. `verdict='unsure'` and `confidence='low'` are still both correct.
-- **Why deferred:** cleanly out of scope for Chunk 1 (backend engine for stocktake). Surfaced only because the chunk's close-gate ran the full pytest suite. Fixing it inline would smear scope.
-- **Recommended resolution:** opportunistic — next time the buy-verdict composer opens for change, read `compose_verdict` + the test to decide whether the emit or the assertion is right. Either fix should be a one-line change.
-
 ## [OPEN] FU-465 — Native push notifications (FCM bridge) not wired
 - **Raised:** 2026-07-04 (P8-10 close-gate).
 - **Type:** deferred job.
 - **What:** VAPID web push works in the browser + PWA install path but Android's WebView doesn't expose the Push / PushManager / Notification APIs, so the Capacitor build's push toggle reads `unsupported`. To make proactive alerts (deal-for-you, run-out, expiry) work on the native app, wire `@capacitor/push-notifications` + Firebase Cloud Messaging on Android (and APNS on iOS when that platform is built). Server-side: a native-endpoint subscription store parallel to the web-push VAPID one, plus a fan-out in `push_sender.py`. Manifest already declares `POST_NOTIFICATIONS`.
 - **Why deferred:** user picked "keep VAPID web push" at P8-10 scope-lock — smallest surface, avoids a Firebase dependency, matches self-host posture. Native push is only worth the FCM/Firebase cost once there's actual demand.
 - **Recommended resolution:** when someone actually installs the native app and complains about missing notifications (or when Phase 4 commercialisation starts). Firebase project setup + `google-services.json` + backend fan-out is roughly a half-day of work.
-
-## [OPEN] FU-464 — Auto-add-when-low threshold is stale after the 3-band collapse (`>= 2` = Out only)
-- **Raised:** 2026-07-03 (spotted while wiring P8-07 consumption events into `update_stock_item.py`).
-- **Type:** finding (real bug — behaviour drift).
-- **What:** [`update_stock_item.py`](dora_api/features/stock_items/update_stock_item.py) auto-add hook fires on `_NewLevelSeq >= 2` with a stale comment `# 2 = Low, 3 = Out (see seed)`. That comment reflects the OLD 4-band sequences (0 Stocked / 1 Sufficient / 2 Low / 3 Out). After the 2026-07-02 Sufficient-band collapse the canonical sequences are **0 Stocked / 1 Low / 2 Out** (`dora_api/domain/stock_status.py`). So `>= 2` now means **Out only** — an item transitioning to **Low** no longer auto-adds, even with `auto_add_when_low` set. The intent is low-or-out (`needs_restock`, seq ≥ 1).
-- **Why not fixed here:** out of P8-07 scope (R-007); touches the auto-add behaviour which has its own DORA_VERIFY coverage. Flagged per the engineering-standards close-gate (R-003 — a bare `2` literal duplicating a domain threshold).
-- **Recommended resolution:** now/opportunistic — replace the `>= 2` + `< 2` literals with `needs_restock(...)` / `LOW_STOCK_SEQUENCE` from `stock_status.py` (server-side single source), and re-verify the auto-add-when-low DORA_VERIFY item. Small, high-value fix.
-
-## [OPEN] FU-463 — Sibling `text() + str(uuid) IN :ids` queries silently returning zero rows on SQLite
-- **Raised:** 2026-07-03 (spotted during FU-171 resolution).
-- **Type:** finding (latent bug on SQLite deployments; harmless on Postgres).
-- **What:** Two remaining call sites use the same broken shape that FU-171 fixed:
-  - `dora_api/features/stock_items/get_stock_items.py:_hydrate_linked_product_count` — the `linked_product_count` on every stock-item DTO defaults to 0 on SQLite because the `WHERE stock_item_id IN :ids` bind never matches BINARY(16) ids.
-  - `dora_api/features/recipes/get_recipes.py:_compute_estimated_cost` — recipe-detail cost estimation joins through `StockItemProduct` on `stock_item_id IN :ids`; same reason it silently returns no rows on SQLite, so `estimated_cost` is always None.
-- **Why deferred:** neither is on the surface the user reported (FU-171 was strictly the recipe-image toggle); rewrites are less mechanical than the recipe one (aggregations across a link table). Postgres deployments were never affected.
-- **Recommended resolution:** now-ish — same pattern as FU-171's fix (drop raw `text()`, use ORM `select()` with SQLAlchemy Core so UUIDType coerces the bindings). Small pass; verify by curl against a SQLite-backed dev instance that `linked_product_count > 0` for a stock item with linked products, and `estimated_cost != null` for a recipe whose ingredients have priced products.
 
 ## [OPEN] FU-462 — Sweep the ~237 prompt-ID comments (`P[0-9]-` / `C-[0-9]` / `B[0-9]`) from shipped source
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
@@ -110,13 +87,6 @@ long session summary. Distinct from the other logs:
 - **What:** No app-wide security-header middleware. Add a response-hook in `infrastructure/middleware.py` that sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, and a permissive-but-honest `Content-Security-Policy` (script-src 'self' 'unsafe-inline'/'unsafe-eval' initially — Quasar's runtime uses eval-ish patterns; tighten later). Flask-Talisman is one option; hand-rolled is fine at this scope.
 - **Why deferred:** Tier-2 hardening, not ship-blocking; CSP tuning has to be done carefully to avoid breaking Piper TTS / print-view / any inline styles the SPA relies on.
 - **Recommended resolution:** later — pair with the security-review Tier-2 delta re-audit (FU-424). Write a one-hit browser-verify sweep after landing (all pages still render, no CSP violations in the console).
-
-## [OPEN] FU-458 — Rate-limit assistant endpoints
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
-- **Type:** deferred job / hardening.
-- **What:** `dora_api/features/assistant/ask_assistant.py:368` (`POST /assistant/ask`) and the confirm-actions endpoint have no rate limit. In multi-tenant (Phase 4) an authenticated user could burn a lot of upstream LLM tokens by looping requests. Options: `flask-limiter` (per-user token bucket, in-memory or Redis), or hand-rolled per-user counter in a DB table. Rate limits should be per-user (`session.user_id`), not per-IP (shared households).
-- **Why deferred:** Tier-2 hardening; Phase 3 is single-user personal-use so the risk is theoretical.
-- **Recommended resolution:** before Phase 4 commercialization / when the first tenancy work starts. Pair with a per-user token accounting design if paid-provider LLM is on.
 
 ## [OPEN] FU-457 — Boot-time resolved-route assertion for reflection-based wiring
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (c)).
@@ -224,17 +194,6 @@ long session summary. Distinct from the other logs:
   done/record status (e.g. "✅ Shipped — see CHANGELOG"). The `PROJECT_STATE.md`
   register already carries the truth, so this is de-risked, not urgent.
 
-## [OPEN] FU-444 — `test__all_axes_thin__collapses_to_single_not_enough_history` fails on pre-existing composer behaviour
-- **Raised:** 2026-07-02 (surfaced while running `pytest` for the Sufficient-band axe close-gate).
-- **Type:** finding (pre-existing, not introduced this session).
-- **What:** [`tests/test_buy_verdict.py:222`](tests/test_buy_verdict.py) asserts that "three thin axes ⇒ one honest reason" — but the fixture (`price_samples=[one]`, `stock_level_band="unknown"`, `waste_events_12mo=0, purchases_12mo=1`) only produces two thin axes: `_waste_axis` returns `(None, "no_waste_history")`, not `thin_data`, when purchases is under `_MIN_PURCHASES_FOR_WASTE_RATE` **and** waste_events is 0. The composer at [`get_buy_verdict.py:314`](dora_api/features/stock_items/get_buy_verdict.py) only surfaces the collapsed "not enough history yet" reason when `len(thin) == 3`, so this test lands with an empty `reasons` list. Confirmed pre-existing via `git stash` re-run against `main`.
-- **Resolution options:**
-  1. Loosen the composer trigger to "zero reasons produced" (broadest — matches the test's intent that a bare-data verdict should carry one honest message).
-  2. Widen the fixture to actually trigger three thin axes (e.g. `purchases_12mo=1, waste_events_12mo=1` so the waste axis returns `thin_data` per the `< _MIN_PURCHASES_FOR_WASTE_RATE` branch line 243).
-  3. Retire the test if the composer's stricter contract is intentional.
-- **Why deferred:** unrelated to the Sufficient-band axe; pre-existed on `main`. Small enough to be a single unit later.
-- **Recommended resolution:** opportunistic — next time buy-verdict is opened for change (P8-06 wait-until work looks likely; see FU-438). Not blocking anything.
-
 ## [OPEN] FU-432 — Recipe Detail residual polish: uncovered NO_HOME bullets
 - **Raised:** 2026-07-01 (12-June feedback-audit delta).
 - **Type:** deferred job (small residual cluster).
@@ -289,13 +248,6 @@ long session summary. Distinct from the other logs:
 - **What:** Original spec (`docs/00_original_spec/Unprocessed Ideas (from Google Docs).md`) asked that when searching for products, the UI should visibly mark ones **already linked to a stock item** so the user isn't tempted to re-link. Search now lives in the companion, but the *linkage-display* rule may still belong in Dora (the "Products" tab on a stock item) or become part of the companion's ingestion contract. Decide where it lives.
 - **Why deferred:** search moved to companion mid-flight; the rule was never re-homed.
 - **Recommended resolution:** during any companion↔Dora ingestion-boundary work — call whether Dora surfaces "already-linked" itself, or the companion queries a Dora endpoint. If the latter, add to the ingestion API's read-side.
-
-## [OPEN] FU-421 — "Remind me to use this" on opened items (use-by reminder)
-- **Raised:** 2026-07-01 (original-spec sweep).
-- **Type:** deferred job (dropped intent).
-- **What:** Original spec asked for a "remind me" affordance when an item is opened (e.g. "I opened this Thai curry paste, remind me in 2 months"). Distinct from expiry (expiry is intrinsic to the product; this is user-set per-open event). Not modelled today — `is_open` + `opened_at` exist, no reminder field/UI.
-- **Why deferred:** never made it into the finishing plan.
-- **Recommended resolution:** when P8-07 Zero-Input Pantry or the alerts refactor next opens — decide keep/cut; if keep, a `use_by_reminder_at` field on `StockItem` + one alert type + a modal on the "opened" toggle covers it.
 
 ## [OPEN] FU-420 — Recipes: non-linked ingredients still fully accounted for (verify model)
 - **Raised:** 2026-07-01 (original-spec sweep).

@@ -30,7 +30,10 @@ from dora_api.features.assistant import (app_knowledge, confirm_actions,
                                           shopping_actions, tools)
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.routers import ASSISTANT_ROUTER
-from dora_api.infrastructure.api_response import ok, unauthorized
+from dora_api.infrastructure.api_response import ProblemDetails, ok, unauthorized
+from dora_api.infrastructure.auth_helpers import (
+    rate_limit, rate_limit_remaining_seconds,
+)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.llm import LlmClient, LlmUnavailable, build_assistant_client
 from dora_api.infrastructure.utils import get_request_body
@@ -42,6 +45,63 @@ _Logger = logging.getLogger(__name__)
 # timeout isn't worth exposing in the UI. Generous so a big model on CPU
 # doesn't get cut off mid-answer.
 _LLM_TIMEOUT_SECONDS = 60
+
+
+# FU-458 — per-user rate limits on the assistant surface. Prevents a
+# runaway loop (accidental or malicious) from burning upstream LLM
+# tokens on an authenticated session. Buckets are keyed by the
+# authenticated `session.user_id` (falling back to IP when the caller
+# is unauthenticated), so a shared household IP doesn't count multiple
+# users against the same bucket.
+#
+# Chosen limits, all per-minute:
+#   - `/assistant/ask` = 20 — a chatty user might send 10–15 messages
+#     in a burst; 20 gives headroom without letting a script hammer
+#     the upstream LLM.
+#   - `/assistant/act` = 60 — no LLM round-trip (just applies decisions);
+#     multi-step confirm flows should never hit this in normal use.
+#   - `/assistant/confirm` = 60 — same shape as `/act`.
+_ASK_PER_MINUTE = 20
+_ACT_PER_MINUTE = 60
+_CONFIRM_PER_MINUTE = 60
+_RATE_SCOPE_ASK = "assistant.ask"
+_RATE_SCOPE_ACT = "assistant.act"
+_RATE_SCOPE_CONFIRM = "assistant.confirm"
+
+
+def _too_many_requests(retry_after: int):
+    """RFC 6585 §4 shaped 429 with a `Retry-After` header. Mirrors the
+    helper in `features/auth/email_flows.py` — kept local to this module
+    for now (R-007 scope discipline). If a third caller needs it,
+    promote to `infrastructure/api_response.py`."""
+    from http.client import TOO_MANY_REQUESTS
+    from flask import jsonify
+    response = jsonify(ProblemDetails(
+        detail=f"Too many requests. Try again in {retry_after}s.",
+        errors={}, status=TOO_MANY_REQUESTS, title="Rate limit exceeded.",
+        type="https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+    ))
+    response.content_type = "application/problem+json"
+    response.status_code = TOO_MANY_REQUESTS
+    response.headers["Retry-After"] = str(max(retry_after, 1))
+    return response
+
+
+def _rate_limit_subject() -> str | None:
+    """Returns the authenticated user_id (as string) so the rate-limit
+    bucket is per-user across a shared household IP. None → falls
+    back to the IP-based bucket inside the helper. Silently
+    tolerates a session that doesn't carry a user_id — the ambient
+    auth guards do the real 401."""
+    raw = session.get(SESSION_USER_ID_KEY)
+    if not raw:
+        return None
+    try:
+        # Round-trip through UUID so a malformed session id doesn't
+        # accidentally share a bucket by literal string equality.
+        return str(UUID(raw))
+    except (ValueError, TypeError):
+        return None
 
 
 class AskAssistantRequest(BaseModel):
@@ -366,6 +426,14 @@ def assistant_status():
 @ASSISTANT_ROUTER.route("/ask", methods=["POST"])
 @has_request_body(AskAssistantRequest)
 def ask_assistant():
+    # FU-458 — per-user rate limit before the LLM round-trip. Applied
+    # BEFORE the pydantic-parsed body extract so a runaway script can't
+    # burn parser cycles either.
+    _Subject = _rate_limit_subject()
+    if not rate_limit(_RATE_SCOPE_ASK, _ASK_PER_MINUTE, subject=_Subject):
+        return _too_many_requests(
+            rate_limit_remaining_seconds(_RATE_SCOPE_ASK, _ASK_PER_MINUTE, subject=_Subject),
+        )
     _Request: AskAssistantRequest = get_request_body()
     _Logger.info("Assistant asked: %s", _Request.message[:80])
     # Constructed directly (not via the DI container) because the handler's
@@ -404,6 +472,14 @@ def _describe_commit(result: dict, list_name: str) -> str:
 @ASSISTANT_ROUTER.route("/act", methods=["POST"])
 @has_request_body(CommitAddRequest)
 def commit_action():
+    # FU-458 — per-user rate limit. Cheaper than `/ask` (no LLM round-
+    # trip) so a higher ceiling, but a runaway loop could still spam
+    # shopping-list writes without one.
+    _Subject = _rate_limit_subject()
+    if not rate_limit(_RATE_SCOPE_ACT, _ACT_PER_MINUTE, subject=_Subject):
+        return _too_many_requests(
+            rate_limit_remaining_seconds(_RATE_SCOPE_ACT, _ACT_PER_MINUTE, subject=_Subject),
+        )
     _Request: CommitAddRequest = get_request_body()
     _Logger.info(
         "Assistant committing %s add(s) to list %s",
@@ -436,6 +512,13 @@ class ConfirmActionRequest(BaseModel):
 @ASSISTANT_ROUTER.route("/confirm", methods=["POST"])
 @has_request_body(ConfirmActionRequest)
 def confirm_action():
+    # FU-458 — per-user rate limit. Same ceiling as `/act` (no LLM
+    # round-trip; the dispatcher just applies a Tier-2 change).
+    _Subject = _rate_limit_subject()
+    if not rate_limit(_RATE_SCOPE_CONFIRM, _CONFIRM_PER_MINUTE, subject=_Subject):
+        return _too_many_requests(
+            rate_limit_remaining_seconds(_RATE_SCOPE_CONFIRM, _CONFIRM_PER_MINUTE, subject=_Subject),
+        )
     _Request: ConfirmActionRequest = get_request_body()
     _Logger.info("Assistant confirming action: %s", _Request.type)
     result = confirm_actions.commit(_Request.type, _Request.payload)

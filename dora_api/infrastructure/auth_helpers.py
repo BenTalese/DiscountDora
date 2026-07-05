@@ -256,14 +256,23 @@ def build_reset_url(token: str) -> str:
 
 # ── Rate limiter ───────────────────────────────────────────────────────
 
-# Per-route per-IP token bucket. In-memory and process-local — fine for
-# a self-contained desktop install, a single PWA backend, or one mobile
-# API host. For horizontally-scaled deployments swap for Redis later.
+# Per-route token bucket, keyed by IP by default OR by a caller-supplied
+# identity string (typically an authenticated user_id). In-memory and
+# process-local — fine for a self-contained desktop install, a single
+# PWA backend, or one mobile API host. For horizontally-scaled
+# deployments swap for Redis later.
 _buckets: dict[tuple[str, str], deque[float]] = {}
 _buckets_lock = Lock()
 
 
-def _bucket_key(scope: str) -> tuple[str, str]:
+def _bucket_key(scope: str, subject: str | None = None) -> tuple[str, str]:
+    """Bucket key = (scope, subject). When the caller provides `subject`
+    (e.g. `str(user_id)` for post-auth routes) it's used verbatim so the
+    limit is per-identity across a household on a shared IP. Otherwise
+    we fall back to the request's remote address for pre-auth surfaces
+    (login, register, verify)."""
+    if subject:
+        return (scope, subject)
     ip = "anon"
     try:
         ip = request.remote_addr or "anon"
@@ -272,12 +281,21 @@ def _bucket_key(scope: str) -> tuple[str, str]:
     return (scope, ip)
 
 
-def rate_limit(scope: str, max_per_minute: int) -> bool:
+def rate_limit(
+    scope: str, max_per_minute: int, subject: str | None = None,
+) -> bool:
     """Returns True if the call is within the limit, False otherwise.
-    `scope` should be the endpoint identifier ("auth.login",
-    "auth.register", …) so different routes don't share buckets.
+
+    `scope` is the endpoint identifier ("auth.login", "assistant.ask",
+    …) so different routes don't share buckets.
+
+    `subject` optionally overrides the per-IP default with a per-identity
+    key. For post-auth routes (assistant surface, anything that already
+    has a session.user_id) pass `str(user_id)` here so a shared
+    household IP doesn't count multiple users against the same bucket
+    (FU-458). For pre-auth routes leave it None to keep the IP fallback.
     """
-    key = _bucket_key(scope)
+    key = _bucket_key(scope, subject)
     now = time.monotonic()
     with _buckets_lock:
         bucket = _buckets.setdefault(key, deque())
@@ -290,10 +308,13 @@ def rate_limit(scope: str, max_per_minute: int) -> bool:
         return True
 
 
-def rate_limit_remaining_seconds(scope: str, max_per_minute: int) -> int:
+def rate_limit_remaining_seconds(
+    scope: str, max_per_minute: int, subject: str | None = None,
+) -> int:
     """Seconds until the oldest event in the bucket falls outside the
-    sliding window. Used for the Retry-After response header."""
-    key = _bucket_key(scope)
+    sliding window. Used for the Retry-After response header. `subject`
+    must match what was passed to `rate_limit` — same key both sides."""
+    key = _bucket_key(scope, subject)
     now = time.monotonic()
     with _buckets_lock:
         bucket = _buckets.get(key)

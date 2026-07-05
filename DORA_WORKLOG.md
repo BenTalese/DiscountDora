@@ -9,6 +9,689 @@ next.
 
 ---
 
+## 2026-07-04 — FU-421 closed as already-satisfied (existing expiry surface covers "remind me to use this")
+
+**Why:** User asked to do FU-421 and initially suggested a modal-on-open
+design. Pushed back on the modal (train-to-dismiss risk) and floated a
+smaller "Remind me…" affordance instead. User cracked the design open
+with the right question: *why not just use the expiry feature?* — since
+a user-set "use within 2 months" IS an expiry, semantically identical
+to a manufacturer-printed one.
+
+Read the code to confirm the reuse hypothesis, and found the whole
+workflow was **already built** three months of Cookbook work ago:
+
+- Item detail's Expiry row has `+1d` / `+7d` / `+14d` shift chips +
+  full date picker + Clear button
+  ([`StockItemDetailPage.vue:269-298`](web_app/src/pages/StockItemDetailPage.vue)).
+- Row's expiry button opens a `Push +1d/+7d/+14d` / `Clear` menu
+  ([`StockItemRow.vue:191-231`](web_app/src/components/stock/StockItemRow.vue)).
+- Open toggle tooltip already documents the exact intended workflow:
+  *"Opening an item doesn't change its expiry date — but for
+  perishables it's the cue to set or shorten one. Use the expiry row
+  above to do that."*
+- Alerts fall out of the existing `expired` + `expiring_soon` pipeline
+  for free (both fire on `expiry_date` regardless of provenance).
+- Auto-clear on waste is wired (row + bulk waste).
+
+Offered two paths:
+- **A. Close as already-satisfied** (no code change).
+- **B. Add `+1m` / `+3m` month-scale shift chips** to the Expiry row
+  since the current `+14d` cap is genuinely tedious for "remind me in
+  2 months" (user would end up on the raw date picker).
+
+User picked **A** — hasn't hit the pain in real use, so no code needed.
+If the month-scale gap ever becomes annoying, Option B is a ~10-line
+SPA change (SetItemDetailPage.vue's shift-chip row + StockItemRow.vue's
+push-menu).
+
+**Files touched:** none (code-side). Ledger only: FU-421 moved to
+`_RESOLVED` with a full state note explaining what's there, the reuse
+rationale, and the Option-B off-ramp.
+
+**Quality gates:** N/A — no code change.
+
+**Engineering-standards close-gate:**
+- **R-003** — the design decision *is* R-003 in action. A parallel
+  `use_by_reminder_at` field would have created two authorities for
+  "when should Dora nudge me to use this item"; reusing `expiry_date`
+  keeps it one.
+- **R-007** — resisted the temptation to add month-scale chips
+  proactively. User explicitly picked "close as-is." If pain surfaces,
+  reopen.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** truly nothing changed in code. Docs only.
+
+**Follow-ups opened:** none.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — FU-458 resolved: per-user rate limits on the assistant surface
+
+**Why:** User pulled forward a Phase-4 hardening item. In multi-tenant
+Phase-4 the risk is an authenticated user looping requests and burning
+upstream LLM tokens; in Phase-3 the risk is smaller (single-user
+personal-use) but a runaway script or an accidental infinite loop in
+an assistant flow could still hit the wallet. Cheap defense.
+
+**Design decision — surfaced during exploration:** the existing
+`rate_limit` helper (`auth_helpers.py:275`) was **per-IP, not
+per-user**. The FU explicitly says households share IPs and this
+needs to be per-user (`session.user_id`). Worse — the neighbouring
+`probe_assistant.py:196-197` had a comment claiming "combines it with
+the authenticated session inside `_bucket_key`" but the code was
+combining with IP. So the FU also had a small doc/code drift buried
+in the same surface.
+
+**Solution:** extend the helper to accept an optional `subject`
+argument that overrides the per-IP default with a per-identity one.
+Backward-compat: `subject=None` (unchanged callers) keeps the historic
+per-IP behaviour for pre-auth surfaces (login/register/verify). New
+signature:
+
+```python
+def rate_limit(scope: str, max_per_minute: int, subject: str | None = None) -> bool
+def rate_limit_remaining_seconds(scope, max_per_minute, subject=None) -> int
+```
+
+`_bucket_key` gained a `subject` param; when provided it becomes the
+second half of the key verbatim, else the IP fallback kicks in.
+
+**Endpoints wired:**
+- **`/assistant/ask` = 20/min** — the LLM round-trip. Most expensive
+  per-request. 20 gives a chatty user headroom (10-15 message bursts)
+  while blocking a script hammering the upstream.
+- **`/assistant/act` = 60/min** — commit-add path. No LLM round-trip
+  but a runaway loop could still spam shopping-list writes.
+- **`/assistant/confirm` = 60/min** — same shape as `/act` (Tier-2
+  action dispatch).
+
+All three extract `session.user_id`, pass it as `subject=str(user_id)`
+so per-user isolation actually works. When unauthenticated → IP
+fallback (defense-in-depth, though the ambient auth guards should
+block those anyway).
+
+**Also fixed:** the `probe_assistant.py` per-user comment now matches
+the code — passes `subject=str(user_id)` explicitly.
+
+**Response shape:** RFC 6585 §4 shaped 429 (`content-type:
+application/problem+json`, `Retry-After` header). Matches the
+neighbouring `email_flows._too_many_requests` byte-for-byte. Kept as
+a local helper in `ask_assistant.py` for now (R-007 scope discipline
+— three copies of the same 429 helper now exist in the auth surface;
+worth promoting to `infrastructure/api_response.py` if a fourth site
+appears).
+
+**Files touched:**
+- `dora_api/infrastructure/auth_helpers.py` — signature extension,
+  updated docstrings for the new `subject` semantics.
+- `dora_api/features/assistant/ask_assistant.py` — imports +
+  constants + local `_too_many_requests` helper + `_rate_limit_subject`
+  helper + rate-limit guards on the three endpoints.
+- `dora_api/features/assistant/probe_assistant.py` — wired the
+  existing rate_limit call to actually be per-user (fixes the
+  doc/code drift).
+
+**Quality gates:**
+- **New pytest coverage:** `tests/test_rate_limit_subject.py` — 5
+  tests locking in subject isolation, scope isolation, retry-after
+  math, IP fallback, and empty-string boundary. All green.
+- **Full pytest suite:** 303/303 green (was 298 → 5 new tests).
+- **Live REPL sanity table:** confirmed `alice` (3/3 limit → 4th
+  refused) and `bob` (independent bucket, 1st call succeeds) don't
+  share state. `remaining_seconds` reflects the correct bucket.
+
+**Engineering-standards close-gate:**
+- **R-001** — reused the existing rate-limit helper; didn't fork a
+  new one just because the semantics changed.
+- **R-003** — the rate-limit rule is now one authority (`auth_helpers.
+  rate_limit`), with the per-vs-per split expressed by a single
+  optional arg on the callsite.
+- **R-007** — didn't refactor the three copies of `_too_many_requests`
+  scattered across the auth surface (email_flows, register_user,
+  bootstrap_admin, and now ask_assistant). Left an inline comment
+  suggesting promotion to `api_response.py` when a fourth caller
+  appears.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the four files this FU needed
+(three code + one new test). No neighbours refactored.
+
+**Follow-ups opened:** none. FU-458 → `_RESOLVED`. Considered opening
+one for the `_too_many_requests` duplication but the promotion cost
+is trivial next time it's needed — noted inline instead.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — FU-463 resolved: two more SQLite text()+str(uuid) sites rewritten
+
+**Why:** Same class of latent bug FU-171 fixed for the recipe-image
+toggle. SQLAlchemy `UUIDType` stores as `BINARY(16)` on SQLite; a raw
+`text('… WHERE id IN :ids')` bound with `[str(uuid), …]` compares a
+string to a blob and silently returns zero rows. Two remaining call
+sites had the same shape — both harmless on Postgres, broken on
+SQLite self-hosts.
+
+**Sites fixed:**
+
+- [`get_stock_items.py::_hydrate_linked_product_count`](dora_api/features/stock_items/get_stock_items.py) — the "how many products link to this stock item?" count on every stock-item DTO. Under the bug: `linked_product_count=0` on every row regardless of link-table contents; the SPA's "N products linked" chip and the linkage-aware branches on stock-item detail were silently reading 0 forever.
+- [`get_recipes.py::_compute_estimated_cost`](dora_api/features/recipes/get_recipes.py) — the three-table cost join (`StockItemProduct → Product → ProductOffer`) that computes a recipe's `estimated_cost`. Under the bug: `estimated_cost=None` on every recipe on SQLite even when ingredients had priced products; the recipe-detail cost card fell back to its "no price data yet" empty state.
+
+**Fix:** dropped raw `text()` in both, moved to `select()` against
+`db.metadata.tables[…]` with `stock_item_id.in_(ids)` — SQLAlchemy Core
+adapts UUID bindings via the column's `UUIDType` on each engine. Both
+now execute correctly on Postgres AND SQLite. Same pattern
+`get_stock_items._hydrate_has_image` was already using since FU-171 —
+now three surfaces speak the same idiom.
+
+**Files touched:**
+- `dora_api/features/stock_items/get_stock_items.py` — rewrote
+  `_hydrate_linked_product_count`, replaced `text() + bindparam`
+  imports with `func, select`.
+- `dora_api/features/recipes/get_recipes.py` — rewrote
+  `_compute_estimated_cost`, same import swap; three-way join
+  expressed via `.select_from(link.join(product).join(offer))`.
+
+**Quality gates:**
+- `pytest tests/ --ignore=tests/e2e` — **298/298 green**.
+- **Live SQLite REPL** against `data/dora.test.db` under
+  `app.app_context()`: both rewritten queries compile + execute
+  cleanly on the sqlite dialect (0 rows on empty tables + fake id,
+  which is the "success" outcome — before the fix they'd have
+  returned 0 rows regardless of contents; now the query at least
+  *runs* and would return real rows against real data).
+- **Standards audit:** R-003 (server-owned domain math via one
+  correct query path), R-006 (no schema change; pure runtime),
+  R-007 (didn't touch adjacent hydration passes even though they
+  looked similar — they already used ORM `select()` and weren't
+  the buggy shape). No new violations.
+
+**Anti-drift check:** touched only the two files this FU named. No
+test additions — the failure mode is a silent zero-row return on a
+specific engine, which unit tests can't catch without an actual DB
+round-trip; the SQLite REPL run is the honest evidence.
+
+**Follow-ups opened:** none. FU-463 moved to `_RESOLVED`.
+
+**Notes for the `project_sqlite_uuid_text_binding` memory:** this
+same class of bug has now bitten four surfaces (`_hydrate_has_image`,
+recipes/meal-plans FU-171 pair, and now these two). Every remaining
+`text() + str(uuid) IN :ids` in the codebase should be treated as a
+latent SQLite bug — sweep opportunistically when the file opens.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — FU-464 resolved: auto-add-when-low regression fixed (`>= 2` was Out-only)
+
+**Why:** Real user-visible bug. Since the 2026-07-02 Sufficient-band
+collapse (`a1c7d9e42be0`), the auto-add hook in `update_stock_item.py`
+was firing on `_NewLevelSeq >= 2` with a stale comment "2 = Low, 3 =
+Out (see seed)" — that mapping was the OLD 4-band world. Under the new
+3-band sequences (0 Stocked / 1 Low / 2 Out), `>= 2` means **Out only**.
+So any item flagged `auto_add_when_low` and set from Stocked → Low was
+NOT auto-added despite the whole point of the setting. Silent
+regression for two days.
+
+**Fix:** replaced the two literal-sequence comparisons with the
+semantic predicate `needs_restock(level)` from `stock_status.py`
+(R-003 — one authority for "is this level restock-needing"). Refactored
+the previous-level capture to hold the loaded `StockLevel` object so
+both the transition check and the neighbouring level-change history
+append read the same source.
+
+Before:
+```python
+_NewLevelSeq: int | None = _StockItem.stock_level.sequence if ...
+if (
+    _StockItem.auto_add_when_low
+    and _NewLevelSeq is not None
+    and _NewLevelSeq >= 2  # 2 = Low, 3 = Out (see seed)   ← stale
+    and (_PreviousLevelSeq is None or _PreviousLevelSeq < 2)
+):
+    _AutoAddResult = self._try_auto_add(_StockItem)
+```
+
+After:
+```python
+if (
+    _StockItem.auto_add_when_low
+    and needs_restock(_StockItem.stock_level)
+    and not needs_restock(_PreviousLevel)
+):
+    _AutoAddResult = self._try_auto_add(_StockItem)
+```
+
+Sanity table (from a live import):
+- `needs_restock(Stocked)` → False
+- `needs_restock(Low)` → True   ← was False under the old `>= 2` bug
+- `needs_restock(Out)` → True
+- `needs_restock(None)` → False (fresh item → treated as
+  "not-yet-restock-needing", so its first landing at Low/Out fires)
+
+**Files touched:**
+- `dora_api/features/stock_items/update_stock_item.py` — one import,
+  the previous-level capture refactor, the auto-add predicate swap.
+  ~15 lines net.
+
+**Quality gates:**
+- `pytest tests/ --ignore=tests/e2e` — **298/298 green**. Auto-add
+  coverage is e2e-only; will re-verify in-browser via the FU-315
+  DORA_VERIFY block (heading nudged with a note pointing at this fix).
+- Module imports clean on the current DB path.
+
+**Engineering-standards close-gate:**
+- **R-003** — the fix is exactly the R-003 shape: one predicate,
+  server-side, one authority. Both the auto-add hook and any future
+  caller now agree on "restock-needing" without hardcoding a
+  sequence.
+- **R-007 scope** — didn't touch the surrounding consumption-event
+  branch (still uses `_PreviousLevelSeq` for its integer-band
+  comparisons — different predicate, different concern).
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched one file, one function. No adjacent
+cleanup.
+
+**Follow-ups opened:** none. FU-464 moved to `_RESOLVED`. Existing
+FU-315 auto-add DORA_VERIFY block gets re-walked once the user's next
+browser session opens — added an inline hint on that heading.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — FU-455 resolved: test was wrong, composer was right
+
+**Why:** Followed on from the stocktake housekeeping — the full-suite
+pytest run had one lingering failure (`test_buy_verdict.py::test__all_
+axes_thin__collapses_to_single_not_enough_history`) that FU-455
+flagged as opportunistic. Session had the file open, so folding it in.
+
+**Diagnosis:** the composer classifies waste-axis output into three
+buckets: `wastes_often` / `wastes_sometimes` / `wastes_rarely` when a
+rate can be computed, else either **`no_waste_history`** (you've never
+wasted this — a positive signal that nudges toward buying) OR
+**`thin_data`** (waste has happened but not enough purchases to compute
+a rate). These two "we couldn't compute a rate" branches are
+meaningfully different — one is knowledge, one is absence-of-knowledge.
+
+The failing test used `waste_events_12mo=0, purchases_12mo=1`, which
+correctly hits the `no_waste_history` branch, NOT `thin_data`. So the
+composer's `len(thin) == 3` all-thin collapse didn't fire (only 2 axes
+were thin), and the test's `len(verdict.reasons) == 1` assertion
+failed. The composer was right; the test's docstring said "three thin
+axes" but the inputs produced only two.
+
+**Fix:** the test, not the composer. Changed
+`waste_events_12mo=0 → 1` while keeping `purchases_12mo=1` so the
+waste axis genuinely returns `thin_data` (waste seen but too few
+purchases to compute a rate). Added a "waste-axis nuance" note to the
+docstring explaining why `waste_events_12mo=0` would miss the collapse
+— so the next reader doesn't fall into the same trap.
+
+**Files touched:**
+- `tests/test_buy_verdict.py` — 3-line change to the failing test's
+  inputs + docstring note.
+
+**Quality gates:**
+- `pytest tests/ --ignore=tests/e2e`: **298/298 green** (was 297/298
+  from Chunk 1's ship onward).
+
+**Engineering-standards close-gate:**
+- **R-003** — the composer's distinction between `no_waste_history`
+  and `thin_data` is exactly the R-003 shape (one meaning per name).
+  Merging them would have been the wrong "fix"; the composer stays
+  the authority.
+- **R-007 scope** — no adjacent cleanup, just the one test.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the test file. Composer + all
+callers unchanged.
+
+**Follow-ups opened:** none. FU-455 moved to `_RESOLVED`.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-04 — Stocktake housekeeping: R-003 alerts drift fixed + dead heatmap deleted + deprecated columns dropped
+
+**Why:** Chunk 3's worklog claimed two columns were "orphaned and can
+be dropped whenever." That claim was wrong — a survey found the
+`stocktake_overdue` alert kind (bell + Alerts page + assistant tool
+filter) and the location "attention" heatmap were BOTH still computing
+overdue from the deprecated per-item column, i.e. **two definitions of
+"overdue" in the codebase after Chunks 1–3.** R-003 drift; the bell
+could disagree with the runner as soon as Auto self-tuning promoted a
+fast mover. User picked "rewire alerts to the band system" (Option 1).
+While auditing the second caller, discovered the whole
+`locations/attention.py` heatmap system was **dead code** — computed on
+every location tree fetch, typed in the SPA, but **zero Vue files
+render it**. That let cleanup finish in one pass rather than three.
+
+**What shipped:**
+
+- **Alerts feed rewired to the queue's authority.** New shared helper
+  `stocktake.resolve_overdue_map(items, now)` factored out of
+  `get_stocktake_queue`: applies mute + push + engagement gate + band
+  resolution in one bulk pass, returns `{stock_item_id → OverdueInfo}`.
+  Both the queue endpoint AND `alerts/get_alerts.py` now consume the
+  same map, so the bell + runner can never disagree (R-003). Queue's
+  stocktake_overdue alert copy switched to the band system's day count.
+- **Dead heatmap system deleted.** `dora_api/features/locations/attention.py`
+  gone. `get_location_tree.py` rewritten to drop `attention_score`,
+  `attention_reasons`, `primary_reason` from both DTOs — payload
+  smaller, no per-item scoring on every fetch, no more dead-code
+  reasons_for_item loop. `get_stock_item_detail.py` DTO stripped
+  of the same two fields; unused imports (`asdict`, `AppSetting`,
+  `effective_expiring_soon_window`, `household_today`) pruned. SPA
+  models pruned identically: `AttentionReasons` type, `summarizeReasons`,
+  `attentionColor`, `attentionBackground` helpers, and the two DTO
+  fields removed from `models/location.ts` + `models/stockItemDetail.ts`.
+  Zero external consumers (verified by grep across `.ts` + `.vue`).
+- **Deprecated columns dropped.** Fresh alembic revision
+  `e5c8b3a1f4d2_20260704_drop_deprecated_stocktake_days` drops
+  `StockItem.days_until_stocktake_alert` (per-item cadence dial) and
+  `AppSetting.default_days_until_stocktake_alert` (household default
+  for the same). R-005 batch_alter_table for SQLite; symmetrical
+  downgrade rehydrates both columns at their historical defaults.
+  Alembic single head after the ship.
+- **Runtime callers cleaned.** Removed the column references from:
+  `stock_item.py` + `app_setting.py` (entities + Fields enums),
+  `table_mappings.py` (both columns), `get_app_settings.py` +
+  `update_app_settings.py` (DTO + PATCH field + set-branch),
+  `access.py` (nothing to change — never seeded it explicitly),
+  `create_stock_item.py` (dropped the AppSetting-seed lookup +
+  unused `get_or_create_app_setting` import), `update_stock_item.py`
+  (dropped the request field + set-branch), `get_stock_item_detail.py`
+  (DTO field + read), `onboarding.py` (two demo-item constructor sites),
+  `import_spreadsheet.py`, `seed.py`. StockItem's docstring in
+  `stocktake.py` updated to drop the "deprecated column" reference.
+- **SPA models cleaned.** `stockItemApiService.UpdateStockItemCommand`
+  no longer accepts `days_until_stocktake_alert`.
+  `appSettingsApiService.AppSettings` no longer carries
+  `default_days_until_stocktake_alert`. `stockItemDetail.StockItemDetail`
+  no longer carries `days_until_stocktake_alert` or the two attention
+  fields.
+
+**Files touched (~19):**
+- Deleted: `dora_api/features/locations/attention.py`.
+- New: `dora_api/persistence/migrations/versions/e5c8b3a1f4d2_20260704_drop_deprecated_stocktake_days.py`.
+- Backend edits: `stocktake/stocktake.py` (extracted resolve_overdue_map + refactored queue), `alerts/get_alerts.py` (routed through the helper), `locations/get_location_tree.py` (rewritten), `stock_items/get_stock_item_detail.py`, `stock_items/create_stock_item.py`, `stock_items/update_stock_item.py`, `app_settings/get_app_settings.py`, `app_settings/update_app_settings.py`, `onboarding/onboarding.py`, `data/import_spreadsheet.py`, `persistence/seed.py`, `persistence/table_mappings.py`, `domain/entities/stock_item.py`, `domain/entities/app_setting.py`.
+- SPA edits: `services/api/stocktakeApiService` (unchanged — Chunk 1's public helper was reused), `services/api/appSettingsApiService.ts`, `services/api/stockItemApiService.ts`, `models/location.ts`, `models/stockItemDetail.ts`.
+
+**Quality gates:**
+- **pytest** (`tests/` minus e2e): 297 pass / 1 fail — same shape as
+  Chunk 1's ship, the failure is the pre-existing FU-455
+  buy-verdict test. **Regression-clean.**
+- `vue-tsc --noEmit`: no new errors from the cleanup (only the
+  pre-existing P8-10 Capacitor typings).
+- Alembic head count: 1. Migration reversible.
+
+**Engineering-standards close-gate:**
+- **R-001 componentisation** — one shared `resolve_overdue_map` used
+  by both callers; no per-endpoint duplication of the overdue rules.
+- **R-003 single source of truth** — the whole point of this cleanup.
+  "Is this item overdue?" now has exactly one authority
+  (`stocktake.resolve_overdue_map`). Bell + runner + heatmap counter
+  can never disagree.
+- **R-005 distribution** — batch_alter_table, no vendor-specific
+  syntax; repository-routed throughout.
+- **R-006 clean migrations** — single revision, symmetrical
+  upgrade/downgrade, server-defaults on the downgrade so an existing
+  pantry doesn't get spurious alerts.
+- **R-007 scope discipline** — the "just drop the columns" ask
+  legitimately expanded when the survey found live callers, but I
+  stopped and confirmed with the user before proceeding (the correct
+  bar). Once approved: rewired only what needed rewiring, deleted
+  only what was truly dead.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the files this cleanup needed. No
+UI change (the alerts + runner behaviour is now consistent with what
+the SPA already displays; users would only notice by seeing the two
+surfaces agree, which they should have been all along).
+
+**Follow-ups opened:** none. This *closes* the stocktake trilogy for
+real — no deferred columns, no drift, no dead code.
+
+**Next up:** browser-verify walk-through covering the Chunks 2 + 3
+DORA_VERIFY entries + a sanity check that the bell's
+`stocktake_overdue` count matches the runner's count on the same
+dataset (this cleanup is what makes them agree).
+
+---
+
+## 2026-07-04 — Stocktake redesign Chunk 3: Settings + Stock Overview surfacing
+
+**Why:** Chunks 1+2 landed the engine + runner. Chunk 3 wires the two
+peripheral surfaces the brief called out (§7 Stock Overview + §8
+Settings) so the redesign is discoverable and configurable end to end.
+
+**What shipped (SPA only + one settings-file cleanup; no backend change):**
+
+- **New page `/settings/admin/system/stocktake`** — dedicated Stocktake
+  block with a **`q-btn-toggle`** three-way cadence-band selector
+  (Weekly / Fortnightly / Monthly) and a **`q-toggle`** for Auto
+  self-tuning. Eager-save on change (matches the neighbouring
+  Alert-thresholds page pattern); failed save reverts the draft.
+- **Deprecated section removed** from
+  `AdminSystemAlertsSettings.vue` — the old "Default stocktake
+  reminder" numeric-days input (backing `default_days_until_stocktake_
+  alert`) is superseded by the band system (Chunk 1 §7). Section
+  gone, unused reactive state pruned, a comment explains where the
+  new dial lives. The DB column stays for now (Chunk-1's deferred
+  drop).
+- **Route + nav** — new route entry + `SettingsShell` System-group
+  nav item using `ICONS.fact_check`.
+- **`AppSettings` TS type** on `appSettingsApiService` gains
+  `stocktake_default_cadence_band: CadenceBand` +
+  `stocktake_auto_tuning_enabled: boolean` so the settings page can
+  GET/PATCH them via the existing generic app-settings service (no
+  new API method).
+- **Stock Overview "Needs check" quick-filter** — new `FilterChip`
+  alongside Essential / Auto-add / Open / Needs-attention. Chip is
+  keyed off a fresh `needsCheckOnly` flag on `useStockFilters`; the
+  composable takes a new optional `needsCheckIds` source getter.
+- **Server signal shape:** reused the existing `GET /stocktake/queue`
+  endpoint — StockOverview's queue fetch bumped from `limit=1` → `500`
+  (server-capped) so we get the ids alongside the count in one round-
+  trip. No new endpoint (§3.2 decision).
+- **Row pulse outline** — `StockItemRow` gains a `needsCheck` prop; the
+  stock-level button gets `.stock-row__level-btn--needs-check` when
+  set, driving a **2s brand-accent pulse** that matches the toolbar
+  Stocktake attention glow byte-for-byte (same `color-mix` /
+  `--brand-accent` shape as `dora-btn--attention`). Reduced-motion
+  users get a static outline instead of the animation.
+
+**Feedback bullets resolved:** the original-spec Taskboard note's
+"highlight overdue rows on the Stock Overview" ambition (§9 keep-line)
+lands here, realised as the pulse-around-the-level-button rather than
+a whole-row background change per the user's design call.
+
+**Files touched:**
+- `web_app/src/pages/settings/AdminSystemStocktakeSettings.vue` — **new**.
+- `web_app/src/pages/settings/AdminSystemAlertsSettings.vue` — removed
+  the deprecated section + pruned unused state.
+- `web_app/src/router/routes.ts` — new stocktake settings route.
+- `web_app/src/pages/SettingsShell.vue` — nav entry under System.
+- `web_app/src/services/api/appSettingsApiService.ts` — two new fields
+  on the `AppSettings` type.
+- `web_app/src/composables/useStockFilters.ts` — new `needsCheckOnly`
+  flag + `needsCheckIds` optional source getter.
+- `web_app/src/pages/StockOverview.vue` — bumped queue fetch to 500;
+  added `needsCheckIds` Set; wired the filter source; added the
+  FilterChip; passed `needs-check` down to both StockItemRow mount
+  sites (list + virtual-scroll).
+- `web_app/src/components/stock/StockItemRow.vue` — new `needsCheck`
+  prop + class binding + pulse CSS (with reduced-motion fallback).
+
+**Quality gates:**
+- `vue-tsc --noEmit` — only the pre-existing Capacitor typing errors
+  on this box; **no new errors** from Chunk 3.
+- No backend change; pytest suite untouched.
+- One transient tsc error (`q-btn-toggle` wanted a mutable options
+  array) caught and fixed inline.
+
+**Engineering-standards close-gate:**
+
+- **R-001 componentisation** — reused `SettingsSection`, `SettingsRow`,
+  `SettingsPageHeader`, `FilterChip`, and the standard prop-injection
+  pattern for StockItemRow. No bespoke widgets.
+- **R-002 theme tokens only** — the pulse animation uses
+  `--brand-accent` + `color-mix`, matching `dora-btn--attention`
+  byte-for-byte. No palette literals.
+- **R-003 SoT** — `needsCheckIds` is server-owned; the SPA is a
+  passive consumer. The filter predicate reads it via a getter so
+  the composable stays decoupled from where the Set lives.
+- **R-007 scope** — the one non-additive edit (removing the
+  deprecated section on Alerts settings) is charter-mandated
+  clean deprecation per the brief §7, not scope creep. No other
+  cleanup.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the files this chunk needed —
+1 new settings page, 6 targeted edits across router/shell/service/
+filters/overview/row. Backend, tests, other pages untouched.
+
+**Follow-ups opened:**
+- None. The stocktake redesign is now feature-complete end to end
+  (backend engine + runner + settings + Overview surfacing). Chunk 3
+  is the natural close of the trilogy.
+
+**Deferred (chained, not FUs):**
+- Drop the `default_days_until_stocktake_alert` AppSetting column
+  (backend). The field is orphaned in the DB after this chunk — no
+  UI writes to it, and the queue engine (Chunk 1) doesn't read it.
+  Left for a housekeeping migration when the next stocktake / alerts
+  work opens.
+- Drop the per-item `StockItem.days_until_stocktake_alert` column
+  (Chunk 1 already flagged this as deferred until the SPA cutover
+  landed; now that Chunk 2 is done, that condition is met and a
+  drop-migration could ship whenever). No urgency.
+
+**Next up:** browser-verify walk-through of the whole stocktake
+redesign (new DORA_VERIFY entries in Chunks 2 + 3 cover the surfaces).
+
+---
+
+## 2026-07-04 — Stocktake redesign Chunk 2: SPA runner rebuild
+
+**Why:** With Chunk 1's backend engine serving up the new DTO shape,
+Chunk 2 delivers the user-visible half — the runner rewrite specified
+in `PROPOSAL_STOCKTAKE_MODE.md §5 / §5.1 / §5.2`. This is the chunk that
+actually lands the redesign for anyone using the app.
+
+**What shipped (SPA only, no backend change):**
+
+- **Landing page retired.** `StocktakePage.vue` deleted; route
+  `/stocktake` now loads `StocktakeRunner.vue` directly. The old
+  `/stocktake/run` sub-route redirects to `/stocktake` so any
+  bookmark or in-progress worklog link keeps working. Empty-queue
+  state ("You're all caught up.") is now a state of the runner, not
+  a separate screen. Resolves SK-1 (no Refresh button) and SK-2
+  (top-of-queue text) by removing the screen that hosted them.
+- **New button layout (§5).** Two big primaries side-by-side —
+  **Still correct** (positive) and **Change level** (tinted to the
+  current level's colour + small "(change)" underneath — the button
+  doubles as the level readout, closing SK-8 / SK-9). Three smaller
+  secondaries below: **Skip** (ghost) / **Push 3 days** (ghost) /
+  **Mute** (danger-ghost).
+- **Dropped:** the standalone Out-of-stock button (Out is a level in
+  the picker), all keyboard shortcuts + their `(1)/(2)/s` labels
+  (SK-4, SK-10), and the per-item Add-to-list button (moves to the
+  completion screen — SK-7).
+- **Level picker (SK-8) gains colours** — each option row renders a
+  `StockLevelDot` at 14px next to the level name, matching the
+  Stock Overview visual language.
+- **Skip semantics:** session-only, no API. Implemented by appending
+  the skipped item back onto the end of the session queue — "later
+  today, keep reminding me" per the design call.
+- **Push wiring:** hits the Chunk-1 `POST /stock-items/{id}/snooze`
+  endpoint via the new `snoozeAsync` on the API service. Doesn't
+  bump `last_checked_at` — that stays a server-side guarantee.
+- **Mute wiring:** confirmation dialog first (nuclear action; only
+  reversible from item detail), then PATCH
+  `stocktake_alerts_are_enabled=false`.
+- **`(?)` help affordance** in the topbar opens a plain-English
+  "How stocktake works" dialog explaining all five verbs + a note
+  on cadence bands / Auto. Not a keyboard-shortcut cheatsheet
+  (there are no shortcuts).
+- **Completion screen (§5.2):** five counters — Checked / Changed /
+  Skipped / Pushed / Muted. Below them, if the session flipped any
+  items to Low or Out, a batch "Add to list…" prompt lets the user
+  add the whole set to any active shopping list in one action
+  (reuses the same `$q.dialog` picker + `useShoppingListActions.
+  addItems` path the Stock Overview bulk-add flow uses). Idempotent
+  UI — button disables after a successful add so the user can't
+  double-fire the batch.
+
+**Files touched:**
+- `web_app/src/pages/StocktakePage.vue` — **deleted**.
+- `web_app/src/pages/StocktakeRunner.vue` — full rewrite.
+- `web_app/src/router/routes.ts` — route mapping + redirect for the
+  legacy sub-path.
+- `web_app/src/services/api/stocktakeApiService.ts` — added
+  `snoozeAsync`, replaced the `days_until_stocktake_alert` field on
+  `StocktakeQueueItem` with `cadence_band` + `cadence_days` to match
+  the Chunk-1 backend DTO, added `CadenceBand` type alias.
+- `web_app/src/style/icons.ts` — added `mute` + `unmute` icons
+  (Chunk 3's Settings screen + a future item-detail un-mute affordance
+  will reuse `unmute`).
+
+**Quality gates:**
+
+- `vue-tsc --noEmit` — only the pre-existing Capacitor typings errors
+  from the P8-10 native scaffold on this box; **no new errors** from
+  the change.
+- No backend change; pytest suite untouched.
+
+**Engineering-standards close-gate:**
+
+- **R-001 componentisation** — reused `BaseButton`, `BaseDialog`,
+  `StockLevelDot`, `useShoppingListActions.addItems`, existing
+  `$q.dialog({options:{type:'radio'}, ...})` pattern for the list
+  picker. The Change-level button is the one place a raw `q-btn` is
+  used (needed to tint by an arbitrary Quasar palette name); inline
+  in the runner rather than extracted into a component — nothing
+  else in the app currently needs a level-tinted button and R-007
+  says don't abstract for a hypothetical second consumer.
+- **R-002 theme tokens only** — the Change-level neutral fallback
+  (for Out / unknown levels) uses `--surface-sunken` +
+  `--surface-hover`, not raw greys. `colourForSequence` remains the
+  one authority for level → palette-name mapping.
+- **R-003 SoT** — cadence band arrives resolved on the DTO; the SPA
+  never re-derives. The one bit of client-side derivation
+  (`restockNeeded` from local session state) is purely a UI
+  concern, not a domain fact.
+- **R-007 scope** — Runner rewritten wholesale (a warranted
+  rewrite, not creeping); every other file touched got a precise,
+  scoped edit.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** touched only the files this chunk needed — 1
+deleted, 1 rewritten, 3 small edits. No other pages, no backend, no
+tests, no unrelated composables.
+
+**Follow-ups opened:**
+- None. Chunk 3 (Settings block for cadence + Auto toggle, Stock
+  Overview overdue-outline pulse + "Needs check" filter) is chained,
+  not a follow-up.
+
+**Next up:** Chunk 3 — Settings → Stocktake block (default cadence
+band + Auto toggle) + Stock Overview overdue-row pulse outline
+around the stock-level button + a "Needs check" quick-filter, per
+§7 (Stock Overview) and §8 (Settings). Awaits user go-ahead.
+
+---
+
 ## 2026-07-04 — Stocktake redesign Chunk 1: backend engine
 
 **Why:** User asked to start building the new stocktake mode

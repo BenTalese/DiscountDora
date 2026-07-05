@@ -1,4 +1,5 @@
 import AxiosHttpClient from './axiosHttpClient';
+import type { CadenceBand } from './stocktakeApiService';
 
 export type AppSettings = {
     // FU-153 §7.1 — single install-wide master kill-switch for the
@@ -22,10 +23,15 @@ export type AppSettings = {
     timezone: string;
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
-    default_days_until_stocktake_alert: number;
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.
     // Empty string ⇒ unset; the nav entry renders disabled with a hint.
     product_search_url: string;
+    // PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
+    // These are the single user-visible cadence dial; the old
+    // `default_days_until_stocktake_alert` field was retired in the
+    // 2026-07-04 cleanup.
+    stocktake_default_cadence_band: CadenceBand;
+    stocktake_auto_tuning_enabled: boolean;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

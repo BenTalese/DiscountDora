@@ -12,7 +12,10 @@ from dora_api.domain.entities.stock_location import StockLocation
 
 @dataclass
 class StockItem(BaseEntity):
-    days_until_stocktake_alert: int
+    # PROPOSAL_STOCKTAKE_MODE — per-item cadence dial (`days_until_
+    # stocktake_alert`) retired in the 2026-07-04 cleanup. The queue now
+    # resolves cadence server-side (global default + Auto + Essential +
+    # Low/Out bump); see `features/stocktake/cadence.py`.
     image: bytes | None
     name: str
     notes: str | None
@@ -66,7 +69,6 @@ class StockItem(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         AUTO_ADD_WHEN_LOW = "auto_add_when_low"
-        DAYS_UNTIL_STOCKTAKE_ALERT = "days_until_stocktake_alert"
         EXPIRY_DATE = "expiry_date"
         IMAGE = "image"
         IS_FLAGGED = "is_flagged"

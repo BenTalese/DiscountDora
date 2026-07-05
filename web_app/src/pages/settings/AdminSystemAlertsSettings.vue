@@ -34,30 +34,12 @@
                 </SettingsRow>
             </SettingsSection>
 
-            <hr class="settings-divider" />
-
-            <SettingsSection>
-                <template #title>Default stocktake reminder</template>
-                <template #description>
-                    Pre-filled check-in cadence for new stock items
-                    (0 = no reminder).
-                </template>
-
-                <SettingsRow label="Days">
-                    <q-input
-                        v-model.number="stocktakeDefaultDraft"
-                        type="number"
-                        outlined
-                        dense
-                        style="max-width: 140px"
-                        :min="0"
-                        :max="3650"
-                        :disable="savingThresholds"
-                        :loading="savingThresholds"
-                        @blur="() => onSaveThreshold('default_days_until_stocktake_alert', stocktakeDefaultDraft)"
-                    />
-                </SettingsRow>
-            </SettingsSection>
+            <!-- PROPOSAL_STOCKTAKE_MODE §7 — the "Default stocktake
+                 reminder" section that used to live here (a numeric
+                 days-per-item value backed by `default_days_until_
+                 stocktake_alert`) is superseded by the band system.
+                 The two new global dials live on the dedicated
+                 Settings → Stocktake page. -->
         </template>
     </div>
 </template>
@@ -81,18 +63,15 @@
     const loading = ref(true);
 
     const expiringSoonWindowDraft = ref<number>(7);
-    const stocktakeDefaultDraft = ref<number>(0);
     const savedThresholds = reactive({
         expiring_soon_window_days: 7,
-        default_days_until_stocktake_alert: 0,
     });
     const savingThresholds = ref(false);
 
-    type ThresholdKey = 'expiring_soon_window_days' | 'default_days_until_stocktake_alert';
+    type ThresholdKey = 'expiring_soon_window_days';
 
     function resetThresholdDrafts() {
         expiringSoonWindowDraft.value = savedThresholds.expiring_soon_window_days;
-        stocktakeDefaultDraft.value = savedThresholds.default_days_until_stocktake_alert;
     }
 
     async function onSaveThreshold(key: ThresholdKey, value: number) {
@@ -105,7 +84,6 @@
         try {
             const result = await api.updateAsync({ [key]: value });
             savedThresholds.expiring_soon_window_days = result.expiring_soon_window_days;
-            savedThresholds.default_days_until_stocktake_alert = result.default_days_until_stocktake_alert;
             resetThresholdDrafts();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
@@ -133,10 +111,6 @@
             if (s.expiring_soon_window_days !== undefined) {
                 savedThresholds.expiring_soon_window_days = s.expiring_soon_window_days;
                 expiringSoonWindowDraft.value = s.expiring_soon_window_days;
-            }
-            if (s.default_days_until_stocktake_alert !== undefined) {
-                savedThresholds.default_days_until_stocktake_alert = s.default_days_until_stocktake_alert;
-                stocktakeDefaultDraft.value = s.default_days_until_stocktake_alert;
             }
         } catch {
             // Leave defaults.

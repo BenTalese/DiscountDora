@@ -105,7 +105,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("timezone", String(64), nullable=False, server_default="UTC"),
         # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
         Column("expiring_soon_window_days", Integer, nullable=False, server_default="7"),
-        Column("default_days_until_stocktake_alert", Integer, nullable=False, server_default="0"),
         # Phase D / FU-186 — admin-set URL the Product Search nav opens.
         # Empty string ⇒ unset; see entity comment.
         Column("product_search_url", String(500), nullable=False, server_default=""),
@@ -200,7 +199,6 @@ def configure_mappings(db: SQLAlchemy):
     stock_item_table = Table(
         "StockItem", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("days_until_stocktake_alert", Integer),
         Column("expiry_date", Date, nullable=True),
         Column("image", LargeBinary, nullable=True),
         Column("is_flagged", Boolean, nullable=False, server_default=false()),

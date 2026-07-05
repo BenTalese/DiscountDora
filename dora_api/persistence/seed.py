@@ -206,7 +206,6 @@ def seed_dev_data():
     # ---------------- STOCK ITEMS ---------------- #
     def make_item(*, name, group, level, location, **kw):
         item = StockItem(
-            days_until_stocktake_alert=kw.get("stocktake_days", 7),
             image=None,
             name=name,
             notes=kw.get("notes"),

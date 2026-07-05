@@ -59,16 +59,11 @@ class AppSetting(BaseEntity):
     # household is correct regardless of where the server is hosted. Default
     # UTC until an admin sets it in System settings. App-wide adoption: FU-174.
     timezone: str = "UTC"
-    # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
-    # These shape the shared derived alert set + the location heatmap, so they
-    # live here (one server-side source — R-003), never copied to the client.
-    # `expiring_soon_window_days` supersedes the `EXPIRING_SOON_WINDOW_DAYS`
-    # constant, which is now the seeded default (resolved via
-    # `stock_status.effective_expiring_soon_window`). `default_days_until_
-    # stocktake_alert` is the new-item default for the per-item stocktake
-    # cadence (0 = off, matching the previous hardcoded create default).
+    # Alerts C-9.2 — household-wide "expiring soon" window used by both the
+    # alerts feed and the assistant (PROPOSAL_ALERTS §3.3). One server-side
+    # source (R-003); the constant `EXPIRING_SOON_WINDOW_DAYS` is now the
+    # seeded default, resolved via `stock_status.effective_expiring_soon_window`.
     expiring_soon_window_days: int = 7
-    default_days_until_stocktake_alert: int = 0
     # Phase D / FU-186 — install-wide URL the Product Search nav entry opens
     # in a new tab when product data is present. Set by the install operator
     # to point at whatever search surface they run themselves (a sibling
@@ -122,7 +117,6 @@ class AppSetting(BaseEntity):
         NUTRITION_DB_SOURCE = "nutrition_db_source"
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
-        DEFAULT_DAYS_UNTIL_STOCKTAKE_ALERT = "default_days_until_stocktake_alert"
         PRODUCT_SEARCH_URL = "product_search_url"
         UNIT_PRICING_LOCALE = "unit_pricing_locale"
         BACKUP_RETENTION_COUNT = "backup_retention_count"

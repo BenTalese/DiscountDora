@@ -52,6 +52,14 @@ export function useStockFilters(sources: {
     recipes: () => ReadList<Recipe>;
     stockGroups: () => ReadList<StockGroup>;
     membership: () => Membership | null;
+    /**
+     * PROPOSAL_STOCKTAKE_MODE §7 — the set of stock-item ids currently
+     * in the stocktake queue (server-owned overdue set; R-003). Absent
+     * or empty → the "Needs check" filter matches nothing, which is
+     * the correct behaviour when the caller hasn't wired the signal
+     * yet. Read on every predicate call so it stays reactive.
+     */
+    needsCheckIds?: () => ReadonlySet<string>;
 }, options: { persistScope?: string } = {}) {
     // ── Raw filter state ────────────────────────────────────────────────
     // Wrapped via useListState so filters/search/sort survive nav-away
@@ -67,6 +75,8 @@ export function useStockFilters(sources: {
             hasAlertOnly: ref(false),
             // X5 — "items that will silently jump onto my list when low".
             autoAddOnly: ref(false),
+            // PROPOSAL_STOCKTAKE_MODE §7 — "in the stocktake queue right now".
+            needsCheckOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             // Deep-link from stock-item detail page's "Recipes using this".
             recipeFilter: ref<string | null>(null),
@@ -81,13 +91,15 @@ export function useStockFilters(sources: {
             openOnly: ref(false),
             hasAlertOnly: ref(false),
             autoAddOnly: ref(false),
+            needsCheckOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
             sortBy: ref<StockSortKey>('name_asc'),
         };
     const {
         searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
-        openOnly, hasAlertOnly, autoAddOnly, cartFilter, recipeFilter, sortBy,
+        openOnly, hasAlertOnly, autoAddOnly, needsCheckOnly, cartFilter,
+        recipeFilter, sortBy,
     } = state;
 
     // ── Lookup maps ─────────────────────────────────────────────────────
@@ -237,6 +249,10 @@ export function useStockFilters(sources: {
             if (autoAddOnly.value && !item.auto_add_when_low) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
+            if (needsCheckOnly.value) {
+                const ids = sources.needsCheckIds?.();
+                if (!ids || !ids.has(item.stock_item_id)) return false;
+            }
             if (tokens.length > 0) {
                 const haystack = item.name.toLowerCase();
                 if (!tokens.some((t) => haystack.includes(t))) return false;
@@ -426,6 +442,7 @@ export function useStockFilters(sources: {
         autoAddOnly,
         openOnly,
         hasAlertOnly,
+        needsCheckOnly,
         cartFilter,
         recipeFilter,
         recipeFilterContext,

@@ -1,12 +1,12 @@
 """GET /api/alerts — items that need the user's attention right now.
 
 All signals are derived from existing schema (expiry_date, stock_level,
-stock_level_last_updated, days_until_stocktake_alert, is_flagged), so the
-alert *conditions* are never stored — they're recomputed every request and
-so always reflect current pantry state. The same reasoning engine used by
-the locations heatmap powers this list — that consistency is intentional:
-if the heatmap says a zone is red, the bell icon shows you which items
-inside that zone are why.
+is_flagged, plus the stocktake queue's band-based resolver), so the
+alert *conditions* are never stored — they're recomputed every request
+and so always reflect current pantry state. `stocktake_overdue` alerts
+route through the same `resolve_overdue_map` helper the queue endpoint
+uses, so the bell + the runner surface the identical set of items
+(R-003, single source of truth for "overdue for a check").
 
 What *is* persisted (C-9.1) is each user's *decisions* about an alert —
 read / snooze / dismiss — in `AlertInteraction`, keyed by the alert's
@@ -52,6 +52,7 @@ from dora_api.features.alerts.alert_kinds import (TIER_ACTIONABLE,
                                                   default_tier_for)
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import ALERT_ROUTER
+from dora_api.features.stocktake.stocktake import resolve_overdue_map
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
@@ -253,28 +254,26 @@ class GetAlertsHandler:
                             related_date = None,
                         ))
 
-            # ── Stocktake overdue ──────────────────────────────────────
-            if (
-                item.stocktake_alerts_are_enabled
-                and item.stock_level_last_updated is not None
-                and item.days_until_stocktake_alert is not None
-            ):
-                last = item.stock_level_last_updated
-                if last.tzinfo is None:
-                    last = last.replace(tzinfo=timezone.utc)
-                elapsed_days = (now - last).days
-                if elapsed_days > item.days_until_stocktake_alert:
-                    overdue_by = elapsed_days - item.days_until_stocktake_alert
-                    raw.append(AlertDto(
-                        alert_id = stock_alert_key(item.id, "stocktake_overdue"),
-                        kind = "stocktake_overdue",
-                        severity = SEVERITY_LOW,
-                        stock_item_id = item.id,
-                        stock_item_name = item.name,
-                        message = f"{item.name} needs a stocktake",
-                        detail = f"Overdue by {overdue_by} day(s).",
-                        related_date = None,
-                    ))
+        # ── Stocktake overdue ──────────────────────────────────────────
+        # Single authority (R-003) — same resolver the runner queue uses,
+        # so the bell and the runner never surface different sets. The
+        # helper already applies mute + push (snooze) + engagement gate
+        # + band resolution in one bulk pass.
+        overdue_map = resolve_overdue_map(items, now)
+        for item in items:
+            info = overdue_map.get(item.id)
+            if info is None:
+                continue
+            raw.append(AlertDto(
+                alert_id = stock_alert_key(item.id, "stocktake_overdue"),
+                kind = "stocktake_overdue",
+                severity = SEVERITY_LOW,
+                stock_item_id = item.id,
+                stock_item_name = item.name,
+                message = f"{item.name} needs a stocktake",
+                detail = f"Overdue by {info.days} day(s).",
+                related_date = None,
+            ))
 
         # ── Forward-looking nudges (C-9.4) ─────────────────────────────
         # Not per-item, so they sit outside the loop. R-021 — `today` is

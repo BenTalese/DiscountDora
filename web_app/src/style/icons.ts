@@ -114,6 +114,10 @@ export const ICONS = {
     skip_next: 'mdi-skip-next',
     smart_toy: 'mdi-robot-happy',
     snooze: 'mdi-alarm-snooze',
+    // PROPOSAL_STOCKTAKE_MODE §5 — Mute action on the runner card and
+    // its inverse on the item-detail page (un-mute).
+    mute: 'mdi-bell-off-outline',
+    unmute: 'mdi-bell-outline',
     star: 'mdi-star',
     star_outline: 'mdi-star-outline',
     storage: 'mdi-database',

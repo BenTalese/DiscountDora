@@ -12,7 +12,6 @@ from dora_api.domain.entities.stock_item_expiry_event import (
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
-from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.get_stock_items import get_stock_items
@@ -89,13 +88,12 @@ class CreateStockItemHandler:
         if _ExistingStockItem:
             return CreateStockItemResponse(stock_item_already_exists=True)
 
-        # C-9.2 — new items take the household default stocktake cadence
-        # (AppSetting; single source — R-003) rather than a hardcoded 0.
-        # Default is 0 (= no stocktake alert until configured), so behaviour
-        # is unchanged unless an admin sets a household default.
-        _Settings = get_or_create_app_setting(self.repository)
+        # PROPOSAL_STOCKTAKE_MODE — per-item cadence is no longer a stored
+        # field; the queue resolves it from the household default band +
+        # Auto self-tuning (R-003, single authority in
+        # `features/stocktake/cadence.py`). New items just start silent
+        # until the engagement gate picks them up.
         _NewStockItem = StockItem(
-            days_until_stocktake_alert = _Settings.default_days_until_stocktake_alert,
             image = request.image.encode("utf-8") if request.image else None,
             name = request.name,
             notes = None,

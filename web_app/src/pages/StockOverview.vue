@@ -171,6 +171,10 @@
                 Needs attention
             </FilterChip>
 
+            <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
+                Needs check
+            </FilterChip>
+
             <!-- C-1 Chunk 2 / L96 — "Used in a recipe" filter removed
                  (low signal; the recipe pages own that view). -->
 
@@ -368,6 +372,7 @@
                             :selected="bulkSelection.has(item.stock_item_id)"
                             :focused="focusedIndex === idx"
                             :peeking="peekId === item.stock_item_id"
+                            :needs-check="needsCheckIds.has(item.stock_item_id)"
                             @click="onRowClick"
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
@@ -390,6 +395,7 @@
                             :selected="bulkSelection.has(item.stock_item_id)"
                             :focused="focusedIndex === index"
                             :peeking="peekId === item.stock_item_id"
+                            :needs-check="needsCheckIds.has(item.stock_item_id)"
                             @click="onRowClick"
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
@@ -534,13 +540,25 @@
     const overviewExport = useStockOverviewExport();
     const stocktakeApi = new StocktakeApiService();
     const stocktakeOverdue = ref(0);
+    // PROPOSAL_STOCKTAKE_MODE §7 — the server-owned set of "needs check"
+    // ids. Drives the row pulse outline + the "Needs check" filter chip
+    // (R-003 — SPA never re-derives). Kept as a Set so hasId lookups
+    // are O(1) inside the filter predicate and the row renderer.
+    const needsCheckIds = ref<Set<string>>(new Set());
 
     async function loadStocktakeCount() {
         try {
-            const result = await stocktakeApi.queueAsync(1);
+            // Bumped from limit=1 → 500 so we get the ids alongside the
+            // count. 500 is the server's cap; a household with more
+            // than that overdue is a pathological state.
+            const result = await stocktakeApi.queueAsync(500);
             stocktakeOverdue.value = result.total;
+            needsCheckIds.value = new Set(
+                result.items.map((i) => i.stock_item_id),
+            );
         } catch {
             stocktakeOverdue.value = 0;
+            needsCheckIds.value = new Set();
         }
     }
 
@@ -602,6 +620,7 @@
         recipes: () => recipes.value,
         stockGroups: () => stockGroups.value,
         membership: () => shoppingListStore.membership as Membership | null,
+        needsCheckIds: () => needsCheckIds.value,
     }, { persistScope: 'stock-overview' });
 
     // Filter panel expanded state — shared between the toolbar's

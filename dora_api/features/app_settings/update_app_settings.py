@@ -41,10 +41,11 @@ class UpdateAppSettingsRequest(BaseModel):
     nutrition_db_source: str | None = Field(default=None, max_length=255)
     # Meal Plans C-2.K — household IANA timezone (validated below).
     timezone: str | None = Field(default=None, max_length=64)
-    # Alerts C-9.2 — household-wide alert thresholds (bounds double as R-010
-    # validation: the window is 1–365 days; the stocktake default 0–3650).
+    # Alerts C-9.2 — household-wide expiring-soon window (bounds double as
+    # R-010 validation: 1–365 days). The old
+    # `default_days_until_stocktake_alert` field was retired in the
+    # 2026-07-04 stocktake cleanup — the band system (below) owns cadence.
     expiring_soon_window_days: int | None = Field(default=None, ge=1, le=365)
-    default_days_until_stocktake_alert: int | None = Field(default=None, ge=0, le=3650)
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     # Empty string ⇒ unset; the nav entry renders disabled with a hint.
     # We allow any http(s) URL or empty; deeper validation is the operator's
@@ -126,11 +127,6 @@ class UpdateAppSettingsHandler:
         # the request model above (R-010).
         if "expiring_soon_window_days" in set_fields and request.expiring_soon_window_days is not None:
             setting.expiring_soon_window_days = request.expiring_soon_window_days
-        if (
-            "default_days_until_stocktake_alert" in set_fields
-            and request.default_days_until_stocktake_alert is not None
-        ):
-            setting.default_days_until_stocktake_alert = request.default_days_until_stocktake_alert
 
         # FU-227 follow-up — unit_pricing_locale. Validated against the
         # supported set so a typo can't silently degrade display.

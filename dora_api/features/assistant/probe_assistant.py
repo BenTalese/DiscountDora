@@ -193,10 +193,15 @@ def probe_assistant():
         session.clear()
         return unauthorized()
 
-    # Per-user rate limit — bucket key is the route scope; the helper
-    # combines it with the authenticated session inside _bucket_key.
-    if not rate_limit(_RATE_SCOPE, _PROBES_PER_MINUTE):
-        retry_after = rate_limit_remaining_seconds(_RATE_SCOPE, _PROBES_PER_MINUTE)
+    # Per-user rate limit (FU-458 — helper gained the `subject` override
+    # so a shared household IP doesn't count multiple users against the
+    # same bucket). Before this the code was per-IP despite the comment
+    # claiming otherwise.
+    _Subject = str(user_id)
+    if not rate_limit(_RATE_SCOPE, _PROBES_PER_MINUTE, subject=_Subject):
+        retry_after = rate_limit_remaining_seconds(
+            _RATE_SCOPE, _PROBES_PER_MINUTE, subject=_Subject,
+        )
         return business_rule_violation(
             f"Too many probes — try again in {retry_after}s.",
         )

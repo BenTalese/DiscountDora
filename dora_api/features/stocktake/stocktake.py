@@ -26,8 +26,7 @@ design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
 
 2.  **Cadence bands + Auto self-tuning.** Per-item overdue is measured
     against a *resolved band* (Weekly/Fortnightly/Monthly, see
-    `cadence.py`), not the deprecated per-item
-    `days_until_stocktake_alert` column. Baseline = the global
+    `cadence.py`). Baseline = the global
     `AppSetting.stocktake_default_cadence_band`; Auto (on by default)
     overrides from movement history; Low/Out in the last 14 days bumps
     one band faster; Essential (`is_flagged`) bumps one more.
@@ -261,18 +260,41 @@ def _is_engaged(item: StockItem, signals: _EngagementSignals) -> bool:
     return False
 
 
-# ── Queue endpoint ─────────────────────────────────────────────────────
+# ── Shared overdue resolver ────────────────────────────────────────────
+# The single authority for "is this item currently overdue for a
+# stocktake, and by how much?" — used by the queue endpoint below AND
+# by the alerts feed (`alerts/get_alerts.py`) so the bell + the runner
+# never surface different sets of items (R-003). Filters for mute +
+# push (snooze) + engagement gate in one pass, so callers get only
+# the items they should actually surface.
 
-@STOCKTAKE_ROUTER.route("/queue", methods=["GET"])
-def get_stocktake_queue():
-    from flask import request
-    try:
-        limit = int(request.args.get("limit", "50"))
-    except ValueError:
-        return bad_request("limit must be an integer.")
-    if limit < 1 or limit > 500:
-        return bad_request("limit must be between 1 and 500.")
 
+@dataclass(frozen=True, slots=True)
+class OverdueInfo:
+    band: CadenceBand
+    days: int  # whole days past the resolved band's window; always ≥ 1.
+
+
+def resolve_overdue_map(
+    items: list[StockItem],
+    now: datetime | None = None,
+) -> dict[UUID, OverdueInfo]:
+    """Return `{stock_item_id: OverdueInfo}` for every item that is
+    currently overdue for a stocktake — with mute, push (snooze) and
+    the engagement gate already applied, and the cadence band already
+    resolved (global default → Auto → Low/Out bump → Essential bump).
+
+    Bulk-fetches all engagement signals in two queries regardless of
+    input size, so the whole map costs the same as one queue endpoint
+    call — safe to invoke from the alerts feed on every request.
+
+    Pass `items` with `stock_level` loaded (the engagement gate needs
+    the sequence). Repo access + AppSetting read happen inside — the
+    caller doesn't need to thread them in.
+    """
+    now_ = now or datetime.now(UTC)
+    if not items:
+        return {}
     repo = SqlAlchemyRepository()
     app_setting = get_or_create_app_setting(repo)
     default_band = parse_band(
@@ -281,24 +303,12 @@ def get_stocktake_queue():
     auto_enabled = bool(
         getattr(app_setting, "stocktake_auto_tuning_enabled", True)
     )
-
-    items = (
-        repo.get(StockItem)
-        .include("stock_level")
-        .include("stock_location")
-        .all()
-    )
-    now = datetime.now(UTC)
-
-    signals = _gather_engagement_signals([item.id for item in items], now)
-
-    overdue: list[tuple[int, CadenceBand, StockItem]] = []
+    signals = _gather_engagement_signals([item.id for item in items], now_)
+    result: dict[UUID, OverdueInfo] = {}
     for item in items:
-        # Mute
         if not item.stocktake_alerts_are_enabled:
             continue
-        # Push (snooze)
-        if item.snoozed_until is not None and item.snoozed_until > now:
+        if item.snoozed_until is not None and item.snoozed_until > now_:
             continue
         if not _is_engaged(item, signals):
             continue
@@ -313,12 +323,44 @@ def get_stocktake_queue():
             default_band=default_band,
             auto_enabled=auto_enabled,
             history=history,
-            now=now,
+            now=now_,
         )
-        days = _compute_overdue_days(item, band.days, now)
+        days = _compute_overdue_days(item, band.days, now_)
         if days <= 0:
             continue
-        overdue.append((days, band, item))
+        result[item.id] = OverdueInfo(band=band, days=days)
+    return result
+
+
+# ── Queue endpoint ─────────────────────────────────────────────────────
+
+@STOCKTAKE_ROUTER.route("/queue", methods=["GET"])
+def get_stocktake_queue():
+    from flask import request
+    try:
+        limit = int(request.args.get("limit", "50"))
+    except ValueError:
+        return bad_request("limit must be an integer.")
+    if limit < 1 or limit > 500:
+        return bad_request("limit must be between 1 and 500.")
+
+    repo = SqlAlchemyRepository()
+    items = (
+        repo.get(StockItem)
+        .include("stock_level")
+        .include("stock_location")
+        .all()
+    )
+    now = datetime.now(UTC)
+
+    overdue_map = resolve_overdue_map(items, now)
+    # Materialise as (days, band, item) tuples so the sort key can
+    # tiebreak on baseline + name without re-looking-up per row.
+    overdue: list[tuple[int, CadenceBand, StockItem]] = [
+        (info.days, info.band, item)
+        for item in items
+        if (info := overdue_map.get(item.id)) is not None
+    ]
 
     overdue.sort(key=lambda triple: (
         -triple[0],

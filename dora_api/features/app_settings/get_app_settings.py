@@ -32,9 +32,8 @@ class AppSettingsDto:
     nutrition_db_source: str
     # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
     timezone: str
-    # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
+    # Alerts C-9.2 — household-wide expiring-soon window (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: int
-    default_days_until_stocktake_alert: int
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     product_search_url: str
     # FU-227 follow-up — AU vs US per-unit display locale.
@@ -63,7 +62,6 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         nutrition_db_source=setting.nutrition_db_source or "",
         timezone=setting.timezone or "UTC",
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
-        default_days_until_stocktake_alert=int(setting.default_days_until_stocktake_alert),
         product_search_url=setting.product_search_url or "",
         unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
         backup_retention_count=int(getattr(setting, "backup_retention_count", 5) or 5),

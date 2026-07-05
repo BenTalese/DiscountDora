@@ -471,6 +471,97 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Stock
 
+### Stocktake redesign — Chunk 3 Settings + Stock Overview surfacing — origin PROPOSAL_STOCKTAKE_MODE
+*Verifies the Settings block + Overview filter chip + row pulse outline. Chunk 3 lands the surfaces users find the redesign from.*
+
+**Settings → Stocktake page**
+- [ ] Navigate to **Settings → Admin → System → Stocktake** — the nav entry appears with the clipboard-check icon, between "Alert thresholds" and "AI assistant"
+- [ ] Page loads with title **"Stocktake"** and a description "How often Dora asks you to check each item…"
+- [ ] **Default check cadence** section: three-button toggle showing **Weekly / Fortnightly / Monthly** with the current setting highlighted (Fortnightly on a fresh install)
+- [ ] Tap **Weekly** → button becomes active, positive toast fires **"Default cadence saved."** — refresh the page and the change persists
+- [ ] Tap **Monthly** → same behaviour, and the previous **Weekly** button de-activates
+- [ ] **Auto self-tuning** section: a `q-toggle` (on by default). Flip off → positive toast **"Auto self-tuning off."** — refresh and it stays off
+- [ ] Flip back on → toast reads **"Auto self-tuning on."**
+- [ ] Non-admin user visits the page → the red admin-permissions banner shows, the sections don't render
+- [ ] With Auto **off**, run stocktake — every item's cadence is the global default (adjusted by Essential = one band faster if flagged)
+- [ ] With Auto **on**, an item with recent frequent level changes moves into a shorter cadence band on next queue rebuild (verify by looking at what the runner shows as "Checked every week/fortnight/month")
+
+**Alert thresholds — clean removal**
+- [ ] Navigate to **Settings → Admin → System → Alert thresholds** — the **"Default stocktake reminder"** section (the numeric-days input) is **gone**; only "Expiring-soon window" remains
+- [ ] Expiring-soon window still edits + saves correctly (regression check)
+
+**Stock Overview — "Needs check" quick-filter**
+- [ ] On **Stock Overview**, expand the filter panel → a new **"Needs check"** chip appears in the chip strip, positioned after "Needs attention", with the clipboard-check icon
+- [ ] With chip **off**: full pantry visible
+- [ ] Toggle chip **on**: view narrows to only the items currently in the stocktake queue (the same set surfaced by the runner)
+- [ ] The count matches: with the filter on, the visible row count equals what the toolbar's Stocktake button says (e.g. "Stocktake (12)")
+- [ ] Toggle chip off: full list returns
+
+**Stock Overview — pulse outline around stock-level button**
+- [ ] An item that IS in the stocktake queue: its **stock-level button** (the small coloured square left of the item name) has a **subtle pulsing outline** — a soft accent-coloured halo that grows and fades on a 2-second cycle
+- [ ] An item NOT in the stocktake queue: no pulse, no outline
+- [ ] After tapping **Still correct** in the runner for an item, return to Stock Overview and refresh — its pulse is gone (item left the queue)
+- [ ] With `prefers-reduced-motion` on (browser accessibility setting): items still show the outline, but as a **static** ring (no animation) — verify by enabling reduced-motion in devtools and confirming no pulsing
+- [ ] Dark mode: the pulse colour still reads well against the darker surface (uses `--brand-accent` theme token)
+- [ ] Light mode: same — the halo is visible without being loud
+
+### Stocktake redesign — Chunk 2 SPA runner rebuild — origin PROPOSAL_STOCKTAKE_MODE
+*Verifies the redesigned stocktake mode: new engagement gate + cadence bands + buttons + completion screen. Chunk 3 (Settings + Stock Overview surfacing) is not yet built.*
+
+**Landing gone / empty state**
+- [ ] Tap **Stocktake** from the left nav (or hit `/stocktake` directly) → the runner opens **immediately** on the first item; no intermediate "N items need a check" landing
+- [ ] Legacy bookmark to `/stocktake/run` → redirects to `/stocktake` and behaves identically
+- [ ] With nothing overdue (fresh install / everything Checked): runner shows the **"You're all caught up."** card with a Back-to-Stock button — no crash, no infinite spinner
+- [ ] Close **X** in the runner topbar → returns to `/stock`
+
+**Runner card + buttons**
+- [ ] Item card shows: name (large), location (or "No location"), and a caption line like **"Checked every fortnight · N days overdue"** — plural/singular correct for 1 day vs many
+- [ ] **Row 1 — two big buttons side by side:** **Still correct** (green/positive) and **Change level**
+- [ ] The **Change level** button is **tinted to the current level's colour** (Stocked → positive/green, Low → negative/red, Out → neutral/muted) and shows the level's **name** with a small **"(change)"** underneath
+- [ ] **Row 2 — three smaller ghost buttons:** **Skip** / **Push 3 days** / **Mute**
+- [ ] No **Out of stock** button anywhere (it's a level in the picker now)
+- [ ] No **keyboard shortcuts** shown on the buttons; pressing `1`/`2`/`3`/`s` does **nothing**
+- [ ] No **Add to list** button on the card (it moved to the completion screen)
+
+**Still correct**
+- [ ] Tap **Still correct** → server logs the check, card advances to next item, no visible toast (it's the mainline action, doesn't need one)
+- [ ] After a Still-correct action, refresh the queue → the same item does NOT resurface (its clock reset)
+
+**Change level (picker)**
+- [ ] Tap **Change level** → dialog opens titled **Set level**, listing every configured level with a **coloured dot on the left** (matches Stock Overview colours pixel-for-pixel)
+- [ ] Pick a level → level updates, card advances
+- [ ] Change to **Low** or **Out** during a session → item name gets tracked for the completion-screen batch add-to-list (see below)
+- [ ] Change back to **Stocked** (or any non-Low/Out) on the same item within the session → item is **removed** from the completion-screen list (dedupe / last-write-wins)
+
+**Skip (session-only)**
+- [ ] Tap **Skip** on the first item → card advances, no API call fires (verify in Network tab)
+- [ ] Continue skipping through the whole queue → the skipped items **come back at the end**, in the order you skipped them
+- [ ] Refresh the page → skips are gone (session-only); the original queue rebuilds fresh
+
+**Push 3 days**
+- [ ] Tap **Push 3 days** → `POST /stock-items/<id>/snooze` fires; card advances; item's `last_checked_at` is **unchanged** (verify in DB or via item detail)
+- [ ] Refresh the queue → the pushed item does NOT resurface (its `snoozed_until` is 3 days in the future)
+- [ ] On a pushed item, hit **Still correct** or **Change level** via any surface → the snooze is **cleared** automatically (Check is stronger than Push)
+
+**Mute (with confirmation)**
+- [ ] Tap **Mute** → a confirmation dialog appears with message **"Dora will stop asking about this item entirely. You can un-mute it later from the item's detail page."** and a red **Mute** confirm button
+- [ ] Cancel the dialog → nothing changes; card stays on the same item
+- [ ] Confirm the dialog → `stocktake_alerts_are_enabled` flips to `false` on the item; card advances
+- [ ] Refresh the queue → muted item does NOT resurface (permanent until un-muted from item detail)
+
+**(?) Help affordance**
+- [ ] Tap the **?** icon in the topbar → dialog opens titled **How stocktake works** with a definition list covering all five verbs + a footer note about cadence bands / Auto
+- [ ] Close and re-open — nothing sticky, no state leaked
+
+**Completion screen**
+- [ ] Walk through every item in the queue (any mix of the 5 verbs) → after the last item, the **completion card** replaces the item card
+- [ ] Completion card shows the 5 counters — **checked / changed / skipped / pushed / muted** — with the right totals matching what you did
+- [ ] If you Changed **≥ 1** item to Low or Out during the session, a prompt appears: **"N items went Low or Out. Add them to a shopping list?"** with an **"Add to list…"** button
+- [ ] Tap **Add to list…** → radio dialog listing every active (non-done) shopping list. Pick one, confirm → all tracked items are added; the button shows an **"Added."** confirmation and disables (can't double-fire)
+- [ ] With **0 active lists**, the button surfaces an info toast: "No active lists. Create one first."
+- [ ] With **0 Low/Out items** in the session, the add-to-list prompt does NOT appear
+- [ ] Tap **Done** → returns to `/stock`
+
 ### Bulk "Log waste…" on Stock Overview — origin FU-226 chat
 *Verifies the new bulk waste action in the Stock Overview bulk-select bar.*
 - [ ] Enter bulk-select mode (long-press a row on mobile, or the toolbar toggle on desktop) → select 3 items, at least one with an expiry date set and at least one without → the "Log waste…" button in the bulk bar is enabled and shows the trash icon
@@ -482,7 +573,7 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] "Log waste…" with a single item selected → summary reads **"Logged 1 item as wasted."** (singular)
 - [ ] Sanity — the single-item "Log waste" from the row's expiry menu still works and still shows the per-item toast + Undo (bulk path didn't regress the single path)
 
-### Auto-add-when-low toast + line chip — origin FU-315
+### Auto-add-when-low toast + line chip — origin FU-315 (re-verify: FU-464 fixed a Low-transition regression 2026-07-04)
 *Requires a stock item with `auto_add_when_low` on and exactly one open draft shopping list.*
 - [ ] From stock overview, tap the stock-level chip on a Stocked item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)
 - [ ] Same setup but set to **Out** on an item that was already Stocked → same toast fires

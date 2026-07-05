@@ -10,6 +10,53 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-328 — Four pre-existing pytest failures (data_router / household_tz / product / recipe_is_planned)
+- **Resolved:** 2026-07-05 — all four cleared. Suite delta on this branch: 44→41 failed, 711→714 passed (net −3, matching the three tests I edited; the fourth self-healed).
+  - `test_recipe_is_planned::test__recipes__is_planned_true_when_future_unconsumed_entry_exists` — self-healed since 2026-06-29 (passes on clean HEAD).
+  - `test_product_router::test__update_product__PriceNowAtZeroBoundary__IsBadRequest` — FU-099 error-shape drift; the assertion still expected a flat raw string. Fixed by using the `validation_err("greater_than", "Input should be greater than 0")` helper (the pattern every neighbouring test in the file already uses).
+  - `test_household_tz_boundaries::test__dashboard__upcoming_window_anchored_on_household_today` — targeting endpoints that don't exist (`POST /meal-plans/<id>/entries`, `GET /dashboard`). Rewrote the test to (a) embed the entry via `POST /meal-plans` (the real composition path), (b) read `GET /dashboard/summary` → `meal_plan.upcoming_entries` (the real DTO shape), (c) tear down the created plan in a `finally`.
+  - `test_data_router::test__chunked_upload__chunk_offset_mismatch__is_400` — same FU-099 error-shape drift; added `domain_err` import and updated the assertion to `domain_err("0")`.
+- **Follow-on discovery:** the full-suite failure count on clean HEAD is now **44** (not 4), reflecting drift accumulated since FU-328 was raised (suite grew from 540 → 755 tests). Logged as a separate FU for opportunistic per-area cleanup — this FU is closed strictly on its four named items.
+- **Raised:** 2026-06-29 (FU-288 resolution — full-suite run uncovered a
+  *different* set of failures than FU-288 originally named).
+- **Type:** finding (pre-existing drift; confirmed on a clean stash).
+- **What:** `./.venv/bin/pytest tests/` shows **4 failures, all pre-existing**,
+  unrelated to the three profile-picture tests FU-288 named (those all pass
+  now). Confirmed via `git stash` — they fail on clean HEAD too:
+  - `tests/e2e/dora_api/test_data_router.py::test__chunked_upload__chunk_offset_mismatch__is_400`
+  - `tests/e2e/dora_api/test_household_tz_boundaries.py::test__dashboard__upcoming_window_anchored_on_household_today`
+  - `tests/e2e/dora_api/test_product_router.py::test__update_product__PriceNowAtZeroBoundary__IsBadRequest`
+  - `tests/e2e/dora_api/test_recipe_is_planned.py::test__recipes__is_planned_true_when_future_unconsumed_entry_exists`
+  Suite totals: 4 failed, 536 passed.
+- **Why deferred:** out of scope of the FU-288 / FU-285 / FU-289 work unit
+  (R-007); each failure belongs to its own feature area (data import,
+  household-tz boundaries, product validation, planner-derived `is_planned`).
+- **Recommended resolution:** opportunistic per area — when next touching
+  data-import / dashboard upcoming-window / product validation / `is_planned`
+  derivation, run that test first, see what it expects, and either fix the
+  code or update the assertion. Don't bundle as one "fix the 4" job — each
+  failure is its own story.
+
+## [RESOLVED] FU-302 — Dora Score reassessment: waste-as-pillar weight
+- **Resolved:** 2026-07-05 — reviewed with the user; no change. The current Score model already keeps waste as its own equal-weight pillar over a rolling 30-day window (`DORA_SCORE_WINDOW_DAYS=30`, `_score_waste` in `dora_api/domain/dora_score.py`), with the 7-day-lagged trend arrow tracking week-over-week movement. That matches the intent — waste stays a distinct, time-based signal separate from freshness (freshness = snapshot of expiry-tracked items past date now; waste = 30d event count). C-waste's UI de-emphasis doesn't require Score reweighting; missing components already excluded per P3. Closed without code changes.
+- **Raised:** 2026-06-24 (C-waste design — `PROPOSAL_WASTE_MINIMISATION.md`).
+- **Type:** finding
+- **What:** `DASHY_DORA_CHAMPION_PLAN.md` §§334, 346, 444–447 treat waste as one of four Dora Score pillars ("low waste, on-budget, fresh, few run-outs"). The C-waste design deliberately de-emphasises waste as a UI feature — the `/waste` page is deleted, the capture flow shrinks to a single row dropdown action with no money/note capture, no Reports card. The *signal* is preserved (events still logged + queryable) so the Score can read it. But the de-emphasis is a quiet vote that the Score model itself may want re-weighting — perhaps waste shrinks to a smaller pillar, or merges with another (e.g. "fresh + low-waste" → one freshness pillar). This is a **charter-level** decision, not a UI cleanup, and was explicitly out of scope for C-waste.
+- **Why deferred:** the Score isn't designed yet (Phase 3 / champion phase); doing the weighting now would be speculative. Better to revisit when the Score model is being built and the full pillar picture is on the table.
+- **Recommended resolution:** later during pre-Phase 3 (when the Dora Score model is actually being designed; the reassessment is an input to that design, not its own deliverable).
+
+## [RESOLVED] FU-295 — Confirm the Alerts page (D5) no longer 404s
+- **Resolved:** 2026-07-05 — user verified in the running app that the `/alerts` route loads (no 404). Feedback D5 confirmed fixed; the static read of `routes.ts` → `pages/AlertsPage.vue` matched actual behaviour.
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 3).
+- **Type:** finding (reported defect, static-only verification).
+- **What:** feedback D5 reported "Alerts navigation is broken (goes to 404)". A
+  static read shows the `/alerts` route IS registered (`routes.ts` →
+  `pages/AlertsPage.vue`, the C-9 control surface), so it appears fixed — but a
+  static read is not proof.
+- **Recommended resolution:** the verify itself is tracked in `DORA_VERIFY.md`
+  under "Dashboard rebuild" (it's the same click that exercises the Phase-3
+  alert card → `/alerts` link). Close this FU once that pass is green.
+
 ## [RESOLVED] FU-444 — `test__all_axes_thin__collapses_to_single_not_enough_history` fails on pre-existing composer behaviour (duplicate of FU-455)
 - **Resolved:** 2026-07-04 — **duplicate of FU-455**. Both FUs described the same failing pytest (`tests/test_buy_verdict.py::test__all_axes_thin__collapses_to_single_not_enough_history`); FU-444 was raised 2026-07-02 during the Sufficient-band axe close-gate, FU-455 was raised 2026-07-04 during Stocktake Chunk 1's close-gate — same failure, second FU. FU-455's resolution literally implemented FU-444's Option 2 recommendation ("widen the fixture to actually trigger three thin axes — `purchases_12mo=1, waste_events_12mo=1` so the waste axis returns `thin_data` per the `< _MIN_PURCHASES_FOR_WASTE_RATE` branch"). Full pytest suite 303/303 green since. Consolidated for the audit trail so a future reader doesn't see two open FUs for one failure.
 - **Raised:** 2026-07-02 (surfaced while running `pytest` for the Sufficient-band axe close-gate).

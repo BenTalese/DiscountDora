@@ -104,6 +104,36 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
+    # FU-333 Bucket B — operational config previously carried as `DORA_*`
+    # env vars. Move to `AppSetting` so an admin can configure a fresh
+    # install through Settings → Admin → System instead of editing an
+    # environment file. Bootstrap-only vars (SECRET_KEY, LLM_KEY_ENCRYPTION_KEY,
+    # ENV, SECURE_COOKIES, SPA_DIR, SKIP_PROD_VALIDATION, ALLOW_DESTRUCTIVE)
+    # stay in env by design. Bucket C secrets (SMTP password, VAPID private
+    # key) also stay in env for now — encrypted-in-DB storage lands with a
+    # follow-up. The read path uses a resolver that prefers a non-empty
+    # AppSetting value and falls back to the env var, so an operator whose
+    # SMTP is already configured via env keeps working on upgrade.
+    #
+    # SMTP (was DORA_SMTP_HOST / _PORT / _USERNAME / _FROM / _USE_TLS).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
+    # Push (was DORA_VAPID_PUBLIC_KEY / _SUBJECT).
+    vapid_public_key: str = ""
+    vapid_subject: str = "mailto:admin@dora.local"
+    # TTS / Piper (was DORA_PIPER_BIN / _BUNDLED_VOICE_DIR / _VOICE).
+    piper_bin: str = ""
+    piper_bundled_voice_dir: str = ""
+    piper_voice: str = ""
+    # Misc operational.
+    # `email_enabled` was DORA_EMAIL_ENABLED — the install-wide "email
+    # subsystem is switched on" flag surfaced via /api/health features.email.
+    email_enabled: bool = False
+    audit_retention_days: int = 365
+    public_url: str = ""
 
     class Fields(BaseEntity.Fields):
         MASTER_LLM_ENABLED = "master_llm_enabled"
@@ -125,3 +155,16 @@ class AppSetting(BaseEntity):
         IMAGE_MAX_DIMENSION = "image_max_dimension"
         STOCKTAKE_DEFAULT_CADENCE_BAND = "stocktake_default_cadence_band"
         STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"
+        SMTP_HOST = "smtp_host"
+        SMTP_PORT = "smtp_port"
+        SMTP_USERNAME = "smtp_username"
+        SMTP_FROM = "smtp_from"
+        SMTP_USE_TLS = "smtp_use_tls"
+        VAPID_PUBLIC_KEY = "vapid_public_key"
+        VAPID_SUBJECT = "vapid_subject"
+        PIPER_BIN = "piper_bin"
+        PIPER_BUNDLED_VOICE_DIR = "piper_bundled_voice_dir"
+        PIPER_VOICE = "piper_voice"
+        EMAIL_ENABLED = "email_enabled"
+        AUDIT_RETENTION_DAYS = "audit_retention_days"
+        PUBLIC_URL = "public_url"

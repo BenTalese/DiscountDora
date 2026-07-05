@@ -47,6 +47,22 @@ class AppSettingsDto:
     # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     stocktake_default_cadence_band: str
     stocktake_auto_tuning_enabled: bool
+    # FU-333 Bucket B — operational config (was `DORA_*` env vars).
+    # Secrets (SMTP password, VAPID private key) remain env-only until
+    # Bucket C lands; they aren't part of this DTO.
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_from: str
+    smtp_use_tls: bool
+    vapid_public_key: str
+    vapid_subject: str
+    piper_bin: str
+    piper_bundled_voice_dir: str
+    piper_voice: str
+    email_enabled: bool
+    audit_retention_days: int
+    public_url: str
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -74,6 +90,19 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         stocktake_auto_tuning_enabled=bool(
             getattr(setting, "stocktake_auto_tuning_enabled", True)
         ),
+        smtp_host=getattr(setting, "smtp_host", None) or "",
+        smtp_port=int(getattr(setting, "smtp_port", 587) or 587),
+        smtp_username=getattr(setting, "smtp_username", None) or "",
+        smtp_from=getattr(setting, "smtp_from", None) or "",
+        smtp_use_tls=bool(getattr(setting, "smtp_use_tls", True)),
+        vapid_public_key=getattr(setting, "vapid_public_key", None) or "",
+        vapid_subject=getattr(setting, "vapid_subject", None) or "mailto:admin@dora.local",
+        piper_bin=getattr(setting, "piper_bin", None) or "",
+        piper_bundled_voice_dir=getattr(setting, "piper_bundled_voice_dir", None) or "",
+        piper_voice=getattr(setting, "piper_voice", None) or "",
+        email_enabled=bool(getattr(setting, "email_enabled", False)),
+        audit_retention_days=int(getattr(setting, "audit_retention_days", 365) or 365),
+        public_url=getattr(setting, "public_url", None) or "",
     )
 
 

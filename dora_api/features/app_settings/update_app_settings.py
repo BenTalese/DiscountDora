@@ -71,6 +71,26 @@ class UpdateAppSettingsRequest(BaseModel):
     # degrade the queue.
     stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
     stocktake_auto_tuning_enabled: bool | None = None
+    # FU-333 Bucket B — operational config previously carried as `DORA_*`
+    # env vars. SMTP password + VAPID private key stay env-only until the
+    # Bucket-C encrypted-in-DB storage lands; they are absent from this
+    # DTO so an accidental client-side send can't smuggle them into the
+    # database as plaintext.
+    smtp_host: str | None = Field(default=None, max_length=255)
+    smtp_port: int | None = Field(default=None, ge=1, le=65535)
+    smtp_username: str | None = Field(default=None, max_length=255)
+    smtp_from: str | None = Field(default=None, max_length=255)
+    smtp_use_tls: bool | None = None
+    vapid_public_key: str | None = Field(default=None, max_length=255)
+    vapid_subject: str | None = Field(default=None, max_length=255)
+    piper_bin: str | None = Field(default=None, max_length=1024)
+    piper_bundled_voice_dir: str | None = Field(default=None, max_length=1024)
+    piper_voice: str | None = Field(default=None, max_length=255)
+    email_enabled: bool | None = None
+    # Retention bounds: 1 day floor (anything less is effectively "no
+    # audit"), ~10-year ceiling on a small install DB.
+    audit_retention_days: int | None = Field(default=None, ge=1, le=3650)
+    public_url: str | None = Field(default=None, max_length=500)
 
 
 @dataclass(slots=True)
@@ -200,6 +220,33 @@ class UpdateAppSettingsHandler:
             and request.stocktake_auto_tuning_enabled is not None
         ):
             setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
+
+        # FU-333 Bucket B — operational config. Strings strip on save; the
+        # `public_url` scheme guard mirrors `product_search_url` above so a
+        # typo can't produce a hostile link in outbound emails.
+        if "public_url" in set_fields:
+            _Url = (request.public_url or "").strip()
+            if _Url and not (_Url.startswith("http://") or _Url.startswith("https://")):
+                return UpdateAppSettingsResponse(
+                    invalid_reason="Public URL must start with http:// or https://."
+                )
+            setting.public_url = _Url
+        for _StrField in (
+            "smtp_host", "smtp_username", "smtp_from",
+            "vapid_public_key", "vapid_subject",
+            "piper_bin", "piper_bundled_voice_dir", "piper_voice",
+        ):
+            if _StrField in set_fields:
+                _Value = getattr(request, _StrField)
+                setattr(setting, _StrField, (_Value or "").strip())
+        for _NumericOrBool in (
+            "smtp_port", "smtp_use_tls",
+            "email_enabled", "audit_retention_days",
+        ):
+            if _NumericOrBool in set_fields:
+                _Value = getattr(request, _NumericOrBool)
+                if _Value is not None:
+                    setattr(setting, _NumericOrBool, _Value)
 
         # FU-153 §7.1 — the install-wide setting is now a master kill-
         # switch only; the per-user "have you finished setting up?"

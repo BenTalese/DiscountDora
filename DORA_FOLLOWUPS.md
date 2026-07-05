@@ -53,6 +53,35 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-467 — Drop the DORA_* env-var fallbacks after FU-333 Bucket B beds in
+- **Raised:** 2026-07-05 (FU-333 Bucket B merge).
+- **Type:** deferred job (deprecation follow-up).
+- **What:** FU-333 Bucket B promoted 12 operational env vars to `AppSetting` and shipped four admin System pages, but kept the env vars as *fallbacks* (resolver in `dora_api/features/app_settings/operational_config.py` prefers the row when set, falls back to the env when the row is empty). The fallback lane is a deprecation-window courtesy so existing operators don't lose their SMTP / VAPID / TTS config on the FU-333 upgrade. One release after Bucket B ships, drop the fallback:
+  - `operational_config.py` — collapse `_pick_str` / `_pick_int` / `_pick_bool` to plain `AppSetting.x` projections; remove the `os.environ` reads.
+  - The 7 read sites (`health/health_check.py`, `infrastructure/audit_retention.py`, `infrastructure/auth_helpers.py`, `infrastructure/email_sender.py`, `infrastructure/push_sender.py`, `features/tts/tts_synthesize.py`, `features/tts/voice_provision.py`) already delegate to the resolver; nothing changes at the call sites.
+  - The migration that added the columns stays (schema).
+  - `.env.example` — delete the "Deprecated fallback" blocks the FU-333 merge added.
+  - README — drop the "env-driven path also still works" language from the VAPID section.
+  - CHANGELOG entry: "Removed: FU-333 Bucket B env-var fallbacks (deprecated 2026-07-05)."
+- **Cross-ref:** FU-333 (parent — Buckets C + D still open). See `docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md` §Chunk 3.
+- **Recommended resolution:** the release *after* the one that carries the Bucket B merge — schedule when cutting that release.
+
+## [OPEN] FU-466 — Wider pytest drift pool discovered while closing FU-328 (~41 failures across alerts / data / stock / tz)
+- **Raised:** 2026-07-05 (surfaced while closing FU-328).
+- **Type:** finding (pre-existing drift; confirmed on clean HEAD via `git stash`).
+- **What:** FU-328 named 4 pre-existing failures on 2026-06-29 when the suite was 540 tests. The suite has since grown to 755 tests, and a full-suite `./.venv/bin/pytest tests/` now shows **44 failures on clean HEAD** — much wider than FU-328's scope. FU-328 was closed strictly on its four named items; this FU tracks the rest so they don't stay invisible. Rough by-file breakdown of the ~41 remaining failures:
+  - `test_alerts.py` — 16 failures (multiple: expired-item scoped key, snooze, dismiss, action, prefs tier, no-planned-meals, shopping-day windowing, history-lists-dismissed, upcoming-expiry).
+  - `test_alerts_digest.py` — 5 failures (opted-in send, dedup-until-clear, cadence off, weekly-day, missing-email).
+  - `test_alerts_push.py` — 4 failures (subscribed-devices, dedup, prune-gone, no-op).
+  - `test_data_router.py` — 11 failures (`get_backup` variants, inspect roundtrip, restore roundtrips, register-barcode traversal — this last one was already flagged flaky in FU-297's worklog entry).
+  - `test_household_tz_boundaries.py` — 2 failures (`test__alerts__expiry_compares_against_household_today`, `test__waste_rescue__horizon_uses_household_today` — both die on `POST /api/stock-items` → 500 under `FORWARD_ZONE=Pacific/Kiritimati`; likely tz-sensitive validation regression).
+  - `test_stock_item_router.py` — 3 failures (`expiry_event__emitted_on_set_push_and_clear`, `history_older_count__caps_at_per_kind_limit`, `expiry_event__no_change_no_event`).
+- **Why deferred:** each cluster belongs to its own feature area and needs a per-area investigation to know whether the test's assertion is stale (FU-099 error-shape drift, changed DTO shape, endpoint moved) or the code has actually regressed. FU-328's guidance — "don't bundle as one job, each failure is its own story" — applies here too, at cluster-granularity.
+- **Recommended resolution:** opportunistic per file. When next touching alerts / backup+restore / stock-item / tz-boundary code, run that file's suite first and fix or rewrite. Two specific priors that will help:
+  - Every neighbouring assertion in these files that uses `validation_err()` / `domain_err()` is a live template for FU-099 error-shape fixes.
+  - The `household_tz` 500s are the most suspicious — a 500 is likely a real bug, not a test-drift issue. Prioritise diagnosing those.
+- **Cross-ref:** [[FU-328]] (the narrow predecessor; resolved 2026-07-05).
+
 ## [OPEN] FU-465 — Native push notifications (FCM bridge) not wired
 - **Raised:** 2026-07-04 (P8-10 close-gate).
 - **Type:** deferred job.
@@ -1053,7 +1082,7 @@ This is **distinct from the server self-host path** (where env vars / systemd `E
 
 ### Recommended resolution
 
-- **Step 1 (Bucket B)** — opportunistic, before the next self-hosted release. Highest leverage, smallest risk.
+- **Step 1 (Bucket B) — SHIPPED 2026-07-05.** Plan `docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md` executed end-to-end: 12 new AppSetting columns + migration + env→row backfill + resolver + 7 read-site cutover + four admin System pages (Email / Push / Voice / Hosting) + CHANGELOG + `.env.example` deprecation notes + README VAPID update. Full pytest 730/771 (41 pre-existing failures unchanged; +16 new resolver tests all green). Env-fallback drop tracked separately in [[FU-467]]. Bucket B is done; leaving this FU open only because Buckets C + D remain.
 - **Step 2 (Bucket C)** — only after Step 1 has shipped + bedded in. Optional unless the operator-onboarding metric is a priority.
 - **Step 3 (Desktop wizard)** — pair with FU-327 when the desktop-bundle work resumes. Don't ship in isolation.
 
@@ -1061,27 +1090,6 @@ This is **distinct from the server self-host path** (where env vars / systemd `E
 
 This is large enough to warrant its own ADR when it lands (recommended title: "Operational config lives in `AppSetting`, not env"). The R-005 ("Portable data access & distribution posture") rule already implies this — explicitly calling it out in an ADR would put the principle in scope for every future "where should this config live?" call.
 
-
-## [OPEN] FU-328 — Four pre-existing pytest failures (data_router / household_tz / product / recipe_is_planned)
-- **Raised:** 2026-06-29 (FU-288 resolution — full-suite run uncovered a
-  *different* set of failures than FU-288 originally named).
-- **Type:** finding (pre-existing drift; confirmed on a clean stash).
-- **What:** `./.venv/bin/pytest tests/` shows **4 failures, all pre-existing**,
-  unrelated to the three profile-picture tests FU-288 named (those all pass
-  now). Confirmed via `git stash` — they fail on clean HEAD too:
-  - `tests/e2e/dora_api/test_data_router.py::test__chunked_upload__chunk_offset_mismatch__is_400`
-  - `tests/e2e/dora_api/test_household_tz_boundaries.py::test__dashboard__upcoming_window_anchored_on_household_today`
-  - `tests/e2e/dora_api/test_product_router.py::test__update_product__PriceNowAtZeroBoundary__IsBadRequest`
-  - `tests/e2e/dora_api/test_recipe_is_planned.py::test__recipes__is_planned_true_when_future_unconsumed_entry_exists`
-  Suite totals: 4 failed, 536 passed.
-- **Why deferred:** out of scope of the FU-288 / FU-285 / FU-289 work unit
-  (R-007); each failure belongs to its own feature area (data import,
-  household-tz boundaries, product validation, planner-derived `is_planned`).
-- **Recommended resolution:** opportunistic per area — when next touching
-  data-import / dashboard upcoming-window / product validation / `is_planned`
-  derivation, run that test first, see what it expects, and either fix the
-  code or update the assertion. Don't bundle as one "fix the 4" job — each
-  failure is its own story.
 
 ## [OPEN] FU-320 — Document every auto-behaviour in the in-app help and point at the setting that controls it
 - **Raised:** 2026-06-28 (FU-092 magic-behaviour audit close-out).
@@ -1362,24 +1370,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   household preferences, lift `showAllSlots` into the household
   `Preference` table (or a small local-storage cache if the call is "this
   is purely a per-device view choice").
-
-## [OPEN] FU-302 — Dora Score reassessment: waste-as-pillar weight
-- **Raised:** 2026-06-24 (C-waste design — `PROPOSAL_WASTE_MINIMISATION.md`).
-- **Type:** finding
-- **What:** `DASHY_DORA_CHAMPION_PLAN.md` §§334, 346, 444–447 treat waste as one of four Dora Score pillars ("low waste, on-budget, fresh, few run-outs"). The C-waste design deliberately de-emphasises waste as a UI feature — the `/waste` page is deleted, the capture flow shrinks to a single row dropdown action with no money/note capture, no Reports card. The *signal* is preserved (events still logged + queryable) so the Score can read it. But the de-emphasis is a quiet vote that the Score model itself may want re-weighting — perhaps waste shrinks to a smaller pillar, or merges with another (e.g. "fresh + low-waste" → one freshness pillar). This is a **charter-level** decision, not a UI cleanup, and was explicitly out of scope for C-waste.
-- **Why deferred:** the Score isn't designed yet (Phase 3 / champion phase); doing the weighting now would be speculative. Better to revisit when the Score model is being built and the full pillar picture is on the table.
-- **Recommended resolution:** later during pre-Phase 3 (when the Dora Score model is actually being designed; the reassessment is an input to that design, not its own deliverable).
-
-## [OPEN] FU-295 — Confirm the Alerts page (D5) no longer 404s
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 3).
-- **Type:** finding (reported defect, static-only verification).
-- **What:** feedback D5 reported "Alerts navigation is broken (goes to 404)". A
-  static read shows the `/alerts` route IS registered (`routes.ts` →
-  `pages/AlertsPage.vue`, the C-9 control surface), so it appears fixed — but a
-  static read is not proof.
-- **Recommended resolution:** the verify itself is tracked in `DORA_VERIFY.md`
-  under "Dashboard rebuild" (it's the same click that exercises the Phase-3
-  alert card → `/alerts` link). Close this FU once that pass is green.
 
 ## [OPEN] FU-357 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).

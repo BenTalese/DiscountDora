@@ -18,6 +18,8 @@ import uuid  # FU-166: register_product_barcode tests used uuid without importin
 import pytest
 import requests
 
+from tests.e2e.dora_api._error_assertions import domain_err
+
 
 LIBRARY_URL = "http://localhost:5170/api/data/backups"
 
@@ -298,7 +300,7 @@ def test__chunked_upload__chunk_offset_mismatch__is_400(api):
         files={"chunk": ("c.bin", b"abc", "application/octet-stream")},
     )
     assert response.status_code == 400
-    assert response.json()["errors"]["received"] == ["0"]
+    assert response.json()["errors"]["received"] == [domain_err("0")]
 
 
 def test__chunked_upload__abort_deletes_staged_file(api):

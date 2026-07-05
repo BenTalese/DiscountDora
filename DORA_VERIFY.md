@@ -804,7 +804,6 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] **Phase 0** — cards keyboard-focus + middle-click; the dark-mode question reads correctly
 - [ ] **Phase 1** — welcome rotates per day; empty states read well; primary-list footer link works
 - [ ] **Phase 2** — zone bands render in order; within-zone reorder persists across reload AND another device (exercises FU-292's backend); hidden cards stay hidden
-- [ ] **Phase 3** — alert summary chips + peek + "See all" → `/alerts`
 - [ ] **Phase 4** — Money band shows only with money enabled; savings range toggle re-fetches; best_deals hidden without products; money empty states
 - [ ] **Phase 5** — restock Add works (toast + list refresh); Add-item dialog creates + refreshes; Add-to-list sheet works
 - [ ] **Phase 6** — opt-in "This fortnight" calendar (enable via Cards menu) renders 14-day grid with correct dots; tapping a day expands detail + links work
@@ -877,6 +876,17 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 ---
 
 ## Settings
+
+### FU-333 Bucket B — env vars promoted to AppSetting + four new admin pages (2026-07-05)
+*Requires admin login.*
+- [ ] Sidebar under Admin → System now has four new entries in order: **Email** (envelope-check icon), **Push notifications** (bell-ring), **Voice** (microphone-message), **Hosting** (cloud-upload). Non-admin session doesn't see them.
+- [ ] `/settings/admin/system/email`: page loads, shows Email enabled toggle + SMTP host/port/username/from/use-TLS + a disabled password input with a caption pointing at `DORA_SMTP_PASSWORD` + Bucket C. Type a host, tab out → toast "Email settings saved.", reload survives.
+- [ ] `/settings/admin/system/email`: with SMTP username set, `/api/health` returns `features.email_smtp_configured: true`. Clear it → next `/health` call returns `false` (no restart).
+- [ ] `/settings/admin/system/push`: page loads with public key + subject fields + disabled private-key input citing Bucket C. Type a subject, tab out → toast "Push settings saved.", reload survives.
+- [ ] `/settings/admin/system/voice`: piper_bin / bundled_voice_dir / legacy voice inputs render; typing a valid path + blur → toast "Voice settings saved."; the assistant Speak action still resolves the same voice as before (the resolver picks the row value now).
+- [ ] `/settings/admin/system/hosting`: public URL + audit retention days inputs. Try `javascript:alert(1)` in Public URL → inline red error "Must start with http:// or https://.", nothing saved. `https://dora.example.com` → toast, reload survives.
+- [ ] Env-var fallback still works: unset the AppSetting (blank via the page), set the env var, restart, hit `/health` — behaviour matches the row-set version (proves the resolver's fallback lane is live for the deprecation window).
+- [ ] Migration backfill: fresh dev DB with `DORA_SMTP_HOST=smtp.example.local` in env → after startup, GET `/api/app-settings` returns `smtp_host: "smtp.example.local"` (the migration's env→row copy fired).
 
 ### Admin cache-race safety net — origin FU-016
 *Requires at least two admins in the system (the backend blocks removing the last admin).*

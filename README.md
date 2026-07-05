@@ -188,14 +188,14 @@ Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs
      python -m py_vapid --gen --applicationServerKey
      ```
      Writes `private_key.pem` to the current directory and prints the matching base64url-encoded public key to stdout. Treat the private key like any other secret.
-  2. **Set three env vars** (in `.env` for dev, or your secret store for prod):
+  2. **Configure the keys.** As of FU-333 Bucket B (2026-07-05), the primary path is **Settings → Admin → System → Push notifications** — the admin enters the public key and subject in the UI, and they persist to `AppSetting`. The private key stays in `DORA_VAPID_PRIVATE_KEY` env until Bucket C (encrypted-in-DB storage) lands. During the deprecation window, the legacy env-only path also still works:
      ```
      DORA_VAPID_PUBLIC_KEY=<base64url public key printed above>
      DORA_VAPID_PRIVATE_KEY=<PEM contents OR base64url, single line>
      DORA_VAPID_SUBJECT=mailto:admin@your-domain.example
      ```
      `DORA_VAPID_SUBJECT` is the contact URL the push service uses to reach you if delivery breaks (`mailto:` or `https://`). Omitting any of the three leaves the sender in dry-run.
-  3. Restart the API. The frontend's **Settings → Notifications → Push** toggle becomes enabled; subscribing happens browser-side and is bound to the configured public key.
+  3. If configured via Settings, no restart is needed — the resolver picks up the row on the next call. Env-driven configuration still needs a restart. The frontend's **Settings → Notifications → Push** toggle becomes enabled once both halves are present; subscribing happens browser-side and is bound to the configured public key.
 
 - **AI assistant (optional, bring-your-own-LLM, per-user):** Dora's chat can be backed by a language model — Ollama you host yourself, or OpenAI / Anthropic / Google Gemini via your own API key. AI mode is configured **per account** (two people in a household can pick different providers), and it's off by default. Setup: (1) admin confirms the master switch is on at **Settings → System → AI assistant** (defence-in-depth kill-switch — on by default on new installs); (2) each account that wants AI goes to **Settings → Assistant**, picks a provider, fills in URL/model (Ollama) or API key + model (paid), and turns the AI-mode toggle on. The page has a **Test connection** button (rate-limited, audit-logged) so you can verify before flipping the toggle. For Ollama, `ollama pull qwen2.5:7b` + `ollama serve` is the canonical setup; the model must be tool-capable (qwen2.5, llama3.1, gpt-oss, etc.).
 

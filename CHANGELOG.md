@@ -6,6 +6,26 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Operator config in Settings — FU-333 Bucket B (2026-07-05).** Twelve
+  `DORA_*` env vars that were operational config (not bootstrap, not
+  secrets) are now editable rows on `AppSetting`: SMTP host/port/
+  username/from/use-TLS, VAPID public key + subject, Piper binary +
+  bundled voice dir + legacy voice override, install-wide email
+  toggle, audit retention days, and public URL. A migration backfills
+  each column from the corresponding env var if set, so existing
+  installs keep working without an admin touching anything on
+  upgrade. Four new focused pages land under Settings → Admin →
+  System: **Email**, **Push notifications**, **Voice**, **Hosting** —
+  each following the established per-page pattern from the earlier
+  System split. The two Bucket-C secrets (`DORA_SMTP_PASSWORD` and
+  `DORA_VAPID_PRIVATE_KEY`) stay env-only and are rendered
+  reveal-and-disabled in the UI with a caption pointing at the
+  Bucket-C follow-up. During the deprecation window the env vars
+  still work as fallbacks (resolver in
+  `features/app_settings/operational_config.py` prefers the row when
+  set); a follow-up tracks their eventual removal. Operator
+  onboarding shrinks from "configure 19 env vars" to "set 2 bootstrap
+  vars + configure the rest in Settings."
 - **Per-user rate limits on the assistant surface — FU-458 (2026-07-04).**
   Defence-in-depth against a runaway loop (accidental or malicious)
   burning upstream LLM tokens on an authenticated session. Three

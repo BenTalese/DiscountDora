@@ -2,13 +2,13 @@
 
 Wired in startup.py via APScheduler. Job is no-op when the table is
 empty and never raises (a failure here must not take the API down).
-RETENTION_DAYS defaults to 365; override with the DORA_AUDIT_RETENTION_DAYS
-env var.
+The retention window is `AppSetting.audit_retention_days` (default 365);
+the legacy `DORA_AUDIT_RETENTION_DAYS` env var still works as a fallback
+during the FU-333 Bucket B deprecation window.
 """
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete
@@ -20,11 +20,14 @@ DEFAULT_RETENTION_DAYS = 365
 
 
 def retention_days() -> int:
+    """Resolve the retention window through the operational-config
+    resolver so a Settings edit takes effect on the next nightly run."""
     try:
-        value = int(os.environ.get("DORA_AUDIT_RETENTION_DAYS", DEFAULT_RETENTION_DAYS))
-    except ValueError:
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        return max(1, resolved_operational_config().audit_retention_days)
+    except Exception:
         return DEFAULT_RETENTION_DAYS
-    return max(1, value)
 
 
 def prune_audit_events() -> int:

@@ -106,9 +106,9 @@ def test__alerts__expiry_compares_against_household_today(api):
 
 
 def test__dashboard__upcoming_window_anchored_on_household_today(api):
-    """The dashboard's `upcoming_meal_plan_entries` window is a 7-day
-    band starting at "today". With FORWARD_ZONE set, the band must
-    include household-today and household-today+6, not server-local."""
+    """The dashboard summary's `meal_plan.upcoming_entries` window is a
+    7-day band starting at "today". With FORWARD_ZONE set, the band
+    must include household-today, not server-local today."""
     try:
         _set_timezone(FORWARD_ZONE)
         household_today = datetime.fromisoformat(_zone_today(FORWARD_ZONE)).date()
@@ -117,41 +117,39 @@ def test__dashboard__upcoming_window_anchored_on_household_today(api):
         # *outside* a UTC-anchored window (one day later than UTC today).
         target = household_today  # exact today in household tz
 
-        # Create / find a meal plan for this user.
-        plans = requests.get(f"{BASE}/meal-plans?limit=1").json()["items"]
-        if plans:
-            plan_id = plans[0]["meal_plan_id"]
-        else:
-            mp = requests.post(
-                f"{BASE}/meal-plans",
-                json={"start_date": target.isoformat()},
-            )
-            assert mp.status_code in (200, 201), mp.text
-            plan_id = mp.json().get("meal_plan_id") or mp.json().get("id")
-
-        # Pin one entry on household-today.
         recipes = requests.get(f"{BASE}/recipes?limit=1").json()["items"]
         if not recipes:
             return  # no recipe seeded → nothing to schedule
         recipe_id = recipes[0]["recipe_id"]
-        entry = requests.post(
-            f"{BASE}/meal-plans/{plan_id}/entries",
+
+        # Create a fresh plan with the entry embedded — the API composes
+        # plan + entries in one call; there is no standalone
+        # POST /meal-plans/<id>/entries endpoint.
+        mp = requests.post(
+            f"{BASE}/meal-plans",
             json={
-                "scheduled_for": target.isoformat(),
-                "slot": "Dinner",
-                "recipe_id": recipe_id,
-                "servings": 1,
+                "start_date": target.isoformat(),
+                "entries": [{
+                    "recipe_id": recipe_id,
+                    "scheduled_for": target.isoformat(),
+                    "servings": 1,
+                    "slot": "Dinner",
+                }],
             },
         )
-        assert entry.status_code in (200, 201), entry.text
+        assert mp.status_code in (200, 201), mp.text
+        plan_id = mp.json().get("meal_plan_id") or mp.json().get("id")
 
-        summary = requests.get(f"{BASE}/dashboard").json()
-        upcoming = summary.get("upcoming_meal_plan_entries") or []
-        dates = {e["scheduled_for"] for e in upcoming}
-        assert target.isoformat() in dates, (
-            "household-today entry missing from upcoming-window — boundary"
-            " is likely server-local"
-        )
+        try:
+            summary = requests.get(f"{BASE}/dashboard/summary").json()
+            upcoming = (summary.get("meal_plan") or {}).get("upcoming_entries") or []
+            dates = {e["scheduled_for"] for e in upcoming}
+            assert target.isoformat() in dates, (
+                "household-today entry missing from upcoming-window — boundary"
+                " is likely server-local"
+            )
+        finally:
+            requests.delete(f"{BASE}/meal-plans/{plan_id}")
     finally:
         _set_timezone("UTC")
 

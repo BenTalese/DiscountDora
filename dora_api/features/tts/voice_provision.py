@@ -70,7 +70,9 @@ def bundled_voices_dir() -> Path | None:
     click Download — the voice is already there.
 
     Resolution order (highest priority first):
-      1. `DORA_PIPER_BUNDLED_VOICE_DIR` — explicit operator override.
+      1. `AppSetting.piper_bundled_voice_dir` (FU-333 Bucket B) — admin-editable
+         operator override. Legacy `DORA_PIPER_BUNDLED_VOICE_DIR` env still
+         works during the deprecation window.
       2. `<_MEIPASS>/voices/` — PyInstaller one-folder / one-file desktop build.
       3. `<repo_root>/packaging/voices/` — dev checkout + the Docker image's
          working copy (the image runs the prefetch into `packaging/voices/`
@@ -78,7 +80,12 @@ def bundled_voices_dir() -> Path | None:
 
     Returns None when no bundle is present (source install with no prefetch).
     """
-    explicit = os.environ.get("DORA_PIPER_BUNDLED_VOICE_DIR")
+    try:
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        explicit = resolved_operational_config().piper_bundled_voice_dir
+    except Exception:
+        explicit = os.environ.get("DORA_PIPER_BUNDLED_VOICE_DIR", "").strip()
     if explicit:
         path = Path(explicit)
         return path if path.is_dir() else None

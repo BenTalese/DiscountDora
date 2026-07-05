@@ -48,13 +48,23 @@ class _VapidConfig:
 
 
 def _config() -> _VapidConfig:
-    public_key = os.environ.get("DORA_VAPID_PUBLIC_KEY", "").strip()
+    # FU-333 Bucket B — public_key + subject resolve through the
+    # AppSetting-first resolver. Private key stays env-only (Bucket C).
+    try:
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        op = resolved_operational_config()
+        public_key = op.vapid_public_key
+        subject = op.vapid_subject or "mailto:admin@dora.local"
+    except Exception:
+        public_key = os.environ.get("DORA_VAPID_PUBLIC_KEY", "").strip()
+        subject = os.environ.get("DORA_VAPID_SUBJECT", "mailto:admin@dora.local").strip() \
+            or "mailto:admin@dora.local"
     private_key = os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
-    subject = os.environ.get("DORA_VAPID_SUBJECT", "mailto:admin@dora.local").strip()
     return _VapidConfig(
         public_key=public_key,
         private_key=private_key,
-        subject=subject or "mailto:admin@dora.local",
+        subject=subject,
         # Either half missing → can't sign / can't be subscribed to →
         # dry-run. The frontend toggle is independently gated on the
         # health flag, so this only matters if someone hand-edits a

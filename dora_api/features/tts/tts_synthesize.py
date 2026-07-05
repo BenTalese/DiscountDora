@@ -58,16 +58,29 @@ _PIPER_PARAM_KEYS = ("length_scale", "noise_scale", "noise_w", "sentence_silence
 
 
 def _piper_bin() -> str | None:
-    explicit = os.environ.get("DORA_PIPER_BIN")
+    # FU-333 Bucket B — resolves via AppSetting.piper_bin (with env fallback).
+    try:
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        explicit = resolved_operational_config().piper_bin
+    except Exception:
+        explicit = os.environ.get("DORA_PIPER_BIN", "").strip()
     if explicit:
         return explicit if Path(explicit).exists() else None
     return shutil.which("piper")
 
 
 def _legacy_voice_override() -> Path | None:
-    """The original single-voice env var. When present and valid it wins for
-    every request (back-compat); otherwise we resolve from the catalog + dir."""
-    raw = os.environ.get("DORA_PIPER_VOICE")
+    """The original single-voice override — now `AppSetting.piper_voice` with
+    `DORA_PIPER_VOICE` as an FU-333 Bucket B env fallback. When present and
+    valid it wins for every request (back-compat); otherwise we resolve from
+    the catalog + dir."""
+    try:
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        raw = resolved_operational_config().piper_voice
+    except Exception:
+        raw = os.environ.get("DORA_PIPER_VOICE", "").strip()
     if not raw:
         return None
     p = Path(raw)

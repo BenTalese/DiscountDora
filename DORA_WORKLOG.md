@@ -9,6 +9,285 @@ next.
 
 ---
 
+## 2026-07-05 — FU-333 Bucket B: shipped end-to-end (Chunks 1-3)
+
+**Why:** After the plan doc landed earlier the same day, user said
+"lets do it." Executed all three chunks in one work unit with a
+checkpoint between Chunks 1 and 2.
+
+**Chunk 1 — schema + resolver + read-site cutover:**
+- Added 12 new columns to `AppSetting` ([app_setting.py](dora_api/domain/entities/app_setting.py))
+  + matching table mapping ([table_mappings.py](dora_api/persistence/table_mappings.py)):
+  `smtp_host / _port / _username / _from / _use_tls`, `vapid_public_key / _subject`,
+  `piper_bin / _bundled_voice_dir / _voice`, `email_enabled`,
+  `audit_retention_days`, `public_url`.
+- Migration [b7d2f9c1e4a3_20260705_appsetting_operational_config.py](dora_api/persistence/migrations/versions/b7d2f9c1e4a3_20260705_appsetting_operational_config.py)
+  batch-adds all 12 with server_defaults + one-shot env→row backfill
+  so any existing env-driven install keeps its SMTP / VAPID / TTS
+  config on upgrade.
+- DTOs extended: read [get_app_settings.py](dora_api/features/app_settings/get_app_settings.py)
+  mirrors all 12; write [update_app_settings.py](dora_api/features/app_settings/update_app_settings.py)
+  gets 12 optional fields (secrets excluded on purpose — SMTP password
+  + VAPID private key cannot be smuggled in via the DTO).
+- New resolver [operational_config.py](dora_api/features/app_settings/operational_config.py) —
+  `resolved_operational_config()` returns an immutable `OperationalConfig`
+  dataclass; row wins when non-empty, env fills in during the
+  deprecation window.
+- 7 read sites cut over:
+  - `health/health_check.py` — `email` + `email_smtp_configured` +
+    `push_vapid_configured` now derive from the resolver (with the
+    private-key half still env-only, so R-014 gating stays honest).
+  - `infrastructure/audit_retention.py`, `infrastructure/auth_helpers.py`
+    (`public_base_url`), `infrastructure/email_sender.py` (SMTP `_config()`),
+    `infrastructure/push_sender.py` (VAPID `_config()`),
+    `features/tts/tts_synthesize.py` (`_piper_bin` + `_legacy_voice_override`),
+    `features/tts/voice_provision.py` (bundled voice dir).
+- Test [test_operational_config_resolver.py](tests/e2e/dora_api/test_operational_config_resolver.py):
+  16-case matrix covering row-wins / env-fallback / default for each
+  field type, plus a `/health` round-trip proving the SPA sees SMTP-
+  configured flip live from Settings edits.
+
+**Chunk 2 — admin UI:**
+- Four new pages under `/settings/admin/system/`:
+  [AdminSystemEmailSettings.vue](web_app/src/pages/settings/AdminSystemEmailSettings.vue),
+  [AdminSystemPushSettings.vue](web_app/src/pages/settings/AdminSystemPushSettings.vue),
+  [AdminSystemVoiceSettings.vue](web_app/src/pages/settings/AdminSystemVoiceSettings.vue),
+  [AdminSystemHostingSettings.vue](web_app/src/pages/settings/AdminSystemHostingSettings.vue).
+- Each follows the existing System-page pattern (SettingsPageHeader +
+  admin banner + SettingsSection/SettingsRow + per-field blur-save via
+  `AppSettingsApiService.updateAsync`) — R-011 win.
+- Bucket-C secrets rendered reveal-and-disabled with a caption
+  pointing at the follow-up (R-014).
+- Hosting page inline-validates the public URL scheme
+  (`http://`/`https://`) before hitting the server.
+- Routes registered in [routes.ts](web_app/src/router/routes.ts:378).
+- Nav entries added to [SettingsShell.vue](web_app/src/pages/SettingsShell.vue:93)
+  under Admin → System (Email · Push · Voice · Hosting).
+- SPA `AppSettings` type extended with all 13 fields —
+  [appSettingsApiService.ts](web_app/src/services/api/appSettingsApiService.ts).
+
+**Chunk 3 — docs + deprecation window:**
+- `.env.example` — SMTP block marked deprecated fallback; added new
+  blocks for VAPID / Piper / misc operational, each pointing at the
+  corresponding Settings page.
+- README VAPID section rewritten: primary path is now Settings →
+  Admin → System → Push, env-only path documented as a still-working
+  fallback.
+- CHANGELOG `[Unreleased]` gained the FU-333 Bucket B entry (operator
+  onboarding shrinks from "19 env vars" to "2 bootstrap + Settings").
+- FU-467 opened tracking the eventual env-fallback drop (one release
+  after Bucket B ships).
+- FU-333 itself: Step 1 marked SHIPPED; Steps 2 (Bucket C) + 3
+  (desktop wizard) still open.
+
+**Quality gates:**
+- `pytest tests/e2e/dora_api/test_operational_config_resolver.py` →
+  **16/16 green**.
+- Full pytest: **730 passed / 41 failed** — the 41 are FU-466's
+  pre-existing drift pool, unchanged; zero regressions from either
+  chunk.
+- `npx vue-tsc --noEmit` → **clean** (exit 0).
+- `npx eslint` on the four new pages + touched TS/router files →
+  **clean** (exit 0).
+
+**Files touched (code + docs):**
+- Backend: `dora_api/domain/entities/app_setting.py`,
+  `dora_api/persistence/table_mappings.py`,
+  `dora_api/persistence/migrations/versions/b7d2f9c1e4a3_...py` (new),
+  `dora_api/features/app_settings/get_app_settings.py`,
+  `dora_api/features/app_settings/update_app_settings.py`,
+  `dora_api/features/app_settings/operational_config.py` (new),
+  `dora_api/features/health/health_check.py`,
+  `dora_api/infrastructure/audit_retention.py`,
+  `dora_api/infrastructure/auth_helpers.py`,
+  `dora_api/infrastructure/email_sender.py`,
+  `dora_api/infrastructure/push_sender.py`,
+  `dora_api/features/tts/tts_synthesize.py`,
+  `dora_api/features/tts/voice_provision.py`.
+- SPA: 4 new admin pages + `appSettingsApiService.ts` + `routes.ts` +
+  `SettingsShell.vue`.
+- Tests: `test_operational_config_resolver.py` (new).
+- Docs: `.env.example`, `README.md`, `CHANGELOG.md`, `DORA_VERIFY.md`,
+  `DORA_FOLLOWUPS.md`, `DORA_WORKLOG.md`.
+
+**Engineering-standards close-gate:**
+- **R-003 — advance.** Operational config no longer lives in two
+  places (env + docs describing where to read it); the row is
+  authoritative, resolver is the one read path, env is a
+  deprecation-lane fallback.
+- **R-005 — advance.** Bootstrap-vs-runtime split enforced: 7
+  bootstrap vars stay in env; 12 operational values move to DB. SaaS
+  path B doesn't need re-architecture later.
+- **R-006 — respect.** Migration follows the R-005 batch-mode SQLite
+  pattern (stocktake_engine_setup precedent); no idempotent guards;
+  clean upgrade + downgrade.
+- **R-007 — respect.** Buckets C (encrypted secrets) + D (desktop
+  wizard) explicitly not started; the four admin pages don't sneak
+  broader UI refreshes in.
+- **R-011 — respect.** New admin pages follow the exact pattern of
+  `AdminSystemTimezoneSettings.vue` /
+  `AdminSystemAlertsSettings.vue` — same import order, same
+  blur-save shape, same admin banner, same style block.
+- **R-014 — respect.** SMTP password + VAPID private key inputs
+  rendered visible-but-disabled with a Bucket-C caption, so operators
+  see where they'll live.
+- **R-019 — respect.** Resolver is explicit `_pick_str` / `_pick_int` /
+  `_pick_bool` helpers with one branch per field; no reflection, no
+  auto-registration. Every read site names its field.
+- **No new violations, no new ADR.** An ADR promoting the
+  bootstrap-vs-runtime split as R-0NN is worth doing after Bucket C
+  lands too — noted in FU-333's engineering-standards paragraph.
+
+**Anti-drift check:** verified each read-site path against the live
+tree before editing (the plan doc's §0 caught two path corrections
+during the plan phase; no further drift found during execution).
+
+**Follow-ups opened:** [[FU-467]] (env-fallback drop).
+
+**Next up:** user pick. Natural next steps if we keep on this thread —
+Bucket C (encrypt SMTP password + VAPID private key at rest), or
+FU-466's tz-500 cluster (real bug, not test drift).
+
+---
+
+## 2026-07-05 — FU-333 Bucket B: implementation plan drafted (no code)
+
+**Why:** User asked to "do FU-333"; pushed back that it's a large
+multi-step job (B / C / D) and offered to plan just Bucket B under
+`docs/04_proposals/`. User picked "just plan Bucket B, no code yet."
+
+**What landed:**
+- New doc: [docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md](docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md)
+  — three chunks:
+  1. Schema (12 new `AppSetting` columns) + migration with a one-shot
+     env→row backfill + DTO extension + a resolver helper that reads
+     AppSetting first, env second, so existing installs don't lose
+     their SMTP config mid-upgrade.
+  2. Four focused admin System pages (`.../system/email`, `/push`,
+     `/voice`, `/hosting`) following the established Phase-2 System-
+     page split pattern; R-014 reveal-and-disable used for the two
+     Bucket-C-owned secret inputs (SMTP password, VAPID private key).
+  3. Deprecation window: README/CHANGELOG, one-release grace, a
+     follow-up opened at merge-time to drop the env fallbacks in the
+     next-next release.
+- Engineering-standards note maps the plan against R-003 / R-005 /
+  R-006 / R-007 / R-014 / R-019.
+- Coverage table calls out that FU-333 wasn't feedback-motivated per
+  se, so the coverage row is against the FU itself; no
+  `COVERAGE_GAPS.md` bullets flip.
+- FU-333's "Recommended resolution" updated to point at the plan doc.
+
+**One drift correction found while writing:** FU-333's audit table
+cites `features/health_check.py:63` for `DORA_EMAIL_ENABLED`; the
+module was reshuffled into `features/health/health_check.py` since,
+and the actual read is at :66. Same for `DORA_PUBLIC_URL` (audit
+said `auth_helpers.py:188`, actual is :236 inside a two-step helper
+starting at :229). Noted in the plan's §0 Verify-state-first
+section, so the executing session doesn't hit either paper cut.
+
+**Files touched:** plan doc (new), `DORA_FOLLOWUPS.md` (pointer added
+to FU-333's resolution paragraph), `DORA_WORKLOG.md` (this entry).
+
+**Quality gates:** N/A — no code change.
+
+**Engineering-standards close-gate:** doc-only; no violations
+introduced.
+
+**Anti-drift check:** every read-site path in the plan was verified
+against the live tree via grep before writing; the two drift
+corrections above landed inside the plan rather than as silent
+carry-forwards.
+
+**Follow-ups opened:** none (Chunk 3 opens one at merge-time — the
+env-fallback-drop follow-up — but no code merged today).
+
+**Next up:** user pick. FU-333 Bucket B is now execution-ready if
+they want to run it in a future session.
+
+---
+
+## 2026-07-05 — Ledger housekeeping: FU-295 / FU-302 / FU-328 closed; FU-466 opened
+
+**Why:** User walked three follow-ups in one short session.
+
+**FU-295** — verified in browser that the Dashboard Phase-3 alert card
+`/alerts` link no longer 404s (feedback D5). Archived. Removed the
+matching verify line from `DORA_VERIFY.md` under Dashboard rebuild.
+
+**FU-302** — reassessed waste-as-pillar weighting in the Dora Score.
+Discussion concluded no code change: the score already keeps waste as
+its own equal-weight pillar over a rolling 30-day window
+(`_score_waste` in [dora_api/domain/dora_score.py:186](dora_api/domain/dora_score.py:186),
+`DORA_SCORE_WINDOW_DAYS=30`), separate from freshness (freshness =
+snapshot of expiry-tracked items past date now; waste = 30d event
+count). The C-waste UI de-emphasis doesn't require score-level
+reweighting — P3 already excludes missing components. Archived.
+
+**FU-328** — all four named tests cleared.
+- `test_recipe_is_planned::...` self-healed since 2026-06-29 (passes on
+  clean HEAD).
+- `test_product_router::test__update_product__PriceNowAtZeroBoundary__IsBadRequest`
+  — FU-099 error-shape drift; swapped the flat raw-string assertion
+  for the `validation_err("greater_than", "Input should be greater than 0")`
+  helper that every neighbouring test already uses.
+- `test_household_tz_boundaries::test__dashboard__upcoming_window_anchored_on_household_today`
+  — the test called endpoints that don't exist
+  (`POST /meal-plans/<id>/entries`, `GET /dashboard`). Rewrote to
+  embed the entry via `POST /meal-plans` (the real composition path),
+  read `GET /dashboard/summary` → `meal_plan.upcoming_entries` (the
+  real DTO shape), and tear down the plan in a `finally`.
+- `test_data_router::test__chunked_upload__chunk_offset_mismatch__is_400`
+  — same FU-099 drift; added `domain_err` import + updated to
+  `domain_err("0")`.
+
+Suite delta on this branch: **44 → 41 failed, 711 → 714 passed** (net
+−3, exactly the 3 tests edited). No regressions.
+
+**FU-466 opened** — while running the full suite to verify no
+regressions, discovered the drift pool is much wider than FU-328's
+sample: 41 remaining failures on clean HEAD, clustered as:
+- test_alerts.py (16), test_alerts_digest.py (5), test_alerts_push.py (4)
+- test_data_router.py (11)
+- test_household_tz_boundaries.py (2) — the two adjacent to the FU-328
+  test both die on `POST /api/stock-items` → **500** under
+  `FORWARD_ZONE=Pacific/Kiritimati`. Likely a real tz-sensitive
+  regression, not test-shape drift — flagged as priority in the FU.
+- test_stock_item_router.py (3)
+
+FU-466 recommends opportunistic per-file cleanup, priority on the tz
+500s.
+
+**Files touched:**
+- Code: [tests/e2e/dora_api/test_product_router.py:822](tests/e2e/dora_api/test_product_router.py:822),
+  [tests/e2e/dora_api/test_household_tz_boundaries.py:108](tests/e2e/dora_api/test_household_tz_boundaries.py:108),
+  [tests/e2e/dora_api/test_data_router.py](tests/e2e/dora_api/test_data_router.py) (import + assertion).
+- Ledger: `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`, `DORA_VERIFY.md`.
+
+**Quality gates:**
+- `pytest tests/e2e/dora_api/test_product_router.py` → 43/43 green.
+- `pytest tests/e2e/dora_api/test_household_tz_boundaries.py::test__dashboard__upcoming_window_anchored_on_household_today` → green.
+- `pytest tests/e2e/dora_api/test_data_router.py::test__chunked_upload__chunk_offset_mismatch__is_400` → green.
+- Full suite: 714 passed / 41 failed (baseline was 711 / 44).
+
+**Engineering-standards close-gate:**
+- **R-007** — held scope. Only touched the 4 tests FU-328 named; the
+  wider drift went into FU-466 rather than a scope-creep bundle.
+- **R-003** — the FU-302 discussion was R-003 in action (score model,
+  thresholds, and windows stay server-side; no client-side re-derivation
+  was proposed).
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** the test rewrites all point at real API shapes
+(`POST /meal-plans` entries embedding, `GET /dashboard/summary` DTO,
+FU-099 `ErrorEntry` shape) — no legacy assumptions carried forward.
+
+**Follow-ups opened:** [[FU-466]] (wider test drift pool).
+
+**Next up:** user pick. FU-466's tz-500 cluster is the most bug-shaped
+target if we want another loop.
+
+---
+
 ## 2026-07-04 — FU-421 closed as already-satisfied (existing expiry surface covers "remind me to use this")
 
 **Why:** User asked to do FU-421 and initially suggested a modal-on-open

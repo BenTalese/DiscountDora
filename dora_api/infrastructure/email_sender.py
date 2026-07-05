@@ -3,19 +3,25 @@
 Wraps stdlib smtplib so dora_api can fire one-off transactional emails
 (verification, password reset, change confirmation) self-contained.
 
-SMTP config from env:
-  DORA_SMTP_HOST       (default: smtp.gmail.com)
-  DORA_SMTP_PORT       (default: 587)
-  DORA_SMTP_USERNAME   (required for real sends; if unset, the sender
-                        runs in "dry-run" mode and just logs the email
-                        body — handy for dev installs without SMTP).
-  DORA_SMTP_PASSWORD
-  DORA_SMTP_FROM       (default: same as USERNAME)
-  DORA_SMTP_USE_TLS    (default: "true")
+SMTP config resolves through `resolved_operational_config()`
+(FU-333 Bucket B) — the admin edits it in Settings → Admin → System →
+Email; the legacy `DORA_SMTP_*` env vars still work as a fallback
+during the deprecation window. The `DORA_SMTP_PASSWORD` secret stays
+env-only until Bucket C (encrypted-in-DB storage) lands.
 
-The dry-run mode is essential for the desktop / mobile deployment
-surfaces that don't need transactional email at all — the verification
-link is logged so a self-hosted user can copy-paste it.
+Config fields consumed:
+  smtp_host       (default: smtp.gmail.com — kept for parity with the env-only
+                   pre-FU-333 default, applied here since the entity default is
+                   the empty string)
+  smtp_port       (default: 587)
+  smtp_username   (required for real sends; empty ⇒ dry-run — the sender
+                   just logs the body, handy for dev installs without SMTP)
+  smtp_from       (default: same as USERNAME)
+  smtp_use_tls    (default: True)
+
+Dry-run mode is essential for the desktop / mobile deployment surfaces
+that don't need transactional email at all — the verification link is
+logged so a self-hosted user can copy-paste it.
 """
 from __future__ import annotations
 
@@ -51,14 +57,32 @@ class _SmtpConfig:
 
 
 def _config() -> _SmtpConfig:
-    username = os.environ.get("DORA_SMTP_USERNAME", "").strip()
+    # FU-333 Bucket B — resolve host/port/username/from/use_tls through the
+    # AppSetting-first resolver. Password stays env-only (Bucket C).
+    from dora_api.features.app_settings.operational_config import \
+        resolved_operational_config
+    try:
+        op = resolved_operational_config()
+        host = op.smtp_host or "smtp.gmail.com"
+        port = op.smtp_port
+        username = op.smtp_username
+        sender = op.smtp_from or username
+        use_tls = op.smtp_use_tls
+    except Exception:
+        # Defensive: DB unavailable at boot / in a dry unit test — fall back
+        # to env so the sender still functions as a dry-run logger.
+        host = os.environ.get("DORA_SMTP_HOST", "smtp.gmail.com").strip()
+        port = int(os.environ.get("DORA_SMTP_PORT", "587"))
+        username = os.environ.get("DORA_SMTP_USERNAME", "").strip()
+        sender = os.environ.get("DORA_SMTP_FROM", username).strip() or username
+        use_tls = os.environ.get("DORA_SMTP_USE_TLS", "true").lower() != "false"
     return _SmtpConfig(
-        host=os.environ.get("DORA_SMTP_HOST", "smtp.gmail.com").strip(),
-        port=int(os.environ.get("DORA_SMTP_PORT", "587")),
+        host=host,
+        port=port,
         username=username,
         password=os.environ.get("DORA_SMTP_PASSWORD", "").strip(),
-        sender=os.environ.get("DORA_SMTP_FROM", username).strip() or username,
-        use_tls=os.environ.get("DORA_SMTP_USE_TLS", "true").lower() != "false",
+        sender=sender,
+        use_tls=use_tls,
         dry_run=not username,
     )
 

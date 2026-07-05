@@ -32,6 +32,23 @@ export type AppSettings = {
     // 2026-07-04 cleanup.
     stocktake_default_cadence_band: CadenceBand;
     stocktake_auto_tuning_enabled: boolean;
+    // FU-333 Bucket B — operational config promoted from DORA_* env vars.
+    // SMTP password + VAPID private key stay env-only until Bucket C
+    // (encrypted-in-DB storage) lands; they aren't in this DTO so an
+    // accidental client send can't smuggle them into the database.
+    smtp_host: string;
+    smtp_port: number;
+    smtp_username: string;
+    smtp_from: string;
+    smtp_use_tls: boolean;
+    vapid_public_key: string;
+    vapid_subject: string;
+    piper_bin: string;
+    piper_bundled_voice_dir: string;
+    piper_voice: string;
+    email_enabled: boolean;
+    audit_retention_days: number;
+    public_url: string;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

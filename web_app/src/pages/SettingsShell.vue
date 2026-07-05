@@ -91,6 +91,11 @@
                 { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
                 { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
                 { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
+                // FU-333 Bucket B — operational config that used to be env-only.
+                { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
+                { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
+                { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
+                { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
             ],
         },
         // FU-341 — Data sub-group: relocated from the retired `/data`

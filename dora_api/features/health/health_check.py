@@ -63,25 +63,17 @@ def _feature_flags() -> dict[str, bool]:
         # feature, no external calls); resolved from AppSetting below.
         "buy_verdict": True,
         "multi_user": True,     # register + admin role
-        "email": os.environ.get("DORA_EMAIL_ENABLED", "false").lower()
-                 in {"1", "true", "yes", "on"},
-        # C-9.7 — derived from `DORA_SMTP_USERNAME` (same check
-        # `email_sender._config()` uses for dry-run mode). The SPA reads
-        # this to disable channel toggles (R-014 — shown-disabled until
-        # the channel is wired); it's distinct from `email` (a coarse
-        # install-feature flag) and `deals_email` (the install-wide
-        # deals-email feature). True ⇒ transactional sends actually
-        # leave the box.
-        "email_smtp_configured": bool(
-            os.environ.get("DORA_SMTP_USERNAME", "").strip()
-        ),
-        # C-9.8 — same shape for the web-push channel: True when both
-        # VAPID halves (public + private) are set. The SPA reads this
-        # to disable the Push toggle in Preferences (R-014); the push
-        # sender itself drops to dry-run when either is missing.
-        "push_vapid_configured": bool(
-            os.environ.get("DORA_VAPID_PUBLIC_KEY", "").strip()
-            and os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
+        # FU-333 Bucket B — the install-wide `email` switch, and the two
+        # `*_configured` R-014 signals (used by the SPA to reveal-and-disable
+        # per-user channel toggles), now read through the operational-config
+        # resolver so admin edits in Settings take effect without a restart.
+        # Set conservatively here; resolved in the try block below alongside
+        # the other AppSetting-driven flags.
+        "email": False,
+        "email_smtp_configured": False,
+        "push_vapid_configured": False,
+        "_push_vapid_private_present": bool(
+            os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
         ),
         "assistant": False,     # resolved below
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
@@ -133,8 +125,19 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition_complex_available"] = bool(
             (setting.nutrition_db_source or "").strip()
         )
+        # FU-333 Bucket B — email + push R-014 signals now derive from the
+        # operational-config resolver (AppSetting first, env fallback).
+        from dora_api.features.app_settings.operational_config import \
+            resolved_operational_config
+        op_config = resolved_operational_config()
+        flags["email"] = bool(op_config.email_enabled)
+        flags["email_smtp_configured"] = bool(op_config.smtp_username)
+        flags["push_vapid_configured"] = bool(
+            op_config.vapid_public_key and flags["_push_vapid_private_present"]
+        )
     except Exception:
         pass
+    flags.pop("_push_vapid_private_present", None)
     return flags
 
 

@@ -376,6 +376,28 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
                     },
+                    // FU-333 Bucket B — four focused System pages carrying the
+                    // operational config that used to live in DORA_* env vars.
+                    {
+                        path: 'admin/system/email',
+                        component: () => import('pages/settings/AdminSystemEmailSettings.vue'),
+                        meta: { title: 'System: Email' }
+                    },
+                    {
+                        path: 'admin/system/push',
+                        component: () => import('pages/settings/AdminSystemPushSettings.vue'),
+                        meta: { title: 'System: Push notifications' }
+                    },
+                    {
+                        path: 'admin/system/voice',
+                        component: () => import('pages/settings/AdminSystemVoiceSettings.vue'),
+                        meta: { title: 'System: Voice' }
+                    },
+                    {
+                        path: 'admin/system/hosting',
+                        component: () => import('pages/settings/AdminSystemHostingSettings.vue'),
+                        meta: { title: 'System: Hosting' }
+                    },
                     // PROPOSAL_STOCKTAKE_MODE §8 — new focused page for the
                     // two global stocktake dials (default cadence + Auto
                     // self-tuning). The old "Default stocktake reminder"

@@ -819,7 +819,7 @@ def test__update_product__PriceNowAtZeroBoundary__IsBadRequest(api):
 
     assert _PatchResponse.status_code == 400
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
-    assert _PatchResponse.json()['errors']['price_now'] == ['Input should be greater than 0']
+    assert _PatchResponse.json()['errors']['price_now'] == [validation_err("greater_than", "Input should be greater than 0")]
 
 
 def test__update_product__ExtraAttributes__IsBadRequest(api):

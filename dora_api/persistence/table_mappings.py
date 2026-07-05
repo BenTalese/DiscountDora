@@ -128,6 +128,23 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
+        # FU-333 Bucket B — operational config promoted from `DORA_*` env vars.
+        # Read path: `resolved_operational_config()` prefers the AppSetting
+        # value when non-empty and falls back to the env var, so an operator
+        # on env-only config keeps working across upgrade.
+        Column("smtp_host", String(255), nullable=False, server_default=""),
+        Column("smtp_port", Integer, nullable=False, server_default="587"),
+        Column("smtp_username", String(255), nullable=False, server_default=""),
+        Column("smtp_from", String(255), nullable=False, server_default=""),
+        Column("smtp_use_tls", Boolean, nullable=False, server_default=true()),
+        Column("vapid_public_key", String(255), nullable=False, server_default=""),
+        Column("vapid_subject", String(255), nullable=False, server_default="mailto:admin@dora.local"),
+        Column("piper_bin", String(1024), nullable=False, server_default=""),
+        Column("piper_bundled_voice_dir", String(1024), nullable=False, server_default=""),
+        Column("piper_voice", String(255), nullable=False, server_default=""),
+        Column("email_enabled", Boolean, nullable=False, server_default=false()),
+        Column("audit_retention_days", Integer, nullable=False, server_default="365"),
+        Column("public_url", String(500), nullable=False, server_default=""),
     )
 
     product_offer_table = Table(

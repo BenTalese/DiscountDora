@@ -6,6 +6,25 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Budget-aware trim on auto-generated shopping lists — FU-448 (2026-07-06).**
+  Closes the P2-05 optimiser half that was deferred when the user-facing
+  budget shipped. On any list where projected total exceeds the user's
+  period-remaining budget, a warning banner appears with three CTAs:
+  **Show what would be cut** (preview per-line with reason chip),
+  **Trim to fit** (apply — cuts move to a collapsible "Deferred to fit
+  budget" section, not deleted, one-tap Add back), and **Dismiss**.
+  Nothing mutates on load; every mutation is a user tap. Cuts follow a
+  five-tier safest-first stack — habit items with no demand, low-stock
+  with days-of-cover left, buy-verdict `wait` lines, out-of-stock with
+  no meal booked, then recipes/meal-plan items scheduled ≥5 days out —
+  and inside each tier, highest-priced line first. Never cuts:
+  essentials, meals in the next 2 days, verdict=`buy` on low/out, or
+  lines under $2. Fixed seven-chip reason vocabulary frozen at trim
+  time on a new `ShoppingListLine.deferred_reason` column. Self-gates
+  when money features are off, no budget is set, or the list is
+  already under budget. Assistant intent **"trim my shopping list to
+  my budget"** proposes + commits through the same endpoint. Full
+  design in `docs/04_proposals/PROPOSAL_BUDGET_AWARE_LISTS.md`.
 - **FU-333 closed — Buckets C + D shipped; env-var sprawl done (2026-07-06).**
   Bucket C moves the two remaining operational secrets — the SMTP password
   and the VAPID private key — onto `AppSetting` as encrypted-at-rest columns

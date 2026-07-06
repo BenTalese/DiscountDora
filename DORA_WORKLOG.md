@@ -9,6 +9,174 @@ next.
 
 ---
 
+## 2026-07-06 — FU-448 shipped: budget-aware trim on auto-generated lists (all 6 steps)
+
+**Why:** User asked "let's start building it" against the design brief
+landed earlier this session (`PROPOSAL_BUDGET_AWARE_LISTS.md`). Chose to
+push all six §10 steps in one session — full backend + SPA + assistant
+in one coherent shippable feature.
+
+**Sequencing (matches brief §10, one step per commit-ready chunk):**
+
+1. **`period_headroom(user, on_date, repository)` helper**
+   ([budget.py](dora_api/features/budget/budget.py)) — pure refactor.
+   Also extracted `period_bounds` (was `_period_bounds`) and
+   `period_spent(...)`. `GetBudgetStatusHandler` refactored to use
+   them; dashboard budget-status endpoint still returns exactly the
+   same shape (6/6 budget tests green throughout).
+2. **`ShoppingListLine.deferred_by_budget` column + read filter**
+   ([shopping_list.py](dora_api/domain/entities/shopping_list.py),
+   [table_mappings.py](dora_api/persistence/table_mappings.py),
+   migration `e5b4d8f2c3a7`). Boolean column; server-default false;
+   [compute_list_totals](dora_api/features/shopping_lists/get_shopping_list_detail.py:144)
+   now skips deferred lines from projected_total / remaining_price /
+   ticked+unticked counts. SPA reads the flag through
+   [ShoppingListLine.deferred_by_budget](web_app/src/models/shoppingList.ts).
+3. **`POST /shopping-lists/<id>/trim-to-budget` (preview + apply)**
+   in a new [trim_to_budget.py](dora_api/features/shopping_lists/trim_to_budget.py).
+   Handler + Pydantic request + response DTO + reason-chip constants +
+   the 5-tier classifier + never-cut rules + stopping condition. Ships
+   with 17 classifier tests in
+   [test_trim_to_budget.py](tests/test_trim_to_budget.py) covering
+   every tier's chip vocab, the never-cut edges, and explicit-exclude.
+4. **Reason chip frozen on read** — added `deferred_reason: str | None`
+   column (same migration, updated in-place) and wired it through the
+   DTO. **Deviation from brief §7.2**, which said "re-derive on read".
+   Ran the numbers: on every list-detail read we'd re-run meal-plan +
+   buy-verdict + cadence queries per deferred line, AND the chip could
+   silently drift if state changed between trim + read. Freezing at
+   trim time removes both risks. Brief §7.2 updated in-place with the
+   rationale — it had already predicted the fallback ("If we later
+   want to freeze the reason at trim time, add a `deferred_reason:
+   str | None` then"), so this is the sanctioned fallback, not a
+   silent divergence. Add-back path lands on the existing
+   `PATCH /lines/<id>` with `deferred_by_budget=false` — server
+   clears the reason in lock-step.
+5. **SPA banner + Deferred section** on
+   [ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue).
+   `baseLines` filters out deferred; new `deferredLines` + `deferredTotal`
+   computeds. Banner with three CTAs (Show what would be cut / Trim
+   to fit / Dismiss), a preview card with per-line Keep buttons, an
+   applied-state confirmation strip that scrolls to the Deferred
+   section, and the collapsible Deferred section itself with reason
+   chip + Add back per line. Reactive state in
+   [trimState / trimBanner](web_app/src/pages/ShoppingListDetail.vue).
+   Money-gated via [useMoneyEnabled](web_app/src/composables/useMoneyEnabled.ts);
+   self-hides when budget is null or overshoot ≤ 0.
+6. **Assistant intent `trim_list_to_budget`** — tool spec in
+   [tools.py](dora_api/features/assistant/tools.py), added to
+   `_ACTION_TOOLS`. Propose + commit in
+   [confirm_actions.py](dora_api/features/assistant/confirm_actions.py)
+   (`propose_trim_list_to_budget` / `commit_trim_list_to_budget`).
+   Self-explains when nothing to trim ("already inside your $Y
+   remaining"), when there's no budget ("Settings → Money"), and
+   when everything is essential ("nothing safe to cut"). Commit
+   re-runs in `mode=apply` on the same list (deterministic given
+   current state — no stale-preview risk).
+
+**Verified:**
+- Backend targeted suite (`budget or shopping or assistant or trim`):
+  60/60 green throughout.
+- Classifier unit tests: 17/17 (all tiers + never-cut + excluded).
+- Full backend suite: 811 passed, 7 failed. All 7 failures are
+  pre-existing (bucket-c secrets + `test_recipe_is_planned.py`); none
+  touched by FU-448.
+- `vue-tsc --noEmit` → exit 0.
+- Not verified in browser this session — user's DORA_VERIFY task.
+  New verify block added under `### Trim-to-budget banner + Deferred
+  section — origin FU-448` with 14 checks covering money-gate,
+  banner states, preview card, apply flow, Deferred section,
+  never-cut set, tier ordering, fallback, and the assistant intent.
+
+**Standing-rules check (close-gate):**
+- **R-003 state-ownership** — projected total / period-remaining
+  arithmetic lives server-side; SPA reads through the endpoint and
+  never re-derives. Reason chip is derived server-side too (via the
+  classifier during trim). ✅
+- **R-005 distribution posture** — new column ships via migration;
+  helper reads through the repository; no env/config-specific paths.
+  Works identically on SQLite + Postgres. ✅
+- **R-016 scope discipline** — deviation from brief §7.2 flagged
+  in-brief and in this worklog with reasoning; no other scope creep.
+  Did NOT touch: multi-store strategies, per-shop caps, per-line
+  substitutes, budget planner surface — all explicitly non-goals per
+  user + brief §8. ✅
+- **No new ADR warranted** — the standing rules already cover the
+  patterns used (state-ownership, migration hygiene, feature-scope).
+
+**Dropped/deferred non-goals (per user, no follow-ups created):**
+Multi-store strategies + `preferred_merchants`, per-line substitute
+suggestions, per-shop caps, "trim on generate" auto-mode — all stay
+dropped. Budget-planner-in-meal-planner discussed as a future
+conversation (user's call), NOT logged as FU.
+
+**Next up:** browser verify pass (DORA_VERIFY.md), then FU-448 stays
+resolved. No open follow-ups from this build.
+
+---
+
+## 2026-07-06 — FU-448: design brief for budget-aware auto-generated shopping lists
+
+**Why:** User asked to tackle FU-448 (the optimizer half of P2-05 that never
+shipped). The FU explicitly said "needs a proper design brief first, not a
+direct build" and flagged six open shape questions (a-f). Wrote the brief.
+
+**What landed:**
+- [docs/04_proposals/PROPOSAL_BUDGET_AWARE_LISTS.md](docs/04_proposals/PROPOSAL_BUDGET_AWARE_LISTS.md)
+  — new design proposal in the Wave-C style (§1-12).
+- [DORA_FOLLOWUPS.md](DORA_FOLLOWUPS.md) FU-448 updated with a
+  "2026-07-06 update" pointing at the brief; type re-cast from "design
+  + build" to "design done, build outstanding".
+
+**Locked shape (with user, in-brief §3-4):**
+- **UX shape** — soft-warn banner on the ShoppingListDetail page +
+  one-tap "Trim to fit" button. Auto-generate never silently trims;
+  every cut is user-triggered and reversible via a "Deferred to fit
+  budget" collapsible section.
+- **Budget window** — period-remaining. If the shop is scheduled for a
+  later period (`shopping_list.expected_shop_at`), we compute against
+  that period's full budget. Single-shop caps are out of scope for v1.
+- **Trim rule stack** — five tiers, walked safest-to-cut first,
+  highest-priced line inside each tier: habit-no-demand → low-cover →
+  buy-verdict `wait` → out-no-meal → scheduled ≥5 days out. Never
+  cuts: essentials, within-2-day meals, verdict=`buy` on low/out lines,
+  lines < $2.
+- **Leans on buy-verdict oracle (P8-05)** rather than re-deriving
+  priorities. Confirmed shipped at
+  [get_buy_verdict.py:372](dora_api/features/stock_items/get_buy_verdict.py:372).
+- **Explainability** — fixed-vocabulary chip per deferred line (seven
+  chips only, brief §5).
+- **Persistence** — one column: `ShoppingListLine.deferred_by_budget`.
+  No new table.
+- **API** — one endpoint: `POST /shopping-lists/<id>/trim-to-budget`
+  with `mode: "preview" | "apply"`.
+
+**Explicit non-goals (Charter Anti-creep, brief §8):**
+- Multi-store strategies + `preferred_merchants` (dropped per
+  RECONCILED_FINISHING_PLAN.md Decision 7).
+- Per-line substitute suggestions (own brief later, needs the
+  substitute-graph work).
+- Per-shop caps (deferred).
+- A separate "budget planner" page.
+
+**Coverage table (§12):** maps FU-448 (a-f) + C10 "money features
+opt-in" + feedback L254 (recipe-cost → meal-plan → list-budget
+linkage — noted as out-of-scope-here, downstream feature).
+
+**Standing-rules check (close-gate):** No code touched, so R-001..R-019
+enforcement is trivial. R-003 state-ownership *is* addressed in the
+brief itself: budget-headroom arithmetic gets extracted into
+`period_headroom_cents(user, on_date)` server-side so the dashboard
+card and the new endpoint share it — SPA never re-derives. No ADR
+warranted; nothing recurring here.
+
+**Next up:** the brief §10 sequences the build in 6 shippable steps.
+When the user picks this up, step 1 is the `period_headroom_cents`
+helper extraction (pure refactor, no user-visible change), then
+schema + endpoint + SPA banner + assistant intent.
+
+---
+
 ## 2026-07-06 — FU-461 refocused + closed: admin Add / Delete on the users page
 
 **Why:** User's call — FU-461 (GDPR-flavoured self-serve account deletion) is

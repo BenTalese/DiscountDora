@@ -826,6 +826,23 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "trim_list_to_budget",
+            "description": (
+                "Trim the user's primary shopping list to fit their "
+                "period-remaining budget. Use for 'trim my shopping list "
+                "to my budget', 'cut some things so I don't go over', "
+                "'keep this shop under budget'. Only works when the money "
+                "features are on and the user has a budget_amount set."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_to_shopping_list",
             "description": "Add one or more items to the user's shopping list, e.g. 'add 3 apples and some milk'.",
             "parameters": {
@@ -955,6 +972,7 @@ _ACTION_TOOLS = frozenset({
     "add_recipe_to_list",
     "cook_recipe",
     "adjust_recipe_meals",
+    "trim_list_to_budget",
 })
 
 

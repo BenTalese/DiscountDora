@@ -357,6 +357,11 @@ def configure_mappings(db: SQLAlchemy):
         # FU-178 breakage; SQLite doesn't enforce FKs anyway, and a dangling
         # id after a PreferredBuy delete is tolerated (the SPA shows no hint).
         Column("preferred_buy_id", UUIDType, nullable=True),
+        # FU-448 — trim-to-budget optimiser. True when the line was set
+        # aside by the "Trim to fit" pass (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
+        # `deferred_reason` freezes the chip vocab (brief §5) at trim time.
+        Column("deferred_by_budget", Boolean, nullable=False, server_default=false()),
+        Column("deferred_reason", String(64), nullable=True),
     )
 
     # FU-334 — receipt-photo record-keeping. One row per attached photo on a

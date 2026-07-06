@@ -160,9 +160,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** framing moved from "score" to "verdict" (P8-05); the leftover pieces weren't back-ported.
 - **Recommended resolution:** opportunistic — fold the `fake_markdown` detection into `BuyVerdictCard` (also un-wires FU-437), and add the `good_deal` alert type to `get_alerts.py`. Skip the 0–100 score + percentile UI — P8-05 replaces that surface. Feeds FU-451 (budget defense wants a deal-quality signal to rank product swaps).
 
-## [OPEN] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece never built)
-- **Raised:** 2026-07-02 (surfaced while checking whether P2-05 was done).
-- **Type:** deferred job (design + build; nice-to-have).
 - **What:** P2-05 in the original plan
   ([`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md:400`](docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md)
   "Budget-Aware Auto Lists") had **two halves**. The *user-facing budget* half

@@ -22,6 +22,8 @@ from datetime import date, timedelta
 from typing import Any, Callable
 from uuid import UUID
 
+from flask import session
+
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
@@ -39,6 +41,8 @@ from dora_api.features.shopping_lists.manage_shopping_list import (
     UpdateShoppingListHandler, UpdateShoppingListRequest)
 from dora_api.features.shopping_lists.manage_shopping_list_lines import (
     AddLineHandler, AddLineRequest, UpdateLineHandler, UpdateLineRequest)
+from dora_api.features.shopping_lists.trim_to_budget import (
+    TrimToBudgetHandler, TrimToBudgetRequest)
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.stock_items.move_stock_item import (
     MoveStockItemHandler, MoveStockItemRequest)
@@ -840,6 +844,130 @@ def commit_adjust_recipe_meals(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ── trim_list_to_budget ────────────────────────────────────────────────
+
+def _session_user_id() -> UUID | None:
+    raw = session.get("user_id")
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
+    """FU-448 — preview the trim on the user's primary list. Returns
+    'ready' with a summary sentence that names the amount to trim and
+    the cut count; commit re-runs in apply mode."""
+    repo = SqlAlchemyRepository()
+    primary = _primary_list(repo)
+    if primary is None:
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": "You don't have a primary shopping list set yet.",
+            "candidates": [],
+        }
+    user_id = _session_user_id()
+    if user_id is None:
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": "I can't see who's asking — try refreshing.",
+            "candidates": [],
+        }
+    handler = TrimToBudgetHandler()
+    preview = handler.handle(
+        primary.id, TrimToBudgetRequest(mode="preview"), user_id,
+    )
+    if preview is None:
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": "I couldn't read your primary list.",
+            "candidates": [],
+        }
+    if preview.budget_target is None:
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": (
+                "You haven't set a grocery budget yet — Settings → Money "
+                "is the place to turn it on."
+            ),
+            "candidates": [],
+        }
+    if preview.overshoot <= 0:
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": (
+                f"\"{primary.name}\" is already inside your "
+                f"${preview.budget_target:.2f} remaining — nothing to trim."
+            ),
+            "candidates": [],
+        }
+    if not preview.trimmed:
+        # Overshooting but every line is essential / near-term / verdict=buy.
+        return {
+            "type": "trim_list_to_budget", "status": "invalid",
+            "summary": (
+                f"\"{primary.name}\" is ${preview.overshoot:.2f} over budget "
+                f"but everything on it is either essential or booked for a "
+                f"meal soon — nothing safe to cut."
+            ),
+            "candidates": [],
+        }
+    cut_count = len(preview.trimmed)
+    still_hint = (
+        f" Still ${preview.still_over:.2f} over after that."
+        if preview.still_over > 0 else ""
+    )
+    return {
+        "type": "trim_list_to_budget",
+        "status": "ready",
+        "summary": (
+            f"Trim ${sum(t.saved for t in preview.trimmed):.2f} off "
+            f"\"{primary.name}\" ({cut_count} item"
+            f"{'' if cut_count == 1 else 's'}) to fit your "
+            f"${preview.budget_target:.2f} remaining budget?{still_hint}"
+        ),
+        "payload": {
+            "shopping_list_id": str(primary.id),
+            "list_name": primary.name,
+        },
+        "candidates": [],
+    }
+
+
+def commit_trim_list_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
+    """Re-run trim-to-budget in apply mode on the same list, ignoring the
+    preview payload's specific cut set — the classifier is deterministic
+    given current state, and a fresh apply is the honest behaviour if
+    anything shifted between propose + commit."""
+    user_id = _session_user_id()
+    if user_id is None:
+        return {"ok": False, "message": "I couldn't confirm who's asking."}
+    list_id = UUID(payload["shopping_list_id"])
+    result = TrimToBudgetHandler().handle(
+        list_id, TrimToBudgetRequest(mode="apply"), user_id,
+    )
+    if result is None or not result.applied or not result.trimmed:
+        return {"ok": False, "message": "Couldn't trim that list right now."}
+    saved = sum(t.saved for t in result.trimmed)
+    n = len(result.trimmed)
+    tail = ""
+    if result.still_over > 0:
+        tail = (
+            f" Still ${result.still_over:.2f} over — I've cut everything "
+            f"that was safe."
+        )
+    return {
+        "ok": True,
+        "message": (
+            f"Done — trimmed ${saved:.2f} off "
+            f"\"{payload['list_name']}\" ({n} item"
+            f"{'' if n == 1 else 's'} moved to Deferred).{tail}"
+        ),
+    }
+
+
 # ── Public dispatchers ─────────────────────────────────────────────────
 
 PROPOSERS: dict[str, Callable[[dict], dict]] = {
@@ -852,6 +980,7 @@ PROPOSERS: dict[str, Callable[[dict], dict]] = {
     "add_recipe_to_list": propose_add_recipe_to_list,
     "cook_recipe": propose_cook_recipe,
     "adjust_recipe_meals": propose_adjust_recipe_meals,
+    "trim_list_to_budget": propose_trim_list_to_budget,
 }
 
 COMMITTERS: dict[str, Callable[[dict], dict]] = {
@@ -864,6 +993,7 @@ COMMITTERS: dict[str, Callable[[dict], dict]] = {
     "add_recipe_to_list": commit_add_recipe_to_list,
     "cook_recipe": commit_cook_recipe,
     "adjust_recipe_meals": commit_adjust_recipe_meals,
+    "trim_list_to_budget": commit_trim_list_to_budget,
 }
 
 

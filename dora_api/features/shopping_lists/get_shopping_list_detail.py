@@ -86,6 +86,14 @@ class ShoppingListLineDto:
     # FU-215 — the chosen hint + the item's available labels for the picker.
     preferred_buy_id: UUID | None = None
     preferred_buys: List[LinePreferredBuyDto] = field(default_factory=list)
+    # FU-448 — trim-to-budget optimiser. True when this line has been set
+    # aside by the "Trim to fit" pass; the SPA routes it into the
+    # collapsible "Deferred to fit budget" section on the list-detail page
+    # instead of the active list. Totals below skip deferred lines.
+    # `deferred_reason` carries the chip vocab string from brief §5,
+    # frozen at trim time.
+    deferred_by_budget: bool = False
+    deferred_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,12 +151,20 @@ def _line_savings(line: 'ShoppingListLineDto') -> float:
 
 def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotalsDto:
     """Aggregate the per-line price/savings into list-level totals. Single source
-    for the dashboard's primary-list stats (it reads these instead of summing)."""
+    for the dashboard's primary-list stats (it reads these instead of summing).
+
+    FU-448 — lines with `deferred_by_budget=True` are not part of the active
+    list; they render under the Deferred section and don't count toward
+    projected total, savings, or ticked/unticked counts."""
     total_price = 0.0
     remaining_price = 0.0
     total_savings = 0.0
     unticked = 0
+    active_line_count = 0
     for line in lines:
+        if line.deferred_by_budget:
+            continue
+        active_line_count += 1
         price = _line_price(line)
         total_price += price
         total_savings += _line_savings(line)
@@ -160,8 +176,8 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
         remaining_price = remaining_price,
         total_savings = total_savings,
         unticked_count = unticked,
-        ticked_count = len(lines) - unticked,
-        line_count = len(lines),
+        ticked_count = active_line_count - unticked,
+        line_count = active_line_count,
     )
 
 
@@ -385,6 +401,8 @@ class GetShoppingListDetailHandler:
                 sequence = line.sequence,
                 added_via = line.added_via,
                 added_at = line.added_at,
+                deferred_by_budget = bool(line.deferred_by_budget),
+                deferred_reason = line.deferred_reason,
                 actual_unit_price = line.actual_unit_price,
                 purchased_store_id = line.purchased_store_id,
                 purchased_store_name = (

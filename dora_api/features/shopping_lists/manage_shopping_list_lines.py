@@ -202,6 +202,11 @@ class UpdateLineRequest(BaseModel):
     # FU-215 — optional PreferredBuy hint on the line (clear-vs-unset flag).
     preferred_buy_id: UUID | None = None
     clear_preferred_buy: bool = False
+    # FU-448 — "Add back" from the Deferred-to-fit-budget section flips
+    # this to False; the reason chip is cleared alongside it. Only ever
+    # sent as False from the SPA (deferral itself goes through the
+    # dedicated trim-to-budget endpoint, not this PATCH).
+    deferred_by_budget: bool | None = None
 
 
 @dataclass(slots=True)
@@ -289,6 +294,12 @@ class UpdateLineHandler:
             line.preferred_buy_id = None
         elif "preferred_buy_id" in set_fields and request.preferred_buy_id is not None:
             line.preferred_buy_id = request.preferred_buy_id
+
+        # FU-448 — "Add back" clears both the deferred flag and the frozen
+        # reason chip in lock-step; the two fields are always coherent.
+        if "deferred_by_budget" in set_fields and request.deferred_by_budget is False:
+            line.deferred_by_budget = False
+            line.deferred_reason = None
 
         if user_edited and line.added_via != ADDED_VIA_MANUAL:
             line.added_via = ADDED_VIA_MANUAL

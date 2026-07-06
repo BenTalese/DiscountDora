@@ -62,6 +62,41 @@ export type UpdateLineCommand = {
     /** FU-215 — optional PreferredBuy hint on the line. */
     preferred_buy_id?: string | null;
     clear_preferred_buy?: boolean;
+    /** FU-448 — "Add back" from the Deferred-to-fit-budget section.
+     *  Only ever sent as `false`. Server clears the frozen reason chip
+     *  in lock-step. */
+    deferred_by_budget?: boolean;
+};
+
+/** FU-448 — POST /shopping-lists/<id>/trim-to-budget request/response. */
+export type TrimToBudgetCommand = {
+    /** `"preview"` computes cuts without mutation; `"apply"` sets
+     *  `deferred_by_budget=true` on the chosen lines and returns the
+     *  same shape with `applied: true`. */
+    mode: 'preview' | 'apply';
+    /** Override the target headroom. Omit to use the user's
+     *  period-remaining budget for the shop's expected period. */
+    budget_target?: number | null;
+    /** Line IDs the user has explicitly kept from the preview. */
+    exclude_line_ids?: string[];
+};
+
+export type TrimmedLine = {
+    line_id: string;
+    tier: number;
+    reason_chip: string;
+    saved: number;
+};
+
+export type TrimToBudgetResult = {
+    projected_total: number;
+    /** `null` when the user has no budget set (feature self-gates off). */
+    budget_target: number | null;
+    overshoot: number;
+    trimmed: TrimmedLine[];
+    /** `>0` when the safe-cut tiers exhausted before hitting the target. */
+    still_over: number;
+    applied: boolean;
 };
 
 export type CopyShoppingListCommand = {
@@ -250,6 +285,16 @@ export default class ShoppingListApiService {
     ): Promise<AutoGenerateResult> =>
         await this.httpClient.post<AutoGenerateResult, AutoGenerateCommand>(
             '/shopping-lists/auto-generate',
+            command,
+        );
+
+    /** FU-448 — trim-to-budget optimiser. Preview or apply. */
+    trimToBudgetAsync = async (
+        listId: string,
+        command: TrimToBudgetCommand,
+    ): Promise<TrimToBudgetResult> =>
+        await this.httpClient.post<TrimToBudgetResult, TrimToBudgetCommand>(
+            `/shopping-lists/${listId}/trim-to-budget`,
             command,
         );
 

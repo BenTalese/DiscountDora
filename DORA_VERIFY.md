@@ -371,6 +371,22 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] **User avatar** (Account Settings): same split, behaves like stock item
 - [ ] **Store logo** (Stores Settings): still uses `q-file` (FU-335 carve-out; do not regress)
 
+### Trim-to-budget banner + Deferred section — origin FU-448
+- [ ] With `money_features_enabled=false` on the user, the banner never appears on any shopping list, regardless of projected total or budget setting
+- [ ] With money features on but `budget_amount` null, banner never appears (endpoint returns `budget_target=null`; SPA self-gates)
+- [ ] With money features on, budget_amount=$100/week, spend-so-far=$60: an auto-generated list projecting $80 shows the banner ("Projected $80 · budget remaining $40 — trim $40 to fit")
+- [ ] **Show what would be cut** expands a preview card with per-line rows, each with a warning-tint reason chip (one of: `Habit — can wait`, `N days' cover left`, `Not urgent`, `Above your usual price`, `Out, but no meal booked`, `For <Recipe> on <Day>`, `Needed for N meals later`) and a `Keep` button
+- [ ] Clicking `Keep` on a preview line re-fires the preview excluding that line; the banner + preview totals update; no mutation until Apply
+- [ ] **Trim to fit** flips `deferred_by_budget=true` on the chosen lines, they move to a collapsible "Deferred to fit budget (N)" section below the active list, and the banner switches to a compact "Trimmed $X to fit — see deferred (N)" confirmation strip
+- [ ] Tapping the link in the confirmation strip scrolls to the Deferred section
+- [ ] Each Deferred line shows the frozen reason chip + line price + an `Add back` button; clicking flips the line back into the active list; if that pushes projected total back over budget, the banner reappears on next load
+- [ ] **Dismiss** hides the banner for the current view; refresh brings it back if still over budget
+- [ ] Tier ordering (highest-price cut first inside a tier): drop a $5 habit item + a $20 low-stock-with-cover item on the same list, both over-budget triggers → the $20 gets cut first inside its tier; the tier-1 habit item only gets cut if the tier-2 cover doesn't close the gap
+- [ ] Never-cut set holds: essentials (`is_flagged=true`), items with a meal booked in next 2 days, verdict=buy on low/out lines, and sub-$2 lines all survive even when we still overshoot after trimming everything else
+- [ ] "Trimmed everything safe. Still $X over" fallback surfaces when the safe-cut tiers exhausted before hitting the target
+- [ ] Assistant intent: **"trim my shopping list to my budget"** proposes the trim with a specific one-line summary (dollar delta + cut count + list name); Confirm applies + returns a "Done — trimmed $X off … (N items moved to Deferred)" message
+- [ ] Assistant intent when the user has no budget → replies "You haven't set a grocery budget yet — Settings → Money is the place to turn it on"; when already under budget → replies "…is already inside your $Y remaining — nothing to trim"
+
 ### Shopping list UX v2 — origin FU-165
 - [ ] Rail order + auto-scroll + next-up marker works
 - [ ] Mobile dropdown opens + picks

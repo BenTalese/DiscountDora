@@ -99,6 +99,14 @@ export type ShoppingListLine = {
      *  labels for the picker. */
     preferred_buy_id?: string | null;
     preferred_buys?: { preferred_buy_id: string; label: string }[];
+    /** FU-448 — trim-to-budget optimiser (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
+     *  When true, this line was set aside by "Trim to fit" and renders under
+     *  the collapsible Deferred-to-fit-budget section, not the active list.
+     *  Server-owned; totals already skip these lines. */
+    deferred_by_budget: boolean;
+    /** Chip label frozen at trim time (one of the seven strings in brief §5).
+     *  Null on non-deferred lines. */
+    deferred_reason: string | null;
 };
 
 /** Server-owned list-level money/count aggregates (state-ownership Type B).

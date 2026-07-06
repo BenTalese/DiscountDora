@@ -22,6 +22,13 @@ no matter which list it was on.
 the chosen offer's current price_now. Lets the dashboard show "if you
 finish this shop you'll be at $X" without committing to numbers we can't
 defend (offers can drift between now and finish).
+
+**Shared arithmetic** — `period_bounds(today, period)`, `period_spent(...)`,
+and `period_headroom(user, on_date, repository)` are the only functions
+authorised to compute budget windows and remaining-money figures. The
+trim-to-budget optimiser (FU-448) and any future budget-aware surface
+call `period_headroom` rather than re-deriving it in a second place.
+R-003 state-ownership.
 """
 import logging
 from dataclasses import dataclass
@@ -53,9 +60,11 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 # completed_at column is timezone-aware, so the comparison happens at
 # datetime level using the start/end converted to UTC midnight.
 
-def _period_bounds(today: date, period: str) -> tuple[date, date]:
+def period_bounds(today: date, period: str) -> tuple[date, date]:
     """Return [start, end) for the rolling period containing `today`.
-    Week starts Monday (ISO weekday convention)."""
+    Week starts Monday (ISO weekday convention). Exported so the
+    trim-to-budget optimiser can compute headroom for a shop scheduled
+    in a later period."""
     if period == BUDGET_PERIOD_MONTHLY:
         start = today.replace(day=1)
         # First of next month — handles year rollover too.
@@ -70,8 +79,73 @@ def _period_bounds(today: date, period: str) -> tuple[date, date]:
     return start, end
 
 
+
+
 def _as_utc_datetime(d: date) -> datetime:
     return datetime.combine(d, time.min, tzinfo=timezone.utc)
+
+
+def _budget_amount(user: User) -> float | None:
+    """Positive budget_amount as a float, or None when disabled / unset."""
+    if user.budget_amount is not None and user.budget_amount > 0:
+        return float(user.budget_amount)
+    return None
+
+
+def period_spent(
+    user: User,
+    period_start: date,
+    period_end: date,
+    repository: SqlAlchemyRepository,
+) -> float:
+    """Sum of archived shopping-list lines whose completed_at falls in the
+    half-open window `[period_start, period_end)`. Uses the `_line_price`
+    ladder — actual > picked-offer > drop. Not per-user because the
+    schema is single-household; if that changes, filter here."""
+    start_dt = _as_utc_datetime(period_start)
+    end_dt = _as_utc_datetime(period_end)
+    archived = repository.get(ShoppingList).all(
+        EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
+        & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).gte(start_dt)
+        & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).lt(end_dt)
+    )
+    if not archived:
+        return 0.0
+    archived_ids = [l.id for l in archived]
+    lines = repository.get(ShoppingListLine).all(
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID)
+        .in_(archived_ids)
+    )
+    total = 0.0
+    for line in lines:
+        qty = line.quantity if line.quantity is not None else 1
+        if qty <= 0:
+            continue
+        price = line_paid_unit_price(line)
+        if price is not None:
+            total += price * qty
+    return total
+
+
+def period_headroom(
+    user: User,
+    on_date: date,
+    repository: SqlAlchemyRepository,
+) -> float | None:
+    """The trim-to-budget optimiser's single source of truth for "how much
+    money is left in the budget for a shop dated `on_date`". Returns None
+    when the user has no positive budget_amount (nothing to constrain
+    against). When the shop is scheduled for a future period, we return
+    the *full* budget_amount for that period — no spend has landed yet.
+    When it's in the current or past period, we deduct actual spend so
+    far in that window."""
+    amount = _budget_amount(user)
+    if amount is None:
+        return None
+    period = user.budget_period or BUDGET_PERIOD_WEEKLY
+    start, end = period_bounds(on_date, period)
+    spent = period_spent(user, start, end, repository)
+    return amount - spent
 
 
 # ── Line-price ladder ────────────────────────────────────────────────────
@@ -80,13 +154,15 @@ def _as_utc_datetime(d: date) -> datetime:
 # rung (the selected product's *current* offer) on top of it.
 
 
-def _projected_price_for(
+def projected_unit_price(
     line: ShoppingListLine,
     current_offer_lookup: dict[UUID, ProductOffer],
 ) -> float | None:
-    """Price for a line on an active list, used only for the projected
-    figure on the dashboard. Tries actual → snapshot → current offer of
-    the selected product. Lines without any of those don't contribute."""
+    """Price for a line on an active list. Tries actual → snapshot →
+    current offer of the selected product. Lines without any of those
+    don't contribute. Public — the trim-to-budget optimiser reads the
+    same ladder so the projected figure it constrains against matches
+    the dashboard's projection to the cent."""
     direct = line_paid_unit_price(line)
     if direct is not None:
         return direct
@@ -127,39 +203,30 @@ class GetBudgetStatusHandler:
         # household calendar boundary, not server-local.
         today = household_today(self.repository)
         period = user.budget_period or BUDGET_PERIOD_WEEKLY
-        start, end = _period_bounds(today, period)
-        start_dt = _as_utc_datetime(start)
-        end_dt = _as_utc_datetime(end)
+        start, end = period_bounds(today, period)
 
-        # Archived lists whose completed_at falls in the period. Lines on
-        # those lists drive `spent`.
-        archived = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
-            & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).gte(start_dt)
-            & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).lt(end_dt)
-        )
-        archived_ids = [l.id for l in archived]
+        # Spent = archived lines in the window. Extracted to the shared
+        # `period_spent` helper so the trim-to-budget optimiser reads the
+        # same number.
+        spent = period_spent(user, start, end, self.repository)
 
-        # Active (non-done) lists drive `projected_active`. Their
-        # lines might pick up prices from the live ProductOffer rows.
+        # Projected still lives here — dashboard-only. Walks active lists'
+        # lines, adding one more rung (current offer of the selected
+        # product) beyond the archived ladder.
         active = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         active_ids = [l.id for l in active]
-
-        # Bulk fetch lines for both sets.
-        list_id_pool = archived_ids + active_ids
-        lines: list[ShoppingListLine] = []
-        if list_id_pool:
-            lines = self.repository.get(ShoppingListLine).all(
+        active_lines: list[ShoppingListLine] = []
+        if active_ids:
+            active_lines = self.repository.get(ShoppingListLine).all(
                 EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID)
-                .in_(list_id_pool)
+                .in_(active_ids)
             )
 
-        # Current offers for products selected on active lines — projection only.
         active_product_ids = list({
-            l.selected_product_id for l in lines
-            if l.shopping_list_id in active_ids and l.selected_product_id is not None
+            l.selected_product_id for l in active_lines
+            if l.selected_product_id is not None
         })
         offer_lookup: dict[UUID, ProductOffer] = {}
         if active_product_ids:
@@ -175,29 +242,16 @@ class GetBudgetStatusHandler:
                 if pid is not None:
                     offer_lookup[pid] = offer
 
-        archived_set = set(archived_ids)
-        active_set = set(active_ids)
-
-        spent = 0.0
         projected_active = 0.0
-        for line in lines:
+        for line in active_lines:
             qty = line.quantity if line.quantity is not None else 1
             if qty <= 0:
                 continue
-            if line.shopping_list_id in archived_set:
-                price = line_paid_unit_price(line)
-                if price is not None:
-                    spent += price * qty
-            elif line.shopping_list_id in active_set:
-                price = _projected_price_for(line, offer_lookup)
-                if price is not None:
-                    projected_active += price * qty
+            price = projected_unit_price(line, offer_lookup)
+            if price is not None:
+                projected_active += price * qty
 
-        amount = (
-            float(user.budget_amount)
-            if user.budget_amount is not None and user.budget_amount > 0
-            else None
-        )
+        amount = _budget_amount(user)
         remaining = (amount - spent) if amount is not None else None
         return BudgetStatusDto(
             enabled=amount is not None,
@@ -264,11 +318,7 @@ class GetBudgetHistoryHandler:
         # R-021 — current period anchored on household-tz today.
         today = household_today(self.repository)
         period = user.budget_period or BUDGET_PERIOD_WEEKLY
-        amount = (
-            float(user.budget_amount)
-            if user.budget_amount is not None and user.budget_amount > 0
-            else None
-        )
+        amount = _budget_amount(user)
 
         # Walk back N periods. The current period is index 0; older
         # rows come from anchoring the boundary calculator to a date
@@ -276,7 +326,7 @@ class GetBudgetHistoryHandler:
         anchors: list[date] = []
         cursor = today
         for _ in range(periods):
-            start, _end = _period_bounds(cursor, period)
+            start, _end = period_bounds(cursor, period)
             anchors.append(cursor)
             # One day before the period start lands inside the previous
             # period, regardless of week vs month.
@@ -284,8 +334,8 @@ class GetBudgetHistoryHandler:
 
         # Earliest start covers the whole range — fetch archived lists
         # in one go and bucket by period.
-        earliest_start, _ = _period_bounds(anchors[-1], period)
-        latest_start, latest_end = _period_bounds(anchors[0], period)
+        earliest_start, _ = period_bounds(anchors[-1], period)
+        latest_start, latest_end = period_bounds(anchors[0], period)
         full_start_dt = _as_utc_datetime(earliest_start)
         full_end_dt = _as_utc_datetime(latest_end)
 
@@ -304,7 +354,7 @@ class GetBudgetHistoryHandler:
 
         rows: list[BudgetHistoryRowDto] = []
         for anchor in anchors:
-            start, end = _period_bounds(anchor, period)
+            start, end = period_bounds(anchor, period)
             window_total = 0.0
             for line in lines:
                 lst = archived_lookup.get(line.shopping_list_id)

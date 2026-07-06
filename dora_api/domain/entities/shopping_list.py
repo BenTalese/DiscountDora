@@ -94,6 +94,18 @@ class ShoppingListLine(BaseEntity):
     # constraint (see the table mapping / migration re: FU-178); a deleted
     # PreferredBuy just leaves a dangling id the SPA ignores.
     preferred_buy_id: UUID | None = None
+    # FU-448 — trim-to-budget optimiser (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
+    # True when the line was set aside by the "Trim to fit" pass to keep the
+    # projected shop within the user's period-remaining budget. Deferred
+    # lines don't contribute to projected totals or ticked/unticked counts;
+    # they render under a "Deferred to fit budget" collapsible section
+    # on the SPA with a one-tap "Add back". `deferred_reason` freezes the
+    # trim-time chip (fixed vocab, brief §5); deviates from brief §7.2 which
+    # first said "derive on read" — but re-running the classifier on every
+    # detail read is wasteful and lets the chip drift if state (verdict,
+    # cadence, meal-plan) changes between the trim tap and the read.
+    deferred_by_budget: bool = False
+    deferred_reason: str | None = None
 
     class Fields(BaseEntity.Fields):
         SHOPPING_LIST_ID = "shopping_list_id"
@@ -110,6 +122,8 @@ class ShoppingListLine(BaseEntity):
         ACTUAL_UNIT_PRICE = "actual_unit_price"
         PURCHASED_STORE_ID = "purchased_store_id"
         PREFERRED_BUY_ID = "preferred_buy_id"
+        DEFERRED_BY_BUDGET = "deferred_by_budget"
+        DEFERRED_REASON = "deferred_reason"
 
 
 def format_list_date(value: date, today: date | None = None) -> str:

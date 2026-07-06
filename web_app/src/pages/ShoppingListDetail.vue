@@ -362,6 +362,110 @@
                         </template>
                     </q-banner>
 
+                    <!-- FU-448 — Budget-aware trim banner (money-gated + budget-set).
+                         Fires when the projected active-list total exceeds the
+                         user's period-remaining budget for this list's shop
+                         date. Never mutates on load; every mutation is a user
+                         tap. -->
+                    <q-banner
+                        v-if="trimBanner.visible"
+                        class="q-mb-sm dora-bg-warning-soft"
+                        rounded
+                        dense
+                    >
+                        <template #avatar>
+                            <q-icon :name="ICONS.savings" color="warning" />
+                        </template>
+                        <div v-if="trimBanner.state === 'applied'" class="text-body2">
+                            Trimmed
+                            <strong>{{ fmtMoney(trimBanner.savedApplied) }}</strong>
+                            to fit —
+                            <a
+                                href="#deferred-by-budget"
+                                class="text-primary"
+                                @click.prevent="scrollToDeferred"
+                            >
+                                see deferred ({{ deferredLines.length }})
+                            </a>
+                        </div>
+                        <div v-else class="text-body2">
+                            <strong>
+                                Projected {{ fmtMoney(trimBanner.projectedTotal) }} ·
+                                budget remaining {{ fmtMoney(trimBanner.budgetTarget) }}
+                            </strong>
+                            — trim
+                            <strong>{{ fmtMoney(trimBanner.overshoot) }}</strong>
+                            to fit.
+                            <div
+                                v-if="trimBanner.state === 'previewed' && trimBanner.stillOver > 0"
+                                class="text-caption text-negative q-mt-xs"
+                            >
+                                Trimmed everything safe. Still
+                                {{ fmtMoney(trimBanner.stillOver) }} over —
+                                this shop needs a hand from you.
+                            </div>
+                        </div>
+                        <template #action>
+                            <BaseButton
+                                v-if="trimBanner.state === 'idle'"
+                                variant="ghost"
+                                label="Show what would be cut"
+                                :loading="trimBanner.busy"
+                                @click="previewTrim"
+                            />
+                            <BaseButton
+                                v-if="trimBanner.state !== 'applied' && trimBanner.canApply"
+                                :label="trimBanner.state === 'previewed' ? 'Apply trim' : 'Trim to fit'"
+                                :loading="trimBanner.busy"
+                                @click="applyTrim"
+                            />
+                            <BaseButton
+                                v-if="trimBanner.state !== 'applied'"
+                                variant="ghost"
+                                label="Dismiss"
+                                @click="dismissTrim"
+                            />
+                        </template>
+                    </q-banner>
+
+                    <!-- Preview: which lines would go, each with a "Keep" opt-out. -->
+                    <q-card
+                        v-if="trimBanner.state === 'previewed' && trimBanner.previewLines.length > 0"
+                        flat
+                        bordered
+                        class="q-mb-sm"
+                    >
+                        <q-card-section class="q-py-sm">
+                            <div class="text-caption dora-text-muted q-mb-xs">
+                                Would trim {{ trimBanner.previewLines.length }} line{{ trimBanner.previewLines.length === 1 ? '' : 's' }}
+                            </div>
+                            <q-list dense>
+                                <q-item
+                                    v-for="p in trimBanner.previewLines"
+                                    :key="p.line_id"
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ p.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            <q-chip dense square color="warning-soft" text-color="warning" class="q-mr-xs">
+                                                {{ p.reason_chip }}
+                                            </q-chip>
+                                            {{ fmtMoney(p.saved) }} saved
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <BaseButton
+                                            variant="ghost"
+                                            size="sm"
+                                            label="Keep"
+                                            @click="keepFromTrim(p.line_id)"
+                                        />
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </q-card-section>
+                    </q-card>
+
                     <!-- Lines -->
                     <q-card v-if="detail.lines.length === 0" flat bordered>
                         <q-card-section class="text-center dora-text-muted">
@@ -802,6 +906,54 @@
                         </div>
                     </template>
 
+                    <!-- FU-448 — Deferred-to-fit-budget section
+                         (PROPOSAL_BUDGET_AWARE_LISTS §6.3). Renders when the
+                         list has any lines with `deferred_by_budget=true`.
+                         Collapsible; each row shows the frozen reason chip
+                         and a one-tap "Add back" that flips the flag off
+                         via PATCH /lines/<id>. -->
+                    <q-expansion-item
+                        v-if="deferredLines.length > 0"
+                        id="deferred-by-budget"
+                        :label="`Deferred to fit budget (${deferredLines.length})`"
+                        :caption="`${fmtMoney(deferredTotal)} saved`"
+                        default-opened
+                        class="q-mt-md dora-bg-sunken rounded-borders"
+                    >
+                        <q-list dense>
+                            <q-item
+                                v-for="line in deferredLines"
+                                :key="line.line_id"
+                            >
+                                <q-item-section>
+                                    <q-item-label>{{ line.stock_item_name }}</q-item-label>
+                                    <q-item-label caption>
+                                        <q-chip
+                                            v-if="line.deferred_reason"
+                                            dense
+                                            square
+                                            color="warning-soft"
+                                            text-color="warning"
+                                            class="q-mr-xs"
+                                        >
+                                            {{ line.deferred_reason }}
+                                        </q-chip>
+                                        {{ fmtMoney(priceOfLine(line)) }}
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <BaseButton
+                                        variant="ghost"
+                                        size="sm"
+                                        label="Add back"
+                                        :loading="addingBackLineIds.has(line.line_id)"
+                                        @click="addLineBackToActive(line.line_id)"
+                                    />
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-expansion-item>
+
                     <!-- FU-334 — receipt-photo record-keeping. Visible only
                          once the list is being shopped or finished; pure
                          record-keeping (no OCR, no parsing). Multi-photo;
@@ -1112,7 +1264,9 @@
     import ShoppingListApiService, {
         type FinishLevelOverride,
         shoppingListAttachmentUrl,
+        type TrimToBudgetResult,
     } from 'src/services/api/shoppingListApiService';
+    import BudgetApiService from 'src/services/api/budgetApiService';
     import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
     import type { ProcessedImage } from 'src/services/files/imageService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
@@ -1130,6 +1284,7 @@
     const router = useRouter();
     const $q = useQuasar();
     const api = new ShoppingListApiService();
+    const budgetApi = new BudgetApiService();
     const templateApi = new ShoppingListTemplateApiService();
     const stockItemApi = new StockItemApiService();
     const store = useShoppingListStore();
@@ -1405,7 +1560,191 @@
         return line.stock_location_breadcrumb.join(' › ');
     }
 
-    const baseLines = computed(() => detail.value?.lines ?? []);
+    // FU-448 — deferred-by-budget lines render under their own collapsible
+    // section, not the active list. Server-side totals already skip them.
+    const baseLines = computed(() =>
+        (detail.value?.lines ?? []).filter((l) => !l.deferred_by_budget),
+    );
+    const deferredLines = computed(() =>
+        (detail.value?.lines ?? []).filter((l) => l.deferred_by_budget),
+    );
+    const deferredTotal = computed(() =>
+        deferredLines.value.reduce((sum, l) => sum + priceOfLine(l), 0),
+    );
+    const addingBackLineIds = ref<Set<string>>(new Set());
+
+    async function addLineBackToActive(lineId: string): Promise<void> {
+        if (addingBackLineIds.value.has(lineId)) return;
+        addingBackLineIds.value = new Set(addingBackLineIds.value).add(lineId);
+        try {
+            await api.updateLineAsync(listId.value, lineId, {
+                deferred_by_budget: false,
+            });
+            await load();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                message: describeApiError(err) ?? 'Could not add that line back.',
+            });
+        } finally {
+            const next = new Set(addingBackLineIds.value);
+            next.delete(lineId);
+            addingBackLineIds.value = next;
+        }
+    }
+
+    // ── FU-448 trim-to-budget banner (PROPOSAL_BUDGET_AWARE_LISTS §6) ──
+
+    type TrimState = 'idle' | 'previewed' | 'applied';
+    type TrimPreviewLine = {
+        line_id: string;
+        name: string;
+        reason_chip: string;
+        saved: number;
+    };
+    const trimState = reactive({
+        state: 'idle' as TrimState,
+        busy: false,
+        loaded: false,                    // true once we've fetched the initial preview
+        projectedTotal: 0,
+        budgetTarget: 0,
+        overshoot: 0,
+        stillOver: 0,
+        savedApplied: 0,
+        previewLines: [] as TrimPreviewLine[],
+        excluded: new Set<string>(),
+        dismissed: false,
+    });
+
+    function fmtMoney(v: number | null | undefined): string {
+        return formatMoney(v ?? 0);
+    }
+
+    const trimBanner = computed(() => {
+        // Money features off, no budget set, list not auto-generated,
+        // dismissed, or nothing to trim → banner stays hidden.
+        const anyDeferredAlready = deferredLines.value.length > 0;
+        const applied = trimState.state === 'applied' && anyDeferredAlready;
+        const hasOvershoot = trimState.overshoot > 0;
+        return {
+            visible: moneyEnabled.value
+                && !trimState.dismissed
+                && trimState.loaded
+                && (hasOvershoot || applied),
+            state: trimState.state,
+            busy: trimState.busy,
+            projectedTotal: trimState.projectedTotal,
+            budgetTarget: trimState.budgetTarget,
+            overshoot: trimState.overshoot,
+            stillOver: trimState.stillOver,
+            savedApplied: trimState.savedApplied,
+            previewLines: trimState.previewLines,
+            canApply: trimState.overshoot > 0 && trimState.previewLines.length > 0,
+        };
+    });
+
+    async function refreshTrimStatus(): Promise<void> {
+        // Only fetch when money features are on and the list has active lines
+        // — the endpoint gracefully returns overshoot=0 when there's no budget,
+        // but skipping the call altogether keeps a fresh install quiet.
+        if (!moneyEnabled.value || !detail.value) return;
+        if (baseLines.value.length === 0) {
+            trimState.loaded = true;
+            trimState.overshoot = 0;
+            return;
+        }
+        try {
+            const result = await api.trimToBudgetAsync(listId.value, {
+                mode: 'preview',
+                exclude_line_ids: [...trimState.excluded],
+            });
+            applyTrimResult(result);
+        } catch {
+            // Non-fatal; the banner just stays hidden.
+            trimState.loaded = true;
+        }
+    }
+
+    function applyTrimResult(result: TrimToBudgetResult): void {
+        trimState.loaded = true;
+        trimState.projectedTotal = result.projected_total;
+        trimState.budgetTarget = result.budget_target ?? 0;
+        trimState.overshoot = result.overshoot;
+        trimState.stillOver = result.still_over;
+        // Freeze display names + saved amounts so the preview card doesn't
+        // desync from the server (the SPA has all the info it needs).
+        const nameByLine = new Map<string, string>();
+        for (const l of detail.value?.lines ?? []) nameByLine.set(l.line_id, l.stock_item_name);
+        trimState.previewLines = result.trimmed.map((t) => ({
+            line_id: t.line_id,
+            name: nameByLine.get(t.line_id) ?? 'Item',
+            reason_chip: t.reason_chip,
+            saved: t.saved,
+        }));
+    }
+
+    async function previewTrim(): Promise<void> {
+        if (trimState.busy) return;
+        trimState.busy = true;
+        try {
+            const result = await api.trimToBudgetAsync(listId.value, {
+                mode: 'preview',
+                exclude_line_ids: [...trimState.excluded],
+            });
+            applyTrimResult(result);
+            trimState.state = 'previewed';
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                message: describeApiError(err) ?? 'Could not preview the trim.',
+            });
+        } finally {
+            trimState.busy = false;
+        }
+    }
+
+    async function applyTrim(): Promise<void> {
+        if (trimState.busy) return;
+        trimState.busy = true;
+        try {
+            const result = await api.trimToBudgetAsync(listId.value, {
+                mode: 'apply',
+                exclude_line_ids: [...trimState.excluded],
+            });
+            trimState.savedApplied = result.trimmed.reduce((s, t) => s + t.saved, 0);
+            trimState.state = 'applied';
+            trimState.previewLines = [];
+            await load();
+            // After apply the list has fewer active lines and totals shift;
+            // re-check whether we still overshoot so the banner updates
+            // ("still over" fallback vs. done).
+            await refreshTrimStatus();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                message: describeApiError(err) ?? 'Could not trim to fit.',
+            });
+        } finally {
+            trimState.busy = false;
+        }
+    }
+
+    function keepFromTrim(lineId: string): void {
+        trimState.excluded = new Set(trimState.excluded).add(lineId);
+        // Re-preview so the totals + cut set update in-place.
+        void previewTrim();
+    }
+
+    function dismissTrim(): void {
+        trimState.dismissed = true;
+    }
+
+    function scrollToDeferred(): void {
+        document.getElementById('deferred-by-budget')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
+    }
 
     // Mid-shop, ticked lines sink to the bottom of their group (still
     // visible, struck through) so the remaining work floats up. Array sort
@@ -1768,6 +2107,9 @@
         } finally {
             loading.value = false;
         }
+        // FU-448 — refresh the trim-to-budget banner state as soon as the
+        // list is available. Own try/catch inside; failures never bubble.
+        void refreshTrimStatus();
     }
 
     async function refreshAll() {

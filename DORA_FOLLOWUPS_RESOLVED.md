@@ -10,6 +10,45 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece)
+- **Resolved:** 2026-07-06 — design brief landed at
+  [PROPOSAL_BUDGET_AWARE_LISTS.md](docs/04_proposals/PROPOSAL_BUDGET_AWARE_LISTS.md);
+  build followed the same session across all six steps in brief §10.
+  - **Step 1** — shared `period_headroom(user, on_date, repository)`
+    helper in [budget.py](dora_api/features/budget/budget.py); dashboard
+    now reads through the same arithmetic (R-003 state-ownership).
+  - **Step 2** — `ShoppingListLine.deferred_by_budget` column +
+    migration [e5b4d8f2c3a7](dora_api/persistence/migrations/versions/e5b4d8f2c3a7_20260706_shoppinglistline_deferred_by_budget.py);
+    `compute_list_totals` skips deferred lines so projected/ticked
+    counts stay honest.
+  - **Step 3** — 5-tier trim classifier + `POST /shopping-lists/<id>/trim-to-budget`
+    with `mode=preview` in [trim_to_budget.py](dora_api/features/shopping_lists/trim_to_budget.py).
+    17 classifier tests in [test_trim_to_budget.py](tests/test_trim_to_budget.py)
+    covering each tier + the never-cut set + explicit-exclude.
+  - **Step 4** — `mode=apply` mutates lines and freezes the reason chip
+    on a new `deferred_reason: str | None` column (**deviation** from brief §7.2,
+    which said "re-derive on read" — the deviation is documented in-brief and
+    in the worklog with a full rationale). Add-back path lands on
+    `PATCH /lines/<id>` with `deferred_by_budget=false`.
+  - **Step 5** — SPA banner + Deferred-to-fit-budget section on
+    [ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue).
+    Three CTAs (Show what would be cut / Trim to fit / Dismiss), a preview
+    card with per-line Keep buttons, applied state that scrolls to the
+    Deferred section, and an "Add back" per-line action that flips the
+    flag off via PATCH.
+  - **Step 6** — assistant confirm-action `trim_list_to_budget` in
+    [confirm_actions.py](dora_api/features/assistant/confirm_actions.py)
+    + tool spec + action-tool registry in [tools.py](dora_api/features/assistant/tools.py).
+    Handles "trim my list to budget" / "cut some things to stay under" —
+    self-gates when money features are off or no budget is set, and
+    returns a specific summary when nothing safe is cuttable.
+- **Verified:** classifier tests 17/17; full targeted suite (budget /
+  shopping / assistant / trim) 60/60; full suite 811 passed / 7 failed
+  (all pre-existing bucket-c + recipe-is-planned; unchanged). `vue-tsc
+  --noEmit` exit 0.
+- **Raised:** 2026-07-02.
+- **Type:** deferred job (design + build). Now: **shipped**.
+
 ## [RESOLVED] FU-461 — Account-deletion endpoint (GDPR) → refocused as admin Add / Delete on the users page
 - **Resolved:** 2026-07-06 — user's call: GDPR "right to erasure" is only load-bearing if we go SaaS; single-tenant self-host and desktop don't have that obligation. The load-bearing gap on the users page was the missing Add + Delete affordances (Edit + Reset password already shipped). Fixed that instead. If SaaS ever becomes real, this FU can be re-opened as a self-serve `/settings/account` danger-zone build — the admin-side plumbing shipped here (soft-vs-hard call, cascade behaviour, last-admin guard) will inform it, but the surface is different.
 - **What shipped:**

@@ -31,8 +31,11 @@
             <template #title>Enable AI mode</template>
             <template #description>
                 Off keeps every chat reply rule-based. On routes
-                tool-able requests (search, suggest recipes, conversions,
-                add-to-list) through your configured provider.
+                <em>tool-able requests</em> through your configured provider —
+                requests that need real actions on your data (for example
+                "add milk to my list" or "what's expiring?"), which the
+                assistant handles by calling app tools. Basic mode only
+                handles chat; AI mode unlocks these action requests.
             </template>
 
             <SettingsRow label="Use AI mode for this account">

@@ -155,25 +155,57 @@
 
             <q-separator vertical class="q-mx-sm" />
 
-            <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="warning">
-                Essential
-            </FilterChip>
+            <span class="row items-center no-wrap">
+                <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="warning">
+                    Essential
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Items you've flagged as household staples. Surfaced first
+                        in filters and prioritised in shopping-list suggestions.
+                    </q-tooltip>
+                </q-icon>
+            </span>
 
-            <FilterChip v-model="filters.autoAddOnly.value" :icon="ICONS.bolt" active-color="primary">
-                Will auto-add on low
-            </FilterChip>
+            <span class="row items-center no-wrap">
+                <FilterChip v-model="filters.autoAddOnly.value" :icon="ICONS.bolt" active-color="primary">
+                    Will auto-add on low
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Items with the Auto-add when low toggle on — they drop into
+                        your primary shopping list automatically when they hit Low.
+                    </q-tooltip>
+                </q-icon>
+            </span>
 
-            <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">
-                Open / in-use
-            </FilterChip>
+            <span class="row items-center no-wrap">
+                <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">
+                    Open / in-use
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Items you've marked as opened — currently being used,
+                        worth watching for expiry.
+                    </q-tooltip>
+                </q-icon>
+            </span>
 
             <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
                 Needs attention
             </FilterChip>
 
-            <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
-                Needs check
-            </FilterChip>
+            <span class="row items-center no-wrap">
+                <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
+                    Needs check
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Items whose recorded stock level is old enough that Dora's
+                        stocktake mode wants you to verify it's still correct.
+                    </q-tooltip>
+                </q-icon>
+            </span>
 
             <!-- C-1 Chunk 2 / L96 — "Used in a recipe" filter removed
                  (low signal; the recipe pages own that view). -->

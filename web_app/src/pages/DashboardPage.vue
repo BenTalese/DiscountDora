@@ -893,7 +893,17 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('savings') }"
             >
-                <DashboardCard :icon="ICONS.savings" title="You've saved">
+                <DashboardCard :icon="ICONS.savings">
+                    <template #title>
+                        You've saved
+                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                            <q-tooltip>
+                                Total savings vs. RRP across every shopping list you
+                                finished in this window. Includes only lines where a
+                                real deal price was captured.
+                            </q-tooltip>
+                        </q-icon>
+                    </template>
                     <template #action>
                         <div class="dora-range-toggle">
                             <button

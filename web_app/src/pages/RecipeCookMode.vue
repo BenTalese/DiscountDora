@@ -41,7 +41,13 @@
                     :class="{ 'text-primary': speechEnabled, 'dora-text-muted': !speechEnabled }"
                     @click="toggleSpeech"
                 >
-                    <q-tooltip>{{ speechEnabled ? 'Disable Sous Chef voice' : 'Enable Sous Chef voice — Dora reads each step aloud' }}</q-tooltip>
+                    <!-- FU-044 — tooltip folds the toggle micro-label with a fuller
+                         explanation of what Sous Chef does, per IMPL_PLAN_HELP_CHIPS. -->
+                    <q-tooltip>
+                        {{ speechEnabled ? 'Disable Sous Chef voice.' : 'Enable Sous Chef voice.' }}
+                        Reads each step aloud as you go, hands-free.
+                        Off = silent cook mode; you tap through the steps yourself.
+                    </q-tooltip>
                 </BaseButton>
                 <BaseButton
                     v-if="speechRecognitionAvailable"
@@ -50,7 +56,15 @@
                     :class="{ 'text-negative': listening, 'dora-text-muted': !listening }"
                     @click="toggleListening"
                 >
-                    <q-tooltip>{{ listening ? 'Stop listening' : 'Listen for hands-free commands' }}</q-tooltip>
+                    <!-- FU-044 — extended tooltip explains the mic is independent
+                         of Sous Chef narration. -->
+                    <q-tooltip>
+                        {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
+                        Turns on the mic so next / previous / repeat / pause navigate
+                        cook mode without touching the screen. Independent of Sous
+                        Chef — you can listen without narration or narrate without
+                        listening.
+                    </q-tooltip>
                 </BaseButton>
                 <BaseButton
                     variant="icon"

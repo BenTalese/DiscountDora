@@ -119,6 +119,11 @@ class CreateStockItemHandler:
         _ExpiryTransition = classify_expiry_transition(None, request.expiry_date)
         if _ExpiryTransition is not None:
             _Kind, _Delta = _ExpiryTransition
+            # The event carries an FK to the just-added StockItem. The classic
+            # imperative mapping has no relationship linking the two, so the
+            # unit-of-work has no reason to insert them in that order; without
+            # this flush SQLite's FK check on the event's INSERT fails.
+            self.repository.flush()
             self.repository.add(StockItemExpiryEvent(
                 stock_item_id = _NewStockItem.id,
                 kind = _Kind,

@@ -80,9 +80,18 @@
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
                 Favourites
             </FilterChip>
-            <FilterChip v-model="cookableNowOnly" :icon="ICONS.check_circle" active-color="positive">
-                Cookable now
-            </FilterChip>
+            <span class="row items-center no-wrap">
+                <FilterChip v-model="cookableNowOnly" :icon="ICONS.check_circle" active-color="positive">
+                    Cookable now
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Recipes where every ingredient is currently in stock.
+                        Distinct from "Have meals in pool" — that one shows
+                        recipes with cooked-ahead portions ready to serve.
+                    </q-tooltip>
+                </q-icon>
+            </span>
             <FilterChip v-model="inStockOnly" :icon="ICONS.inventory_2" active-color="primary">
                 Have meals in pool
             </FilterChip>

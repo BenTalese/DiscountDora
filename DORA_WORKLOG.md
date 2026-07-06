@@ -9,6 +9,269 @@ next.
 
 ---
 
+## 2026-07-06 — FU-347: prepend UTF-8 BOM to the import-template CSV download
+
+**Why:** User: "do Fu347". Latent Excel-on-Windows mojibake trap.
+
+**What landed:**
+- [import_spreadsheet.py::download_import_template](dora_api/features/data/import_spreadsheet.py)
+  — prepend `\xef\xbb\xbf` (UTF-8 BOM) to the CSV body before encoding.
+  Comment explains why (Excel on Windows guesses ANSI/CP-1252 without
+  it, so any future accented character in an example or header would
+  render as mojibake) and notes that the upload-side parser strips the
+  BOM back off at [import_spreadsheet.py:127](dora_api/features/data/import_spreadsheet.py:127),
+  keeping the round-trip symmetric.
+- Two new tests in [test_data_router.py](tests/e2e/dora_api/test_data_router.py)
+  under a new "Import template download (FU-347)" section:
+  - `test__import_template__csv_download__starts_with_utf8_bom` — the
+    response body starts with the exact `0xEF 0xBB 0xBF` triple.
+  - `test__import_template__csv_download__body_after_bom_parses` —
+    round-trip the downloaded body through the chunked-upload +
+    `/inspect` stack; the auto-mapper still resolves the `name`
+    column and no header starts with the BOM character. Belt-and-
+    braces on the FU's claim that the parser already strips it.
+
+**Files touched:**
+- Code: `dora_api/features/data/import_spreadsheet.py` (one line + a
+  four-line comment).
+- Tests: `tests/e2e/dora_api/test_data_router.py` (new section, two
+  cases).
+- Ledger: `DORA_FOLLOWUPS.md` (removed FU-347), `DORA_FOLLOWUPS_RESOLVED.md`
+  (archived with full state note), `DORA_WORKLOG.md` (this entry).
+
+**Quality gates:**
+- New tests targeted: **2/2 green**.
+- Full suite: **790 passed / 1 pre-existing FU-466 flake**
+  (`test__register_barcode__against_product__lookup_traverses_via_product`).
+  Verified pre-existing by running the same failure list against clean
+  HEAD in a prior work unit; no regression from this FU.
+
+**Engineering-standards close-gate:**
+- **R-013 (E2E API tests dispatch in-process via Flask test client) —
+  respect.** Both new tests use the `api` fixture; no external HTTP.
+- **R-023 (test naming) — respect.** Both cases follow the
+  `test__<subject>__<condition>__<expectation>` shape and cluster
+  under a labelled section header for grep-ability.
+- **R-007 (scope discipline) — respect.** Fixed the download-side
+  emit; did NOT retrofit the FU's mentioned future-non-ASCII example
+  data (that's FU-349's territory, still open).
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** verified the upload-side BOM strip at
+[import_spreadsheet.py:127](dora_api/features/data/import_spreadsheet.py:127)
+before writing the round-trip test, so the test's premise ("parser
+strips it, so we can prove round-trip") is grounded in actual code,
+not the FU's claim alone.
+
+**Follow-ups opened:** none.
+
+**Next up:** user pick.
+
+---
+
+## 2026-07-06 — FU-319: recipe-picker inline-create toast copy
+
+**Why:** User: "do FU-319". Small F9 magic-audit cleanup.
+
+**What landed:**
+- [RecipeDetailPage.vue:1516](web_app/src/pages/RecipeDetailPage.vue) —
+  reworded the positive toast fired by the ingredient picker's
+  "Create '<typed>'" no-option path from `Created stock item "<name>".`
+  to `Added "<name>" to your pantry.` — matches the FU wording.
+- Small inline comment names the FU and states the underlying reason
+  (the inline-created item survives even if the user cancels the recipe
+  save, so the toast has to hint at persistence).
+- **Not changed:** the two negative-path toasts (`No stock levels
+  configured…` and `Could not create stock item.`). They're technical
+  error surfaces where "stock item" language matches the underlying
+  error being reported; rewording is out of FU-319's scope (R-007).
+
+**Files touched:**
+- Code: [web_app/src/pages/RecipeDetailPage.vue](web_app/src/pages/RecipeDetailPage.vue) (one string + comment).
+- Ledger: `DORA_FOLLOWUPS.md` (removed FU-319), `DORA_FOLLOWUPS_RESOLVED.md`
+  (archived), `DORA_VERIFY.md` (new browser-verify item under
+  Cross-cutting), `DORA_WORKLOG.md` (this entry).
+
+**Quality gates:**
+- `npx vue-tsc --noEmit` → **clean** (exit 0).
+- No backend touch → no pytest run needed.
+
+**Engineering-standards close-gate:**
+- **R-007 (scope discipline) — respect.** Held to the toast copy; did
+  not touch the neighbouring error-path toasts.
+- **R-008 (code-style minimalism) — respect.** One short comment
+  naming the FU + the reason; no ceremony.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** confirmed the inline-create call site still fires
+`createStockItemAsync` + the positive-toast branch before editing;
+comment references the actual behaviour (item survives recipe cancel),
+not a hypothetical.
+
+**Follow-ups opened:** none.
+
+**Next up:** user pick.
+
+---
+
+## 2026-07-06 — FU-502: locale/currency backend coverage tests (19 cases, all green)
+
+**Why:** User: "now do FU-502". Close FU-043's R-013 coverage gap — the
+locale/currency work shipped without tests because the pytest venv wasn't
+available on the box that ran it.
+
+**What landed:**
+- New [tests/e2e/dora_api/test_locale_currency.py](tests/e2e/dora_api/test_locale_currency.py) — 19 parameterised cases:
+  - **Round-trip (2):** PATCH `{currency, locale}` → `GET /health`
+    reflects `locale_policy.currency` + `locale_policy.locale`; the
+    shipping defaults (`AUD` + `en-AU`) surface when the row is untouched.
+  - **Currency valid (3):** `USD`, `EUR`, and `aud`→`AUD`
+    (case-normalisation asserted).
+  - **Currency invalid (5):** `US` (too short), `USDX` (too long), `US1`
+    (has digit), `""`, and `" GBP "` (whitespace-padded exceeds the
+    3-char length gate).
+  - **Locale valid (5):** `en-AU`, `en-US`, `de-DE`, `en-Latn-US`,
+    `zh-Hant-TW`.
+  - **Locale invalid (4):** `en_AU` (underscore), `e` (too short),
+    `english` (4+ letters), `en AU` (space).
+- Autouse fixture resets the row to `AUD`/`en-AU` in `try/finally` so no
+  test leaks state to later files in the suite.
+
+**Explicit call — skipping one FU line item:** the FU asked for "migration
+up/down against in-memory sqlite (matches `test_operational_config_resolver.py`
+shape)". The resolver test isn't a migration test — it's an API
+round-trip against the running app. The migration is *already* exercised
+on every test run: conftest boots the app, alembic materialises the
+schema, and every test that reads `AppSetting.currency` / `.locale` (this
+new file included) proves the columns exist. A dedicated up/down test
+would need infra (isolated engine, alembic invocation harness) that
+doesn't exist in the repo today; skipped as ceremony without added
+coverage. Noted in the resolved-FU state note so a future reader knows
+the reasoning.
+
+**Files touched:** `tests/e2e/dora_api/test_locale_currency.py` (new).
+Ledger: `DORA_FOLLOWUPS.md` (removed FU-502), `DORA_FOLLOWUPS_RESOLVED.md`
+(archived with full state note), `DORA_WORKLOG.md` (this entry).
+
+**Quality gates:**
+- New file targeted: **19/19 green**.
+- Full suite: **787 passed / 2 pre-existing flakes**. Verified the two
+  failures (`test_data_router::test__register_barcode__against_product__lookup_traverses_via_product`
+  and `test_recipe_is_planned::test__recipes__is_planned_true_when_future_unconsumed_entry_exists`)
+  reproduce on clean HEAD (`mv` the new file out, re-run — same two
+  failures). Both are order-dependent state pollution tracked by [[FU-466]].
+  No regression from FU-502.
+
+**Engineering-standards close-gate:**
+- **R-013 (E2E API tests dispatch in-process via Flask test client) —
+  respect.** Uses the existing `api` fixture; no new external HTTP
+  boot.
+- **R-023 (test naming + shared response matchers) — respect.** File
+  name + test names follow the `test__<subject>__<condition>__<expectation>`
+  convention already in the suite; parametrised tables have descriptive
+  ids inherited from the input values.
+- **R-007 (scope discipline) — respect.** Only tests the FU-043
+  surfaces. Didn't sneak fixes for the FU-466 flakes into this work
+  unit; they stay tracked separately.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** verified the migration file, entity columns, DTO
+fields, and `_locale_policy()` shape against the live tree before writing
+the tests. The validator behaviour (pydantic length gate + handler-level
+`.strip().upper()` + `isalpha` guard for currency; `_is_valid_bcp47`
+structural check for locale) matches what the tests assert.
+
+**Follow-ups opened:** none.
+
+**Next up:** user pick.
+
+---
+
+## 2026-07-06 — FU-503 / FU-044: shipped targeted (?) help chips per IMPL_PLAN_HELP_CHIPS
+
+**Why:** User: "do fu 503". Executed the pre-planned impl doc without re-
+opening the overlay-mechanism decision.
+
+**What landed:**
+- ~20 new `(?)` chips using the `RecipeDetailPage.vue`-style pattern
+  (`<q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+  <q-tooltip>[copy]</q-tooltip></q-icon>`) across:
+  - [DoraScoreCard.vue](web_app/src/components/dashboard/DoraScoreCard.vue) — Kitchen health card title (via DashboardCard `#title` slot).
+  - [DashboardPage.vue](web_app/src/pages/DashboardPage.vue) — Savings card title.
+  - [ReportsPage.vue](web_app/src/pages/ReportsPage.vue) — Year-over-year card title, Meals-worth caption.
+  - [AlertsPage.vue](web_app/src/pages/AlertsPage.vue) — tier-concept chip on the summary text; per-kind tier segmented control in Manage panel.
+  - [MealPlanWeekStatus.vue](web_app/src/components/MealPlanWeekStatus.vue) — Shortfall chip; **shared component, so chips 8 and 9 collapse into one edit** (renders in both MealPlansOverview and MealPlansBoardPage).
+  - [RecipeDetailPage.vue](web_app/src/pages/RecipeDetailPage.vue) — "N unallocated of M cooked" caption.
+  - [RecipesOverview.vue](web_app/src/pages/RecipesOverview.vue) — Cookable now filter chip.
+  - [StockOverview.vue](web_app/src/pages/StockOverview.vue) — Essential, Auto-add on low, Open/in-use, Needs check filter chips (`Needs attention` intentionally left as-is; not on the audit).
+  - [StocktakeRunner.vue](web_app/src/pages/StocktakeRunner.vue) — cadence subline chip; Push 3 days button tooltip.
+  - [ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue) — Finish & restock button tooltip.
+  - [PriceHistoryPage.vue](web_app/src/pages/PriceHistoryPage.vue) — "currently X% above" + "Your usual" chips.
+  - [MyProductsPage.vue](web_app/src/pages/MyProductsPage.vue) — Select on-deal button.
+  - [PriceEntry.vue](web_app/src/components/dora/PriceEntry.vue) — Multipack disclosure ghost button.
+- **Folded (extended existing q-tooltip / help text rather than adding a second one):**
+  - [RecipeCookMode.vue](web_app/src/pages/RecipeCookMode.vue) — Sous Chef toggle + hands-free mic tooltips extended with the fuller "what the feature IS" explanation.
+  - [ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue) — Plan-which-day tooltip extended.
+  - [NotificationsSettings.vue](web_app/src/pages/settings/NotificationsSettings.vue) — Compact-format `help` on SettingsRow extended.
+  - [AssistantSettings.vue](web_app/src/pages/settings/AssistantSettings.vue) — Enable-AI-mode section description extended.
+- **Skipped as already covered (per plan's don't-add-a-second-tooltip
+  rule):** StockItemDetailPage Essential + Auto-add-when-low toggles
+  already have long `q-tooltip`s in place; PreferencesSettings' three
+  toggles (Always ask which list, Infer stock levels, Batch cooking) all
+  had `help` attrs on their SettingsRow or section descriptions.
+- **Skipped as N/A (control renamed/repurposed since the audit):** the
+  "Cookable tonight" dashboard label the audit named at
+  `DashboardPage.vue:1198` no longer exists — the card has been rebuilt
+  as "Next to cook" (meal-plan-driven) since 2026-07-06. Adding the
+  cookable-tonight tooltip there would misdescribe the current card;
+  chip 11 covers the term in its actual home (RecipesOverview filter).
+
+**Files touched:**
+- Code (SPA only, no backend / no tests): the 15 files listed above.
+- Docs: `CHANGELOG.md` [Unreleased] bullet, `DORA_FOLLOWUPS.md` (removed
+  FU-044 and FU-503), `DORA_FOLLOWUPS_RESOLVED.md` (archived both with
+  full state notes), `DORA_VERIFY.md` (new Cross-cutting section with a
+  walk-through checklist), `docs/04_proposals/PROPOSAL_HELP_OVERLAY.md`
+  (marked 📦 SUPERSEDED at the top).
+
+**Quality gates:**
+- `npx vue-tsc --noEmit` → **clean** (exit 0).
+- No backend touch → no pytest run needed (matches the plan's
+  "no backend changes, no pytest run required").
+
+**Engineering-standards close-gate:**
+- **R-002 (theme tokens only) — respect.** No `color=` on any of the new
+  `q-icon`s; they inherit muted tone from parent caption context.
+- **R-007 (scope discipline) — respect.** Held to the audit list. Did NOT
+  revive the parked overlay mechanism, `v-help` directive, or `?`
+  toolbar toggle. Where a chip would have duplicated existing help, I
+  skipped rather than expanded scope; where the audit target had been
+  renamed, I skipped rather than "fix" the audit.
+- **R-008 (code-style minimalism) — respect.** No comment blocks around
+  the chips other than the two `<!-- FU-044 chip -->` / `<!-- FU-044 —
+  extended tooltip … -->` markers on the folded edits (which help future
+  readers understand why the tooltip is unusually long).
+- **R-011 (framework idiomatic pattern) — respect.** Every new chip uses
+  the exact `RecipeDetailPage.vue` shape the plan named as the
+  authoritative pattern.
+- **R-019 (no magic) — respect.** Inline strings, no `$t()`, no
+  auto-registration, no directive.
+- **No new violations, no new ADR.**
+
+**Anti-drift check:** for each target file I opened the actual source
+before editing and anchored by nearby label text (not line number) per
+the plan's step 2. Caught the DoraScoreCard case where the title lives
+inside a `DashboardCard` prop, not a slot — solved by switching to the
+`#title` slot instead of trying to force the chip into a string prop.
+
+**Follow-ups opened:** none. If any of the skipped targets or the
+Cookable-tonight repurpose surfaces as user confusion in real use, a
+fresh FU can be opened then — per the plan's "Not for this batch" rule.
+
+**Next up:** user pick. The chip batch is closed.
+
+---
+
 ## 2026-07-06 — Retired R-014 (reveal-and-disable); adopted R-029 (hide, don't nag)
 
 **Why:** User: "i think go back on FU-176 and the proposed engineering rule.

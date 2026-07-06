@@ -54,6 +54,18 @@ class SqlAlchemyRepository:
     def remove(self, entity: BaseEntity):
         db.session.delete(entity)
 
+    def flush(self):
+        """Materialise pending inserts on the wire without committing.
+        Use before adding a *child* row (any row with an FK to a pending
+        *parent* row added earlier in the same unit of work): the classic
+        mapper doesn't know the two entities depend on each other unless
+        a ``relationship()`` links them, so SQLite's FK check can fire on
+        the child before the parent has hit the DB. The narrower fix
+        (a relationship on every event/log mapping) is out of scope for
+        the pre-release drift work; ``flush()`` here is the local
+        contract."""
+        db.session.flush()
+
     def save_changes(self):
         db.session.commit()
 

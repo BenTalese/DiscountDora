@@ -66,46 +66,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** cross-cutting presentation change touching ~10 files; better as a focused small pass than folded into other work.
 - **Recommended resolution:** opportunistic / a focused sweep — pair with the next touch of each gated surface. Also update **ADR-002**'s stance in `ENGINEERING_STANDARDS.md:1149` to drop the "R-014 partially revisits it" implication (R-002's hide-when-off is now the whole story again).
 
-## [OPEN] FU-503 — Ship the 32 targeted `(?)` help chips per `IMPL_PLAN_HELP_CHIPS.md`
-- **Raised:** 2026-07-06 (FU-044 re-scope).
-- **Type:** deferred job (execution — audit + copy are already done).
-- **What:** User re-scoped FU-044 mid-session (dropped the opt-in help-
-  overlay mechanism from `PROPOSAL_HELP_OVERLAY.md`); the narrowed ask is
-  to add a targeted `(?)` hover-tooltip using the existing
-  `RecipeDetailPage.vue`-style pattern on 32 genuinely-confusing
-  controls. The audit ran this session and the tooltip copy is drafted
-  in [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
-- **Why deferred:** user asked to save it for the next session so that
-  session can go straight from open → edit → commit without re-
-  discovering the audit or drafting copy.
-- **Recommended resolution:** **now / next session.** Open the impl plan,
-  open each file in its "Batch by file" order, apply the chips, `vue-tsc`
-  clean, run the close-gate in the impl plan (CHANGELOG bullet, move
-  FU-044 → resolved, retire PROPOSAL_HELP_OVERLAY as superseded, add
-  DORA_VERIFY entry, worklog + PROJECT_STATE update). Do NOT re-open the
-  overlay-mechanism debate — that decision is locked as parked.
-
-## [OPEN] FU-502 — Coverage tests for FU-043 locale/currency backend
-- **Raised:** 2026-07-06 (FU-043 close-gate).
-- **Type:** deferred job (test coverage).
-- **What:** the FU-043 backend (AppSetting `currency`/`locale` columns +
-  migration `c4e9a2f7b1d3` + `_is_valid_bcp47` validator in
-  `update_app_settings.py` + `_locale_policy()` in `health_check.py`) shipped
-  without new tests because the Python test venv wasn't available on the box
-  the work ran on. The R-013 close-gate wants these under coverage.
-- **What to add:**
-  - Round-trip test: `PATCH /app-settings {currency:"USD", locale:"en-US"}`
-    then `GET /health` reflects `locale_policy.currency == "USD"` and
-    `locale_policy.locale == "en-US"`.
-  - Validation table: currency must be 3 uppercase alpha; `"US"`, `"USDX"`,
-    `"US1"`, `"usd"` (should upper-cased-in), `""` — expected verdicts.
-  - Locale validation table: `"en-AU"`, `"en-Latn-US"`, `"zh-Hant-TW"` accept;
-    `"en_AU"` (underscore), `"e"`, `"english"`, `"en AU"` (space) reject.
-  - Migration up/down against an in-memory sqlite (matches the existing
-    `test_operational_config_resolver.py` shape).
-- **Recommended resolution:** opportunistic — next time the pytest env is
-  reachable (see [[FU-466]] for the broader suite drift).
-
 ## [OPEN] FU-501 — Seasonal-picks table is AU-only; needs locale-scoped data
 - **Raised:** 2026-07-06 (FU-043 close-gate).
 - **Type:** deferred job (locale data).
@@ -936,26 +896,6 @@ long session summary. Distinct from the other logs:
   pre-design it. **Recommended resolution point:** when the second
   importable section is designed.
 
-## [OPEN] FU-347 — Import template CSV: no UTF-8 BOM — Excel-on-Windows garbles accented example values
-- **Raised:** 2026-07-01 (post-FU-343 self-review).
-- **Type:** finding (latent — only bites when non-ASCII enters the example).
-- **What:** The templates endpoint in
-  [`import_spreadsheet.py`](dora_api/features/data/import_spreadsheet.py)
-  emits UTF-8 without a BOM. Today the example row is all ASCII, so
-  nothing renders wrong. If a future example includes an accented
-  character (`café`, `crème`, a currency symbol, etc.), Excel on
-  Windows will show mojibake unless the user opens via Data → From
-  Text and picks UTF-8. The inspect endpoint strips a BOM if
-  present, so the round-trip works either way — this is a display-
-  only concern for the *download*, not the *upload*.
-- **Why deferred:** doesn't bite today (all-ASCII example).
-- **Recommended resolution:** prepend `﻿` to the CSV body when
-  writing (one line change). Trivial. **Recommended resolution
-  point:** now if we ever want to add non-ASCII to an example
-  (unlikely for stock_items), else pair with FU-349 if we go for
-  option (b) — customer-named locations / groups might contain
-  accents.
-
 ## [OPEN] FU-346 — Admin settings feel hidden — pick a better host / entry point
 - **Raised:** 2026-07-01 (settings-scroll fix session).
 - **Type:** design decision.
@@ -1198,21 +1138,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   clears — own its own prompt under `docs/03_prompts/`.
 - **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` (the
   source-of-truth catalogue this FU documents into help).
-
-## [OPEN] FU-319 — Toast "Added <name> to your pantry" on inline-create from the recipe ingredient picker (F9)
-- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F9 — (b)).
-- **Type:** UX / cleanup.
-- **What:** The recipe ingredient `q-select` exposes a "Create '<typed>'"
-  no-option entry that fires a POST to create a brand-new `StockItem`
-  inline. The new item survives even if the user cancels the recipe save
-  (verified during the audit). Add a small positive toast "Added <name>
-  to your pantry" when that inline-create path fires so the user isn't
-  surprised by a new tracked item on the next StockOverview visit.
-- **Where:** `web_app/src/pages/RecipeDetailPage.vue:395` (the picker)
-  and the create-stock-item handler the inline-create eventually calls.
-- **Recommended resolution:** opportunistic — fold into the next cookbook /
-  recipe-editor touch. 1–2 lines.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F9.
 
 ## [OPEN] FU-318 — "Cheapest" chip on shopping-list lines using the auto-picked offer (F7)
 - **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F7 — (b)).
@@ -1699,24 +1624,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
     server-side ("one Product = one EAN").
 - **Recommended resolution:** Phase 2 ingestion + the Products UI work,
   whichever lands first.
-
-## [OPEN] FU-044 — Re-scoped 2026-07-06 → superseded by [[FU-503]]
-- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`).
-- **Type:** deferred job (design retired; execution pending under a new ID).
-- **Status update 2026-07-06:** original opt-in help-overlay design
-  (`?` toolbar toggle, dismissible per-element overlays, `v-help`
-  directive, DoraBot fronting, discoverability nudge) **retired.** User
-  narrowed scope mid-session: instead of a whole mechanism, add
-  targeted `(?)` hover-tooltip chips on 32 specific confusing controls
-  using the existing `RecipeDetailPage.vue`-style pattern. Audit +
-  tooltip copy are drafted in
-  [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
-  `PROPOSAL_HELP_OVERLAY.md` stays in the tree as the record of the
-  parked overlay design (📦 superseded); Help/guides page + assistant
-  remain the deep-help fallback.
-- **Recommended resolution:** closes at the same time as [[FU-503]] —
-  next session opens the impl plan, applies the chips, runs the
-  close-gate.
 
 ## [OPEN] FU-041 — Onboarding "you already have groups/locations" copy on first-run
 - **Raised:** 2026-06-06 (C-5 brief; feedback L32/L33)

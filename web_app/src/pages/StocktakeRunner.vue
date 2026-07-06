@@ -66,6 +66,14 @@
                     <div class="text-caption dora-text-muted-5 q-mt-xs">
                         Checked every {{ bandLabel(current.cadence_band) }}
                         · {{ current.overdue_days }} day{{ current.overdue_days === 1 ? '' : 's' }} overdue
+                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                            <q-tooltip>
+                                How often stocktake mode wants you to re-check this
+                                item (Weekly / Fortnightly / Monthly) and how far
+                                past the last check date you are. Cadence is set
+                                globally in Settings or per-item on the detail page.
+                            </q-tooltip>
+                        </q-icon>
                     </div>
                 </q-card-section>
 
@@ -125,7 +133,13 @@
                         label="Push 3 days"
                         :loading="busy"
                         @click="onPush"
-                    />
+                    >
+                        <q-tooltip>
+                            Delays this item's next stocktake prompt by 3 days
+                            without recording a check. Use when you'll be able to
+                            look properly soon.
+                        </q-tooltip>
+                    </BaseButton>
                     <BaseButton
                         variant="danger-ghost"
                         class="col"

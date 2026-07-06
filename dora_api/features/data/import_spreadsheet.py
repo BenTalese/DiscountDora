@@ -726,7 +726,12 @@ def download_import_template(section: str):
     writer = csv.writer(buf)
     writer.writerow(template.headers)
     writer.writerow(template.example)
-    body = buf.getvalue().encode("utf-8")
+    # FU-347 — prepend a UTF-8 BOM so Excel-on-Windows opens the file in
+    # UTF-8 by default (without BOM it guesses ANSI/CP-1252 and any
+    # accented character in an example row / template header renders as
+    # mojibake). The upload-side sniffer strips the BOM back off before
+    # parsing (see `_parse_csv` above), so the round-trip is symmetric.
+    body = "﻿".encode("utf-8") + buf.getvalue().encode("utf-8")
 
     from flask import Response
     response = Response(body, mimetype="text/csv; charset=utf-8")

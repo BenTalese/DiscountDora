@@ -291,6 +291,14 @@
                                 <div class="text-caption dora-text-muted">
                                     {{ recipe.unallocated_meals }} unallocated
                                     of {{ recipe.available_meals }} cooked
+                                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                                        <q-tooltip>
+                                            Portions of this recipe already in your
+                                            pool but not yet earmarked for any
+                                            meal-plan slot. Cook mode adds to the
+                                            pool; planning a meal subtracts from it.
+                                        </q-tooltip>
+                                    </q-icon>
                                 </div>
                             </div>
                             <q-space />
@@ -1505,10 +1513,15 @@
             if (created) {
                 form.ingredients[idx]!.stock_item_id = created.stock_item_id;
                 markDirty();
+                // FU-319 — copy shifted from "Created stock item" (internal
+                // jargon) to a user-facing "Added to your pantry" so the user
+                // isn't surprised by a new tracked item on the next Stock
+                // overview visit. The inline-create path persists the item
+                // regardless of whether the recipe save goes through.
                 $q.notify({
                     type: 'positive',
                     position: 'bottom-right',
-                    message: `Created stock item "${name}".`,
+                    message: `Added "${name}" to your pantry.`,
                 });
             }
         } catch (err) {

@@ -491,6 +491,58 @@ def test__spreadsheet_import__commit_without_name_column__is_rejected(api):
     assert response.status_code == 400
 
 
+# ── Import template download (FU-347 — BOM for Excel-on-Windows) ───────
+
+def test__import_template__csv_download__starts_with_utf8_bom(api):
+    """FU-347 — the downloaded template CSV must start with the UTF-8
+    BOM so Excel-on-Windows opens it in UTF-8 instead of guessing
+    ANSI/CP-1252. Without the BOM, any accented character in a future
+    example row / header renders as mojibake in Excel."""
+    response = requests.get(
+        "http://localhost:5170/api/data/import/templates/stock_items.csv"
+    )
+    assert response.status_code == 200, response.text
+    body = response.content
+    assert body.startswith(b"\xef\xbb\xbf"), (
+        "Template CSV must begin with the UTF-8 BOM (0xEF 0xBB 0xBF); "
+        f"got first bytes {body[:8]!r}"
+    )
+
+
+def test__import_template__csv_download__body_after_bom_parses(api):
+    """The BOM is only for Excel — server-side parsers (including our
+    own upload path) must still be able to consume the file. Round-trip
+    the downloaded template through the chunked-upload + inspect stack
+    to prove the BOM doesn't wedge the parser."""
+    response = requests.get(
+        "http://localhost:5170/api/data/import/templates/stock_items.csv"
+    )
+    assert response.status_code == 200, response.text
+    body = response.content
+    # Sanity — BOM present + non-empty CSV payload after it.
+    assert body[:3] == b"\xef\xbb\xbf"
+    assert len(body) > 3
+
+    upload_id = _stage_bytes(body)
+    inspect = requests.post(IMPORT_INSPECT_URL, json={
+        "upload_id": upload_id, "filename": "stock_items.csv",
+    })
+    assert inspect.status_code == 200, inspect.text
+    inspect_body = inspect.json()
+    # The parser strips the BOM before decoding, so the auto-mapper's
+    # `name` column resolves cleanly instead of collating a `"﻿name"`
+    # header that no target field can match.
+    auto = inspect_body["auto_mapping"]["stock_items.csv"]
+    assert auto["name"] is not None, (
+        f"Auto-mapper couldn't identify the name column after BOM strip: {auto!r}"
+    )
+    # Belt-and-braces — the mapped header itself doesn't carry a
+    # leading BOM character.
+    assert not auto["name"].startswith("﻿"), (
+        f"BOM leaked into the mapped name-column header: {auto['name']!r}"
+    )
+
+
 # ── Export & Print (N4) ────────────────────────────────────────────────
 
 def _first_seeded_shopping_list_id() -> str:

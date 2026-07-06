@@ -70,7 +70,13 @@
                 :icon="ICONS.add"
                 label="Add pack count (multipack)"
                 @click="packCountVisible = true"
-            />
+            >
+                <q-tooltip>
+                    For multipacks (e.g. 4 × 125g yoghurt), open this and enter
+                    the pack count so Dora computes the right per-unit price
+                    and remembers the pack shape for next time.
+                </q-tooltip>
+            </BaseButton>
             <div v-else class="row q-gutter-sm items-start">
                 <q-input
                     v-model.number="packCount"

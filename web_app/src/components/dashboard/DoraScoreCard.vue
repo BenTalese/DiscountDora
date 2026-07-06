@@ -4,7 +4,19 @@
          component as a mini-bar chip that links to a remediating
          action (charter: every weak component should nudge toward the
          feature that improves it, never shame). -->
-    <DashboardCard :icon="ICONS.favorite" title="Kitchen health">
+    <DashboardCard :icon="ICONS.favorite">
+        <template #title>
+            <!-- FU-044 chip -->
+            Kitchen health
+            <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                <q-tooltip>
+                    A 0–100 score of how your kitchen's tracking right now — waste,
+                    on-budget, freshness, unplanned run-outs, and stocktake staleness,
+                    averaged. Only signals with real data count; missing signals
+                    don't drag the score down.
+                </q-tooltip>
+            </q-icon>
+        </template>
         <template #action>
             <span
                 v-if="score && score.trend_direction && score.trend_direction !== 'flat'"

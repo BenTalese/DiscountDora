@@ -659,7 +659,7 @@ def test__expiry_event__emitted_on_set_push_and_clear(api, stock_level_id):
         stock_level_id=stock_level_id,
         expiry_date='2026-07-05',
     ).model_dump(mode='json'))
-    assert _CreatedResp.status_code == 200, _CreatedResp.text
+    assert _CreatedResp.status_code == 201, _CreatedResp.text
     _ItemId = _CreatedResp.json()['stock_item_id']
 
     # Set on create → `set` event.
@@ -676,7 +676,7 @@ def test__expiry_event__emitted_on_set_push_and_clear(api, stock_level_id):
         f'{base_route}/{_ItemId}',
         json={'expiry_date': '2026-07-12'},
     )
-    assert _PushResp.status_code == 200, _PushResp.text
+    assert _PushResp.status_code == 204, _PushResp.text
     _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
     assert len(_Detail['expiry_events']) == 2
     _Pushed = _Detail['expiry_events'][0]  # newest first
@@ -690,7 +690,7 @@ def test__expiry_event__emitted_on_set_push_and_clear(api, stock_level_id):
         f'{base_route}/{_ItemId}',
         json={'expiry_date': None},
     )
-    assert _ClearResp.status_code == 200, _ClearResp.text
+    assert _ClearResp.status_code == 204, _ClearResp.text
     _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
     assert len(_Detail['expiry_events']) == 3
     _Cleared = _Detail['expiry_events'][0]
@@ -725,7 +725,7 @@ def test__history_older_count__caps_at_per_kind_limit(api, stock_level_id):
             f'{base_route}/{_ItemId}',
             json={'expiry_date': _new},
         )
-        assert _resp.status_code == 200, _resp.text
+        assert _resp.status_code == 204, _resp.text
 
     _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
     # 52 total events, cap 50 → returns 50 in the list, drops 2 past
@@ -749,7 +749,7 @@ def test__expiry_event__no_change_no_event(api, stock_level_id):
         f'{base_route}/{_ItemId}',
         json={'expiry_date': '2026-08-01'},
     )
-    assert _NoOp.status_code == 200, _NoOp.text
+    assert _NoOp.status_code == 204, _NoOp.text
     _Detail = requests.get(f'{base_route}/{_ItemId}/detail').json()
     assert len(_Detail['expiry_events']) == 1  # only the `set` from create
 

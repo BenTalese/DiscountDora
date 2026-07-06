@@ -10,6 +10,104 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-347 — Import template CSV: no UTF-8 BOM — Excel-on-Windows garbles accented example values
+- **Resolved:** 2026-07-06 — [`import_spreadsheet.py::download_import_template`](dora_api/features/data/import_spreadsheet.py) now prepends the UTF-8 BOM (`\xef\xbb\xbf`) to the response body before encoding, with an inline comment explaining why (Excel-on-Windows guesses ANSI/CP-1252 without it). The upload-side sniffer (`_parse_csv` around line 127) already strips a leading BOM, so the round-trip stays symmetric — verified by two new tests in [`test_data_router.py`](tests/e2e/dora_api/test_data_router.py): (1) the downloaded template starts with the BOM byte sequence; (2) staging that exact body back through the chunked-upload + inspect stack auto-maps the `name` column cleanly (proving the BOM didn't leak into a `"﻿name"` header). Full pytest 790/1 pre-existing flake — no regressions.
+- **Raised:** 2026-07-01 (post-FU-343 self-review).
+- **Type:** finding (latent — only bites when non-ASCII enters the example).
+- **What:** The templates endpoint in
+  [`import_spreadsheet.py`](dora_api/features/data/import_spreadsheet.py)
+  emits UTF-8 without a BOM. Today the example row is all ASCII, so
+  nothing renders wrong. If a future example includes an accented
+  character (`café`, `crème`, a currency symbol, etc.), Excel on
+  Windows will show mojibake unless the user opens via Data → From
+  Text and picks UTF-8. The inspect endpoint strips a BOM if
+  present, so the round-trip works either way — this is a display-
+  only concern for the *download*, not the *upload*.
+- **Why deferred:** doesn't bite today (all-ASCII example).
+- **Recommended resolution:** prepend `﻿` to the CSV body when
+  writing (one line change). Trivial. **Recommended resolution
+  point:** now if we ever want to add non-ASCII to an example
+  (unlikely for stock_items), else pair with FU-349 if we go for
+  option (b) — customer-named locations / groups might contain
+  accents.
+
+## [RESOLVED] FU-319 — Toast "Added <name> to your pantry" on inline-create from the recipe ingredient picker (F9)
+- **Resolved:** 2026-07-06 — the inline-create path in [RecipeDetailPage.vue:1516](web_app/src/pages/RecipeDetailPage.vue) already fired a positive toast (`Created stock item "<name>".`), but the copy leaned on internal jargon and didn't hint that the new item is now a persistent pantry row the user will see on the next Stock overview visit. Reworded to `Added "<name>" to your pantry.` — matches the FU's exact ask; small inline comment names the FU and the persistence expectation for future readers. `vue-tsc` clean. Negative-path toasts (`No stock levels configured…`, `Could not create stock item.`) left as-is: they're technical error surfaces where "stock item" language matches the error being reported, and rewording is out of FU-319's scope.
+- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F9 — (b)).
+- **Type:** UX / cleanup.
+- **What:** The recipe ingredient `q-select` exposes a "Create '<typed>'"
+  no-option entry that fires a POST to create a brand-new `StockItem`
+  inline. The new item survives even if the user cancels the recipe save
+  (verified during the audit). Add a small positive toast "Added <name>
+  to your pantry" when that inline-create path fires so the user isn't
+  surprised by a new tracked item on the next StockOverview visit.
+- **Where:** `web_app/src/pages/RecipeDetailPage.vue:395` (the picker)
+  and the create-stock-item handler the inline-create eventually calls.
+- **Recommended resolution:** opportunistic — fold into the next cookbook /
+  recipe-editor touch. 1–2 lines.
+- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F9.
+
+## [RESOLVED] FU-502 — Coverage tests for FU-043 locale/currency backend
+- **Resolved:** 2026-07-06 — new [tests/e2e/dora_api/test_locale_currency.py](tests/e2e/dora_api/test_locale_currency.py), **19 cases, all green**. Covers: (1) PATCH `{currency, locale}` round-trip through `GET /health` `locale_policy`, plus a shipping-default check; (2) currency valid table (`USD`, `EUR`, `aud→AUD` case-normalisation) + invalid table (`US`, `USDX`, `US1`, `""`, `" GBP "` — pydantic length gate catches the whitespace-padded case); (3) locale valid table (`en-AU`, `en-US`, `de-DE`, `en-Latn-US`, `zh-Hant-TW`) + invalid table (`en_AU`, `e`, `english`, `en AU`). Explicit skip of the FU's "migration up/down against in-memory sqlite" line item — the migration is exercised on every test run via the conftest's alembic-managed schema (any regression on the columns would take the whole suite down before this file loads), so a dedicated up/down test would only add ceremony. Fixture resets the row to `AUD`/`en-AU` in `try/finally`. Suite delta: 787 passed / 2 pre-existing flakes (both `register_barcode` and `is_planned_true_when_future_unconsumed_entry_exists` fail on clean HEAD with the same order-dependent state pollution — [[FU-466]]).
+- **Raised:** 2026-07-06 (FU-043 close-gate).
+- **Type:** deferred job (test coverage).
+- **What:** the FU-043 backend (AppSetting `currency`/`locale` columns +
+  migration `c4e9a2f7b1d3` + `_is_valid_bcp47` validator in
+  `update_app_settings.py` + `_locale_policy()` in `health_check.py`) shipped
+  without new tests because the Python test venv wasn't available on the box
+  the work ran on. The R-013 close-gate wants these under coverage.
+- **What to add:**
+  - Round-trip test: `PATCH /app-settings {currency:"USD", locale:"en-US"}`
+    then `GET /health` reflects `locale_policy.currency == "USD"` and
+    `locale_policy.locale == "en-US"`.
+  - Validation table: currency must be 3 uppercase alpha; `"US"`, `"USDX"`,
+    `"US1"`, `"usd"` (should upper-cased-in), `""` — expected verdicts.
+  - Locale validation table: `"en-AU"`, `"en-Latn-US"`, `"zh-Hant-TW"` accept;
+    `"en_AU"` (underscore), `"e"`, `"english"`, `"en AU"` (space) reject.
+  - Migration up/down against an in-memory sqlite (matches the existing
+    `test_operational_config_resolver.py` shape).
+- **Recommended resolution:** opportunistic — next time the pytest env is
+  reachable (see [[FU-466]] for the broader suite drift).
+
+## [RESOLVED] FU-503 — Ship the targeted `(?)` help chips per `IMPL_PLAN_HELP_CHIPS.md`
+- **Resolved:** 2026-07-06 — executed the impl plan end-to-end. Batched by file across ~15 files, 32 audit targets. **Landed net ~20 new chips**: DoraScoreCard (Kitchen health), DashboardPage (Savings captured), ReportsPage (Year-over-year, Meals-worth), AlertsPage (tier concept + per-kind tier override), shared MealPlanWeekStatus (Shortfall — covers chips 8 & 9 in one edit), RecipeDetailPage (Unallocated meals), RecipesOverview (Cookable now), StockOverview (Essential, Auto-add on low, Open/in-use, Needs check), StocktakeRunner (cadence subline, Push 3 days), ShoppingListDetail (Finish & restock), PriceHistoryPage (currently X% above, Your usual), MyProductsPage (Select on-deal), PriceEntry (multipack disclosure). **Folded (extended existing tooltip)**: RecipeCookMode Sous Chef + hands-free mic, ShoppingListDetail Plan-which-day, NotificationsSettings Compact format help, AssistantSettings tool-able-requests description. **Skipped as already covered**: StockItemDetailPage Essential/Auto-add toggles (existing tooltips), PreferencesSettings three toggles (existing SettingsRow `help` attrs). **Skipped as N/A**: Cookable-tonight dashboard label — card was renamed to "Next to cook" (meal-plan-driven) since the audit; the tooltip copy would misdescribe the current card, and chip 11 covers the "cookable now" term in its actual home. `npx vue-tsc --noEmit` → clean. Overlay mechanism, `v-help` directive, `?` toolbar toggle, DoraBot fronting stay parked as someday.
+- **Raised:** 2026-07-06 (FU-044 re-scope).
+- **Type:** deferred job (execution — audit + copy are already done).
+- **What:** User re-scoped FU-044 mid-session (dropped the opt-in help-
+  overlay mechanism from `PROPOSAL_HELP_OVERLAY.md`); the narrowed ask is
+  to add a targeted `(?)` hover-tooltip using the existing
+  `RecipeDetailPage.vue`-style pattern on 32 genuinely-confusing
+  controls. The audit ran this session and the tooltip copy is drafted
+  in [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
+- **Why deferred:** user asked to save it for the next session so that
+  session can go straight from open → edit → commit without re-
+  discovering the audit or drafting copy.
+- **Recommended resolution:** **now / next session.** Open the impl plan,
+  open each file in its "Batch by file" order, apply the chips, `vue-tsc`
+  clean, run the close-gate in the impl plan (CHANGELOG bullet, move
+  FU-044 → resolved, retire PROPOSAL_HELP_OVERLAY as superseded, add
+  DORA_VERIFY entry, worklog + PROJECT_STATE update). Do NOT re-open the
+  overlay-mechanism debate — that decision is locked as parked.
+
+## [RESOLVED] FU-044 — Re-scoped 2026-07-06 → shipped via [[FU-503]]
+- **Resolved:** 2026-07-06 — original opt-in help-overlay design retired (parked as someday). Executed the narrowed replacement per `IMPL_PLAN_HELP_CHIPS.md`; see [[FU-503]] for the shipped detail. Help/guides page + assistant remain the deep-help fallback; `PROPOSAL_HELP_OVERLAY.md` stays in the tree as 📦 superseded record.
+- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`).
+- **Type:** deferred job (design retired; execution pending under a new ID).
+- **Status update 2026-07-06:** original opt-in help-overlay design
+  (`?` toolbar toggle, dismissible per-element overlays, `v-help`
+  directive, DoraBot fronting, discoverability nudge) **retired.** User
+  narrowed scope mid-session: instead of a whole mechanism, add
+  targeted `(?)` hover-tooltip chips on 32 specific confusing controls
+  using the existing `RecipeDetailPage.vue`-style pattern. Audit +
+  tooltip copy are drafted in
+  [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
+  `PROPOSAL_HELP_OVERLAY.md` stays in the tree as the record of the
+  parked overlay design (📦 superseded); Help/guides page + assistant
+  remain the deep-help fallback.
+- **Recommended resolution:** closes at the same time as [[FU-503]] —
+  next session opens the impl plan, applies the chips, runs the
+  close-gate.
+
 ## [RESOLVED] FU-218 — Browser-verify the new admin "API access" page (C-10 / Phase B)
 - **Resolved:** 2026-07-06 — pure browser-verify; the a-g checklist already lives in `DORA_VERIFY.md` under **API access page (C-10 Phase B) — origin FU-218** (lines ~1050-1057). Per the CLAUDE.md rule, pure "walk the app" checks don't warrant an open FU. If any check turns up a real bug, a fresh FU gets opened for the fix.
 - **Raised:** 2026-06-17 (Phase B build)

@@ -144,7 +144,14 @@
                             label="Finish & restock"
                             :loading="finishing"
                             @click="openFinishReview"
-                        />
+                        >
+                            <q-tooltip>
+                                Marks this shop as done: every ticked item moves
+                                back to Stocked in your pantry, and the list is
+                                archived. Untick anything you didn't actually buy
+                                first.
+                            </q-tooltip>
+                        </BaseButton>
                         <BaseButton
                             v-if="detail && detail.status === 'done'"
                             variant="ghost"
@@ -281,7 +288,14 @@
                                 class="q-mt-sm q-px-sm"
                                 @click="openPlannedDateEditor"
                             >
-                                <q-tooltip>Plan which day you'll shop this list — it becomes the "next up" pick</q-tooltip>
+                                <!-- FU-044 — extended tooltip explains what the
+                                     planned date drives beyond "next up". -->
+                                <q-tooltip>
+                                    Set the date you plan to shop this list. Helps
+                                    Dora prioritise which list is your "active" one
+                                    this week, and drives shop-day reminders if you
+                                    have them on.
+                                </q-tooltip>
                             </q-btn>
                         </div>
                         <div

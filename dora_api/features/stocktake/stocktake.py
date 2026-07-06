@@ -197,6 +197,13 @@ def _gather_engagement_signals(
     items_with_recent_level_change: set[UUID] = set()
     items_hit_low_or_out_recently: set[UUID] = set()
     for stock_item_id, changed_at, seq in change_rows:
+        # SQLite's `DateTime(timezone=True)` round-trips as naive; every
+        # write here uses `datetime.now(UTC)`, so re-attaching UTC is the
+        # honest way to compare against the tz-aware cutoffs. Doing it
+        # inline (instead of a helper) keeps the two comparison sites
+        # obviously symmetric.
+        if changed_at.tzinfo is None:
+            changed_at = changed_at.replace(tzinfo=UTC)
         change_timestamps_by_item.setdefault(stock_item_id, []).append(changed_at)
         if changed_at >= engagement_cutoff:
             items_with_recent_level_change.add(stock_item_id)

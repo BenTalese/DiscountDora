@@ -5,7 +5,40 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Import template CSV: UTF-8 BOM prepended for Excel-on-Windows — FU-347 (2026-07-06).**
+  The downloaded `dora-import-<section>.csv` now begins with the UTF-8
+  byte-order mark so Excel-on-Windows opens it in UTF-8 by default
+  instead of guessing ANSI/CP-1252 and rendering any accented character
+  as mojibake. Round-trip is unaffected — the upload-side parser
+  already strips the BOM before decoding.
+
+### Changed
+- **Recipe-picker inline-create toast copy — FU-319 (2026-07-06).** The
+  "Create '<typed>'" no-option row in the recipe ingredient picker now
+  toasts `Added "<name>" to your pantry.` instead of the older
+  jargon-y `Created stock item "<name>".` — because the inline-created
+  item persists even if the recipe save is cancelled, the copy now
+  hints at where the user will see it next.
+
 ### Added
+- **Targeted (?) hover-help chips on ~25 confusing controls — FU-044 (2026-07-06).**
+  Non-obvious metrics and Dora-specific terminology explained in-context
+  without a toggle or overlay engine: Kitchen health score, Savings
+  captured range, Year-over-year card, Meals-worth metric, Alerts
+  Needs-action/FYI distinction + per-kind tier override, meal-plan
+  Shortfall, Available meals / Unallocated, Cookable-now filter,
+  Sous Chef + hands-free mic (extended existing tooltips), Stock
+  filter chips (Essential / Auto-add on low / Open / Needs check),
+  Stocktake cadence + Push-3-days button, Finish-&-restock + Plan-day
+  buttons, Above-usual and Your-usual price chips, Select-on-deal bulk,
+  Multipack pack count disclosure, Compact deals-email format, and the
+  Assistant AI-mode "tool-able requests" description. A lightweight
+  sibling to the Help page and assistant, not a replacement. Some audit
+  targets were already covered by nearby captions/help text or had been
+  renamed since the audit (Cookable-tonight dashboard card is now
+  "Next to cook"); those were skipped rather than duplicated. Overlay
+  mechanism from `PROPOSAL_HELP_OVERLAY.md` remains parked.
 - **Currency & locale for non-AU installs — FU-043 (2026-07-06).** Dora is now
   usable outside Australia. Two new install-wide settings on `AppSetting`:
   `currency` (ISO 4217, e.g. `USD`, `EUR`, `AUD`) and `locale` (BCP-47, e.g.

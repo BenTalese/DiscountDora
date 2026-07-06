@@ -148,6 +148,15 @@
                                 <strong>{{ formatMoney(s.all_time_low.unit_price) }}</strong>
                                 <span v-if="aboveLowPct(s) !== null">
                                     · currently {{ aboveLowPct(s) }}% above
+                                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                                        <q-tooltip>
+                                            You're paying more than your own usual
+                                            price for this product, based on prices
+                                            you've logged. Not a comparison to the
+                                            all-time-low across all stores — it's
+                                            personal.
+                                        </q-tooltip>
+                                    </q-icon>
                                 </span>
                             </div>
                             <!-- FU-227 chunk 6 (F-3) — the user's own usual
@@ -163,6 +172,14 @@
                                     {{ formatMoney(s.your_prices.baseline)
                                     }}{{ s.your_prices.baseline_unit ? `/${s.your_prices.baseline_unit}` : '' }}
                                 </strong>
+                                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                                    <q-tooltip>
+                                        "Usually" is the median of prices you've
+                                        logged for this item. "Above usual" means
+                                        today's shelf price is meaningfully higher
+                                        than that median.
+                                    </q-tooltip>
+                                </q-icon>
                                 <q-chip
                                     v-if="s.your_prices.above_baseline"
                                     dense

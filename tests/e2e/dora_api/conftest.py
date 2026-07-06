@@ -194,6 +194,17 @@ class _TestClientResponse:
     def json(self):
         return self._response.get_json()
 
+    def raise_for_status(self) -> None:
+        """Mirror `requests.Response.raise_for_status`. Some backup/restore
+        tests call this to fail fast on the download-attachment path;
+        without it the calls hit `AttributeError` before the assertion
+        that matters."""
+        if 400 <= self._response.status_code < 600:
+            raise RuntimeError(
+                f"HTTP {self._response.status_code}: "
+                f"{self._response.get_data(as_text=True)[:200]}"
+            )
+
 
 class _TestClientSession:
     """Stand-in for `requests.Session` backed by a single test client (its own

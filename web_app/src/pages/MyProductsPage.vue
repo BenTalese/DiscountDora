@@ -76,7 +76,13 @@
                         no-caps
                         label="Select on-deal"
                         @click="selectOnDealVisible"
-                    />
+                    >
+                        <q-tooltip>
+                            Selects every visible product that's currently on
+                            special — a shortcut for bulk actions like adding all
+                            deals to your primary list.
+                        </q-tooltip>
+                    </q-btn>
                     <q-btn
                         flat
                         no-caps

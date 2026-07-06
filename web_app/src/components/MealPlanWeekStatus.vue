@@ -9,6 +9,13 @@
             <span v-if="batchEnabled && shortfallCount > 0" class="week-status__cell text-warning">
                 <q-icon :name="ICONS.chef_hat" size="14px" class="q-mr-xs" />
                 {{ cookByLabel }}
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                    <q-tooltip>
+                        Meal-plan slots whose recipe doesn't have enough
+                        cooked-and-frozen portions to cover them. You'll need to
+                        cook or shop for the missing ingredients.
+                    </q-tooltip>
+                </q-icon>
             </span>
             <span
                 class="week-status__cell"

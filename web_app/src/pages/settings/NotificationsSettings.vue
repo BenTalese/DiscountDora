@@ -45,7 +45,7 @@
 
                 <SettingsRow
                     label="Compact format"
-                    help="One line per deal."
+                    help="One line per deal (item, price, store). Off = expanded card per deal with images and store logos."
                 >
                     <q-toggle
                         :model-value="currentUser.deals_email_compact"

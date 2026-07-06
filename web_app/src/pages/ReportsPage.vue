@@ -186,6 +186,14 @@
                     >
                         {{ mealsCooked.cook_count }} cook{{ mealsCooked.cook_count === 1 ? '' : 's' }}
                         · {{ mealsCooked.meals_total }} meals-worth
+                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                            <q-tooltip>
+                                Total portions you cooked in this range, summed from
+                                the "how many meals?" answer at the end of each cook.
+                                Different from cook count — one cook can yield
+                                several meals.
+                            </q-tooltip>
+                        </q-icon>
                     </span>
                 </header>
                 <div v-if="loading.mealsCooked" class="report-card-loading">
@@ -265,7 +273,17 @@
             <article class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.compare_arrows" size="22px" class="report-card-icon" />
-                    <h3 class="report-card-title">Year-over-year</h3>
+                    <h3 class="report-card-title">
+                        <!-- FU-044 chip -->
+                        Year-over-year
+                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                            <q-tooltip>
+                                This window's total spend compared to the same-length
+                                window a year earlier — so a 90-day view compares this
+                                90 days to the matching 90 days last year.
+                            </q-tooltip>
+                        </q-icon>
+                    </h3>
                     <span v-if="spendYoY" class="report-card-note">
                         this
                         <template v-if="range === '30d'">30 days</template>

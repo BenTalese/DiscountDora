@@ -1250,6 +1250,32 @@ machine at this session close-time; walked opportunistically.*
 
 ## Cross-cutting
 
+### Recipe-picker inline-create toast — origin FU-319 (2026-07-06)
+- [ ] Open any recipe in the cookbook, edit ingredients, add a new ingredient row → type a name that doesn't match any existing stock item → tap the "Create '<typed>'" no-option row in the picker → **positive toast reads `Added "<name>" to your pantry.`** (not the old "Created stock item …" copy)
+- [ ] After the toast, navigate to Stock overview → the new item is there with the shipping-default level (top of the levels list). Confirms the toast reflects reality.
+
+### Help chips (FU-503 / FU-044) — 2026-07-06
+*Walk the surfaces in `docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md`. For each
+one: hover the `(?)` icon on desktop and long-press on mobile. Confirm the
+tooltip renders (not clipped), and the copy reads correctly.*
+- [ ] Dashboard: Kitchen health card title, You've saved card title
+- [ ] Reports: Year-over-year card title, Meals-worth metric in Meals cooked card
+- [ ] Alerts: header "N need action · M FYI" tooltip; per-kind tier segmented control in the Manage panel
+- [ ] Meal plans: Shortfall / cook-by chip in the week status (renders on both Overview and Board pages — shared component)
+- [ ] Recipe detail: "N unallocated of M cooked" caption in the Available meals card
+- [ ] Cookbook overview: Cookable now filter chip has a `(?)` beside it explaining the distinction from "Have meals in pool"
+- [ ] Cook mode: Sous Chef button tooltip now includes the fuller explanation; hands-free mic tooltip explains it's independent of narration
+- [ ] Stock overview: `(?)` beside Essential, Will auto-add on low, Open / in-use, Needs check filter chips
+- [ ] Stocktake runner: cadence subline ("Checked every X · Y days overdue") has a `(?)`; Push 3 days button tooltip renders
+- [ ] Shopping list detail: Finish & restock button tooltip; Plan-which-day button tooltip renders the extended copy
+- [ ] Price history: "currently X% above" has a `(?)`; "Your usual" caption has a `(?)`
+- [ ] My products: Select on-deal button tooltip
+- [ ] Any product row's PriceEntry (multipack disclosure): "Add pack count (multipack)" ghost button tooltip
+- [ ] Notifications settings: Compact format help text now reads "One line per deal (item, price, store). Off = expanded card…"
+- [ ] Assistant settings: Enable AI mode description reads "Off keeps every chat reply rule-based. On routes *tool-able requests* through your configured provider — requests that need real actions…"
+- [ ] Dark mode + all themes: `(?)` icon inherits colour from parent context (R-002); no hardcoded colour bleeds through
+- [ ] Mobile viewport: tooltips are readable at 360px (may need to reflow); long-press activates them
+
 ### iOS / macOS-WKWebView audio-unlock primer — origin FU-287
 *Needs iPhone / iPad (Safari) or the macOS desktop bundle (WKWebView).
 User doesn't have iOS device access as of 2026-07-03 — sits until then.

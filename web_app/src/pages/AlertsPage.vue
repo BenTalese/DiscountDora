@@ -8,6 +8,14 @@
                     <span v-if="totalCount === 0 && snoozedCount === 0">All quiet. Good work.</span>
                     <span v-else>
                         {{ alerts.actionable_count }} need action · {{ alerts.fyi_count }} FYI
+                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
+                            <q-tooltip>
+                                Needs action = things you should decide on soon
+                                (expiring items, low stock, run-outs). FYI = things
+                                worth knowing about but no decision required (price
+                                drops, stocktake nudges).
+                            </q-tooltip>
+                        </q-icon>
                         <span v-if="snoozedCount > 0"> · {{ snoozedCount }} snoozed</span>
                     </span>
                 </div>
@@ -148,6 +156,13 @@
                                 :disable="!pref.enabled || prefBusy.has(pref.kind)"
                                 @update:model-value="(t) => onSetTier(pref, t as AlertTier)"
                             />
+                            <q-icon :name="ICONS.help_outline" size="14px">
+                                <q-tooltip>
+                                    Choose whether this alert kind lands in
+                                    Needs action, FYI, or is silenced entirely.
+                                    Overrides the app-wide default set in Settings.
+                                </q-tooltip>
+                            </q-icon>
                             <span v-if="pref.tier_override">· default {{ tierLabel(pref.default_tier) }}</span>
                         </q-item-label>
                     </q-item-section>

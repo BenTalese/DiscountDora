@@ -1,6 +1,16 @@
 # C-help — Opt-in contextual help overlay → `PROPOSAL_HELP_OVERLAY.md`
 
-**Type:** 🔵 design brief — produces this proposal, changes **NO code.**
+**Type:** 📦 **SUPERSEDED (2026-07-06)** — the opt-in overlay design here
+(the `?` toolbar toggle, dismissible per-element overlays, `v-help`
+directive, DoraBot fronting, discoverability nudge) was **retired** when
+FU-044 was re-scoped mid-session. The narrower ask — targeted `(?)` hover-
+tooltip chips on ~25 specific confusing controls — shipped instead via
+[IMPL_PLAN_HELP_CHIPS.md](IMPL_PLAN_HELP_CHIPS.md) and [[FU-503]] /
+[[FU-044]] (both resolved 2026-07-06). Help page + assistant remain the
+deep-help fallback. This file is kept as the record of the parked design;
+do NOT revive without an explicit re-scoping decision from the user.
+
+**Type (original):** 🔵 design brief — produces this proposal, changes **NO code.**
 
 **Origin.** User-floated (2026-06-06): *"add an info button that can be clicked at
 any time on a page to show/hide info panels that pop up around all the UI elements

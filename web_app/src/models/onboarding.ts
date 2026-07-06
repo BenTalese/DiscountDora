@@ -10,9 +10,6 @@ export type OnboardingState = {
     completed: boolean;
     completed_at: string | null;
     first_user: boolean;
-    has_locations: boolean;
-    has_groups: boolean;
-    has_stock_items: boolean;
     store_status: StoreStatus;
 };
 

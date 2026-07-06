@@ -5,6 +5,28 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Batch-cooking preference now asked in onboarding — FU-041 follow-up (2026-07-06).**
+  New "I batch-cook" toggle sits under the "how many people do you cook for?"
+  input on the welcome step. Both are "how you cook" personal prefs and belong
+  together; the batch-cooking toggle used to be Settings-only, which meant
+  users who batch-cook only discovered the cook-pool ± / "N free" / shortfall
+  affordances by accident. Default stays off (Charter P10 Anti-creep) and the
+  Settings toggle is unchanged — the wizard just gives it a first-run
+  discovery point.
+
+### Changed
+- **Onboarding split into first-user vs subsequent-user tracks — FU-041 (2026-07-06).**
+  A genuine first-time setup (fresh self-host, or first user in a new SaaS
+  household) always runs against an empty DB, so the seed step no longer
+  branches defensively on "you already have groups/locations". First user
+  walks the full path (welcome → admin → seed catalogues → first stock item →
+  finish); every subsequent user walks welcome → finish only (personal prefs
+  and the "here's the app" tour — no household-scoped seeding, no first-item
+  nudge, no admin bootstrap). The `has_locations` / `has_groups` /
+  `has_stock_items` flags — and the "You already have…" copy blocks that
+  read them — are gone.
+
 ### Fixed
 - **Import template CSV: UTF-8 BOM prepended for Excel-on-Windows — FU-347 (2026-07-06).**
   The downloaded `dora-import-<section>.csv` now begins with the UTF-8

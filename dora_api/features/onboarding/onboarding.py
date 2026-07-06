@@ -93,9 +93,6 @@ class OnboardingStateDto:
     completed: bool
     completed_at: datetime | None
     first_user: bool
-    has_locations: bool
-    has_groups: bool
-    has_stock_items: bool
     store_status: StoreStatusDto
 
 
@@ -105,17 +102,11 @@ class GetOnboardingStateHandler:
 
     def handle(self, user: User) -> OnboardingStateDto:
         total_users = self.repository.get(User).count()
-        groups_count = self.repository.get(StockGroup).count()
-        locations_count = self.repository.get(StockLocation).count()
-        items_count = self.repository.get(StockItem).count()
         store_total = self.repository.get(Store).count()
         return OnboardingStateDto(
             completed = user.onboarding_completed_at is not None,
             completed_at = user.onboarding_completed_at,
             first_user = total_users <= 1,
-            has_locations = locations_count > 0,
-            has_groups = groups_count > 0,
-            has_stock_items = items_count > 0,
             store_status = StoreStatusDto(
                 total = store_total,
                 enabled = store_total,

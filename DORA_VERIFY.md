@@ -1079,7 +1079,6 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] Finish the wizard. In Settings → Stock locations only Kitchen (auto-created as FK parent) + Fridge exist. Bathroom / Laundry / their children are **not** seeded. Kitchen's zone row is NOT visually marked as "already existed"
 - [ ] Ticking the zone AND a child (e.g. Kitchen + Kitchen/Fridge) seeds both (zone once, child once). No duplicate rows
 - [ ] Case-insensitive: manually PATCH the local draft to have a path `"KITCHEN/fridge"` (in DevTools localStorage) → finish → seeds correctly (path comparison is lowercased server-side)
-- [ ] Master card body is hidden entirely when `state.has_groups` / `state.has_locations` is true. Existing-groups copy shows in place (unchanged from pre-FU-195)
 - [ ] Legacy draft resume: manually inject `{"seedGroups": false}` into the localStorage draft, reload — the groups pick-map defaults to all-**unticked** (respecting the legacy explicit-off intent). Any other legacy value → all-ticked default
 - [ ] **Paste-rows affordance:** below the two seed cards, an expansion "Paste rows to bulk-add items" opens a textarea. Paste `Milk, Dairy, Fridge\nOlive oil, Pantry\nEmpty,\n , trailing comma test\n` — caption below reads "3 rows ready — added on Finish" (the empty-name and whitespace-only rows drop silently)
 - [ ] Click "Queue 3 rows" → toast fires, textarea clears, the queued rows behave like step-4 draftItems (visible on step 4's "Added" list)
@@ -1094,7 +1093,8 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] Theme picks persist as `system`/`pesto`/`pesto-dark` and repaint
 - [ ] Import line reads "spreadsheet or another app" and links to `/data/import`
 - [ ] Mid-wizard refresh resumes draft including queued first items
-- [ ] On a genuinely fresh DB (no dev seed), the "already have groups/locations" copy does NOT appear and seed checkboxes are enabled (folds FU-041)
+- [ ] **First-user vs subsequent-user tracks (FU-041):** first ever user on a fresh install walks welcome → admin → seed → first_item → finish. A second user registered afterwards walks welcome → finish only — no admin, no seed catalogues step, no "add your first stock item" step
+- [ ] **Batch-cooking toggle on the welcome step (FU-041 follow-up):** sits directly under the headcount input, labelled "I batch-cook" with a caption explaining what it unlocks (cook-pool ± / "N free" / shortfall). Default off. Flipping it on and finishing the wizard → `currentUser.batch_features_enabled === true` and the meal-plan recipe picker now shows "N free" caption + ± buttons. Bailing mid-wizard leaves `batch_features_enabled` untouched (like every other pref). Second run of onboarding pre-fills the toggle from the saved value
 - [ ] **C-5.2:** first-run opens on story; scenes auto-advance, hero loop pauses for exploration
 - [ ] Loop draws itself once, then stages + Dora are tappable + detail panel updates
 - [ ] Persona preview toggles provisional Insight chip + Dora-centre copy; previewed persona persists in draft for C-5.3 fork

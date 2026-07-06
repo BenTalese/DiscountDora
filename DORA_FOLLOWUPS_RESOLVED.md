@@ -10,6 +10,52 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-032 — C-2: allocation count doesn't decrement after planner drop
+- **Resolved:** 2026-07-06 — user confirmed in the browser (with batch-cooking
+  toggled on via the new onboarding pref) that dropping a recipe onto a future
+  day now decrements the "N free" caption on the recipe row in the palette
+  ([MealPlanRecipePicker.vue:59](web_app/src/components/MealPlanRecipePicker.vue:59)).
+  Root cause never diagnosed — the meal-plan surface was rebuilt between the
+  original repro (2026-06-12 against `MealPlansOverview.vue`) and now (the
+  picker lives in `MealPlanRecipePicker.vue`, gated behind
+  `batch_features_enabled`), and the rebuild quietly cleared whatever
+  reactivity / commit-visibility bug was making the old chip stick. Not worth
+  archaeology; the bug is gone from the shipping surface.
+- **Raised:** 2026-06-06 (C-2 recon); user repro confirmed 2026-06-12
+- **Type:** finding (real bug, not yet root-caused)
+- **What:** User dragged recipes from the palette onto future days; the chip's
+  count next to the recipe name didn't change. Data path read clean end-to-end
+  (frontend `onDropOnDay` → PATCH → refetch recipes; backend `_hydrate_unallocated`
+  GROUP BY looked correct; chip bound through `storeToRefs`). Three runtime
+  suspects — reading the wrong number (`available_meals` vs `unallocated_meals`),
+  `storeToRefs` + sorted-array reactivity edge case, `scheduled_for >= today`
+  date boundary. None ever verified; picker rebuild made the question moot.
+
+## [RESOLVED] FU-041 — Onboarding "you already have groups/locations" copy on first-run
+- **Resolved:** 2026-07-06 — root cause fixed by design change rather than a
+  bug hunt. The user pointed out that a genuine first-time setup (fresh
+  self-host, or first user in a new SaaS household) will *always* be against an
+  empty DB, so onboarding never needed to defensively handle "already have
+  groups/locations". The dev seed data was the only thing that could ever fire
+  that branch. Split onboarding into two tracks: first user walks
+  welcome → admin → seed → first_item → finish; every subsequent user walks
+  welcome → finish only (personal prefs; no household-scoped seeding). Dropped
+  `has_locations` / `has_groups` / `has_stock_items` from `OnboardingStateDto`
+  ([onboarding.py](dora_api/features/onboarding/onboarding.py)) and the
+  matching TS type ([onboarding.ts](web_app/src/models/onboarding.ts)); ripped
+  the "You already have…" copy branches out of
+  [WelcomeWizard.vue](web_app/src/pages/onboarding/WelcomeWizard.vue). Backend
+  onboarding tests green (24 passed).
+- **Raised:** 2026-06-06 (C-5 brief; feedback L32/L33)
+- **Type:** finding (reported defect — didn't reproduce statically)
+- **What:** User reported the seed step said "You already have some groups set
+  up…" / "You already have locations…" during first-time setup. Static read
+  showed the copy was gated on `has_groups` / `has_locations`, which are false
+  on a truly-empty DB — so the branch could only ever fire against
+  `seed_dev_data()` output. Rather than chase the dev-seed source, we removed
+  the defensive branch and the whole seed step from the subsequent-user track
+  (where it doesn't belong).
+
 ## [RESOLVED] FU-347 — Import template CSV: no UTF-8 BOM — Excel-on-Windows garbles accented example values
 - **Resolved:** 2026-07-06 — [`import_spreadsheet.py::download_import_template`](dora_api/features/data/import_spreadsheet.py) now prepends the UTF-8 BOM (`\xef\xbb\xbf`) to the response body before encoding, with an inline comment explaining why (Excel-on-Windows guesses ANSI/CP-1252 without it). The upload-side sniffer (`_parse_csv` around line 127) already strips a leading BOM, so the round-trip stays symmetric — verified by two new tests in [`test_data_router.py`](tests/e2e/dora_api/test_data_router.py): (1) the downloaded template starts with the BOM byte sequence; (2) staging that exact body back through the chunked-upload + inspect stack auto-maps the `name` column cleanly (proving the BOM didn't leak into a `"﻿name"` header). Full pytest 790/1 pre-existing flake — no regressions.
 - **Raised:** 2026-07-01 (post-FU-343 self-review).

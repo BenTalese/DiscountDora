@@ -9,6 +9,107 @@ next.
 
 ---
 
+## 2026-07-06 — FU-041 follow-up: surface batch-cooking pref in onboarding
+
+**Why:** While closing FU-041 the user asked about FU-032 (recipe-palette
+"unallocated" chip stuck after planner drop) and couldn't find the "N free" /
+± controls the FU described. Root cause: those affordances are gated behind
+the per-user `batch_features_enabled` toggle (charter P10 Anti-creep — off by
+default) and the toggle was only reachable via Settings. Users who batch-cook
+would never discover the feature. Same "how you cook" shape as the headcount
+question already on the welcome step, so it belongs there.
+
+**What landed** (all in [WelcomeWizard.vue](web_app/src/pages/onboarding/WelcomeWizard.vue)):
+- New `q-toggle` row under the headcount `q-input` on the welcome step:
+  "I batch-cook" + a caption explaining what it unlocks (cook-pool ± / "N
+  free" / shortfall warning) and that it's flippable in Settings later.
+- `WizardDraft.batchCooking: boolean` (default `false`); pre-filled from
+  `currentUser.batch_features_enabled` on load like the other prefs.
+- `persistPreferences()` diffs and sends `batch_features_enabled` alongside
+  `username` / `theme` / `font_family` / `household_headcount` — same
+  once-on-Finish semantics, so a mid-wizard bail leaves the flag untouched
+  (inherits the C-5.1 verify guarantee automatically).
+
+**Charter check:** FU-210 (`WelcomeWizard.vue:715`) said "onboarding is one
+'show everything' path; features are enabled in Settings, not chosen here."
+That rule targeted a persona-fork step that gated whole app surfaces. This
+change adds a single preference toggle next to another preference toggle
+(headcount) — it doesn't fork the wizard or hide any surface. Charter-
+compatible.
+
+**Verified:**
+- `pytest -k "update_me or onboarding"` → 29 passed.
+- `vue-tsc --noEmit` → clean.
+- Backend contract unchanged: `UpdateMeRequest.batch_features_enabled: bool |
+  None` already accepts the field ([update_me.py:70,209](dora_api/features/auth/update_me.py:70)),
+  and the SPA type already exposes it on `currentUser` ([auth.ts:90](web_app/src/models/auth.ts:90)).
+
+**Standing-rules check (close-gate):** No R-* violations introduced. R-016
+scope discipline — kept to the wizard + the ledger updates.
+
+**Next up:** unrelated to FU-032, but the user should now be able to flip the
+toggle on and repro the FU-032 drop-decrement bug against the "N free"
+caption in `MealPlanRecipePicker.vue`. If it decrements cleanly, close
+FU-032 as fixed by the picker rebuild.
+
+---
+
+## 2026-07-06 — FU-041: split onboarding into first-user vs subsequent-user tracks
+
+**Why:** User raised FU-041 (the "you already have groups/locations" copy
+appearing during first-run). Their key insight: the branch shouldn't exist at
+all — a genuine first-time setup always runs against an empty DB (fresh
+self-host, or first user in a new SaaS household). The only path that ever
+tripped it was the dev seed data. Rather than chase the dev-seed source we
+removed the whole defensive branch and split onboarding cleanly.
+
+**Design decision (with user):**
+- **First-user track** (`first_user === true`): welcome → admin → seed
+  catalogues → first stock item → finish. Unchanged from before.
+- **Subsequent-user track** (`first_user === false`): welcome → finish only.
+  Personal prefs (display name / theme / font / headcount) + the "here's the
+  app" flow-cards. No household-scoped seeding, no first-item nudge, no admin
+  step — those are all things the household already has.
+
+**What landed:**
+- [dora_api/features/onboarding/onboarding.py](dora_api/features/onboarding/onboarding.py):
+  dropped `has_locations` / `has_groups` / `has_stock_items` from
+  `OnboardingStateDto` + `GetOnboardingStateHandler`.
+- [web_app/src/models/onboarding.ts](web_app/src/models/onboarding.ts):
+  matching three fields removed from `OnboardingState`.
+- [web_app/src/pages/onboarding/WelcomeWizard.vue](web_app/src/pages/onboarding/WelcomeWizard.vue):
+  - `visibleSteps` computed: gate `seed` + `first_item` on `first_user` (was
+    only gating `admin`); update the leading comment.
+  - Removed the four "already have…" copy blocks in both seed cards, and the
+    `:disable` / `v-if=!state?.has_*` guards on the expansion items,
+    master-checkboxes, and inner lists — now unconditionally editable, since
+    only first_user sees this step.
+- [DORA_VERIFY.md](DORA_VERIFY.md): dropped the obsolete "master card body is
+  hidden when state.has_groups is true" verify; replaced the FU-041
+  browser-verify item with a new one covering both tracks.
+- [CHANGELOG.md](CHANGELOG.md): Unreleased § Changed entry.
+- [DORA_FOLLOWUPS.md](DORA_FOLLOWUPS.md) → [DORA_FOLLOWUPS_RESOLVED.md](DORA_FOLLOWUPS_RESOLVED.md):
+  FU-041 archived.
+
+**Verified:**
+- `.venv/bin/python -m pytest -k onboarding` → 24 passed.
+- `grep has_groups\|has_locations\|has_stock_items` across code = clean; only
+  legacy prompt-plan snapshots + this worklog reference them now.
+- Not run: full pytest suite, `vue-tsc` (spawned but produced no output in the
+  time window — no diagnostics). Should be a green re-run; the removed fields
+  aren't referenced anywhere in the SPA except the wizard I edited.
+
+**Standing-rules check (close-gate):** R-003 state-ownership — this change is
+strictly server-side simplification (fewer computed flags) + a client that
+stops branching on server-side facts it never needed. No new client-side
+domain rules introduced. R-016 scope discipline — stayed inside FU-041; did
+not touch `store_status` even though `enabled === total` is now a dead mirror
+(FU-189 comment says keep it). No new ADR warranted.
+
+**Next up:** unblocks nothing specific; user's own queue.
+
+---
+
 ## 2026-07-06 — FU-347: prepend UTF-8 BOM to the import-template CSV download
 
 **Why:** User: "do Fu347". Latent Excel-on-Windows mojibake trap.

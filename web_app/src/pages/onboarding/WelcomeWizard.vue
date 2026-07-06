@@ -118,6 +118,21 @@
                         hint="Cook mode scales recipes to this. Leave blank to use each recipe's own serving size."
                         @blur="onHeadcountBlur"
                     />
+                    <q-item tag="label" class="q-px-none">
+                        <q-item-section>
+                            <q-item-label>I batch-cook</q-item-label>
+                            <q-item-label caption>
+                                One cook session feeds several days. Turns on the
+                                cook-pool controls in the meal planner — a per-recipe
+                                ± counter, "N free" chip, and a shortfall warning when
+                                the plan needs more cooks than you have on hand. Off
+                                by default; flip in Settings any time.
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                            <q-toggle v-model="form.batchCooking" />
+                        </q-item-section>
+                    </q-item>
                 </q-card-section>
             </q-card>
 
@@ -180,10 +195,7 @@
                 <div class="col-12 col-md-6">
                     <q-card flat bordered class="seed-card"
                         :class="{ 'seed-card--picked': groupPickCount > 0 }">
-                        <q-expansion-item
-                            :model-value="!state?.has_groups && groupPickCount > 0"
-                            :disable="state?.has_groups"
-                        >
+                        <q-expansion-item :model-value="groupPickCount > 0">
                             <template #header>
                                 <q-item-section avatar>
                                     <q-icon :name="ICONS.category" size="28px" color="primary" />
@@ -200,13 +212,12 @@
                                     <q-checkbox
                                         :model-value="groupMasterState"
                                         toggle-indeterminate
-                                        :disable="state?.has_groups"
                                         @update:model-value="toggleAllGroups($event)"
                                         @click.stop
                                     />
                                 </q-item-section>
                             </template>
-                            <q-list dense v-if="!state?.has_groups">
+                            <q-list dense>
                                 <q-item
                                     v-for="name in catalog?.groups ?? []"
                                     :key="name"
@@ -222,24 +233,12 @@
                                 </q-item>
                             </q-list>
                         </q-expansion-item>
-                        <q-separator v-if="state?.has_groups" />
-                        <q-card-section
-                            v-if="state?.has_groups"
-                            class="text-caption dora-text-muted q-py-sm"
-                        >
-                            You already have some groups set up. Skipping
-                            this leaves them alone; opting in won't create
-                            duplicates.
-                        </q-card-section>
                     </q-card>
                 </div>
                 <div class="col-12 col-md-6">
                     <q-card flat bordered class="seed-card"
                         :class="{ 'seed-card--picked': locationPickCount > 0 }">
-                        <q-expansion-item
-                            :model-value="!state?.has_locations && locationPickCount > 0"
-                            :disable="state?.has_locations"
-                        >
+                        <q-expansion-item :model-value="locationPickCount > 0">
                             <template #header>
                                 <q-item-section avatar>
                                     <q-icon :name="ICONS.place" size="28px" color="primary" />
@@ -256,13 +255,12 @@
                                     <q-checkbox
                                         :model-value="locationMasterState"
                                         toggle-indeterminate
-                                        :disable="state?.has_locations"
                                         @update:model-value="toggleAllLocations($event)"
                                         @click.stop
                                     />
                                 </q-item-section>
                             </template>
-                            <q-list dense v-if="!state?.has_locations">
+                            <q-list dense>
                                 <template v-for="zone in catalog?.locations ?? []" :key="zone.name">
                                     <q-item tag="label" dense>
                                         <q-item-section>
@@ -295,14 +293,6 @@
                                 </template>
                             </q-list>
                         </q-expansion-item>
-                        <q-separator v-if="state?.has_locations" />
-                        <q-card-section
-                            v-if="state?.has_locations"
-                            class="text-caption dora-text-muted q-py-sm"
-                        >
-                            You already have locations. Same deal — opting
-                            in here won't double them up.
-                        </q-card-section>
                     </q-card>
                 </div>
 
@@ -712,17 +702,19 @@ Toilet paper, Toiletries, Bathroom"
     // pre-fill from whatever the user last previewed in the hero loop.
     const personaPreview = ref<PersonaPreviewKey>(DEFAULT_PERSONA_PREVIEW);
 
-    // Setup steps are built per-state: admin is first-user only. (FU-210: the
-    // persona fork step is removed — onboarding is one "show everything" path;
-    // features are enabled in Settings, not chosen here. FU-209 removed the
-    // stock-vs-product explainer.)
+    // Two tracks. First user of an install (fresh self-host or first user in a
+    // new SaaS household) walks the full setup — admin bootstrap, seed the
+    // household-scoped groups/locations/catalogues, add a first stock item.
+    // Every subsequent user joins an already-configured household, so they only
+    // set personal prefs (display name / theme / font / headcount on the
+    // welcome step) and land in the app.
     const visibleSteps = computed<Step[]>(() => {
         const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
         if (state.value?.first_user) {
             steps.push({ id: 'admin', title: "You're the admin" });
+            steps.push({ id: 'seed', title: 'Seed catalogues' });
+            steps.push({ id: 'first_item', title: 'First stock item' });
         }
-        steps.push({ id: 'seed', title: 'Seed catalogues' });
-        steps.push({ id: 'first_item', title: 'First stock item' });
         steps.push({ id: 'finish', title: "You're all set" });
         return steps;
     });
@@ -821,6 +813,10 @@ Toilet paper, Toiletries, Bathroom"
         theme: ThemePreference;
         fontFamily: FontFamilyPreference;
         headcount: number | null;
+        // FU-041 follow-up — surfaced in onboarding alongside headcount (both
+        // are "how you cook" prefs). Default false matches the Charter P10
+        // Anti-creep posture the useBatchEnabled composable enforces.
+        batchCooking: boolean;
         // FU-195 — the seed-catalogue master booleans are gone; the
         // per-name pick sets below carry the same signal. A card is
         // effectively "on" when any name in it is picked, "off" when
@@ -848,6 +844,7 @@ Toilet paper, Toiletries, Bathroom"
         theme: 'system',
         fontFamily: 'default',
         headcount: null,
+        batchCooking: false,
         seedDemo: false,
         stepIndex: 0,
     });
@@ -1293,6 +1290,9 @@ Toilet paper, Toiletries, Bathroom"
         if (form.headcount !== (currentUser.value?.household_headcount ?? null)) {
             updates.household_headcount = form.headcount;
         }
+        if (form.batchCooking !== !!currentUser.value?.batch_features_enabled) {
+            updates.batch_features_enabled = form.batchCooking;
+        }
         if (Object.keys(updates).length === 0) return;
         await authStore.updateMeAsync(updates);
     }
@@ -1419,6 +1419,7 @@ Toilet paper, Toiletries, Bathroom"
             form.theme = currentUser.value.theme ?? 'system';
             form.fontFamily = currentUser.value.font_family ?? 'default';
             form.headcount = currentUser.value.household_headcount ?? null;
+            form.batchCooking = !!currentUser.value.batch_features_enabled;
         }
         loadDraft();
 

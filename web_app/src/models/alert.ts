@@ -140,33 +140,40 @@ export function iconFor(kind: AlertKind): string {
     }
 }
 
+// Severity ladder — returned string is the class-suffix Quasar's `color` prop
+// consumes (`bg-<name>` / `text-<name>`). Matching utility classes live in
+// `web_app/src/css/colours.scss` and read from the tokens in tokens.scss.
+// FU-313 (2026-07-06) — was Quasar numbered palette (red-6/orange-7/amber-7);
+// now theme-aware via `light-dark()` tokens.
 export function colorFor(severity: AlertSeverity): string {
-    if (severity === 'high') return 'red-6';
-    if (severity === 'medium') return 'orange-7';
-    return 'amber-7';
+    if (severity === 'high') return 'severity-critical';
+    if (severity === 'medium') return 'severity-medium';
+    return 'severity-low';
 }
 
 // Per-kind accent colour (C-9.3) — a stable visual identity per kind for the
 // summary boxes (L224), distinct from the severity-driven row avatar above.
-// Quasar palette names, matching colorFor's convention.
+// Some kinds intentionally reuse severity-ladder tokens where the semantic
+// overlaps (expired ⇒ critical, expiring_soon ⇒ medium, low_stock ⇒ low,
+// essential_low ⇒ high); the rest have their own categorical accents.
 export function colorForKind(kind: AlertKind): string {
     switch (kind) {
         case 'expired':
-            return 'red-6';
+            return 'severity-critical';
         case 'essential_low':
-            return 'deep-orange-6';
+            return 'severity-high';
         case 'expiring_soon':
-            return 'orange-7';
+            return 'severity-medium';
         case 'out_of_stock':
-            return 'purple-5';
+            return 'alert-kind-out-of-stock';
         case 'low_stock':
-            return 'amber-7';
+            return 'severity-low';
         case 'stocktake_overdue':
-            return 'blue-grey-6';
+            return 'alert-kind-stocktake-overdue';
         case 'no_planned_meals':
-            return 'teal-6';
+            return 'alert-kind-no-planned-meals';
         case 'shopping_day':
-            return 'indigo-5';
+            return 'alert-kind-shopping-day';
     }
 }
 

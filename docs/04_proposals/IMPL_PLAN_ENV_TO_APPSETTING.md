@@ -1,11 +1,14 @@
 # IMPL — FU-333 Bucket B: promote operational env vars to `AppSetting`
 
 **Source follow-up:** `DORA_FOLLOWUPS.md` FU-333, Bucket B only.
-**Status:** drafted 2026-07-05. No code yet — this is the plan a
-future session picks up cold.
-**Run order:** stand-alone. Buckets C (encrypt SMTP/VAPID secrets in
-DB) and D (desktop first-run wizard) are separate follow-ups and
-explicitly out of scope here.
+**Status:** ✅ **SHIPPED 2026-07-05 (Bucket B) + 2026-07-06 (Bucket C + D
++ env-fallback drop).** FU-333 closed; see `DORA_FOLLOWUPS_RESOLVED.md`.
+Historical planning doc — kept for the decision trail. The env-fallback
+lane described in Chunk 3 was dropped pre-release 2026-07-06 rather than
+after a "one full release" window; the sequencing rationale in §Chunk 3
+is superseded by the user directive "no need for fallbacks, this is
+prerelease work" recorded in the FU-333 resolved entry.
+**Run order:** N/A (shipped).
 
 FU-333's audit already answered the design question — 12 named env
 vars are operational config (not bootstrap, not secrets) and belong

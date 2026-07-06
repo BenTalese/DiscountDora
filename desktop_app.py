@@ -8,13 +8,20 @@ Boot sequence:
     1. Resolve per-user data / cache / log dirs via platformdirs and
        export them as DORA_* env vars BEFORE any dora_api module
        loads (the env-first config layer reads them at import time).
-    2. Tell the production gate to stand down (DORA_SKIP_PROD_VALIDATION).
-    3. Run the Flask app on a random localhost port in a daemon
+    2. Auto-generate the two remaining bootstrap keys
+       (`DORA_SECRET_KEY`, `DORA_LLM_KEY_ENCRYPTION_KEY`) into the
+       per-user data dir if not already set — FU-333 Bucket D so a
+       double-click end-user never sees an env var.
+    3. Tell the production gate to stand down (DORA_SKIP_PROD_VALIDATION).
+    4. Run the Flask app on a random localhost port in a daemon
        thread using werkzeug.serving.make_server, so we can shut it
        down cleanly when the window closes.
-    4. Poll /api/health until it answers 200 (max 5s).
-    5. Launch a pywebview window pointed at the local Flask URL.
-    6. On window close, shut Flask down and exit.
+    5. Poll /api/health until it answers 200 (max 5s).
+    6. Seed detected bundle paths (piper binary + voices dir) into the
+       `AppSetting` row when they're empty — FU-333 Bucket B strict
+       (no env fallback: the resolver reads only from the DB).
+    7. Launch the SPA in the user's default browser.
+    8. On shutdown signal, stop Flask and exit.
 
 Nothing here is Docker-aware. Docker keeps using startup.sh.
 """
@@ -22,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import socket
 import sys
 import threading
@@ -79,6 +87,42 @@ def _bootstrap_paths() -> None:
     _set_default_env("DORA_CORS_ORIGINS", "")
 
 
+def _bootstrap_keys() -> None:
+    """FU-333 Bucket D — auto-generate the two remaining bootstrap env vars
+    on desktop bundles.
+
+    `DORA_SECRET_KEY` signs the session cookie; `DORA_LLM_KEY_ENCRYPTION_KEY`
+    wraps per-user LLM API keys (FU-153) and the Bucket-C operational secrets
+    (SMTP password, VAPID private key). On server self-host the operator sets
+    both explicitly at deploy time. On a desktop bundle the user should never
+    see an env var — so we persist a per-install key file under the user data
+    dir and set the env from it before dora_api loads.
+
+    Rotation: the operator can delete the key file to force a re-generate at
+    the next launch. That invalidates every stored ciphertext (LLM keys, SMTP
+    password, VAPID private key) and every existing session — same trade-off
+    documented in `key_encryption.py`.
+    """
+    data = Path(os.environ["DORA_DATA_DIR"])
+    data.mkdir(parents=True, exist_ok=True)
+
+    if not os.environ.get("DORA_SECRET_KEY"):
+        secret_file = data / ".secret_key"
+        if not secret_file.exists():
+            secret_file.parent.mkdir(parents=True, exist_ok=True)
+            secret_file.write_text(secrets.token_hex(32))
+        os.environ["DORA_SECRET_KEY"] = secret_file.read_text().strip()
+
+    if not os.environ.get("DORA_LLM_KEY_ENCRYPTION_KEY"):
+        wrap_file = data / ".llm_key_encryption_key"
+        if not wrap_file.exists():
+            # Fernet.generate_key() returns 32-byte url-safe base64 — exactly
+            # what `key_encryption._fernet()` expects to read from env.
+            from cryptography.fernet import Fernet
+            wrap_file.write_bytes(Fernet.generate_key())
+        os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = wrap_file.read_bytes().decode("ascii").strip()
+
+
 def _bootstrap_spa_dir() -> None:
     """Tell Flask where the built SPA lives.
 
@@ -101,32 +145,88 @@ def _bootstrap_spa_dir() -> None:
             return
 
 
-def _bootstrap_piper() -> None:
-    """Point DORA_PIPER_BIN at the bundled Piper binary so Dora's neural voice
-    works out of the box on desktop (R-018 / ADR-013).
+def _detect_bundled_piper_paths() -> tuple[str | None, str | None]:
+    """Return `(piper_bin, bundled_voice_dir)` for whichever locations exist
+    inside this bundle, or `(None, None)` when nothing is prefetched.
 
-    `dora.spec` ships `packaging/piper/` to `<bundle>/piper/` when the build
-    fetched it (packaging/fetch_piper.py). One-folder + one-file PyInstaller
-    both expose that via `sys._MEIPASS`; we also check alongside the script so
-    a dev `python desktop_app.py` with a populated `packaging/piper/` works.
-    If no bundled binary is found we leave DORA_PIPER_BIN unset — `/api/tts`
-    then 503s and the SPA falls back to the browser voice. Voice models are
-    downloaded on demand into the data dir, untouched here."""
-    if os.environ.get("DORA_PIPER_BIN"):
-        return
+    `dora.spec` ships `packaging/piper/` and `packaging/voices/` alongside the
+    binary (see `packaging/fetch_piper.py` + `packaging/fetch_default_voice.py`).
+    One-folder + one-file PyInstaller expose them via `sys._MEIPASS`; the dev
+    checkout layout also works so `python desktop_app.py` from a repo where
+    the prefetch scripts have run behaves the same.
+
+    FU-333 Bucket B is strict — the app resolves `piper_bin` /
+    `piper_bundled_voice_dir` only through `AppSetting`. This detector runs
+    at desktop boot; `_seed_desktop_paths` (post-init) writes what we find
+    into the row when the row is empty. Server / Docker installs leave the
+    row blank and use system-installed piper via PATH; the operator can
+    override in Settings → Admin → System → Voice.
+    """
     exe = "piper.exe" if sys.platform.startswith("win") else "piper"
-    roots = []
+    roots: list[Path] = []
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         roots.append(Path(meipass))
     here = Path(__file__).resolve().parent
     roots.append(here)                 # alongside the bundled executable
     roots.append(here / "packaging")   # dev checkout layout
+
+    bin_path: str | None = None
     for root in roots:
         candidate = root / "piper" / exe
         if candidate.is_file():
-            os.environ["DORA_PIPER_BIN"] = str(candidate)
-            return
+            bin_path = str(candidate)
+            break
+
+    voice_dir: str | None = None
+    for root in roots:
+        candidate = root / "voices"
+        if candidate.is_dir():
+            voice_dir = str(candidate)
+            break
+
+    return bin_path, voice_dir
+
+
+def _seed_desktop_paths(bin_path: str | None, voice_dir: str | None) -> None:
+    """FU-333 Bucket B strict — populate `AppSetting.piper_bin` and
+    `piper_bundled_voice_dir` with the bundle-detected paths if the row is
+    empty *or* points at a path that no longer exists (moved bundle).
+
+    Called after Flask + migrations are up but before we open the browser,
+    so the first `/api/tts/voices` request finds the correct paths on the
+    row. Wrapped in a broad except — a DB hiccup here shouldn't take the
+    desktop launch down; the admin can always set the paths from Settings
+    if the auto-seed fails."""
+    log = logging.getLogger("dora.desktop")
+    if not bin_path and not voice_dir:
+        return
+    try:
+        from dora_api.app import app
+        from dora_api.features.app_settings.access import \
+            get_or_create_app_setting
+        from dora_api.persistence.sqlalchemy_repository import \
+            SqlAlchemyRepository
+        with app.app_context():
+            repo = SqlAlchemyRepository()
+            setting = get_or_create_app_setting(repo)
+            changed = False
+            current_bin = (getattr(setting, "piper_bin", "") or "").strip()
+            if bin_path and (not current_bin or not Path(current_bin).exists()):
+                setting.piper_bin = bin_path
+                changed = True
+            current_voices = (getattr(setting, "piper_bundled_voice_dir", "") or "").strip()
+            if voice_dir and (not current_voices or not Path(current_voices).is_dir()):
+                setting.piper_bundled_voice_dir = voice_dir
+                changed = True
+            if changed:
+                repo.save_changes()
+                log.info(
+                    "Seeded desktop piper paths: bin=%s bundle=%s",
+                    bin_path or "<unchanged>", voice_dir or "<unchanged>",
+                )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Piper path seed skipped: %s", exc)
 
 
 def _pick_free_port() -> int:
@@ -154,8 +254,9 @@ def _wait_for_health(url: str, timeout_seconds: float = 5.0) -> bool:
 
 def main() -> int:
     _bootstrap_paths()
+    _bootstrap_keys()
     _bootstrap_spa_dir()
-    _bootstrap_piper()
+    piper_bin_path, piper_voice_dir = _detect_bundled_piper_paths()
 
     # Set up file-based logging early so anything that goes wrong
     # below leaves a trail in user_log_dir. The desktop bundle has
@@ -176,6 +277,8 @@ def main() -> int:
     log.info("  cache=%s", os.environ["DORA_CACHE_DIR"])
     log.info("  logs=%s", os.environ["DORA_LOG_DIR"])
     log.info("  spa=%s", os.environ.get("DORA_SPA_DIR") or "<not found>")
+    log.info("  piper_bin=%s", piper_bin_path or "<not bundled — using PATH>")
+    log.info("  piper_voice_dir=%s", piper_voice_dir or "<not bundled>")
 
     # Import lazily so the env vars above are already set by the
     # time any `from dora_api...` module runs.
@@ -184,6 +287,7 @@ def main() -> int:
 
     init_db(is_test_env=False)
     register_routers()
+    _seed_desktop_paths(piper_bin_path, piper_voice_dir)
 
     from werkzeug.serving import make_server
 

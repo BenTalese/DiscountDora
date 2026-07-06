@@ -9,6 +9,418 @@ next.
 
 ---
 
+## 2026-07-06 — FU-461 refocused + closed: admin Add / Delete on the users page
+
+**Why:** User's call — FU-461 (GDPR-flavoured self-serve account deletion) is
+only load-bearing if we ever go SaaS; single-tenant self-host + desktop don't
+carry the "right to erasure" obligation. The real gap on the users page was
+that Edit + Reset password shipped but Add + Delete never did. Fixed the
+actual gap; refocused the FU. If SaaS becomes real later, the self-serve
+danger-zone build can lean on the admin-side plumbing that landed here.
+
+**Backend:**
+- **`dora_api/features/users/create_user_as_admin.py` (new)** —
+  `POST /api/users` (admin-only). Payload: `{ username, email?, is_admin? }`.
+  Uniqueness checks mirror `register_user.py` (username case-sensitive, email
+  normalised + case-insensitive). Email validated when present.  Server mints
+  a 12-char alphanumeric one-time password (same shape as
+  `reset_user_password.py`), hashes it, returns `{ user_id, new_password }` —
+  admin relays out-of-band. `email_verified=false` (parity with self-register);
+  no verification email dispatch. Audit event `user.created_by_admin`.
+- **`dora_api/features/users/delete_user_as_admin.py` (new)** —
+  `DELETE /api/users/<user_id>` (admin-only). Hard-deletes the User row after
+  two guards: refuses to delete the caller (`403`); refuses to delete the last
+  remaining admin (`400` business_rule_violation, mirroring the demote guard
+  on `update_user_as_admin`). FK-cascaded tables auto-drop (`PriceAlert`,
+  `AuthToken`, per-user LLM config); `RecipeCookEvent.cooked_by_user_id` +
+  `ShoppingList.created_by_user_id` are `ON DELETE SET NULL` so household
+  history survives with a null author. Explicit cleanup for the three
+  user-scoped tables that carry a plain `user_id` column with no FK
+  constraint: `AlertInteraction`, `AlertPreference`, `PushSubscription`.
+  `AuditEvent.actor_user_id` orphans intentionally so the audit trail
+  preserves what happened. Audit event `user.deleted_by_admin`.
+
+**Frontend:**
+- **`web_app/src/services/api/userAdminApiService.ts`** — added `createAsync`
+  (returns `{ user_id, new_password }`) and `deleteAsync`. Documented the
+  one-time-password contract in a comment so future callers know the server
+  never re-exposes it.
+- **`web_app/src/pages/settings/UsersAdminSettings.vue`** — new **Add user**
+  button in the header (primary variant, `person_add` icon). Create dialog
+  collects Username / Email / Admin toggle with inline field-error surfacing
+  (server 422s land in the picker's field-error map; 400 username-taken /
+  email-taken responses route to the right field by keyword sniff). On
+  success, closes the create dialog and reuses the existing password-shown-
+  once dialog — a `resetResultKind: 'create' | 'reset'` flag switches the
+  copy so both flows share one component. New **Delete** button on each row
+  (red text, trash icon), disabled with tooltip on the current user's row;
+  confirms via `$q.dialog` with a negative-coloured Delete CTA and honest
+  scope copy ("sessions, alert prefs, push subs removed; household-shared
+  things survive").
+- **`web_app/src/style/icons.ts`** — added `person_add: 'mdi-account-plus'`.
+
+**Design calls locked in:**
+- **Hard delete, not soft-delete.** Soft-delete needs a `User.deleted_at`
+  column plus every user-scoped query filtering on it — bigger scope than the
+  users page needs today. Hard delete + explicit cleanup of the three
+  FK-less tables + intentional audit-event orphaning is a smaller surface.
+  If SaaS retention-window obligations arrive later, a `deleted_at` column
+  can layer on top without invalidating the current shape.
+- **No self-delete.** The admin must ask another admin, even beyond the
+  last-admin guard. Prevents accidental lockouts.
+- **One-time password, not verification email.** Same shape as the existing
+  reset-password flow — no SMTP dependency; admin relays out-of-band.
+  `email_verified=false` on the created user so a subsequent self-serve
+  verify still works if the admin wants that later.
+
+**Governance:**
+- FU-461 moved to `DORA_FOLLOWUPS_RESOLVED.md` with the refocus rationale
+  and the full itemised shipped change list; original GDPR framing preserved
+  in the "original what" field for the audit trail.
+- New browser-verify block in `DORA_VERIFY.md` under Settings — Add flow,
+  Delete flow, both guards (can't-delete-self + last-admin), cascade
+  behaviour spot-checks (recipe/shopping-list authorship survives; audit
+  events survive with orphan actor).
+
+**Engineering-standards close-gate:** clean. R-003 (server owns the guards +
+audit + one-time-password mint), R-007 (scope stayed on the users-page CRUD;
+no adjacent cleanups). R-005 posture: the delete handler treats the schema
+inconsistency (three user-scoped tables without FKs) as a here-and-now
+migration cost — worth flagging that if a future schema pass adds proper
+FKs on those tables, the manual cleanup list here can be shortened.
+
+**Next up:** user's queue.
+
+---
+
+## 2026-07-06 — FU-313 closed: designed token ladder for graded severity + alert taxonomy
+
+**Why:** User's call after we reassessed the FU-313 scope — location-heatmap
+was already killed 2026-07-04 so that palette pointer dropped; the remaining
+alert-severity ladder + alert-kind accents + lifecycle event colours were the
+real scope, and the app foundations are settled enough to lock the design.
+User approved: use existing hex-alike Quasar palette values as the light-mode
+starting point (design intent already baked in), derive dark-mode values
+mechanically via `light-dark()` lightness-mirroring, sweep any other
+numbered-palette leaks at the same time.
+
+**What changed:**
+- **`web_app/src/css/tokens.scss`** — new "Graded severity + alert taxonomy"
+  section (15 tokens). Severity ladder (`--severity-critical` / `-high` /
+  `-medium` / `-low` / `-attention`), 4 categorical alert-kind accents
+  (`--alert-kind-out-of-stock` / `-stocktake-overdue` / `-no-planned-meals` /
+  `-shopping-day`), 1 alert-history state (`--alert-history-read` — snoozed
+  reuses `--severity-medium`), 3 lifecycle accents (`--lifecycle-bought` /
+  `-expiry-changed` / `-cleared`), 1 neutral (`--neutral-muted`). Each unique
+  colour uses `light-dark(hsl light, hsl dark)` — the light values keep the
+  current Quasar hues; dark values are lifted ~15% lightness for legibility
+  against dark surfaces.
+- **`web_app/src/css/colours.scss`** — matching `.bg-<name>` and
+  `.text-<name>` utility classes (30 total). Documented that Quasar's `color`
+  prop generates `bg-<name>` / `text-<name>` classes, so these utility classes
+  are the mechanism that makes `<q-avatar :color="severity-critical">` work
+  without touching Quasar's SCSS palette.
+- **`web_app/src/models/alert.ts`** — `colorFor` (3-stop severity ladder) and
+  `colorForKind` (8 kinds) return the new token names instead of
+  `red-6`/`orange-7`/`amber-7`/`deep-orange-6`/`purple-5`/`amber-7`/
+  `blue-grey-6`/`teal-6`/`indigo-5`. Kinds that semantically overlap the
+  severity ladder alias to it (expired ⇒ critical, expiring_soon ⇒ medium,
+  low_stock ⇒ low, essential_low ⇒ high).
+- **`web_app/src/pages/AlertsPage.vue historyChipColor`** — snoozed →
+  `severity-medium`; read → `alert-history-read`.
+- **`web_app/src/components/AddToListButton.vue`** — `on_multiple` amber-9 →
+  `severity-attention`.
+- **`web_app/src/pages/StockItemDetailPage.vue` lifecycle timeline (5 sites)**
+  — bought (teal-8) → `lifecycle-bought`; cooked (deep-orange-6) →
+  `severity-high`; expiry set/pushed (orange-8 × 2) →
+  `lifecycle-expiry-changed`; cleared (grey-7) → `lifecycle-cleared`; opened
+  (amber-9) → `severity-attention`.
+- **`web_app/src/pages/DashboardPage.vue nextToCookBadgeColor`** — extra leak
+  swept in-pass: `grey-6` (unlinked ingredients / no ingredients) →
+  `neutral-muted`.
+
+**Verified sweep clean:** grep for `'red-\d|'orange-\d|'amber-\d|'grey-\d`
+(etc.) across `web_app/src` returns only the FU-313 breadcrumb comments in the
+migrated files documenting what was there before.
+
+**Scope narrowing (verified in-session):** the FU originally listed the
+location heatmap as one of four migration targets. Reading `models/location.ts`
+confirmed the whole heatmap subsystem was **deleted** 2026-07-04 in the
+stocktake cleanup ("dead heatmap deleted, deprecated columns dropped") — the
+file's own header comment names it as "remnants of the killed stock-map /
+location-heatmap feature". Dropped that item from scope; the FU pointer was
+stale.
+
+**Deliberate design calls:**
+- **Ladder + aliases pattern.** Kept a 5-stop severity ladder + separate
+  alert-kind accents rather than trying to collapse everything into one flat
+  set. Kinds that map cleanly to the severity ladder alias to it (expired ⇒
+  critical, etc.) so the visual weight matches; kinds that don't (out-of-stock
+  purple, stocktake blue-grey, no-planned-meals teal, shopping-day indigo)
+  keep their own categorical tokens.
+- **`light-dark()` over per-theme repetition.** All 5 dark themes inherit a
+  single `light-dark()` declaration on `:root`. Would have been ~15 tokens ×
+  5 dark theme blocks = ~75 lines of per-theme overrides otherwise; the
+  themes' `color-scheme: dark` triggers the dark half automatically.
+- **Lightness derivation, not from-scratch design.** Dark-mode values are
+  `light-mode-hsl` with lightness +15% (roughly), preserving hue + saturation.
+  Faster to ship than hand-picking; browser-verify can catch anything that
+  reads wrong per theme and I'll tune. User accepted this trade-off up-front.
+
+**Engineering-standards close-gate:** R-002 (theme tokens only, no hardcoded
+palette) fully advanced. R-003 (single source for the ladder — tokens.scss
+owns the values, colours.scss owns the utility classes, `alert.ts` owns the
+mapping from semantics to tokens). R-007 (scope: the FU's four sites + one
+extra Dashboard leak the user's directive covered; nothing else swept). No
+new rule/ADR — this is the existing R-002 pattern applied to a subdomain that
+was previously carved out.
+
+**Governance:**
+- FU-313 moved to `DORA_FOLLOWUPS_RESOLVED.md` with the full itemised
+  migration list + kept FU history for the audit trail.
+- No new browser-verify block — the change is theme-token plumbing;
+  user's existing browser-check of alert / stock-item lifecycle / dashboard
+  pages will catch any theme miss (each token has a light + dark version to
+  eyeball across the 10 theme variants).
+
+**Next up:** user's queue.
+
+---
+
+## 2026-07-06 — FU-184 closed: onboarding sell-copy honesty pass
+
+**Why:** User: "the logic of the app is pretty settled, minus the verification
+pass needed. with the foundations in place, i think we can do FU-184 now."
+FU-184 was gated on the app catching up to its provisional onboarding claims;
+with C-2.J meal-plan builder, Cook mode step-walker + ingredient decrement,
+Finish & restock, cookable-now filter, YourPricesWidget/price observations,
+and Dora Score card all shipped, every loop-stage claim is now testable
+against real code.
+
+**What I did:** walked every `sell` line in
+`web_app/src/pages/onboarding/onboardingContent.ts` and cross-checked
+against the codebase. Two lines didn't back cleanly; softened both. Rest
+verified accurate and left alone. Full itemised results in the FU-184
+resolved-ledger entry.
+
+**Copy changes:**
+- **`WelcomeWizard.vue:69`** — "pantry, **deals** and meals" → "pantry,
+  **shopping and cooking**". "Deals" was a stale P8-scraping-divorce
+  hangover.
+- **`onboardingContent.ts` PERSONA_PREVIEWS[cooking].centreSell** —
+  "suggesting what to cook" → "flagging what you can cook now". Active
+  suggestions need the opt-in assistant; "flagging" maps to the always-on
+  cookable-now filter + Dora Score card.
+- **`onboardingContent.ts` header docstring + inline field JSDocs** —
+  flipped from "⚠️ PROVISIONAL — FU-184 gate" to "✅ Honesty pass done"
+  so future readers know the reconciliation ran, plus guidance that any
+  new sell copy must be truthful to a day-1 install.
+
+**What I verified and kept unchanged:**
+- All six `LOOP_STAGES` (Stock / Plan / List / Shop / Restock / Cook) —
+  every claim maps to a shipped feature; specific file anchors in the
+  resolved entry.
+- `LOOP_CENTRE.sell` "…answering when you ask" — the assistant answers
+  when queried; the "when you ask" phrasing honestly gates on user
+  engagement.
+- `PERSONA_PREVIEWS.spend` "…what you've been paying" — YourPricesWidget
+  + price observations exist; `money_enabled` gating is the intended
+  "preview of what turning it on gives you" framing.
+- `NARRATIVE_SCENES` — figurative, no literal feature claims.
+
+**Governance:**
+- FU-184 moved to `DORA_FOLLOWUPS_RESOLVED.md` with the full itemised
+  verification list — every claim, verdict, and code anchor.
+- New browser-verify block in `DORA_VERIFY.md` under Onboarding —
+  the two edited surfaces plus a spot-check of each `LOOP_STAGES.sell`
+  claim playing out end-to-end when a real user walks the loop.
+
+**Engineering-standards close-gate:** clean. R-007 (scope: only the two
+lines the honesty check actually flagged; didn't rewrite adjacent
+narrative copy or invent new stages). No new ADR — this is a copy
+reconciliation, not a recurring engineering decision.
+
+**Next up:** user's queue. The remaining onboarding follow-ups still
+open are FU-195 (starter-data per-name picks — already verified) and
+whatever surfaces from an actual browser walk of `/welcome`.
+
+---
+
+## 2026-07-06 — FU-095 closed: RecipeEditDialog reshaped to stub-creator + navigate-to-detail
+
+**Why:** User's reassessment of the New Recipe modal. Principle: it should
+be **quick and easy** — its point is to add a **stub**. Ingredients + steps
+are tedious and belong on the detail page, and today after creating a
+recipe the app doesn't navigate to it, so the user had to hunt the grid to
+keep going. Two changes belong together: trim the modal, navigate on create.
+
+**What changed:**
+- **`web_app/src/components/RecipeEditDialog.vue`** — rewritten. Kept
+  only Name (required) + Cuisine + Category (the two primary overview
+  filter axes so the stub doesn't get lost) + Collection (the "where does
+  this live" pick). Everything else removed from the modal: ingredients
+  repeater, image upload, instructions textarea, dietary tags multi-
+  select, tools multi-select, difficulty, servings, prep/cook time, time
+  of day. Dialog width dropped 800px → 480px (single column). Primary
+  button reads "Create & open" on create, "Save" on edit. Emit signature
+  split from generic `saved` into distinct `created(recipeId)` +
+  `updated`. Vocab hydration for tools + dietary tag catalogue removed
+  (the trimmed dialog doesn't consume them).
+- **`web_app/src/stores/recipeStore.ts`** — `createRecipeAsync` now
+  returns the created `Recipe` entity so callers can navigate. Was
+  `Promise<void>`; no other callers relied on that.
+- **`web_app/src/pages/RecipesOverview.vue`** — `onSaved()` split into
+  `onRecipeCreated(recipeId)` (navigates via `router.push('/cookbook/<id>')`)
+  and `onRecipeUpdated()` (list refresh only, same as before). Template
+  wiring updated for the new emit names.
+- **Backend unchanged** — all removed fields are already optional on
+  `CreateRecipeCommand`; the modal now sends `null` / `[]` defaults for
+  the ones the DTO types as required.
+
+**Governance:**
+- FU-095 moved to `DORA_FOLLOWUPS_RESOLVED.md` with the reshape rationale.
+- New browser-verify block in `DORA_VERIFY.md` under Cookbook (fields
+  present, "Create & open" navigates, edit stays on the list, GET
+  `/api/recipes/<id>` shows an empty stub after create).
+
+**Engineering-standards close-gate:** clean. R-001 (component-scoped
+concerns — the flesh-out editors already live on the detail page; the
+modal doesn't duplicate them), R-007 (only the modal + one caller +
+`createRecipeAsync`'s signature touched — no adjacent cleanup). No new
+ADR — this is a UX refinement, not a recurring engineering decision.
+
+**Next up:** user's queue.
+
+---
+
+## 2026-07-06 — FU-333 closed: Buckets C + D shipped; env fallbacks dropped
+
+**Why:** User asked to close FU-333 outright — "complete the work. also no
+need for fallbacks, this is prerelease work. no current users of the app."
+FU-333 Bucket B had shipped 2026-07-05 with an env-fallback lane; Buckets C
+(encrypted secrets in DB) and D (desktop first-run key auto-generation)
+were still open, and [[FU-467]] was tracking the eventual fallback drop.
+Pre-release directive makes it one work unit instead of three sequenced
+releases.
+
+**What changed — backend:**
+- **`AppSetting` entity** — added `smtp_password_encrypted` +
+  `vapid_private_key_encrypted` columns (Fernet ciphertext, ASCII-safe
+  string storage), plus matching `Fields` entries. Table mapping mirrors,
+  server-default `""`, non-null. Comment block updated: the two
+  bootstrap-only env vars remaining are `DORA_SECRET_KEY` +
+  `DORA_LLM_KEY_ENCRYPTION_KEY`.
+- **Migration `a3e7d2c9b5f1_20260706_appsetting_bucket_c_secrets.py`** —
+  batch-mode add for both columns; drop on downgrade. No data seed (the
+  columns start empty; admin populates via the new admin UI).
+- **`operational_config.py`** — rewritten as a strict `AppSetting`
+  projection. `_pick_str` / `_pick_int` / `_pick_bool` gone. Added a
+  `_decrypt_or_empty(ciphertext, *, field)` helper that swallows
+  `EncryptionUnavailable` + `EncryptionFailed` with a warning log,
+  returning empty so the caller degrades to dry-run rather than crashing
+  install-wide over a rotated wrapping key. `OperationalConfig` gained
+  `smtp_password` + `vapid_private_key`.
+- **PATCH `update_app_settings.py`** — accepts optional plaintext on
+  `smtp_password` + `vapid_private_key` (max 512 / 4096 chars). Empty
+  string is explicit-clear. Missing wrapping key → 400 with a friendly
+  reason. Partial-update semantics: field absent → stored value
+  unchanged.
+- **GET `get_app_settings.py` DTO** — added `smtp_password_configured` +
+  `vapid_private_key_configured` bools; the ciphertext columns never
+  appear on the wire.
+- **`email_sender.py` + `push_sender.py`** — env fallbacks removed. Both
+  now read the resolver; DB unreachable → module-level `_DRY_RUN_CONFIG`
+  so unit tests that import without a Flask context still no-op safely.
+- **`auth_helpers.public_base_url()`** — dropped the `DORA_PUBLIC_URL`
+  env fallback path. Empty explicit → Origin header → localhost:5174.
+- **`tts_synthesize.py` + `voice_provision.py`** — env fallbacks removed
+  for `DORA_PIPER_BIN` / `DORA_PIPER_VOICE` / `DORA_PIPER_BUNDLED_VOICE_DIR`.
+  Desktop paths now flow via `_seed_desktop_paths()` writing to the row.
+- **`health_check.py`** — removed the `_push_vapid_private_present` env
+  scratch flag; `push_vapid_configured` is now `bool(op_config.vapid_public_key
+  and op_config.vapid_private_key)` — decryption success is the truth.
+- **`audit_retention.py`** — docstring updated (fallback lane gone; the
+  code was already resolver-only).
+- **`desktop_app.py`** — new `_bootstrap_keys()` (auto-generate
+  `DORA_SECRET_KEY` via `secrets.token_hex(32)` and
+  `DORA_LLM_KEY_ENCRYPTION_KEY` via `Fernet.generate_key()` into
+  `<DATA_DIR>/.secret_key` + `.llm_key_encryption_key` if not env-set —
+  Bucket D). Renamed `_bootstrap_piper()` → `_detect_bundled_piper_paths()`
+  (returns paths, no env writes) + new `_seed_desktop_paths()` (post-init
+  hook writing detected paths into `AppSetting`). `main()` calls the new
+  functions in the right order.
+
+**What changed — frontend:**
+- **`appSettingsApiService.ts`** — `AppSettings` gains
+  `smtp_password_configured` + `vapid_private_key_configured`;
+  `UpdateAppSettingsCommand` accepts write-only `smtp_password` +
+  `vapid_private_key`.
+- **`AdminSystemEmailSettings.vue`** — password row flipped from
+  disabled-with-hint placeholder to a real write-only input with Save +
+  (when configured) Clear buttons; hydrates the label / help text off
+  `smtp_password_configured`.
+- **`AdminSystemPushSettings.vue`** — same treatment for VAPID private
+  key. Page-header + section-description copy updated to reflect
+  encrypted-at-rest storage + R-029 hide-when-off (instead of
+  reveal-and-disabled).
+
+**What changed — tests:**
+- **`test_bucket_c_secrets.py`** (new) — the docstring in the resolver
+  test already promised this file; it lands here. Covers: ciphertext-not-
+  plaintext on the row; DTO returns only `_configured` bool (never
+  plaintext or ciphertext); empty-string clears; omitted field leaves
+  unchanged; VAPID round-trip; unset secrets → empty resolver values;
+  undecodable ciphertext → dry-run + warning; missing wrapping key → 400.
+- **`test_operational_config_resolver.py`** — was already rewritten for
+  the strict-AppSetting shape by whichever agent shipped the interim
+  work; untouched here.
+
+**Governance:**
+- `docs/01_charter/ENGINEERING_STANDARDS.md` — new **R-030 "Operational
+  config lives on `AppSetting`, not env"** + **ADR-026** promoting it.
+  Captures the recurring "where should this config live?" call so future
+  work defaults to the row unless the value is genuinely pre-DB.
+- `docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md` — marked
+  ✅ SHIPPED at header; Chunk 3's one-release-grace rationale flagged as
+  superseded by the user directive.
+- `.env.example` — 14 env vars deleted; new "Wrapping key" section for
+  `DORA_LLM_KEY_ENCRYPTION_KEY` explains desktop auto-generation vs
+  server explicit-set.
+- `README.md` — VAPID section rewritten to reference the encrypted-at-
+  rest storage + Settings-UI-only configuration path.
+- `CHANGELOG.md` — one entry under [Unreleased].
+- `DORA_FOLLOWUPS.md` — FU-333 and FU-467 blocks deleted.
+- `DORA_FOLLOWUPS_RESOLVED.md` — resolved entries appended at top for
+  both, cross-linking each other + FU-327 (desktop bundles) + FU-153
+  (Fernet helper).
+
+**Deliberate non-goals:**
+- Did NOT touch the `desktop_app.py._secret_key_file` in `app.py` — it
+  still generates `.secret_key` when env unset for both desktop and dev
+  server. That was already a pre-existing convenience; harmless.
+- Did NOT run the tests in this session (no Python venv on this Windows
+  dev box; per the standing environmental constraint). The new
+  `test_bucket_c_secrets.py` will run first-time when the user pulls to
+  a Linux/CI box; browser verify goes in DORA_VERIFY (below).
+
+**Engineering-standards close-gate:** clean. R-003 (server-owned config),
+R-005 (portable — AppSetting travels with backups; SaaS-friendly), R-007
+(scope: Buckets C + D + fallback drop bundled per the directive; no
+adjacent cleanups snuck in). Promoted R-030 / ADR-026 to codify the pattern.
+
+**Next up:** user's queue. Suggested browser-verify additions to
+`DORA_VERIFY.md`:
+- Admin → System → Email: enter SMTP password → Save → row `Password (change)`
+  reappears with "•••" placeholder; Clear button removes it.
+- Admin → System → Push: same for VAPID private key.
+- `/api/health features.push_vapid_configured` flips true only when both
+  the public key and the (decrypted) private key are present.
+- Delete `<DATA_DIR>/.llm_key_encryption_key` on a bundled build, relaunch
+  → new key generated, existing secrets can no longer decrypt (dry-run
+  fallback fires with the warning log), admin re-enters both.
+
+---
+
 ## 2026-07-06 — FU-041 follow-up: surface batch-cooking pref in onboarding
 
 **Why:** While closing FU-041 the user asked about FU-032 (recipe-palette

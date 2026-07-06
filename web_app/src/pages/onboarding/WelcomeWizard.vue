@@ -66,9 +66,10 @@
                     <div class="col">
                         <div class="text-h6">Hi! I'm Dora.</div>
                         <div class="text-body2 dora-text-secondary">
-                            I keep your pantry, deals and meals in one place
-                            so the weekly shop stops feeling like detective
-                            work. Let's get you set up — takes about a minute.
+                            I keep your pantry, shopping and cooking in one
+                            place so the weekly shop stops feeling like
+                            detective work. Let's get you set up — takes
+                            about a minute.
                         </div>
                     </div>
                 </q-card-section>

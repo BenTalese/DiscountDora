@@ -49,3 +49,41 @@
 .dora-bg-negative-soft { background-color: var(--semantic-negative-soft) !important; }
 .dora-bg-warning-soft  { background-color: var(--semantic-warning-soft) !important; }
 .dora-bg-info-soft     { background-color: var(--semantic-info-soft) !important; }
+
+// ── FU-313 severity + alert taxonomy (2026-07-06) ────────────────────
+// Utility classes matching the graded-severity / alert-kind / lifecycle
+// tokens in tokens.scss. Named without the `dora-` prefix on purpose:
+// Quasar's `color` prop generates class names as `bg-<name>` /
+// `text-<name>`, so a template `<q-avatar :color="severity-critical">`
+// applies `.bg-severity-critical` → this class → the token colour. Each
+// pair gives us both a background variant (avatars, chips, timeline
+// dots) and a foreground variant (icons, text).
+.bg-severity-critical { background-color: var(--severity-critical) !important; color: white !important; }
+.bg-severity-high     { background-color: var(--severity-high) !important;     color: white !important; }
+.bg-severity-medium   { background-color: var(--severity-medium) !important;   color: white !important; }
+.bg-severity-low      { background-color: var(--severity-low) !important;      color: white !important; }
+.bg-severity-attention { background-color: var(--severity-attention) !important; color: white !important; }
+.bg-alert-kind-out-of-stock      { background-color: var(--alert-kind-out-of-stock) !important;      color: white !important; }
+.bg-alert-kind-stocktake-overdue { background-color: var(--alert-kind-stocktake-overdue) !important; color: white !important; }
+.bg-alert-kind-no-planned-meals  { background-color: var(--alert-kind-no-planned-meals) !important;  color: white !important; }
+.bg-alert-kind-shopping-day      { background-color: var(--alert-kind-shopping-day) !important;      color: white !important; }
+.bg-alert-history-read     { background-color: var(--alert-history-read) !important;     color: white !important; }
+.bg-lifecycle-bought         { background-color: var(--lifecycle-bought) !important;         color: white !important; }
+.bg-lifecycle-expiry-changed { background-color: var(--lifecycle-expiry-changed) !important; color: white !important; }
+.bg-lifecycle-cleared        { background-color: var(--lifecycle-cleared) !important;        color: white !important; }
+.bg-neutral-muted            { background-color: var(--neutral-muted) !important;            color: white !important; }
+
+.text-severity-critical { color: var(--severity-critical) !important; }
+.text-severity-high     { color: var(--severity-high) !important; }
+.text-severity-medium   { color: var(--severity-medium) !important; }
+.text-severity-low      { color: var(--severity-low) !important; }
+.text-severity-attention { color: var(--severity-attention) !important; }
+.text-alert-kind-out-of-stock      { color: var(--alert-kind-out-of-stock) !important; }
+.text-alert-kind-stocktake-overdue { color: var(--alert-kind-stocktake-overdue) !important; }
+.text-alert-kind-no-planned-meals  { color: var(--alert-kind-no-planned-meals) !important; }
+.text-alert-kind-shopping-day      { color: var(--alert-kind-shopping-day) !important; }
+.text-alert-history-read     { color: var(--alert-history-read) !important; }
+.text-lifecycle-bought         { color: var(--lifecycle-bought) !important; }
+.text-lifecycle-expiry-changed { color: var(--lifecycle-expiry-changed) !important; }
+.text-lifecycle-cleared        { color: var(--lifecycle-cleared) !important; }
+.text-neutral-muted            { color: var(--neutral-muted) !important; }

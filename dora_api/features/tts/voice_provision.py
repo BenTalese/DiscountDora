@@ -71,8 +71,8 @@ def bundled_voices_dir() -> Path | None:
 
     Resolution order (highest priority first):
       1. `AppSetting.piper_bundled_voice_dir` (FU-333 Bucket B) — admin-editable
-         operator override. Legacy `DORA_PIPER_BUNDLED_VOICE_DIR` env still
-         works during the deprecation window.
+         operator override; desktop bundles seed this at boot from the
+         detected `<_MEIPASS>/voices/` location.
       2. `<_MEIPASS>/voices/` — PyInstaller one-folder / one-file desktop build.
       3. `<repo_root>/packaging/voices/` — dev checkout + the Docker image's
          working copy (the image runs the prefetch into `packaging/voices/`
@@ -85,7 +85,7 @@ def bundled_voices_dir() -> Path | None:
             resolved_operational_config
         explicit = resolved_operational_config().piper_bundled_voice_dir
     except Exception:
-        explicit = os.environ.get("DORA_PIPER_BUNDLED_VOICE_DIR", "").strip()
+        explicit = ""
     if explicit:
         path = Path(explicit)
         return path if path.is_dir() else None

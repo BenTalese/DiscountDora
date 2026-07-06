@@ -2,16 +2,26 @@ import { ICONS } from 'src/style/icons';
 
 /**
  * Onboarding sell-copy — the SINGLE SOURCE OF TRUTH for the cinematic intro
- * (C-5.2). Centralised here on purpose so the FU-184 honesty pass is a
+ * (C-5.2). Centralised here on purpose so any future honesty pass is a
  * one-file edit.
  *
- * ⚠️ PROVISIONAL — FU-184 gate (PROPOSAL_ONBOARDING §6).
- * Every `sell` line below is a CLAIM about what the app does. Before this copy
- * is treated as final it MUST be reconciled against the running app: walk each
- * flow and cut/soften anything the app doesn't actually back (P3 Honest). The
- * `LOOP_INSIGHT` node in particular is an EMERGING, not-yet-shipped feature —
- * it is represented as a clearly-provisional "candidate" (dimmed + "coming")
- * and must NOT be presented as a delivered promise until it is real.
+ * ✅ Honesty pass done — FU-184 closed 2026-07-06 (P3 Honest). Every `sell`
+ * line below was reconciled against the running app; the two claims that
+ * didn't back cleanly were adjusted:
+ *   - `WelcomeWizard.vue`'s welcome-card blurb: "pantry, deals and meals"
+ *     → "pantry, shopping and cooking" (scraping was divorced — "deals"
+ *     was aspirational).
+ *   - `PERSONA_PREVIEWS[cooking].centreSell`: "suggesting what to cook" →
+ *     "flagging what you can cook now" (the cookable-now filter + Dora
+ *     Score card are the day-1 surface; active suggestions require the
+ *     opt-in assistant).
+ * The provisional `LOOP_INSIGHT` node was already removed 2026-06-17 in
+ * the FU-210 pass — nothing dimmed-and-"coming" remains here.
+ *
+ * If new sell copy lands, keep it truthful to what a user with an empty
+ * install can see on day 1 (features gated by admin flags like
+ * `money_enabled` are fine to allude to via the persona chips — they
+ * describe *what turning it on would give you*, not what's on by default).
  */
 
 // ── The loop spine ───────────────────────────────────────────────────────
@@ -28,7 +38,8 @@ export interface LoopStage {
     key: LoopStageKey;
     label: string;
     icon: string;
-    /** One-line sell shown when the stage is focused. PROVISIONAL (FU-184). */
+    /** One-line sell shown when the stage is focused. Verified against the
+     *  running app on 2026-07-06 (FU-184 honesty pass). */
     sell: string;
 }
 
@@ -155,7 +166,8 @@ export interface PersonaPreview {
     key: PersonaPreviewKey;
     /** Chip label — describes the user's reason, not a persona identity. */
     label: string;
-    /** Override for the Dora-centre sell on this preview. PROVISIONAL (FU-184). */
+    /** Override for the Dora-centre sell on this preview. Verified against
+     *  the running app on 2026-07-06 (FU-184 honesty pass). */
     centreSell: string;
 }
 
@@ -163,7 +175,7 @@ export const PERSONA_PREVIEWS: readonly PersonaPreview[] = [
     {
         key: 'cooking',
         label: 'Mostly cooking',
-        centreSell: 'Watching expiry and stock, and suggesting what to cook.',
+        centreSell: 'Watching expiry and stock, and flagging what you can cook now.',
     },
     {
         key: 'spend',

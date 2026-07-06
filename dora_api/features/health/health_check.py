@@ -72,9 +72,6 @@ def _feature_flags() -> dict[str, bool]:
         "email": False,
         "email_smtp_configured": False,
         "push_vapid_configured": False,
-        "_push_vapid_private_present": bool(
-            os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
-        ),
         "assistant": False,     # resolved below
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         # Each pairs with a per-user opt-in (where one exists) — install
@@ -125,19 +122,21 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition_complex_available"] = bool(
             (setting.nutrition_db_source or "").strip()
         )
-        # FU-333 Bucket B — email + push R-014 signals now derive from the
-        # operational-config resolver (AppSetting first, env fallback).
+        # FU-333 Buckets B + C — email + push signals derive from the
+        # operational-config resolver. Bucket-C secrets (SMTP password,
+        # VAPID private key) live encrypted-at-rest on the AppSetting row;
+        # the resolver decrypts on read, so a truthy value here means the
+        # secret is both stored and decodable.
         from dora_api.features.app_settings.operational_config import \
             resolved_operational_config
         op_config = resolved_operational_config()
         flags["email"] = bool(op_config.email_enabled)
         flags["email_smtp_configured"] = bool(op_config.smtp_username)
         flags["push_vapid_configured"] = bool(
-            op_config.vapid_public_key and flags["_push_vapid_private_present"]
+            op_config.vapid_public_key and op_config.vapid_private_key
         )
     except Exception:
         pass
-    flags.pop("_push_vapid_private_present", None)
     return flags
 
 

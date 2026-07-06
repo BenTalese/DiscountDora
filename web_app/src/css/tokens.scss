@@ -132,6 +132,56 @@
     --chart-5: hsl(218 70% 55%);   /* cool tertiary */
     --chart-6: hsl(300 50% 55%);   /* magenta tertiary */
 
+    /* ────────────────────────────── Graded severity + alert taxonomy ─
+       FU-313 (2026-07-06) — five surfaces used Quasar's numbered palette
+       (red-6, orange-7, amber-9, etc.) because a single semantic
+       negative/warning loses the *ordinal* signal. This ladder + the
+       alert-kind categorical accents replace those. Values are
+       `light-dark(light, dark)` so a single declaration covers both
+       schemes — dark values are lifted ~15% lightness so they stay
+       legible against `--surface-page` / `--surface-component` in the
+       dark themes. See colours.scss for the matching `.bg-<name>` /
+       `.text-<name>` utility classes Quasar's `color` prop consumes.
+
+       Severity ladder — high → low. Reused as some alert-kind accents
+       where the semantic overlaps (expired ⇒ critical, expiring_soon ⇒
+       medium, low_stock ⇒ low, essential_low ⇒ high). */
+    --severity-critical: light-dark(hsl(1 77% 55%),  hsl(1 78% 68%));       /* was red-6 */
+    --severity-high:     light-dark(hsl(14 91% 54%), hsl(14 85% 68%));      /* was deep-orange-6 */
+    --severity-medium:   light-dark(hsl(30 100% 48%), hsl(30 95% 62%));     /* was orange-7 */
+    --severity-low:      light-dark(hsl(38 100% 50%), hsl(38 95% 62%));     /* was amber-7 */
+
+    /* "Attention" tone — deeper than severity-low so it doesn't read as
+       an alert. Used by grabby-not-critical affordances: the AddToList
+       "on multiple lists" hint, the stock-item lifecycle "Opened" entry. */
+    --severity-attention: light-dark(hsl(26 100% 50%), hsl(26 90% 62%));    /* was amber-9 */
+
+    /* Categorical alert-kind accents — the ones that don't collapse into
+       the severity ladder. Each carries a stable per-kind identity for
+       summary boxes + row badges. */
+    --alert-kind-out-of-stock:       light-dark(hsl(291 64% 42%), hsl(291 60% 68%));  /* was purple-5 */
+    --alert-kind-stocktake-overdue:  light-dark(hsl(200 18% 40%), hsl(200 18% 62%));  /* was blue-grey-6 */
+    --alert-kind-no-planned-meals:   light-dark(hsl(174 100% 27%), hsl(174 55% 58%)); /* was teal-6 */
+    --alert-kind-shopping-day:       light-dark(hsl(231 48% 48%),  hsl(231 55% 70%)); /* was indigo-5 */
+
+    /* Alert-history chip states — snoozed reuses severity-medium (still
+       active), read is a distinct muted blue-grey. */
+    --alert-history-read: light-dark(hsl(200 18% 52%), hsl(200 12% 62%));   /* was blue-grey-5 */
+
+    /* Stock-item lifecycle timeline accents — categorical, one per
+       event kind so the item's purchase → use → open → expiry trail
+       scans cleanly. Cooked reuses --severity-high; opened reuses
+       --severity-attention. */
+    --lifecycle-bought:          light-dark(hsl(174 100% 20%), hsl(174 55% 55%)); /* was teal-8 */
+    --lifecycle-expiry-changed:  light-dark(hsl(27 100% 47%), hsl(27 95% 62%));   /* was orange-8 */
+    --lifecycle-cleared:         var(--text-muted);                                /* was grey-7 */
+
+    /* Generic "no signal yet / not applicable" neutral for badges that
+       encode absence-of-state (e.g. the dashboard's next-to-cook chip
+       when a meal has unlinked ingredients or no ingredients logged).
+       Aliases --text-muted for consistency with --lifecycle-cleared. */
+    --neutral-muted:             var(--text-muted);                                /* was grey-6 */
+
     /* ────────────────────────────── Spacing scale ────────────────── */
     /* 4 px base, doubling pattern. Quasar's q-pa-xs/sm/md/lg/xl
        roughly aligns to space-2/3/4/6/8. */

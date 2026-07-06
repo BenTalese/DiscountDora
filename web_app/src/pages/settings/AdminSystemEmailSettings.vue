@@ -88,21 +88,44 @@
                     />
                 </SettingsRow>
 
-                <!-- R-014 reveal-and-disable: the SMTP password stays in
-                     env until FU-333 Bucket C (encrypted-in-DB storage)
-                     lands. Show the field so an operator sees where it
-                     will live; disable it with the reason so nobody
-                     wastes time typing. -->
+                <!-- FU-333 Bucket C — SMTP password lives encrypted-at-rest
+                     on AppSetting.smtp_password_encrypted. The response DTO
+                     never returns the ciphertext; we know only whether one
+                     is stored (`smtp_password_configured`). The input is
+                     write-only: submitting a value replaces the stored
+                     ciphertext; empty submit clears it. -->
                 <SettingsRow
-                    label="Password"
-                    help="Set DORA_SMTP_PASSWORD in the environment. Encrypted-in-database storage lands with FU-333 Bucket C — this input will unlock then."
+                    :label="passwordConfigured ? 'Password (change)' : 'Password'"
+                    :help="passwordConfigured
+                        ? 'A password is stored. Enter a new one to replace it, or use Clear to remove.'
+                        : 'Encrypted at rest with DORA_LLM_KEY_ENCRYPTION_KEY. Leave blank to keep the sender in dry-run mode.'"
                     stacked
                 >
-                    <q-input
-                        model-value=""
-                        outlined dense disable
-                        placeholder="Managed via DORA_SMTP_PASSWORD environment variable"
-                    />
+                    <div class="row items-center q-gutter-sm">
+                        <q-input
+                            v-model="passwordDraft"
+                            type="password"
+                            outlined dense
+                            style="flex: 1 1 auto"
+                            :placeholder="passwordConfigured ? '••••••••' : 'Enter SMTP password'"
+                            :disable="saving"
+                        />
+                        <q-btn
+                            unelevated no-caps
+                            label="Save"
+                            color="primary"
+                            :disable="saving || passwordDraft.length === 0"
+                            @click="() => onSavePassword(passwordDraft)"
+                        />
+                        <q-btn
+                            v-if="passwordConfigured"
+                            flat no-caps
+                            label="Clear"
+                            color="negative"
+                            :disable="saving"
+                            @click="() => onSavePassword('')"
+                        />
+                    </div>
                 </SettingsRow>
             </SettingsSection>
         </template>
@@ -139,6 +162,10 @@
         smtp_use_tls: true,
     });
     const draft = reactive({ ...saved });
+    // Bucket-C secret is write-only — the server never returns the plaintext,
+    // just a `_configured` bool. We hold the draft locally, submit explicitly.
+    const passwordConfigured = ref(false);
+    const passwordDraft = ref('');
 
     function resetDrafts() {
         Object.assign(draft, saved);
@@ -168,6 +195,29 @@
         }
     }
 
+    async function onSavePassword(nextValue: string) {
+        saving.value = true;
+        try {
+            const result = await api.updateAsync({ smtp_password: nextValue });
+            passwordConfigured.value = result.smtp_password_configured;
+            passwordDraft.value = '';
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: nextValue.length === 0
+                    ? 'SMTP password cleared.'
+                    : 'SMTP password saved.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save SMTP password.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            saving.value = false;
+        }
+    }
+
     function hydrate(s: AppSettings) {
         saved.email_enabled = s.email_enabled;
         saved.smtp_host = s.smtp_host;
@@ -175,6 +225,7 @@
         saved.smtp_username = s.smtp_username;
         saved.smtp_from = s.smtp_from;
         saved.smtp_use_tls = s.smtp_use_tls;
+        passwordConfigured.value = s.smtp_password_configured;
         resetDrafts();
     }
 
@@ -186,7 +237,7 @@
         try {
             hydrate(await api.getAsync());
         } catch {
-            // Leave defaults; the resolver's env fallback is still active.
+            // Leave defaults; admin can retry once the DB is reachable.
         } finally {
             loading.value = false;
         }

@@ -7,6 +7,12 @@
         >
             <template #actions>
                 <BaseButton
+                    variant="primary"
+                    :icon="ICONS.person_add"
+                    label="Add user"
+                    @click="onAddClick"
+                />
+                <BaseButton
                     variant="icon"
                     :icon="ICONS.refresh"
                     :loading="loading"
@@ -98,6 +104,23 @@
                             :loading="resettingId === user.user_id"
                             @click="onResetPassword(user)"
                         />
+                        <BaseButton
+                            variant="ghost"
+                            dense
+                            :icon="ICONS.delete"
+                            label="Delete"
+                            class="text-negative"
+                            :disable="
+                                user.user_id === currentUserId ||
+                                deletingId === user.user_id
+                            "
+                            :loading="deletingId === user.user_id"
+                            @click="onDelete(user)"
+                        >
+                            <q-tooltip v-if="user.user_id === currentUserId">
+                                You can't delete your own account.
+                            </q-tooltip>
+                        </BaseButton>
                     </div>
                 </q-item-section>
             </q-item>
@@ -142,12 +165,70 @@
                 </template>
         </BaseDialog>
 
-        <!-- Password-reset result dialog ────────────────────────── -->
-        <BaseDialog v-model="resetResultOpen" title="Password reset" closable card-style="min-width: 320px">
+        <!-- Add-user dialog ─────────────────────────────────────── -->
+        <BaseDialog
+            v-model="createOpen"
+            title="Add user"
+            closable
+            card-style="min-width: 320px; max-width: 480px"
+        >
+            <q-card-section class="q-gutter-md">
+                <q-input
+                    v-model="createDraft.username"
+                    outlined
+                    label="Username *"
+                    :error="!!createFieldErrors.username"
+                    :error-message="createFieldErrors.username"
+                    @update:model-value="() => clearCreateField('username')"
+                    autofocus
+                />
+                <q-input
+                    v-model="createDraft.email"
+                    outlined
+                    label="Email (optional)"
+                    :error="!!createFieldErrors.email"
+                    :error-message="createFieldErrors.email"
+                    @update:model-value="() => clearCreateField('email')"
+                />
+                <q-toggle
+                    v-model="createDraft.is_admin"
+                    label="Admin"
+                />
+                <div class="text-caption dora-text-muted">
+                    Dora will generate a one-time password. You'll see it once — copy it
+                    and share it with the user out-of-band.
+                </div>
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    label="Create"
+                    :loading="creating"
+                    :disable="!createDraft.username.trim()"
+                    @click="onSubmitCreate"
+                />
+            </template>
+        </BaseDialog>
+
+        <!-- One-time-password result dialog (shared by create + reset) ── -->
+        <BaseDialog
+            v-model="resetResultOpen"
+            :title="resetResultKind === 'create' ? 'User created' : 'Password reset'"
+            closable
+            card-style="min-width: 320px"
+        >
                 <q-card-section>
                     <div class="text-caption dora-text-muted">
-                        Copy this and pass it to {{ resetTargetName }} out-of-band.
-                        It's shown once.
+                        <span v-if="resetResultKind === 'create'">
+                            Copy this one-time password and pass it to
+                            {{ resetTargetName }} out-of-band. They'll be
+                            able to log in with it and change it themselves.
+                            It's shown once.
+                        </span>
+                        <span v-else>
+                            Copy this and pass it to {{ resetTargetName }}
+                            out-of-band. It's shown once.
+                        </span>
                     </div>
                 </q-card-section>
                 <q-card-section>
@@ -184,12 +265,13 @@
     import { storeToRefs } from 'pinia';
     import { copyToClipboard, useQuasar } from 'quasar';
     import UserAdminApiService, {
+        type AdminCreateUserCommand,
         type AdminUser
     } from 'src/services/api/userAdminApiService';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import { useAuthStore } from 'src/stores/authStore';
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
@@ -209,9 +291,31 @@
     const editingEmail = ref('');
     const savingEdit = ref(false);
 
+    const deletingId = ref<string | null>(null);
+
+    // Create-user dialog state. Fresh reactive draft each open (see openCreate).
+    const createOpen = ref(false);
+    const creating = ref(false);
+    const createDraft = reactive<AdminCreateUserCommand & { username: string; email: string; is_admin: boolean }>({
+        username: '',
+        email: '',
+        is_admin: false,
+    });
+    const createFieldErrors = ref<Record<string, string>>({});
+    function clearCreateField(field: 'username' | 'email') {
+        if (createFieldErrors.value[field]) {
+            const next = { ...createFieldErrors.value };
+            delete next[field];
+            createFieldErrors.value = next;
+        }
+    }
+
+    // One-time-password result dialog is shared by create + reset — the copy
+    // text depends on which flow produced the password.
     const resetResultOpen = ref(false);
     const resetResult = ref('');
     const resetTargetName = ref('');
+    const resetResultKind = ref<'create' | 'reset'>('reset');
 
     const currentUserId = computed(() => currentUser.value?.user_id ?? null);
 
@@ -303,6 +407,7 @@
             const { new_password } = await api.resetPasswordAsync(user.user_id);
             resetResult.value = new_password;
             resetTargetName.value = user.username;
+            resetResultKind.value = 'reset';
             resetResultOpen.value = true;
         } catch (err) {
             $q.notify({
@@ -313,6 +418,103 @@
             });
         } finally {
             resettingId.value = null;
+        }
+    }
+
+    // FU-461 close-out (2026-07-06) — Add / Delete on the users page.
+    function onAddClick() {
+        createDraft.username = '';
+        createDraft.email = '';
+        createDraft.is_admin = false;
+        createFieldErrors.value = {};
+        createOpen.value = true;
+    }
+
+    async function onSubmitCreate() {
+        if (!createDraft.username.trim()) return;
+        creating.value = true;
+        createFieldErrors.value = {};
+        try {
+            const payload: AdminCreateUserCommand = {
+                username: createDraft.username.trim(),
+                is_admin: createDraft.is_admin,
+            };
+            const email = createDraft.email.trim();
+            if (email.length > 0) payload.email = email;
+
+            const { new_password } = await api.createAsync(payload);
+            createOpen.value = false;
+            resetResult.value = new_password;
+            resetTargetName.value = payload.username;
+            resetResultKind.value = 'create';
+            resetResultOpen.value = true;
+            await loadUsers();
+        } catch (err) {
+            // Server maps username-taken / email-taken to 400 with a friendly
+            // detail; validation problems (bad email) come back as 422 with a
+            // per-field errors map. Surface both inline.
+            const problem = (err as { response?: { data?: { errors?: Record<string, string[]>; detail?: string } } })?.response?.data;
+            if (problem?.errors) {
+                const next: Record<string, string> = {};
+                for (const [field, messages] of Object.entries(problem.errors)) {
+                    if (Array.isArray(messages) && messages.length > 0) {
+                        next[field] = messages[0]!;
+                    }
+                }
+                createFieldErrors.value = next;
+            } else if (problem?.detail?.toLowerCase().includes('username')) {
+                createFieldErrors.value = { username: problem.detail };
+            } else if (problem?.detail?.toLowerCase().includes('email')) {
+                createFieldErrors.value = { email: problem.detail };
+            } else {
+                $q.notify({
+                    type: 'negative',
+                    position: 'bottom-right',
+                    message: 'Could not create user.',
+                    caption: toastCaption(err),
+                });
+            }
+        } finally {
+            creating.value = false;
+        }
+    }
+
+    async function onDelete(user: AdminUser) {
+        const confirm = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: `Delete "${user.username}"?`,
+                message:
+                    `Their sessions, alert preferences and push subscriptions ` +
+                    `will be removed. Household-shared things they touched ` +
+                    `(recipes, shopping lists) stay in the household.`,
+                cancel: true,
+                persistent: true,
+                ok: { color: 'negative', label: 'Delete' },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!confirm) return;
+
+        deletingId.value = user.user_id;
+        try {
+            await api.deleteAsync(user.user_id);
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Deleted "${user.username}".`,
+            });
+            await loadUsers();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Delete failed.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            deletingId.value = null;
         }
     }
 

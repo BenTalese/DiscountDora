@@ -1815,8 +1815,11 @@
     }
     function nextToCookBadgeColor(entry: UpcomingMealPlanEntry): string {
         if (entry.missing_count === 0) return 'positive';
-        if (entry.unlinked_ingredient_count > 0) return 'grey-6';
-        if (entry.missing_count === null) return 'grey-6';
+        // FU-313 — was 'grey-6'; theme-aware --neutral-muted for
+        // "no signal yet / not applicable" (unlinked ingredients, or
+        // no ingredients logged).
+        if (entry.unlinked_ingredient_count > 0) return 'neutral-muted';
+        if (entry.missing_count === null) return 'neutral-muted';
         return 'warning';
     }
 

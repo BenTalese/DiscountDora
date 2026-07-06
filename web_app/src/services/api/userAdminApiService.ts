@@ -20,6 +20,18 @@ export type AdminUpdateUserCommand = {
     deals_email_enabled?: boolean;
 };
 
+// FU-461 resolve pass (2026-07-06) — admin-create counterpart to
+// `/auth/register`. Server mints a one-time password + returns it once;
+// admin relays it out-of-band. No verification email; the admin
+// implicitly vouches.
+export type AdminCreateUserCommand = {
+    username: string;
+    email?: string | null;
+    is_admin?: boolean;
+};
+
+export type CreateUserResult = { user_id: string; new_password: string };
+
 export type ResetPasswordResult = { new_password: string };
 
 export default class UserAdminApiService {
@@ -27,6 +39,14 @@ export default class UserAdminApiService {
 
     getAllAsync = async (): Promise<Page<AdminUser>> =>
         await this.httpClient.get<Page<AdminUser>>('/users');
+
+    createAsync = async (
+        command: AdminCreateUserCommand,
+    ): Promise<CreateUserResult> =>
+        await this.httpClient.post<CreateUserResult, AdminCreateUserCommand>(
+            '/users',
+            command,
+        );
 
     updateAsync = async (
         userId: string,
@@ -36,6 +56,9 @@ export default class UserAdminApiService {
             `/users/${userId}`,
             command
         );
+
+    deleteAsync = async (userId: string): Promise<void> =>
+        await this.httpClient.delete(`/users/${userId}`);
 
     resetPasswordAsync = async (userId: string): Promise<ResetPasswordResult> =>
         await this.httpClient.post<ResetPasswordResult, Record<string, never>>(

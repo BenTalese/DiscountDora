@@ -185,6 +185,7 @@ export const ICONS = {
     file_upload: 'mdi-file-upload',
     folder: 'mdi-folder',
     group: 'mdi-account-group',
+    person_add: 'mdi-account-plus',
     help: 'mdi-help',
     home_pin: 'mdi-home-map-marker',
     // `icon` is a placeholder used as a fallback when no specific icon

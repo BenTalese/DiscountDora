@@ -1989,7 +1989,8 @@
                 at: p.occurred_at,
                 title: `Bought · ${p.shopping_list_name}`,
                 icon: ICONS.shopping_bag,
-                color: 'teal-8',
+                // FU-313 — was 'teal-8'; now theme-aware via --lifecycle-bought.
+                color: 'lifecycle-bought',
             };
             if (bits.length > 0) entry.body = bits.join(' · ');
             out.push(entry);
@@ -2006,7 +2007,9 @@
                 at: c.occurred_at,
                 title: `Used in ${c.recipe_name}${badge}`,
                 icon: ICONS.local_fire_department,
-                color: 'deep-orange-6',
+                // FU-313 — was 'deep-orange-6'; reuses the severity-high
+                // token (same visual weight as the essential-low alert kind).
+                color: 'severity-high',
             });
         }
 
@@ -2022,17 +2025,21 @@
                 body = e.previous_expiry_date
                     ? `Was ${fmt(e.previous_expiry_date)}`
                     : null;
-                color = 'grey-7';
+                // FU-313 — was 'grey-7'; theme-aware --lifecycle-cleared
+                // (a muted neutral, distinct from severity-*). Cleared
+                // is a "wound-down" state, not part of the severity ladder.
+                color = 'lifecycle-cleared';
             } else if (e.kind === 'pushed') {
                 const delta = e.delta_days ?? 0;
                 title = delta >= 0 ? `Pushed expiry +${delta} day${delta === 1 ? '' : 's'}`
                                    : `Expiry moved ${delta} day${delta === -1 ? '' : 's'}`;
                 body = `${fmt(e.previous_expiry_date)} → ${fmt(e.new_expiry_date)}`;
-                color = 'orange-8';
+                // FU-313 — was 'orange-8'; theme-aware --lifecycle-expiry-changed.
+                color = 'lifecycle-expiry-changed';
             } else {
                 title = 'Set expiry';
                 body = e.new_expiry_date;
-                color = 'orange-8';
+                color = 'lifecycle-expiry-changed';
             }
             const entry: LifecycleEvent = {
                 id: `expiry-${e.occurred_at}-${e.kind}`,
@@ -2053,7 +2060,10 @@
                 at: `${d.opened_on}T00:00:00`,
                 title: 'Opened',
                 icon: 'lock_open',
-                color: 'amber-9',
+                // FU-313 — was 'amber-9'; reuses the --severity-attention
+                // token (same visual weight as the AddToList "on multiple
+                // lists" hint — both grabby-but-not-urgent).
+                color: 'severity-attention',
             });
         }
 

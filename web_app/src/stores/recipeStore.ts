@@ -53,7 +53,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         return collectionsInflight;
     };
 
-    const createRecipeAsync = async (command: CreateRecipeCommand) => {
+    const createRecipeAsync = async (command: CreateRecipeCommand): Promise<Recipe> => {
         const resource = await recipeApiService.createAsync(command);
         const entity =
             'recipe_id' in resource
@@ -61,6 +61,9 @@ export const useRecipeStore = defineStore('recipe', () => {
                 : await recipeApiService.getAsync(resource.id as string);
         recipes.value.push(entity);
         recipes.value.sort((a, b) => collator.compare(a.name, b.name));
+        // FU-095 — callers (RecipeEditDialog) navigate to the new detail
+        // page after create, so we hand back the entity we just resolved.
+        return entity;
     };
 
     const updateRecipeAsync = async (command: UpdateRecipeCommand) => {

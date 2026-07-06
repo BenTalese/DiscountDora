@@ -6,6 +6,20 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **FU-333 closed — Buckets C + D shipped; env-var sprawl done (2026-07-06).**
+  Bucket C moves the two remaining operational secrets — the SMTP password
+  and the VAPID private key — onto `AppSetting` as encrypted-at-rest columns
+  (Fernet ciphertext wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`, reusing the
+  FU-153 helper). Admins now enter both from **Settings → Admin → System →
+  Email** and **Push notifications**; the response DTO returns only a
+  `<field>_configured: bool` so ciphertext never leaves the row. Bucket D
+  auto-generates the two remaining bootstrap keys (`DORA_SECRET_KEY`,
+  `DORA_LLM_KEY_ENCRYPTION_KEY`) into the per-user data dir on desktop
+  bundles so a double-click end-user never sees an env var — server
+  self-host still sets them explicitly. Same work also closed [[FU-467]]:
+  the Bucket-B env-var fallbacks (14 vars across SMTP, VAPID, Piper, email,
+  audit, public URL) are gone — the resolver is a straight `AppSetting`
+  projection. Migration `a3e7d2c9b5f1` adds the two new columns.
 - **Batch-cooking preference now asked in onboarding — FU-041 follow-up (2026-07-06).**
   New "I batch-cook" toggle sits under the "how many people do you cook for?"
   input on the welcome step. Both are "how you cook" personal prefs and belong

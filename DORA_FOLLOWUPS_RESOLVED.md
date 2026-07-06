@@ -10,6 +10,188 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-461 — Account-deletion endpoint (GDPR) → refocused as admin Add / Delete on the users page
+- **Resolved:** 2026-07-06 — user's call: GDPR "right to erasure" is only load-bearing if we go SaaS; single-tenant self-host and desktop don't have that obligation. The load-bearing gap on the users page was the missing Add + Delete affordances (Edit + Reset password already shipped). Fixed that instead. If SaaS ever becomes real, this FU can be re-opened as a self-serve `/settings/account` danger-zone build — the admin-side plumbing shipped here (soft-vs-hard call, cascade behaviour, last-admin guard) will inform it, but the surface is different.
+- **What shipped:**
+  - **Backend — new `dora_api/features/users/create_user_as_admin.py`.** `POST /api/users` (admin-only). Payload: `{ username, email?, is_admin? }`. Uniqueness checks match `register_user.py` (username case-sensitive, email normalised + case-insensitive). Optional email is validated when present. Server mints a 12-char alphanumeric one-time password (same shape as `reset_user_password.py`), hashes it, stores, returns `{ user_id, new_password }` — admin relays out-of-band. `email_verified=false` (parity with self-register); no verification email dispatch (admin implicitly vouches). Audit event `user.created_by_admin`.
+  - **Backend — new `dora_api/features/users/delete_user_as_admin.py`.** `DELETE /api/users/<user_id>` (admin-only). Hard-deletes the User row after two guards: (a) refuses to delete the caller (`403 Forbidden`); (b) refuses to delete the last remaining admin (`400 business_rule_violation`, mirroring the `update_user_as_admin` demote guard). FK-cascaded tables drop automatically (`PriceAlert`, `AuthToken`, per-user LLM config); `RecipeCookEvent.cooked_by_user_id` + `ShoppingList.created_by_user_id` are `ON DELETE SET NULL` so household-shared history survives with a null author. `AlertInteraction`, `AlertPreference`, `PushSubscription` — user-scoped tables that carry a plain `user_id` column with no FK constraint — are cleaned up explicitly in the handler. `AuditEvent.actor_user_id` orphans intentionally so the audit trail preserves what happened. Audit event `user.deleted_by_admin`.
+  - **Frontend — `userAdminApiService.ts`**: added `createAsync(command) → { user_id, new_password }` and `deleteAsync(userId)`. Documented the one-time-password contract.
+  - **Frontend — `UsersAdminSettings.vue`**: new **Add user** button in the page header (primary variant, `person_add` icon). Create dialog collects `username / email / is_admin` with inline field-error surfacing (server 422 errors map to the picker; username-taken / email-taken 400s land inline on the offending field). On success the existing password-shown-once dialog is reused (shared between create + reset — a `resetResultKind` flag switches the copy). New **Delete** button on each row, disabled with tooltip on the current user's row; confirms via `$q.dialog` with a `Delete` (negative) CTA and honest scope copy ("sessions, alert prefs, push subs removed; household-shared things survive"). Also added `person_add: 'mdi-account-plus'` to `web_app/src/style/icons.ts`.
+- **Deliberate design calls:**
+  - **Hard delete, not soft-delete.** Soft-delete would need a `User.deleted_at` column + every user-scoped query to filter on it; scope grew beyond what the users page needs today. Hard delete + explicit cleanup of the three FK-less tables + intentional audit-event orphaning is a smaller surface. If SaaS obligations arrive later, an added `deleted_at` + retention window is straightforward and doesn't invalidate the current shape.
+  - **No self-delete.** The admin must ask another admin (or use a future self-serve account-close endpoint). Prevents accidental lockouts even beyond the last-admin guard.
+  - **One-time password, not verification email.** Same shape as the existing `reset_user_password` flow — no dependency on SMTP being configured, admin relays out-of-band. `email_verified=false` on the created user so a subsequent self-serve verify still works if wanted.
+- **Files touched:**
+  - Backend: `dora_api/features/users/{create_user_as_admin,delete_user_as_admin}.py` (new).
+  - Frontend: `web_app/src/services/api/userAdminApiService.ts`; `web_app/src/pages/settings/UsersAdminSettings.vue`; `web_app/src/style/icons.ts`.
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type:** deferred job / feature (compliance) → refocused as admin CRUD.
+- **What (original):** No account-deletion path exists (`DELETE /auth/me` etc.). Needed for GDPR "right to erasure" once the product is user-facing. Design questions: soft-delete (retention window) vs hard-delete, cascade rules (personal data vs household-shared data like recipes/products), auth (password reprompt), audit trail, self-service UI location (Settings → Account danger-zone). Recommend a short brief before building.
+- **Browser-verify:** appended to `DORA_VERIFY.md` under Settings.
+
+## [RESOLVED] FU-313 — Designed token ladder for graded severity / heatmap palettes
+- **Resolved:** 2026-07-06 — shipped the designed token ladder + categorical alert-kind accents + lifecycle event colours, replaced Quasar's numbered palette across every FU-audited site (plus one extra leak swept in the same pass). All values `light-dark()`-driven so a single declaration in `tokens.scss` covers every theme's light + dark variants; no per-theme repetition. Scope shrank one item when the killed location-heatmap system was verified gone (`models/location.ts` FU pointer was stale).
+- **What shipped:**
+  - **`web_app/src/css/tokens.scss`** — new "Graded severity + alert taxonomy" section with 15 tokens: severity ladder (`--severity-critical` / `-high` / `-medium` / `-low` / `-attention`), 4 categorical alert-kind accents (`--alert-kind-out-of-stock` / `-stocktake-overdue` / `-no-planned-meals` / `-shopping-day`), 1 alert-history state (`--alert-history-read`; snoozed reuses `--severity-medium`), 3 lifecycle accents (`--lifecycle-bought` / `-expiry-changed` / `-cleared`), 1 generic neutral (`--neutral-muted`). Each unique colour uses `light-dark(lightHSL, darkHSL)` — light values keep the current Quasar-palette hue, dark values are lifted ~15% lightness so they stay legible against `--surface-page` in the 5 dark themes.
+  - **`web_app/src/css/colours.scss`** — matching `.bg-<name>` + `.text-<name>` utility classes (30 total) so Quasar's `color` prop keeps working as-is (`<q-avatar :color="severity-critical">` generates `bg-severity-critical` → the utility class → the token). Documented that this is the mechanism.
+  - **`models/alert.ts colorFor + colorForKind`** — 3-stop severity ladder + 8 kind accents now return token class-suffixes (`severity-critical`, `alert-kind-out-of-stock`, etc.) instead of `red-6` / `orange-7` / `purple-5` etc. Kinds that semantically overlap the severity ladder alias to it (expired ⇒ critical, expiring_soon ⇒ medium, low_stock ⇒ low, essential_low ⇒ high).
+  - **`AlertsPage.vue historyChipColor`** — snoozed reuses `severity-medium`, read maps to the new `alert-history-read` token.
+  - **`AddToListButton.vue`** — `on_multiple` (`amber-9`) → `severity-attention`.
+  - **`StockItemDetailPage.vue` lifecycle timeline (5 sites)** — bought (teal-8) → `lifecycle-bought`; cooked (deep-orange-6) → `severity-high`; expiry set/pushed (orange-8 × 2) → `lifecycle-expiry-changed`; cleared (grey-7) → `lifecycle-cleared`; opened (amber-9) → `severity-attention`.
+  - **`DashboardPage.vue nextToCookBadgeColor`** — extra leak swept in-pass: `grey-6` (unlinked ingredients / no ingredients) → `neutral-muted`.
+- **Verified sweep clean:** `rg "return 'red-\d|return 'orange-\d|..."` etc. across `web_app/src` returns only breadcrumb comments in the migrated files. Full audit list preserved in the FU history below.
+- **Raised:** 2026-06-26 (FU-046 A1 theme-token regression sweep).
+- **Type:** deferred job.
+- **What:** four surfaces still ride Quasar's numbered palette because they
+  encode a *graded* severity / heatmap, not a binary semantic — a single
+  `negative` / `warning` doesn't carry the ordinal signal. Sites:
+  - `web_app\src\models\alert.ts:144-169` — alert-severity gradient
+    (red → orange → amber → deep-orange → purple → teal → indigo).
+  - `web_app\src\models\location.ts:41-45` — location-heatmap palette
+    (green → teal → amber → orange → red). **Verified stale 2026-07-06 — the whole location-heatmap feature was killed 2026-07-04 stocktake cleanup; palette pointer removed from scope.**
+  - `web_app\src\pages\AlertsPage.vue:422-423` — `historyChipColor`
+    state ladder: `'orange-7'` (snoozed), `'blue-grey-5'` (read).
+  - `web_app\src\components\AddToListButton.vue:247` and
+    `web_app\src\pages\StockItemDetailPage.vue:1635` — `'amber-9'`
+    "needs attention" tones (inspect; likely the same shape).
+- **Why deferred:** swapping these to a single semantic loses ordinal info, and
+  picking N specific palette stops is a design decision, not a sweep. They need
+  a designed token ladder — e.g. `--severity-1`..`--severity-5` (and a
+  `--heatmap-1..N`) — defined in `web_app/src/style/tokens.scss` +
+  `themes.scss` so each step is theme-aware in both light and dark, and a tiny
+  `severityClass(level)` helper to map an ordinal to the right token-bound
+  class.
+- **Recommended resolution:** opportunistic — bundle with the next visual
+  pass on alerts/heatmaps, or when an A-wave design brief touches severity UI.
+
+## [RESOLVED] FU-284 — settings mobile nav still horizontal-scroll fallback (Phase 5 owes top tab strip) — SHIPPED IN PASSING
+- **Resolved:** 2026-07-06 — stale FU; the "real" implementation the FU said Phase 5 owed has already shipped in [SettingsMobileNav.vue](web_app/src/components/settings/SettingsMobileNav.vue). Whoever did it didn't close the FU at the time. Verified in the current code:
+  - **Top tab strip** with Account / Kitchen setup / Admin · global tabs, accent-underline active state.
+  - **Chip strip below** reveals the selected group's destinations, horizontally-scrolling, current route highlighted.
+  - **Sub-groups flattened** on mobile (Recipe taxonomies + System become flat chips — documented design pick in the component).
+  - **Route-aware** — the correct tab auto-opens on deep-link and follows navigation.
+  - File's own header comment confirms: "Replaces Phase 3's placeholder horizontal-scroll of the desktop sidebar."
+- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
+- **Type:** deferred job (shipped in a later Phase-3/5 pass, FU not closed at the time).
+- **What:** §6.3 was resolved as **top tab strip** but Phase 3 only ships the
+  desktop shell + a `flex-direction: row; overflow-x: auto` fallback on
+  `<1024px`. The real implementation (three top tabs → chip strip with the
+  selected group's sub-items) is owned by Phase 5.
+- **Why deferred:** Phase 3 owns desktop visuals only; mobile is a dedicated
+  phase that also revisits SettingsSection row collapse + theme grid + the
+  DoraSegmented overflow shape.
+- **Note for future:** the FU also mentioned Phase-5 revisits of `SettingsSection` row collapse + theme grid + `DoraSegmented` overflow shape. Those may still be open — but they're separate from the mobile-nav concern this FU's title + body describe. If any turn out to be open, they warrant their own FU rather than sitting under FU-284's title.
+
+## [RESOLVED] FU-220 — Repurpose `OnboardingLoop` in Help + consider menu re-ordering — WON'T DO (no change)
+- **Resolved:** 2026-07-06 — discussed and closed with no code change. Three separable sub-questions; verdict on each:
+  - **Loop diagram in Help.** Nice-to-have, not must-do. Costs promoting `OnboardingLoop.vue` into a shared `components/dora/AppLoopDiagram.vue` + a compact size mode + a HelpPage slot. Value is a mental-model refresh users could otherwise only get by re-running the wizard; low payoff for the churn. Skipped.
+  - **Help section order following the loop.** Current order (Stock → Recipes & meals → Shopping & deals → Settings → Dora) already serves the "plan-first" user reasonably; the "shop-first" alternative order is defensible but not obviously better. Reordering costs muscle memory + doc-link churn; skipped.
+  - **Main-menu order following the loop.** The FU itself already flagged the tension — cookbook + recipes are nouns, not loop steps. Nav is a random-access index, not a linear tutorial; loop belongs in onboarding/Help as a mental model, not baked into the nav strip. Skipped.
+- **Raised:** 2026-06-17 (FU-210 revisit — user direction)
+- **Type:** follow-up (UX + IA) — dropped without action.
+- **What:** With the cinematic Story still alive (FU-210 revisit kept the hero loop there) and
+  the Finish-step recap dropped, the loop is "a nice reminder of how to use the app." Find a
+  durable home for it in **Help** so first-run users can revisit it after onboarding without
+  rerunning the wizard. Two open IA questions to chew on at the same time:
+  (a) **Help section order.** Should the Help sections be ordered in the loop's flow
+      (Stock → Plan → List → Shop → Restock → Cook), so newcomers can read the help in the same
+      order they'll actually use the app?
+  (b) **Main menu order.** Same question for the left-nav: do the buttons map cleanly to the
+      loop today? If not, is reordering worth doing — or is the loop's order aspirational
+      and the menu's pragmatic (cookbook + recipes are nouns, not steps)?
+- **Note for future:** if you revisit, the cheapest partial win is renaming the Help sections to include the loop stage they cover ("Recipes & meals — plan and cook" / "Shopping — list, shop, restock"). No file structure change, teaches the mental model in situ.
+
+## [RESOLVED] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5) — WON'T DO
+- **Resolved:** 2026-07-06 — user's call: won't do. The FU was speculative — no back-in-stock data source exists (it was gated on the companion / ingestion path producing an availability signal). If a signal ever ships, the producer will design the in-app surface at the same time; keeping a dangling UI-only follow-up here adds noise without adding memory that the future implementer needs.
+- **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)
+- **Type:** deferred job (dropped)
+- **What:** The proposal/impl plan for the subscriptions tier mentioned a **back-in-stock**
+  subscription shape ("notify me when a merchant's product comes back in stock") alongside the
+  price-watch (`PriceAlert`) tier that C-9.5 shipped. C-9.5 built **only** the price-watch
+  surface (`SubscriptionsPanel.vue`, money-gated, reusing `/price-history/alerts`). Back-in-stock
+  was **not** built: there is no data source / entity for it yet — it's companion/ingestion-scope
+  (the producer would push availability), and the in-app side would just surface/manage rows like
+  price watches do.
+- **Why deferred:** anti-creep — no back-in-stock data exists to surface, so a placeholder UI/shape
+  now would be speculative (charter: don't pre-build). User confirmed skipping it for C-9.5.
+- **Recommended resolution:** **when** the companion/ingestion path (C-10) defines a back-in-stock
+  signal — then add a second tier to `SubscriptionsPanel.vue` (same list/manage shape) reading it.
+
+## [RESOLVED] FU-184 — Reconcile onboarding sell-copy + loop stages against actual app behaviour
+- **Resolved:** 2026-07-06 — honesty pass done. Walked every claim in the onboarding sell-copy against the running feature set; two lines didn't cleanly back and were softened, the rest are truthful to what a user with an empty install sees on day 1. User directive: "the logic of the app is pretty settled, minus the verification pass needed" — the foundations FU-184 was waiting on are now in place.
+- **What changed in the copy:**
+  - **`WelcomeWizard.vue:69`** — welcome-card blurb: "I keep your pantry, **deals** and meals in one place" → "I keep your pantry, **shopping and cooking** in one place". Scraping was divorced back in P8; "deals" was aspirational.
+  - **`onboardingContent.ts` PERSONA_PREVIEWS[cooking].centreSell** — "Watching expiry and stock, and **suggesting** what to cook." → "…and **flagging what you can cook now**." Active suggestion requires the opt-in assistant (off by default at the master flag + per-user provider config); the cookable-now filter + Dora Score card ARE always-on day-1 surfaces, and "flagging what you can cook now" maps cleanly onto them.
+  - **`onboardingContent.ts` header docstring + inline `PROVISIONAL` markers** — flipped from "⚠️ PROVISIONAL" to "✅ Honesty pass done" so future readers know the reconciliation ran; kept the guidance that any *new* sell copy must be truthful to a day-1 install.
+- **What was verified and kept unchanged:**
+  - `LOOP_STAGES.stock` — `StockItem.stock_level` + `Location` tree + `expiry_date` all exist. ✓
+  - `LOOP_STAGES.plan` — cookable-now filter ([RecipesOverview.vue:84](web_app/src/pages/RecipesOverview.vue:84)) + meal plans + shortfall (per `useMealPlanWeekStatus`) all real. ✓
+  - `LOOP_STAGES.list` — auto-add-when-low (per FU-464 fix) + meal-plan-gaps-onto-lists all real. ✓
+  - `LOOP_STAGES.shop` + `restock` — `ShoppingListDetail.vue`'s Finish & restock is real (bumps ticked items back to Stocked). ✓
+  - `LOOP_STAGES.cook` — [RecipeCookMode.vue](web_app/src/pages/RecipeCookMode.vue) walks structured steps + `recipeStore.cookAsync` → `dora_api/features/recipes/cook_recipe.py` decrements ingredients. ✓
+  - `LOOP_CENTRE.sell` "…watching expiry and stock, and answering when you ask" — alerts feed watches expiry + stock; the assistant answers when queried (opt-in gating is honest because the sell says "when you ask", not "unprompted"). ✓
+  - `PERSONA_PREVIEWS.spend` "…and what you've been paying" — YourPricesWidget + price observations (FU-213/FU-216) are shipped; gating on the `money_enabled` install flag is the intended "preview of what turning it on gives you" framing. ✓
+  - `NARRATIVE_SCENES` (detective work / one loop / brain doing the remembering / you're in control) — figurative, no literal feature claims. ✓
+  - Provisional `LOOP_INSIGHT` node was already removed 2026-06-17 in the FU-210 pass — nothing dimmed-and-"coming" remains.
+- **Raised:** 2026-06-15 (Onboarding C-5 v3 design)
+- **Type:** finding / deferred verification (P3 Honest gate)
+- **Browser-verify:** appended to `DORA_VERIFY.md` under Onboarding — the two edited surfaces plus a spot-check of each `LOOP_STAGES.sell` claim playing out end-to-end.
+
+## [RESOLVED] FU-095 — RecipeEditDialog reshaped: stub-creator only, then navigate to detail
+- **Resolved:** 2026-07-06 — reassessed and reshaped rather than "add structured steps to the modal". The dialog now creates a **stub** (Name / Cuisine / Category / Collection), closes, and navigates straight to `/cookbook/<new-id>` so the user can flesh out ingredients, steps, image, tools, dietary tags, times, servings, difficulty, time-of-day, and instructions on the detail page (which has better editors for all of them, including the Structured/Freeform/Image `steps_mode` toggle that FU-095 originally worried about). Same shape when editing from the overview — a quick rename/reclassify shortcut; deeper edits happen on the detail page.
+- **What shipped:**
+  - **`RecipeEditDialog.vue`** — trimmed to 4 fields (Name, Cuisine, Category, Collection). Dialog width dropped 800px → 480px (single column). Primary button reads "Create & open" on create, "Save" on edit. Emit signature split from a generic `saved` into distinct `created(recipeId)` + `updated`.
+  - **`recipeStore.createRecipeAsync`** — now returns the created `Recipe` entity so callers can navigate. Existing signature was `Promise<void>`; no other callers relied on that.
+  - **`RecipesOverview.vue`** — `onSaved()` split into `onRecipeCreated(recipeId)` (navigates via `router.push('/cookbook/<id>')`) and `onRecipeUpdated()` (list refresh only, same as before). Import + wiring updated.
+- **Removed from the modal (all now detail-page-only):** ingredients repeater, image upload, instructions textarea, dietary tags multi-select, tools multi-select, difficulty, servings, prep time, cook time, time of day. Vocab-store hydration for tools + dietary tag catalogue also gone — the trimmed dialog doesn't consume them.
+- **Rationale (from the reassessment):** the modal's job is "quick stub so the recipe exists in the list"; anything that reads as "flesh out this recipe" is friction and belongs on the detail page where the specialised editors live. Name + Cuisine + Category keep the stub from getting lost (they're the primary overview filter axes); Collection is the "where does this live" pick users often think of at create-time.
+- **Raised:** 2026-06-09 (Cookbook Chunk 6 impl).
+- **Type:** follow-up (reshape, not "add structured steps to the modal").
+- **Browser-verify:** appended to `DORA_VERIFY.md` under Cookbook — dialog fields present, "Create & open" navigates, edit-from-overview stays on the list.
+
+## [RESOLVED] FU-056 (partial) — Phase 2 ingestion EAN auto-populate
+- **Resolved:** 2026-07-06 — closed as clutter rather than "done". The two remaining pieces are both **call sites for plumbing that's already shipped**, gated behind speculative future work (Phase 2 ingestion API + a Products UI redesign). Neither needs a bookmark to be remembered: anyone building either parent feature will naturally add these in passing.
+  - **Ingestion auto-populate** — `POST /api/data/barcodes` + the `Barcode` model with per-Product UNIQUE landed 2026-06-28 (slice 1, hybrid model). When Phase 2 ingestion is built, the feed importer should call the endpoint for each EAN/UPC in the catalogue. Grep-anchor for future work: `POST /api/data/barcodes` with `product_id` set.
+  - **Product detail EAN field** — same endpoint. Add a single-EAN row on the Product detail page (gated on `features.products`) when the Products UI is next touched. Products is currently a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY / FU-209), so this piggy-backs on whatever surface work lands there.
+- **Raised:** 2026-06-07 (P6-02); slice 1 closed 2026-06-28 (hybrid model)
+- **Type:** deferred job (Phase-2 scoped)
+- **What's left after the 2026-06-28 hybrid landing:**
+  - **Ingestion auto-populate** — when the ingestion API imports a
+    retailer catalogue, it should populate `Barcode` from the feed's
+    EAN/UPC field automatically so most barcodes resolve without manual
+    registration. Just calls `POST /api/data/barcodes` with
+    `product_id` set; logic + endpoint already in place. Blocked on the
+    ingestion API itself.
+  - **Product detail EAN field** — when the Products UI gets touched,
+    add a single-EAN row (gated on `features.products`). Uses the same
+    endpoint. Per-Product UNIQUE constraint already enforced
+    server-side ("one Product = one EAN").
+- **Recommended resolution:** Phase 2 ingestion + the Products UI work,
+  whichever lands first.
+
+## [RESOLVED] FU-333 — Env-var sprawl: promote operational config to AppSetting + first-run wizard for desktop
+- **Resolved:** 2026-07-06 — Buckets C + D shipped end-to-end; the Bucket-B env-var fallbacks were also dropped in the same unit (pre-release, no operators to preserve → also closes [[FU-467]]). Env-var footprint is now 2 bootstrap keys on server self-host (`DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY`), auto-generated on desktop bundles.
+- **What shipped in this unit (2026-07-06):**
+  - **Bucket C — encrypted secrets on `AppSetting`.** New columns `smtp_password_encrypted` + `vapid_private_key_encrypted` (Fernet ciphertext wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`, reusing the FU-153 helper). Migration `a3e7d2c9b5f1`. Write handler accepts plaintext on `smtp_password` / `vapid_private_key` and encrypts on save; empty string is the explicit-clear signal; missing-wrapping-key returns a friendly 400. Read DTO returns `<field>_configured: bool` — ciphertext never leaves the row. Resolver decrypts on demand and degrades to empty (dry-run) on rotated-key / undecodable ciphertext with a warning log rather than crashing install-wide. Admin UI: `AdminSystemEmailSettings.vue` + `AdminSystemPushSettings.vue` flipped from disabled-with-hint placeholders to write-only password inputs with Save/Clear.
+  - **Bucket D — desktop first-run key bootstrap.** `desktop_app.py._bootstrap_keys()` auto-generates `DORA_SECRET_KEY` (`secrets.token_hex(32)`) and `DORA_LLM_KEY_ENCRYPTION_KEY` (`Fernet.generate_key()`) into `<DATA_DIR>/.secret_key` + `<DATA_DIR>/.llm_key_encryption_key` on first launch; server self-host still sets both explicitly. Same file also gained `_detect_bundled_piper_paths()` + `_seed_desktop_paths()` — the detected `piper_bin` / `piper_bundled_voice_dir` are written into the `AppSetting` row post-init (rather than exported as env), so the strict Bucket-B resolver has no env fallback path to lose.
+  - **Bucket-B env fallbacks dropped.** `operational_config.py` is now a straight `AppSetting` projection (no `_pick_str` / `_pick_int` / `_pick_bool`); all 7 read sites (`health_check`, `audit_retention`, `auth_helpers.public_base_url`, `email_sender`, `push_sender`, `tts_synthesize`, `voice_provision`) either delegate to the resolver or fall through to a dry-run/None. `.env.example` deprecated blocks removed. README VAPID section rewritten; the "env-driven path also still works" language is gone.
+  - **Tests.** `tests/e2e/dora_api/test_operational_config_resolver.py` had already been rewritten to the strict-AppSetting shape; added `test_bucket_c_secrets.py` covering the encrypt-on-write path (ciphertext-not-plaintext, `_configured` bool never leaks, clear-via-empty-string, partial-update leaves-unchanged, round-trip decrypt, missing wrapping key → 400, rotated wrapping key → dry-run + warning).
+- **Files touched in this unit:**
+  - Backend: `dora_api/domain/entities/app_setting.py`; `dora_api/persistence/table_mappings.py`; `dora_api/persistence/migrations/versions/a3e7d2c9b5f1_20260706_appsetting_bucket_c_secrets.py` (new); `dora_api/features/app_settings/{operational_config,get_app_settings,update_app_settings}.py`; `dora_api/infrastructure/{email_sender,push_sender,auth_helpers,audit_retention}.py`; `dora_api/features/tts/{tts_synthesize,voice_provision}.py`; `dora_api/features/health/health_check.py`; `desktop_app.py`.
+  - Frontend: `web_app/src/services/api/appSettingsApiService.ts`; `web_app/src/pages/settings/{AdminSystemEmailSettings,AdminSystemPushSettings}.vue`.
+  - Tests: `tests/e2e/dora_api/test_bucket_c_secrets.py` (new).
+  - Docs: `.env.example`; `README.md`; `CHANGELOG.md`; `docs/04_proposals/IMPL_PLAN_ENV_TO_APPSETTING.md`; `docs/01_charter/ENGINEERING_STANDARDS.md` (new ADR-026 + R-030).
+- **Explicit non-goals kept:** `DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY` stay in env (bootstrap-only). Per-user `User.llm_*` (FU-153) unchanged. No "set arbitrary env vars from admin UI" surface — that was the anti-pattern this FU existed to avoid.
+- **Engineering-standards close-gate:** clean. R-003 (server-owned operational config), R-005 (portable data access; strict AppSetting is Postgres/SQLite-agnostic), R-007 (Buckets C + D + fallback drop bundled per user directive; no scope creep beyond that), all respected. Promoted a new **R-030 / ADR-026** — "Operational config lives on `AppSetting`, not env" — capturing the recurring "where should this config live?" call.
+- **Cross-refs:** [[FU-467]] closed in the same unit (below); [[FU-327]] previously shipped the desktop bundle scripts (2026-07-03), which made Bucket D actionable.
+
+## [RESOLVED] FU-467 — Drop the DORA_* env-var fallbacks after FU-333 Bucket B beds in
+- **Resolved:** 2026-07-06 — folded into the FU-333 close-out. User directive: "no need for fallbacks, this is prerelease work. no current users of the app." Resolver + 7 read sites are now strict AppSetting projections; `.env.example` and README purged of the deprecated env vars. See the FU-333 resolved entry above for the full file list.
+- **Raised:** 2026-07-05 (FU-333 Bucket B merge).
+- **Type:** deferred job (deprecation follow-up).
+- **What:** FU-333 Bucket B promoted 12 operational env vars to `AppSetting` and shipped four admin System pages, but kept the env vars as *fallbacks* (resolver in `dora_api/features/app_settings/operational_config.py` prefers the row when set, falls back to the env when the row is empty). The fallback lane is a deprecation-window courtesy so existing operators don't lose their SMTP / VAPID / TTS config on the FU-333 upgrade. One release after Bucket B ships, drop the fallback.
+- **Cross-ref:** FU-333 (parent).
+
 ## [RESOLVED] FU-032 — C-2: allocation count doesn't decrement after planner drop
 - **Resolved:** 2026-07-06 — user confirmed in the browser (with batch-cooking
   toggled on via the new onboarding pref) that dropping a recipe onto a future

@@ -371,7 +371,8 @@
         <RecipeEditDialog
             v-model="editDialogOpen"
             :recipe="editingRecipe"
-            @saved="onSaved"
+            @created="onRecipeCreated"
+            @updated="onRecipeUpdated"
         />
 
         <!-- ── Per-ingredient picker (Chunk B §1.4) ─────────────── -->
@@ -1335,7 +1336,17 @@
         }
     }
 
-    async function onSaved() {
+    // FU-095 (2026-07-06) — the modal is a stub-creator. On create,
+    // close and navigate straight to the detail page so the user can
+    // flesh the recipe out (ingredients, steps, image, times, tags)
+    // without hunting the list. On update (rename/reclassify from
+    // the overview), just refresh the grid.
+    async function onRecipeCreated(recipeId: string) {
+        editDialogOpen.value = false;
+        await router.push(`/cookbook/${recipeId}`);
+    }
+
+    async function onRecipeUpdated() {
         editDialogOpen.value = false;
         await recipeStore.getRecipesAsync();
     }

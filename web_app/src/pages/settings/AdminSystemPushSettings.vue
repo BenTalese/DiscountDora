@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Push notifications"
-            description="Web-push (VAPID) keys the browser needs to sign notification subscriptions. The private key stays in the environment until encrypted-in-database storage lands."
+            description="Web-push (VAPID) keys the browser needs to sign notification subscriptions. The private key is stored encrypted-at-rest (Fernet, wrapped by DORA_LLM_KEY_ENCRYPTION_KEY)."
             :icon="ICONS.notifications_active"
         />
 
@@ -15,8 +15,9 @@
                 <template #title>VAPID</template>
                 <template #description>
                     Both halves must be set for real pushes to leave the box.
-                    Users see the Push toggle in Preferences as
-                    reveal-and-disabled while push isn't fully configured.
+                    Push notifications stay hidden across the app while
+                    both halves aren't configured (R-029 — respect the
+                    off-state; hide, don't nag).
                 </template>
 
                 <SettingsRow label="Public key" stacked>
@@ -39,18 +40,46 @@
                     />
                 </SettingsRow>
 
-                <!-- R-014 reveal-and-disable: the private key stays in env
-                     until FU-333 Bucket C lands. -->
+                <!-- FU-333 Bucket C — VAPID private key lives encrypted-
+                     at-rest on AppSetting.vapid_private_key_encrypted. The
+                     read DTO returns only `vapid_private_key_configured`.
+                     Write-only input: submit replaces / empty clears. -->
                 <SettingsRow
-                    label="Private key"
-                    help="Set DORA_VAPID_PRIVATE_KEY in the environment. Encrypted-in-database storage lands with FU-333 Bucket C — this input will unlock then."
+                    :label="privateKeyConfigured ? 'Private key (change)' : 'Private key'"
+                    :help="privateKeyConfigured
+                        ? 'A private key is stored. Enter a new one to replace it, or use Clear to remove.'
+                        : 'Encrypted at rest with DORA_LLM_KEY_ENCRYPTION_KEY. Push sends stay in dry-run until this is set.'"
                     stacked
                 >
-                    <q-input
-                        model-value=""
-                        outlined dense disable
-                        placeholder="Managed via DORA_VAPID_PRIVATE_KEY environment variable"
-                    />
+                    <div class="column q-gutter-sm">
+                        <q-input
+                            v-model="privateKeyDraft"
+                            type="password"
+                            outlined dense
+                            autogrow
+                            :placeholder="privateKeyConfigured
+                                ? '••••••••'
+                                : 'Paste base64 / PEM private key'"
+                            :disable="saving"
+                        />
+                        <div class="row q-gutter-sm">
+                            <q-btn
+                                unelevated no-caps
+                                label="Save"
+                                color="primary"
+                                :disable="saving || privateKeyDraft.length === 0"
+                                @click="() => onSavePrivateKey(privateKeyDraft)"
+                            />
+                            <q-btn
+                                v-if="privateKeyConfigured"
+                                flat no-caps
+                                label="Clear"
+                                color="negative"
+                                :disable="saving"
+                                @click="() => onSavePrivateKey('')"
+                            />
+                        </div>
+                    </div>
                 </SettingsRow>
             </SettingsSection>
         </template>
@@ -82,6 +111,8 @@
         vapid_subject: 'mailto:admin@dora.local',
     });
     const draft = reactive({ ...saved });
+    const privateKeyConfigured = ref(false);
+    const privateKeyDraft = ref('');
 
     function resetDrafts() {
         Object.assign(draft, saved);
@@ -111,9 +142,33 @@
         }
     }
 
+    async function onSavePrivateKey(nextValue: string) {
+        saving.value = true;
+        try {
+            const result = await api.updateAsync({ vapid_private_key: nextValue });
+            privateKeyConfigured.value = result.vapid_private_key_configured;
+            privateKeyDraft.value = '';
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: nextValue.length === 0
+                    ? 'VAPID private key cleared.'
+                    : 'VAPID private key saved.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save VAPID private key.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            saving.value = false;
+        }
+    }
+
     function hydrate(s: AppSettings) {
         saved.vapid_public_key = s.vapid_public_key;
         saved.vapid_subject = s.vapid_subject;
+        privateKeyConfigured.value = s.vapid_private_key_configured;
         resetDrafts();
     }
 
@@ -125,7 +180,7 @@
         try {
             hydrate(await api.getAsync());
         } catch {
-            // Leave defaults; env fallback still active.
+            // Leave defaults; admin can retry once DB is reachable.
         } finally {
             loading.value = false;
         }

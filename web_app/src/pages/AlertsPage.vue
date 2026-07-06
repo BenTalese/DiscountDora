@@ -434,12 +434,12 @@
 
     function historyChipColor(state: AlertHistoryState): string {
         // R-002: dismissed routes through the theme-bound `info`
-        // semantic; the saturated `orange-7` / `blue-grey-5` cases for
-        // snoozed / read are part of a graded severity ladder and
-        // are flagged for the FU-313 designed-token-ladder work.
+        // semantic. Snoozed reuses --severity-medium (the alert is still
+        // active), read maps to --alert-history-read (a distinct muted
+        // blue-grey). FU-313 (2026-07-06) — see tokens.scss.
         if (state === 'dismissed') return 'info';
-        if (state === 'snoozed') return 'orange-7';
-        return 'blue-grey-5';
+        if (state === 'snoozed') return 'severity-medium';
+        return 'alert-history-read';
     }
 
     onMounted(async () => {

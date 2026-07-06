@@ -2,9 +2,8 @@
 
 Wired in startup.py via APScheduler. Job is no-op when the table is
 empty and never raises (a failure here must not take the API down).
-The retention window is `AppSetting.audit_retention_days` (default 365);
-the legacy `DORA_AUDIT_RETENTION_DAYS` env var still works as a fallback
-during the FU-333 Bucket B deprecation window.
+The retention window is `AppSetting.audit_retention_days` (default 365),
+edited in Settings → Admin → System → Hosting (FU-333 Bucket B).
 """
 from __future__ import annotations
 

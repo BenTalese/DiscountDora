@@ -76,6 +76,14 @@ surface — pick a surface, walk it top-to-bottom.
 
 ## Cookbook & recipes
 
+### RecipeEditDialog stub-creator reshape — origin FU-095
+- [ ] Cookbook → **New Recipe**: the modal now shows exactly four fields — Name, Cuisine, Category, Collection — and nothing else (no ingredients repeater, no image upload, no instructions textarea, no dietary tags / tools multi-selects, no times / servings / difficulty / time-of-day).
+- [ ] Primary button reads **Create & open** (not "Save").
+- [ ] Fill only Name → click **Create & open** → dialog closes and the URL changes to `/cookbook/<new-id>`; the detail page loads with the new (mostly empty) recipe. All the flesh-out editors (ingredients, structured/freeform/image steps, image, tools, dietary tags, times, servings) live on the detail page as before.
+- [ ] Cancel from an empty form → nothing created; grid unchanged.
+- [ ] Edit an existing recipe from the overview (the pencil / edit action on a card, if any surface exposes it) → modal opens with the recipe's current Name / Cuisine / Category / Collection populated; button reads **Save**; changing Name and saving → dialog closes, list refreshes with the new name, URL stays on `/cookbook` (no navigation on edit — the deep edit happens on the detail page anyway).
+- [ ] Server-side: the created recipe has `steps_mode='freeform'` and `instructions=null` / `ingredients=[]` (defaults) — verify via GET `/api/recipes/<id>` shows an empty stub.
+
 ### Recipe importer — bulk-linker + PWA share target (Chunk 6) — origin IMPL_PLAN_RECIPE_IMPORTER
 - [ ] Settings → Admin → Data → **Unlinked ingredients** appears in the sidebar under the Data subheader beside Backup & restore and Import
 - [ ] With no unlinked rows in the DB, the page shows the empty-state ("Every recipe ingredient is linked to a stock item.")
@@ -888,16 +896,45 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 
 ## Settings
 
-### FU-333 Bucket B — env vars promoted to AppSetting + four new admin pages (2026-07-05)
-*Requires admin login.*
+### FU-333 close-out — Buckets C + D + strict AppSetting (2026-07-06) — origin FU-333
+*Requires admin login. Supersedes the earlier Bucket-B block below — env fallbacks are gone.*
+- [ ] `/settings/admin/system/email`: SMTP password row now renders a real password input (not disabled). Empty state label reads "Password"; help text mentions encryption + `DORA_LLM_KEY_ENCRYPTION_KEY`.
+- [ ] Type a password, click Save → toast "SMTP password saved."; the row's label flips to "Password (change)" and shows a **Clear** button; the input clears itself; reload the page — same "change" state.
+- [ ] Click **Clear** → toast "SMTP password cleared."; row flips back to the "Password" label, no Clear button; the ciphertext column on `AppSetting` is empty (verify via `/api/app-settings` — `smtp_password_configured: false`).
+- [ ] `/api/app-settings` **never** returns a `smtp_password` or `smtp_password_encrypted` field — only `smtp_password_configured: bool`.
+- [ ] Same behaviour on `/settings/admin/system/push` for VAPID private key: real password textarea, Save then Clear, label flips accordingly, DTO returns only `vapid_private_key_configured`.
+- [ ] With both VAPID public key + private key set: `/api/health` returns `features.push_vapid_configured: true`. Clear the private key → next `/health` call returns `false`.
+- [ ] Env-var fallback is **gone**: unset `DORA_SMTP_HOST` (etc.) and clear the AppSetting row → the sender is in dry-run (logs the body) rather than reading env. Grep the running server logs for "DRY-RUN email" on any auth flow that would have sent.
+- [ ] `.env.example` no longer lists `DORA_SMTP_*` / `DORA_VAPID_*` / `DORA_PIPER_*` / `DORA_EMAIL_ENABLED` / `DORA_AUDIT_RETENTION_DAYS` / `DORA_PUBLIC_URL` (they were removed with the fallback drop).
+- [ ] **Bucket D — desktop first-run** (only meaningful when running the PyInstaller bundle, not `python dora_api/app.py`). Delete `<DATA_DIR>/.llm_key_encryption_key` (and `.secret_key`) → relaunch the app → both files reappear; `/api/health` responds normally; login still works (new session key was generated). Any previously-stored SMTP password / VAPID private key cannot decrypt against the new wrapping key — Settings shows them as "not configured" and the log carries a warning line naming the field.
+- [ ] Server self-host (docker / manual): explicitly setting `DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY` in env still works — the auto-generation branch only runs when the env var is missing.
+
+### FU-333 Bucket B — env vars promoted to AppSetting + four new admin pages (2026-07-05, historical)
+*Requires admin login. Earlier checklist for the Bucket B landing; keep for reference but the FU-333 close-out block above is what should be walked now.*
 - [ ] Sidebar under Admin → System now has four new entries in order: **Email** (envelope-check icon), **Push notifications** (bell-ring), **Voice** (microphone-message), **Hosting** (cloud-upload). Non-admin session doesn't see them.
-- [ ] `/settings/admin/system/email`: page loads, shows Email enabled toggle + SMTP host/port/username/from/use-TLS + a disabled password input with a caption pointing at `DORA_SMTP_PASSWORD` + Bucket C. Type a host, tab out → toast "Email settings saved.", reload survives.
+- [ ] `/settings/admin/system/email`: page loads, shows Email enabled toggle + SMTP host/port/username/from/use-TLS + the password input (write-only, post-FU-333 close-out — no longer the Bucket-C disabled placeholder). Type a host, tab out → toast "Email settings saved.", reload survives.
 - [ ] `/settings/admin/system/email`: with SMTP username set, `/api/health` returns `features.email_smtp_configured: true`. Clear it → next `/health` call returns `false` (no restart).
-- [ ] `/settings/admin/system/push`: page loads with public key + subject fields + disabled private-key input citing Bucket C. Type a subject, tab out → toast "Push settings saved.", reload survives.
+- [ ] `/settings/admin/system/push`: page loads with public key + subject fields + the private-key input (write-only). Type a subject, tab out → toast "Push settings saved.", reload survives.
 - [ ] `/settings/admin/system/voice`: piper_bin / bundled_voice_dir / legacy voice inputs render; typing a valid path + blur → toast "Voice settings saved."; the assistant Speak action still resolves the same voice as before (the resolver picks the row value now).
 - [ ] `/settings/admin/system/hosting`: public URL + audit retention days inputs. Try `javascript:alert(1)` in Public URL → inline red error "Must start with http:// or https://.", nothing saved. `https://dora.example.com` → toast, reload survives.
-- [ ] Env-var fallback still works: unset the AppSetting (blank via the page), set the env var, restart, hit `/health` — behaviour matches the row-set version (proves the resolver's fallback lane is live for the deprecation window).
-- [ ] Migration backfill: fresh dev DB with `DORA_SMTP_HOST=smtp.example.local` in env → after startup, GET `/api/app-settings` returns `smtp_host: "smtp.example.local"` (the migration's env→row copy fired).
+
+### Users admin — Add / Delete (2026-07-06) — origin FU-461
+*Requires admin login. Second admin account handy for the last-admin + can't-delete-self checks.*
+- [ ] Settings → Admin → Users: the header now has **Add user** (primary button, account-plus icon) alongside the refresh button.
+- [ ] Click **Add user** → dialog opens with Username / Email (optional) / Admin toggle. Cancel closes without side effects.
+- [ ] Submit with only a username filled → dialog closes → "User created" result dialog appears with a 12-char one-time password + Copy button. User list refreshes and the new user appears.
+- [ ] Copy button copies the password; toast "Copied to clipboard." Close the dialog — password is gone (no way to retrieve it; admin must reset if lost).
+- [ ] Log in as the new user with the copied password → login succeeds → normal onboarding path.
+- [ ] Try Add with a **taken username** → inline field error appears under Username; nothing created.
+- [ ] Try Add with a **malformed email** ("nope") → inline field error under Email; nothing created.
+- [ ] Try Add with a **taken email** (belongs to another user) → inline field error under Email; nothing created.
+- [ ] Try Add with the Admin toggle on → new user appears in the list with the yellow "admin" badge.
+- [ ] Each row now has a **Delete** button (red text, trash icon).
+- [ ] Delete on **your own row**: disabled + tooltip "You can't delete your own account."
+- [ ] Delete on another user → confirm dialog appears with negative-coloured Delete CTA + honest scope copy ("sessions, alert prefs, push subs removed; household-shared things survive"). Cancel closes with no change.
+- [ ] Confirm delete → toast "Deleted 'X'." → user disappears from the list. Their historical audit events still exist (audit-log page keeps the row with the now-orphan actor_user_id).
+- [ ] Recipes / shopping lists that the deleted user authored / cooked survive with a null author (RecipeCookEvent.cooked_by_user_id and ShoppingList.created_by_user_id are SET NULL).
+- [ ] With only one admin remaining, attempt to delete that admin → toast "Delete failed." with caption "Refusing to delete the last admin — promote someone else first." No deletion happens.
 
 ### Admin cache-race safety net — origin FU-016
 *Requires at least two admins in the system (the backend blocks removing the last admin).*
@@ -1067,6 +1104,19 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 ---
 
 ## Onboarding
+
+### FU-184 — onboarding sell-copy honesty pass (2026-07-06) — origin FU-184
+- [ ] Welcome card (`/welcome` step 1) reads "I keep your pantry, **shopping and cooking** in one place…" — no mention of "deals".
+- [ ] Cinematic hero loop still shows the six stages (Stock → Plan → List → Shop → Restock → Cook), no seventh "Insight/Spend smarter" candidate node dangling in the middle.
+- [ ] Focus each loop stage and confirm the sell line describes something you can actually do in the app:
+  - **Stock** → Stock Overview shows levels + locations + expiry chips.
+  - **Plan** → Cookbook has a "Cookable now" filter; MealPlans has a week board with a shortfall indicator.
+  - **List** → items marked Low / Out (or a meal-plan shortfall) appear on the current draft shopping list without a manual add.
+  - **Shop** → tick-off works; a **Finish & restock** button appears once at least one item is checked.
+  - **Restock** → clicking Finish & restock bumps the ticked items to Stocked (verify one on Stock Overview after).
+  - **Cook** → open a recipe → Cook mode walks steps; on completion the ingredient stock levels drop.
+- [ ] Persona preview chip "Mostly cooking" — the Dora-centre sell reads "…and **flagging what you can cook now**" (not "suggesting what to cook").
+- [ ] `LOOP_INSIGHT` / dimmed "coming soon" chip: **not present** — should have been removed 2026-06-17.
 
 ### FU-195 — starter-data per-name picks + inline paste-rows (2026-07-02)
 - [ ] On a fresh install, `/welcome` step 3 shows two collapsed cards: "Use Dora's default stock groups" and "Use Dora's default locations". Master checkbox on each header is **fully ticked** by default (matches pre-FU-195 all-on behaviour)

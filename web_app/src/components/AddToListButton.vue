@@ -244,7 +244,10 @@
             case 'on_other':
                 return 'accent';
             case 'on_multiple':
-                return 'amber-9';
+                // FU-313 (2026-07-06) — was 'amber-9'; now theme-aware via
+                // --severity-attention (deeper than severity-low so it
+                // reads as "notice me, not urgent").
+                return 'severity-attention';
             case 'none':
             default:
                 return null;

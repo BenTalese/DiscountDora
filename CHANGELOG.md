@@ -6,6 +6,29 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Currency & locale for non-AU installs — FU-043 (2026-07-06).** Dora is now
+  usable outside Australia. Two new install-wide settings on `AppSetting`:
+  `currency` (ISO 4217, e.g. `USD`, `EUR`, `AUD`) and `locale` (BCP-47, e.g.
+  `en-US`, `de-DE`, `en-AU`). Every money render across the app — Dashboard
+  (budget, savings, spend by store, pantry value, best deals), Reports (all
+  charts and totals), ShoppingListDetail (line prices, totals, offer chips),
+  PriceHistory (chart axis + tooltip, "all-time low", price-alert labels),
+  StockItemDetail (offer prices, price observations, purchase-event lifecycle),
+  RecipeDetail (estimated cost), YourPricesWidget, PriceEntry, MoneySettings,
+  ProductChip, QuickAddSheet, SubscriptionsPanel, MyProductsPage — now routes
+  through one shared `Intl.NumberFormat` wrapper (`useMoney.ts`). Money-input
+  prefixes read the same currency symbol so `q-input` fields flip atomically
+  when an admin changes the setting. Voice input's speech-recognition locale
+  derives from the same setting (fallback: browser locale, then `en-AU`), so a
+  German-locale install gets German voice recognition instead of Australian
+  English. New admin page at **Settings → Admin → System → Currency & locale**
+  with validation, a live preview, and a "Use this device" locale detect.
+  Assistant copy generalised — `APP_OVERVIEW` no longer name-drops "Coles,
+  Woolworths, IGA, Aldi"; the `search_products` and `set_primary_list` tool
+  descriptions read for any merchant. Household-scoped by design (one currency
+  per install); if Dora ever goes multi-tenant SaaS the setting moves onto
+  whatever household row lands then. Layer C (full UI translation) stays
+  deferred per the proposal.
 - **Operator config in Settings — FU-333 Bucket B (2026-07-05).** Twelve
   `DORA_*` env vars that were operational config (not bootstrap, not
   secrets) are now editable rows on `AppSetting`: SMTP host/port/

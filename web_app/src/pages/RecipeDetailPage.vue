@@ -770,7 +770,7 @@
                                     </q-icon>
                                 </div>
                                 <div class="text-body2">
-                                    <strong>${{ recipe.estimated_cost.toFixed(2) }}</strong>
+                                    <strong>{{ formatMoney(recipe.estimated_cost) }}</strong>
                                     <span class="text-caption dora-text-muted q-ml-xs">
                                         ({{ recipe.estimated_cost_priced_count }} /
                                         {{ recipe.estimated_cost_total_count }}
@@ -1061,6 +1061,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
+    import { formatMoney } from 'src/composables/useMoney';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Recipe, RecipeStepsMode } from 'src/models/recipe';

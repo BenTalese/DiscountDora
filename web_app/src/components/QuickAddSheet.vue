@@ -127,6 +127,7 @@
     import { storeToRefs } from 'pinia';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { formatMoney } from 'src/composables/useMoney';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LinkedProduct } from 'src/models/stockItemDetail';
@@ -234,7 +235,7 @@
     ]);
 
     function offerLabel(o: LinkedProduct): string {
-        const price = o.price_now != null ? `$${o.price_now.toFixed(2)}` : 'n/a';
+        const price = o.price_now != null ? formatMoney(o.price_now) : 'n/a';
         const store = o.store_name ? ` · ${o.store_name}` : '';
         const size = o.size ? ` · ${o.size}` : '';
         return `${o.name} — ${price}${store}${size}`;

@@ -28,6 +28,13 @@ export interface HealthInfo {
         quality: number;         // 30–100
         max_dimension: number;   // longest edge in px
     };
+    // FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47)
+    // for money rendering. Optional in the type because older backends
+    // won't emit it; callers default to Dora's AU shipping values.
+    locale_policy?: {
+        currency: string;        // ISO 4217, e.g. 'AUD'
+        locale: string;          // BCP-47, e.g. 'en-AU'
+    };
 }
 
 export default class HealthApiService {

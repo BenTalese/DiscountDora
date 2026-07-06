@@ -76,6 +76,7 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
+    import { formatMoney } from 'src/composables/useMoney';
     import { computed } from 'vue';
 
     // Structural type covering both Product and LinkedProduct so the chip works
@@ -113,7 +114,7 @@
     });
 
     const priceLabel = computed(() =>
-        props.product.price_now != null ? `$${props.product.price_now.toFixed(2)}` : '',
+        props.product.price_now != null ? formatMoney(props.product.price_now) : '',
     );
 
     function openLink() {

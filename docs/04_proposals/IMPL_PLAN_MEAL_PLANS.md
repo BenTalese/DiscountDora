@@ -605,10 +605,11 @@ commits before step 3).
 3. **Build & finish** — one click writes the plan entries **and** generates a
    new list or adds-to-existing (the **same choice modal as C-2.H**, reuse).
    Last screen offers **print** (`useMealPlanExport.openPrintView`) + **email**.
-   The Email button follows **R-014 (reveal-and-disable)**: when SMTP is
-   unconfigured for the install (INV-4 detection — surface it via a capability
-   flag), the button is **shown but disabled** with a "Set up emailing in
-   Settings" hint, **not hidden**. Print is always available.
+   The Email button follows **R-029 (respect the off-state)**: when SMTP is
+   unconfigured for the install (INV-4 detection — via `useFeatureFlags().hasEmail`),
+   the button is **hidden** (`v-if`), not shown-disabled. Print is always available.
+   (R-014 reveal-and-disable was superseded 2026-07-06 by R-029 / ADR-025 —
+   hide, don't nag.)
 
 **Backend:** add `POST /api/meal-plans/preview-ingredients` (confirmed in
 review) — takes the unsaved `{recipe_id, servings}[]` set and returns the same
@@ -621,8 +622,8 @@ pieces. Keep the preview math identical to the saved-plan path.
 
 **Engineering close-gate:** R-003 (ingredient/scaling math server-owned, one
 function shared by preview + saved paths), R-001 (each step is a component;
-reuse the choice modal + recipe row), R-014 (Email shown-disabled when SMTP
-unset), R-007 (no new persistence beyond ordinary entries).
+reuse the choice modal + recipe row), R-029 (Email button hidden when SMTP
+unset — supersedes R-014), R-007 (no new persistence beyond ordinary entries).
 
 *Acceptance:* the builder picks meals → shows buy-vs-have → builds the plan +
 list in one finish; cancelling writes nothing; email + print work from the
@@ -743,9 +744,11 @@ calendar "today" dot + past-day dimming match the household date.
   is assessed separately ([[FU-175]]).
 - C-2.J → **adds `POST /meal-plans/preview-ingredients`** for unsaved
   selections.
-- Builder Email button → **shown-disabled** when SMTP unset (new rule
-  **R-014** / ADR-009); the app-wide reveal-and-disable sweep (scanning button,
-  etc.) is [[FU-176]].
+- Builder Email button → **hidden** when SMTP unset (rule **R-029** /
+  ADR-025, adopted 2026-07-06 — supersedes R-014 / ADR-009 "reveal-and-
+  disable"). The app-wide inverse sweep (scanning button, other gated
+  entry points → hide, don't disable) is [[FU-500]]; FU-176 was closed
+  when the rule flipped.
 - Interaction defaults confirmed: inline `[−N+]` pool stepper, drag
   desktop-only, entry chip = name + ×servings, H/I sequenced ahead of F/G.
 

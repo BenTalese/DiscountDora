@@ -28,7 +28,7 @@
             </div>
             <div v-if="yourPrices?.current != null" class="text-caption dora-text-muted q-mb-xs">
                 Last seen
-                <strong>${{ yourPrices.current.toFixed(2) }}</strong>
+                <strong>{{ formatMoney(yourPrices.current) }}</strong>
                 <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
                 <span v-if="yourPrices.last_observed_at">
                     · {{ relativeTime(yourPrices.last_observed_at) }}
@@ -43,7 +43,7 @@
         <template v-else>
             <div class="text-body1 q-mb-xs">
                 Usually
-                <strong>${{ yourPrices.baseline.toFixed(2) }}</strong>
+                <strong>{{ formatMoney(yourPrices.baseline) }}</strong>
                 <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
                 <q-chip
                     v-if="yourPrices.above_baseline"
@@ -61,7 +61,7 @@
             </div>
             <div v-if="yourPrices.current != null" class="text-caption dora-text-muted q-mb-xs">
                 Last seen
-                <strong>${{ yourPrices.current.toFixed(2) }}</strong>
+                <strong>{{ formatMoney(yourPrices.current) }}</strong>
                 <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
                 <span v-if="yourPrices.last_observed_at">
                     · {{ relativeTime(yourPrices.last_observed_at) }}
@@ -92,7 +92,7 @@
                     :key="`${o.store_name}-${i}`"
                 >
                     <span v-if="i > 0"> · </span>
-                    <strong>${{ o.price_per_unit.toFixed(2) }}</strong>
+                    <strong>{{ formatMoney(o.price_per_unit) }}</strong>
                     <span class="dora-text-muted">/ {{ o.unit }}</span>
                     at {{ o.store_name }}
                 </span>
@@ -152,6 +152,7 @@
     import PriceHistoryBottomSheet from 'src/components/dora/PriceHistoryBottomSheet.vue';
     import { ICONS } from 'src/style/icons';
     import { relativeTime } from 'src/helpers/relativeTime';
+    import { formatMoney } from 'src/composables/useMoney';
     import type {
         PriceEntryPrefill,
         YourPrices,

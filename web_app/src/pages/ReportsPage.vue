@@ -69,7 +69,7 @@
                         <li v-for="row in storeSpend!.rows" :key="row.store">
                             <span class="store-dot" :style="{ background: colourFor(row.store) }" />
                             <span class="store-name">{{ row.store }}</span>
-                            <span class="store-spend">${{ row.spend.toFixed(2) }}</span>
+                            <span class="store-spend">{{ formatMoney(row.spend) }}</span>
                             <span class="store-count">{{ row.list_count }} list{{ row.list_count === 1 ? '' : 's' }}</span>
                         </li>
                     </ul>
@@ -144,10 +144,10 @@
                 </div>
                 <div v-else-if="savings && savings.total_spent > 0" class="savings-body">
                     <div class="savings-number">
-                        ${{ savings.total_savings.toFixed(2) }}
+                        {{ formatMoney(savings.total_savings) }}
                     </div>
                     <div class="savings-sub">
-                        saved vs RRP on ${{ savings.total_spent.toFixed(2) }} spent
+                        saved vs RRP on {{ formatMoney(savings.total_spent) }} spent
                         ({{ savings.lists.length }} list{{ savings.lists.length === 1 ? '' : 's' }})
                     </div>
                     <v-chart
@@ -231,7 +231,7 @@
                         v-if="spendByCategory && spendByCategory.total_spent > 0"
                         class="report-card-note"
                     >
-                        ${{ spendByCategory.total_spent.toFixed(2) }} total
+                        {{ formatMoney(spendByCategory.total_spent) }} total
                     </span>
                 </header>
                 <div v-if="loading.spendByCategory" class="report-card-loading">
@@ -250,7 +250,7 @@
                         <li v-for="row in spendByCategory!.rows" :key="row.category">
                             <span class="store-dot" :style="{ background: colourFor(row.category) }" />
                             <span class="store-name">{{ row.category }}</span>
-                            <span class="store-spend">${{ row.spent.toFixed(2) }}</span>
+                            <span class="store-spend">{{ formatMoney(row.spent) }}</span>
                             <span class="store-count">{{ row.share_pct }}%</span>
                         </li>
                     </ul>
@@ -289,7 +289,7 @@
                 >
                     <div class="yoy-total">
                         <div class="yoy-total__current">
-                            ${{ spendYoY.current_total.toFixed(2) }}
+                            {{ formatMoney(spendYoY.current_total) }}
                         </div>
                         <div class="yoy-total__delta">
                             <template v-if="spendYoY.delta_pct === null">
@@ -301,7 +301,7 @@
                                 >
                                     {{ spendYoY.delta_pct > 0 ? '+' : '' }}{{ spendYoY.delta_pct }}%
                                 </span>
-                                vs. ${{ spendYoY.previous_total.toFixed(2) }}
+                                vs. {{ formatMoney(spendYoY.previous_total) }}
                             </template>
                         </div>
                     </div>
@@ -318,8 +318,8 @@
                                 </template>
                             </span>
                             <span class="yoy-amount">
-                                ${{ row.current.toFixed(2) }}
-                                <span class="yoy-prev">vs ${{ row.previous.toFixed(2) }}</span>
+                                {{ formatMoney(row.current) }}
+                                <span class="yoy-prev">vs {{ formatMoney(row.previous) }}</span>
                             </span>
                         </li>
                     </ul>
@@ -378,6 +378,7 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import { formatMoney } from 'src/composables/useMoney';
     import { LineChart, PieChart } from 'echarts/charts';
     import {
         GridComponent,
@@ -535,7 +536,7 @@
     }
 
     const stockValueOption = computed(() => ({
-        tooltip: { trigger: 'axis', valueFormatter: (v: number) => `$${v.toFixed(2)}` },
+        tooltip: { trigger: 'axis', valueFormatter: (v: number) => formatMoney(v) },
         grid: { left: 50, right: 16, top: 24, bottom: 32 },
         xAxis: {
             type: 'category',
@@ -555,7 +556,7 @@
     }));
 
     const storeSpendOption = computed(() => ({
-        tooltip: { trigger: 'item', valueFormatter: (v: number) => `$${v.toFixed(2)}` },
+        tooltip: { trigger: 'item', valueFormatter: (v: number) => formatMoney(v) },
         series: [{
             type: 'pie',
             radius: ['55%', '80%'],
@@ -573,7 +574,7 @@
         grid: { left: 0, right: 0, top: 4, bottom: 4 },
         xAxis: { type: 'category', show: false, data: savings.value?.lists.map((l) => l.name) ?? [] },
         yAxis: { type: 'value', show: false },
-        tooltip: { trigger: 'axis', valueFormatter: (v: number) => `$${v.toFixed(2)} saved` },
+        tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${formatMoney(v)} saved` },
         series: [{
             type: 'line',
             smooth: true,
@@ -620,7 +621,7 @@
     const spendByCategoryOption = computed(() => ({
         tooltip: {
             trigger: 'item',
-            valueFormatter: (v: number) => `$${v.toFixed(2)}`,
+            valueFormatter: (v: number) => formatMoney(v),
         },
         series: [{
             type: 'pie',
@@ -641,7 +642,7 @@
         for (const s of series) for (const p of s.points) allDates.add(p.date);
         const dates = [...allDates].sort();
         return {
-            tooltip: { trigger: 'axis', valueFormatter: (v: number) => v == null ? '—' : `$${v.toFixed(2)}` },
+            tooltip: { trigger: 'axis', valueFormatter: (v: number) => v == null ? '—' : formatMoney(v) },
             legend: { bottom: 0, type: 'scroll' },
             grid: { left: 50, right: 16, top: 24, bottom: 40 },
             xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },

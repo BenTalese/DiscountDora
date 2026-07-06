@@ -10,6 +10,175 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-218 — Browser-verify the new admin "API access" page (C-10 / Phase B)
+- **Resolved:** 2026-07-06 — pure browser-verify; the a-g checklist already lives in `DORA_VERIFY.md` under **API access page (C-10 Phase B) — origin FU-218** (lines ~1050-1057). Per the CLAUDE.md rule, pure "walk the app" checks don't warrant an open FU. If any check turns up a real bug, a fresh FU gets opened for the fix.
+- **Raised:** 2026-06-17 (Phase B build)
+- **Type:** verification
+- **What:** New Settings page lives at `/settings/admin/api-access`. Confirm in the browser:
+  (a) sidebar entry appears under Admin · global (admin only); (b) `New key` opens dialog → reveals
+  raw key once → copy works → list shows the new row with `Never used` + `Accepted 0 / Skipped 0
+  / Failed 0`; (c) expanding the row shows "Store mappings" panel; (d) push a record from any
+  bearer client against an unknown store → reload → the source row shows a pending badge + the
+  mapping appears in the panel marked "pending"; (e) merchant picker assigns it → the badge
+  clears; (f) disable / enable / rename / revoke all round-trip; (g) revoked key is rejected by
+  `/api/ingest` immediately.
+- **Recommended resolution:** opportunistic — bundle with the other Phase 0 browser passes.
+
+## [RESOLVED] FU-190 — Ingestion API must honour "no auto-create stores"
+- **Resolved:** 2026-07-06 — code + tests landed 2026-06-17 (quarantine queue end-to-end; `test_ingest_batch.py` + `test_ingestion_store_mappings.py`). Only outstanding piece was "confirm the pending → assign flow in the UI", which is a pure browser-verify — that checklist already lives in `DORA_VERIFY.md` under **Ingestion: quarantine queue — origin FU-190** (lines ~1063-1065) and steps (d)/(e) of the FU-218 API access verify cover the same flow. Nothing left as an open FU.
+- **Update 2026-06-17 (Phase B build):** implemented as **(b) quarantine queue** end-to-end (the
+  proposal's chosen safety net; the "(c) setup mapping step" is naturally produced by the same
+  surface — admins map *before* pushing if they want, but unknown names on first sight quarantine
+  instead of being rejected, which is friendlier). On every ingest record the producer's
+  `merchant` string is resolved via `IngestionStoreMapping`: known → use the linked Merchant;
+  unknown → create a quarantined mapping (`merchant_id IS NULL`), skip the record with reason
+  `store_not_mapped`, surface as **pending** on the API access page. Stores themselves are
+  **never** created by the endpoint. Admin assigns or clears the merchant via
+  `PUT /api/ingestion-sources/<id>/store-mappings`. Covered by `test_ingest_batch.py` (quarantine
+  + post-mapping roundtrip) + `test_ingestion_store_mappings.py` (CRUD + invalid merchant rejected).
+
+## [RESOLVED] FU-176 — Apply R-014 (reveal-and-disable) app-wide
+- **Resolved:** 2026-07-06 — R-014 / ADR-009 retired (superseded by R-029 / ADR-025). User directive: "if a user has disabled something (either personally or for the household) it should not be in their face." The sweep this FU prescribed is now inverted — hide gated entry points outside their own settings screen, not show-disabled. Tracked as **[[FU-500]]**. Standards doc, ADR log, and `IMPL_PLAN_MEAL_PLANS.md` C-2.J all updated same session.
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; new rule R-014 / ADR-009)
+- **Type:** follow-up
+- **What:** New engineering rule **R-014** says adoptable features that aren't
+  yet configured/enabled should be **shown disabled with a "not set up" hint**,
+  not hidden — so users discover they exist. The meal-plan builder's Email
+  button adopts this in C-2.J. The rest of the app needs a sweep: most notably
+  the **scanning button**, which today is *hidden* when `scanning_enabled` is
+  off (ADR-002) and per the user should now render **disabled-with-a-hint**
+  instead. Audit other gated/`v-if`-hidden adoptable surfaces (LLM/assistant
+  affordances, any integration entry points) and convert the *presentation* of
+  the off state from hidden → visible-disabled where it makes sense (R-014
+  carve-outs: genuinely inapplicable or security-sensitive surfaces stay hidden).
+- **Why deferred:** out of the meal-plans scope (R-007); it's a cross-cutting
+  presentation change touching the scanning gate + others.
+- **Recommended resolution:** opportunistic / a focused small sweep — pair with
+  the next touch of each gated surface, and update ADR-002's note to point at
+  R-014 for the presentation of the off state.
+
+## [RESOLVED] FU-085 — Run + verify Cookbook Chunk 2 (tag taxonomy overhaul) in a real env
+- **Resolved:** 2026-07-06 — remaining work (items 3, 5, 6, 8, 9) is all pure browser-verify; the checklist already lives in `DORA_VERIFY.md` under **Cookbook Chunk 2 — tag taxonomy — remaining items — origin FU-085** (and the second-round items under `FU-085 fixes — second-round verify items — origin FU-151`). Per the CLAUDE.md rule, pure browser-verify doesn't warrant an open FU. If any of those checks turn up a real bug, a fresh FU gets opened for the fix.
+- **Raised:** 2026-06-09 (Chunk 2 implementation; nothing was run — no Python venv / node_modules on the Windows dev box)
+- **Type:** finding / verification (blocks trusting Chunk 2)
+- **What:** Chunk 2 is a large, unrun backend+frontend change (FK-ify cuisine/category, DietaryTag table, 3 CRUD endpoints + settings, tri-state filter). Verify, in order:
+  1. `alembic upgrade head` applies cleanly on **SQLite and Postgres** (migration `a7d2f4c9e1b8`: batch-mode Recipe alter dropping cuisine/category strings + adding cuisine_id/category_id FKs, RecipeTag rebuild to dietary_tag_id, vocab seed). Also test `downgrade`.
+  2. App boots — `verify_mappings()` passes for Cuisine/Category/DietaryTag + the reshaped Recipe (risk: the `_cuisine_id`/`_category_id` hidden-FK mapping + the selectin relationships).
+  3. `repository.get(Recipe).all()` actually selectin-loads `recipe.cuisine`/`.category` (assistant + global_search depend on it; if not, they'll show null cuisine/category).
+  4. Recipe create/update/list round-trips `cuisine_id`/`category_id`/`dietary_tag_ids`; `GET /recipes/tags` returns DB-backed tags (value = id) + disclaimer.
+  5. Overview: cuisine/category single-selects filter; tri-state DietaryTagFilter cycles +/−/neutral and stays open; RecipeCard shows cuisine/category names + tag chips.
+  6. Edit dialog + detail page: cuisine/category selects + dietary multiselect populate from existing recipe + save correctly; URL importer pre-fills matched cuisine/category.
+  7. Settings → "Recipe tags & categories": create/rename/delete for all three vocabularies; usage counts + delete warnings; deleting a cuisine/category nulls recipes (SET NULL), deleting a dietary tag removes the links (CASCADE).
+  8. Backup → restore round-trips Cuisine/Category/DietaryTag/RecipeTag in FK-correct order.
+  9. Dora assistant: search_recipes/suggest_recipes still filter by cuisine + dietary tags (now Python-side / name-resolved).
+- **Recommended resolution:** now / first thing once a working env is available — before building Chunk 3+ on top.
+- **State note:** 2026-06-09 — first user browser pass: migration applied + app boots + settings CRUD + add-modal dietary tags all **confirmed working** (items 1,2,4,7 effectively ✅). Two gaps found: (a) overview filters unusable → split out as **FU-087**; (b) no dietary-tag editor on the detail page (only the add modal) → **fixed** (added a multiselect to `RecipeDetailPage.vue`, L264). Still to verify: items 3 (selectin), 5 (filters), 6 (detail-page tags), 8 (backup), 9 (assistant).
+- **State note:** 2026-06-12 — second user browser pass surfaced
+  five concrete findings split out as their own FUs (so FU-085
+  doesn't become an umbrella for everything cookbook-shaped):
+  - **FU-146** (RESOLVED this session) — GitHub-issues mentions
+    swept out (repo private).
+  - **FU-147** — detail-page dietary-tag picker doesn't
+    pre-populate + chips clear after save (item 6 partial fail).
+  - **FU-148** — Cookbook overview missing "time of day" filter.
+  - **FU-149** — Cookbook overview missing "# ingredients"
+    filter + sort axis.
+  - **FU-150** — assistant chat-mode doesn't recognise dietary
+    or cuisine queries (item 9 partial fail). RESOLVED 2026-06-12
+    (minimal fix shipped). The structural redesign is folded into
+    `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` §2.2.1
+    rather than tracked as its own FU.
+
+## [RESOLVED] FU-043 — C-locale international-readiness (Layers A + B shipped)
+- **Resolved:** 2026-07-06 — Layers A + B shipped end-to-end. Layer C (full UI
+  translation) stays parked as designed.
+- **Decisions taken during approval (2026-07-06):**
+  1. Currency + locale live **install-wide** on `AppSetting` (no per-user override).
+  2. `vue-i18n` **adopt-lite** — kept installed as the future translation seam,
+     but the money formatter is a direct `Intl.NumberFormat` wrapper (`useMoney.ts`)
+     rather than `n(v, 'currency')`.
+  3. **No** `currency` field on C-10 `price_observation` — single-currency-per-
+     install assumption stays. If Dora ever goes multi-tenant SaaS with separate
+     households sharing an install, this moves onto whatever household row lands
+     then; today, one value each is correct.
+  4. AU merchant branding **fully removed** from core assistant copy (no
+     `AldiLogo`/`IgaLogo` files existed to remove; StoreLogo is generic and
+     stays).
+- **What shipped:**
+  - **Backend:** `AppSetting.currency` + `AppSetting.locale` fields (entity +
+    table mapping + migration `c4e9a2f7b1d3`), extended DTO + PATCH endpoint
+    with ISO 4217 + BCP-47 validation (server-side lightweight parser).
+    `/api/health` now surfaces `locale_policy: { currency, locale }` alongside
+    `image_policy` for every logged-in session to consume.
+  - **Frontend money formatter (Layer A):** new
+    [useMoney.ts](web_app/src/composables/useMoney.ts) — module-level
+    reactive `Intl.NumberFormat`-backed formatter; exports `formatMoney(x)`
+    (the primary render helper), `currencySymbol` (for `q-input` prefix),
+    `currentMoneyPolicy()` (non-Vue callers), `refreshMoneyPolicy()` (settings
+    save re-fetch). Every hardcoded `$` prefix (2 sites) and `${{ x.toFixed(2) }}` /
+    template-literal `` `$${x.toFixed(2)}` `` (45 sites across 11 files) now
+    routes through it — Dashboard, Reports, ShoppingListDetail, PriceHistory,
+    StockItemDetail, RecipeDetail, YourPricesWidget, PriceHistoryChart,
+    PriceHistoryBottomSheet, ProductChip, QuickAddSheet, SubscriptionsPanel,
+    MyProductsPage, MoneySettings, PriceEntry.
+  - **Frontend voice locale (Layer B):** `useVoiceInput.ts` derives its BCP-47
+    tag from the install locale (fallback: browser locale, then `en-AU`), no
+    longer hardcoded `en-AU`.
+  - **Backend assistant copy (Layer B):** `app_knowledge.py` reworded so the
+    APP_OVERVIEW doesn't name Australian retailers; `tools.py` two tool
+    descriptions genericised (`search_products`, `set_primary_list`). The
+    seasonal-picks tool + note remain factually AU-specific — its underlying
+    table is AU-curated. Left as-is with the "Australian seasonal guide"
+    disclaimer; logged as [[FU-501]] for later per-locale data.
+  - **Settings UI:** new
+    [AdminSystemLocaleSettings.vue](web_app/src/pages/settings/AdminSystemLocaleSettings.vue)
+    at `/settings/admin/system/locale` — currency + locale inputs with a live
+    preview + "Use this device" locale-detect, wired via the same
+    `AppSettingsApiService.updateAsync({currency,locale})` pattern the timezone
+    page uses. Sits alongside Timezone in the System nav.
+  - **vue-i18n:** unchanged mechanically; a comment in `boot/i18n.ts` records
+    the adopt-lite decision so a future session knows the app doesn't route
+    through `n(v, 'currency')`.
+- **Coverage tests not written:** the test venv isn't available on this box; the
+  new resolver + endpoint validation are logged as [[FU-502]] for a coverage
+  pass when the runner is next reachable.
+- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_LOCALE_I18N.md`)
+- **Type:** deferred job (design brief done; implementation pending approval)
+- **What:** Make Dora usable outside Australia. Companion split solves product
+  sourcing; Dora-core still has AU residue — hardcoded `$` currency, `en-AU` voice
+  default (`useVoiceInput.ts`), AU merchant branding/copy/seed in core, and a
+  **dormant vue-i18n scaffold** (installed in `boot/i18n.ts`, locale hardcoded
+  `en-US`, stub messages, zero `$t()`). Brief recommends Layer A (currency/format
+  neutrality) + Layer B (de-AU core) now; Layer C (full UI translation) deferred.
+- **Why deferred:** brief-only; no code until approval + §3 open decisions
+  (currency home, vue-i18n adopt-vs-rip, C-10 currency field, merchant-logo fate).
+- **Recommended resolution:** **when the user approves** — fold the currency
+  setting + shared money formatter into the C-cross config work (they share the
+  config layer); coordinate the C-10 currency field with the ingestion impl;
+  de-AU (voice/branding/seed) is independent and low-risk. Layer C stays parked.
+
+---
+
+## [RESOLVED] FU-003 — Other light themes' `--text-muted` contrast nudge
+- **Resolved:** 2026-07-06 — user's call was to **undo the Pesto bump** rather than
+  propagate it to the other light themes. Reverted `[data-theme="pesto"] --text-muted`
+  in `web_app/src/css/themes.scss:66` from `hsl(168 10% 42%)` back to the pre-A1b
+  value `hsl(168 8% 50%)`. All light themes (Pesto, Lemon Tart, Blueberry, Cherry
+  Cola light, Sourdough light) are now on the same ~50% muted-lightness baseline —
+  the whole-app polish pass ([[FU-002]]) will re-judge muted contrast holistically
+  from parity, not from a Pesto-only outlier. Pesto Dark was not touched (its 66% was
+  independently tuned for dark-page pop, not part of the A1b light-theme bump).
+- **Raised:** 2026-06-04 (A1b)
+- **Type:** follow-up
+- **What:** only the Pesto family got the `--text-muted` 50→42 lightness bump.
+  Other light themes (Lemon Tart, Blueberry, Cherry Cola light, Sourdough light)
+  may want the same for AA contrast.
+- **Why deferred:** wanted to eyeball Pesto first before touching the whole family.
+- **Recommended resolution:** later during a dedicated A1b contrast pass, after the
+  user has eyeballed the themes.
+
+---
+
 ## [RESOLVED] FU-328 — Four pre-existing pytest failures (data_router / household_tz / product / recipe_is_planned)
 - **Resolved:** 2026-07-05 — all four cleared. Suite delta on this branch: 44→41 failed, 711→714 passed (net −3, matching the three tests I edited; the fourth self-healed).
   - `test_recipe_is_planned::test__recipes__is_planned_true_when_future_unconsumed_entry_exists` — self-healed since 2026-06-29 (passes on clean HEAD).

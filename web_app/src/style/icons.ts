@@ -30,6 +30,7 @@ export const ICONS = {
     subdirectory_arrow_right: 'mdi-subdirectory-arrow-right',
     notes: 'mdi-note-text-outline',
     payments: 'mdi-cash',
+    language: 'mdi-translate',
     record_voice_over: 'mdi-microphone-message',
     auto_awesome: 'mdi-auto-fix',
     bolt: 'mdi-lightning-bolt',

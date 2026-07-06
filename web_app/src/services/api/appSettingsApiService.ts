@@ -21,6 +21,11 @@ export type AppSettings = {
     nutrition_db_source: string;
     // Meal Plans C-2.K — household IANA timezone for the "today" boundary.
     timezone: string;
+    // FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47).
+    // Every money render in the SPA routes through the shared formatter
+    // (composables/useMoney.ts), which reads these values from /api/health.
+    currency: string;
+    locale: string;
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.

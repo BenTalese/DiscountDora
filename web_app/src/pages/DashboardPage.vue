@@ -345,7 +345,7 @@
                         </div>
                         <div class="dora-stat">
                             <div class="dora-stat-num">
-                                <AnimatedNumber :value="primaryListStats.remaining" prefix="$" />
+                                <AnimatedNumber :value="primaryListStats.remaining" :prefix="dashCurrencySymbol" />
                             </div>
                             <div class="dora-stat-label">remaining</div>
                         </div>
@@ -354,7 +354,7 @@
                             class="dora-stat dora-stat-ok"
                         >
                             <div class="dora-stat-num">
-                                <AnimatedNumber :value="primaryListStats.savings" prefix="$" />
+                                <AnimatedNumber :value="primaryListStats.savings" :prefix="dashCurrencySymbol" />
                             </div>
                             <div class="dora-stat-label">saves vs rrp</div>
                         </div>
@@ -408,10 +408,10 @@
                                 class="dora-budget-spent"
                                 :class="{ 'text-negative': budgetStatus.over_budget }"
                             >
-                                ${{ budgetStatus.spent.toFixed(2) }}
+                                {{ formatMoney(budgetStatus.spent) }}
                             </span>
                             <span class="dora-budget-of">
-                                of ${{ budgetStatus.amount!.toFixed(2) }}
+                                of {{ formatMoney(budgetStatus.amount!) }}
                             </span>
                             <span
                                 class="dora-budget-remaining"
@@ -419,8 +419,8 @@
                             >
                                 {{
                                     budgetStatus.over_budget
-                                        ? `$${Math.abs(budgetStatus.remaining ?? 0).toFixed(2)} over`
-                                        : `$${(budgetStatus.remaining ?? 0).toFixed(2)} left`
+                                        ? `${formatMoney(Math.abs(budgetStatus.remaining ?? 0))} over`
+                                        : `${formatMoney(budgetStatus.remaining ?? 0)} left`
                                 }}
                             </span>
                         </div>
@@ -435,11 +435,11 @@
                             v-if="budgetStatus.projected_active > 0"
                             class="text-caption dora-text-muted q-mt-xs"
                         >
-                            +${{ budgetStatus.projected_active.toFixed(2) }} in active lists
+                            +{{ formatMoney(budgetStatus.projected_active) }} in active lists
                         </div>
                     </div>
                     <div v-else class="dora-empty">
-                        ${{ budgetStatus.spent.toFixed(2) }} spent so far. Set a target
+                        {{ formatMoney(budgetStatus.spent) }} spent so far. Set a target
                         in Settings to see how you're tracking.
                     </div>
                 </DashboardCard>
@@ -610,10 +610,10 @@
                             </div>
                             <div class="dora-deal-price">
                                 <span class="dora-deal-now">
-                                    ${{ p.price_now.toFixed(2) }}
+                                    {{ formatMoney(p.price_now) }}
                                 </span>
                                 <span class="dora-deal-was">
-                                    ${{ p.price_was.toFixed(2) }}
+                                    {{ formatMoney(p.price_was) }}
                                 </span>
                             </div>
                             <q-badge class="dora-deal-badge" color="negative" text-color="white">
@@ -910,11 +910,11 @@
                     </template>
                     <div v-if="savings && savings.total_savings > 0">
                         <div class="dora-savings-amount">
-                            <AnimatedNumber :value="savings.total_savings" prefix="$" />
+                            <AnimatedNumber :value="savings.total_savings" :prefix="dashCurrencySymbol" />
                         </div>
                         <div class="dora-savings-sub">vs RRP, {{ savingsRangeLabel }}</div>
                         <div class="dora-savings-spent">
-                            on ${{ savings.total_spent.toFixed(2) }} spent across
+                            on {{ formatMoney(savings.total_spent) }} spent across
                             {{ savings.lists.length }} shop{{ savings.lists.length === 1 ? '' : 's' }}
                         </div>
                     </div>
@@ -941,11 +941,11 @@
                             class="dora-spend-row"
                         >
                             <span class="dora-spend-store">{{ row.store }}</span>
-                            <span class="dora-spend-amt">${{ row.spend.toFixed(2) }}</span>
+                            <span class="dora-spend-amt">{{ formatMoney(row.spend) }}</span>
                         </li>
                     </ul>
                     <div v-if="topSpendStores.length > 0" class="dora-spend-total">
-                        ${{ totalSpend.toFixed(2) }} total
+                        {{ formatMoney(totalSpend) }} total
                     </div>
                     <div v-else class="dora-empty">
                         Your spend by store shows up once you complete a shop.
@@ -961,14 +961,14 @@
             >
                 <DashboardCard :icon="ICONS.inventory" title="Pantry value">
                     <div v-if="pantryValueLatest !== null">
-                        <div class="dora-stat-num">${{ pantryValueLatest.toFixed(2) }}</div>
+                        <div class="dora-stat-num">{{ formatMoney(pantryValueLatest) }}</div>
                         <div
                             v-if="pantryValueDelta !== null && pantryValueDelta !== 0"
                             class="dora-pantry-delta"
                             :class="pantryValueDelta > 0 ? 'is-up' : 'is-down'"
                         >
                             {{ pantryValueDelta > 0 ? '▲' : '▼' }}
-                            ${{ Math.abs(pantryValueDelta).toFixed(2) }} over 90 days
+                            {{ formatMoney(Math.abs(pantryValueDelta)) }} over 90 days
                         </div>
                         <div
                             v-if="pantryValue?.estimate_note"
@@ -1030,10 +1030,10 @@
                             </div>
                             <div class="dora-deal-price">
                                 <span class="dora-deal-now">
-                                    ${{ row.price_now.toFixed(2) }}
+                                    {{ formatMoney(row.price_now) }}
                                 </span>
                                 <span class="dora-deal-was">
-                                    was ${{ row.previous_low.toFixed(2) }}
+                                    was {{ formatMoney(row.previous_low) }}
                                 </span>
                             </div>
                             <q-badge class="dora-deal-badge" color="negative" text-color="white">
@@ -1097,6 +1097,7 @@
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
     import type { Product } from 'src/models/product';
     import { discountPercent } from 'src/helpers/scrapedProductOfferLogic';
+    import { useMoney, formatMoney } from 'src/composables/useMoney';
     import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
@@ -1135,6 +1136,11 @@
     import { computed, onMounted, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
+
+    // FU-043 — money renders route through the shared install-currency
+    // formatter; the `$` prefix on <AnimatedNumber> reads the same symbol
+    // so a currency flip in Settings updates the dashboard atomically.
+    const { currencySymbol: dashCurrencySymbol } = useMoney();
 
     type CardId =
         | 'attention'

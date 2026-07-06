@@ -364,6 +364,8 @@ exceptions, which still must be commented) · **Source** (where it was establish
 - **Source:** ADR-010; FU-178 (resolved 2026-06-17).
 
 ### R-014 — Reveal-and-disable: show a feature exists even when it isn't set up
+> **⚠️ SUPERSEDED 2026-07-06 by [R-029](#r-029--respect-the-off-state-hide-dont-nag) / ADR-025.** The reveal-and-disable directive is retired: if a user or the household admin has *disabled or not configured* an optional feature, hide it — don't advertise it as a nag. The rule text below is preserved for audit trail only; do not follow it in new work. Empty-state "calm placeholder instead of vanishing" usages (the dashboard, meal-plan week banner, etc.) are unaffected — they're a separate pattern that was mistakenly labelled R-014 in some comments and lives on its own footing.
+
 - **Rule:** Prefer to **surface a feature's entry point even when the feature
   is not yet configured/enabled**, rendered in an obvious **disabled / "not set
   up" state** (a `:disable`d control + a tooltip/hint that says how to enable
@@ -1098,6 +1100,42 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `pantry_belief` (P8-07); promoted 2026-07-03 (ADR-024) once the second use
   confirmed the pattern.
 
+### R-029 — Respect the off-state: hide, don't nag
+- **Rule:** When a user or the household admin has **disabled** an optional
+  feature — via a per-user preference, a household `AppSetting` flag, or by
+  never configuring the required backend (SMTP, VAPID, LLM, scanning, etc.) —
+  its **entry points elsewhere in the app are hidden**, not shown-disabled with
+  a "not set up" hint. Respect the off-state; don't advertise a capability the
+  household has opted out of. The one place the disabled control legitimately
+  appears is **the settings screen that owns its configuration** (Admin →
+  System, Preferences, etc.) — that surface exists precisely to enable it.
+- **Why:** A disabled-with-hint control everywhere the feature *would* attach
+  is a nag: it takes up space and attention advertising something the user
+  already said no to (or the household hasn't set up). The Dora product
+  posture is calm, effortless, anti-nag — the settings screens are the front
+  door for enabling features; the rest of the app respects the current state.
+  This supersedes R-014 (reveal-and-disable), which optimised for discovery at
+  the cost of nagging. It aligns with ADR-002 (a single flag, respected
+  everywhere) and R-012 (working features stay visible — the inverse: *not-
+  working / opted-out* features stay hidden).
+- **Apply:** Gate the entry point on the same capability flag the functionality
+  uses (`useFeatureFlags().hasEmail`, `useScanningEnabled()`, etc.) with `v-if`
+  — not `:disable`. The settings screen that configures the feature still
+  renders (that's where enabling happens); nowhere else advertises the
+  unavailable state.
+- **Violation signal:** a `:disable`d button with a "Set up X in Settings"
+  tooltip appearing in a workflow surface (a builder, a dialog, a page action
+  bar); a comment referencing R-014 on a gated entry point outside the
+  feature's own settings screen.
+- **Carve-outs (must be commented):** the settings screen that *owns* the
+  feature's config obviously shows its own disabled state so it can be turned
+  on. Calm empty-state placeholders (dashboard "all clear", empty-week banner,
+  score-row explainer) are a different pattern — they're not gating a feature
+  the user disabled, they're describing "no data yet". Those stay.
+- **Source:** ADR-025; user directive 2026-07-06 walking back R-014 ("if a
+  user has disabled something either personally or for the household it should
+  not be in their face").
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1352,7 +1390,7 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 
 ### ADR-009 — Reveal-and-disable unconfigured features instead of hiding them
 - **Date / task:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review, user directive)
-- **Status:** accepted
+- **Status:** superseded by ADR-025 (2026-07-06)
 - **Context:** Gating discussion for the meal-plan sequential builder's Email
   button — SMTP may be unconfigured per install (INV-4). The user wants
   features advertised so users get interested and adopt them, but with the
@@ -1832,6 +1870,21 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   - P8-08 Dora Score and any future prediction/score feature start from this shape.
   - The gather layer must still batch for list overlays (no N+1) — called out in R-028's Apply.
 - **Promotes rule:** R-028.
+
+### ADR-025 — Respect the off-state: hide disabled/unconfigured features outside their own settings screen
+- **Date / task:** 2026-07-06 (user directive walking back R-014).
+- **Status:** accepted; supersedes ADR-009
+- **Context:** ADR-009 / R-014 (2026-06-14) established "reveal-and-disable" — showing gated feature entry points as visible-disabled with a "not set up" hint, so users would discover capabilities. In practice this reads as nagging: a disabled Email button sitting in the meal-plan builder for a household that has no SMTP configured, a scanning button greyed-out for a household where the admin turned it off, etc. The user's directive is unambiguous — "if a user has disabled something (either personally or for the household) it should not be in their face". This applies whether the off-state is an explicit toggle (`scanning_enabled=false`), a per-user preference, or an unconfigured backend (SMTP/VAPID/LLM never set up = the household implicitly opted out).
+- **Decision:** Adopt R-029. Gate optional-feature entry points with `v-if` on the same capability flag the functionality uses; hide them when off. The settings screen that owns the config still renders the disabled control (that's where enabling happens). Calm empty-state placeholders ("no data yet") are a different pattern and stay.
+- **Alternatives considered:**
+  - **Keep R-014 with per-surface judgement.** Rejected — the user explicitly wants the principle inverted, not softened. "Show disabled everywhere" was the wrong default.
+  - **Split "explicitly disabled" vs "never configured".** Rejected — the household not setting up SMTP *is* an opt-out; treating unconfigured as "discoverable-nag" is exactly what the user is walking back. One consistent rule.
+- **Consequences:**
+  - The FU-176 sweep flips direction: any place currently rendering a disabled-with-hint gated control outside its config screen becomes a `v-if` hide. A fresh follow-up ([[FU-500]]) tracks the inverse sweep — most visibly the scanning button, the meal-plan builder Email button (C-2.J), and the notification/push/LLM controls that appear outside their settings screen.
+  - ADR-002's original hide-when-off presentation is restored — it no longer needs the "R-014 revisits it" note.
+  - Empty-state usages (dashboard "all clear", meal-plan empty week, `DoraScoreCard` explainer) are unaffected — they're a distinct pattern that some code comments mislabelled as R-014. They stay; the R-014 comment references on those sites can be re-labelled opportunistically.
+- **Promotes rule:** R-029.
+- **Supersedes:** ADR-009 (R-014).
 
 ---
 

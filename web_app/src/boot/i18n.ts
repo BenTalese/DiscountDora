@@ -1,3 +1,11 @@
+// FU-043 (PROPOSAL_LOCALE_I18N Layer A / decision §2.3a) — vue-i18n is
+// **adopt-lite**: kept installed as the natural home for future locale
+// work (number/date/currency wrappers, and eventually string translation
+// if Layer C is greenlit), but the app's money renders route through
+// `composables/useMoney.ts` — a direct `Intl.NumberFormat` wrapper —
+// rather than `n(v, 'currency')`. That keeps the formatter cheap, the
+// call sites terse (`formatMoney(x)`), and vue-i18n's currency schema
+// off the critical path until real translation demand appears.
 import { defineBoot } from '#q-app/wrappers';
 import { createI18n } from 'vue-i18n';
 

@@ -512,7 +512,7 @@
                                     >
                                         <q-item-section>
                                             <q-item-label>
-                                                ${{ obs.total_price.toFixed(2) }}
+                                                {{ formatMoney(obs.total_price) }}
                                                 <span class="dora-text-muted">for {{ formatObsMeasure(obs) }}</span>
                                             </q-item-label>
                                             <q-item-label caption>
@@ -625,13 +625,13 @@
                                 <q-card-section class="row items-center q-py-xs">
                                     <div>
                                         <span v-if="prod.price_now !== null" class="text-h6">
-                                            ${{ prod.price_now.toFixed(2) }}
+                                            {{ formatMoney(prod.price_now) }}
                                         </span>
                                         <span
                                             v-if="prod.price_was !== null && prod.price_now !== null && prod.price_was > prod.price_now"
                                             class="text-caption dora-text-muted strike q-ml-xs"
                                         >
-                                            ${{ prod.price_was.toFixed(2) }}
+                                            {{ formatMoney(prod.price_was) }}
                                         </span>
                                     </div>
                                     <q-space />
@@ -1026,6 +1026,7 @@
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import PantryBeliefChip from 'src/components/stock/PantryBeliefChip.vue';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
+    import { formatMoney } from 'src/composables/useMoney';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -1980,7 +1981,7 @@
             const bits: string[] = [];
             if (p.quantity && p.quantity !== 1) bits.push(`${p.quantity}×`);
             if (p.actual_unit_price != null) {
-                bits.push(`$${p.actual_unit_price.toFixed(2)}${p.quantity > 1 ? '/ea' : ''}`);
+                bits.push(`${formatMoney(p.actual_unit_price)}${p.quantity > 1 ? '/ea' : ''}`);
             }
             if (p.store_name) bits.push(`at ${p.store_name}`);
             const entry: LifecycleEvent = {

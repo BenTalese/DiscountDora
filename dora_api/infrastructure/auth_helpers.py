@@ -226,9 +226,7 @@ def public_base_url() -> str:
     URL embedded in verify-email / reset-password emails.
 
     Resolution order:
-      1. `AppSetting.public_url` (edited from Settings → Admin → System);
-         falls back to the legacy ``DORA_PUBLIC_URL`` env var via the
-         FU-333 Bucket B resolver during the deprecation window.
+      1. `AppSetting.public_url` (edited from Settings → Admin → System).
       2. Origin header on the current request (the SPA POSTing to the
          API is the most reliable dev fallback).
       3. http://localhost:5174 (Quasar's default dev port).
@@ -238,7 +236,7 @@ def public_base_url() -> str:
             resolved_operational_config
         explicit = resolved_operational_config().public_url
     except Exception:
-        explicit = os.environ.get("DORA_PUBLIC_URL", "").strip()
+        explicit = ""
     if explicit:
         return explicit.rstrip("/")
     try:

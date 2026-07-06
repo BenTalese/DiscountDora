@@ -38,6 +38,11 @@ class AppSettingsDto:
     product_search_url: str
     # FU-227 follow-up — AU vs US per-unit display locale.
     unit_pricing_locale: str
+    # FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47).
+    # Layer A of PROPOSAL_LOCALE_I18N; also mirrored on /api/health so
+    # every client session (not just admin) reads them.
+    currency: str
+    locale: str
     # FU-342 — backup library controls. See AppSetting entity.
     backup_retention_count: int
     backup_storage_path: str
@@ -47,15 +52,19 @@ class AppSettingsDto:
     # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     stocktake_default_cadence_band: str
     stocktake_auto_tuning_enabled: bool
-    # FU-333 Bucket B — operational config (was `DORA_*` env vars).
-    # Secrets (SMTP password, VAPID private key) remain env-only until
-    # Bucket C lands; they aren't part of this DTO.
+    # FU-333 Buckets B + C — operational config (was `DORA_*` env vars).
+    # Bucket-C secrets (SMTP password, VAPID private key) are stored
+    # encrypted-at-rest on the row; the DTO exposes a `<field>_configured`
+    # bool instead of the ciphertext so the admin UI can show Set / Change
+    # / Clear without ever transporting the secret.
     smtp_host: str
     smtp_port: int
     smtp_username: str
+    smtp_password_configured: bool
     smtp_from: str
     smtp_use_tls: bool
     vapid_public_key: str
+    vapid_private_key_configured: bool
     vapid_subject: str
     piper_bin: str
     piper_bundled_voice_dir: str
@@ -80,6 +89,8 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
         product_search_url=setting.product_search_url or "",
         unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
+        currency=getattr(setting, "currency", None) or "AUD",
+        locale=getattr(setting, "locale", None) or "en-AU",
         backup_retention_count=int(getattr(setting, "backup_retention_count", 5) or 5),
         backup_storage_path=getattr(setting, "backup_storage_path", None) or "",
         image_quality=int(getattr(setting, "image_quality", 85) or 85),
@@ -93,9 +104,11 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         smtp_host=getattr(setting, "smtp_host", None) or "",
         smtp_port=int(getattr(setting, "smtp_port", 587) or 587),
         smtp_username=getattr(setting, "smtp_username", None) or "",
+        smtp_password_configured=bool((getattr(setting, "smtp_password_encrypted", None) or "").strip()),
         smtp_from=getattr(setting, "smtp_from", None) or "",
         smtp_use_tls=bool(getattr(setting, "smtp_use_tls", True)),
         vapid_public_key=getattr(setting, "vapid_public_key", None) or "",
+        vapid_private_key_configured=bool((getattr(setting, "vapid_private_key_encrypted", None) or "").strip()),
         vapid_subject=getattr(setting, "vapid_subject", None) or "mailto:admin@dora.local",
         piper_bin=getattr(setting, "piper_bin", None) or "",
         piper_bundled_voice_dir=getattr(setting, "piper_bundled_voice_dir", None) or "",

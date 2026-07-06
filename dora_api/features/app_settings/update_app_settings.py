@@ -4,6 +4,7 @@ Only the assistant (BYO-LLM) config lives here for now. Fields are optional;
 only those present in the request body are changed.
 """
 import logging
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,6 +55,12 @@ class UpdateAppSettingsRequest(BaseModel):
     product_search_url: str | None = Field(default=None, max_length=500)
     # FU-227 follow-up — AU vs US per-unit display locale.
     unit_pricing_locale: str | None = Field(default=None, max_length=8)
+    # FU-043 — install-wide currency (ISO 4217; 3 uppercase letters) and
+    # display locale (BCP-47 tag; validated in the handler against Python's
+    # Babel-style parse rather than a regex, since BCP-47 has more shapes
+    # than a single pattern captures cleanly).
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    locale: str | None = Field(default=None, min_length=2, max_length=35)
     # FU-342 — backup library controls. Retention 1–100; storage_path
     # blank ⇒ default `<data-dir>/backups`. Non-blank path is validated
     # for writeability on save.
@@ -71,17 +78,20 @@ class UpdateAppSettingsRequest(BaseModel):
     # degrade the queue.
     stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
     stocktake_auto_tuning_enabled: bool | None = None
-    # FU-333 Bucket B — operational config previously carried as `DORA_*`
-    # env vars. SMTP password + VAPID private key stay env-only until the
-    # Bucket-C encrypted-in-DB storage lands; they are absent from this
-    # DTO so an accidental client-side send can't smuggle them into the
-    # database as plaintext.
+    # FU-333 Buckets B + C — operational config previously carried as
+    # `DORA_*` env vars. Bucket-C secrets (SMTP password, VAPID private
+    # key) accept plaintext on the wire and are Fernet-encrypted before
+    # they touch the DB; the response DTO returns only a `_configured`
+    # bool. Empty string is the explicit "clear this secret" signal —
+    # `None` (field omitted) leaves the stored value alone.
     smtp_host: str | None = Field(default=None, max_length=255)
     smtp_port: int | None = Field(default=None, ge=1, le=65535)
     smtp_username: str | None = Field(default=None, max_length=255)
+    smtp_password: str | None = Field(default=None, max_length=512)
     smtp_from: str | None = Field(default=None, max_length=255)
     smtp_use_tls: bool | None = None
     vapid_public_key: str | None = Field(default=None, max_length=255)
+    vapid_private_key: str | None = Field(default=None, max_length=4096)
     vapid_subject: str | None = Field(default=None, max_length=255)
     piper_bin: str | None = Field(default=None, max_length=1024)
     piper_bundled_voice_dir: str | None = Field(default=None, max_length=1024)
@@ -161,6 +171,33 @@ class UpdateAppSettingsHandler:
                     ),
                 )
             setting.unit_pricing_locale = _Locale
+
+        # FU-043 — currency + locale. Currency is ISO 4217 (3 uppercase
+        # letters, no digits — the validator here mirrors the client's
+        # Intl.NumberFormat constraint). Locale is a BCP-47 tag validated
+        # by asking Intl.Locale on the client and, server-side, by a
+        # lightweight structural check (primary tag + optional subtags),
+        # so a typo can't silently degrade every money render in the app.
+        if "currency" in set_fields and request.currency is not None:
+            _Code = request.currency.strip().upper()
+            if len(_Code) != 3 or not _Code.isalpha():
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{request.currency}' is not a valid ISO 4217 currency "
+                        f"code (must be 3 letters, e.g. 'USD', 'EUR', 'AUD')."
+                    ),
+                )
+            setting.currency = _Code
+        if "locale" in set_fields and request.locale is not None:
+            _Tag = request.locale.strip()
+            if not _is_valid_bcp47(_Tag):
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{request.locale}' is not a valid BCP-47 locale tag "
+                        f"(e.g. 'en-AU', 'en-US', 'de-DE', 'fr-FR')."
+                    ),
+                )
+            setting.locale = _Tag
 
         # Phase D / FU-186 — product_search_url. Strip; reject obviously
         # non-http schemes so a typo doesn't render a hostile link, but
@@ -248,12 +285,63 @@ class UpdateAppSettingsHandler:
                 if _Value is not None:
                     setattr(setting, _NumericOrBool, _Value)
 
+        # FU-333 Bucket C — encrypt-and-store the two operational secrets.
+        # Empty string is explicit "clear the stored value"; a non-empty
+        # value replaces it. Encryption requires `DORA_LLM_KEY_ENCRYPTION_KEY`;
+        # if the wrapping key isn't configured we bail with a friendly
+        # 400 rather than silently swallowing the write.
+        for _SecretField, _ColumnField in (
+            ("smtp_password", "smtp_password_encrypted"),
+            ("vapid_private_key", "vapid_private_key_encrypted"),
+        ):
+            if _SecretField not in set_fields:
+                continue
+            _Plain = getattr(request, _SecretField)
+            if _Plain is None or _Plain == "":
+                setattr(setting, _ColumnField, "")
+                continue
+            from dora_api.infrastructure.llm.key_encryption import (
+                EncryptionUnavailable,
+                encrypt,
+            )
+            try:
+                token = encrypt(_Plain)
+            except EncryptionUnavailable:
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"Cannot save {_SecretField}: DORA_LLM_KEY_ENCRYPTION_KEY "
+                        f"isn't configured for this install. Configure the "
+                        f"wrapping key before storing secrets in the database."
+                    ),
+                )
+            setattr(setting, _ColumnField, token.decode("ascii"))
+
         # FU-153 §7.1 — the install-wide setting is now a master kill-
         # switch only; the per-user "have you finished setting up?"
         # validation moved to auth/update_me.py.
 
         self.repository.save_changes()
         return UpdateAppSettingsResponse(dto=_to_dto(setting))
+
+
+_BCP47_SUBTAG = re.compile(r"^[A-Za-z0-9]{1,8}$")
+
+
+def _is_valid_bcp47(tag: str) -> bool:
+    """FU-043 — lightweight BCP-47 tag check. Accepts the shapes that
+    `Intl.NumberFormat` / `Intl.Locale` actually consume: a 2-3 letter
+    primary language tag, optionally followed by hyphen-separated
+    script/region/variant subtags of alphanumeric characters. Rejects
+    empty, malformed, and obviously-wrong inputs. We don't try to
+    reproduce full RFC 5646 grammar server-side — the client's own
+    `new Intl.Locale(tag)` will catch anything exotic that slips
+    through, and the admin sees the reason there. Belt-and-braces."""
+    if not tag or " " in tag:
+        return False
+    parts = tag.split("-")
+    if not parts[0] or not parts[0].isalpha() or not (2 <= len(parts[0]) <= 3):
+        return False
+    return all(_BCP47_SUBTAG.match(p) for p in parts[1:])
 
 
 def _validate_backup_storage_path(path_str: str) -> str | None:

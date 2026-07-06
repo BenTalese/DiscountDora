@@ -87,6 +87,7 @@
             subheader: 'System',
             items: [
                 { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
+                { path: '/settings/admin/system/locale', label: 'Currency & locale', icon: ICONS.language },
                 { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
                 { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
                 { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },

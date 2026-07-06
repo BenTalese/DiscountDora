@@ -57,7 +57,7 @@
                             type="number"
                             step="1"
                             min="0"
-                            prefix="$"
+                            :prefix="currencySymbol"
                             outlined
                             dense
                             style="max-width: 160px"
@@ -86,6 +86,9 @@
     import type { BudgetPeriod } from 'src/models/auth';
     import { useAuthStore } from 'src/stores/authStore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useMoney } from 'src/composables/useMoney';
+    // FU-043 — budget input prefix follows the install currency symbol.
+    const { currencySymbol } = useMoney();
     import { ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';

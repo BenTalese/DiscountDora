@@ -37,7 +37,7 @@
                     </span>
                     <span v-if="history?.baseline != null" class="row items-center no-wrap">
                         <span class="legend-dash legend-dash--baseline" />
-                        Usually ${{ history.baseline.toFixed(2)
+                        Usually {{ formatMoney(history.baseline)
                         }}{{ history.baseline_unit ? `/${history.baseline_unit}` : '' }}
                     </span>
                     <q-space />
@@ -73,6 +73,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import { formatMoney } from 'src/composables/useMoney';
     import { ICONS } from 'src/style/icons';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import type {

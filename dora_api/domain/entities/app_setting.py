@@ -79,6 +79,17 @@ class AppSetting(BaseEntity):
     # only the display denominator changes. Default `"AU"` because Dora's
     # built here and ships AU-first; admin can flip to `"US"` in Settings.
     unit_pricing_locale: str = "AU"
+    # FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
+    # locale, so a non-AU install renders money and dates in a form its users
+    # recognise. Single-source (R-003): every money render on the client goes
+    # through one `Intl.NumberFormat(locale, { style: 'currency', currency })`
+    # wrapper that reads both values from `/api/health`. Household-scoped
+    # (one currency per install) — user chose install-wide over per-user,
+    # matching the "a household shares a currency" model in the brief.
+    # `currency` is an ISO 4217 code (3 letters); `locale` is a BCP-47 tag.
+    # Defaults keep AU-shipped behaviour intact for existing installs.
+    currency: str = "AUD"
+    locale: str = "en-AU"
     # FU-342 — backup library controls. `backup_retention_count` caps
     # the library; oldest above the cap is auto-dropped on each new
     # write. Default 5 is Pi-disk-conscious. `backup_storage_path`
@@ -104,25 +115,33 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
-    # FU-333 Bucket B — operational config previously carried as `DORA_*`
-    # env vars. Move to `AppSetting` so an admin can configure a fresh
-    # install through Settings → Admin → System instead of editing an
-    # environment file. Bootstrap-only vars (SECRET_KEY, LLM_KEY_ENCRYPTION_KEY,
-    # ENV, SECURE_COOKIES, SPA_DIR, SKIP_PROD_VALIDATION, ALLOW_DESTRUCTIVE)
-    # stay in env by design. Bucket C secrets (SMTP password, VAPID private
-    # key) also stay in env for now — encrypted-in-DB storage lands with a
-    # follow-up. The read path uses a resolver that prefers a non-empty
-    # AppSetting value and falls back to the env var, so an operator whose
-    # SMTP is already configured via env keeps working on upgrade.
+    # FU-333 Buckets B + C — operational config that was formerly carried as
+    # `DORA_*` env vars. An admin now configures a fresh install through
+    # Settings → Admin → System; the two remaining bootstrap-only vars
+    # (`DORA_SECRET_KEY`, `DORA_LLM_KEY_ENCRYPTION_KEY`) stay in env because
+    # they're read before the DB is reachable / are root keys the DB
+    # ciphertext depends on. On desktop bundles both are auto-generated on
+    # first boot (see `desktop_app.py _bootstrap_keys`).
     #
-    # SMTP (was DORA_SMTP_HOST / _PORT / _USERNAME / _FROM / _USE_TLS).
+    # Bucket C secrets — SMTP password + VAPID private key — live here
+    # encrypted at rest with the Fernet helper from FU-153
+    # (`infrastructure/llm/key_encryption`) using
+    # `DORA_LLM_KEY_ENCRYPTION_KEY` as the wrapping key. The plaintext
+    # never leaves the write handler; reads decrypt on demand inside the
+    # resolver. The DTO surfaces a `<field>_configured: bool` instead of
+    # the ciphertext so the admin UI can render Set/Change without ever
+    # transporting the secret.
+    #
+    # SMTP (was DORA_SMTP_HOST / _PORT / _USERNAME / _PASSWORD / _FROM / _USE_TLS).
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
+    smtp_password_encrypted: str = ""
     smtp_from: str = ""
     smtp_use_tls: bool = True
-    # Push (was DORA_VAPID_PUBLIC_KEY / _SUBJECT).
+    # Push (was DORA_VAPID_PUBLIC_KEY / _PRIVATE_KEY / _SUBJECT).
     vapid_public_key: str = ""
+    vapid_private_key_encrypted: str = ""
     vapid_subject: str = "mailto:admin@dora.local"
     # TTS / Piper (was DORA_PIPER_BIN / _BUNDLED_VOICE_DIR / _VOICE).
     piper_bin: str = ""
@@ -149,6 +168,8 @@ class AppSetting(BaseEntity):
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         PRODUCT_SEARCH_URL = "product_search_url"
         UNIT_PRICING_LOCALE = "unit_pricing_locale"
+        CURRENCY = "currency"
+        LOCALE = "locale"
         BACKUP_RETENTION_COUNT = "backup_retention_count"
         BACKUP_STORAGE_PATH = "backup_storage_path"
         IMAGE_QUALITY = "image_quality"
@@ -158,9 +179,11 @@ class AppSetting(BaseEntity):
         SMTP_HOST = "smtp_host"
         SMTP_PORT = "smtp_port"
         SMTP_USERNAME = "smtp_username"
+        SMTP_PASSWORD_ENCRYPTED = "smtp_password_encrypted"
         SMTP_FROM = "smtp_from"
         SMTP_USE_TLS = "smtp_use_tls"
         VAPID_PUBLIC_KEY = "vapid_public_key"
+        VAPID_PRIVATE_KEY_ENCRYPTED = "vapid_private_key_encrypted"
         VAPID_SUBJECT = "vapid_subject"
         PIPER_BIN = "piper_bin"
         PIPER_BUNDLED_VOICE_DIR = "piper_bundled_voice_dir"

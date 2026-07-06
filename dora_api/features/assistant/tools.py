@@ -104,9 +104,10 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "search_products",
             "description": (
-                "Search merchant products and deals (Coles, Woolworths, IGA, "
-                "Aldi), e.g. 'any specials on cheese?'. Do NOT use for 'how do I "
-                "search for products' — that's a how-to question."
+                "Search merchant products and deals across the household's "
+                "configured merchants, e.g. 'any specials on cheese?'. Do NOT "
+                "use for 'how do I search for products' — that's a how-to "
+                "question."
             ),
             "parameters": {
                 "type": "object",
@@ -262,7 +263,7 @@ TOOL_SCHEMAS: list[dict] = [
             "description": (
                 "Find currently-on-special merchant products, optionally filtered "
                 "by keyword or merchant. Use for 'any specials right now', "
-                "'cheap meat this week', 'what's on sale at Coles'."
+                "'cheap meat this week', 'what's on sale at <store>'."
             ),
             "parameters": {
                 "type": "object",
@@ -721,7 +722,7 @@ TOOL_SCHEMAS: list[dict] = [
             "description": (
                 "Make a named shopping list the primary one (the default target "
                 "for new additions). Use for 'make Groceries the primary list', "
-                "'switch primary to Aldi run'."
+                "'switch primary to the weekend run'."
             ),
             "parameters": {
                 "type": "object",

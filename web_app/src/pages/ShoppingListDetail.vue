@@ -301,14 +301,14 @@
                             <div class="text-body2">
                                 <div>
                                     Remaining
-                                    <span class="text-weight-medium">${{ remainingTotal.toFixed(2) }}</span>
+                                    <span class="text-weight-medium">{{ formatMoney(remainingTotal) }}</span>
                                 </div>
                                 <div>
                                     Full list
-                                    <span class="text-weight-medium">${{ fullTotal.toFixed(2) }}</span>
+                                    <span class="text-weight-medium">{{ formatMoney(fullTotal) }}</span>
                                 </div>
                                 <div v-if="savingsTotal > 0" class="text-positive">
-                                    Savings ${{ savingsTotal.toFixed(2) }}
+                                    Savings {{ formatMoney(savingsTotal) }}
                                 </div>
                             </div>
                         </div>
@@ -540,7 +540,7 @@
                                                     class="q-mr-xs"
                                                 />
                                                 {{ offer.store_name }} ·
-                                                {{ offer.price_now != null ? `$${offer.price_now.toFixed(2)}` : '—' }}
+                                                {{ offer.price_now != null ? formatMoney(offer.price_now) : '—' }}
                                                 <span
                                                     v-if="offerSavings(offer) > 0"
                                                     class="q-ml-xs offer-savings"
@@ -550,13 +550,13 @@
                                                             : 'text-positive'
                                                     "
                                                 >
-                                                    save ${{ offerSavings(offer).toFixed(2) }}
+                                                    save {{ formatMoney(offerSavings(offer)) }}
                                                 </span>
                                                 <q-tooltip>
                                                     {{ offer.brand ? `${offer.brand} — ` : '' }}{{ offer.name }}
                                                     <span v-if="offer.size"> ({{ offer.size }})</span>
                                                     <span v-if="offer.price_was != null && offer.price_now != null">
-                                                        · RRP ${{ offer.price_was.toFixed(2) }}
+                                                        · RRP {{ formatMoney(offer.price_was) }}
                                                     </span>
                                                 </q-tooltip>
                                             </q-chip>
@@ -650,14 +650,14 @@
                                             :color="line.actual_unit_price != null ? 'primary' : undefined"
                                             :label="
                                                 priceForLine(line) > 0
-                                                    ? `$${priceForLine(line).toFixed(2)}`
+                                                    ? formatMoney(priceForLine(line))
                                                     : 'Set price'
                                             "
                                         >
                                             <q-tooltip v-if="detail.status !== 'done'">
                                                 {{
                                                     line.actual_unit_price != null
-                                                        ? `You paid $${line.actual_unit_price.toFixed(2)} per unit${line.purchased_store_name ? ` at ${line.purchased_store_name}` : ''}`
+                                                        ? `You paid ${formatMoney(line.actual_unit_price)} per unit${line.purchased_store_name ? ` at ${line.purchased_store_name}` : ''}`
                                                         : 'Enter the price you actually paid'
                                                 }}
                                             </q-tooltip>
@@ -688,7 +688,7 @@
                                                             step="0.01"
                                                             min="0"
                                                             label="Unit price"
-                                                            prefix="$"
+                                                            :prefix="currencySymbol"
                                                             @keydown.enter.prevent="savePriceEditor(line)"
                                                         />
                                                         <!-- D3 — where the prefilled
@@ -874,7 +874,7 @@
                                 Picked {{ tickedCount }} of {{ detail.lines.length }}
                             </div>
                             <div class="text-caption dora-text-muted">
-                                Remaining ${{ remainingTotal.toFixed(2) }}
+                                Remaining {{ formatMoney(remainingTotal) }}
                             </div>
                         </div>
                         <q-space />
@@ -1075,6 +1075,8 @@
     import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useQuasar, type QVirtualScroll } from 'quasar';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useMoney, formatMoney } from 'src/composables/useMoney';
+    const { currencySymbol } = useMoney();
     import { useDragDropList } from 'src/composables/useDragDropList';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';

@@ -1,4 +1,5 @@
 import { onBeforeUnmount, ref } from 'vue';
+import { currentMoneyPolicy } from 'src/composables/useMoney';
 
 /**
  * P2-13 — Web Speech API wrapper for speech-to-text.
@@ -54,7 +55,11 @@ export type UseVoiceInputOptions = {
      *  one shot — auto-stops after the first final result (push-to-talk
      *  on the Dora mic). */
     continuous?: boolean;
-    /** BCP-47 tag. Defaults to en-AU to match the rest of the app. */
+    /** BCP-47 tag. When omitted, falls back to the install-wide locale
+     *  from `useMoney()`'s money policy — which is the same setting the
+     *  admin chose for currency/dates. That keeps voice input in the
+     *  household's tongue on non-AU installs instead of a hardcoded
+     *  `en-AU` default (FU-043 Layer B). */
     lang?: string;
     /** Fires for every result (interim or final) so the caller can
      *  render a live transcript. */
@@ -66,7 +71,14 @@ export type UseVoiceInputOptions = {
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const continuous = options.continuous ?? false;
-    const lang = options.lang ?? 'en-AU';
+    // FU-043 Layer B — default the recognition locale from the install-
+    // wide locale setting, falling back to the browser's own locale, then
+    // to en-AU as the ultimate safety net. Never a hardcoded `en-AU` when
+    // the admin has chosen otherwise.
+    const lang = options.lang
+        ?? currentMoneyPolicy().locale
+        ?? (typeof navigator !== 'undefined' ? navigator.language : null)
+        ?? 'en-AU';
 
     const ctor = getRecognitionCtor();
     const available = ref<boolean>(ctor !== null);

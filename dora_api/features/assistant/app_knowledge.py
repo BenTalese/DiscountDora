@@ -7,8 +7,9 @@ features land so the assistant's advice stays accurate.
 """
 
 APP_OVERVIEW = """\
-Dora is a grocery, pantry, recipe, and shopping app for Australian stores
-(Coles, Woolworths, IGA, Aldi). Main areas (left-hand navigation):
+Dora is a grocery, pantry, recipe, and shopping app. Products and store data
+come from whichever merchants the household has configured — the app is not
+tied to a particular country or retailer. Main areas (left-hand navigation):
 
 - Dashboard (home): pantry health at a glance, upcoming planned meals, quick
   stats, items needing attention.

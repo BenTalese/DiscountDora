@@ -361,6 +361,12 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemTimezoneSettings.vue'),
                         meta: { title: 'System: Timezone' }
                     },
+                    // FU-043 — install-wide currency + display locale.
+                    {
+                        path: 'admin/system/locale',
+                        component: () => import('pages/settings/AdminSystemLocaleSettings.vue'),
+                        meta: { title: 'System: Currency & locale' }
+                    },
                     {
                         path: 'admin/system/alerts',
                         component: () => import('pages/settings/AdminSystemAlertsSettings.vue'),

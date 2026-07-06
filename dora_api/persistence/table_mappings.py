@@ -111,6 +111,13 @@ def configure_mappings(db: SQLAlchemy):
         # FU-227 follow-up — AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
         Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
+        # FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
+        # locale for money rendering. Read via /api/health so every client
+        # session pulls the same values; the client formatter is a thin
+        # wrapper around Intl.NumberFormat(locale, {style:'currency', currency}).
+        # Household-scoped by design (see entity comment).
+        Column("currency", String(3), nullable=False, server_default="AUD"),
+        Column("locale", String(35), nullable=False, server_default="en-AU"),
         # FU-342 — backup library: retention cap + storage path.
         # Retention 5 (not 10) is disk-conscious for Pi self-hosts.
         # Empty storage_path ⇒ resolved to `$DORA_DATA_DIR/backups/`
@@ -128,16 +135,21 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
-        # FU-333 Bucket B — operational config promoted from `DORA_*` env vars.
-        # Read path: `resolved_operational_config()` prefers the AppSetting
-        # value when non-empty and falls back to the env var, so an operator
-        # on env-only config keeps working across upgrade.
+        # FU-333 Buckets B + C — operational config promoted from `DORA_*`
+        # env vars. `resolved_operational_config()` is now a straight
+        # AppSetting projection (env fallbacks dropped 2026-07-06 —
+        # pre-release, no operators to preserve). Bucket C secrets
+        # (`smtp_password_encrypted`, `vapid_private_key_encrypted`) hold
+        # Fernet ciphertext wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`; the
+        # DTO surfaces a `<field>_configured: bool` instead of the ciphertext.
         Column("smtp_host", String(255), nullable=False, server_default=""),
         Column("smtp_port", Integer, nullable=False, server_default="587"),
         Column("smtp_username", String(255), nullable=False, server_default=""),
+        Column("smtp_password_encrypted", String(1024), nullable=False, server_default=""),
         Column("smtp_from", String(255), nullable=False, server_default=""),
         Column("smtp_use_tls", Boolean, nullable=False, server_default=true()),
         Column("vapid_public_key", String(255), nullable=False, server_default=""),
+        Column("vapid_private_key_encrypted", String(4096), nullable=False, server_default=""),
         Column("vapid_subject", String(255), nullable=False, server_default="mailto:admin@dora.local"),
         Column("piper_bin", String(1024), nullable=False, server_default=""),
         Column("piper_bundled_voice_dir", String(1024), nullable=False, server_default=""),

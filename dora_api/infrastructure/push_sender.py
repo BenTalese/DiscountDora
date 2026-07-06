@@ -5,24 +5,15 @@ party HTTP client. Mirrors `email_sender.py` shape: a single send_*
 function, a dry-run mode when the install isn't configured, and the
 config read in one place.
 
-VAPID config from env (same shape as the SMTP block):
-  DORA_VAPID_PUBLIC_KEY    base64url-encoded uncompressed P-256 public
-                           key (the value the SPA passes as
-                           `applicationServerKey` to
-                           `pushManager.subscribe`). Required for real
-                           sends.
-  DORA_VAPID_PRIVATE_KEY   matching private key (PEM or base64url). The
-                           server signs the JWT in each push request's
-                           Authorization header with this.
-  DORA_VAPID_SUBJECT       contact `mailto:` or `https://` URL the
-                           push service uses to reach the admin if
-                           something goes wrong (RFC 8292 §2).
-                           Default: `mailto:admin@dora.local`.
+All three VAPID fields live on ``AppSetting`` (FU-333 Buckets B + C).
+The private key is stored encrypted-at-rest with the Fernet helper
+from FU-153 and decrypted on demand by the resolver. Admins edit
+everything from Settings → Admin → System → Push.
 
-When any of public/private is missing the sender is in **dry-run** mode
-(logs the push, returns success). This keeps an unconfigured self-hosted
-install bootable and lets developers test the surrounding plumbing
-without generating keys.
+When either half is missing the sender is in **dry-run** mode (logs
+the push, returns success). This keeps an unconfigured install
+bootable and lets developers test the surrounding plumbing without
+generating keys.
 
 Generate a key pair with `py-vapid`'s CLI (bundled with pywebpush):
     python -m py_vapid --gen --applicationServerKey
@@ -32,7 +23,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -47,35 +37,36 @@ class _VapidConfig:
     dry_run: bool
 
 
+_DRY_RUN_CONFIG = _VapidConfig(
+    public_key="", private_key="", subject="mailto:admin@dora.local", dry_run=True,
+)
+
+
 def _config() -> _VapidConfig:
-    # FU-333 Bucket B — public_key + subject resolve through the
-    # AppSetting-first resolver. Private key stays env-only (Bucket C).
+    """Read the resolved AppSetting-backed VAPID config. If the DB isn't
+    available (a unit test importing this module without a Flask context)
+    return a dry-run config so callers still no-op safely."""
+    from dora_api.features.app_settings.operational_config import \
+        resolved_operational_config
     try:
-        from dora_api.features.app_settings.operational_config import \
-            resolved_operational_config
         op = resolved_operational_config()
-        public_key = op.vapid_public_key
-        subject = op.vapid_subject or "mailto:admin@dora.local"
     except Exception:
-        public_key = os.environ.get("DORA_VAPID_PUBLIC_KEY", "").strip()
-        subject = os.environ.get("DORA_VAPID_SUBJECT", "mailto:admin@dora.local").strip() \
-            or "mailto:admin@dora.local"
-    private_key = os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
+        return _DRY_RUN_CONFIG
     return _VapidConfig(
-        public_key=public_key,
-        private_key=private_key,
-        subject=subject,
+        public_key=op.vapid_public_key,
+        private_key=op.vapid_private_key,
+        subject=op.vapid_subject or "mailto:admin@dora.local",
         # Either half missing → can't sign / can't be subscribed to →
         # dry-run. The frontend toggle is independently gated on the
         # health flag, so this only matters if someone hand-edits a
         # subscription row.
-        dry_run=not (public_key and private_key),
+        dry_run=not (op.vapid_public_key and op.vapid_private_key),
     )
 
 
 def is_configured() -> bool:
     """True when both VAPID halves are set. Read by the health endpoint
-    so the SPA's R-014 gating reflects whether real pushes can leave the
+    so the SPA's push toggle reflects whether real pushes can leave the
     box."""
     return not _config().dry_run
 
@@ -83,7 +74,7 @@ def is_configured() -> bool:
 def vapid_public_key() -> str | None:
     """Public key the SPA needs for `pushManager.subscribe({applicationServerKey})`.
     Returns None when VAPID isn't configured (the SPA treats that as
-    "push channel disabled" and shows the toggle as disabled)."""
+    "push channel disabled")."""
     cfg = _config()
     return cfg.public_key or None
 

@@ -27,7 +27,7 @@
                     class="chart-axis-label"
                     text-anchor="end"
                 >
-                    ${{ tick.value.toFixed(2) }}
+                    {{ formatMoney(tick.value) }}
                 </text>
             </g>
 
@@ -140,7 +140,7 @@
                 <span class="chart-tooltip-name">{{ s.name }}</span>
                 <span class="chart-tooltip-price">
                     {{ hover.byProduct[s.product_id]?.price !== undefined
-                        ? `$${hover.byProduct[s.product_id]!.price!.toFixed(2)}`
+                        ? formatMoney(hover.byProduct[s.product_id]!.price!)
                         : '—' }}
                 </span>
                 <q-icon
@@ -171,6 +171,7 @@
 <script lang="ts" setup>
     import { computed, ref } from 'vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import { formatMoney } from 'src/composables/useMoney';
     import type { PriceHistorySeries } from 'src/services/api/priceHistoryApiService';
 
     const props = defineProps<{
@@ -316,7 +317,7 @@
             if (showBaselineFor(s) && s.your_prices?.baseline != null) {
                 baselineY = projectY(s.your_prices.baseline);
                 const unit = s.your_prices.baseline_unit;
-                baselineLabel = `usually $${s.your_prices.baseline.toFixed(2)}${unit ? `/${unit}` : ''}`;
+                baselineLabel = `usually ${formatMoney(s.your_prices.baseline)}${unit ? `/${unit}` : ''}`;
             }
 
             return {

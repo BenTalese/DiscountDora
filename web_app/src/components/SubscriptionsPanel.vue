@@ -33,7 +33,7 @@
                         <q-item-label>{{ alert.product_name }}</q-item-label>
                         <q-item-label caption>
                             {{ alert.store_name }} · notify below
-                            <strong>${{ alert.threshold_unit_price.toFixed(2) }}</strong>
+                            <strong>{{ formatMoney(alert.threshold_unit_price) }}</strong>
                             <span v-if="alert.last_fired_at">
                                 · last alerted {{ formatDate(alert.last_fired_at) }}
                             </span>
@@ -83,6 +83,7 @@
     import { onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';
+    import { formatMoney } from 'src/composables/useMoney';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     // C-9.5 — the subscriptions tier on the Alerts hub. Surfaces + manages the

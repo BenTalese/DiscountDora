@@ -31,7 +31,7 @@
             <q-input
                 v-model.number="totalPrice"
                 dense outlined type="number"
-                prefix="$"
+                :prefix="currencySymbolRef"
                 class="col"
                 :label="mode === 'harvest' ? 'Total paid' : 'Price'"
                 :rules="[(v) => (v != null && v > 0) || 'Required']"
@@ -104,7 +104,7 @@
             v-if="perUnitPreview"
             class="dora-bg-sunken dora-text-secondary q-pa-sm rounded-borders text-body2"
         >
-            ≈ <strong>${{ perUnitPreview }}</strong> per {{ unit }}
+            ≈ <strong>{{ perUnitPreview }}</strong> per {{ unit }}
             <span v-if="isMultipack" class="dora-text-muted">
                 · {{ packCount }} × {{ perPackSize }}{{ unit }} = {{ totalMeasureDisplay }}{{ unit }} total
             </span>
@@ -130,10 +130,16 @@
 <script setup lang="ts">
     import { computed, ref, watch } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import { useMoney, formatMoney } from 'src/composables/useMoney';
     import { ICONS } from 'src/style/icons';
     import { SUPPORTED_PRICE_UNITS } from 'src/generated/units_table';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { Store } from 'src/models/store';
+
+    // FU-043 — currency symbol + money formatter come from the shared
+    // install-wide money policy (see composables/useMoney.ts). Never
+    // hardcode `$` in this component; a non-AUD install renders wrong.
+    const { currencySymbol: currencySymbolRef } = useMoney();
 
     type Mode = 'shelf' | 'harvest';
 
@@ -229,7 +235,7 @@
     const perUnitPreview = computed(() => {
         if (!canSubmit.value) return null;
         const per = (totalPrice.value as number) / (totalMeasure() as number);
-        return per.toFixed(2);
+        return formatMoney(per);
     });
 
     function onSubmit() {

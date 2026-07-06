@@ -3,30 +3,16 @@
 Wraps stdlib smtplib so dora_api can fire one-off transactional emails
 (verification, password reset, change confirmation) self-contained.
 
-SMTP config resolves through `resolved_operational_config()`
-(FU-333 Bucket B) — the admin edits it in Settings → Admin → System →
-Email; the legacy `DORA_SMTP_*` env vars still work as a fallback
-during the deprecation window. The `DORA_SMTP_PASSWORD` secret stays
-env-only until Bucket C (encrypted-in-DB storage) lands.
-
-Config fields consumed:
-  smtp_host       (default: smtp.gmail.com — kept for parity with the env-only
-                   pre-FU-333 default, applied here since the entity default is
-                   the empty string)
-  smtp_port       (default: 587)
-  smtp_username   (required for real sends; empty ⇒ dry-run — the sender
-                   just logs the body, handy for dev installs without SMTP)
-  smtp_from       (default: same as USERNAME)
-  smtp_use_tls    (default: True)
-
-Dry-run mode is essential for the desktop / mobile deployment surfaces
-that don't need transactional email at all — the verification link is
-logged so a self-hosted user can copy-paste it.
+SMTP config resolves through `resolved_operational_config()` (FU-333
+Buckets B + C). The admin edits everything — including the password —
+in Settings → Admin → System → Email; the password is Fernet-encrypted
+at rest. Empty username still puts the sender in dry-run mode (logs
+the body), which is essential for dev / desktop installs that don't
+need real email.
 """
 from __future__ import annotations
 
 import logging
-import os
 import smtplib
 import ssl
 from dataclasses import dataclass
@@ -56,33 +42,32 @@ class _SmtpConfig:
     dry_run: bool
 
 
+_DRY_RUN_CONFIG = _SmtpConfig(
+    host="", port=587, username="", password="", sender="", use_tls=True, dry_run=True,
+)
+
+
 def _config() -> _SmtpConfig:
-    # FU-333 Bucket B — resolve host/port/username/from/use_tls through the
-    # AppSetting-first resolver. Password stays env-only (Bucket C).
+    """Read the resolved AppSetting-backed SMTP config. If the DB isn't
+    available (e.g. a unit test that imports this module without a Flask
+    context), return a dry-run config so callers still function as
+    dry-run loggers."""
     from dora_api.features.app_settings.operational_config import \
         resolved_operational_config
     try:
         op = resolved_operational_config()
-        host = op.smtp_host or "smtp.gmail.com"
-        port = op.smtp_port
-        username = op.smtp_username
-        sender = op.smtp_from or username
-        use_tls = op.smtp_use_tls
     except Exception:
-        # Defensive: DB unavailable at boot / in a dry unit test — fall back
-        # to env so the sender still functions as a dry-run logger.
-        host = os.environ.get("DORA_SMTP_HOST", "smtp.gmail.com").strip()
-        port = int(os.environ.get("DORA_SMTP_PORT", "587"))
-        username = os.environ.get("DORA_SMTP_USERNAME", "").strip()
-        sender = os.environ.get("DORA_SMTP_FROM", username).strip() or username
-        use_tls = os.environ.get("DORA_SMTP_USE_TLS", "true").lower() != "false"
+        return _DRY_RUN_CONFIG
+    host = op.smtp_host or "smtp.gmail.com"
+    username = op.smtp_username
+    sender = op.smtp_from or username
     return _SmtpConfig(
         host=host,
-        port=port,
+        port=op.smtp_port,
         username=username,
-        password=os.environ.get("DORA_SMTP_PASSWORD", "").strip(),
+        password=op.smtp_password,
         sender=sender,
-        use_tls=use_tls,
+        use_tls=op.smtp_use_tls,
         dry_run=not username,
     )
 

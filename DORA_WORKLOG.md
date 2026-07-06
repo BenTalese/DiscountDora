@@ -9,6 +9,273 @@ next.
 
 ---
 
+## 2026-07-06 — Retired R-014 (reveal-and-disable); adopted R-029 (hide, don't nag)
+
+**Why:** User: "i think go back on FU-176 and the proposed engineering rule.
+i think i prefer if a user has disabled something (either personally or for
+the household) it should not be in their face."
+
+R-014 / ADR-009 (2026-06-14, from IMPL_PLAN_MEAL_PLANS review) said gated
+feature entry points should be shown *disabled* with a "not set up" hint —
+optimising for discovery. In practice it reads as nagging: a disabled Email
+button in the meal-plan builder for a household with no SMTP, a greyed
+scanning button for a household that opted out, etc. The user's principle
+inverts this — respect the off-state; hide, don't advertise.
+
+**What changed — docs:**
+- `docs/01_charter/ENGINEERING_STANDARDS.md`
+  - R-014 flagged **SUPERSEDED 2026-07-06** with a banner pointing at R-029
+    (rule text preserved for audit trail; do not follow in new work).
+  - ADR-009 status flipped to **superseded by ADR-025**.
+  - **New R-029 — "Respect the off-state: hide, don't nag"** added after
+    R-028. `v-if` on the same capability flag the functionality uses; the
+    feature's own settings screen still renders (that's the carve-out — it
+    exists to enable the thing). Calm empty-state placeholders (dashboard
+    "all clear", empty-week banner, `DoraScoreCard`, `YourPricesWidget`)
+    are a **distinct pattern** and stay unchanged — code comments that
+    mislabelled them as R-014 can be re-labelled opportunistically.
+  - **New ADR-025** promoting R-029 and superseding ADR-009. Notes ADR-002's
+    original hide-when-off presentation is restored; the sweep is [[FU-500]].
+- `docs/04_proposals/IMPL_PLAN_MEAL_PLANS.md` C-2.J step 3 — Email button
+  reference flipped from "shown but disabled" → "hidden (`v-if`)"; the
+  engineering close-gate line + the loose-ends note both re-point at R-029 /
+  ADR-025 and reference [[FU-500]] for the sweep.
+
+**What changed — followups:**
+- **[[FU-176]] closed** (moved to `DORA_FOLLOWUPS_RESOLVED.md`) — the sweep
+  it prescribed is now moot / inverted.
+- **[[FU-500]] opened** at the top of `DORA_FOLLOWUPS.md` — the inverse sweep:
+  audit each R-014 site, flip disable → hide where the surface isn't the
+  feature's own settings screen. Most visibly the scanning button
+  (`StockItemDetailPage.vue:796` comment; also the meal-plan builder Email
+  button once C-2.J is built), plus checks on `MainLayout.vue`,
+  `models/auth.ts`, `menuButtonProps.ts`, and `useFeatureFlags.ts` usage
+  sites. Empty-state comment re-labelling is opportunistic, not a blocker.
+
+**Not touched (deliberately):** the ~10 code sites that reference R-014 in
+comments — future work correcting each site as it's touched is cheaper than a
+big-bang sweep now, and FU-500 tracks the sequencing. No code behaviour
+change landed in this unit; docs + FU ledger only.
+
+**Engineering-standards close-gate:** clean. This unit *is* a standards
+revision — R-014 retired, R-029 added, ADR-009 superseded, ADR-025 promoted.
+No new implicit violations; the follow-up sweep is captured in FU-500.
+
+**Next up:** the user's queue continues wherever they choose. FU-500 sits
+opportunistic — pair with the next touch of any gated surface.
+
+---
+
+## 2026-07-06 — FU-044 re-scoped → `IMPL_PLAN_HELP_CHIPS.md` + FU-503 (next-session execution)
+
+**Why:** User: "lets try tackle this. it's a big job: FU-044. lets also assess
+options for surfacing this in the UI. possibly a toggle for 'help mode'?"
+After surveying the surfaces and drafting the toggle/overlay design decisions,
+the user changed course: *"i've changed my mind, instead of the current plan,
+we just assess all elements of the UI and check for confusing things that
+would benefit from a (?) hover chip/tooltip next to that UI element. this has
+already been done in some places. we already have the plan to extensively
+document help and guides page, plus you can ask the assistant for help. we
+only need to have a hover help element for truly confusing UI where needed.
+it does not need to be turned on/off."*
+
+**What changed this session (no code):**
+- Full audit ran across Dashboard, Reports, Alerts, Meal plans, Recipes,
+  Stock surfaces, Shopping, Pricing, Settings. Result: **32 shortlisted
+  controls** (11 HIGH / 18 MED / 3 LOW confidence) genuinely confusing to
+  a first-time user. Already-covered items (`RecipeDetailPage.vue`
+  "Estimated cost", `PantryBeliefChip.vue`, `StocktakeRunner.vue` Mute)
+  excluded up-front.
+- User approved the full list ("do all") and asked for a plan doc so the
+  next session runs efficiently.
+- New impl plan:
+  [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md) —
+  includes the exact
+  `<q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs"><q-tooltip>…</q-tooltip></q-icon>`
+  pattern (matching the shape already at [RecipeDetailPage.vue:756-770](web_app/src/pages/RecipeDetailPage.vue)),
+  full tooltip copy drafted for every one of the 32 items, per-file
+  batching order, style rules (R-002 no `color=`, R-008 no comment
+  blocks), close-gate steps, and explicit "do NOT revive the overlay
+  mechanism" fences.
+- **`PROPOSAL_HELP_OVERLAY.md`** stays in the tree as the record of the
+  parked overlay design (the `?` toolbar toggle + `v-help` directive +
+  DoraBot fronting). Should be marked 📦 superseded in the document
+  register when FU-503 ships.
+- **FU-044** re-scoped in place — its entry now points at FU-503 and
+  the impl plan; it closes when FU-503 does.
+- **FU-503 opened** at the top of `DORA_FOLLOWUPS.md` — next session's
+  start-of-session scan should surface it as "now / next session"
+  work.
+
+**Housekeeping — number collisions from earlier the same session, fixed:**
+- Earlier today I created FU-361 (seasonal picks AU-only) and FU-362
+  (locale coverage tests) at the FU-043 close-gate; both IDs were
+  already taken by pre-existing FUs (A-4 Help content overhaul; A-5
+  Settings theme type/identity). Renumbered mine to **FU-501** and
+  **FU-502**; updated the two cross-refs in
+  `DORA_FOLLOWUPS_RESOLVED.md` (the FU-043 resolution entry). No
+  pre-existing FU touched — only my duplicates renamed.
+
+**R-checks / ADR:** none — no code changed this session. Design work only.
+
+**Next up:** FU-503 — open `IMPL_PLAN_HELP_CHIPS.md`, batch-edit each
+file, run the close-gate defined in the plan. Estimated one focused
+work-unit; the copy is done, so the session is mostly mechanical
+edits + a `vue-tsc` pass.
+
+---
+
+## 2026-07-06 — FU-043 shipped: currency + locale (Layers A + B end-to-end)
+
+**Why:** User: "lets tackle FU-043." Approved the brief and locked four
+decisions in one pass (install-wide over per-user, adopt-lite vue-i18n, no
+C-10 currency field, remove AU branding from core). Shipped both layers in
+one work unit per the build-to-plan preference.
+
+**Decisions taken (recorded in the resolved-ledger entry):**
+1. Currency + locale live **install-wide** on `AppSetting` (no per-user override).
+2. `vue-i18n` **adopt-lite** — kept installed, but the money formatter is a
+   direct `Intl.NumberFormat` wrapper (`useMoney.ts`), not `n(v, 'currency')`.
+3. **No** `currency` field on C-10 `price_observation` — single-currency-per-
+   install assumption stays; multi-tenant SaaS is a future concern.
+4. AU merchant branding fully removed from core copy. (Note: no `AldiLogo`
+   / `IgaLogo` component files exist in the repo — the audit expected them
+   but only the generic `StoreLogo.vue` is there. Nothing to remove.)
+
+**What changed — backend:**
+- [app_setting.py:82-91](dora_api/domain/entities/app_setting.py) — added
+  `currency: str = "AUD"` and `locale: str = "en-AU"` fields + Fields enum
+  entries. Household-scoped comment records the decision.
+- [table_mappings.py:113-119](dora_api/persistence/table_mappings.py) — added
+  columns `String(3)` / `String(35)` with server defaults `"AUD"` / `"en-AU"`.
+- New migration
+  [c4e9a2f7b1d3_20260706_appsetting_currency_locale.py](dora_api/persistence/migrations/versions/c4e9a2f7b1d3_20260706_appsetting_currency_locale.py)
+  — `batch_alter_table` add + drop; no backfill needed (server defaults
+  cover existing installs).
+- [get_app_settings.py](dora_api/features/app_settings/get_app_settings.py) —
+  extended DTO with `currency` + `locale`, `_to_dto` reads with `getattr`
+  fallbacks (matching the pattern established in FU-333 Bucket B).
+- [update_app_settings.py](dora_api/features/app_settings/update_app_settings.py) —
+  request model adds both fields with Pydantic length bounds; handler
+  validates currency as `^[A-Z]{3}$` and locale via a new lightweight BCP-47
+  parser (`_is_valid_bcp47`) that mirrors what `Intl.NumberFormat` actually
+  consumes. Belt-and-braces — the browser's own `new Intl.Locale(tag)` runs
+  before the round-trip too.
+- [health_check.py](dora_api/features/health/health_check.py) — new
+  `_locale_policy()` sibling to `_image_policy()`; adds a `locale_policy:
+  { currency, locale }` block to `/api/health` so every logged-in session
+  (not just admin) can consume the values without a `/app-settings` GET.
+
+**What changed — frontend:**
+- New composable
+  [useMoney.ts](web_app/src/composables/useMoney.ts) — the single money
+  formatter for the whole app (R-003). Module-level reactive state,
+  single-inflight health probe, cached `Intl.NumberFormat` (rebuilt on
+  policy change). Exports:
+  - `formatMoney(n | null | undefined)` — primary render helper; `null`/
+    `undefined`/`NaN` → `'—'` so templates don't have to guard.
+  - `currencySymbol` (a computed) — for `q-input` `:prefix=`. Derived via
+    `Intl.NumberFormat#formatToParts` so a currency-in-non-native-locale
+    (USD in en-AU → "US$") reads correctly, not from a hardcoded symbol map.
+  - `currentMoneyPolicy()` — non-Vue getter (used by `useVoiceInput`).
+  - `refreshMoneyPolicy()` — force-reload after the admin saves.
+- 15 files updated to route through it: `PriceEntry.vue`, `MoneySettings.vue`,
+  `DashboardPage.vue` (13 sites), `ReportsPage.vue` (14 sites including 5
+  echarts `valueFormatter` callbacks), `ShoppingListDetail.vue` (9 sites),
+  `PriceHistoryPage.vue` (4 sites + input label), `StockItemDetailPage.vue`,
+  `RecipeDetailPage.vue`, `MyProductsPage.vue`, `YourPricesWidget.vue`,
+  `PriceHistoryBottomSheet.vue`, `PriceHistoryChart.vue`, `ProductChip.vue`,
+  `SubscriptionsPanel.vue`, `QuickAddSheet.vue`. Zero remaining hardcoded
+  `${{ x.toFixed(2) }}` / template-literal `` `$${x.toFixed(2)}` `` sites
+  (grep-verified at close-gate).
+- [boot/i18n.ts](web_app/src/boot/i18n.ts) — comment records the adopt-lite
+  decision; the boot itself is unchanged.
+- [healthApiService.ts](web_app/src/services/api/healthApiService.ts) —
+  `HealthInfo` gains an optional `locale_policy` block matching the
+  server addition.
+- [appSettingsApiService.ts](web_app/src/services/api/appSettingsApiService.ts) —
+  `AppSettings` type extended with `currency` + `locale`; `UpdateAppSettingsCommand`
+  picks them up automatically via `Partial<AppSettings>`.
+- [useVoiceInput.ts](web_app/src/composables/useVoiceInput.ts) — recognition
+  locale derives from `currentMoneyPolicy().locale`, falling back to
+  `navigator.language`, then `'en-AU'`. Three call sites (DoraChat, CookMode,
+  VoiceSettings) inherit the new default without change.
+- New admin page
+  [AdminSystemLocaleSettings.vue](web_app/src/pages/settings/AdminSystemLocaleSettings.vue)
+  at `/settings/admin/system/locale` — currency + locale text inputs with
+  inline validation, live preview via `formatMoney(12.5)` /
+  `formatMoney(1234.56)`, a "Use this device" locale detect. Follows the
+  timezone-page pattern; saves via `AppSettingsApiService.updateAsync` and
+  calls `refreshMoneyPolicy()` so the app re-renders immediately.
+- [routes.ts](web_app/src/router/routes.ts) + [SettingsShell.vue](web_app/src/pages/SettingsShell.vue) —
+  route + nav entry (icon `mdi-translate`, alongside Timezone).
+- [icons.ts](web_app/src/style/icons.ts) — added `language: 'mdi-translate'`.
+
+**What changed — assistant copy (Layer B):**
+- [app_knowledge.py](dora_api/features/assistant/app_knowledge.py) —
+  `APP_OVERVIEW` reworded so the opening no longer names Coles/Woolworths/IGA/
+  Aldi; reads as "products come from whichever merchants the household has
+  configured."
+- [tools.py](dora_api/features/assistant/tools.py) — `search_products` and
+  `set_primary_list` tool descriptions genericised. `seasonal_picks` and
+  its "Australian seasonal guide" note are left factually accurate; the
+  underlying table is AU-curated, tracked as [[FU-361]] for later.
+
+**R-checks / ADR evaluation:**
+- **R-001 componentisation-first:** money render + currency symbol live in
+  one composable, consumed by every site. ✅
+- **R-003 single source of truth:** currency + locale are server-owned facts
+  (they live on `AppSetting`), read once via `/health`, wrapped in one
+  formatter. No hardcoded `$` anywhere. ✅
+- **R-005 portable data access:** columns added via a portable Alembic
+  `batch_alter_table` migration (SQLite-friendly). ✅
+- **R-006 clean migration:** up + down both defined; server defaults preserve
+  existing installs. ✅
+- **R-007 scope discipline:** Layer A + B only; Layer C parked. Seasonal
+  data + coverage tests logged as FUs rather than expanded into scope. ✅
+- **R-008 code-style:** comments record WHY (FU-043, decisions) — no
+  WHAT-comments introduced. ✅
+- **R-013 tests:** no new tests written this session (test venv unavailable
+  on this box) — logged as [[FU-362]] for opportunistic close.
+- **New ADR?** Considered but no. The pattern is a straight application of
+  R-003 (money formatter → single source) + the FU-333 Bucket B admin-page
+  pattern; nothing recurring enough to promote.
+
+**Next up:** unrelated — pick whatever the user brings. The browser-verify
+list under DORA_VERIFY.md → "Currency & locale (FU-043)" catches the pieces
+that need eyeballs (chiefly: switch currency in Settings, walk Dashboard /
+Reports / ShoppingList / PriceHistory / cook-mode voice, confirm the flip).
+
+---
+
+## 2026-07-06 — FU-003 resolved: revert Pesto `--text-muted` bump (do not propagate)
+
+**Why:** User's call — undo the A1b-era Pesto-only `--text-muted` contrast nudge
+rather than propagate it to the other four light themes. The holistic look-and-feel
+pass ([[FU-002]]) will re-judge muted contrast across the whole family from parity,
+not from a lone outlier.
+
+**What changed:**
+- [themes.scss:66](web_app/src/css/themes.scss:66) — `[data-theme="pesto"]
+  --text-muted` reverted from `hsl(168 10% 42%)` back to the pre-A1b value
+  `hsl(168 8% 50%)`. All light themes (Pesto, Lemon Tart, Blueberry, Cherry Cola
+  light, Sourdough light) now share the same ~50% muted-lightness baseline.
+- Pesto Dark (`hsl(205 12% 66%)`, line 114) untouched — its lightness was tuned
+  independently for dark-page pop, not part of the A1b light-theme bump.
+- `DORA_FOLLOWUPS.md` — FU-003 block removed; the FU-002 body updated to drop the
+  now-stale "also feed in FU-003" reference (with a one-line note that the family
+  starts from parity now).
+- `DORA_FOLLOWUPS_RESOLVED.md` — FU-003 entry added at the top with the resolution
+  mechanism.
+
+**R-checks / ADR:** No engineering-standards impact (pure token value revert on a
+single theme block; no rule added or violated).
+
+**Next up:** unrelated — pick whatever the user brings. The muted-contrast question
+now sleeps inside the FU-002 whole-app polish pass.
+
+---
+
 ## 2026-07-05 — FU-333 Bucket B: shipped end-to-end (Chunks 1-3)
 
 **Why:** After the plan doc landed earlier the same day, user said

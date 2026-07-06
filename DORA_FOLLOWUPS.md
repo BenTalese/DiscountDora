@@ -53,6 +53,74 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-500 — Apply R-029 (hide, don't nag) app-wide — inverse sweep of the retired FU-176
+- **Raised:** 2026-07-06 (user directive walking back R-014 → new rule R-029 / ADR-025)
+- **Type:** follow-up (cross-cutting presentation change)
+- **What:** R-014 (reveal-and-disable) is retired. R-029 (respect the off-state — hide, don't nag) is the new rule: user- or household-disabled or install-unconfigured features are **hidden** (`v-if`) outside their own settings screen, not shown-disabled with a "Set up X" hint. Sweep the app for the pattern R-014 previously prescribed and flip each site to `v-if`:
+  - **Meal-plan builder Email button (C-2.J)** — `useFeatureFlags().hasEmail` false → hide the button entirely (already respec'd in `IMPL_PLAN_MEAL_PLANS.md`; verify implementation when C-2.J is built or, if already built, revisit and flip disable → hide).
+  - **`NotificationsSettings.vue`** — the C-9.7 alerts email digest row + C-9.8 push row are on the settings screen that *owns* the config, so they legitimately stay (R-029 carve-out). But if any *other* surface references those and shows a disabled affordance, hide it.
+  - **`AssistantSettings.vue`, `VoiceSettings.vue`, `AdminSystemEmailSettings.vue`, `AdminSystemPushSettings.vue`** — all on their own settings screens; the disabled-when-unconfigured control is the R-029 carve-out and stays. Sweep only if any of these render R-014 patterns on *other* pages.
+  - **`MainLayout.vue`** (product-search-URL unconfigured hint), **`models/auth.ts`** (SMTP-unconfigured control disabled), **`useFeatureFlags.ts`** helper comments, **`menuButtonProps.ts`** (`disabledWithTooltip`) — check each usage site: if it's the config surface, keep; if it's a workflow surface elsewhere, hide.
+  - **`StockItemDetailPage.vue:796`** references the scanning flag with an R-014 comment; per the user's original example, the scanning button (and any related UI outside `AdminSystemScanningSettings`) should be **hidden** when `scanning_enabled=false`, restoring the original ADR-002 hide-when-off.
+  - Empty-state usages (dashboard "all clear", meal-plan empty-week banner, `DoraScoreCard`, `YourPricesWidget`) are a **different pattern**; they stay unchanged. Their R-014 comment references can be re-labelled opportunistically (they were mislabelled — "calm empty state" isn't the same rule).
+- **Why deferred:** cross-cutting presentation change touching ~10 files; better as a focused small pass than folded into other work.
+- **Recommended resolution:** opportunistic / a focused sweep — pair with the next touch of each gated surface. Also update **ADR-002**'s stance in `ENGINEERING_STANDARDS.md:1149` to drop the "R-014 partially revisits it" implication (R-002's hide-when-off is now the whole story again).
+
+## [OPEN] FU-503 — Ship the 32 targeted `(?)` help chips per `IMPL_PLAN_HELP_CHIPS.md`
+- **Raised:** 2026-07-06 (FU-044 re-scope).
+- **Type:** deferred job (execution — audit + copy are already done).
+- **What:** User re-scoped FU-044 mid-session (dropped the opt-in help-
+  overlay mechanism from `PROPOSAL_HELP_OVERLAY.md`); the narrowed ask is
+  to add a targeted `(?)` hover-tooltip using the existing
+  `RecipeDetailPage.vue`-style pattern on 32 genuinely-confusing
+  controls. The audit ran this session and the tooltip copy is drafted
+  in [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
+- **Why deferred:** user asked to save it for the next session so that
+  session can go straight from open → edit → commit without re-
+  discovering the audit or drafting copy.
+- **Recommended resolution:** **now / next session.** Open the impl plan,
+  open each file in its "Batch by file" order, apply the chips, `vue-tsc`
+  clean, run the close-gate in the impl plan (CHANGELOG bullet, move
+  FU-044 → resolved, retire PROPOSAL_HELP_OVERLAY as superseded, add
+  DORA_VERIFY entry, worklog + PROJECT_STATE update). Do NOT re-open the
+  overlay-mechanism debate — that decision is locked as parked.
+
+## [OPEN] FU-502 — Coverage tests for FU-043 locale/currency backend
+- **Raised:** 2026-07-06 (FU-043 close-gate).
+- **Type:** deferred job (test coverage).
+- **What:** the FU-043 backend (AppSetting `currency`/`locale` columns +
+  migration `c4e9a2f7b1d3` + `_is_valid_bcp47` validator in
+  `update_app_settings.py` + `_locale_policy()` in `health_check.py`) shipped
+  without new tests because the Python test venv wasn't available on the box
+  the work ran on. The R-013 close-gate wants these under coverage.
+- **What to add:**
+  - Round-trip test: `PATCH /app-settings {currency:"USD", locale:"en-US"}`
+    then `GET /health` reflects `locale_policy.currency == "USD"` and
+    `locale_policy.locale == "en-US"`.
+  - Validation table: currency must be 3 uppercase alpha; `"US"`, `"USDX"`,
+    `"US1"`, `"usd"` (should upper-cased-in), `""` — expected verdicts.
+  - Locale validation table: `"en-AU"`, `"en-Latn-US"`, `"zh-Hant-TW"` accept;
+    `"en_AU"` (underscore), `"e"`, `"english"`, `"en AU"` (space) reject.
+  - Migration up/down against an in-memory sqlite (matches the existing
+    `test_operational_config_resolver.py` shape).
+- **Recommended resolution:** opportunistic — next time the pytest env is
+  reachable (see [[FU-466]] for the broader suite drift).
+
+## [OPEN] FU-501 — Seasonal-picks table is AU-only; needs locale-scoped data
+- **Raised:** 2026-07-06 (FU-043 close-gate).
+- **Type:** deferred job (locale data).
+- **What:** `dora_api/features/assistant/tools.py::seasonal_picks` returns a
+  hardcoded `_SEASONAL_AU` fruit/veg table with the note "Australian seasonal
+  guide — pricing and availability vary by region." Left as-is at FU-043
+  close: the data is factually AU-specific and the tool description is
+  honest, but a non-AU install still sees AU seasons.
+- **Options:** (a) a `_SEASONAL_BY_LOCALE` map keyed on the install locale's
+  country subtag, with AU/NZ/US/GB seed data and a graceful "no seasonal
+  data for your locale" fallback; (b) drop the tool entirely on non-AU
+  installs; (c) let admins upload their own seasonal table.
+- **Recommended resolution:** later — after a real non-AU user surfaces the
+  gap. Not blocking FU-043.
+
 ## [OPEN] FU-467 — Drop the DORA_* env-var fallbacks after FU-333 Bucket B beds in
 - **Raised:** 2026-07-05 (FU-333 Bucket B merge).
 - **Type:** deferred job (deprecation follow-up).
@@ -1484,51 +1552,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** **close-gate on the onboarding-copy chunks (C-5.1/C-5.2/C-5.6)** —
   validate when building them on a provisioned app. Not optional polish.
 
-## [OPEN] FU-218 — Browser-verify the new admin "API access" page (C-10 / Phase B)
-- **Raised:** 2026-06-17 (Phase B build)
-- **Type:** verification
-- **What:** New Settings page lives at `/settings/admin/api-access`. Confirm in the browser:
-  (a) sidebar entry appears under Admin · global (admin only); (b) `New key` opens dialog → reveals
-  raw key once → copy works → list shows the new row with `Never used` + `Accepted 0 / Skipped 0
-  / Failed 0`; (c) expanding the row shows "Store mappings" panel; (d) push a record from any
-  bearer client against an unknown store → reload → the source row shows a pending badge + the
-  mapping appears in the panel marked "pending"; (e) merchant picker assigns it → the badge
-  clears; (f) disable / enable / rename / revoke all round-trip; (g) revoked key is rejected by
-  `/api/ingest` immediately.
-- **Recommended resolution:** opportunistic — bundle with the other Phase 0 browser passes.
-
-## [RESOLVED?] FU-190 — Ingestion API must honour "no auto-create stores"  *(move to RESOLVED on confirm)*
-- **Update 2026-06-17 (Phase B build):** implemented as **(b) quarantine queue** end-to-end (the
-  proposal's chosen safety net; the "(c) setup mapping step" is naturally produced by the same
-  surface — admins map *before* pushing if they want, but unknown names on first sight quarantine
-  instead of being rejected, which is friendlier). On every ingest record the producer's
-  `merchant` string is resolved via `IngestionStoreMapping`: known → use the linked Merchant;
-  unknown → create a quarantined mapping (`merchant_id IS NULL`), skip the record with reason
-  `store_not_mapped`, surface as **pending** on the API access page. Stores themselves are
-  **never** created by the endpoint. Admin assigns or clears the merchant via
-  `PUT /api/ingestion-sources/<id>/store-mappings`. Covered by `test_ingest_batch.py` (quarantine
-  + post-mapping roundtrip) + `test_ingestion_store_mappings.py` (CRUD + invalid merchant rejected).
-  **Move to RESOLVED once the FU-218 browser pass confirms the pending → assign flow in the UI.**
-
-## [OPEN] FU-176 — Apply R-014 (reveal-and-disable) app-wide
-- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; new rule R-014 / ADR-009)
-- **Type:** follow-up
-- **What:** New engineering rule **R-014** says adoptable features that aren't
-  yet configured/enabled should be **shown disabled with a "not set up" hint**,
-  not hidden — so users discover they exist. The meal-plan builder's Email
-  button adopts this in C-2.J. The rest of the app needs a sweep: most notably
-  the **scanning button**, which today is *hidden* when `scanning_enabled` is
-  off (ADR-002) and per the user should now render **disabled-with-a-hint**
-  instead. Audit other gated/`v-if`-hidden adoptable surfaces (LLM/assistant
-  affordances, any integration entry points) and convert the *presentation* of
-  the off state from hidden → visible-disabled where it makes sense (R-014
-  carve-outs: genuinely inapplicable or security-sensitive surfaces stay hidden).
-- **Why deferred:** out of the meal-plans scope (R-007); it's a cross-cutting
-  presentation change touching the scanning gate + others.
-- **Recommended resolution:** opportunistic / a focused small sweep — pair with
-  the next touch of each gated surface, and update ADR-002's note to point at
-  R-014 for the presentation of the off state.
-
 ## [OPEN] FU-169 — Implement the test-suite improvements proposal
 - **Raised:** 2026-06-13 (post-FU-166 proposal)
 - **Type:** deferred job
@@ -1660,40 +1683,6 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   the same `steps_mode` toggle.
 - **Recommended resolution:** opportunistic / when next touching the dialog.
 
-## [OPEN] FU-085 — Run + verify Cookbook Chunk 2 (tag taxonomy overhaul) in a real env
-- **Raised:** 2026-06-09 (Chunk 2 implementation; nothing was run — no Python venv / node_modules on the Windows dev box)
-- **Type:** finding / verification (blocks trusting Chunk 2)
-- **What:** Chunk 2 is a large, unrun backend+frontend change (FK-ify cuisine/category, DietaryTag table, 3 CRUD endpoints + settings, tri-state filter). Verify, in order:
-  1. `alembic upgrade head` applies cleanly on **SQLite and Postgres** (migration `a7d2f4c9e1b8`: batch-mode Recipe alter dropping cuisine/category strings + adding cuisine_id/category_id FKs, RecipeTag rebuild to dietary_tag_id, vocab seed). Also test `downgrade`.
-  2. App boots — `verify_mappings()` passes for Cuisine/Category/DietaryTag + the reshaped Recipe (risk: the `_cuisine_id`/`_category_id` hidden-FK mapping + the selectin relationships).
-  3. `repository.get(Recipe).all()` actually selectin-loads `recipe.cuisine`/`.category` (assistant + global_search depend on it; if not, they'll show null cuisine/category).
-  4. Recipe create/update/list round-trips `cuisine_id`/`category_id`/`dietary_tag_ids`; `GET /recipes/tags` returns DB-backed tags (value = id) + disclaimer.
-  5. Overview: cuisine/category single-selects filter; tri-state DietaryTagFilter cycles +/−/neutral and stays open; RecipeCard shows cuisine/category names + tag chips.
-  6. Edit dialog + detail page: cuisine/category selects + dietary multiselect populate from existing recipe + save correctly; URL importer pre-fills matched cuisine/category.
-  7. Settings → "Recipe tags & categories": create/rename/delete for all three vocabularies; usage counts + delete warnings; deleting a cuisine/category nulls recipes (SET NULL), deleting a dietary tag removes the links (CASCADE).
-  8. Backup → restore round-trips Cuisine/Category/DietaryTag/RecipeTag in FK-correct order.
-  9. Dora assistant: search_recipes/suggest_recipes still filter by cuisine + dietary tags (now Python-side / name-resolved).
-- **Recommended resolution:** now / first thing once a working env is available — before building Chunk 3+ on top.
-- **State note:** 2026-06-09 — first user browser pass: migration applied + app boots + settings CRUD + add-modal dietary tags all **confirmed working** (items 1,2,4,7 effectively ✅). Two gaps found: (a) overview filters unusable → split out as **FU-087**; (b) no dietary-tag editor on the detail page (only the add modal) → **fixed** (added a multiselect to `RecipeDetailPage.vue`, L264). Still to verify: items 3 (selectin), 5 (filters), 6 (detail-page tags), 8 (backup), 9 (assistant).
-- **State note:** 2026-06-12 — second user browser pass surfaced
-  five concrete findings split out as their own FUs (so FU-085
-  doesn't become an umbrella for everything cookbook-shaped):
-  - **FU-146** (RESOLVED this session) — GitHub-issues mentions
-    swept out (repo private).
-  - **FU-147** — detail-page dietary-tag picker doesn't
-    pre-populate + chips clear after save (item 6 partial fail).
-  - **FU-148** — Cookbook overview missing "time of day" filter.
-  - **FU-149** — Cookbook overview missing "# ingredients"
-    filter + sort axis.
-  - **FU-150** — assistant chat-mode doesn't recognise dietary
-    or cuisine queries (item 9 partial fail). RESOLVED 2026-06-12
-    (minimal fix shipped). The structural redesign is folded into
-    `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` §2.2.1
-    rather than tracked as its own FU.
-  FU-085 itself stays OPEN until items 3 (selectin), 5 (filters
-  end-to-end), 6 (FU-147 fix verified), 8 (backup), 9 (FU-150
-  minimal fix verified in-browser) are all green.
-
 ## [OPEN] FU-056 (partial) — Phase 2 ingestion EAN auto-populate
 - **Raised:** 2026-06-07 (P6-02); slice 1 closed 2026-06-28 (hybrid model)
 - **Type:** deferred job (Phase-2 scoped)
@@ -1711,38 +1700,23 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
 - **Recommended resolution:** Phase 2 ingestion + the Products UI work,
   whichever lands first.
 
-## [OPEN] FU-044 — C-help opt-in help-overlay brief written; awaiting approval + per-surface hint rollout
-- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`)
-- **Type:** deferred job (design brief done; implementation pending approval)
-- **What:** A persistent "?" toggle overlaying dismissible per-element "what does
-  this do" hints — the opt-in inverse of the forced tour C-5 removed. Net-new
-  cross-cutting front-end component (no existing tour/coachmark system). The
-  expensive part is **content** (a hint per control, kept from rotting), so the
-  brief defers the hint corpus to a per-surface rollout folded into each C-1..C-9
-  implementation prompt.
-- **Why deferred:** brief-only per the Wave-C ritual; no code until the user
-  approves and resolves §4 open decisions (reveal style, content model, mascot,
-  discoverability).
-- **Recommended resolution:** **when the user approves the brief** — build the
-  mechanism + `v-help` directive first (§8.1), then seed hints on the highest-
-  confusion surfaces, then roll out per-surface as each C-brief implements. Pair
-  the C-5 finish-card mention (§4-4) with C-5 implementation.
-
-## [OPEN] FU-043 — C-locale international-readiness brief written; awaiting approval
-- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_LOCALE_I18N.md`)
-- **Type:** deferred job (design brief done; implementation pending approval)
-- **What:** Make Dora usable outside Australia. Companion split solves product
-  sourcing; Dora-core still has AU residue — hardcoded `$` currency, `en-AU` voice
-  default (`useVoiceInput.ts`), AU merchant branding/copy/seed in core, and a
-  **dormant vue-i18n scaffold** (installed in `boot/i18n.ts`, locale hardcoded
-  `en-US`, stub messages, zero `$t()`). Brief recommends Layer A (currency/format
-  neutrality) + Layer B (de-AU core) now; Layer C (full UI translation) deferred.
-- **Why deferred:** brief-only; no code until approval + §3 open decisions
-  (currency home, vue-i18n adopt-vs-rip, C-10 currency field, merchant-logo fate).
-- **Recommended resolution:** **when the user approves** — fold the currency
-  setting + shared money formatter into the C-cross config work (they share the
-  config layer); coordinate the C-10 currency field with the ingestion impl;
-  de-AU (voice/branding/seed) is independent and low-risk. Layer C stays parked.
+## [OPEN] FU-044 — Re-scoped 2026-07-06 → superseded by [[FU-503]]
+- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`).
+- **Type:** deferred job (design retired; execution pending under a new ID).
+- **Status update 2026-07-06:** original opt-in help-overlay design
+  (`?` toolbar toggle, dismissible per-element overlays, `v-help`
+  directive, DoraBot fronting, discoverability nudge) **retired.** User
+  narrowed scope mid-session: instead of a whole mechanism, add
+  targeted `(?)` hover-tooltip chips on 32 specific confusing controls
+  using the existing `RecipeDetailPage.vue`-style pattern. Audit +
+  tooltip copy are drafted in
+  [IMPL_PLAN_HELP_CHIPS.md](docs/04_proposals/IMPL_PLAN_HELP_CHIPS.md).
+  `PROPOSAL_HELP_OVERLAY.md` stays in the tree as the record of the
+  parked overlay design (📦 superseded); Help/guides page + assistant
+  remain the deep-help fallback.
+- **Recommended resolution:** closes at the same time as [[FU-503]] —
+  next session opens the impl plan, applies the chips, runs the
+  close-gate.
 
 ## [OPEN] FU-041 — Onboarding "you already have groups/locations" copy on first-run
 - **Raised:** 2026-06-06 (C-5 brief; feedback L32/L33)
@@ -1856,23 +1830,14 @@ This is large enough to warrant its own ADR when it lands (recommended title: "O
   the structural fix tracked in [[FU-004]]). So the dulling may have over-corrected
   against values that weren't actually rendering. Now that Pesto/Pesto Dark were
   synced, the *final* dulled value should be re-judged from scratch.
-- **Also feed in:** other light themes' `--text-muted` contrast nudge ([[FU-003]]),
-  and the structural dual-source collapse ([[FU-004]]) so the review isn't fighting
-  a moving target.
+- **Also feed in:** the structural dual-source collapse ([[FU-004]]) so the review
+  isn't fighting a moving target. (Note: FU-003 — the Pesto-only `--text-muted`
+  42% bump — was reverted 2026-07-06; all light themes are back on the original
+  50% baseline, so this holistic review starts from parity across the family.)
 - **Why deferred:** look-and-feel polish is best judged late, in one sitting, on a
   near-final app — not litigated token-by-token mid-build.
 - **Recommended resolution:** later — a dedicated pass during **Phase 3 (champion
   polish)** or just before **Phase 4 (commercialize)**, once the app is feature-
   complete enough to eyeball holistically. Requires the app actually running
   (deps installed) and ideally a side-by-side across all themes.
-
-## [OPEN] FU-003 — Other light themes' `--text-muted` contrast nudge
-- **Raised:** 2026-06-04 (A1b)
-- **Type:** follow-up
-- **What:** only the Pesto family got the `--text-muted` 50→42 lightness bump.
-  Other light themes (Lemon Tart, Blueberry, Cherry Cola light, Sourdough light)
-  may want the same for AA contrast.
-- **Why deferred:** wanted to eyeball Pesto first before touching the whole family.
-- **Recommended resolution:** later during a dedicated A1b contrast pass, after the
-  user has eyeballed the themes.
 

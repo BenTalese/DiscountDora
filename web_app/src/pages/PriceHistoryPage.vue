@@ -131,7 +131,7 @@
                         </q-card-section>
                         <q-card-section v-if="s.current" class="q-pt-none">
                             <div class="text-h6">
-                                ${{ s.current.unit_price?.toFixed(2) ?? '—' }}
+                                {{ s.current.unit_price != null ? formatMoney(s.current.unit_price) : '—' }}
                                 <q-chip
                                     v-if="s.current.deal_pct"
                                     dense
@@ -145,7 +145,7 @@
                             </div>
                             <div v-if="s.all_time_low" class="text-caption dora-text-muted-7">
                                 All-time low:
-                                <strong>${{ s.all_time_low.unit_price.toFixed(2) }}</strong>
+                                <strong>{{ formatMoney(s.all_time_low.unit_price) }}</strong>
                                 <span v-if="aboveLowPct(s) !== null">
                                     · currently {{ aboveLowPct(s) }}% above
                                 </span>
@@ -160,7 +160,7 @@
                             >
                                 Your usual:
                                 <strong>
-                                    ${{ s.your_prices.baseline.toFixed(2)
+                                    {{ formatMoney(s.your_prices.baseline)
                                     }}{{ s.your_prices.baseline_unit ? `/${s.your_prices.baseline_unit}` : '' }}
                                 </strong>
                                 <q-chip
@@ -188,7 +188,7 @@
                                     dense
                                     type="number"
                                     step="0.01"
-                                    label="Notify me below ($)"
+                                    :label="`Notify me below (${currencySymbol})`"
                                     class="col"
                                 />
                                 <BaseButton
@@ -217,7 +217,7 @@
                             <q-item-label caption>
                                 {{ a.store_name }} ·
                                 notify below
-                                <strong>${{ a.threshold_unit_price.toFixed(2) }}</strong>
+                                <strong>{{ formatMoney(a.threshold_unit_price) }}</strong>
                             </q-item-label>
                         </q-item-section>
                         <q-item-section side>
@@ -239,6 +239,10 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import { useMoney, formatMoney } from 'src/composables/useMoney';
+    // FU-043 — money renders + input labels read the install-currency
+    // symbol from the shared money policy.
+    const { currencySymbol } = useMoney();
     import { useQuasar } from 'quasar';
     import { computed, onBeforeUnmount, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';

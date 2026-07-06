@@ -141,6 +141,30 @@ def _feature_flags() -> dict[str, bool]:
     return flags
 
 
+def _locale_policy() -> dict[str, str]:
+    """FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
+    locale, surfaced here (not on `/app-settings`) because every logged-in
+    user's browser needs to render money in the household's chosen currency
+    on boot, not just admins. Client wraps these in one
+    `Intl.NumberFormat(locale, {style:'currency', currency})` and every
+    money render routes through it (R-003). Wrapped in a try so a DB
+    hiccup doesn't take the probe down — falls back to Dora's AU shipping
+    defaults."""
+    currency = "AUD"
+    locale = "en-AU"
+    try:
+        from dora_api.features.app_settings.access import \
+            get_or_create_app_setting
+        from dora_api.persistence.sqlalchemy_repository import \
+            SqlAlchemyRepository
+        setting = get_or_create_app_setting(SqlAlchemyRepository())
+        currency = (getattr(setting, "currency", None) or currency).strip() or currency
+        locale = (getattr(setting, "locale", None) or locale).strip() or locale
+    except Exception:
+        pass
+    return {"currency": currency, "locale": locale}
+
+
 def _image_policy() -> dict[str, int]:
     """FU-345 — install-wide image compression knobs. Read on boot by
     the client-side `processImageFile` helper so every upload site
@@ -179,4 +203,5 @@ def health_check():
         "profile": (os.environ.get("DORA_ENV") or "development").lower(),
         "features": _feature_flags(),
         "image_policy": _image_policy(),
+        "locale_policy": _locale_policy(),
     }), 200

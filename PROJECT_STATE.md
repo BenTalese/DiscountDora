@@ -1,6 +1,15 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-04** — full dashboard rebuild after a long session
+**Regenerated: 2026-07-06** — hand-edited row refresh after **FU-043 (Locale
+& international readiness Layers A + B)** shipped end-to-end: install-wide
+currency + locale on `AppSetting`, one shared `Intl.NumberFormat` wrapper
+routing every money render, voice-input locale following the setting, AU
+merchant name-drops removed from assistant copy, new admin **Settings → System
+→ Currency & locale** page. Also earlier the same day: **FU-003** resolved by
+reverting the Pesto `--text-muted` bump instead of propagating it. Baseline
+below is unchanged from the 2026-07-04 full rebuild.
+
+**Original regen note (2026-07-04):** — full dashboard rebuild after a long session
 that shipped the **Stocktake mode redesign trilogy** (Chunks 1–3
 end-to-end from `PROPOSAL_STOCKTAKE_MODE.md`), the **stocktake
 housekeeping pass** (retired the dead `locations/attention.py` heatmap +
@@ -121,6 +130,8 @@ first.
 
 ## Recently shipped (newest first)
 
+- **FU-043 resolved — locale & international readiness Layers A + B (2026-07-06).** Dora is now usable outside Australia. Install-wide `currency` (ISO 4217) + `locale` (BCP-47) on `AppSetting` (migration `c4e9a2f7b1d3`, defaults `AUD` / `en-AU`). Every money render across the app — Dashboard budget/savings/deals/pantry-value, all Reports charts+totals, ShoppingListDetail line prices+offer chips, PriceHistory axes+tooltips+alert labels, StockItemDetail offers/observations/lifecycle, RecipeDetail cost, YourPricesWidget, PriceEntry, MoneySettings, ProductChip, QuickAddSheet, SubscriptionsPanel, MyProductsPage — routes through one shared [useMoney.ts](web_app/src/composables/useMoney.ts) wrapper around `Intl.NumberFormat`. `q-input :prefix` reads the same currency symbol so inputs flip atomically. `useVoiceInput` recognition locale derives from the setting (fallback: browser locale → `en-AU`). New admin page **Settings → Admin → System → Currency & locale** with validation, live preview, and "Use this device" locale detect. Assistant copy generalised — `APP_OVERVIEW` no longer names Coles/Woolworths/IGA/Aldi; two tool descriptions genericised. Locked as install-wide (not per-user), adopt-lite `vue-i18n` (kept installed as future translation seam, but the formatter is direct `Intl.NumberFormat`), no `currency` field on C-10 `price_observation`. Layer C (full UI translation) stays parked. Test coverage + AU-specific seasonal data logged as [[FU-362]] + [[FU-361]].
+- **FU-003 resolved — reverted Pesto `--text-muted` bump instead of propagating (2026-07-06).** User's call: undo the A1b-era 50→42 lightness nudge on Pesto light rather than apply it to the other four light themes. Reverted [themes.scss:66](web_app/src/css/themes.scss:66) back to `hsl(168 8% 50%)`; Pesto Dark (independently tuned) untouched. All five light themes now share a common ~50% muted-lightness baseline — the FU-002 whole-app polish pass will re-judge muted contrast from parity, not from a Pesto-only outlier.
 - **FU-421 closed as already-satisfied (2026-07-04).** No code change. The "remind me to use this on opened items" ask from the original spec is already implemented via the existing expiry surface — [item detail](web_app/src/pages/StockItemDetailPage.vue)'s Expiry row exposes `+1d`/`+7d`/`+14d` shift chips + a Set date-picker + Clear, and the Open toggle's tooltip explicitly documents the workflow ("for perishables it's the cue to set or shorten"). A user-set "use within 2 months" IS an expiry semantically, so reusing avoids duplicating a whole reminder infrastructure (R-003). Free alerts via the existing `expired`/`expiring_soon` kinds. Free auto-clear on waste. Only real gap is month-scale shift chips (`+1m`/`+3m` not there today) — user picked "close as-is" since he hasn't hit the pain; a ~10-line SPA change is available as an off-ramp if it becomes annoying.
 - **FU-458 resolved — per-user rate limits on the assistant surface (2026-07-04).** Defense-in-depth against runaway LLM-cost loops. Extended `auth_helpers.rate_limit` with an optional `subject` arg — pre-auth callers keep the historic per-IP bucket, post-auth surfaces (assistant) pass `str(session.user_id)` so a shared household IP doesn't cross-count users. Wired 20/min on `/assistant/ask` (LLM round-trip), 60/min on `/assistant/act` + `/assistant/confirm`. 429 responses match the RFC 6585 §4 shape (Retry-After header). Also fixed a misleading "per-user" comment on `/assistant/probe` — the code was per-IP; now matches the comment. New `test_rate_limit_subject.py` (5 tests) locks subject isolation + IP-fallback back-compat. **303/303 pytest green** (was 298 → 5 new).
 - **FU-463 resolved — SQLite `text()+str(uuid) IN :ids` zero-row regression in two hydration passes (2026-07-04).** Latent bug on SQLite self-hosts (Postgres unaffected). [`_hydrate_linked_product_count`](dora_api/features/stock_items/get_stock_items.py) and [`_compute_estimated_cost`](dora_api/features/recipes/get_recipes.py) both used raw `text()` binds with string uuids that never matched the `UUIDType` BINARY(16) storage — every stock-item DTO's `linked_product_count` was 0 and every recipe's `estimated_cost` was None on SQLite. Rewrote both as ORM `select()` against `db.metadata.tables[…]` — same shape `_hydrate_has_image` uses since FU-171. Verified via a live REPL round-trip against `data/dora.test.db` under `app.app_context()`. The `project_sqlite_uuid_text_binding` memory now covers three fixed surfaces + FU-171's pair; the pattern to grep for remains any `text() + str(uuid) IN :ids` combination.
@@ -252,7 +263,8 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | PROPOSAL_COOKBOOK_CARD_REVISION / _RECIPE_IMAGE_STEPS / _WASTE_MINIMISATION / _SHOPPING_LIST_UX_V2 | ✅ done | Shipped; were orphaned from indexes |
 | STATE_OWNERSHIP_REFACTOR_PROPOSAL | ✅ done | R-003 authority; IMPL executed |
 | PROPOSAL_PRODUCTS_AS_OVERLAY / IMPL_PLAN_PRODUCTS_AS_OVERLAY / PRODUCTS_OVERLAY_RUNBOOK | 🟡 active | Phase F in progress; RUNBOOK is the ⭐ live driver |
-| PROPOSAL_HELP_OVERLAY / _LOCALE_I18N / _SUPPORT_CHANNEL / _TEST_SUITE_IMPROVEMENTS | 🔵 designed | Real pending design debt (FU-043/044 etc.) |
+| PROPOSAL_HELP_OVERLAY / _SUPPORT_CHANNEL / _TEST_SUITE_IMPROVEMENTS | 🔵 designed | Real pending design debt (FU-044 etc.) |
+| PROPOSAL_LOCALE_I18N | ➗ carve-outs | Layers A + B shipped 2026-07-06 (FU-043); Layer C (full UI translation) explicitly parked as someday |
 | PROPOSAL_SIMPLE_MODE | 📦 superseded | → products-as-overlay |
 | SHOPPING_LIST_REDESIGN_PROPOSAL | 📦 superseded | v1 shipped (P6-01) → UX_V2 presentation |
 | IMPL_PLAN_* (Alerts, Cart, Cookbook, Cook-Mode, Dashboard, Error-Handling, Ingestion, Meal-Plans, Meal-Plans-Rebuild, State-Ownership, Stock-Item-Detail, Stock-Overview, Waste, Your-Prices, Settings-Rebuild, Shopping-Lists, Shopping-List-Receipts, Config, Auth-Shell) | ✅ done | All executed & shipped. ~13 carry stale "no code yet" headers (FU-445). MEAL_PLANS_REBUILD is the live meal-plans authority. |

@@ -5,6 +5,17 @@ surface — pick a surface, walk it top-to-bottom.
 
 ---
 
+## Currency & locale (FU-043) — origin FU-043
+- [ ] Settings → Admin → System → **Currency & locale** loads; two inputs (Currency 3-letter, Locale BCP-47), a live preview showing `$12.50 · $1,234.56` (or whatever the current setting renders), and a "Use this device" button beside the preview
+- [ ] Change currency to `USD` → blur (or Enter) → toast "Currency set to USD."; Dashboard budget / Deals / ReportsPage / ShoppingList totals / StockItem prices / RecipeDetail cost card all re-render with `US$` (or `$` depending on the locale's convention) without a hard reload
+- [ ] Change currency to `EUR` and locale to `de-DE` → money renders as `1.234,56 €` (comma decimal, dot thousands, symbol suffix) everywhere; MoneySettings budget input prefix flips to `€`; PriceEntry dialog's price input prefix flips to `€`
+- [ ] Change locale to `en-GB` → symbol renders as `£` (currency stayed as previously set) — verifying that locale and currency are independent knobs
+- [ ] Enter invalid inputs: `US` (2 chars), `USDD` (4 chars), `US1` (digits), lowercase `usd` (should upper-case-in on blur and succeed); invalid locale `en_AU` (underscore), `english` (not a tag), space `en AU` — each shows inline red error message, no toast, no server round-trip
+- [ ] Reset to `AUD` + `en-AU` → money renders `$12.50` again (Australian dollar sign, comma thousands, dot decimal)
+- [ ] Dora chat / Cook mode: hold-to-talk mic uses the household locale for speech recognition (verify by switching locale to `en-GB` or `de-DE` on a device where speech-recog supports it, then hitting the mic — the recognised text shape follows the locale)
+- [ ] Assistant chat: ask "what can Dora do?" → the answer no longer name-drops "Coles, Woolworths, IGA, Aldi" — it says "the household's configured merchants" or similar
+- [ ] Fresh install (or new admin session) sees the AU defaults (`AUD` + `en-AU`) with no explicit save required — existing installs unchanged post-migration
+
 ## Native Android build (P8-10) — origin P8-10
 - [ ] `web_app/src-capacitor/android/` opens cleanly in Android Studio (File → Open → point at the folder); Gradle sync completes with no errors
 - [ ] `./gradlew assembleDebug` from `src-capacitor/android/` produces `app/build/outputs/apk/debug/app-debug.apk` (after `npx quasar build -m capacitor -T android` has synced the SPA into `assets/public/`)

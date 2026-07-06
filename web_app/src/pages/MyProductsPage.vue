@@ -249,13 +249,13 @@
                     <q-card-section class="q-pt-none">
                         <div class="row items-baseline q-gutter-xs">
                             <span class="text-h6">
-                                ${{ (product.price_now ?? 0).toFixed(2) }}
+                                {{ formatMoney(product.price_now ?? 0) }}
                             </span>
                             <span
                                 v-if="onSpecial(product)"
                                 class="text-caption dora-text-muted strike"
                             >
-                                ${{ (product.price_was ?? 0).toFixed(2) }}
+                                {{ formatMoney(product.price_was ?? 0) }}
                             </span>
                         </div>
                         <div class="text-caption dora-text-muted">
@@ -566,6 +566,7 @@
     import FilterBar from 'src/components/FilterBar.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
+    import { formatMoney } from 'src/composables/useMoney';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

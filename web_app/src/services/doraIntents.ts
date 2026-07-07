@@ -83,7 +83,7 @@ export type RecipeSnapshot = {
     cookTimeMinutes: number | null;
     isFavourite: boolean;
     ingredientStockItemIds: string[];
-    // FU-150 — names of dietary tags + tools so the handler can match
+    // names of dietary tags + tools so the handler can match
     // queries like "vegetarian recipe" / "I need an asian recipe"
     // without needing to resolve IDs at chat time. The snapshot stays
     // a pure data shape; the Pinia stores supply the names.
@@ -298,7 +298,7 @@ const FALLBACK_REPLIES = [
 
 // ── Local helpers for data intents ─────────────────────────────────────
 
-// FU-050 — sequence constants live in `helpers/stockStatus.ts` (R-003).
+// sequence constants live in `helpers/stockStatus.ts` (R-003).
 // The duplicates that previously sat here had drifted off the canonical
 // source and would have silently broken if either side changed.
 const EXPIRY_HORIZON_DAYS = 7;
@@ -647,7 +647,7 @@ export const INTENTS: ReadonlyArray<{
                   'where did i put', 'which location'],
     },
     {
-        // FU-150 — broaden the trigger list so dietary / cuisine /
+        // broaden the trigger list so dietary / cuisine /
         // time-of-day queries route here even without an explicit
         // "recipe for ..." preposition. "i need a vegetarian recipe"
         // / "i need an asian recipe" / "any breakfast ideas" all land
@@ -1120,7 +1120,7 @@ export async function runIntent(
         }
 
         case 'find_recipe': {
-            // FU-150 — instead of yanking the noun chunk after
+            // instead of yanking the noun chunk after
             // "recipe for"/"how to cook", filter the recipe list by
             // every term we recognise in the message. Substring-match
             // each candidate's name + cuisine + category +

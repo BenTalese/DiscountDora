@@ -84,7 +84,7 @@ FONT_SIZE_LG = "lg"
 FONT_SIZE_XL = "xl"  # A6 — extra-large step
 ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL)
 
-# P2-05 — grocery-budget period. `weekly` rolls from Monday; `monthly`
+# grocery-budget period. `weekly` rolls from Monday; `monthly`
 # from the 1st (local-civil-date for simplicity; the home use-case
 # doesn't justify timezone gymnastics).
 BUDGET_PERIOD_WEEKLY = "weekly"
@@ -116,7 +116,7 @@ VOICE_ENGINE_BROWSER = "browser"
 VOICE_ENGINE_PIPER = "piper"
 ALLOWED_VOICE_ENGINES = (VOICE_ENGINE_BROWSER, VOICE_ENGINE_PIPER)
 
-# C-9.7 — per-user alerts-email cadence (PROPOSAL_ALERTS §4.4). `off` is
+# per-user alerts-email cadence (PROPOSAL_ALERTS §4.4). `off` is
 # the absent-feature value (paired with `alerts_email_enabled=False` it's
 # the default for a fresh user — quiet until opted in). R-010 carve-out:
 # closed-set string sentinel, single validation point in `update_me.py`.
@@ -129,7 +129,7 @@ ALERTS_EMAIL_CADENCE_VALUES = (
     ALERTS_EMAIL_CADENCE_WEEKLY,
 )
 
-# FU-153 §7.4 — per-user LLM provider. Closed set validated at the
+# per-user LLM provider. Closed set validated at the
 # update_me boundary (R-010 carve-out, same shape as nutrition_mode /
 # alerts_email_cadence). Ollama is the local/free path; OpenAI /
 # Anthropic / Gemini are paid API providers that additionally require
@@ -181,14 +181,14 @@ class User(BaseEntity):
     # the cutoff a session cookie's issued-at must beat, so resetting a
     # password effectively invalidates every existing session.
     password_changed_at: datetime | None = None
-    # P2-05 — optional grocery budget. `budget_amount` NULL means the
+    # optional grocery budget. `budget_amount` NULL means the
     # feature is disabled (the user hasn't opted in); a positive value
     # turns on dashboard + assistant budget surfaces. `budget_period`
     # picks the rolling window. We deliberately don't store the period
     # *start* — it's derived from the current date so it can't go stale.
     budget_amount: float | None = None
     budget_period: str = BUDGET_PERIOD_WEEKLY
-    # P2-13 — voice opt-ins. Off by default because the Web Speech APIs
+    # voice opt-ins. Off by default because the Web Speech APIs
     # are permission-gated and behaviour varies by browser; we never
     # silently activate a microphone or speaker. The SPA reads these on
     # boot to seed the per-page toggles.
@@ -217,16 +217,16 @@ class User(BaseEntity):
     # "to cook by" sidebar line. Fresh households see a pure scheduling
     # surface; batch households opt in to the extra layer.
     batch_features_enabled: bool = False
-    # FU-316 — per-user "always ask which draft list on quick-add" toggle.
+    # per-user "always ask which draft list on quick-add" toggle.
     # Default False → the SPA's `useQuickAddTargetPick` remembers the picked
     # list for the tab session (current behaviour). True → the picker fires
     # every quick-add when more than one draft exists.
     always_ask_which_shopping_list: bool = False
-    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # target meal count for the sequential builder.
     # NULL = not set → the SPA falls back to its `BUILDER_TARGET_MEALS`
     # constant (7). Bounds (1–21) enforced at the update-me boundary.
     meals_per_week: int | None = None
-    # P8-07 — Zero-Input Pantry opt-out. Default True: inferred stock
+    # Zero-Input Pantry opt-out. Default True: inferred stock
     # levels (the belief overlay) are the headline experience. Charter 10 —
     # some users want purely manual control, so this toggle switches the
     # belief chip + inference-driven quick-checks off.
@@ -251,7 +251,7 @@ class User(BaseEntity):
     # NULL = not set (cook mode falls back to each recipe's own `servings`).
     # Read by RecipeCookMode to seed its per-session serving scaler (L44).
     household_headcount: int | None = None
-    # C-9.7 — alerts email digest (PROPOSAL_ALERTS §3.5 / §4.4). Off by
+    # alerts email digest (PROPOSAL_ALERTS §3.5 / §4.4). Off by
     # default (P10 Anti-creep + the proposal §5 "channels: in-app on; email
     # off (opt-in)"). When `alerts_email_enabled` is True, the scheduled
     # digest job (`send_alerts_digest`) runs at the user's `alerts_email_
@@ -276,7 +276,7 @@ class User(BaseEntity):
     # presentation belongs to the client) — we persist it verbatim so it
     # survives a cache clear and follows the user across devices.
     dashboard_layout: str | None = None
-    # FU-153 §7.1 / §7.4 — per-user assistant config. Replaces the
+    # per-user assistant config. Replaces the
     # singleton AppSetting.llm_* row. `llm_enabled` is the user's own
     # opt-in; the install-wide `AppSetting.master_llm_enabled` is layered
     # on top (both must be True for AI mode to fire). `llm_provider` is a

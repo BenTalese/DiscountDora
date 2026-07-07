@@ -1,4 +1,4 @@
-// C-9.8 — Web-push subscription state for the Preferences toggle.
+// Web-push subscription state for the Preferences toggle.
 //
 // Owns the four-state lifecycle a real Push toggle has to express:
 //   - unsupported    browser lacks ServiceWorker / PushManager / Notification

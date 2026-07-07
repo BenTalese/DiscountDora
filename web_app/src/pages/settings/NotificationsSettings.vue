@@ -58,7 +58,7 @@
 
         <hr class="settings-divider" />
 
-        <!-- C-9.7 — Alerts email digest. SMTP-gated (R-014). -->
+        <!-- Alerts email digest. SMTP-gated (R-014). -->
         <SettingsSection>
             <template #title>Alerts email digest</template>
             <template #description>
@@ -110,7 +110,7 @@
 
         <hr class="settings-divider" />
 
-        <!-- C-9.8 — Push notifications. VAPID-gated (R-014). -->
+        <!-- Push notifications. VAPID-gated (R-014). -->
         <SettingsSection>
             <template #title>Push notifications</template>
             <template #description>

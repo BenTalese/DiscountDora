@@ -1,5 +1,5 @@
 <template>
-    <!-- FU-189 — store logo. Resolution order:
+    <!-- store logo. Resolution order:
          1. The store's uploaded image (when has_image is true).
          2. A deterministic hash-swatch + initial pill, so unknown stores
             still render predictably without licensing risk. Dora ships

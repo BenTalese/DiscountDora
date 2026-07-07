@@ -86,7 +86,7 @@
     import { formatMoney } from 'src/composables/useMoney';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
-    // C-9.5 — the subscriptions tier on the Alerts hub. Surfaces + manages the
+    // the subscriptions tier on the Alerts hub. Surfaces + manages the
     // user's armed `PriceAlert`s; set-point creation stays on the price-history
     // explorer (R-007 — display/manage only, the scrape/ingestion side fires
     // them). Reuses the existing /price-history/alerts list+delete (R-003 — no

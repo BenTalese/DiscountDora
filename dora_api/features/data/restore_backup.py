@@ -360,7 +360,7 @@ class RestoreBackupHandler:
 @has_request_body(RestoreBackupRequest)
 def restore_backup():
     _Logger = logging.getLogger(__name__)
-    # FU-341 / FU-198 — restore inserts arbitrary rows across every
+    # restore inserts arbitrary rows across every
     # table (users, app_settings, historic offers). Any authenticated
     # caller could invoke it before; the gate closes that HIGH-severity
     # hole.

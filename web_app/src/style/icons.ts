@@ -179,7 +179,6 @@ export const ICONS = {
     compare_arrows: 'mdi-compare-horizontal',
     donut_large: 'mdi-chart-donut',
     drag_indicator: 'mdi-drag',
-    eco: 'mdi-leaf',
     emoji_emotions: 'mdi-emoticon-happy-outline',
     error: 'mdi-alert-circle',
     file_upload: 'mdi-file-upload',

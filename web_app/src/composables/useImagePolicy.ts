@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import HealthApiService from 'src/services/api/healthApiService';
 
-// FU-345 — install-wide image compression policy. Every upload site
+// install-wide image compression policy. Every upload site
 // funnels through `processImageFile`, which reads these values so
 // admins can tune quality / max-dimension in one place and every
 // surface (stock items, recipes, products, avatars, receipts, store

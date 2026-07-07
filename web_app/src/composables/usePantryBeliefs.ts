@@ -2,7 +2,7 @@ import { readonly, ref } from 'vue';
 import StockItemApiService from 'src/services/api/stockItemApiService';
 import type { PantryBelief } from 'src/models/pantryBelief';
 
-// P8-07 — module-level cache of the Zero-Input Pantry beliefs so the stock
+// module-level cache of the Zero-Input Pantry beliefs so the stock
 // overview (many rows) and the detail page share one fetch. Additive: the
 // belief is an overlay beside the recorded level, never a replacement.
 //

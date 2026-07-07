@@ -1,5 +1,5 @@
 <template>
-    <!-- FU-094 / R-022 — drag-and-drop reorder via `useDragDropList`.
+    <!-- drag-and-drop reorder via `useDragDropList`.
          The parent editor owns the drag state + sibling-pair predicate
          and passes per-row bindings down through `dragBindings`. The
          row spreads `rowProps` on its outer wrapper (drop target) and
@@ -26,7 +26,7 @@
                 {{ row.depth === 0 ? `Step ${row.sibling_index + 1}` : `↳ Sub-step ${row.sibling_index + 1}` }}
             </div>
             <q-space />
-            <!-- FU-117 — section picker, only when the recipe has named
+            <!-- section picker, only when the recipe has named
                  sections and only at depth 0 (sub-steps inherit visually
                  from their parent). Mirrors the ingredient row picker on
                  RecipeDetailPage. -->
@@ -148,7 +148,7 @@
         row: StepRowView;
         ingredientOptions: IngredientOption[];
         toolOptions: ToolOption[];
-        // FU-117 — section choices. Optional so callers without named
+        // section choices. Optional so callers without named
         // sections leave the picker entirely off-screen.
         sectionOptions?: SectionOption[];
         canAddSubStep: boolean;
@@ -198,7 +198,7 @@
         set: (v) => patch({ tool_ids: v ?? [] }),
     });
 
-    // FU-117 — section_client_id picker on top-level rows. q-select with
+    // section_client_id picker on top-level rows. q-select with
     // a null option ("(Main)") emits null when picked, no coercion needed.
     const sectionModel = computed<string | null>({
         get: () => props.row.section_client_id,

@@ -1,5 +1,5 @@
 <template>
-    <!-- P6-01 Chunk 4 — unified "New shopping list" surface. One composable
+    <!-- unified "New shopping list" surface. One composable
          form for empty / template / recipe / meal-plan starts, optional auto-
          fill from stock, and create-new-or-merge target. Reusable from the
          router landing page and the detail page (Chunk 5). -->
@@ -99,7 +99,7 @@
                 label="Name (optional)"
                 placeholder="Leave blank to use a default name"
             />
-            <!-- P6-01 Chunk 7 — optional shop day. The selector sort, the
+            <!-- optional shop day. The selector sort, the
                  router landing's "today's list" pick, and the shopping-day
                  banner all key off this. -->
             <q-input

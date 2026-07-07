@@ -137,7 +137,7 @@
                         </q-tooltip>
                         <q-tooltip v-else>Filter to this location</q-tooltip>
                     </button>
-                    <!-- P8-07 — Zero-Input Pantry inferred level (additive;
+                    <!-- Zero-Input Pantry inferred level (additive;
                          beside the recorded level, never replacing it). -->
                     <PantryBeliefChip :belief="belief" />
                 </div>
@@ -145,7 +145,7 @@
 
             <q-space />
 
-            <!-- P8-05 — "should I buy this?" verdict. Renders inline
+            <!-- "should I buy this?" verdict. Renders inline
                  left of the cart cluster because that's where the user
                  is deciding whether to add to the list. Silent on
                  low-confidence verdicts (Charter P3: don't dashboard
@@ -159,7 +159,7 @@
                 @action="(kind) => emit('verdict-action', item.stock_item_id, kind)"
             />
 
-            <!-- FU-227 chunk 3 — "Log a price" (G2: money-gated, left of
+            <!-- "Log a price" (G2: money-gated, left of
                  expiry). Opens the shared PriceEntry dialog. No emit
                  wiring beyond the optimistic close — the row's visible
                  surface doesn't depend on observations today; chunks 4/6
@@ -343,12 +343,12 @@
         (e: 'click', stockItemId: string): void;
         (e: 'bulk-toggle', stockItemId: string): void;
         (e: 'filter-location', stockLocationId: string): void;
-        // C-1 Chunk 5 / L72 — long-press enters bulk-select on mobile.
+        // long-press enters bulk-select on mobile.
         // The page owns the mode toggle; the row just reports the gesture.
         (e: 'long-press', stockItemId: string): void;
-        // C-1 Chunk 3 — `go-to-list` retired with the "On N lists" chip.
+        // `go-to-list` retired with the "On N lists" chip.
         // The cart button owns the list interaction now.
-        // P8-05 — buy-verdict badge emits its one-tap action up so the
+        // buy-verdict badge emits its one-tap action up so the
         // page can reuse the existing cart / stock-level mutation seams.
         (e: 'verdict-action', stockItemId: string,
             kind: 'add_to_list' | 'skip' | 'mark_stocked'
@@ -359,11 +359,11 @@
     const actions = useStockItemActions();
     const { moneyEnabled } = useMoneyEnabled();
     const { buyVerdictEnabled } = useBuyVerdictEnabled();
-    // P8-05 — fetch the verdict for this row (per-item cache in the
+    // fetch the verdict for this row (per-item cache in the
     // composable keeps re-mounts free). Show only medium/high
     // confidence: low-confidence noise on every row breaks Charter P3.
     const { verdict } = useBuyVerdict(props.item.stock_item_id);
-    // P8-07 — inferred belief for this row (shared module-level cache;
+    // inferred belief for this row (shared module-level cache;
     // loaded once by the overview). Null when inference is off or absent.
     const { beliefFor } = usePantryBeliefs();
     const belief = computed(() => beliefFor(props.item.stock_item_id));
@@ -372,10 +372,10 @@
         && verdict.value !== null
         && verdict.value.confidence !== 'low',
     );
-    // C-1 Chunk 6 / FU-033 — defensive fallback. If the bytes endpoint
+    // defensive fallback. If the bytes endpoint
     // 404s mid-render (race with a delete, transient error), drop the
     // <img> rather than show a broken icon — placeholder takes over.
-    // FU-125 — reset the latch when the image-version bumps (a new
+    // reset the latch when the image-version bumps (a new
     // upload may succeed where the previous attempt failed).
     const imgFailed = ref(false);
 
@@ -528,7 +528,7 @@
         'stock-row--warn': isWarnRow.value,
     }));
 
-    // C-1 Chunk 4 / L87 — restrict the date picker to today + future.
+    // restrict the date picker to today + future.
     // q-date passes each candidate date as `YYYY/MM/DD`; compare via
     // string ordering against today's ISO date for cheap correctness.
     const todayIsoSlash = computed(() => {
@@ -581,7 +581,7 @@
         }
     }
 
-    // C-7 Chunk 1 — cart button is now `AddToListButton`; the dead
+    // cart button is now `AddToListButton`; the dead
     // `cart` computed + `onCartClick` + `cartStateFor` import retired.
 
     // ── Essential toggle ────────────────────────────────────────────────
@@ -642,7 +642,7 @@
         }
     }
 
-    // C-1 Chunk 5 / L72 — long-press handler. Bubbles up so the parent
+    // long-press handler. Bubbles up so the parent
     // can decide whether to enter bulk-mode (mobile) or ignore (desktop).
     function onLongPress() {
         emit('long-press', props.item.stock_item_id);

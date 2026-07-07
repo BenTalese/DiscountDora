@@ -49,7 +49,7 @@ class LinkedProductDto:
     brand: str | None
     store_id: UUID
     store_name: str
-    # FU-189 carve-out: producer's SKU code, retained verbatim.
+    # producer's SKU code, retained verbatim.
     merchant_stockcode: str | None
     size: str | None
     web_url: str | None
@@ -91,9 +91,9 @@ class SubstituteDto:
     name: str
     stock_level_id: UUID | None
     stock_level_name: str | None
-    # FU-034 — free-text hint. NULL when the user didn't set one.
+    # free-text hint. NULL when the user didn't set one.
     notes: str | None
-    # FU-034 — optional structured ratio "qty_in of THIS item → qty_out of
+    # optional structured ratio "qty_in of THIS item → qty_out of
     # the substitute". The four fields are stored in the canonical pair's
     # A→B direction; the handler inverts here so consumers always see the
     # ratio from the viewing item's perspective. All four are None or all
@@ -111,7 +111,7 @@ class LevelChangeDto:
     stock_level_name: str | None
 
 
-# C-1b.5 / INV-7 — lifecycle timeline inputs. The frontend merges these
+# lifecycle timeline inputs. The frontend merges these
 # with `level_history` (and synthesises open/checked rows from current
 # state) into a single date-sorted q-timeline. Keeping them as separate
 # typed lists rather than a pre-merged union lets the client style each
@@ -175,7 +175,7 @@ class ExpiryEventDto:
     delta_days: int | None
 
 
-# FU-211 — free-text "what I actually buy" reminders (PROPOSAL_PRODUCTS_AS_OVERLAY
+# free-text "what I actually buy" reminders (PROPOSAL_PRODUCTS_AS_OVERLAY
 # §3.1). Everyday-user construct, separate from the Product overlay; always
 # present, never gated by the products/money features.
 @dataclass(frozen=True, slots=True)
@@ -184,7 +184,7 @@ class PreferredBuyDto:
     label: str
 
 
-# FU-227 chunk 2 — folded shape (A1) `{total_price, total_measure, unit}`
+# folded shape (A1) `{total_price, total_measure, unit}`
 # plus the A2 store surfacing ("Last seen at Coles") and A4-revised FK
 # provenance ("from <list>" when harvested from a shopping line at /finish).
 # Money-gated at the UI surfaces, not at the handler.
@@ -208,7 +208,7 @@ class PriceObservationDto:
     pack_count: int | None
 
 
-# FU-227 chunk 3 — what the PriceEntry widget seeds itself with on open (F2 —
+# what the PriceEntry widget seeds itself with on open (F2 —
 # "every field prefilled from latest observation so the common case is confirm
 # one number"). Resolved server-side so the SPA renders a label, not derived
 # logic. `source_label` is a short human string ("from your last log",
@@ -223,7 +223,7 @@ class PriceEntryPrefillDto:
     source_label: str
 
 
-# FU-227 chunk 4 — populated by `build_your_prices_for_item`. R-003: every
+# populated by `build_your_prices_for_item`. R-003: every
 # field is server-derived. `offers_sidecar` (LC-2) is a separate UI region
 # in the widget — "Current shelf prices: $X at Y" — and never folded into
 # the median.
@@ -265,7 +265,7 @@ class StockItemDetailDto:
     opened_on: date | None
     is_flagged: bool
     auto_add_when_low: bool
-    # FU-189 — usual store hint (nullable). Surfaced as a small picker on the
+    # usual store hint (nullable). Surfaced as a small picker on the
     # stock-item detail; drives the shopping-list grouping
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) when set.
     usual_store_id: UUID | None
@@ -274,7 +274,7 @@ class StockItemDetailDto:
     recipes: List[LinkedRecipeDto]
     substitutes: List[SubstituteDto]
     level_history: List[LevelChangeDto]
-    # C-1b.5 / INV-7 — last-N lifecycle inputs for the History tab. Capped
+    # last-N lifecycle inputs for the History tab. Capped
     # at the handler so the JSON stays light on busy items; older history
     # is intentionally not surfaced here (it lives in the waste-insights /
     # spend reports surfaces instead).
@@ -293,20 +293,20 @@ class StockItemDetailDto:
     # single honest footer — "N older events not shown" — instead of
     # silently truncating.
     history_older_count: int = 0
-    # FU-211 — free-text "what I buy" reminders (always present; not gated).
+    # free-text "what I buy" reminders (always present; not gated).
     preferred_buys: List[PreferredBuyDto] = field(default_factory=list)
-    # FU-213 — price observations + the server-derived per-unit cost (the
+    # price observations + the server-derived per-unit cost (the
     # client never divides — R-003). Money-gated at the UI, not here.
     price_observations: List[PriceObservationDto] = field(default_factory=list)
     unit_cost: float | None = None
-    # FU-227 chunk 3 — what the shared PriceEntry widget should seed itself
+    # what the shared PriceEntry widget should seed itself
     # with when opened (F2). Null when no prior observation exists. Resolved
     # server-side so the source label ("from your last log") stays consistent.
     price_entry_prefill: PriceEntryPrefillDto | None = None
-    # FU-227 chunk 3 placeholder (chunk 4 fills it for real). Until chunk 4,
-    # the widget reads None and renders the "Not enough price data yet" state.
+    # None until enough price data has accrued — the widget renders the
+    # "Not enough price data yet" state in that case.
     your_prices: YourPricesDto | None = None
-    # FU-056 — every barcode that resolves to this stock item, whether
+    # every barcode that resolves to this stock item, whether
     # registered directly (source=='direct') or via a linked Product
     # (source=='via_product'). Always present; the SPA gates the surface
     # on `features.scanning`.
@@ -314,11 +314,11 @@ class StockItemDetailDto:
     # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
     # the timeline whenever it differs from the most recent level change.
     last_checked_at: datetime | None = None
-    # C-1 Chunk 6 / FU-033 — image presence flag (own-image OR linked-
+    # image presence flag (own-image OR linked-
     # product image fallback). Bytes served via
     # `GET /stock-items/<id>/image`; never inlined in the JSON.
     has_image: bool = False
-    # FU-125 — true only when the stock item carries its OWN uploaded
+    # true only when the stock item carries its OWN uploaded
     # image (no fallback). Lets the detail page render "Add image" instead
     # of "Change image / Remove" when the preview is being served from a
     # linked product (there's nothing the user could "remove").
@@ -502,7 +502,7 @@ class GetStockItemDetailHandler:
             for c in _Changes[:HISTORY_PER_KIND_CAP]
         ]
 
-        # C-1b.5 / INV-7 — lifecycle inputs (read-only, capped).
+        # lifecycle inputs (read-only, capped).
         # Waste events: append-only log (P2-06); newest first.
         _Wastes = self.repository.get(StockItemWasteEvent).all(
             EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.STOCK_ITEM_ID).eq(stock_item_id)
@@ -661,7 +661,7 @@ class GetStockItemDetailHandler:
             for e in _ExpiryRows[:HISTORY_PER_KIND_CAP]
         ]
 
-        # FU-211 — free-text preferred buys for this item. FU-225 dropped
+        # free-text preferred buys for this item. FU-225 dropped
         # the `position` column and the manual reorder UI; sort alphabetically
         # (case-insensitive) for a stable, predictable order matching the SPA.
         _PreferredBuys = sorted(
@@ -677,7 +677,7 @@ class GetStockItemDetailHandler:
             key=lambda d: d.label.lower(),
         )
 
-        # FU-227 chunk 2 — folded-shape observations (newest first) + the
+        # folded-shape observations (newest first) + the
         # single server-owned per-unit cost (R-003 — client never divides).
         # Provenance / store names resolved server-side so the SPA renders
         # strings, not raw FKs.
@@ -734,7 +734,7 @@ class GetStockItemDetailHandler:
         ]
         _UnitCost = get_stock_item_unit_cost_at(_Observations)
 
-        # FU-227 chunk 3 (F2) — seed the PriceEntry widget from the most-recent
+        # seed the PriceEntry widget from the most-recent
         # observation. The "source_label" line picks the right human framing
         # based on the FK (provenance) — manual entries say "your last log",
         # harvested entries say "your last receipt".
@@ -755,7 +755,7 @@ class GetStockItemDetailHandler:
                 source_label=_SourceLabel,
             )
 
-        # FU-227 chunk 4 — server-derived baseline + signal (R-003: client
+        # server-derived baseline + signal (R-003: client
         # renders the booleans/numbers, never re-derives). Pure-function call
         # over already-loaded data via the repo.
         _YpRaw = build_your_prices_for_item(self.repository, stock_item_id)
@@ -777,7 +777,7 @@ class GetStockItemDetailHandler:
             ],
         )
 
-        # FU-189 — resolve the usual-store name for the detail DTO. Falls
+        # resolve the usual-store name for the detail DTO. Falls
         # back to None when the user hasn't picked one or the referenced
         # store has been deleted (the FK is SET NULL).
         _UsualStoreName: str | None = None
@@ -786,7 +786,7 @@ class GetStockItemDetailHandler:
             if _UsualStore is not None:
                 _UsualStoreName = _UsualStore.name
 
-        # FU-056 — gather every barcode that resolves to this stock item.
+        # gather every barcode that resolves to this stock item.
         # Two sources, merged + sorted by created_at descending:
         #   1. Direct registrations (Barcode.stock_item_id == this id)
         #   2. Indirect via a linked Product (StockItemProduct → Product
@@ -859,7 +859,7 @@ class GetStockItemDetailHandler:
 
             last_checked_at = _StockItem.last_checked_at,
             level_history = _LevelHistory,
-            # C-1 Chunk 6 / FU-033 — own-image OR any linked product image.
+            # own-image OR any linked product image.
             # `_LinkedProducts` already loaded above; checks are cheap.
             has_image = bool(_StockItem.image) or any(
                 bool(getattr(p, "image", None)) for p in (_StockItem.products or [])

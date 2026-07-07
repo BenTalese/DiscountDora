@@ -23,7 +23,7 @@ def _offer(price_now, price_was, *, is_selected=False):
 def _line(*, quantity=1, is_ticked=False, actual_unit_price=None,
           selected_product_id=None, offers=()):
     return ShoppingListLineDto(
-        # FU-136 — `product_id` became required on the DTO when Cart
+        # `product_id` became required on the DTO when Cart
         # Button Chunk 3 added the standalone-product anchor. These
         # tests exercise totals only, so product_id is irrelevant —
         # pass None and keep the test stub current.

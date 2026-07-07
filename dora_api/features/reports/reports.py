@@ -78,7 +78,7 @@ _Logger = logging.getLogger(__name__)
 # Range tokens accepted on every endpoint with a `range=` query. Mapped to
 # a lower bound (UTC) or None for "all time". `1y`/`2y`/`5y` are flat
 # 365-day multiples rather than calendar years so the chart axis is stable.
-# P8-09 added 2y/5y so the Memory section can answer "dairy up 8% over 2 years".
+# 2y/5y are what the Memory section reads for "dairy up 8% over 2 years".
 _RANGE_DAYS = {
     "30d": 30,
     "90d": 90,
@@ -211,7 +211,7 @@ class StockValueOverTimeHandler:
             for pid in prices_by_product:
                 prices_by_product[pid].sort(key=lambda r: r[0])
 
-        # FU-216 — price observations per item, for the fallback when an item
+        # price observations per item, for the fallback when an item
         # has no linked-product price as-of a bucket (PROPOSAL §3.2).
         observations_by_item: Dict[UUID, list] = {}
         _ItemIds = [i.id for i in items]
@@ -256,7 +256,7 @@ class StockValueOverTimeHandler:
                 linked = product_ids_by_item.get(item.id) or []
                 price = _cheapest_as_of(linked, cursor, prices_by_product) if linked else None
                 if price is None:
-                    # FU-216 — fall back to the item's own price observations
+                    # fall back to the item's own price observations
                     # (everyday substrate; PROPOSAL_PRODUCTS_AS_OVERLAY §3.2)
                     # when there's no linked-product price as-of this bucket.
                     price = get_stock_item_unit_cost_at(

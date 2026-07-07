@@ -17,7 +17,7 @@ _STORE_ROUTE = 'http://localhost:5170/api/stores'
 
 @pytest.fixture(scope="module", autouse=True)
 def _seed_stores(api):
-    # FU-189a: `/api/products` no longer auto-creates stores on an unknown
+    # `/api/products` no longer auto-creates stores on an unknown
     # name. The legacy tests POST products against fixed names ("Woolworths"
     # + "ReuseMerchant"); seed those once so the strict no-auto-create
     # contract is exercised without each test having to set up the store
@@ -597,7 +597,7 @@ def test__get_products__PaginationSecondPage__ReturnsCorrectSlice(api):
 
 
 def test__get_products__PageWithoutLimit__DefaultsLimit(api):
-    # FU-166: page/limit are now independently optional (limit defaults to 50).
+    # page/limit are now independently optional (limit defaults to 50).
     _Response = requests.get(f'{base_route}?page=1')
 
     assert _Response.status_code == 200

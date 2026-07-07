@@ -169,7 +169,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[stockItemIndex] = await stockItemApiService.getAsync(stock_item_id);
         }
         clearRollbacks();
-        // FU-315 — level transition may have triggered the auto-add hook.
+        // level transition may have triggered the auto-add hook.
         await handleAutoAddedResponse(stock_item_id, result);
     }
 
@@ -200,10 +200,10 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[idx] = refreshed;
             stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
         }
-        // FU-125 — bump the image version when the PATCH touched the image
+        // bump the image version when the PATCH touched the image
         // so every surface displaying this item refetches the bytes.
         if ('image' in cmd) bumpImageVersion(stock_item_id);
-        // FU-315 — `saveField`-style level changes on the detail page also
+        // `saveField`-style level changes on the detail page also
         // go through this path (they carry `stock_level_id`), so the
         // auto-add hook can fire here too.
         await handleAutoAddedResponse(stock_item_id, result);

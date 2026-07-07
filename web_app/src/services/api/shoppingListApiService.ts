@@ -351,7 +351,7 @@ export default class ShoppingListApiService {
             `/shopping-lists/frequently-added?limit=${limit}`,
         );
 
-    // FU-334 — receipt-photo record-keeping. The image is sent as a
+    // receipt-photo record-keeping. The image is sent as a
     // `data:image/...;base64,...` string produced by `processImageFile`
     // (R-003 centralised pipeline) — DO NOT bypass that helper.
     addAttachmentAsync = async (

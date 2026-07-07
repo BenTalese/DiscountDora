@@ -39,13 +39,13 @@ class StockItemDto:
     is_open: bool
     opened_on: date | None
     last_checked_at: datetime | None
-    # C-1 Chunk 6 / FU-033 — whether the row has an image to render. The
+    # whether the row has an image to render. The
     # bytes themselves never travel in the list/detail JSON (the `image`
     # column is deferred); the SPA fetches them via
     # `GET /stock-items/<id>/image`, which itself falls back to a linked
     # Product's image when the stock item has none. Hydrated below.
     has_image: bool = False
-    # C-7 Chunk 2 — count of linked products. Drives the "2+ products →
+    # count of linked products. Drives the "2+ products →
     # combined choice modal" decision in `AddToListButton`. 0 = generic
     # stock-item line (no offer); 1 = preselect; 2+ = open QuickAddSheet
     # so the user picks the offer + (if relevant) the target list in one

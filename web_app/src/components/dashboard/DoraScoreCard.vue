@@ -1,12 +1,11 @@
 <template>
-    <!-- P8-08 — dashboard's kitchen-health card. Reads the composite +
+    <!-- dashboard's kitchen-health card. Reads the composite +
          five-component breakdown from `useDoraScore()`; renders each
          component as a mini-bar chip that links to a remediating
          action (charter: every weak component should nudge toward the
          feature that improves it, never shame). -->
     <DashboardCard :icon="ICONS.favorite">
         <template #title>
-            <!-- FU-044 chip -->
             Kitchen health
             <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
                 <q-tooltip>

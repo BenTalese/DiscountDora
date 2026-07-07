@@ -155,7 +155,7 @@ class DoraConfig:
         return _env_int("DORA_API_PORT", self._config.API_PORT)
 
     def get_db_connection_string(self) -> str:
-        # FU-045 — Postgres is the standard datastore (Decision 5,
+        # Postgres is the standard datastore (Decision 5,
         # RECONCILED_FINISHING_PLAN.md §7.5). Resolution order:
         #   1. `DORA_DB_URL` if set — full override, any SQLAlchemy URL.
         #      Use this when pointing at a remote Postgres, a custom

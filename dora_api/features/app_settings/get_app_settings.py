@@ -15,11 +15,11 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 @dataclass(frozen=True, slots=True)
 class AppSettingsDto:
-    # FU-153 §7.1 — install-wide master kill-switch (replaces the
+    # install-wide master kill-switch (replaces the
     # per-install LLM URL/model/enabled config, which moved to User).
     master_llm_enabled: bool
     scanning_enabled: bool
-    # P8-05 — buy-verdict oracle toggle.
+    # buy-verdict oracle toggle.
     buy_verdict_enabled: bool
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
@@ -36,23 +36,23 @@ class AppSettingsDto:
     expiring_soon_window_days: int
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     product_search_url: str
-    # FU-227 follow-up — AU vs US per-unit display locale.
+    # AU vs US per-unit display locale.
     unit_pricing_locale: str
-    # FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47).
+    # install-wide currency (ISO 4217) + display locale (BCP-47).
     # Layer A of PROPOSAL_LOCALE_I18N; also mirrored on /api/health so
     # every client session (not just admin) reads them.
     currency: str
     locale: str
-    # FU-342 — backup library controls. See AppSetting entity.
+    # backup library controls. See AppSetting entity.
     backup_retention_count: int
     backup_storage_path: str
-    # FU-345 — image compression knobs. See AppSetting entity.
+    # image compression knobs. See AppSetting entity.
     image_quality: int
     image_max_dimension: int
     # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     stocktake_default_cadence_band: str
     stocktake_auto_tuning_enabled: bool
-    # FU-333 Buckets B + C — operational config (was `DORA_*` env vars).
+    # operational config (was `DORA_*` env vars).
     # Bucket-C secrets (SMTP password, VAPID private key) are stored
     # encrypted-at-rest on the row; the DTO exposes a `<field>_configured`
     # bool instead of the ciphertext so the admin UI can show Set / Change

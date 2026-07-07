@@ -168,7 +168,7 @@
         }
     }
 
-    // P8-10 — surface the live backend URL (which now includes the
+    // surface the live backend URL (which now includes the
     // Capacitor/localStorage runtime override), not just the build-time
     // env, so a user who swapped instances from Settings sees the change.
     const currentBackend = ref(getBackendBaseUrl());

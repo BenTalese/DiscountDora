@@ -53,7 +53,7 @@
             />
         </div>
 
-        <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe
+        <!-- Import-from-URL on the overview's New-Recipe
              surface. FU-102: dialog chrome extracted to a shared component;
              this page wires the imported DTO to `createAsync` + nav.
              IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — the PWA share target
@@ -95,7 +95,7 @@
             <FilterChip v-model="inStockOnly" :icon="ICONS.inventory_2" active-color="primary">
                 Have meals in pool
             </FilterChip>
-            <!-- FU-081 — tri-state: click 1 = Planned only, click 2 = Not
+            <!-- tri-state: click 1 = Planned only, click 2 = Not
                  planned only, click 3 = off. Single chip cycles through; the
                  active filter count + Clear filters cover both modes. -->
             <TriStateFilterChip
@@ -117,7 +117,7 @@
 
             <q-separator vertical class="q-mx-sm" />
 
-            <!-- FU-083 — :hint removed; the under-input copy was just
+            <!-- :hint removed; the under-input copy was just
                  padding out the filter row's height and offsetting
                  alignment without adding info. -->
             <q-input
@@ -140,7 +140,7 @@
                 label="Missing ingredients ≤"
                 hide-bottom-space
             />
-            <!-- C-4 Chunk 9 — kcal upper-bound filter (gated). -->
+            <!-- kcal upper-bound filter (gated). -->
             <q-input
                 v-if="nutritionEnabled"
                 v-model.number="kcalMax"
@@ -187,7 +187,7 @@
                 :options="categoryOptions"
                 label="Category"
             />
-            <!-- FU-148 — time-of-day single-select. §1.12: vocabulary
+            <!-- time-of-day single-select. §1.12: vocabulary
                  sourced from DEFAULT_MEAL_SLOTS (shared with meal-plans
                  PROPOSAL_MEAL_PLANS.md §4). -->
             <q-select
@@ -214,7 +214,7 @@
                 :options="DIFFICULTY_OPTIONS"
                 label="Difficulty"
             />
-            <!-- FU-149 — "# ingredients ≤" numeric cap. Pairs with the
+            <!-- "# ingredients ≤" numeric cap. Pairs with the
                  new sort axis below. -->
             <q-input
                 v-model.number="ingredientsMax"
@@ -226,7 +226,7 @@
                 label="# ingredients ≤"
                 hide-bottom-space
             />
-            <!-- FU-083 follow-up — Uses / Doesn't use ingredients consolidated
+            <!-- Uses / Doesn't use ingredients consolidated
                  into the shared TriStateFilter, with `searchable` for the
                  large stock-item set and a per-row stock-level colour dot.
                  Single button (+/-) replaces the two paired q-selects. -->
@@ -254,7 +254,7 @@
                 v-model:include="toolsInclude"
                 v-model:exclude="toolsExclude"
             />
-            <!-- FU-083 — old "Free from ingredient(s)" free-text input
+            <!-- old "Free from ingredient(s)" free-text input
                  removed; its concern is now covered by the "Doesn't use"
                  stock-item picker above (paired with "Uses ingredients" as a
                  +/- filter on the same option source). Untracked-name
@@ -275,7 +275,7 @@
                 label="Sort by"
                 style="min-width: 180px"
             />
-            <!-- FU-083 — direction toggle. Icon flips between
+            <!-- direction toggle. Icon flips between
                  arrow-up (asc) and arrow-down (desc). Tooltip explains
                  the current axis's meaning in the chosen direction. -->
             <BaseButton
@@ -289,7 +289,7 @@
             </div>
             </template>
         </FilterBar>
-        <!-- P2-08 — disclaimer surfaced when any dietary filter is on.
+        <!-- disclaimer surfaced when any dietary filter is on.
              Pulled from the backend so the wording stays consistent
              between the SPA and Dora. -->
         <div
@@ -438,7 +438,7 @@
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
     const shoppingListStore = useShoppingListStore();
-    // FU-081 — meal-plan store dependency dropped: `is_planned` is
+    // meal-plan store dependency dropped: `is_planned` is
     // server-derived now, and the page never read the cache otherwise.
     // Saves one round-trip on cookbook overview load.
     const recipeVocabStore = useRecipeVocabStore();
@@ -452,7 +452,7 @@
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
     const { showRecipeImages, setRecipeImages } = useImagePrefs();
-    // C-4 Chunk 9 — nutrition flag gates the kcal axis + filter.
+    // nutrition flag gates the kcal axis + filter.
     const { nutritionEnabled } = useNutritionMode();
     const SORT_OPTIONS = computed<{ label: string; value: SortKey }[]>(() =>
         nutritionEnabled.value
@@ -483,7 +483,7 @@
     const loading = ref(false);
 
     // ── Filter state ────────────────────────────────────────────────
-    // FU-121: expanded state persisted per-page (mobile always starts hidden).
+    // expanded state persisted per-page (mobile always starts hidden).
     const filtersExpanded = useFilterPanelExpanded('cookbook-overview');
     // A8 §3 nav-state — filters/search/sort survive navigation within the
     // session and reset on full reload. Non-persisted (fetch-in-flight,
@@ -493,7 +493,7 @@
         favouritesOnly: ref(false),
         cookableNowOnly: ref(false),
         inStockOnly: ref(false),
-        // FU-081 — tri-state: 'off' = no constraint; 'include' = only planned
+        // tri-state: 'off' = no constraint; 'include' = only planned
         // recipes (any future un-consumed MealPlanEntry); 'exclude' = only
         // un-planned recipes. Cycles via TriStateFilterChip.
         plannedFilterState: ref<TriState>('off'),
@@ -505,22 +505,22 @@
         // v-model.number; predicates guard on Number.isFinite.
         missingMax: ref<number | null>(null),
         mealCountMin: ref<number | null>(null),
-        // C-4 Chunk 9 — "Kcal ≤" filter (only renders when nutrition opt-in
+        // "Kcal ≤" filter (only renders when nutrition opt-in
         // is on). Recipes with no kcal value pass through.
         kcalMax: ref<number | null>(null),
         collectionFilter: ref<string | null>(null),
         // L235 — cuisine + category are distinct single-select id filters.
         cuisineFilter: ref<string | null>(null),
         categoryFilter: ref<string | null>(null),
-        // FU-148 — time-of-day single-select. Null = no filter.
+        // time-of-day single-select. Null = no filter.
         timeOfDayFilter: ref<string | null>(null),
         // §1.7 — difficulty single-select. Null = no filter.
         difficultyFilter: ref<Difficulty | null>(null),
-        // FU-149 — "# ingredients ≤" cap.
+        // "# ingredients ≤" cap.
         ingredientsMax: ref<number | null>(null),
         // Set via the "Uses ingredients" picker OR via `?usesStockItem=` query.
         usesStockItemIds: ref<string[]>([]),
-        // FU-083 — "Doesn't use" pair. Combine with AND.
+        // "Doesn't use" pair. Combine with AND.
         excludesStockItemIds: ref<string[]>([]),
     }));
     const {
@@ -543,10 +543,10 @@
         | 'ingredient_count'
         | 'difficulty';
     type SortDir = 'asc' | 'desc';
-    // C-4 Chunk 9 — "Kcal" axis added when the nutrition opt-in is on.
+    // "Kcal" axis added when the nutrition opt-in is on.
     // The sort menu options are computed below; the static list keeps
     // the always-on axes.
-    // C-2.A — time-of-day reads the household meal-slot vocabulary
+    // time-of-day reads the household meal-slot vocabulary
     // (MealSlot table), falling back to the seed constant only before the
     // store's first load.
     const TIME_OF_DAY_OPTIONS = computed(() =>
@@ -559,12 +559,12 @@
     const STATIC_SORT_OPTIONS: { label: string; value: SortKey }[] = [
         { label: 'Name', value: 'name' },
         { label: 'Recently made', value: 'last_made' },
-        // FU-082 — Recently added is the fifth IMPL_PLAN_COOKBOOK Chunk 1
+        // Recently added is the fifth IMPL_PLAN_COOKBOOK Chunk 1
         // axis; landed once Recipe.created_at became available on the DTO.
         { label: 'Recently added', value: 'created_at' },
         { label: 'Meals in pool', value: 'meal_count' },
         { label: 'Prep + cook time', value: 'total_time' },
-        // FU-149 — sort by ingredient count (fewer ingredients first
+        // sort by ingredient count (fewer ingredients first
         // is the common "make this quick" intent; the asc/desc toggle
         // covers the other direction).
         { label: '# ingredients', value: 'ingredient_count' },
@@ -573,7 +573,7 @@
     ];
     const cookbookSortState = useListState('cookbook-overview:sort', () => ({
         sortBy: ref<SortKey>('name'),
-        // FU-083 — explicit asc/desc toggle. Default per axis: name = asc,
+        // explicit asc/desc toggle. Default per axis: name = asc,
         // everything else = desc.
         sortDir: ref<SortDir>('asc'),
     }));
@@ -623,13 +623,13 @@
     }
 
 
-    // FU-081 — `is_planned` is now server-owned (RecipeDto field,
+    // `is_planned` is now server-owned (RecipeDto field,
     // derived from MealPlanEntry rows in the same query that fills
     // `committed_meals`). The client predicate reads it directly; the
     // old client-side walk of `mealPlanStore.mealPlans[].entries[]`
     // with timezone-juggling on `scheduled_for` is retired.
 
-    // FU-083 — hint computeds removed (the input labels carry the meaning;
+    // hint computeds removed (the input labels carry the meaning;
     // the hint-under-input text was just inflating the filter row).
 
     // A7 — sticky footer counts over the FILTERED view.
@@ -660,7 +660,7 @@
     ]);
 
     // ── Ingredient (stock-item) filter options ──────────────────────
-    // FU-083 follow-up — used by the shared TriStateFilter (the +/-
+    // used by the shared TriStateFilter (the +/-
     // partner replaces the old two paired q-selects). The component
     // owns the search input AND the sort selector (name / stock level)
     // — we hand it the full options list with a `dotColour` per row
@@ -670,7 +670,7 @@
         stockItems.value.map((si) => ({
             value: si.stock_item_id,
             label: si.name,
-            // FU-050 — sequence-keyed (R-003). `si.stock_level_sequence`
+            // sequence-keyed (R-003). `si.stock_level_sequence`
             // is null on untracked items → null dotColour, which the
             // TriStateFilter renders as a muted dot.
             dotColour: colourForSequence(si.stock_level_sequence ?? null),
@@ -710,7 +710,7 @@
             if (favouritesOnly.value && !r.is_favourite) return false;
             if (cookableNowOnly.value && !r.cookable) return false;
             if (inStockOnly.value && r.available_meals <= 0) return false;
-            // FU-081 — tri-state: include keeps only planned; exclude keeps
+            // tri-state: include keeps only planned; exclude keeps
             // only un-planned; off is no constraint.
             if (plannedFilterState.value === 'include' && !r.is_planned) return false;
             if (plannedFilterState.value === 'exclude' && r.is_planned) return false;
@@ -742,7 +742,7 @@
             ) {
                 return false;
             }
-            // C-4 Chunk 9 — "Kcal ≤" filter. Only active when nutrition
+            // "Kcal ≤" filter. Only active when nutrition
             // is enabled. Recipes without a kcal value pass through (we
             // don't penalise unannotated recipes).
             if (
@@ -772,7 +772,7 @@
             if (categoryFilter.value !== null && r.category_id !== categoryFilter.value) {
                 return false;
             }
-            // FU-148 — time-of-day single-select. Null = no filter; a
+            // time-of-day single-select. Null = no filter; a
             // recipe with null time_of_day fails any non-null filter
             // (matches the user intent of "show me breakfast recipes",
             // not "show me everything tagged breakfast OR unset").
@@ -785,7 +785,7 @@
             if (difficultyFilter.value !== null && r.difficulty !== difficultyFilter.value) {
                 return false;
             }
-            // FU-149 — "# ingredients ≤" cap. Blank/NaN reverts to no
+            // "# ingredients ≤" cap. Blank/NaN reverts to no
             // filter (matches L234 blank-input rule).
             if (
                 ingredientsMax.value !== null
@@ -819,7 +819,7 @@
                 const has = new Set(r.tool_ids ?? []);
                 if (toolsExclude.value.some((t) => has.has(t))) return false;
             }
-            // FU-083 — "Doesn't use" stock-item picker (the +/- partner to
+            // "Doesn't use" stock-item picker (the +/- partner to
             // "Uses ingredients"). Recipe is excluded if any picked id is in
             // its ingredient set. Replaces the old free-text path.
             if (excludesStockItemIds.value.length > 0) {
@@ -830,7 +830,7 @@
         }),
     );
 
-    // FU-083 — explicit asc/desc direction. Null sentinels (last_made,
+    // explicit asc/desc direction. Null sentinels (last_made,
     // total_time) always sink to the bottom regardless of direction —
     // the user doesn't want a wall of "—" at the top when toggling to
     // newest-first. Name is the universal tiebreaker.
@@ -862,7 +862,7 @@
                     return av.localeCompare(bv) * dirSign;
                 }
                 case 'created_at': {
-                    // FU-082 — never null on rows from the API (DTO field
+                    // never null on rows from the API (DTO field
                     // is always populated post-backfill); ISO-8601 strings
                     // sort lexicographically. Tie-break alphabetical.
                     const c = a.created_at.localeCompare(b.created_at);
@@ -891,7 +891,7 @@
                     return (av - bv) * dirSign;
                 }
                 case 'ingredient_count': {
-                    // FU-149 — neither side is null (ingredients[] is
+                    // neither side is null (ingredients[] is
                     // always at least []), so no sentinel-sink handling.
                     const av = a.ingredients.length;
                     const bv = b.ingredients.length;
@@ -1032,7 +1032,7 @@
         }
     });
 
-    // FU-083 — when the user picks a new sort axis, snap to its
+    // when the user picks a new sort axis, snap to its
     // conventional direction so the first thing they see makes sense
     // (recently-made → newest first; name → A→Z; etc). They can still
     // flip with the direction button.
@@ -1048,7 +1048,7 @@
                 : 'desc';
     });
 
-    // C-4 Chunk 9 — if the user had Kcal as their sort axis and then the
+    // if the user had Kcal as their sort axis and then the
     // nutrition opt-in flips off (admin disable, or user picks Off in
     // Settings), snap back to Name so the picker doesn't show an
     // orphaned value.
@@ -1133,7 +1133,7 @@
         editDialogOpen.value = true;
     }
 
-    // C-4 Chunk 7 — overview-side URL importer. Mirrors the detail-page
+    // overview-side URL importer. Mirrors the detail-page
     // flow (which overwrites the current recipe); here we *create* a new
     // recipe from the import preview and route into its detail page so the
     // user can finish the cleanup.
@@ -1336,7 +1336,7 @@
         }
     }
 
-    // FU-095 (2026-07-06) — the modal is a stub-creator. On create,
+    // the modal is a stub-creator. On create,
     // close and navigate straight to the detail page so the user can
     // flesh the recipe out (ingredients, steps, image, times, tags)
     // without hunting the list. On update (rename/reclassify from
@@ -1378,14 +1378,14 @@
                 recipeStore.ensureCollectionsLoadedAsync(),
                 stockItemStore.ensureLoadedAsync(),
                 shoppingListStore.ensureLoadedAsync(),
-                // FU-081 — `is_planned` is now server-derived (RecipeDto
+                // `is_planned` is now server-derived (RecipeDto
                 // field), so this page no longer needs to fetch meal plans
                 // for the "Planned" filter. The store hydration is left to
                 // other surfaces that genuinely need it.
-                // C-4 Chunk 2 — vocabularies for the cuisine/category/dietary
+                // vocabularies for the cuisine/category/dietary
                 // filters (sourced from the editable settings tables).
                 recipeVocabStore.ensureLoadedAsync(),
-                // C-2.A — household meal-slot vocabulary for the time-of-day filter.
+                // household meal-slot vocabulary for the time-of-day filter.
                 mealSlotStore.ensureLoadedAsync(),
                 // Disclaimer text for the dietary filter. Errors non-fatal.
                 recipeApi.getTagCatalogueAsync()

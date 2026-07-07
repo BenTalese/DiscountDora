@@ -6,7 +6,7 @@ from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
 
-# FU-166: list endpoints take query options on the query string and return a
+# list endpoints take query options on the query string and return a
 # `{items, total, page, limit}` envelope; query-option errors come back via
 # `bad_request(str(exc))` (message in `title`). Seed provisions 4 stores
 # (Woolworths, Coles, Aldi, IGA). FU-189: the entity was renamed
@@ -176,7 +176,7 @@ def test__get_stores__LimitValueIsNotInteger__IsBadRequest(api):
 
 
 def test__get_stores__PageWithoutLimit__DefaultsLimit(api):
-    # FU-166: page/limit are now independently optional (limit defaults to 50).
+    # page/limit are now independently optional (limit defaults to 50).
     _Response = requests.get(f'{base_route}?page=1')
 
     assert _Response.status_code == 200

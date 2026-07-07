@@ -87,7 +87,7 @@ def assert_envelope(response, *, expect_total: int | None = None) -> list:
 
 
 def is_valid_datetime(value, format=None):
-    # FU-166 / ADR-007: the API now serialises datetimes as ISO 8601
+    # the API now serialises datetimes as ISO 8601
     # (`datetime.isoformat()`), which may carry microseconds and/or an offset.
     # With no explicit format, validate via `fromisoformat` (handles those);
     # an explicit `format` still uses strptime for callers that need it.

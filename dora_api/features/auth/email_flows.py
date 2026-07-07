@@ -255,7 +255,7 @@ def reset_password():
 class ChangeEmailRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     new_email: str = Field(min_length=1, max_length=255)
-    # FU-197 — proof-of-possession. Matches the shape of
+    # proof-of-possession. Matches the shape of
     # ChangePasswordRequest so the two sensitive flows stay symmetric:
     # neither succeeds without re-proving the current password.
     current_password: str = Field(min_length=1, max_length=255)
@@ -284,7 +284,7 @@ def request_email_change():
         session.clear()
         return unauthorized()
 
-    # FU-197 — re-prove the current password before letting the request
+    # re-prove the current password before letting the request
     # proceed. Pairs with the new CSRF defence in middleware: even with
     # both layers a remote attacker would still need the victim's
     # password to flip their email.
@@ -309,7 +309,7 @@ def request_email_change():
         payload=new_email,
     )
 
-    # FU-197 — notify the OLD address that a change was requested
+    # notify the OLD address that a change was requested
     # *before* sending the confirmation to the new one. Even if a
     # future hole lets an attacker through both prior guards, the
     # legitimate owner sees a heads-up at the address they currently

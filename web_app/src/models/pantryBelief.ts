@@ -1,4 +1,4 @@
-// P8-07 — Zero-Input Pantry belief (server-owned inference; R-003).
+// Zero-Input Pantry belief (server-owned inference; R-003).
 // The client only renders this — the band/confidence/reason are computed
 // server-side from purchases + cooking + cadence + time decay.
 

@@ -84,7 +84,7 @@ class GetMealPlansHandler:
         self.repository = SqlAlchemyRepository()
 
     def _base_query(self):
-        # FU-314 — Recipe.cuisine / Recipe.category are noload now; the
+        # Recipe.cuisine / Recipe.category are noload now; the
         # MealPlanEntryDto reads both, so chain sibling then_includes off
         # the entry.recipe path. Re-`include(ENTRIES)` resets the chain
         # so each `then_include` starts fresh (see get_recipes._base_query

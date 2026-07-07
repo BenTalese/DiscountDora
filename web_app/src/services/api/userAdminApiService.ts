@@ -20,7 +20,7 @@ export type AdminUpdateUserCommand = {
     deals_email_enabled?: boolean;
 };
 
-// FU-461 resolve pass (2026-07-06) — admin-create counterpart to
+// admin-create counterpart to
 // `/auth/register`. Server mints a one-time password + returns it once;
 // admin relays it out-of-band. No verification email; the admin
 // implicitly vouches.

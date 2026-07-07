@@ -70,7 +70,7 @@ class RecipeIngredientDto:
     # client never matches a stock-level name to decide cookability.
     is_missing: bool
     is_low_stock: bool
-    # C-4 Chunk 10 — nullable section grouping. NULL = implicit "main"
+    # nullable section grouping. NULL = implicit "main"
     # group; the client uses this to bucket ingredients under the named
     # section headers from `RecipeDto.sections`.
     section_id: UUID | None
@@ -136,7 +136,7 @@ class RecipeStepDto:
     hint: str | None
     ingredient_ids: List[UUID]
     tool_ids: List[UUID]
-    # C-4 Chunk 10 — top-level steps may belong to a section; NULL = main.
+    # top-level steps may belong to a section; NULL = main.
     # Sub-steps carry the same section_id as their parent for cheap reads.
     section_id: UUID | None = None
 
@@ -164,20 +164,20 @@ class RecipeDto:
     # commitment — NOT floored, unlike unallocated_meals). Lets the UI show a
     # shortfall (committed > available) in red. Hydrated post-query.
     committed_meals: int
-    # C-2.I — "haven't had in a while" (last_made_on NULL or older than the
+    # "haven't had in a while" (last_made_on NULL or older than the
     # household 21-day window) + how often this recipe appears across meal
     # plans ("frequently planned"). Both hydrated post-query — the server owns
     # the window + the count (R-003); the client just renders the trays.
     not_made_recently: bool
     plan_count: int
-    # FU-081 — true iff at least one MealPlanEntry for this recipe is
+    # true iff at least one MealPlanEntry for this recipe is
     # scheduled today or later AND not yet consumed. Server-owned (R-003)
     # so the cookbook's "Planned" / "Not planned" filter doesn't need to
     # walk every meal plan client-side. Hydrated alongside the existing
     # `committed_meals` derivation in `_hydrate_unallocated` (same query
     # — zero extra round-trip).
     is_planned: bool
-    # C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
+    # cuisine + category are FK vocabularies. The id drives the
     # edit-form selects + client filters; the name is carried for cheap
     # display (card subtitle, search, export) without a client-side join.
     cuisine_id: UUID | None
@@ -192,18 +192,18 @@ class RecipeDto:
     prep_time_minutes: int | None
     recipe_collection_id: UUID | None
     servings: int | None
-    # C-4 Chunk 7 — origin URL when the recipe was imported.
+    # origin URL when the recipe was imported.
     source: str | None
     time_of_day: str | None
-    # C-4 Chunk 8 — version sibling group. NULL means singleton. List
+    # version sibling group. NULL means singleton. List
     # endpoint sets `version_group_id` (cheap); detail endpoint also
     # populates `version_siblings[]` (the other recipes sharing the id).
     version_group_id: UUID | None
-    # C-4 Chunk 9 — simple nutrition (kcal). Stored per-recipe; the
+    # simple nutrition (kcal). Stored per-recipe; the
     # client gates the render on the C-cross nutrition opt-in. NULL when
     # the user hasn't typed one.
     kcal: int | None
-    # FU-082 — when the recipe was added to this household. Drives the
+    # when the recipe was added to this household. Drives the
     # cookbook "Recently added" sort axis. Never null on a row that came
     # through the create handlers (which stamp it) or through the
     # backfill migration f9d3a7c2b5e8.
@@ -223,7 +223,7 @@ class RecipeDto:
     # client render a "Missing: flour, eggs" hint without rejoining the
     # ingredient tree or the stock-level table.
     missing_stock_item_names: List[str]
-    # C-4 Chunk 5: whether the recipe has an image (the bytes are served via
+    # whether the recipe has an image (the bytes are served via
     # GET /recipes/<id>/image, never inlined in list/detail JSON).
     has_image: bool
     # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of REQUIRED ingredients
@@ -231,23 +231,23 @@ class RecipeDto:
     # "N ingredients need linking" prompt and the shopping-list
     # "add missing" flow's linking-first message.
     unlinked_ingredient_count: int = 0
-    # C-4 Chunk 2/5: dietary tag + tool ids. Empty list when none. Hydrated by
+    # dietary tag + tool ids. Empty list when none. Hydrated by
     # the handler after the base query — mutable so `from_entity` stays
     # agnostic of association loading.
     dietary_tag_ids: List[UUID] = field(default_factory=list)
     tool_ids: List[UUID] = field(default_factory=list)
-    # C-4 Chunk 6: structured steps. The list endpoint sets only
+    # structured steps. The list endpoint sets only
     # `has_structured_steps` (cheap existence check); detail hydrates
     # `steps[]` from the link tables. Empty steps + has_structured_steps
     # false ⇒ recipe is unstructured; cook-mode falls back to splitting
     # `instructions` on newline.
     has_structured_steps: bool = False
     steps: List['RecipeStepDto'] = field(default_factory=list)
-    # C-4 Chunk 8 — populated only by `handle_by_id` (detail). List endpoint
+    # populated only by `handle_by_id` (detail). List endpoint
     # leaves this empty; the client uses `version_group_id` on the list DTO
     # to know whether siblings exist at all.
     version_siblings: List['RecipeVersionSiblingDto'] = field(default_factory=list)
-    # C-4 Chunk 9 — server-derived cost estimate (DEC-5). Populated only
+    # server-derived cost estimate (DEC-5). Populated only
     # on the detail endpoint and only when at least one ingredient has
     # a linked product offer; client gates render on the C-cross money
     # opt-in. NULL when no estimate could be computed (no linked
@@ -259,7 +259,7 @@ class RecipeDto:
     # as an estimate, not a quote.
     estimated_cost_priced_count: int = 0
     estimated_cost_total_count: int = 0
-    # C-4 Chunk 10 — named sections (DEC-3 option A). The list endpoint
+    # named sections (DEC-3 option A). The list endpoint
     # populates only `section_count` (cheap), the detail endpoint also
     # hydrates `sections[]`. Empty sections + section_count == 0 ⇒ the
     # recipe is flat; ingredients/steps render under no header.
@@ -327,7 +327,7 @@ class RecipeDto:
             cookable = _Cookable,
             missing_stock_item_names = missing_stock_item_names_for(recipe.ingredients),
             unlinked_ingredient_count = _Unlinked,
-            # FU-090 — `image` is now a deferred column; accessing
+            # `image` is now a deferred column; accessing
             # `recipe.image` here would trigger N+1 lazy loads on the
             # list path. Default False and let the handler hydrate
             # via a bulk SELECT below.
@@ -349,7 +349,7 @@ class RecipeStepImageDto:
 _FIELD_MAP: dict[str, EntityField] = {
     "recipe_id": EntityField(Recipe, "id"),
     "recipe_collection_id": EntityField(Recipe, "_recipe_collection_id"),
-    # FU-082 — exposed so the cookbook can sort/filter by "Recently added"
+    # exposed so the cookbook can sort/filter by "Recently added"
     # via the standard `sort=created_at:desc` query string if it ever moves
     # off the client-side sort. The client sort uses the DTO field
     # directly; this entry lets API consumers do the same server-side.
@@ -546,7 +546,7 @@ class GetRecipesHandler:
                 .then_include(RecipeIngredient.Fields.STOCK_ITEM)
                 .then_include(StockItem.Fields.STOCK_LOCATION)
             .include(Recipe.Fields.RECIPE_COLLECTION)
-            # FU-314 — cuisine + category flipped to noload; RecipeDto reads
+            # cuisine + category flipped to noload; RecipeDto reads
             # both, so every list/detail hit must eager-load them here.
             .include(Recipe.Fields.CUISINE)
             .include(Recipe.Fields.CATEGORY)
@@ -719,7 +719,7 @@ class GetRecipesHandler:
             if prev is None or unit_price < prev[0]:
                 price_by_stock_item[_key(sid)] = (unit_price, float(size_value or 0) or None)
 
-        # FU-216 — observation fallback: for ingredients whose stock item has
+        # observation fallback: for ingredients whose stock item has
         # no linked-product price, use the everyday price substrate's unit cost
         # (PROPOSAL §3.2). Derived via the server helper (R-003).
         obs_cost_by_item: dict[str, float] = {}
@@ -743,7 +743,7 @@ class GetRecipesHandler:
             if entry is not None:
                 unit_price = entry[0]
             else:
-                # FU-216 — fall back to the stock item's price observations
+                # fall back to the stock item's price observations
                 # when no linked-product offer prices this ingredient.
                 unit_price = obs_cost_by_item.get(sid)
                 if unit_price is None:
@@ -905,7 +905,7 @@ class GetRecipesHandler:
         )
         _Rows = db.session.execute(_Stmt).all()
 
-        # C-2.I — how often each recipe appears across *all* meal plans (the
+        # how often each recipe appears across *all* meal plans (the
         # "frequently planned" tray): a plain all-time entry count.
         _CountStmt = (
             select(_Mpe.c.recipe_id, func.count())
@@ -925,7 +925,7 @@ class GetRecipesHandler:
         _Committed = {_key(row[0]): int(row[1] or 0) for row in _Rows}
         _PlanCount = {_key(row[0]): int(row[1] or 0) for row in _CountRows}
 
-        # C-2.I — "haven't had in a while": never made, or last made before the
+        # "haven't had in a while": never made, or last made before the
         # household 21-day window. The server owns the threshold (R-003).
         _StaleCutoff = _Today - timedelta(days=21)
 
@@ -940,7 +940,7 @@ class GetRecipesHandler:
                 unallocated_meals = max(d.available_meals - _Committed.get(str(d.recipe_id), 0), 0),
                 plan_count = _PlanCount.get(str(d.recipe_id), 0),
                 not_made_recently = _stale(d),
-                # FU-081 — same query already filtered to future-unconsumed
+                # same query already filtered to future-unconsumed
                 # entries; any presence in _Committed means at least one
                 # such row exists.
                 is_planned = _Committed.get(str(d.recipe_id), 0) > 0,
@@ -982,7 +982,7 @@ class GetRecipesHandler:
         if entity is None:
             return None
         dto = RecipeDto.from_entity(entity)
-        # FU-147 — the `/<recipe_id>` route has no `uuid:` converter, so
+        # the `/<recipe_id>` route has no `uuid:` converter, so
         # Flask hands us a `str`. `get_tag_ids_for_recipes` returns a
         # dict keyed by real UUIDs (SQLAlchemy coerces the IN clause but
         # the dict's keys come from the result rows). A Python `.get(str)`
@@ -1014,7 +1014,7 @@ class GetRecipesHandler:
             )
             for row in section_rows
         ]
-        # C-4 Chunk 8 — sibling versions for the Versions card. One small
+        # sibling versions for the Versions card. One small
         # query; skipped entirely when the recipe has no group id.
         sibling_dtos: list[RecipeVersionSiblingDto] = []
         if entity.version_group_id is not None:
@@ -1047,7 +1047,7 @@ class GetRecipesHandler:
         import dataclasses
         _WithAssoc = dataclasses.replace(
             dto,
-            # FU-147 — keys are UUIDs from the SQL result; use entity.id
+            # keys are UUIDs from the SQL result; use entity.id
             # (a real UUID) instead of the route-string `recipe_id`.
             dietary_tag_ids=tag_map.get(entity.id, []),
             tool_ids=tool_map.get(entity.id, []),

@@ -32,7 +32,7 @@ export type BootstrapAdminCommand = {
 };
 export type UpdateMeCommand = {
     send_deals_on_day?: number;
-    // FU-197 — `email` removed from this command. Email changes flow
+    // `email` removed from this command. Email changes flow
     // through `requestEmailChangeAsync` (password proof + confirmation
     // link); sending it via `updateMeAsync` is now a 400 from the
     // backend's `extra="forbid"` model.

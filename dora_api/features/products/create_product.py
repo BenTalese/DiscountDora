@@ -24,7 +24,7 @@ class CreateProductRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     brand: str | None = Field(default = None, min_length = 1)
-    # FU-014 — image is a data-URL string ("data:image/...;base64,..."), stored
+    # image is a data-URL string ("data:image/...;base64,..."), stored
     # as UTF-8 bytes on the entity; served back via GET /products/<id>/image.
     # Matches the stock-item/recipe convention. The old `Base64Bytes` decoded
     # arbitrary base64 strings to raw bytes that the read path then tried to
@@ -33,7 +33,7 @@ class CreateProductRequest(BaseModel):
     is_active: bool
     is_available: bool
     store_name: str = Field(min_length = 1)
-    # FU-189 carve-out: `merchant_stockcode` is the producer's SKU on the
+    # `merchant_stockcode` is the producer's SKU on the
     # offer, retained verbatim per the rename runbook.
     merchant_stockcode: str | None = Field(default = None, min_length = 1)
     name: str = Field(min_length = 1)
@@ -45,7 +45,7 @@ class CreateProductRequest(BaseModel):
     web_url: str | None = Field(default = None, min_length = 1)
 
 
-# FU-217 / R-003 — the manual product-add reuses the C-10 shared
+# the manual product-add reuses the C-10 shared
 # `apply_offer_to_product` so duplicates append a historic point + move
 # `current_offer` (one offer-append path across `/api/products` and
 # `/api/ingest`). Source string is `"manual"` to distinguish from
@@ -70,7 +70,7 @@ class CreateProductHandler:
         _ProductName = EntityField(Product, Product.Fields.NAME)
         _ProductStockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
 
-        # FU-189a — strict no-auto-create. Stores are user-curated (managed
+        # strict no-auto-create. Stores are user-curated (managed
         # in Settings → Stores); the manual product-add path must reject
         # unknown store names, mirroring what `/api/ingest` already does via
         # the quarantine queue (FU-190). Case-insensitive trimmed match to

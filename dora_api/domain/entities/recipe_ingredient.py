@@ -15,7 +15,7 @@ class RecipeIngredient(BaseEntity):
     # and importer flow may hand back either.
     stock_item: StockItem | None
     unit: str | None
-    # C-4 Chunk 10 — nullable section grouping (DEC-3 option A). NULL means
+    # nullable section grouping (DEC-3 option A). NULL means
     # the ingredient sits in the implicit "main" group; FK → RecipeSection
     # with ON DELETE SET NULL so deleting a section keeps its ingredients,
     # just unsectioned.

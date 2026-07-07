@@ -28,7 +28,7 @@ export function useStockItemActions() {
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { currentUser } = storeToRefs(authStore);
 
-    // FU-316 — resolve a shopping list's display name from the store's
+    // resolve a shopping list's display name from the store's
     // hydrated summaries. Falls back to a generic label so we never
     // render an obviously-broken toast if the store isn't loaded yet.
     function listNameFor(listId: string): string {
@@ -57,13 +57,13 @@ export function useStockItemActions() {
         listId?: string | null,
         options?: { silent?: boolean },
     ) {
-        // FU-018: callers running this in a bulk loop pass silent:true and
+        // callers running this in a bulk loop pass silent:true and
         // emit one summary toast themselves instead of N per-item ones.
         const silent = options?.silent ?? false;
         const ok = (msg: string) => { if (!silent) notifyOk(msg); };
         const err = (msg: string, caption?: string) => { if (!silent) notifyErr(msg, caption); };
         const pick = useQuickAddTargetPick();
-        // FU-316 — when the user has opted into "always ask", ignore any
+        // when the user has opted into "always ask", ignore any
         // session-remembered pick so the picker fires every add.
         const alwaysAsk = currentUser.value?.always_ask_which_shopping_list ?? false;
         try {
@@ -127,7 +127,7 @@ export function useStockItemActions() {
                         .onDismiss(() => resolve(null));
                 });
                 if (!choice) return;
-                // FU-316 — always save the pick so the bulk-add caller in
+                // always save the pick so the bulk-add caller in
                 // AddToListButton can read it and batch items 2..N into
                 // the same list. When "always ask" is on we clear it at
                 // the end of this call so the *next* quick-add re-prompts.
@@ -158,7 +158,7 @@ export function useStockItemActions() {
             }
             err('Could not add to list.', String(e));
         } finally {
-            // FU-316 — with "always ask" on, wipe the pick so the next
+            // with "always ask" on, wipe the pick so the next
             // quick-add re-prompts. The current call already used it for
             // any bulk-follow-up read in AddToListButton.
             if (alwaysAsk) pick.clear();

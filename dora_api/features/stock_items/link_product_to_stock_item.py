@@ -58,7 +58,7 @@ class LinkProductToStockItemHandler:
 
         _StockItem.products.append(_Product)
 
-        # C-7 Chunk 3, rule 2 — any standalone-product line on a
+        # any standalone-product line on a
         # NOT-DONE list anchored on this product gets upgraded to
         # nest under a stock-item line for this item. Two paths:
         #   - the list already has a stock-item line for this item:

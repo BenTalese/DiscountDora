@@ -7,7 +7,7 @@
                     Guides by area, a peek at what's new, and a fun fact while you're here.
                 </div>
             </div>
-            <!-- FU-006: ambiguous — flat with color="accent"; no BaseButton variant supports the accent palette. Left as raw q-btn for review. -->
+            <!-- ambiguous — flat with color="accent"; no BaseButton variant supports the accent palette. Left as raw q-btn for review. -->
             <q-btn
                 flat
                 no-caps
@@ -37,7 +37,7 @@
                 {{ versionInfo.current_version }}.
             </div>
             <template #action>
-                <!-- FU-006: ambiguous — type="a" anchor form not in BaseButton's type union; left as raw q-btn for review. -->
+                <!-- ambiguous — type="a" anchor form not in BaseButton's type union; left as raw q-btn for review. -->
                 <q-btn
                     v-if="versionInfo.release_url"
                     flat

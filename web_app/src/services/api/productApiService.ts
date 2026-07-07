@@ -29,7 +29,7 @@ export default class ProductApiService {
 
 export type CreateProductCommand = {
     brand: string | null;
-    // FU-014 — `data:image/...;base64,...` string.
+    // `data:image/...;base64,...` string.
     image: string | null;
     is_active: boolean;
     is_available: boolean;

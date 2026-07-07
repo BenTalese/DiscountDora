@@ -27,7 +27,7 @@ class AddSubstituteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     substitute_id: UUID
-    # FU-034 — free-text hint + optional structured ratio. Both default to
+    # free-text hint + optional structured ratio. Both default to
     # None for backward compatibility with callers that don't care. The
     # ratio direction (in/out) is *from the perspective of stock_item_id*;
     # the handler reorients it into the canonical pair direction before
@@ -45,7 +45,7 @@ class AddSubstituteResponse:
     substitute_not_found: bool = False
     is_self: bool = False
     already_linked: bool = False
-    # FU-034 — ratio validation failure (a single message; the API layer
+    # ratio validation failure (a single message; the API layer
     # turns it into a business-rule-violation response).
     invalid_ratio: str | None = None
 
@@ -63,7 +63,7 @@ class AddSubstituteHandler:
         if not self.repository.get(StockItem).exists(request.substitute_id):
             return AddSubstituteResponse(substitute_not_found=True)
 
-        # FU-034 — validate the requested metadata (all-or-none ratio,
+        # validate the requested metadata (all-or-none ratio,
         # positive quantities, units in the canonical catalogue).
         _Meta = SubstituteMetadata(
             notes=request.notes,
@@ -89,7 +89,7 @@ class AddSubstituteHandler:
         if _Existing is not None:
             return AddSubstituteResponse(already_linked=True)
 
-        # FU-034 — flip the ratio in/out to the canonical A→B direction
+        # flip the ratio in/out to the canonical A→B direction
         # if the caller passed it the B→A way round.
         _Persisted = build_metadata(
             meta=_Meta,

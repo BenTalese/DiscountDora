@@ -368,7 +368,7 @@ export function useStockFilters(sources: {
             // `none` qualifies (on_target / on_other / on_multiple).
             if ((cartMap.get(it.stock_item_id) ?? 'none') !== 'none') onAnyList++;
         }
-        // C-1 Chunk 2 / L93 — minified labels; matches the plan's order:
+        // minified labels; matches the plan's order:
         // Shown · Stocked · Low · Out · Flagged · Auto-add ·
         // Needs-attention. Level names are shortened for the chip
         // ("Low Stock" → "Low", "Out of Stock" → "Out") so they fit in

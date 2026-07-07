@@ -168,7 +168,7 @@
     const listActions = useShoppingListActions();
     const { openQuickAdd } = useQuickAdd();
 
-    // C-7 Chunk 2 — decision 2: 2+ linked products → always open the
+    // decision 2: 2+ linked products → always open the
     // combined `QuickAddSheet` modal (the user picks the offer + target
     // list in one surface). 0/1 products go through the existing
     // single-item flow. Read off the StockItem store, which carries the
@@ -244,7 +244,7 @@
             case 'on_other':
                 return 'accent';
             case 'on_multiple':
-                // FU-313 (2026-07-06) — was 'amber-9'; now theme-aware via
+                // was 'amber-9'; now theme-aware via
                 // --severity-attention (deeper than severity-low so it
                 // reads as "notice me, not urgent").
                 return 'severity-attention';
@@ -344,7 +344,7 @@
     }
 
     // ── Inline-product variant click ────────────────────────────────────
-    // C-7 Chunk 3 — adds a *standalone product line* (no stock-item
+    // adds a *standalone product line* (no stock-item
     // anchor). Resolves the target list via Axis B (membership.active_
     // lists filtered by status='draft'): 1 draft → silent; 2+ → picker;
     // 0 → tell the user to create a draft. Skips cart-state tracking
@@ -445,7 +445,7 @@
                 }
                 return;
             }
-            // C-7 Chunk 2 — 2+ products (and/or both axes ambiguous)
+            // 2+ products (and/or both axes ambiguous)
             // → combined modal so the user makes both picks in one
             // surface. Quantity lives only here (decision 5); quick
             // paths stay qty-1.

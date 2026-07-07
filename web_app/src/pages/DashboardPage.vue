@@ -36,7 +36,7 @@
                                     :class="cardDnd.bind(card.id).rowClass"
                                     v-bind="cardDnd.bind(card.id).rowProps"
                                 >
-                                    <!-- FU-294 — desktop-only drag handle. The
+                                    <!-- desktop-only drag handle. The
                                          up/down buttons remain (C13's
                                          tap-mandatory alternative); drag is
                                          the power-user extra. The handle's
@@ -643,7 +643,7 @@
                 class="col-12 col-sm-6 col-lg-4"
                 :style="{ order: cardCssOrder('stock_items') }"
             >
-                <!-- FU-299 — the card is no longer a single link; low + out
+                <!-- the card is no longer a single link; low + out
                      legend rows / donut segments deep-link to the filtered
                      stock view (?level_id=…). The "View →" action keeps the
                      unfiltered pantry link for the "show me everything" case. -->
@@ -1147,7 +1147,7 @@
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
 
-    // FU-043 — money renders route through the shared install-currency
+    // money renders route through the shared install-currency
     // formatter; the `$` prefix on <AnimatedNumber> reads the same symbol
     // so a currency flip in Settings updates the dashboard atomically.
     const { currencySymbol: dashCurrencySymbol } = useMoney();
@@ -1170,7 +1170,7 @@
         | 'restock'
         // Phase 6 — unified fortnight calendar (D7).
         | 'calendar'
-        // P8-08 — kitchen-health score (top of Your kitchen zone).
+        // kitchen-health score (top of Your kitchen zone).
         | 'dora_score';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
@@ -1228,7 +1228,7 @@
         { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, zone: 'money', gate: 'products', defaultHidden: true },
         { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
-        // P8-08 — sits above 'Pantry' in the Kitchen zone by default;
+        // sits above 'Pantry' in the Kitchen zone by default;
         // the composite score is the summary, the pantry donut is the
         // detail underneath. `favorite` icon (♥) reads as "health" and
         // isn't already used on the dashboard.
@@ -1257,13 +1257,13 @@
     const productApi = new ProductApiService();
     const budgetApi = new BudgetApiService();
     const reportsApi = new ReportsApiService();
-    // P2-04 — suggestion store shared with the Dora launcher badge and
+    // suggestion store shared with the Dora launcher badge and
     // the chat panel so dismiss/snooze here propagates everywhere.
     const suggestionStore = useSuggestionStore();
     const shoppingListApi = new ShoppingListApiService();
 
     const shoppingListStore = useShoppingListStore();
-    // FU-299 — donut segments deep-link to /stock?level_id=<id>. The stock
+    // donut segments deep-link to /stock?level_id=<id>. The stock
     // overview already reads `level_id` from the query; we just need the two
     // level ids (low / out) that match the canonical status sequences.
     const stockLevelStore = useStockLevelStore();
@@ -1330,7 +1330,7 @@
     const alerts = ref<Alert[]>([]);
     const bestDeals = ref<Product[]>([]);
     const primaryListDetail = ref<ShoppingListDetail | null>(null);
-    // P2-05 — grocery budget card. Always loads (so the passive "spent
+    // grocery budget card. Always loads (so the passive "spent
     // this week" state works for users who haven't opted in), but the
     // card is hidden when the loader errors so we never block dashboard
     // render on this slot.
@@ -1503,7 +1503,7 @@
         persistLayout();
     }
 
-    // FU-294 — drag-handle reorder for the Cards menu. Sits on top of the
+    // drag-handle reorder for the Cards menu. Sits on top of the
     // existing tap up/down: drag is the desktop power-user extra; tap is the
     // mobile/keyboard mandate (C13). Same-zone-only via `canDropOn`.
     // `cardDragEnabled` gates the handle on non-touch — `$q.platform.is.mobile`
@@ -1555,7 +1555,7 @@
         return Math.max(0, s.total - s.low_stock - s.out_of_stock);
     });
 
-    // FU-299 — pre-computed deep-link targets for each donut bucket. Falls
+    // pre-computed deep-link targets for each donut bucket. Falls
     // back to the un-filtered `/stock` when the levels aren't loaded yet, so
     // clicks never dead-end.
     const stockLowLink = computed(() => {
@@ -1780,7 +1780,7 @@
     // only suggest real recipes, so require at least one ingredient.
     // Favourites bubble up first within the cookable subset so your usuals
     // show up before the long tail.
-    // FU-298 — "Next to cook" is meal-plan-driven now (feedback L272):
+    // "Next to cook" is meal-plan-driven now (feedback L272):
     // upcoming entries from `summary.meal_plan.upcoming_entries`, deduped by
     // recipe so the same recipe scheduled twice in the week only shows once
     // (earliest slot wins), capped at 3, each tagged with a ready / missing-N
@@ -1815,7 +1815,7 @@
     }
     function nextToCookBadgeColor(entry: UpcomingMealPlanEntry): string {
         if (entry.missing_count === 0) return 'positive';
-        // FU-313 — was 'grey-6'; theme-aware --neutral-muted for
+        // was 'grey-6'; theme-aware --neutral-muted for
         // "no signal yet / not applicable" (unlinked ingredients, or
         // no ingredients logged).
         if (entry.unlinked_ingredient_count > 0) return 'neutral-muted';
@@ -1897,7 +1897,7 @@
     }
 
     async function loadBudget() {
-        // FU-297 — budget is money-gated; skip the fetch when money is off.
+        // budget is money-gated; skip the fetch when money is off.
         if (!moneyEnabled.value) { budgetStatus.value = null; return; }
         try {
             budgetStatus.value = await budgetApi.getStatusAsync();
@@ -1958,7 +1958,7 @@
         }
     }
 
-    // FU-296 — price-drops is product-gated (not money-gated); still cheap to
+    // price-drops is product-gated (not money-gated); still cheap to
     // load, hides itself when empty.
     async function loadPriceDrops() {
         if (!productsEnabled.value) { priceDrops.value = null; return; }
@@ -2112,7 +2112,7 @@
             isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
             suggestionStore.refreshAsync(),
             shoppingListStore.ensureLoadedAsync(),
-            // FU-299 — the donut's low/out segments deep-link to
+            // the donut's low/out segments deep-link to
             // /stock?level_id=<id>; the store hydrates those ids.
             stockLevelStore.ensureLoadedAsync(),
         ]);

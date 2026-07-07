@@ -357,7 +357,7 @@
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import SequentialBuilderDialog from 'components/SequentialBuilderDialog.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
-    // FU-181 — target-count sourced from the user's `meals_per_week` pref
+    // target-count sourced from the user's `meals_per_week` pref
     // via this composable (fallback 7 when unset).
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
     import { resolvePlannerView, setPlannerView } from 'src/composables/useMealPlannerView';

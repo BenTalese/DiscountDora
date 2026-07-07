@@ -62,7 +62,7 @@ class PriceObservationHandler:
         if not self.repository.get(StockItem).exists(stock_item_id):
             return PriceObservationMutationResponse(stock_item_not_found=True)
 
-        # B3 — unit must be on the supported price list (volume / mass / count).
+        # unit must be on the supported price list (volume / mass / count).
         # Normalised via the chunk-1 domain helper so "L", " L ", "litre" all
         # land. Rejected units include kJ, °C, mm — those are recipe-side, not
         # price-side (R-001-equivalent: one validation source).

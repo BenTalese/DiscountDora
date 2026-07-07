@@ -58,11 +58,11 @@ class CreateRecipeIngredientRequest(BaseModel):
     quantity: float | None = None
     unit: str | None = Field(default = None, max_length = 50)
     notes: str | None = Field(default = None, max_length = 255)
-    # C-4 Chunk 6 — optional client-side identifier (any string) used by
+    # optional client-side identifier (any string) used by
     # `steps[].ingredient_client_ids` to point at this ingredient before the
     # server has assigned its UUID. Omit when no step references it.
     client_id: str | None = Field(default = None, max_length = 64)
-    # C-4 Chunk 10 — optional section grouping; the client_id of one of the
+    # optional section grouping; the client_id of one of the
     # sections in the same payload. Omit/null to leave in the implicit
     # "main" group.
     section_client_id: str | None = Field(default = None, max_length = 64)
@@ -97,7 +97,7 @@ class CreateRecipeStepRequest(BaseModel):
     hint: str | None = None
     ingredient_client_ids: List[str] = Field(default_factory = list)
     tool_ids: List[UUID] = Field(default_factory = list)
-    # C-4 Chunk 10 — optional section grouping; resolved against the sibling
+    # optional section grouping; resolved against the sibling
     # `sections[]` entry with the same client_id.
     section_client_id: str | None = Field(default = None, max_length = 64)
 
@@ -115,7 +115,7 @@ class CreateRecipeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length = 1, max_length = 255)
-    # C-4 Chunk 2: cuisine + category are FK vocabularies (single-select each).
+    # cuisine + category are FK vocabularies (single-select each).
     category_id: UUID | None = None
     cook_time_minutes: int | None = Field(default = None, ge = 0)
     cuisine_id: UUID | None = None
@@ -124,23 +124,23 @@ class CreateRecipeRequest(BaseModel):
     prep_time_minutes: int | None = Field(default = None, ge = 0)
     recipe_collection_id: UUID | None = None
     servings: int | None = Field(default = None, ge = 1)
-    # C-4 Chunk 7 — origin URL for imported recipes.
+    # origin URL for imported recipes.
     source: str | None = Field(default = None, max_length = 2048)
     time_of_day: str | None = Field(default = None, max_length = 50)
-    # C-4 Chunk 9 — simple nutrition (kcal). Gated on the C-cross
+    # simple nutrition (kcal). Gated on the C-cross
     # nutrition opt-in client-side; the server stores whatever's sent.
     kcal: int | None = Field(default = None, ge = 0, le = 100_000)
     ingredients: List[CreateRecipeIngredientRequest] = Field(default_factory = list)
-    # C-4 Chunk 2 — dietary tag ids (FK to DietaryTag). Validated server-side
+    # dietary tag ids (FK to DietaryTag). Validated server-side
     # against existing rows; unknown ids surface as a 400.
     dietary_tag_ids: List[UUID] = Field(default_factory = list)
-    # C-4 Chunk 5 — tool ids (FK to Tool).
+    # tool ids (FK to Tool).
     tool_ids: List[UUID] = Field(default_factory = list)
-    # C-4 Chunk 5 — optional image as a data-URL string ("data:image/...;
+    # optional image as a data-URL string ("data:image/...;
     # base64,..."). Stored as UTF-8 bytes; served back via GET /recipes/<id>/
     # image. Capped to keep the row sane (~4MB raw image).
     image: str | None = Field(default = None, max_length = 6_000_000)
-    # C-4 Chunk 6 — structured steps. Empty list = unstructured recipe
+    # structured steps. Empty list = unstructured recipe
     # (cook-mode falls back to splitting `instructions` on newline). Each
     # step's `ingredient_client_ids` references its sibling ingredients via
     # the `client_id` field above.
@@ -153,7 +153,7 @@ class CreateRecipeRequest(BaseModel):
     # mode. Empty list when not in image mode. Cap mirrored from the
     # access helper.
     step_images: List[str] = Field(default_factory = list)
-    # C-4 Chunk 10 — named sections (optional). When non-empty, the server
+    # named sections (optional). When non-empty, the server
     # creates RecipeSection rows; ingredients and steps reference them by
     # `section_client_id`. Unreferenced sections still get created (empty
     # group) so the user can type the name first, then drop rows into it.
@@ -187,7 +187,7 @@ class CreateRecipeHandler:
                     f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
                 ),
             )
-        # C-2.A — `time_of_day` is the household meal-slot vocabulary
+        # `time_of_day` is the household meal-slot vocabulary
         # (MealSlot table), validated at the boundary (R-010). Off-vocab
         # values are rejected on new writes; legacy stored values persist.
         if request.time_of_day is not None:
@@ -280,12 +280,12 @@ class CreateRecipeHandler:
             servings = request.servings,
             source = request.source,
             time_of_day = request.time_of_day,
-            # C-4 Chunk 8 — singletons get NULL; the new-version endpoint
+            # singletons get NULL; the new-version endpoint
             # is the only path that populates this.
             version_group_id = None,
             kcal = request.kcal,
             steps_mode = request.steps_mode if request.steps_mode in ALLOWED_STEPS_MODES else "freeform",
-            # FU-082 — stamp at write time so the cookbook "Recently
+            # stamp at write time so the cookbook "Recently
             # added" sort axis has a stable, recipe-owned timestamp.
             created_at = datetime.now(timezone.utc),
         )
@@ -294,7 +294,7 @@ class CreateRecipeHandler:
         # Save first so the recipe row exists before the tag FK insert.
         self.repository.save_changes()
 
-        # C-4 Chunk 10 — insert sections, then back-fill ingredient
+        # insert sections, then back-fill ingredient
         # rows with their resolved section_id. Sections live as their
         # own table so the FK from RecipeIngredient.section_id is
         # satisfiable; the back-fill keeps the rest of the request

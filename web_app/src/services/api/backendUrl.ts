@@ -1,4 +1,4 @@
-// P8-10 — runtime-configurable Dora API base URL.
+// runtime-configurable Dora API base URL.
 //
 // The SPA runs in three shapes:
 //   - web (dev / prod PWA): baseURL follows the current origin (env-baked

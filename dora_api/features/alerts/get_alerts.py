@@ -68,7 +68,7 @@ SEVERITY_LOW = "low"
 
 _SEVERITY_ORDER = {SEVERITY_HIGH: 0, SEVERITY_MEDIUM: 1, SEVERITY_LOW: 2}
 
-# C-9.4 — how soon a list's planned shop date must be to nudge. A small
+# how soon a list's planned shop date must be to nudge. A small
 # constant default (not yet admin-tunable — these are FYI nudges, and per-user
 # on/off already covers "I don't want this"); one source here (R-003).
 SHOPPING_DAY_WINDOW_DAYS = 3
@@ -302,7 +302,7 @@ class GetAlertsHandler:
         actionable = fyi = 0
 
         for alert in raw:
-            # C-9.2 — a kind this user disabled contributes nothing to their
+            # a kind this user disabled contributes nothing to their
             # set, counts, or (later) channels.
             pref = preferences.get(alert.kind)
             if pref is not None and not pref.enabled:

@@ -27,7 +27,7 @@ def test__price_history__unknown_product__returns_placeholder(api):
     assert series[0]["product_id"] == str(bogus)
     assert series[0]["points"] == []
     assert series[0]["name"] == "(unknown)"
-    # FU-227 chunk 6 — placeholder still carries the new fields (no obs / no
+    # placeholder still carries the new fields (no obs / no
     # baseline for a product that doesn't exist).
     assert series[0]["your_prices"] is None
     assert series[0]["observation_points"] == []

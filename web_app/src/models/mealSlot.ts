@@ -1,4 +1,4 @@
-// C-2.A — household-wide meal-slot vocabulary. Same {id, name, sequence}
+// household-wide meal-slot vocabulary. Same {id, name, sequence}
 // lookup shape as the recipe vocabularies, edited in Recipe Vocab settings.
 // `usage_count` is rolled up by the list endpoint (matching the stored slot
 // label on meal-plan entries + recipe `time_of_day`) for the delete warning.

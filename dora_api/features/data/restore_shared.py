@@ -83,7 +83,7 @@ SECTIONS: tuple[Section, ...] = (
     Section("shopping_list_templates", "ShoppingListTemplate", "Shopping list templates", "Core data", True, _name_key),
     Section("shopping_list_template_lines", "ShoppingListTemplateLine", "Template lines", "Core data", True),
     Section("recipe_collections", "RecipeCollection", "Recipe collections", "Core data", True, _name_key),
-    # C-4 Chunk 2 — recipe vocabularies. Parents of Recipe (cuisine_id /
+    # recipe vocabularies. Parents of Recipe (cuisine_id /
     # category_id FKs) so they precede it in restore order.
     Section("cuisines", "Cuisine", "Cuisines", "Core data", True, _name_key),
     Section("categories", "Category", "Recipe categories", "Core data", True, _name_key),
@@ -93,7 +93,7 @@ SECTIONS: tuple[Section, ...] = (
     Section("recipe_ingredients", "RecipeIngredient", "Recipe ingredients", "Core data", True),
     Section("recipe_dietary_tags", "RecipeTag", "Recipe ↔ dietary-tag links", "Core data", True),
     Section("recipe_tools", "RecipeTool", "Recipe ↔ tool links", "Core data", True),
-    # C-4 Chunk 6 — structured steps + their two link tables. Steps must be
+    # structured steps + their two link tables. Steps must be
     # inserted before their link rows; sub-steps reference parent_step_id on
     # the same table, but rows insert in any order on restore (the FK is
     # deferred by SQLite when reset+restored in one txn, and Postgres tolerates
@@ -149,11 +149,11 @@ HARD_FK_PULL_IN: dict[tuple[str, str], str] = {
     ("stock_items", "stock_level_id"): "stock_levels",
     ("stock_locations", "parent_id"): "stock_locations",
     ("recipes", "recipe_collection_id"): "recipe_collections",
-    # C-4 Chunk 2 — pull the cuisine/category vocab row in if a selected
+    # pull the cuisine/category vocab row in if a selected
     # recipe references it.
     ("recipes", "cuisine_id"): "cuisines",
     ("recipes", "category_id"): "categories",
-    # C-7 Chunk 3 — product-only / nested product lines carry a hard
+    # product-only / nested product lines carry a hard
     # `product_id`; the line's CHECK constraint requires either anchor.
     # Pull the referenced Product into the selection so the line survives
     # a "shopping list only" partial restore.
@@ -171,13 +171,13 @@ SOFT_FK_NULLABLE: set[tuple[str, str]] = {
 REQUIRED_FKS: set[tuple[str, str]] = {
     ("saved_products", "store_id"),
     ("shopping_list_items", "shopping_list_id"),
-    # C-7 Chunk 3 — `stock_item_id` is now NULLABLE (product-only lines
+    # `stock_item_id` is now NULLABLE (product-only lines
     # leave it null). Only enforced as required when the source row carries
     # a non-null value: the restore decoder skips the FK check entirely
     # when the column is null, so this entry behaves as "if set, must
     # resolve" rather than "must be set".
     ("shopping_list_items", "stock_item_id"),
-    # C-7 Chunk 3 — `product_id` is also NULLABLE. When set, the target
+    # `product_id` is also NULLABLE. When set, the target
     # Product must resolve; otherwise drop the row rather than silently
     # nulling the column (a product-only line with both anchors null
     # would violate the CHECK constraint on insert). HARD_FK_PULL_IN

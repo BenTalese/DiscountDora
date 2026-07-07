@@ -115,6 +115,9 @@ Order per the plan's own dependencies:
 
 ### Phase 4 — Commercialize *(rest of Part 7 — only when selling)*
 - Productionize (Postgres/gunicorn/Redis), tenancy (Path B managed instances first → Path A multi-tenant = **my MULTI_USER_READINESS / P6-05 / P7-A1+A2**), Stripe, compliance (security headers/data rights = P5-01/02), ops, launch readiness.
+- **SaaS-only work parked in follow-ups** — resurrect these FUs when Phase 4 kicks off; they're deliberately not worth doing for self-host / single-tenant:
+  - **FU-461** (resolved 2026-07-06 as admin Add/Delete) — self-serve GDPR "right to erasure" endpoint at `/settings/account` danger-zone. Only load-bearing under a hosted/SaaS obligation; the admin-side plumbing already shipped (soft-vs-hard call, cascade behaviour, last-admin guard) informs the surface but doesn't build it. See `DORA_FOLLOWUPS_RESOLVED.md`.
+  - **FU-465** (resolved 2026-07-07 as parked-until-SaaS) — native push on the Capacitor build via `@capacitor/push-notifications` + Firebase Cloud Messaging (Android) / APNS (iOS), plus a parallel subscription store + fan-out in `push_sender.py`. VAPID web push already covers browser + PWA install. Adds a Firebase dependency, so only worth the cost once the native APK is the primary distribution or Phase 4 wants push parity across install types.
 
 ---
 

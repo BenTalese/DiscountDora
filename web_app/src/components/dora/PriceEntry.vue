@@ -142,7 +142,7 @@
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { Store } from 'src/models/store';
 
-    // FU-043 — currency symbol + money formatter come from the shared
+    // currency symbol + money formatter come from the shared
     // install-wide money policy (see composables/useMoney.ts). Never
     // hardcode `$` in this component; a non-AUD install renders wrong.
     const { currencySymbol: currencySymbolRef } = useMoney();
@@ -197,7 +197,7 @@
 
     const isMultipack = computed(() => packCountVisible.value && packCount.value != null && packCount.value > 1);
 
-    // B3 — flat list grouped by dimension. The canonical strings come from
+    // flat list grouped by dimension. The canonical strings come from
     // the generated table (single source of truth — chunk 1 / R-003), so
     // the picker never drifts from the server's accepted set.
     const unitOptions = computed(() => {

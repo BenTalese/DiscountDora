@@ -172,18 +172,39 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ### R-008 — Code-style minimalism
 - **Rule:** Minimal comments — only the non-obvious *why* (a constraint, a subtle
-  invariant, a workaround, an R-00x carve-out). No WHAT-comments, no
-  task/PR/caller references in code, no multi-paragraph docstrings. No emojis in
-  code. No AI self-references. No gratuitous `.md` files.
-- **Why:** Comments that restate the code rot; the user has repeatedly asked for
-  this.
+  invariant, a workaround, an R-00x/ADR carve-out). **A comment must be useful to a
+  reader who has no memory of how the code got here.** No WHAT-comments (they
+  restate what the code already says). No task/PR/prompt/FU-ID references in code
+  — those live in `DORA_WORKLOG.md` / `CHANGELOG.md` / commit messages, not the
+  source. No multi-paragraph docstrings. No emojis in code. No AI self-references.
+  No gratuitous `.md` files.
+- **Why:** Comments that restate the code rot; prompt/FU-ID prefixes have zero
+  value once the prompt is closed and clutter every skim; the user has repeatedly
+  asked for this.
 - **Apply:** Default to zero comments; add one only when a future reader would
-  otherwise be confused.
-- **Violation signal:** comments explaining *what*; "added for X flow" notes;
-  emojis; new docs nobody asked for.
-- **Carve-outs:** the explain-in-place comments R-00x enforcement *requires* — those
-  are wanted.
-- **Source:** memory `feedback_code_style`.
+  otherwise be confused. If the substance of a comment *is* real WHY, keep the
+  substance but drop the prompt-ID / FU-ID prefix (e.g. `# P8-05 — buy-verdict
+  defaults on because ...` → `# Buy-verdict defaults on because ...`).
+- **Violation signal / close-gate greps** (run before closing any unit that
+  touched code):
+  ```
+  rg -nE '(#|//) +(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])' \
+     dora_api/ tests/ web_app/src/
+  ```
+  Expected output: **nothing outside test-only setup helpers**. Any hit is a
+  fix-in-place before close. Standing R-0NN / ADR-0NN references are allowed
+  (`# R-003 —`, `# ADR-014 —` etc.) — the numeric pattern above deliberately
+  excludes them.
+- **Violation signal (WHAT-comments):** a comment that could be deleted without
+  a future reader losing information — because it just names what the next line
+  does — is a WHAT-comment. Delete it. Signals: `# Set X to Y`, `// Loop through
+  items`, `# Handler for /foo endpoint` directly above `def foo():`.
+- **Carve-outs:** the explain-in-place comments R-00x enforcement *requires* (an
+  R-0NN or ADR-0NN reference that names the rule) — those are wanted. A one-line
+  reference to a live FU that is *currently open* and load-bearing on this exact
+  code (e.g. `# workaround for FU-045 — remove when Postgres migration lands`)
+  is a carve-out; delete it when the FU closes.
+- **Source:** memory `feedback_code_style` + FU-462 close-out (2026-07-07).
 
 ### R-009 — Safe mutations: preview → approve → commit
 - **Rule:** No silent writes. User-facing mutations are previewable, undoable, and

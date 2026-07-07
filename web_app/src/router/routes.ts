@@ -19,7 +19,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/LoginPage.vue'),
         meta: { title: 'Sign in' }
     },
-    // FU-200 — fresh-install first-admin setup. Lives outside MainLayout
+    // fresh-install first-admin setup. Lives outside MainLayout
     // for the same reason as /login. The router guard sends visitors here
     // when bootstrapRequired is true, and bounces them away once an admin
     // exists.
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/SetupAdminPage.vue'),
         meta: { title: 'Set up Dashy Dora' },
     },
-    // P8-10 — native app first-run instance picker. Only reachable when
+    // native app first-run instance picker. Only reachable when
     // Capacitor.isNativePlatform() is true and no backend URL is stored
     // yet; the router guard bounces web visitors to /settings/about.
     {
@@ -94,7 +94,7 @@ const routes: RouteRecordRaw[] = [
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
-            // B5 stopgap — minimal alerts list, reuses alertStore (same
+            // minimal alerts list, reuses alertStore (same
             // data as the header bell). The full alerts control centre is
             // the C-wave design brief.
             { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
@@ -115,7 +115,7 @@ const routes: RouteRecordRaw[] = [
                 path: 'shopping-lists',
                 component: () => import('pages/ShoppingListsOverview.vue'),
                 meta: { title: 'Shopping lists' },
-                // P6-01 Chunk 5 — the detail page is the canonical surface
+                // the detail page is the canonical surface
                 // (with a list-selector in its header). The landing's job is
                 // to pick a target list and route there. We do it as a
                 // **route-level `beforeEnter`** rather than an
@@ -151,7 +151,7 @@ const routes: RouteRecordRaw[] = [
             // UX-v2: detail is the single shopping surface for every status
             // (S4: plural title; the old /shop route + page were merged in).
             { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping lists' } },
-            // P2-11 — PWA-shortcut landing page that redirects to whichever
+            // PWA-shortcut landing page that redirects to whichever
             // list is live / next up. Lightweight stub; see
             // pages/ShopNowRedirect.vue.
             { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
@@ -175,7 +175,7 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('pages/errors/ErrorServer.vue'),
                 meta: { title: 'Server error' }
             },
-            // FU-341 — the `/data` shell + its DataManagement.vue host are
+            // the `/data` shell + its DataManagement.vue host are
             // retired. Backup + Import now live under Settings → Admin →
             // Data (see the settings route tree below). Every child path
             // that used to hang off `/data` is preserved as a redirect so
@@ -199,10 +199,9 @@ const routes: RouteRecordRaw[] = [
                 redirect: '/settings/kitchen-setup/qr-labels'
             },
             {
-                // FU-339 retired the page; the redirect points at Backup so
-                // a stale bookmark lands on the closest sibling rather than
-                // 404. Print now lives in-context on each printable
-                // surface (see FU-338/339).
+                // The redirect points at Backup so a stale bookmark lands
+                // on the closest sibling rather than 404. Print now lives
+                // in-context on each printable surface.
                 path: 'data/export',
                 redirect: '/settings/admin/data/backup'
             },
@@ -254,7 +253,7 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Nutrition' }
                     },
                     {
-                        // FU-153 §7.1 — per-user Assistant config (provider +
+                        // per-user Assistant config (provider +
                         // URL/model/API key). Sibling to MoneySettings /
                         // NutritionSettings; the install-wide master flag lives
                         // separately on AdminSystemAssistantSettings.
@@ -313,7 +312,7 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/RecipeDietaryTagsSettings.vue'),
                         meta: { title: 'Recipe dietary tags' }
                     },
-                    // FU-340 — QR labels (Print sheet). Relocated from
+                    // QR labels (Print sheet). Relocated from
                     // `/data/barcodes`; the old page's Scan tab was retired
                     // (duplicative with Stock Overview's scan button). Still
                     // gated by the install-wide `scanning_enabled` flag; the
@@ -361,7 +360,7 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemTimezoneSettings.vue'),
                         meta: { title: 'System: Timezone' }
                     },
-                    // FU-043 — install-wide currency + display locale.
+                    // install-wide currency + display locale.
                     {
                         path: 'admin/system/locale',
                         component: () => import('pages/settings/AdminSystemLocaleSettings.vue'),
@@ -382,7 +381,7 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
                     },
-                    // FU-333 Bucket B — four focused System pages carrying the
+                    // four focused System pages carrying the
                     // operational config that used to live in DORA_* env vars.
                     {
                         path: 'admin/system/email',
@@ -428,7 +427,7 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/ApiAccessSettings.vue'),
                         meta: { title: 'API access' }
                     },
-                    // FU-341 — Data sub-group under Admin: relocated
+                    // Data sub-group under Admin: relocated
                     // Backup/Restore + Import from the retired `/data`
                     // shell. Admin-only via the same isAdmin router
                     // guard that covers the rest of `admin/*`; the

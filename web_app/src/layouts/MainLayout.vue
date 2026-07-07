@@ -118,7 +118,7 @@
              useQuickAdd().openQuickAdd(). -->
         <QuickAddSheet v-if="currentUser" />
 
-        <!-- FU-300 — global log-price sheet. Mounted once; any screen pops
+        <!-- global log-price sheet. Mounted once; any screen pops
              it via useLogPrice().openLogPrice(). -->
         <LogPriceSheet v-if="currentUser" />
 
@@ -234,7 +234,7 @@
         if (productSearchEntry.value) {
             base.push(productSearchEntry.value);
         }
-        // FU-209: My Products is gated on the same data-presence flag
+        // My Products is gated on the same data-presence flag
         // as the rest of the products overlay — hide it entirely when
         // no products exist. Previously this entry slipped through
         // (productSearchEntry above was gated but the push below wasn't),
@@ -248,7 +248,7 @@
             { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
             { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
             { label: 'Reports', icon: ICONS.insights, link: '/reports' },
-            // FU-341 — "Data" main-menu entry retired. The `/data` shell
+            // "Data" main-menu entry retired. The `/data` shell
             // itself is gone; Backup/Restore and Import now live under
             // Settings → Admin → Data (admin-only). A top-level slot for
             // an admin-only workflow was confusing for the 90% case, and
@@ -258,7 +258,7 @@
             // surface via Needs-your-attention on the dashboard and
             // through Dora's `expiry_rescue` tool. No replacement slot
             // (PROPOSAL_WASTE_MINIMISATION §2 D11).
-            // B9.3: Settings used to live here too; it's already in the user
+            // Settings used to live here too; it's already in the user
             // dropdown (header avatar). Duplicating it in the main menu was
             // confusing — removed.
         );

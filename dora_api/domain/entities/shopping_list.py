@@ -30,7 +30,7 @@ ADDED_VIA_VALUES = {
 }
 
 
-# P6-01 lifecycle status — the single source of truth for where a list is
+# the single source of truth for where a list is
 # in the shop loop, replacing the old is_archived / is_in_progress flags.
 #   draft    : being assembled / edited (the old "planning", non-archived,
 #              not-in-progress state).
@@ -53,7 +53,7 @@ SHOPPING_LIST_STATUS_VALUES = {
 @dataclass
 class ShoppingListLine(BaseEntity):
     shopping_list_id: UUID
-    # C-7 Chunk 3 — a line is anchored by stock_item_id OR product_id
+    # a line is anchored by stock_item_id OR product_id
     # (or both, when a product is nested under a stock item). At least
     # one MUST be set; enforced by a DB CHECK + the add-line validator.
     stock_item_id: UUID | None = None
@@ -80,7 +80,7 @@ class ShoppingListLine(BaseEntity):
     # when planning-time and tick-time prices diverged.)
     picked_offer_price: float | None = None
     list_price_at_pick: float | None = None
-    # P2-02 purchase memory: what the shopper *actually* paid (per unit) and
+    # what the shopper *actually* paid (per unit) and
     # which store they actually bought it from, when those differ from the
     # planned offer. Either may be set independently — a user might confirm
     # the store on the chip but type a different till-receipt price, or vice
@@ -89,12 +89,12 @@ class ShoppingListLine(BaseEntity):
     # for totals and for the assistant's price-history queries.
     actual_unit_price: float | None = None
     purchased_store_id: UUID | None = None
-    # FU-215 — optional shopping hint: one of the stock item's PreferredBuy
+    # optional shopping hint: one of the stock item's PreferredBuy
     # labels (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Reference-only — no DB FK
     # constraint (see the table mapping / migration re: FU-178); a deleted
     # PreferredBuy just leaves a dangling id the SPA ignores.
     preferred_buy_id: UUID | None = None
-    # FU-448 — trim-to-budget optimiser (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
+    # trim-to-budget optimiser (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
     # True when the line was set aside by the "Trim to fit" pass to keep the
     # projected shop within the user's period-remaining budget. Deferred
     # lines don't contribute to projected totals or ticked/unticked counts;
@@ -161,7 +161,7 @@ class ShoppingList(BaseEntity):
     # finished or deleted.)
     status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
-    # P6-01 Chunk 7. Optional shopping day the user is planning this list
+    # Optional shopping day the user is planning this list
     # for. Drives the landing-page pick (today's list wins), the selector's
     # sort, and the shopping-day banner. Never required — a list without a
     # planned date still behaves the same as today.

@@ -12,7 +12,7 @@ const productApiService = new ProductApiService();
  * state moved to the companion app along with the scraper itself.
  */
 export const useProductStore = defineStore('product', () => {
-    // FU-154 — initialised to `[]` (not `undefined`) so consumers reading
+    // initialised to `[]` (not `undefined`) so consumers reading
     // `productStore.products.value` before the first hydration get a stable
     // empty array instead of an "is it undefined yet?" tri-state.
     const products = ref<Product[]>([]);

@@ -73,7 +73,7 @@ class _ProductIn(BaseModel):
 
     ref: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
-    # FU-189 — producer pushes the store's external name as `store`. Was
+    # producer pushes the store's external name as `store`. Was
     # `merchant` pre-Phase-E; the rename also flows through to the SPA
     # quarantine surface.
     store: str = Field(min_length=1, max_length=255)
@@ -103,7 +103,7 @@ class _OfferIn(BaseModel):
     source: str | None = Field(default=None, max_length=64)
 
 
-# FU-227 chunk 7 (J1) — `_PriceObservationIn` removed. Observations are an
+# `_PriceObservationIn` removed. Observations are an
 # in-app user-input substrate only (PROPOSAL_PRODUCTS_AS_OVERLAY §2.5, Idea A):
 # the producer never writes them. A request carrying `price_observations[]`
 # is now rejected by `extra="forbid"` below; producers that wanted to push
@@ -189,7 +189,7 @@ class SubmitIngestionBatchHandler:
             self._apply_product(ctx, raw)
         for raw in payload.offers:
             self._apply_offer(ctx, raw)
-        # FU-227 chunk 7 — observations are in-app input only; the producer
+        # observations are in-app input only; the producer
         # path was removed (J1). Offer pushes still flow through above.
 
         # Counters land on the source row (consumed by C-10.3's
@@ -390,7 +390,7 @@ class SubmitIngestionBatchHandler:
             note="appended",
         ))
 
-# FU-227 chunk 7 (J1) — `_apply_observation` removed. The producer no longer
+# `_apply_observation` removed. The producer no longer
 # writes observations; users do, via the in-app PriceEntry widget. The
 # product-anchored half of the old method (push a single-point historic offer
 # from a "$X for product Y" payload) was always a misuse of the observation

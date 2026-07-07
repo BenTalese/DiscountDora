@@ -266,8 +266,7 @@ def build_your_prices_for_product(
     Used by Price-History chart to render a baseline reference line per
     product series (F-3) and the above-usual annotation in the header.
     """
-    # FU-227 chunk 6 will wire this end-to-end. The chunk-4 implementation
-    # is intentionally minimal: aggregate observations across linked stock
+    # Intentionally minimal: aggregate observations across linked stock
     # items and reuse the per-item algorithm. No offers sidecar here — the
     # per-product Price-History page already shows offers as the primary
     # series, sidecar would be redundant.

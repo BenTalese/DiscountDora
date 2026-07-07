@@ -1,4 +1,4 @@
-// C-4 Chunk 2 — user-configurable recipe vocabularies. Each is a simple
+// user-configurable recipe vocabularies. Each is a simple
 // {id, name, sequence} lookup edited in settings; `recipe_count` is rolled
 // up by the list endpoints for the settings delete-warnings.
 

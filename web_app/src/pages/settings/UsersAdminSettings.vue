@@ -337,7 +337,7 @@
         try {
             await api.updateAsync(user.user_id, command);
             await loadUsers();
-            // FU-016 — when the admin is editing themselves (self-demote,
+            // when the admin is editing themselves (self-demote,
             // rename, email change), the admin-user list refresh above
             // doesn't touch `authStore.currentUser`. Without this refresh
             // the router guard, MainLayout, SettingsShell, and every
@@ -421,7 +421,7 @@
         }
     }
 
-    // FU-461 close-out (2026-07-06) — Add / Delete on the users page.
+    // Add / Delete on the users page.
     function onAddClick() {
         createDraft.username = '';
         createDraft.email = '';

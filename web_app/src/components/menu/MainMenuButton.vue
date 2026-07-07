@@ -160,7 +160,7 @@
         color: var(--q-accent);
     }
 
-    // B9.2: Quasar's q-item ships a built-in hover/focus overlay
+    // Quasar's q-item ships a built-in hover/focus overlay
     // (`.q-focus-helper`) that was stacking on top of the custom
     // `::before` overlay above — inactive-hover rendered as two
     // concentric rounded rectangles ("double outline"), while active

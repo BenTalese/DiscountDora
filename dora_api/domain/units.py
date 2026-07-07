@@ -25,7 +25,7 @@ from typing import Any
 
 VOLUME = "volume"
 MASS = "mass"
-COUNT = "count"             # B1 — sizeless ("ea", "pack", "dozen").
+COUNT = "count"             # sizeless ("ea", "pack", "dozen").
 TEMPERATURE = "temperature"
 LENGTH = "length"
 ENERGY = "energy"
@@ -37,7 +37,7 @@ ENERGY = "energy"
 PRICE_DIMENSIONS = frozenset({VOLUME, MASS, COUNT})
 
 
-# FU-227 chunk 4 — the **compute** denominator per dimension. Baseline math
+# the **compute** denominator per dimension. Baseline math
 # (`your_prices.py`) normalises every observation into one of these before
 # computing the median, so the median is comparable across observations
 # logged in different aliases (e.g. "L" + "ml" both land on "L"). The
@@ -341,7 +341,7 @@ def normalise_unit(unit: str) -> str:
     return unit.strip().lower().replace("°", "")
 
 
-# FU-097 / DEC-3 — server mirror of `web_app/src/helpers/formatQuantity.ts`.
+# server mirror of `web_app/src/helpers/formatQuantity.ts`.
 # Inclusion list MUST stay in sync with `NO_SPACE_UNITS` over there.
 _NO_SPACE_UNITS: frozenset[str] = frozenset({
     "ml", "g", "kg", "l", "mg", "oz", "lb", "floz", "pt", "qt",

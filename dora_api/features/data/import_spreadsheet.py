@@ -275,7 +275,7 @@ class InspectSpreadsheetHandler:
 @DATA_ROUTER.route("/import/spreadsheet/inspect", methods=["POST"])
 @has_request_body(InspectSpreadsheetRequest)
 def inspect_spreadsheet():
-    # FU-341 / FU-198 — import inserts arbitrary stock rows across
+    # import inserts arbitrary stock rows across
     # the install. Same admin gate as backup restore.
     _, err = require_admin()
     if err is not None:
@@ -726,7 +726,7 @@ def download_import_template(section: str):
     writer = csv.writer(buf)
     writer.writerow(template.headers)
     writer.writerow(template.example)
-    # FU-347 — prepend a UTF-8 BOM so Excel-on-Windows opens the file in
+    # prepend a UTF-8 BOM so Excel-on-Windows opens the file in
     # UTF-8 by default (without BOM it guesses ANSI/CP-1252 and any
     # accented character in an example row / template header renders as
     # mojibake). The upload-side sniffer strips the BOM back off before

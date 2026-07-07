@@ -87,7 +87,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useMoney } from 'src/composables/useMoney';
-    // FU-043 — budget input prefix follows the install currency symbol.
+    // budget input prefix follows the install currency symbol.
     const { currencySymbol } = useMoney();
     import { ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';

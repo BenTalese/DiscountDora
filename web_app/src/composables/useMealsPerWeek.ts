@@ -1,4 +1,4 @@
-// FU-181 loose-end 2 — per-user "meals per week" preference. Drives the
+// per-user "meals per week" preference. Drives the
 // sequential builder's target-count. Falls back to `BUILDER_TARGET_MEALS_
 // FALLBACK` (7) when the user hasn't set a value.
 //

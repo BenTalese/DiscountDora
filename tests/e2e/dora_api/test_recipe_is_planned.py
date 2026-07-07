@@ -29,9 +29,13 @@ def test__recipes__is_planned_true_when_future_unconsumed_entry_exists(api):
     plan flips it back to false."""
     today = _household_today()
     next_monday = today + timedelta(days=7 - today.weekday())
-    recipe_id = requests.get(f"{RECIPES}?limit=1").json()["items"][0]["recipe_id"]
+    # Pick a recipe with no existing future meal-plan entries — otherwise
+    # deleting the one entry we add won't flip is_planned back to false.
+    items = requests.get(f"{RECIPES}?limit=200").json()["items"]
+    unplanned = next((r for r in items if r["is_planned"] is False), None)
+    assert unplanned is not None, "seed expected to have an unplanned recipe"
+    recipe_id = unplanned["recipe_id"]
 
-    # Pre-condition isn't relevant — we toggle and check the delta.
     created = requests.post(MEAL_PLANS, json={
         "start_date": next_monday.isoformat(),
         "entries": [{

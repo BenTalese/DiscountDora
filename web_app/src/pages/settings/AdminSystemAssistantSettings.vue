@@ -15,7 +15,7 @@
         </div>
 
         <template v-else>
-            <!-- FU-153 §7.1 — the install-wide knob is just the master
+            <!-- the install-wide knob is just the master
                  kill-switch now. Per-user provider config (URL, model,
                  API key) lives on each user's own Settings → Assistant
                  page; the admin controls the *availability* of that

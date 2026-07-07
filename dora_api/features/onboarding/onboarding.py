@@ -167,7 +167,7 @@ class SeedRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     groups: bool = False
     locations: bool = False
-    # FU-195 — optional per-name filter over the bundled defaults. When
+    # optional per-name filter over the bundled defaults. When
     # None (default) and the corresponding bool is True, seed all defaults
     # (original behaviour). When a list is provided, seed only those
     # defaults whose name (or path, for locations) is in the list.

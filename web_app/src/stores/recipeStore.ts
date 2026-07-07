@@ -61,7 +61,7 @@ export const useRecipeStore = defineStore('recipe', () => {
                 : await recipeApiService.getAsync(resource.id as string);
         recipes.value.push(entity);
         recipes.value.sort((a, b) => collator.compare(a.name, b.name));
-        // FU-095 — callers (RecipeEditDialog) navigate to the new detail
+        // callers (RecipeEditDialog) navigate to the new detail
         // page after create, so we hand back the entity we just resolved.
         return entity;
     };

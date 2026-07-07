@@ -2,12 +2,12 @@ import AxiosHttpClient from './axiosHttpClient';
 import type { CadenceBand } from './stocktakeApiService';
 
 export type AppSettings = {
-    // FU-153 §7.1 — single install-wide master kill-switch for the
+    // single install-wide master kill-switch for the
     // assistant feature. Per-user LLM URL/model/provider/API key live
     // on the User row (see authStore.currentUser.llm_*).
     master_llm_enabled: boolean;
     scanning_enabled: boolean;
-    // P8-05 — buy-verdict oracle. Default on (pure-personal feature).
+    // buy-verdict oracle. Default on (pure-personal feature).
     buy_verdict_enabled: boolean;
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: boolean;
@@ -21,7 +21,7 @@ export type AppSettings = {
     nutrition_db_source: string;
     // Meal Plans C-2.K — household IANA timezone for the "today" boundary.
     timezone: string;
-    // FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47).
+    // install-wide currency (ISO 4217) + display locale (BCP-47).
     // Every money render in the SPA routes through the shared formatter
     // (composables/useMoney.ts), which reads these values from /api/health.
     currency: string;
@@ -37,7 +37,7 @@ export type AppSettings = {
     // 2026-07-04 cleanup.
     stocktake_default_cadence_band: CadenceBand;
     stocktake_auto_tuning_enabled: boolean;
-    // FU-333 Buckets B + C — operational config promoted from DORA_* env vars.
+    // operational config promoted from DORA_* env vars.
     // Bucket-C secrets (SMTP password, VAPID private key) live encrypted-at-
     // rest on the AppSetting row; the read DTO surfaces a `_configured` bool
     // instead of the ciphertext. Writes accept plaintext via the write DTO
@@ -59,7 +59,7 @@ export type AppSettings = {
     public_url: string;
 };
 
-// FU-333 Bucket C — the read DTO exposes `<field>_configured` bools; the
+// the read DTO exposes `<field>_configured` bools; the
 // write DTO accepts the plaintext value on `<field>` (server encrypts and
 // returns only the bool). Empty string on a secret field is the explicit
 // "clear the stored value" signal; omit the field to leave it unchanged.

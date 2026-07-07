@@ -11,7 +11,7 @@ from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
 
-# FU-166: list endpoints take query options on the query string
+# list endpoints take query options on the query string
 # (`?filter=…&sort=…&page=…&limit=…`) and return a `{items, total, page, limit}`
 # envelope. Query-option errors come back via `bad_request(str(exc))`, so the
 # message is in `title`. Rewritten to that contract.
@@ -218,7 +218,7 @@ def test__get_stock_locations__LimitValueIsNotInteger__IsBadRequest(api):
 
 
 def test__get_stock_locations__PageWithoutLimit__DefaultsLimit(api):
-    # FU-166: the "page and limit must be used together" rule was removed;
+    # the "page and limit must be used together" rule was removed;
     # they are now independently optional (limit defaults to 50).
     _Response = requests.get(f'{base_route}?page=1')
 

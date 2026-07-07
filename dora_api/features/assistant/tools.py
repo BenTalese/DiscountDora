@@ -31,7 +31,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.entities.app_setting import AppSetting
-# FU-187 — the assistant now honours the admin-configured expiring-soon window
+# the assistant now honours the admin-configured expiring-soon window
 # (AppSetting.expiring_soon_window_days), matching alerts + the location
 # heatmap. The constant below is still the seeded default; the resolver
 # `effective_expiring_soon_window` layers the override on top (R-003 — one
@@ -542,25 +542,6 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "seasonal_picks",
-            "description": (
-                "What produce is in season in Australia right now (or for a "
-                "named month). Curated table covering common fruit and veg. "
-                "Use for 'what's in season', 'what should I be buying this "
-                "month', 'seasonal produce'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "month": {"type": "string", "description": "Optional month name (e.g. 'march') or number 1-12. Defaults to the current month."},
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "list_suggestions",
             "description": (
                 "Dora's current proposals for this user — generated from "
@@ -865,7 +846,7 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
-    # P8-09 — culinary memory: recall queries over the household's own
+    # culinary memory: recall queries over the household's own
     # accumulated data. All three tools are read-only wrappers over the
     # new /api/reports memory endpoints, composed here so the assistant
     # can answer "what did we make last Christmas?" and "how has dairy
@@ -1028,7 +1009,7 @@ def search_stock(args: dict) -> list[dict]:
         conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(LOW_STOCK_SEQUENCE))
     if _truthy(args.get("expiring_soon")):
         # R-021 — expiring-soon horizon evaluates in household timezone.
-        # FU-187 — window honours AppSetting override, not the bare default.
+        # window honours AppSetting override, not the bare default.
         horizon = household_today(repo) + timedelta(days=_resolve_expiring_window(repo))
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(horizon))
@@ -1095,7 +1076,7 @@ def search_products(args: dict) -> list[dict]:
 
 def search_recipes(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
-    # FU-314 — cuisine + category noload; both read below for the
+    # cuisine + category noload; both read below for the
     # response body and the Python-side cuisine filter.
     query = (
         repo.get(Recipe)
@@ -1187,7 +1168,7 @@ def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
 
 def suggest_recipes(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
-    # FU-314 — cuisine + category noload; the response body reads cuisine
+    # cuisine + category noload; the response body reads cuisine
     # and `_recipe_matches_keywords` reads both, so eager-load both.
     query = (
         repo.get(Recipe)
@@ -1213,7 +1194,7 @@ def suggest_recipes(args: dict) -> list[dict]:
     if _truthy(args.get("favourite_only")):
         conditions.append(EntityField(Recipe, Recipe.Fields.IS_FAVOURITE).eq(True))
 
-    # P2-08 — tag / ingredient filters. We compute an allowed recipe-id
+    # tag / ingredient filters. We compute an allowed recipe-id
     # set up front (when any filter is set) and add it as an `id IN
     # (...)` constraint, which composes naturally with the existing
     # `conditions` list. Empty result short-circuits before the DB hit.
@@ -1453,7 +1434,7 @@ def suggest_substitution(args: dict) -> list[dict]:
 
 def whats_expiring(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
-    # FU-187 — when the caller doesn't specify `within_days`, fall back to the
+    # when the caller doesn't specify `within_days`, fall back to the
     # household-configured window (not the bare default), so the assistant's
     # answer agrees with alerts + the location heatmap.
     default_window = _resolve_expiring_window(repo)
@@ -1550,7 +1531,7 @@ def pantry_health(_args: dict) -> list[dict]:
     flagged = sum(1 for i in items if i.is_flagged)
     open_items = sum(1 for i in items if i.is_open)
     # R-021 — household-tz boundary for the expiring/expired buckets.
-    # FU-187 — window honours AppSetting override, not the bare default.
+    # window honours AppSetting override, not the bare default.
     today = household_today(repo)
     horizon = today + timedelta(days=_resolve_expiring_window(repo))
     expiring_soon = sum(
@@ -1669,7 +1650,7 @@ def recipes_using_item(args: dict) -> list[dict]:
         repo.get(Recipe)
         .include(Recipe.Fields.INGREDIENTS)
         .then_include(RecipeIngredient.Fields.STOCK_ITEM)
-        # FU-314 — cuisine noload; response body reads it below.
+        # cuisine noload; response body reads it below.
         .include(Recipe.Fields.CUISINE)
         .all()
     )
@@ -1816,7 +1797,7 @@ def recipe_detail(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
 
     def build():
-        # FU-314 — cuisine + category noload; both read on the winner
+        # cuisine + category noload; both read on the winner
         # AND on the ambiguous-candidates list below.
         return (
             repo.get(Recipe)
@@ -1967,7 +1948,7 @@ def meal_detail(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
 
     def build():
-        # FU-314 — cuisine noload; response body reads it below.
+        # cuisine noload; response body reads it below.
         return repo.get(Recipe).include(Recipe.Fields.CUISINE)
 
     result = _find_one_by_name(repo, Recipe, name, build)
@@ -2017,7 +1998,7 @@ def find_location(args: dict) -> list[dict]:
     )
 
     # R-021 — household-tz "today" for urgency thresholds.
-    # FU-187 — window honours AppSetting override, not the bare default.
+    # window honours AppSetting override, not the bare default.
     today = household_today(repo)
     horizon = today + timedelta(days=_resolve_expiring_window(repo))
 
@@ -2052,71 +2033,6 @@ def find_location(args: dict) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────
 # Tier-3 cognitive / curated tools
 # ─────────────────────────────────────────────────────────────────────────
-
-# AU seasonal produce by month. Curated rather than computed — fits a small
-# pocket reference better than a date library. Apologies to the southern-
-# hemisphere edge cases; this is the rough consensus.
-_SEASONAL_AU: dict[int, dict[str, list[str]]] = {
-    # month → { "fruit": [...], "veg": [...] }
-    1:  {"fruit": ["apricot", "blackberry", "blueberry", "cherry", "fig", "lychee", "mango", "nectarine", "peach", "plum", "raspberry", "watermelon"],
-         "veg":   ["basil", "capsicum", "corn", "cucumber", "eggplant", "green bean", "lettuce", "snow pea", "tomato", "zucchini"]},
-    2:  {"fruit": ["apple", "blackberry", "fig", "grape", "mango", "nectarine", "passionfruit", "peach", "plum", "raspberry", "watermelon"],
-         "veg":   ["basil", "capsicum", "chilli", "corn", "cucumber", "eggplant", "leek", "lettuce", "tomato", "zucchini"]},
-    3:  {"fruit": ["apple", "fig", "grape", "kiwifruit", "passionfruit", "pear", "persimmon", "pomegranate", "quince"],
-         "veg":   ["beetroot", "broccoli", "cabbage", "cauliflower", "eggplant", "leek", "mushroom", "pumpkin", "silverbeet", "sweet potato"]},
-    4:  {"fruit": ["apple", "feijoa", "kiwifruit", "mandarin", "pear", "persimmon", "pomegranate", "quince"],
-         "veg":   ["beetroot", "broccoli", "brussels sprout", "cabbage", "cauliflower", "fennel", "leek", "mushroom", "pumpkin", "silverbeet", "sweet potato"]},
-    5:  {"fruit": ["apple", "kiwifruit", "lemon", "mandarin", "orange", "pear", "persimmon", "rhubarb"],
-         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "celeriac", "fennel", "kale", "leek", "parsnip", "pumpkin", "swede", "turnip"]},
-    6:  {"fruit": ["apple", "kiwifruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
-         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "celeriac", "fennel", "kale", "leek", "parsnip", "pumpkin", "silverbeet", "swede", "turnip"]},
-    7:  {"fruit": ["apple", "grapefruit", "kiwifruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
-         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "fennel", "kale", "leek", "parsnip", "pumpkin", "silverbeet", "swede", "turnip"]},
-    8:  {"fruit": ["apple", "blood orange", "grapefruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
-         "veg":   ["asparagus", "broccoli", "brussels sprout", "cabbage", "cauliflower", "fennel", "kale", "leek", "parsnip", "spinach", "swede"]},
-    9:  {"fruit": ["apple", "blood orange", "grapefruit", "lemon", "mandarin", "orange", "pineapple", "strawberry"],
-         "veg":   ["artichoke", "asparagus", "broad bean", "broccoli", "cabbage", "fennel", "kale", "leek", "spinach", "spring onion"]},
-    10: {"fruit": ["apple", "loquat", "mango", "papaya", "pineapple", "rhubarb", "strawberry"],
-         "veg":   ["artichoke", "asparagus", "broad bean", "broccoli", "leek", "lettuce", "rocket", "snow pea", "spinach", "spring onion"]},
-    11: {"fruit": ["apricot", "blueberry", "cherry", "mango", "nectarine", "papaya", "peach", "pineapple", "raspberry", "strawberry", "watermelon"],
-         "veg":   ["asparagus", "broad bean", "capsicum", "cucumber", "lettuce", "rocket", "snow pea", "spring onion", "tomato", "zucchini"]},
-    12: {"fruit": ["apricot", "blueberry", "cherry", "lychee", "mango", "nectarine", "peach", "pineapple", "plum", "raspberry", "strawberry", "watermelon"],
-         "veg":   ["basil", "capsicum", "corn", "cucumber", "lettuce", "rocket", "snow pea", "spring onion", "tomato", "zucchini"]},
-}
-
-_MONTH_NAMES = ["january", "february", "march", "april", "may", "june",
-                "july", "august", "september", "october", "november", "december"]
-
-
-def _resolve_month(raw: str) -> int:
-    # R-021 — "this month" is the household-tz month (matters at the
-    # last/first day of a month when server-local has already rolled over).
-    fallback_month = household_today(SqlAlchemyRepository()).month
-    raw = raw.strip().lower()
-    if not raw:
-        return fallback_month
-    try:
-        n = int(raw)
-        if 1 <= n <= 12:
-            return n
-    except ValueError:
-        pass
-    for i, name in enumerate(_MONTH_NAMES, start=1):
-        if raw.startswith(name[:3]):
-            return i
-    return fallback_month
-
-
-def seasonal_picks(args: dict) -> list[dict]:
-    month_num = _resolve_month(str(args.get("month") or ""))
-    table = _SEASONAL_AU.get(month_num, {"fruit": [], "veg": []})
-    return [{
-        "month": _MONTH_NAMES[month_num - 1].capitalize(),
-        "fruit": table["fruit"],
-        "veg": table["veg"],
-        "note": "Australian seasonal guide — pricing and availability vary by region.",
-    }]
-
 
 # ── Suggestions inbox (P2-04) ───────────────────────────────────────────
 # Same handler as GET /api/suggestions. Flattened to plain dicts so the
@@ -2696,7 +2612,7 @@ def recipe_for_occasion(args: dict) -> list[dict]:
     }]
 
 
-# P8-09 — culinary memory tools. Thin wrappers over the reports
+# culinary memory tools. Thin wrappers over the reports
 # handlers so the assistant answers recall questions from the same
 # aggregation logic the /reports page renders (single source, R-003).
 def meals_cooked_in_range(args: dict) -> list[dict]:
@@ -2785,7 +2701,6 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "shopping_list_contents": shopping_list_contents,
     "meal_detail": meal_detail,
     "find_location": find_location,
-    "seasonal_picks": seasonal_picks,
     "compare_prices": compare_prices,
     "purchase_price_stats": purchase_price_stats,
     "budget_status": budget_status,
@@ -2793,7 +2708,6 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "waste_insights": waste_insights,
     "list_suggestions": list_suggestions,
     "recipe_for_occasion": recipe_for_occasion,
-    # P8-09 memory tools.
     "meals_cooked_in_range": meals_cooked_in_range,
     "spend_by_category": spend_by_category,
     "spend_year_over_year": spend_year_over_year,
@@ -2830,13 +2744,13 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     # list_suggestions intentionally has no nav target — the SPA reads
     # primary_action off each suggestion and routes from there.
     "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},
-    # P8-09 — recall queries hand the user off to the /reports Memory
+    # recall queries hand the user off to the /reports Memory
     # section for the full timeline / bars / drill-down. The chat itself
     # already carries the answer; the nav is the "and see more" affordance.
     "meals_cooked_in_range": {"path": "/reports", "label": "Open Reports"},
     "spend_by_category": {"path": "/reports", "label": "Open Reports"},
     "spend_year_over_year": {"path": "/reports", "label": "Open Reports"},
-    # convert_measurement / suggest_substitution / seasonal_picks need no nav.
+    # convert_measurement / suggest_substitution need no nav.
 }
 
 

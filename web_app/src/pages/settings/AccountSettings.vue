@@ -242,7 +242,7 @@
 
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
-    // FU-197 — proof-of-possession for the verified change-email flow.
+    // proof-of-possession for the verified change-email flow.
     // Kept separate from the change-password input below so the two
     // forms don't accidentally share state.
     const emailChangePassword = ref('');

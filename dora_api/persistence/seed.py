@@ -59,7 +59,7 @@ def seed_dev_data():
     db.session.autoflush = False
 
     # ---------------- STORES (dev fixtures only) ---------------- #
-    # FU-189 — production ships zero pre-seeded stores; these exist only
+    # production ships zero pre-seeded stores; these exist only
     # so the dev seed dataset has products to render.
     woolworths = Store(name="Woolworths")
     coles = Store(name="Coles")
@@ -432,7 +432,7 @@ def seed_dev_data():
     for t in tools.values():
         repo.add(t)
 
-    # C-2.A — household-wide meal-slot vocabulary. Mirror the migration's
+    # household-wide meal-slot vocabulary. Mirror the migration's
     # default seed so a create_all dev/test DB matches a migrated prod DB.
     _meal_slot_names = ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"]
     for i, n in enumerate(_meal_slot_names):
@@ -465,7 +465,7 @@ def seed_dev_data():
             version_group_id=None,
             kcal=kw.get("kcal"),
             steps_mode=kw.get("steps_mode", "freeform"),
-            # FU-082 — seed recipes get the same now() stamp the real
+            # seed recipes get the same now() stamp the real
             # create handlers use; the "Recently added" axis sorts them
             # by name within the same tick.
             created_at=kw.get("created_at", datetime.now(UTC)),
@@ -735,7 +735,7 @@ def seed_dev_data():
         name="Last week", created_at=now - timedelta(days=7),
         completed_at=now - timedelta(days=5), status=SHOPPING_LIST_STATUS_DONE,
     )
-    # FU-227 chunk 5 — a second finished list whose priced ticked lines get
+    # a second finished list whose priced ticked lines get
     # harvested into observations (provenance via FK). Its items overlap the
     # draft `primary` list, so those draft lines surface a "from your last
     # receipt" prefill; the rest fall back to the chosen-offer prefill.

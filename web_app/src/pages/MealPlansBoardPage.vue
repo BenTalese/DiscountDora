@@ -64,7 +64,7 @@
 
                 <q-space />
 
-                <!-- FU-338 — Print action lives in-context (matches the
+                <!-- Print action lives in-context (matches the
                      print affordance on MealPlansOverview and every other
                      printable surface). Uses the same `useMealPlanExport`
                      path via `planner.printFocusedWeek`. Hidden when no
@@ -344,7 +344,7 @@
     import MealPlanSkeleton from 'src/components/MealPlanSkeleton.vue';
     import MealPlanTemplatesDrawer from 'src/components/MealPlanTemplatesDrawer.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
-    // FU-181 — target-count is the user's `meals_per_week` pref (falls
+    // target-count is the user's `meals_per_week` pref (falls
     // back to 7 when unset). Reactive so a Preferences change lights up
     // the builder without a reload.
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';

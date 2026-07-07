@@ -57,7 +57,7 @@ class CreateMealPlanHandler:
     def handle(self, request: CreateMealPlanRequest) -> CreateMealPlanResponse:
         _Today = household_today(self.repository)
 
-        # C-2.A — validate slot names against the household MealSlot
+        # validate slot names against the household MealSlot
         # vocabulary at the boundary (R-010). Slots are free-text labels,
         # not FKs; off-vocab names are rejected on new writes.
         _ValidSlots = get_valid_slot_names(self.repository)

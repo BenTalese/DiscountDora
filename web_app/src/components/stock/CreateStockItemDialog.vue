@@ -11,7 +11,7 @@
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
                     <FormErrorSummary :message="generalError" />
 
-                    <!-- P8-02 — barcode-to-add suggestion banner. Shown when
+                    <!-- barcode-to-add suggestion banner. Shown when
                          the dialog opens from a scan flow with either an OFF
                          suggestion (source='off') or an EAN-only prefill
                          (unknown barcode, OFF miss or product_no_link). Uses
@@ -144,7 +144,7 @@
     import { useQuasar } from 'quasar';
     import { computed, reactive, ref, watch } from 'vue';
 
-    // P8-02 prefill type lives in a sibling `.ts` file so page callers
+    // Prefill type lives in a sibling `.ts` file so page callers
     // resolve it under ESLint's TS parser (which doesn't always trace
     // named exports across `.vue` boundaries).
     const props = defineProps<{
@@ -214,7 +214,7 @@
         const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
         return typeof seq === 'number' ? seq : null;
     });
-    // FU-099 — R-001 form-error plumbing.
+    // R-001 form-error plumbing.
     const { fieldErrors, generalError, handleSaveError, reset: resetFormErrors } = useFormErrors();
 
     function resetForm() {
@@ -258,7 +258,7 @@
                 stock_level_id: form.stock_level_id,
                 stock_location_id: form.stock_location_id,
             });
-            // P8-02 — if the dialog was opened from a scan flow with a
+            // if the dialog was opened from a scan flow with a
             // barcode prefill, register the EAN against the new stock
             // item so the next scan of the same code lands on this item
             // instead of re-triggering the add-flow. A conflict here (rare

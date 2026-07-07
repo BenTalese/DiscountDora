@@ -44,7 +44,7 @@ class ImportedStepDto:
 @dataclass(frozen=True, slots=True)
 class ImportedRecipeDto:
     name: str
-    # C-4 Chunk 2: cuisine/category are FK vocabularies. The importer is a
+    # cuisine/category are FK vocabularies. The importer is a
     # no-persist preview, so it returns the parsed *name* (for display) plus
     # a resolved *id* when an existing vocab row matches by name. The id is
     # null when the parsed value has no match — the user picks/creates one
@@ -64,7 +64,7 @@ class ImportedRecipeDto:
     # user didn't provide one.
     source_url: str
     ingredients: List[ImportedIngredientDto] = field(default_factory=list)
-    # C-4 Chunk 6 — structured steps parsed from the recipe. Empty when
+    # structured steps parsed from the recipe. Empty when
     # the parser only produced a freeform ``instructions`` blob.
     steps: List[ImportedStepDto] = field(default_factory=list)
     # IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — true when the parser fell

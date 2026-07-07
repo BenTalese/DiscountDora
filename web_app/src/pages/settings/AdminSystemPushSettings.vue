@@ -40,7 +40,7 @@
                     />
                 </SettingsRow>
 
-                <!-- FU-333 Bucket C — VAPID private key lives encrypted-
+                <!-- VAPID private key lives encrypted-
                      at-rest on AppSetting.vapid_private_key_encrypted. The
                      read DTO returns only `vapid_private_key_configured`.
                      Write-only input: submit replaces / empty clears. -->

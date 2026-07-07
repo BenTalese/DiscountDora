@@ -8,10 +8,10 @@ import routes from './routes';
 
 const PUBLIC_ROUTES = new Set<string>([
     '/login',
-    // FU-200 — fresh-install first-admin setup. Reachable without a
+    // fresh-install first-admin setup. Reachable without a
     // session by definition.
     '/setup',
-    // P8-10 — native app first-run instance picker. Reachable before any
+    // native app first-run instance picker. Reachable before any
     // backend is configured (there is no backend to authenticate against
     // until this step completes).
     '/setup/backend',
@@ -87,7 +87,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     // route needs a session), or redirects to / (when an already-logged-in
     // user lands on /login).
     ROUTER.beforeEach(async (to) => {
-        // P8-10 — native app first-run gate. On Capacitor the app is served
+        // native app first-run gate. On Capacitor the app is served
         // from https://localhost with no backend behind it; block every
         // route (including /login) until the user has picked an instance.
         if (isNativePlatform() && !hasBackendBaseUrl()) {
@@ -103,7 +103,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
             await authStore.bootstrapAsync();
         }
 
-        // FU-200 — fresh-install gate. While no admin exists, every route
+        // fresh-install gate. While no admin exists, every route
         // funnels to /setup; conversely, an installed system never serves
         // /setup (the operator who saved a /setup tab from earlier doesn't
         // get a second-admin foothold). These checks sit ahead of the

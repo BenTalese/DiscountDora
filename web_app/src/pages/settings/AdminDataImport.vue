@@ -17,7 +17,7 @@
                         level, location, group, expiry, is&nbsp;essential.
                     </div>
                 </div>
-                <!-- FU-343 — per-section CSV template. Sits on the same
+                <!-- per-section CSV template. Sits on the same
                      header row as the file picker below because "download a
                      blank one" is a peer choice to "upload one you already
                      have". Single-section installs (today: stock_items) get
@@ -201,7 +201,7 @@
             <q-separator />
             <q-card-section>
                 <div class="text-subtitle2 q-mb-sm">Options</div>
-                <!-- FU-344 — SettingsRow puts the description on the left
+                <!-- SettingsRow puts the description on the left
                      and the toggle on the right; consistent with every
                      other Settings page and fixes the previous
                      stacked-checkbox misalignment. -->
@@ -324,7 +324,7 @@
     const $q = useQuasar();
     const { progress, upload, abort, reset: resetUpload } = useChunkedUpload();
 
-    // FU-343 — per-section CSV templates. Loaded once on mount; the
+    // per-section CSV templates. Loaded once on mount; the
     // download button in the header offers a single click when there's
     // one section (today's shape) or a menu when more land later.
     interface ImportTemplate {

@@ -6,6 +6,71 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Boot-time warning when `DORA_SECURE_COOKIES` is unset in production —
+  FU-460 (2026-07-07).** Any install running `DORA_ENV=production`
+  without an explicit `DORA_SECURE_COOKIES` value now sees a loud stderr
+  banner at boot: HTTPS-fronted installs (SaaS or self-host behind
+  Let's Encrypt / Cloudflare / LB TLS termination) that forgot the flag
+  get told to set `DORA_SECURE_COOKIES=true`, and installs deliberately
+  serving over plain HTTP (LAN-only, VPN-fronted, home-lab) are told to
+  set `DORA_SECURE_COOKIES=false` explicitly to silence the warning.
+  Warning, not a boot-block — a prod install on plain HTTP is a
+  legitimate shape and shouldn't be forced through an override flag.
+  Default stays off so desktop / LAN self-host / dev keep working
+  unchanged. `DORA_SKIP_PROD_VALIDATION=true` also silences.
+- **Put-away helper on finished shopping lists — FU-452 Surface A (2026-07-07).**
+  A **Put away** button now appears in the toolbar of a `done` shopping list.
+  Opens an ephemeral checklist dialog that groups the list's ticked items by
+  their `stock_location_breadcrumb` — one card per kitchen location with a
+  tick-per-group affordance ("Freezer · 3", "Pantry · 2", "(No location) · 1"
+  pinned to the bottom). Unsorted items get a per-line **Assign** button that
+  opens a small location picker (searchable walked tree, same shape as the
+  create-stock-item picker); saving re-parents the item and refreshes the list
+  so the item moves group in-place. All checklist state is ephemeral — closing
+  the dialog resets ticks, and no new column was added. Nothing appears on
+  non-`done` lists. Surface B of the original FU (grouping expiring alerts by
+  location) was explicitly cut this session.
+
+### Changed
+- **Comment-hygiene sweep — FU-462 (2026-07-07).** Removed 887 prompt-ID
+  (`P#`, `C-#`, `B#`, `INV-#`) and FU-NNN task-ID comments from shipped
+  source across 202 files (`dora_api/`, `tests/`, `web_app/src/`). Where
+  the comment carried real WHY, the substance was kept; where it was pure
+  breadcrumb naming the prompt/FU that produced the code, the whole
+  comment was deleted. R-008 in `docs/01_charter/ENGINEERING_STANDARDS.md`
+  was hardened with an explicit close-time grep so future work can't
+  reintroduce the pattern. Pytest suite still 818/818, no new type
+  errors introduced.
+
+### Fixed
+- **Test-suite health restored — FU-466 (2026-07-07).** Full pytest suite
+  now green (818/818). Fixed a missing session fixture in
+  `test_bucket_c_secrets.py` that left the wrapping key unconfigured on
+  every write-a-secret test; a stale test assumption in
+  `test_recipe_is_planned.py` that picked an already-planned seed recipe
+  and so couldn't observe the toggle; and an order-dependent flake in
+  `test_data_router.py::test__register_barcode__against_product__lookup_traverses_via_product`
+  by advancing the round-robin Product picker until it finds one with a
+  linked StockItem (previously landed on an unlinked Product once earlier
+  tests had consumed the linked seed rows). Most of FU-466's original
+  ~41-failure spread (alerts / digest / push / stock_item / household_tz)
+  had already resolved via unrelated feature work between the FU raise
+  date and the fix session.
+
+### Removed
+- **Assistant tool `seasonal_picks` removed — FU-501 (2026-07-07).** The Dora
+  assistant no longer exposes a "what's in season?" tool. It was only ever
+  reachable via chat (no page, no dashboard tile, no shopping-list
+  integration), and the underlying `_SEASONAL_AU` table was AU-only — a
+  non-AU install got wrong data with no locale fallback. Cutting was cheaper
+  than localising for a low-value chat capability. Removed: the tool schema,
+  handler, `_SEASONAL_AU` / `_MONTH_NAMES` / `_resolve_month` in
+  [tools.py](dora_api/features/assistant/tools.py); the tool-selection
+  example in [ask_assistant.py](dora_api/features/assistant/ask_assistant.py);
+  the `seasonal_picks` entry in [DoraHelpPage.vue](web_app/src/pages/DoraHelpPage.vue);
+  the now-unused `eco: 'mdi-leaf'` icon in [icons.ts](web_app/src/style/icons.ts).
+
+### Added
 - **Budget-aware trim on auto-generated shopping lists — FU-448 (2026-07-06).**
   Closes the P2-05 optimiser half that was deferred when the user-facing
   budget shipped. On any list where projected total exceeds the user's

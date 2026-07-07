@@ -87,7 +87,7 @@ export interface HttpClient {
     delete<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>>;
 }
 
-// P8-10 — thin adapter kept for the handful of callers that still read the
+// thin adapter kept for the handful of callers that still read the
 // base URL synchronously (network-status ping, About settings). New code
 // should import `getBackendBaseUrl` from `services/api/backendUrl` directly.
 export function resolveBaseURL(): string {
@@ -135,7 +135,7 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// FU-197 — double-submit CSRF cookie reader. The backend mints
+// double-submit CSRF cookie reader. The backend mints
 // `dora_csrf` (non-HttpOnly) on the first response that doesn't carry
 // it, so this returns null until the SPA has made at least one request
 // (the cold-load `getMe` GET happens before any mutating call).
@@ -169,7 +169,7 @@ export default class AxiosHttpClient implements HttpClient {
         // ── Request interceptor: correlation id + CSRF token ───────
         this.axios.interceptors.request.use((config) => {
             const cfg = config as DoraRequestConfig;
-            // P8-10 — resolve baseURL per-request so a runtime change
+            // resolve baseURL per-request so a runtime change
             // (Settings → save new instance URL) takes effect immediately
             // without rebuilding the axios instance. Empty string is a
             // valid answer on native before the setup gate completes; the
@@ -178,7 +178,7 @@ export default class AxiosHttpClient implements HttpClient {
             if (!cfg.__correlationId) cfg.__correlationId = newCorrelationId();
             cfg.headers.set?.('X-Request-Id', cfg.__correlationId);
 
-            // FU-197 — double-submit CSRF. The backend mints the
+            // double-submit CSRF. The backend mints the
             // `dora_csrf` cookie on the first response that doesn't
             // carry one (cold-load GETs seed it), and rejects any
             // mutating request whose `X-CSRF-Token` header doesn't
@@ -286,7 +286,7 @@ export default class AxiosHttpClient implements HttpClient {
             }
         }
 
-        // FU-099 — every failed API call lands in DevTools with the same
+        // every failed API call lands in DevTools with the same
         // shape (method, path, status, code, correlation id, details).
         // The 5xx path used to log; lifted to all non-2xx so a user
         // pasting a toast caption ("ref: 4f8c0312") into a bug report

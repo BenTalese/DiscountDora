@@ -9,7 +9,7 @@ export interface PriceHistoryPoint {
     on_deal: boolean;
 }
 
-// FU-227 chunk 6 — the user's own observation points (per-unit, "your data").
+// the user's own observation points (per-unit, "your data").
 // `on_deal`/`list_price` don't apply (an observation isn't an offer), so this
 // is a lighter shape than PriceHistoryPoint.
 export interface PriceObservationPoint {
@@ -18,7 +18,7 @@ export interface PriceObservationPoint {
     store_name?: string | null;
 }
 
-// FU-227 chunk 6 — per-series baseline block (F-3). Server-derived (R-003);
+// per-series baseline block (F-3). Server-derived (R-003);
 // the chart renders the reference line + above-usual chip, never recomputes.
 export interface SeriesYourPrices {
     baseline: number | null;
@@ -49,7 +49,7 @@ export interface PriceHistorySeries {
     all_time_low: { unit_price: number; date: string | null } | null;
 }
 
-// FU-227 chunk 6 — per-stock-item unioned series for the "Full history"
+// per-stock-item unioned series for the "Full history"
 // bottom-sheet. Points are tagged by `source` and already normalised to
 // `canonical_unit` server-side.
 export interface StockItemPriceHistoryPoint {

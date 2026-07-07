@@ -36,7 +36,7 @@ function probePiperConfigured(): Promise<boolean> {
     return piperConfiguredProbe;
 }
 
-// FU-287 — iOS / WKWebView audio-unlock primer.
+// iOS / WKWebView audio-unlock primer.
 //
 // iOS Safari (and the macOS WKWebView the desktop bundle uses on Mac)
 // enforce a strict user-gesture rule for `HTMLAudioElement.play()`. The
@@ -117,7 +117,7 @@ function unlockAudioOnFirstGesture(): void {
 }
 
 export function useSpeechOutput() {
-    // FU-287 — register the iOS audio-unlock primer once per session on
+    // register the iOS audio-unlock primer once per session on
     // the first `useSpeechOutput()` instantiation (which is early — the
     // MainLayout mounts Dora chat + cook mode both consume this).
     // Idempotent across composable instances.

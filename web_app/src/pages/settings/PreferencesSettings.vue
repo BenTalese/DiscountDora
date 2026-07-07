@@ -215,7 +215,7 @@
         { label: 'Fresh', value: 'fresh' },
         { label: 'Batch', value: 'batch' },
     ];
-    // FU-316 — "always ask which list" quick-add opt-in. Optimistic flip
+    // "always ask which list" quick-add opt-in. Optimistic flip
     // with rollback on error, same shape as the other single-toggle prefs
     // on this page.
     const savingAlwaysAsk = ref(false);
@@ -233,7 +233,7 @@
         }
     }
 
-    // P8-07 — Zero-Input Pantry opt-out. Same optimistic-flip shape as the
+    // Zero-Input Pantry opt-out. Same optimistic-flip shape as the
     // other single-toggle prefs. Default true on a fresh account.
     const savingInferredPantry = ref(false);
     async function onInferredPantryChange(value: boolean) {
@@ -252,7 +252,7 @@
         }
     }
 
-    // FU-181 loose-end 2 — meals-per-week input. Null / cleared → server
+    // meals-per-week input. Null / cleared → server
     // stores NULL and the builder falls back to
     // BUILDER_TARGET_MEALS_FALLBACK. Validated 1–21 server-side.
     const mealsPerWeekDraft = ref<number | null>(currentUser.value?.meals_per_week ?? null);

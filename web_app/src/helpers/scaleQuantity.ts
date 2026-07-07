@@ -1,4 +1,4 @@
-// C-3 Chunk 6 — DEC-4 quantity-scaling rule.
+// DEC-4 quantity-scaling rule.
 //
 // Cook mode lets the user override how many people they're cooking for; every
 // ingredient quantity rescales `cookingFor / recipe.servings`. The raw

@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 
-// FU-121 — per-page persisted filter-panel expanded state shared between
+// per-page persisted filter-panel expanded state shared between
 // FilterToggleButton (in the page toolbar) and FilterBar (the panel
 // below). Persists across reloads via localStorage so a user who likes
 // the panel open on Stock Overview gets it back on next visit. Mobile

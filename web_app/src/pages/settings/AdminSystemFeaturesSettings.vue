@@ -38,7 +38,7 @@
                     />
                 </SettingsRow>
 
-                <!-- P8-05 — buy-verdict oracle. Personal-data-only: no
+                <!-- buy-verdict oracle. Personal-data-only: no
                      external calls, no crowd data. On by default. -->
                 <SettingsRow
                     label='"Should I buy?" oracle'
@@ -54,7 +54,7 @@
 
             <hr class="settings-divider" />
 
-            <!-- FU-209: Product search URL is part of the products overlay,
+            <!-- Product search URL is part of the products overlay,
                  so it follows the same data-presence gate as the rest of the
                  surface — hidden entirely until at least one Product row
                  exists. Operators on a fresh install won't see a setting for
@@ -115,7 +115,7 @@
     const scanningDraft = ref(false);
     const savingScanning = ref(false);
 
-    // P8-05 — buy-verdict oracle install-wide toggle. Defaults on (see
+    // buy-verdict oracle install-wide toggle. Defaults on (see
     // AppSetting entity docstring); the API returns the current value.
     const buyVerdictDraft = ref(true);
     const savingBuyVerdict = ref(false);

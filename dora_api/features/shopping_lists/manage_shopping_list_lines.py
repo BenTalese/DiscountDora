@@ -42,7 +42,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 class AddLineRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # C-7 Chunk 3 — a line may anchor on a stock item, a product, or
+    # a line may anchor on a stock item, a product, or
     # both. At least one MUST be set; validated below + at the DB
     # (CHECK ck_shopping_list_line_anchor). `product_id` enables the
     # "standalone product line" path (L130 / L191 rule 1): a product
@@ -68,7 +68,7 @@ class AddLineHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: AddLineRequest, shopping_list_id: UUID) -> AddLineResponse:
-        # C-7 Chunk 3 — anchor validation. At least one of
+        # anchor validation. At least one of
         # stock_item_id/product_id is required; the DB enforces it too
         # but failing early gives the SPA a clean 400.
         if request.stock_item_id is None and request.product_id is None:
@@ -87,7 +87,7 @@ class AddLineHandler:
             if product is None:
                 return AddLineResponse(product_not_found=True)
 
-        # C-7 Chunk 3 — dedupe by anchor. Same stock_item_id OR same
+        # dedupe by anchor. Same stock_item_id OR same
         # product_id on the same list = already on list. (A product
         # nested under a stock item carries both columns; either
         # match counts.)
@@ -191,7 +191,7 @@ class UpdateLineRequest(BaseModel):
     # explicit flag to clear an existing selection.
     clear_selected_product: bool = False
     sequence: int | None = None
-    # P2-02 purchase memory overrides. Same clear-vs-unset story as the
+    # Purchase-memory overrides. Same clear-vs-unset story as the
     # selected_product fields: clients send the explicit clear_* flag to
     # blank a previously-recorded actual price/store, otherwise omitted
     # fields are left untouched.
@@ -199,10 +199,10 @@ class UpdateLineRequest(BaseModel):
     clear_actual_unit_price: bool = False
     purchased_store_id: UUID | None = None
     clear_purchased_store: bool = False
-    # FU-215 — optional PreferredBuy hint on the line (clear-vs-unset flag).
+    # optional PreferredBuy hint on the line (clear-vs-unset flag).
     preferred_buy_id: UUID | None = None
     clear_preferred_buy: bool = False
-    # FU-448 — "Add back" from the Deferred-to-fit-budget section flips
+    # "Add back" from the Deferred-to-fit-budget section flips
     # this to False; the reason chip is cleared alongside it. Only ever
     # sent as False from the SPA (deferral itself goes through the
     # dedicated trim-to-budget endpoint, not this PATCH).
@@ -277,7 +277,7 @@ class UpdateLineHandler:
                 snapshot_offer_price(self.repository, line)
             user_edited = True
 
-        # P2-02 — actual paid price / store. Editing these doesn't flip
+        # actual paid price / store. Editing these doesn't flip
         # added_via back to manual: they're a shopping-mode capture, not a
         # re-curation of how the line came to be on the list.
         if request.clear_actual_unit_price:
@@ -289,13 +289,13 @@ class UpdateLineHandler:
         elif "purchased_store_id" in set_fields and request.purchased_store_id is not None:
             line.purchased_store_id = request.purchased_store_id
 
-        # FU-215 — preferred-buy hint (a reminder; doesn't flip provenance).
+        # preferred-buy hint (a reminder; doesn't flip provenance).
         if request.clear_preferred_buy:
             line.preferred_buy_id = None
         elif "preferred_buy_id" in set_fields and request.preferred_buy_id is not None:
             line.preferred_buy_id = request.preferred_buy_id
 
-        # FU-448 — "Add back" clears both the deferred flag and the frozen
+        # "Add back" clears both the deferred flag and the frozen
         # reason chip in lock-step; the two fields are always coherent.
         if "deferred_by_budget" in set_fields and request.deferred_by_budget is False:
             line.deferred_by_budget = False
@@ -337,7 +337,7 @@ class DeleteLineHandler:
         # strings so the parent-ownership guard doesn't always mismatch.
         if line is None or str(line.shopping_list_id) != str(shopping_list_id):
             return DeleteLineResponse(line_not_found=True)
-        # C-7 Chunk 3, rule 3 — when a stock-item-anchored line is
+        # when a stock-item-anchored line is
         # removed, cascade-remove any nested product-only lines on
         # the same list whose product is linked to that stock item.
         # A "nested product line" here = product_id set, stock_item_id
@@ -403,7 +403,7 @@ class RemoveLineByStockItemHandler:
             & EntityField(ShoppingListLine, "stock_item_id").eq(stock_item_id)
         )
         if existing is not None:
-            # C-7 Chunk 3, rule 3 — cascade-remove nested product
+            # cascade-remove nested product
             # lines (same rule as the by-line delete; see comment
             # above DeleteLineHandler).
             stock_item = (

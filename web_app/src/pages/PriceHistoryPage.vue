@@ -159,7 +159,7 @@
                                     </q-icon>
                                 </span>
                             </div>
-                            <!-- FU-227 chunk 6 (F-3) — the user's own usual
+                            <!-- the user's own usual
                                  price for this product + above-usual signal. A
                                  caption (not on the chart axis) so the per-unit
                                  baseline never clashes with the raw offer scale. -->
@@ -257,7 +257,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import { useMoney, formatMoney } from 'src/composables/useMoney';
-    // FU-043 — money renders + input labels read the install-currency
+    // money renders + input labels read the install-currency
     // symbol from the shared money policy.
     const { currencySymbol } = useMoney();
     import { useQuasar } from 'quasar';
@@ -276,7 +276,7 @@
     const $q = useQuasar();
     const route = useRoute();
     const historyApi = new PriceHistoryApiService();
-    // FU-154 — products come through the store (R-003), so a save on the
+    // products come through the store (R-003), so a save on the
     // product-search surface is visible here without a hard refresh.
     const productStore = useProductStore();
     const { products: candidates } = storeToRefs(productStore);
@@ -296,7 +296,7 @@
     const alertsOpen = ref(false);
     const alertInputs = reactive<Record<string, number | null>>({});
 
-    // B9.6: chart width tracks the surrounding card so the graph extends to
+    // chart width tracks the surrounding card so the graph extends to
     // the card edge at every viewport size. Was hard-coded to 720, which
     // left a gap on wide screens and overflowed on narrow ones.
     const chartCardRef = ref<{ $el?: HTMLElement } | null>(null);
@@ -409,7 +409,7 @@
     watch([selectedIds, range], () => { void refreshSeries(); });
 
     onMounted(async () => {
-        // FU-154 — hydrate via the store so a save on the product-search
+        // hydrate via the store so a save on the product-search
         // surface (which writes through `productStore.createProductAsync`)
         // is visible here without a hard refresh.
         await productStore.getProductsAsync();

@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import HealthApiService from 'src/services/api/healthApiService';
 
-// P8-05 — install-wide `buy_verdict_enabled` AppSetting, surfaced to
+// install-wide `buy_verdict_enabled` AppSetting, surfaced to
 // the client as `features.buy_verdict` on GET /api/health. Defaults to
 // **true** (unlike scanning): the oracle is a pure-personal feature
 // with no external surface to disable, so the default is on.

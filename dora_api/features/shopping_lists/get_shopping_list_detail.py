@@ -41,7 +41,7 @@ class LineProductOfferDto:
     is_selected: bool
 
 
-# FU-215 — a stock item's PreferredBuy label as a pickable shopping hint.
+# a stock item's PreferredBuy label as a pickable shopping hint.
 @dataclass(frozen=True, slots=True)
 class LinePreferredBuyDto:
     preferred_buy_id: UUID
@@ -51,7 +51,7 @@ class LinePreferredBuyDto:
 @dataclass(frozen=True, slots=True)
 class ShoppingListLineDto:
     line_id: UUID
-    # C-7 Chunk 3 — a line is anchored by stock_item_id OR product_id
+    # a line is anchored by stock_item_id OR product_id
     # (or both, when a product is nested under a stock item). NULL
     # stock_item_id ⇒ standalone-product line ("product only").
     stock_item_id: UUID | None
@@ -70,12 +70,12 @@ class ShoppingListLineDto:
     # ShoppingListDetail.
     added_via: str
     added_at: datetime | None
-    # P2-02 purchase memory — what the shopper actually paid / where they
+    # what the shopper actually paid / where they
     # actually bought it. Both NULL until the user overrides on the line.
     actual_unit_price: float | None
     purchased_store_id: UUID | None
     purchased_store_name: str | None
-    # FU-227 chunk 5 (D3) — server-resolved per-item price suggestion for the
+    # server-resolved per-item price suggestion for the
     # till-entry editor, with a human source label. `None` when there's no
     # prior purchase and no offer to suggest. Display-only; the SPA seeds the
     # editor from it and persists on first edit (R-003 — the label is resolved
@@ -83,10 +83,10 @@ class ShoppingListLineDto:
     prefill_unit_price: float | None = None
     prefill_source_label: str | None = None
     offers: List[LineProductOfferDto] = field(default_factory=list)
-    # FU-215 — the chosen hint + the item's available labels for the picker.
+    # the chosen hint + the item's available labels for the picker.
     preferred_buy_id: UUID | None = None
     preferred_buys: List[LinePreferredBuyDto] = field(default_factory=list)
-    # FU-448 — trim-to-budget optimiser. True when this line has been set
+    # trim-to-budget optimiser. True when this line has been set
     # aside by the "Trim to fit" pass; the SPA routes it into the
     # collapsible "Deferred to fit budget" section on the list-detail page
     # instead of the active list. Totals below skip deferred lines.
@@ -181,7 +181,7 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
     )
 
 
-# FU-334 — receipt-photo attachment metadata. Bytes never inlined; the SPA
+# receipt-photo attachment metadata. Bytes never inlined; the SPA
 # loads each via `GET /shopping-lists/<list_id>/attachments/<id>`.
 @dataclass(frozen=True, slots=True)
 class ShoppingListAttachmentDto:
@@ -202,7 +202,7 @@ class ShoppingListDetailDto:
     totals: ShoppingListTotalsDto
     planned_shop_date: date | None = None
     lines: List[ShoppingListLineDto] = field(default_factory=list)
-    # FU-334 — empty list when the list is a draft or has no attachments yet.
+    # empty list when the list is a draft or has no attachments yet.
     attachments: List[ShoppingListAttachmentDto] = field(default_factory=list)
 
 
@@ -223,7 +223,7 @@ class GetShoppingListDetailHandler:
 
         # Pre-load all referenced stock items + their linked products in
         # bulk so we render N rows without N round-trips.
-        # C-7 Chunk 3 — product-only lines have no stock_item_id; skip
+        # product-only lines have no stock_item_id; skip
         # those when assembling the stock-item id set.
         _StockItemIds = list({l.stock_item_id for l in _Lines if l.stock_item_id})
         _StockItems: dict[UUID, StockItem] = {}
@@ -240,7 +240,7 @@ class GetShoppingListDetailHandler:
             )
             _StockItems = {s.id: s for s in _Loaded}
 
-        # FU-215 — bulk-load PreferredBuy labels for the lines' stock items so
+        # bulk-load PreferredBuy labels for the lines' stock items so
         # each line can offer them as a hint picker without N round-trips.
         _PreferredBuysByItem: dict[UUID, List[PreferredBuy]] = {}
         if _StockItemIds:
@@ -249,7 +249,7 @@ class GetShoppingListDetailHandler:
             ):
                 _PreferredBuysByItem.setdefault(pb.stock_item_id, []).append(pb)
 
-        # C-7 Chunk 3 — bulk-load product names for product-only lines
+        # bulk-load product names for product-only lines
         # so the DTO can fall back to the product name when there's
         # no anchor stock item to ask. Keep it minimal — just name +
         # id; the offers list comes from the linked-stock-item path
@@ -284,7 +284,7 @@ class GetShoppingListDetailHandler:
             )
             _StoreNameLookup = {s.id: s.name for s in stores}
 
-        # FU-227 chunk 5 (D3) — per-item prefill source: the most-recent
+        # per-item prefill source: the most-recent
         # *actual purchase* of each stock item on a prior finished list, priced
         # via the shared actual→picked ladder. This is the honest per-item
         # number for the till editor; manual price observations are per-measure
@@ -357,7 +357,7 @@ class GetShoppingListDetailHandler:
                     o.price_now if o.price_now is not None else float("inf"),
                     o.store_name.lower(),
                 ))
-            # C-7 Chunk 3 — fall back to the product name for
+            # fall back to the product name for
             # product-only lines (no anchor stock item to ask).
             _line_display_name = (
                 item.name if item
@@ -422,7 +422,7 @@ class GetShoppingListDetailHandler:
                 ),
             ))
 
-        # FU-334 — receipt-photo metadata. Only fetched for non-draft lists
+        # receipt-photo metadata. Only fetched for non-draft lists
         # (the UI hides the section on drafts anyway; saves a query for
         # the common case).
         _Attachments: List[ShoppingListAttachmentDto] = []

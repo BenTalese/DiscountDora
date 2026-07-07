@@ -18,7 +18,7 @@
             />
         </div>
 
-        <!-- P8-06 — time-boxed hint on `wait` verdicts. Server only sends
+        <!-- time-boxed hint on `wait` verdicts. Server only sends
              this when a confident cycle was detected; the reason string
              is authoritative, the friendly "in ~N days" is a client-side
              formatting nicety. -->

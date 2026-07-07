@@ -14,7 +14,7 @@ from uuid import UUID
 
 from flask import request
 
-# FU-196 (d2) — rapidfuzz's `fuzz` module is a drop-in for fuzzywuzzy's;
+# rapidfuzz's `fuzz` module is a drop-in for fuzzywuzzy's;
 # same scoring functions (ratio, partial_ratio, token_set_ratio, etc.) at
 # the same 0-100 scale. Actively maintained, MIT-licensed, ships a C
 # extension so no python-Levenshtein warning noise (the old
@@ -176,7 +176,7 @@ class GlobalSearchHandler:
             )
 
         if "recipe" in wanted:
-            # FU-314 — cuisine + category flipped to noload; explicit
+            # cuisine + category flipped to noload; explicit
             # eager-load so the subtitle read below doesn't silently see None.
             recipes = (
                 self.repository.get(Recipe)

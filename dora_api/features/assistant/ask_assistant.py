@@ -47,7 +47,7 @@ _Logger = logging.getLogger(__name__)
 _LLM_TIMEOUT_SECONDS = 60
 
 
-# FU-458 — per-user rate limits on the assistant surface. Prevents a
+# per-user rate limits on the assistant surface. Prevents a
 # runaway loop (accidental or malicious) from burning upstream LLM
 # tokens on an authenticated session. Buckets are keyed by the
 # authenticated `session.user_id` (falling back to IP when the caller
@@ -170,9 +170,8 @@ _SYSTEM_PROMPT = (
     "'cross off bread on my list' / 'I got the milk' → tick_shopping_line. "
     "'move the cheese to the fridge' → move_item. 'plan carbonara for "
     "Friday dinner' → plan_meal_for_date (date as yyyy-mm-dd). 'add what I need for "
-    "carbonara to my list' → add_recipe_to_list. 'what's in season right "
-    "now' → seasonal_picks. 'where's milk cheapest right now' → "
-    "compare_prices. 'something kid-friendly tonight' / 'date night ideas' "
+    "carbonara to my list' → add_recipe_to_list. 'where's milk cheapest "
+    "right now' → compare_prices. 'something kid-friendly tonight' / 'date night ideas' "
     "/ 'comfort food' → recipe_for_occasion. Mutating tools ALWAYS produce "
     "a confirm card the user has to click — you never actually change "
     "anything on your own.\n\n"
@@ -426,7 +425,7 @@ def assistant_status():
 @ASSISTANT_ROUTER.route("/ask", methods=["POST"])
 @has_request_body(AskAssistantRequest)
 def ask_assistant():
-    # FU-458 — per-user rate limit before the LLM round-trip. Applied
+    # per-user rate limit before the LLM round-trip. Applied
     # BEFORE the pydantic-parsed body extract so a runaway script can't
     # burn parser cycles either.
     _Subject = _rate_limit_subject()
@@ -472,7 +471,7 @@ def _describe_commit(result: dict, list_name: str) -> str:
 @ASSISTANT_ROUTER.route("/act", methods=["POST"])
 @has_request_body(CommitAddRequest)
 def commit_action():
-    # FU-458 — per-user rate limit. Cheaper than `/ask` (no LLM round-
+    # per-user rate limit. Cheaper than `/ask` (no LLM round-
     # trip) so a higher ceiling, but a runaway loop could still spam
     # shopping-list writes without one.
     _Subject = _rate_limit_subject()
@@ -512,7 +511,7 @@ class ConfirmActionRequest(BaseModel):
 @ASSISTANT_ROUTER.route("/confirm", methods=["POST"])
 @has_request_body(ConfirmActionRequest)
 def confirm_action():
-    # FU-458 — per-user rate limit. Same ceiling as `/act` (no LLM
+    # per-user rate limit. Same ceiling as `/act` (no LLM
     # round-trip; the dispatcher just applies a Tier-2 change).
     _Subject = _rate_limit_subject()
     if not rate_limit(_RATE_SCOPE_CONFIRM, _CONFIRM_PER_MINUTE, subject=_Subject):

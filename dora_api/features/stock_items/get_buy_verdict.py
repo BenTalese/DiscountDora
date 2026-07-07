@@ -79,7 +79,7 @@ _WASTES_SOMETIMES_RATE = 0.10
 _HISTORY_WINDOW_DAYS = 365
 _PRICE_RECENT_WINDOW_DAYS = 90   # "cheapest in 3 months" window
 
-# P8-06 — cycle detection for the `wait` verdict's time-boxed hint.
+# cycle detection for the `wait` verdict's time-boxed hint.
 # Reuses `_CHEAP_BAND_FRACTION` to define a "low" (same threshold P8-05
 # uses for `cheapest_3mo`), so there is one definition of "low" the whole
 # oracle agrees on. We need ≥2 lows to measure a gap; the CV guard drops
@@ -140,7 +140,7 @@ class BuyVerdictDto:
     reasons: list[VerdictReasonDto]
     one_tap_action: OneTapActionDto
     data_used: VerdictDataUsedDto
-    # P8-06 — populated only on `wait` verdicts when a confident cycle
+    # populated only on `wait` verdicts when a confident cycle
     # is detected. `None` otherwise (non-wait verdicts, thin data, or
     # unstable/overdue cycles — see `_wait_hint`).
     wait_hint: Optional[WaitHintDto] = None
@@ -428,7 +428,7 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
         confidence = _step_down(confidence)
 
     one_tap = _pick_action(verdict, inputs)
-    # P8-06 — attach the time-boxed hint only when the verdict actually
+    # attach the time-boxed hint only when the verdict actually
     # landed on `wait`. The helper self-guards on thin/unstable/overdue
     # cycles, so a `wait` with unreliable history simply gets `None`.
     wait_hint = _wait_hint(inputs) if verdict == "wait" else None

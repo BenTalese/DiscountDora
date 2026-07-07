@@ -1,7 +1,7 @@
 import type { MealSlot } from 'src/models/mealSlot';
 import AxiosHttpClient from './axiosHttpClient';
 
-// C-2.A — household-wide meal-slot vocabulary CRUD. Mirrors
+// household-wide meal-slot vocabulary CRUD. Mirrors
 // cuisineApiService, plus a reorder verb (slot order is user-facing).
 
 export type CreateMealSlotCommand = { name: string };

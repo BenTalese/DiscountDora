@@ -32,6 +32,29 @@ BASE = "http://localhost:5170/api"
 APP_SETTINGS = f"{BASE}/app-settings"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _wrapping_key():
+    """Provision `DORA_LLM_KEY_ENCRYPTION_KEY` for the whole module. Every
+    test here writes a secret through `PATCH /api/app-settings`, which
+    requires the wrapping key to be configured — without this fixture
+    every write fails with a 400. Uses a fresh Fernet key generated
+    once per session; the `key_encryption._fernet` lru_cache is
+    cleared so the change is observed after the env is populated."""
+    from dora_api.infrastructure.llm import key_encryption
+
+    previous = os.environ.get("DORA_LLM_KEY_ENCRYPTION_KEY")
+    os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = Fernet.generate_key().decode("ascii")
+    key_encryption._fernet.cache_clear()
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("DORA_LLM_KEY_ENCRYPTION_KEY", None)
+        else:
+            os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = previous
+        key_encryption._fernet.cache_clear()
+
+
 @pytest.fixture(autouse=True)
 def _clear_secrets(api):
     """Zero both secret columns before + after each test so nothing leaks

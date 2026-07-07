@@ -296,7 +296,7 @@ let cachedThemePref: ThemePreference = 'system';
 function applyThemeKey(themeKey: string) {
     const theme = THEMES[themeKey];
     if (!theme) return;
-    // FU-004 — set data-theme FIRST so the SCSS custom properties for the
+    // set data-theme FIRST so the SCSS custom properties for the
     // target theme are live before we read them back into Quasar's palette.
     if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-theme', themeKey);

@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Set when the boot probe fails to reach the backend. The splash screen
     // watches this and surfaces a retry button instead of hanging silently.
     const bootstrapError = ref<string | null>(null);
-    // FU-200 — fresh-install flag. True when no user exists yet; the
+    // fresh-install flag. True when no user exists yet; the
     // router uses this to route to /setup instead of /login. Cleared once
     // setupAdminAsync() succeeds (so refresh-after-setup falls through to
     // the normal login-or-authed path).
@@ -58,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
     const runBootstrap = async () => {
         while (!isBootstrapped.value) {
             try {
-                // FU-200 — check fresh-install state first. If no admin
+                // check fresh-install state first. If no admin
                 // exists yet, skip the /me probe (it'll 401) and let the
                 // router send the user to /setup. The probe is cheap
                 // (single COUNT) and explicitly public.
@@ -133,7 +133,7 @@ export const useAuthStore = defineStore('auth', () => {
         await authApiService.changePasswordAsync(command);
     };
 
-    // FU-197 — verified change-email flow. Doesn't mutate `currentUser`
+    // verified change-email flow. Doesn't mutate `currentUser`
     // here: the address only flips after the user clicks the
     // confirmation link in their new inbox, at which point the next
     // `/auth/me` refresh picks it up.

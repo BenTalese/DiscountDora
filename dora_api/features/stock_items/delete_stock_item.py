@@ -37,7 +37,7 @@ class DeleteStockItemHandler:
         if not _StockItem:
             return DeleteStockItemResponse(stock_item_not_found = True)
 
-        # B4: refuse deletion when the item is still an ingredient on any
+        # refuse deletion when the item is still an ingredient on any
         # recipe. Every other FK to StockItem is either CASCADE (shopping
         # lines, templates, product joins, level-change history, legacy
         # substitutes) or SET NULL (waste events), so RecipeIngredient is

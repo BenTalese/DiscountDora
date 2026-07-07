@@ -24,7 +24,7 @@
                     </q-tooltip>
                 </q-chip>
                 <q-space />
-                <!-- P2-13 — speak Dora's replies. Hidden when the browser
+                <!-- speak Dora's replies. Hidden when the browser
                      has no SpeechSynthesis support. The toggle persists
                      across reloads via the user's saved preference; the
                      in-page click only flips the session-local view. -->
@@ -61,7 +61,7 @@
 
         <q-separator />
 
-        <!-- FU-330 — AI-unavailable banner. Shows ONLY when the user has
+        <!-- AI-unavailable banner. Shows ONLY when the user has
              configured AI mode (`llm_enabled=true`) but it's currently
              unreachable / mis-configured. Plain Basic-mode users (no LLM
              configured) never see this — Basic isn't a failure, it's a
@@ -109,7 +109,7 @@
             visible
         >
             <div class="dora-chat-messages">
-            <!-- P2-04 — suggestion cards. Render at the top of the
+            <!-- suggestion cards. Render at the top of the
                  scroll area, above any chat history, so the user sees
                  them on open without scrolling. Each card has Accept
                  (navigates via primary_action), Dismiss, Snooze 1d,
@@ -387,7 +387,7 @@
                 @keydown.enter.prevent="onSubmit"
             >
                 <template #append>
-                    <!-- P2-13 — mic button. Push-to-talk: tap to start,
+                    <!-- mic button. Push-to-talk: tap to start,
                          tap again (or wait for a final result) to stop.
                          Hidden when the browser doesn't expose the Web
                          Speech API. Disabled while Dora is sending so
@@ -517,7 +517,7 @@
     const helpApi = new HelpApiService();
     const alertApi = new AlertApiService();
     const assistantApi = new AssistantApiService();
-    // P2-04 — suggestion panel reads from the same store as the
+    // suggestion panel reads from the same store as the
     // launcher badge, so dismissing here updates the badge instantly.
     const suggestionStore = useSuggestionStore();
 
@@ -563,7 +563,7 @@
     const { openQuickAdd } = useQuickAdd();
 
     const recipeStore = useRecipeStore();
-    // FU-150 — chat handlers need the dietary-tag vocab to convert
+    // chat handlers need the dietary-tag vocab to convert
     // ids on recipes into names ("vegetarian", "gluten free") for
     // substring matching.
     const recipeVocabStore = useRecipeVocabStore();
@@ -872,7 +872,7 @@
     // A single timed-out chat call shouldn't downgrade the badge if the
     // model is still actually reachable; that caused visible flickering.
     const aiActive = ref<boolean | null>(null);
-    // FU-330 — reason string surfaced when the user has `llm_enabled=true`
+    // reason string surfaced when the user has `llm_enabled=true`
     // but `ai_available=false`. Drives the "AI mode unavailable" banner
     // at the top of the chat panel + a Retry affordance. Null when AI is
     // available (banner hidden) or when the user is in plain Basic mode
@@ -969,7 +969,7 @@
                 });
             },
             getRecipes: () => {
-                // FU-150 — resolve dietary tag ids → names once per call
+                // resolve dietary tag ids → names once per call
                 // so the chat handler can substring-match "vegetarian"
                 // / "gluten free" against recipes without an N×M scan
                 // of the vocab.
@@ -1111,7 +1111,7 @@
         // trigger re-renders and the bubble stays empty until something
         // else nudges reactivity.
         startTypewriter(messages.value[messages.value.length - 1]!);
-        // P2-13 — speak the reply when the user has opted in. Runs in
+        // speak the reply when the user has opted in. Runs in
         // parallel with the typewriter so the audio and on-screen text
         // start at roughly the same moment.
         if (voiceOutputEnabled.value) {
@@ -1333,7 +1333,7 @@
     async function ensureRecipeData() {
         // R-016 — every store guards its own re-entry, so call the helpers
         // unconditionally; the no-op short-circuit lives in the store.
-        // FU-150 — recipeVocab covers dietary tags + cuisines, which the
+        // recipeVocab covers dietary tags + cuisines, which the
         // chat handler resolves ids → names against for substring matching.
         await Promise.all([
             recipeStore.ensureLoadedAsync(),

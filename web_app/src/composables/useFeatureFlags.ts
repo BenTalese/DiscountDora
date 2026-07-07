@@ -64,11 +64,11 @@ export function useFeatureFlags() {
         nutrition: computed(() => readFlag('nutrition')),
         companionIngestion: computed(() => readFlag('companion_ingestion')),
         dealsEmail: computed(() => readFlag('deals_email')),
-        // C-9.7 — true when DORA_SMTP_USERNAME is set on the backend.
+        // true when DORA_SMTP_USERNAME is set on the backend.
         // Drives R-014 "shown-disabled" gating for any per-user email-
         // channel toggle (alerts digest today; future per-channel opts).
         emailSmtpConfigured: computed(() => readFlag('email_smtp_configured')),
-        // C-9.8 — true when both DORA_VAPID_PUBLIC_KEY and
+        // true when both DORA_VAPID_PUBLIC_KEY and
         // DORA_VAPID_PRIVATE_KEY are set. Drives R-014 gating for the
         // Push notifications toggle and short-circuits the composable
         // before it tries to fetch the public key.

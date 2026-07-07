@@ -58,7 +58,7 @@ _PIPER_PARAM_KEYS = ("length_scale", "noise_scale", "noise_w", "sentence_silence
 
 
 def _piper_bin() -> str | None:
-    # FU-333 Bucket B — `AppSetting.piper_bin`. Desktop bundles seed the row at
+    # `AppSetting.piper_bin`. Desktop bundles seed the row at
     # boot via `desktop_app._seed_desktop_paths` (post-init); server operators
     # set it in Settings → Admin → System → Voice.
     try:

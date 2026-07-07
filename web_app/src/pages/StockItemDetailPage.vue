@@ -97,7 +97,7 @@
                      breathing room on every side. The outer wrapper
                      keeps q-pa-md too for the header/toolbar row. -->
                 <q-tab-panel name="overview" class="q-pa-md">
-                    <!-- P8-05 + P8-06 — the buy-verdict oracle (row/line
+                    <!-- the buy-verdict oracle (row/line
                          badges elsewhere; the full detail card here per
                          FU-437). The card no-ops when the composable hasn't
                          resolved yet or the install-wide flag is off, so
@@ -193,7 +193,7 @@
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
                                             </span>
                                         </div>
-                                        <!-- P8-07 — inferred level (additive;
+                                        <!-- inferred level (additive;
                                              beside the recorded level above). -->
                                         <div v-if="belief" class="q-mt-xs">
                                             <PantryBeliefChip :belief="belief" />
@@ -484,7 +484,7 @@
                                 />
                             </div>
 
-                            <!-- FU-227 chunk 3 — "Your prices" widget (C5
+                            <!-- "Your prices" widget (C5
                                  revised) replaces the inline price entry
                                  form. The widget contains its own [Log a
                                  price] action that opens the shared
@@ -579,7 +579,7 @@
                             :key="prod.product_id"
                             class="col-12 col-md-6"
                         >
-                            <!-- C-1b.3: cheapest card carries a "Cheapest"
+                            <!-- cheapest card carries a "Cheapest"
                                  chip + a subtle highlight class so the
                                  cheaper option pops without needing a
                                  separate "Add cheapest" button (§2.4). -->
@@ -678,7 +678,7 @@
                             :key="r.recipe_id"
                             class="col-12 col-sm-6 col-md-4"
                         >
-                            <!-- C-1b.4 / FU-185 / B8 residue: wire the
+                            <!-- wire the
                                  favourite-toggle + add-all-to-list events
                                  RecipeCard emits. Previously dropped, so
                                  "remove from favourites does nothing" and
@@ -737,7 +737,7 @@
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>{{ stockItemFor(sub).name }}</q-item-label>
-                                <!-- FU-034 — optional ratio shown above
+                                <!-- optional ratio shown above
                                      notes; cook-mode picker mirrors this
                                      same layout so the user reads the
                                      swap the same way in both places. -->
@@ -749,7 +749,7 @@
                                 </q-item-label>
                             </q-item-section>
                             <q-item-section side>
-                                <!-- FU-034 — pencil icon opens the metadata
+                                <!-- pencil icon opens the metadata
                                      edit dialog (notes + ratio). Sits next
                                      to the unlink action so the substitute
                                      row carries both lifecycle controls
@@ -775,7 +775,7 @@
                         </q-item>
                     </q-list>
 
-                    <!-- FU-034 — metadata edit dialog. v-model-controlled
+                    <!-- metadata edit dialog. v-model-controlled
                          open state + a snapshot of the substitute being
                          edited (driven by `onEditSubstituteMetadata`). -->
                     <SubstituteMetadataDialog
@@ -792,7 +792,7 @@
                         @save="onSaveSubstituteMetadata"
                     />
 
-                    <!-- FU-056 — Barcodes section. Gated on the install-wide
+                    <!-- Barcodes section. Gated on the install-wide
                          scanning flag (R-014: when off, the surface stays
                          hidden — scanning isn't an active capability on this
                          install). Shows direct registrations + via-Product
@@ -855,7 +855,7 @@
                             </q-item>
                         </q-list>
 
-                        <!-- FU-056 — Add-barcode dialog. Textbox by default;
+                        <!-- Add-barcode dialog. Textbox by default;
                              a future polish slot could add a "scan" button
                              when the camera is available. -->
                         <BaseDialog
@@ -1091,7 +1091,7 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
-    // P8-07 — inferred belief for this item (shared cache).
+    // inferred belief for this item (shared cache).
     const pantryBeliefs = usePantryBeliefs();
     const belief = computed(() =>
         detail.value ? pantryBeliefs.beliefFor(detail.value.stock_item_id) : null,
@@ -1105,13 +1105,13 @@
 
     const actions = useStockItemActions();
     const slActions = useShoppingListActions();
-    // FU-454 — shared handlers for the BuyVerdictCard's mark_stocked +
+    // shared handlers for the BuyVerdictCard's mark_stocked +
     // remove_from_list actions. Same seams the row card uses.
     const verdictActions = useBuyVerdictActions();
 
     const stockItemId = computed(() => props.idOverride ?? (route.params.id as string));
 
-    // P8-05/06 — buy-verdict oracle (row/line badges elsewhere; the full
+    // buy-verdict oracle (row/line badges elsewhere; the full
     // card renders on the overview tab, per FU-437). The composable
     // fetches on mount, caches for 5 min, and yields a computed we can
     // v-if in the template. `.value` at wire time so the string overload
@@ -1126,7 +1126,7 @@
 
     // ── QR labels (gated by the install-wide scanning flag) ──────────
     const { scanningEnabled } = useScanningEnabled();
-    // C-1b.3 (§2.5): when `products` is off the Products tab + per-product
+    // when `products` is off the Products tab + per-product
     // surfaces disappear entirely; FU-182 owns the app-wide sweep, this
     // page just consumes the flag.
     const { products: productsEnabled } = useFeatureFlags();
@@ -1149,7 +1149,7 @@
     const tab = ref<string>(
         typeof route.query.section === 'string' ? route.query.section : 'overview',
     );
-    // C-1b.3 (§2.5): if the URL pointed at ?section=products but products
+    // if the URL pointed at ?section=products but products
     // is off (or the admin flips it off later), fall back to Overview so
     // we don't strand the user on an invisible tab.
     watch(
@@ -1235,7 +1235,7 @@
         stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
     );
 
-    // FU-189 — Stores picker. Hydrate lazily via R-016 ensureLoadedAsync; the
+    // Stores picker. Hydrate lazily via R-016 ensureLoadedAsync; the
     // store dropdown shows whatever the user has curated under Settings →
     // Stores. Empty list ⇒ the picker reads "no stores set up yet" and the
     // user is invited to add some.
@@ -1248,7 +1248,7 @@
     // form's Save button. Cache-bust is owned by the store now (FU-125
     // `imageVersionOf`) so a save here reactively refreshes every row /
     // surface displaying the same item, not just this detail page.
-    // FU-050 — resolve the level *sequence* (StockLevelDot maps it to a
+    // resolve the level *sequence* (StockLevelDot maps it to a
     // colour, or the sunken fallback when null). Untracked items (no
     // level_id) get null → muted bg via the component's internal
     // fallback.
@@ -1511,11 +1511,11 @@
     }
     async function onAddToList() {
         await withBusyReload(() => actions.addToList(stockItemId.value));
-        // P8-05/06 — the verdict's stock-band + open-list state both
+        // the verdict's stock-band + open-list state both
         // changed. Invalidate so a re-render fetches a fresh answer.
         buyVerdictInvalidate();
     }
-    // P8-05/06 — closes FU-437 (add_to_list) and FU-454 (mark_stocked +
+    // closes FU-437 (add_to_list) and FU-454 (mark_stocked +
     // remove_from_list). Delegates to the shared `useBuyVerdictActions`
     // composable so the same math runs from every card mount (row card,
     // detail-page card, shopping-list card).
@@ -1544,10 +1544,10 @@
                 stock_level_id: stockLevelId,
             }),
         );
-        // P8-05/06 — stock band feeds `_need_axis`; drop the cached
+        // stock band feeds `_need_axis`; drop the cached
         // verdict so the card re-fetches the new answer.
         buyVerdictInvalidate();
-        // P8-07 — a manual level change is a fresh hard signal; refresh the
+        // a manual level change is a fresh hard signal; refresh the
         // belief so the chip reflects "override wins" immediately.
         pantryBeliefs.invalidate();
         void pantryBeliefs.loadAsync(true);
@@ -1608,14 +1608,14 @@
     }
 
 
-    // C-1b.3 (L130 emphasis): the cheapest product gets a chip + highlight
+    // the cheapest product gets a chip + highlight
     // style rather than a separate "Add cheapest" button — each product
     // carries its own Add-to-list.
     function isCheapest(p: LinkedProduct): boolean {
         return cheapestProduct.value?.product_id === p.product_id;
     }
 
-    // C-1b.3 (L125): Find-deals now lives only inside the Products tab
+    // Find-deals now lives only inside the Products tab
     // (empty-state CTA + "Link another" when products exist). Both route
     // to product-search seeded with the item name; that page already owns
     // the link flow.
@@ -1677,7 +1677,7 @@
         void router.push({ path: '/stock', query: { recipe: recipeId } });
     }
 
-    // C-1b.4 / FU-185 — B8 residue: the favourite toggle on this surface
+    // the favourite toggle on this surface
     // was wired to a dead listener. Mirror RecipesOverview's handler shape
     // (toggle on the recipe store; the card re-renders via the store).
     function onToggleFavourite(recipeId: string) {
@@ -1867,7 +1867,7 @@
             .map((lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const })
             .filter((l) => l.status !== 'done');
     });
-    // C-1b.4 (L138): the server-inferred primary draft list (R-003) — the
+    // the server-inferred primary draft list (R-003) — the
     // Lists tab decorates that row with a styled "Primary" badge instead
     // of plain text.
     const primaryListId = computed(() => shoppingListStore.quickAddTargetListId ?? null);
@@ -1989,7 +1989,7 @@
                 at: p.occurred_at,
                 title: `Bought · ${p.shopping_list_name}`,
                 icon: ICONS.shopping_bag,
-                // FU-313 — was 'teal-8'; now theme-aware via --lifecycle-bought.
+                // was 'teal-8'; now theme-aware via --lifecycle-bought.
                 color: 'lifecycle-bought',
             };
             if (bits.length > 0) entry.body = bits.join(' · ');
@@ -2007,7 +2007,7 @@
                 at: c.occurred_at,
                 title: `Used in ${c.recipe_name}${badge}`,
                 icon: ICONS.local_fire_department,
-                // FU-313 — was 'deep-orange-6'; reuses the severity-high
+                // was 'deep-orange-6'; reuses the severity-high
                 // token (same visual weight as the essential-low alert kind).
                 color: 'severity-high',
             });
@@ -2025,7 +2025,7 @@
                 body = e.previous_expiry_date
                     ? `Was ${fmt(e.previous_expiry_date)}`
                     : null;
-                // FU-313 — was 'grey-7'; theme-aware --lifecycle-cleared
+                // was 'grey-7'; theme-aware --lifecycle-cleared
                 // (a muted neutral, distinct from severity-*). Cleared
                 // is a "wound-down" state, not part of the severity ladder.
                 color = 'lifecycle-cleared';
@@ -2034,7 +2034,7 @@
                 title = delta >= 0 ? `Pushed expiry +${delta} day${delta === 1 ? '' : 's'}`
                                    : `Expiry moved ${delta} day${delta === -1 ? '' : 's'}`;
                 body = `${fmt(e.previous_expiry_date)} → ${fmt(e.new_expiry_date)}`;
-                // FU-313 — was 'orange-8'; theme-aware --lifecycle-expiry-changed.
+                // was 'orange-8'; theme-aware --lifecycle-expiry-changed.
                 color = 'lifecycle-expiry-changed';
             } else {
                 title = 'Set expiry';
@@ -2060,7 +2060,7 @@
                 at: `${d.opened_on}T00:00:00`,
                 title: 'Opened',
                 icon: 'lock_open',
-                // FU-313 — was 'amber-9'; reuses the --severity-attention
+                // was 'amber-9'; reuses the --severity-attention
                 // token (same visual weight as the AddToList "on multiple
                 // lists" hint — both grabby-but-not-urgent).
                 color: 'severity-attention',
@@ -2091,8 +2091,8 @@
     });
 
     // ── Unlink products ──────────────────────────────────────────────────
-    // C-1b.3 retired the saved-products picker dialog in favour of the
-    // single Find-&-link CTA → /product-search (which owns the link flow).
+    // The saved-products picker dialog was retired; the Find-&-link CTA
+    // on /product-search owns the link flow.
     async function onUnlink(productId: string) {
         await withBusyReload(() => stockItemApi.unlinkProductAsync(stockItemId.value, productId));
     }
@@ -2117,7 +2117,7 @@
             if (props.embedded) emit('close');
             else void router.push('/stock');
         } catch (err) {
-            // B4: backend refuses delete when the item is still on a recipe,
+            // backend refuses delete when the item is still on a recipe,
             // returning 422 with a structured `blocked_by_recipes` list.
             // Surface the recipe names in a dialog rather than a vague toast
             // so the user knows where to act.
@@ -2181,7 +2181,7 @@
         if (stockItemId.value) void loadDetail();
     });
 
-    // FU-123: when the row's expiry / open / flag / level toggles fire
+    // when the row's expiry / open / flag / level toggles fire
     // while this page is open as a peek, the store's StockItem updates
     // but `detail.value` (loaded as a one-shot) goes stale. Sync the
     // handful of fields the row can mutate from the store version onto
@@ -2224,7 +2224,7 @@
         // Stock groups are page-local (only consumer); load alongside the
         // other dropdowns so the inline picker has options on first paint.
         void stockGroupApi.getAllAsync().then((g) => { stockGroups.value = g; });
-        // FU-189 — populate the usual-store picker. R-016 ensureLoaded.
+        // populate the usual-store picker. R-016 ensureLoaded.
         void storesStore.ensureLoadedAsync();
         await Promise.all([
             stockLevelStore.ensureLoadedAsync(),
@@ -2232,7 +2232,7 @@
             stockItemStore.ensureLoadedAsync(),
             recipeStore.ensureLoadedAsync(),
             shoppingListStore.ensureLoadedAsync(),
-            // P8-07 — load inferred beliefs (shared cache; idempotent when
+            // load inferred beliefs (shared cache; idempotent when
             // the overview already loaded them).
             pantryBeliefs.loadAsync(),
         ]);

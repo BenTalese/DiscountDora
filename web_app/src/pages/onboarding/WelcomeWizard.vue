@@ -183,7 +183,7 @@
             </q-card>
 
             <!-- ── Step 3: Seed catalogues ──────────────────────────── -->
-            <!-- FU-195 — the two default-catalogue cards are expansions so
+            <!-- the two default-catalogue cards are expansions so
                  the user can pick individual names, not just all-or-none.
                  Master checkbox on each expansion header is tri-state:
                  unchecked = none picked, indeterminate = some, checked =
@@ -297,7 +297,7 @@
                     </q-card>
                 </div>
 
-                <!-- FU-195 (L30) — inline "paste rows" affordance so bulk
+                <!-- inline "paste rows" affordance so bulk
                      ingest doesn't demand a nav-out to the full importer.
                      Rows queue into draftItems and flow through the
                      existing seed-items pipeline on Finish, after the
@@ -356,7 +356,7 @@ Toilet paper, Toiletries, Bathroom"
                     </router-link>
                 </div>
 
-                <!-- FU-194 / L38 — opt-in demo dataset. Plain rows (no
+                <!-- opt-in demo dataset. Plain rows (no
                      `is_demo` marking) so the user deletes them like any
                      other recipe / item / plan if they aren't useful. -->
                 <div class="col-12">
@@ -535,7 +535,7 @@ Toilet paper, Toiletries, Bathroom"
             </q-card>
 
             <!-- ── Step: Finish — celebrate + flow-cards (C-5.6) ── -->
-            <!-- FU-210 revisit (2026-06-17): the loop recap was removed from
+            <!-- the loop recap was removed from
                  Finish — the hero already plays in Story, replaying it here
                  was repetitive. The loop survives in Story; a help-section
                  home is tracked separately. -->
@@ -814,15 +814,15 @@ Toilet paper, Toiletries, Bathroom"
         theme: ThemePreference;
         fontFamily: FontFamilyPreference;
         headcount: number | null;
-        // FU-041 follow-up — surfaced in onboarding alongside headcount (both
+        // surfaced in onboarding alongside headcount (both
         // are "how you cook" prefs). Default false matches the Charter P10
         // Anti-creep posture the useBatchEnabled composable enforces.
         batchCooking: boolean;
-        // FU-195 — the seed-catalogue master booleans are gone; the
+        // the seed-catalogue master booleans are gone; the
         // per-name pick sets below carry the same signal. A card is
         // effectively "on" when any name in it is picked, "off" when
         // none. See groupPicks / locationPicks below.
-        // FU-194 — optional demo dataset (one recipe + a current-week meal
+        // optional demo dataset (one recipe + a current-week meal
         // plan). Default off because it inserts plain rows the user then
         // has to clean up if they didn't actually want demo content.
         seedDemo: boolean;
@@ -850,17 +850,17 @@ Toilet paper, Toiletries, Bathroom"
         stepIndex: 0,
     });
 
-    // FU-195 — per-name picks over the bundled catalogues. Keys are
+    // per-name picks over the bundled catalogues. Keys are
     // lowercased (name for groups; "zone" or "zone/child" path for
     // locations). Default state (populated on catalog load) has every
     // name ticked — matches the pre-FU-195 "seedGroups=true" behaviour.
     const groupPicks = reactive<Record<string, boolean>>({});
     const locationPicks = reactive<Record<string, boolean>>({});
 
-    // FU-195 — L30 inline paste-rows affordance state.
+    // L30 inline paste-rows affordance state.
     const pasteRowsText = ref('');
 
-    // FU-195 legacy-draft hints: honoured when the catalogue lands + the
+    // honoured when the catalogue lands + the
     // pick maps get seeded, so a pre-FU-195 "seedGroups=false" resumes as
     // "no groups picked".
     let legacyGroupsOff = false;
@@ -875,7 +875,7 @@ Toilet paper, Toiletries, Bathroom"
     // Queued first items, awaiting creation on Finish.
     const draftItems = ref<DraftItem[]>([]);
 
-    // C-5.5 — starter catalogue (default groups/locations + packs), fetched on
+    // starter catalogue (default groups/locations + packs), fetched on
     // mount, and the pack items the user has ticked (keyed by item name).
     const catalog = ref<OnboardingCatalog | null>(null);
     const packItemSelected = reactive<Record<string, boolean>>({});
@@ -888,7 +888,7 @@ Toilet paper, Toiletries, Bathroom"
         }
     }
 
-    // FU-195 — after the catalogue lands, seed the pick maps with every
+    // after the catalogue lands, seed the pick maps with every
     // name ticked by default (preserving the pre-FU-195 default of
     // "seed everything"). A pick key already present in the map (from a
     // resumed draft) is left alone so the user's choice survives reload.
@@ -1103,7 +1103,7 @@ Toilet paper, Toiletries, Bathroom"
         for (const item of pack.items) packItemSelected[item.name] = on;
     }
 
-    // FU-195 — per-name pick helpers for the default groups / locations
+    // per-name pick helpers for the default groups / locations
     // cards. Master checkbox is tri-state: false = none picked, null =
     // some (indeterminate), true = all. Clicking cycles all-off ⇄ all-on.
     const groupPickCount = computed(() => {
@@ -1150,7 +1150,7 @@ Toilet paper, Toiletries, Bathroom"
         for (const p of locationLeafPaths.value) locationPicks[p.toLowerCase()] = on;
     }
 
-    // FU-195 (L30) — parse the paste-rows textarea. One row per line;
+    // parse the paste-rows textarea. One row per line;
     // fields comma-separated: Name, Group?, Location?. Empty lines and
     // rows without a Name are dropped silently.
     const pasteRowsParsed = computed<DraftItem[]>(() => {
@@ -1211,7 +1211,7 @@ Toilet paper, Toiletries, Bathroom"
     // items), so the items resolve against the groups/locations just seeded.
     async function applyDraft() {
         await persistPreferences();
-        // FU-195 — send the actual picked names/paths. Master bool is
+        // send the actual picked names/paths. Master bool is
         // implicit: it's true whenever any pick under it survives.
         const groupsWanted = groupPickCount.value > 0;
         const locationsWanted = locationPickCount.value > 0;
@@ -1249,7 +1249,7 @@ Toilet paper, Toiletries, Bathroom"
         if (items.length > 0) {
             await onboardingApi.seedItemsAsync({ items });
         }
-        // FU-194 — optional demo dataset. After the items pass so the demo
+        // optional demo dataset. After the items pass so the demo
         // can reuse a starter-pack "Spaghetti pasta" / "Garlic" / "Olive oil"
         // if the user picked them; otherwise the demo creates its own. The
         // server is idempotent (`seeded: false` when the demo recipe already

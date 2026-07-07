@@ -70,7 +70,7 @@ export async function processImageFile(
     file: File,
     options: ProcessImageOptions = {},
 ): Promise<ProcessedImage> {
-    // FU-345 — read the install policy on every call. `options` still
+    // read the install policy on every call. `options` still
     // wins so a narrow surface (e.g. a tight avatar) can override; the
     // vast majority of callers omit options entirely and get the
     // admin-chosen defaults automatically.

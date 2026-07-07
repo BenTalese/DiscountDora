@@ -54,10 +54,10 @@ class UpdateStockItemRequest(BaseModel):
     # `is_open` flips True, but the spec also wants a manual edit path
     # ("I can edit the date a stock item was opened on…").
     opened_on: date | None = None
-    # C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
+    # data-URL string to set the image, null to
     # clear, omit to leave untouched. Mirrors the recipe-update contract.
     image: str | None = Field(default = None, max_length = 6_000_000)
-    # FU-189 — usual store hint. Send a UUID to bind, omit to leave alone;
+    # usual store hint. Send a UUID to bind, omit to leave alone;
     # send `clear_usual_store=true` to blank an existing value (the same
     # clear-vs-unset pattern as ShoppingListLine fields).
     usual_store_id: UUID | None = None
@@ -69,7 +69,7 @@ class UpdateStockItemRequest(BaseModel):
     # quirk so the picker's X button actually persists.
     clear_stock_location: bool = False
     clear_stock_group: bool = False
-    # P8-07 / FU-449 — consumption context. When a level DROP accompanies
+    # consumption context. When a level DROP accompanies
     # this update (e.g. the cook-mode finish dialog marking an ingredient
     # down), the handler records a ConsumptionEvent so run-out prediction +
     # the Zero-Input Pantry belief can blend cooking with purchases. Only
@@ -147,7 +147,7 @@ class UpdateStockItemHandler:
                     stock_level_name = _StockLevel.name,
                     changed_at = datetime.now(UTC),
                 ))
-            # P8-07 / FU-449 — record a ConsumptionEvent when this level
+            # record a ConsumptionEvent when this level
             # change is a DROP (higher sequence = more depleted) tagged with
             # a consumption source. This is the depletion leg of the loop:
             # cooking with an item now feeds run-out prediction + the belief,
@@ -207,7 +207,7 @@ class UpdateStockItemHandler:
                     occurred_at = datetime.now(UTC),
                 ))
 
-        # C-1 Chunk 6 / FU-033 — explicit null clears, data-URL string sets.
+        # explicit null clears, data-URL string sets.
         if "image" in _SetFields:
             _StockItem.image = (
                 request.image.encode("utf-8") if request.image else None
@@ -219,7 +219,7 @@ class UpdateStockItemHandler:
         if "auto_add_when_low" in _SetFields and request.auto_add_when_low is not None:
             _StockItem.auto_add_when_low = request.auto_add_when_low
 
-        # FU-189 — usual store hint. Clear flag wins over a present-but-None.
+        # usual store hint. Clear flag wins over a present-but-None.
         # We don't validate the target Store exists here: the FK has SET NULL
         # ondelete, so a stale id silently degrades; the SPA picker only
         # surfaces actual rows so the bad-write path requires hand-crafting.
@@ -269,7 +269,7 @@ class UpdateStockItemHandler:
         # or if the item is already on ANY non-archived list — the user
         # already knows; double-add would be annoying.
         #
-        # FU-464 — was `>= 2` / `< 2` against the OLD 4-band sequences
+        # was `>= 2` / `< 2` against the OLD 4-band sequences
         # (0 Stocked / 1 Sufficient / 2 Low / 3 Out). After the
         # 2026-07-02 Sufficient-band collapse (`a1c7d9e42be0`) canonical
         # sequences are 0 Stocked / 1 Low / 2 Out, so `>= 2` meant Out

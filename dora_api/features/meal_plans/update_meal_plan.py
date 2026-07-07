@@ -79,7 +79,7 @@ class UpdateMealPlanHandler:
             if len(request.entries) == 0 and not request.confirm_clear_entries:
                 return UpdateMealPlanResponse(needs_clear_confirmation = True)
 
-            # C-2.A — validate slot names against the household MealSlot
+            # validate slot names against the household MealSlot
             # vocabulary (R-010); off-vocab names rejected on new writes.
             _ValidSlots = get_valid_slot_names(self.repository)
             _BadSlot = find_invalid_slot(

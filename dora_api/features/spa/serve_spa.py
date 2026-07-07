@@ -85,7 +85,7 @@ def serve_path(requested: str):
     # as success is far worse than a clean not-found; surfaced when the
     # shopping-list CSV /export endpoint was removed in UX-v2).
     #
-    # FU-167: return the shared JSON problem-detail (the same body the request
+    # return the shared JSON problem-detail (the same body the request
     # middleware returns for no-route paths) rather than `abort(404)`, which
     # would yield the default HTML 404 — so an unmatched GET /api/<x> matches
     # POST/PATCH/DELETE on the same path.

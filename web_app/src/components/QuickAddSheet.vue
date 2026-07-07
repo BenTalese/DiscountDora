@@ -185,7 +185,7 @@
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? -1;
     }
     function levelColour(id: string | null): string | null {
-        // FU-050 — key off sequence (R-003); names can drift.
+        // key off sequence (R-003); names can drift.
         const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
         return typeof seq === 'number' ? colourForSequence(seq) : null;
     }

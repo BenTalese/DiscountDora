@@ -64,12 +64,12 @@ class AuthenticatedUserDto:
     font_size: str
     onboarding_completed_at: str | None
     email_verified: bool
-    # P2-05 — grocery budget. `budget_amount` is None when the user
+    # grocery budget. `budget_amount` is None when the user
     # hasn't opted in; a positive number turns on the dashboard / Dora
     # budget surfaces. Period is one of "weekly" / "monthly".
     budget_amount: float | None
     budget_period: str
-    # P2-13 — voice opt-ins. Both default False; the SPA reads them on
+    # voice opt-ins. Both default False; the SPA reads them on
     # boot to seed the per-page mic / volume toggles.
     voice_input_enabled: bool
     voice_output_enabled: bool
@@ -85,12 +85,12 @@ class AuthenticatedUserDto:
     # posture. Default False ("fresh"); when True the meal-planner reveals
     # the cook-pool affordances + shortfall warning.
     batch_features_enabled: bool
-    # FU-316 — "always ask which draft list on quick-add".
+    # "always ask which draft list on quick-add".
     always_ask_which_shopping_list: bool
-    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # target meal count for the sequential builder.
     # None = not set (SPA falls back to 7).
     meals_per_week: int | None
-    # P8-07 — Zero-Input Pantry opt-out (default True).
+    # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
     # `complex` (complex requires admin-configured nutrition source).
@@ -101,7 +101,7 @@ class AuthenticatedUserDto:
     show_stock_images: bool
     # Onboarding C-5.4 — household cooking headcount; None = not set.
     household_headcount: int | None
-    # C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5).
+    # alerts email digest channel (PROPOSAL_ALERTS §3.5).
     # `alerts_email_cadence` is 'off' | 'daily' | 'weekly'; `alerts_email_
     # day` is the weekly send day (Mon=0 … Sun=6, ignored on daily).
     alerts_email_enabled: bool
@@ -117,7 +117,7 @@ class AuthenticatedUserDto:
     # hidden set), or None when the user hasn't customised. The SPA parses it
     # to seed the dashboard; the backend treats it as an opaque string.
     dashboard_layout: str | None
-    # FU-153 §7.1 / §7.4 — per-user assistant config. Plaintext API key
+    # per-user assistant config. Plaintext API key
     # is never echoed back — the wire-side carries a derived
     # `has_llm_api_key: bool` (same shape as `has_image`). The other
     # four fields round-trip directly so the Settings page can show /
@@ -195,7 +195,7 @@ class RegisterUserResponse:
     new_user_id: UUID = EMPTY_UUID
     username_taken: bool = False
     email_taken: bool = False
-    # FU-200: bootstrap_required is True when there's no admin yet — the
+    # bootstrap_required is True when there's no admin yet — the
     # SPA shouldn't even reach /register in that case; we return a 409 at
     # the handler level so a direct API caller is told to use the
     # bootstrap endpoint instead.
@@ -210,7 +210,7 @@ class RegisterUserHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: RegisterUserRequest) -> RegisterUserResponse:
-        # FU-200: refuse self-serve registration until an admin exists.
+        # refuse self-serve registration until an admin exists.
         # The fresh-install surface is /bootstrap-admin (single-use),
         # not /register.
         if self.repository.get(User).count() == 0:
@@ -233,7 +233,7 @@ class RegisterUserHandler:
             password_hash=generate_password_hash(request.password),
             send_deals_on_day=0,
             username=request.username,
-            # FU-200: /register never grants admin. The bootstrap endpoint
+            # /register never grants admin. The bootstrap endpoint
             # owns that path, and admin promotion otherwise goes through
             # the Users admin page.
             is_admin=False,
@@ -288,7 +288,7 @@ def register_user():
     response = handler.handle(request_body)
 
     if response.bootstrap_required:
-        # FU-200: empty DB → /register is closed. Force the caller through
+        # empty DB → /register is closed. Force the caller through
         # /bootstrap-admin instead. 409 (Conflict) signals "the system is
         # in a state that disallows this request"; the SPA's router guard
         # already redirects to /setup, so this branch is only reachable
@@ -353,7 +353,7 @@ def register_user():
     )
 
     _Logger.info(f"Registered user {request_body.username} ({response.new_user_id})")
-    # FU-310 — return the full AuthenticatedUserDto so the SPA can hydrate
+    # return the full AuthenticatedUserDto so the SPA can hydrate
     # the auth store from a single call (parity with /login and /me). The
     # old ad-hoc dict had drifted: `has_image` and `dashboard_layout` were
     # missing, and a stale `verification_sent` flag rode alongside. Keep

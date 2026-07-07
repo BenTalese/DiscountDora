@@ -1,4 +1,4 @@
-// P8-10 — screen wake lock (Screen Wake Lock API).
+// screen wake lock (Screen Wake Lock API).
 //
 // Two callers today:
 //   - RecipeCookMode.vue keeps the screen on while cooking, so a hands-free

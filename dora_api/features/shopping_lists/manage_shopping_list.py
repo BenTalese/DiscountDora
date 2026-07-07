@@ -38,7 +38,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class CreateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, max_length=255)
-    # P6-01 Chunk 7. Optional shop day for this list.
+    # Optional shop day for this list.
     planned_shop_date: date | None = None
 
 
@@ -97,7 +97,7 @@ class UpdateShoppingListRequest(BaseModel):
     # also manages completed_at. Note: this is the plain status edit — the
     # restock-and-snapshot Finish flow lives in /finish, not here.
     status: str | None = None
-    # P6-01 Chunk 7. Pass an ISO date to set, or `null` (explicit) to clear.
+    # Pass an ISO date to set, or `null` (explicit) to clear.
     # Field unset on the wire = leave the existing value alone.
     planned_shop_date: date | None = None
 
@@ -279,7 +279,7 @@ class FinishShoppingListHandler:
                 item.stock_level_last_updated = now
                 updated += 1
 
-        # FU-227 chunk 5 — harvest a price observation per priced ticked line
+        # harvest a price observation per priced ticked line
         # (the closed loop: confirm what you paid at the till → it feeds "Your
         # prices"). After the snapshot loop above so the picked-offer fallback
         # is populated; before the status flip so the harvest shares the single
@@ -355,10 +355,10 @@ class FinishShoppingListHandler:
                 total_measure=total_measure,
                 unit=unit,
                 observed_at=now,
-                store_id=line.purchased_store_id,   # A2 — where you bought it
-                shopping_list_line_id=line.id,      # A4 — provenance via FK
+                store_id=line.purchased_store_id,
+                shopping_list_line_id=line.id,
                 created_at=now,
-                pack_count=pack_count,              # FU-227 multipack
+                pack_count=pack_count,
             ))
 
 

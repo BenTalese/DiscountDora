@@ -47,7 +47,7 @@
         steps: EditableStep[];
         ingredientOptions: IngredientOption[];
         toolOptions: ToolOption[];
-        // FU-117 — section choices for the top-level step picker. Defaults
+        // section choices for the top-level step picker. Defaults
         // to `[]` so callers without named sections (or that haven't wired
         // the prop yet) get the same behaviour as before: no picker
         // rendered, steps stay unsectioned.
@@ -129,7 +129,7 @@
             hint: null,
             ingredient_client_ids: [],
             tool_ids: [],
-            // FU-117 — sub-steps inherit their parent's section visually
+            // sub-steps inherit their parent's section visually
             // on the read path (server flattens cook-mode by section_id of
             // the top-level row). Keep null here; the picker isn't shown.
             section_client_id: null,

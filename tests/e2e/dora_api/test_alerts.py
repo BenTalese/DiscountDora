@@ -142,7 +142,7 @@ def test__alerts__action_endpoint_rejects_non_stock_key(api):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# C-9.2 — per-user preferences (enable/disable + tier override) + configurable
+# per-user preferences (enable/disable + tier override) + configurable
 # household thresholds. The count split always equals the per-alert effective
 # `tier`; tests clean up after themselves (prefs are per-user + persistent, and
 # the threshold is household-wide — no per-test DB isolation yet, FU-169).
@@ -251,7 +251,7 @@ def test__alerts__expiring_soon_window_threshold_re_derives(api):
 
 
 def test__alerts__history_lists_dismissed_with_resolved_label(api):
-    # C-9.3 — alerts are derived, so "history" is the ledger of decisions; a
+    # alerts are derived, so "history" is the ledger of decisions; a
     # dismissed alert surfaces in /history with its stock name resolved.
     name = f"alert-history-{uuid.uuid4().hex[:8]}"
     _create_expired_item(name)
@@ -268,7 +268,7 @@ def test__alerts__history_lists_dismissed_with_resolved_label(api):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# C-9.4 — forward-looking nudges: `no_planned_meals` (next week empty) and
+# forward-looking nudges: `no_planned_meals` (next week empty) and
 # `shopping_day` (a list's planned shop date is near). Both are non-stock kinds:
 # they carry no stock_item_id and deep-link via kind (+ target_id for the list).
 # ─────────────────────────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ def test__alerts__shopping_day_silent_outside_window(api):
 
 
 def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
-    # FU-074 — a not-yet-done list whose planned shop date has already
+    # a not-yet-done list whose planned shop date has already
     # passed should keep nudging (mirrors the in-page banner's overdue
     # state). Severity bumps from low → medium so it sorts above plain
     # upcoming nudges; tier stays FYI (the kind default).

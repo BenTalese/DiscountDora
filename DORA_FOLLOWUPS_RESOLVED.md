@@ -10,6 +10,148 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-425 — Pricing reassessment handoff → fully executed, archived to `06_legacy_prompt_plans/`
+- **Resolved:** 2026-07-07 — comprehensive delta-check via an Explore agent walked every §6 (A–K), §6a (A1 deep-dive + two-mode PriceEntry), and §6b (LC-1 through LC-5) decision from `PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` against shipped code. **All shipped, no gaps.** Handoff moved from `docs/99_scratch/` to `docs/06_legacy_prompt_plans/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` with an archive banner at the top pointing at IMPL_PLAN_YOUR_PRICES.md as the execution vehicle and this FU as the delta-check.
+- **Coverage confirmed:** every decision — folded observation shape (A1) · nullable `store_id` (A2) · user-editable `observed_at` (A3) · dropped `source` enum + FK provenance (A4) · count dimension (B1) · extracted units module + SPA codegen mirror (B2) · flat picker, no smart defaults (B3) · per-dimension baseline (B4) · median + 1.15× + min-3 + trailing-12mo (C1-C2) · observation-only baseline (C3, LC-2) · inline widget + bottom-sheet + price-history page (C5) · never-converted offers/observations (D1) · colour-coded chart (D2) · prefill priority ladder (D3) · prefill-and-persist, no bulk copy (E1-E2) · `/finish` as only harvest path (E3) · sizeless-vs-sized harvest (E4) · till total (E5) · product-less lines (E6) · shared `PriceEntry` component (F1) · source-labelled prefill (F2) · row button + `mdi-cash-plus` (G1-G3) · intra-build staging (H1, LC-5) · products-off history (H2) · money-gated "Receipt" relabel (I1) · UI-gated observation endpoints (I3) · removed ingestion→observation path (J1) · non-preserving migration + partial UNIQUE (K1, LC-1) · extracted `line_paid_unit_price` helper (K2). All in code.
+- **Bonus shape-changes en route** (additive within FU-227, not reshaping the core):
+  - `pack_count` optional informational field added (FU-232 follow-up) — folded shape still intact; count is display-only, math ignores it.
+  - Locale display denominators (AU `/100ml` vs US `/fl oz`) via `display_denominator_for()` in `domain/units.py` — FU-228 follow-up, natural consequence of multi-locale support.
+  - Chart series helpers (`build_stock_item_price_series`, `build_product_observation_series` in `your_prices.py`) — implementation detail surfaced during chunks 5-6, not a design shift.
+- **Raised:** 2026-07-01 (docs audit).
+- **Type (original):** finding (verification-only).
+
+## [RESOLVED] FU-424 — Senior review Tier-2 credibility gaps → all four routed to concrete FUs
+- **Resolved:** 2026-07-07 — the four Tier-2 items from `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md` are all now either shipped or tracked by concrete FUs. FU-424 was a "confirm status" umbrella; that status is now confirmed.
+- **Tier-2 resolution summary:**
+  1. **Unreachable Postgres posture** → **CLOSED** via [[FU-045]] (Postgres migration path documented; SQLite still supported for lightweight self-host per §7.5).
+  2. **~237 prompt-ID comments in shipped source** → **CLOSED** via [[FU-462]] (2026-07-07: 887 refs stripped across 202 files; R-008 hardened with an explicit close-time grep).
+  3. **Half-finished base-component adoption** → **AUDITED THIS SESSION** via an Explore agent. Findings: 54 raw `q-btn` uses across 16 files (mostly straightforward migrations, 3-4 defensible "unelevated coloured icon" outliers waiting on a `BaseButton` variant decision); `q-dialog` / `q-btn-toggle` / `q-btn-dropdown` are all clean (defensible non-modal / wrapper cases). **Real work bounded and opportunistic** — logged as [[FU-504]] rather than left as an unbounded credibility gap.
+  4. **Missing request-level transaction safety** → **AUDITED THIS SESSION**. 72 write handlers; 23 have multiple `save_changes()` calls (torn-state risk on mid-flow failure). Worst offenders: `create_recipe.py` (5 saves), `shopping_list_templates/manage_templates.py` (11 saves across bundled handlers), `meal_plan_templates/manage_templates.py` (3 saves in create + 3 in clone), `new_recipe_version.py` (2). **Work already tracked** by [[FU-456]] (unit-of-work refactor starting with `create_recipe.py`). The audit confirms FU-456's shape is right: opportunistic per-touch with the flush-based pattern, not a project-wide sweep. No new FU needed; FU-456's scope is sufficient.
+- **Nothing left unrouted** — every Tier-2 item is now either shipped (postgres, prompt-IDs), tracked with bounded scope (FU-504), or tracked with a working impl-plan (FU-456). FU-424 itself has no residual work.
+- **Cross-ref:** [[FU-045]] · [[FU-462]] · [[FU-456]] · [[FU-504]] · [[FU-409]] (auth findings re-audit — overlapping but separate, still open).
+- **Raised:** 2026-07-01 (docs audit).
+- **Type (original):** finding (audit-only).
+
+## [RESOLVED] FU-460 — `SESSION_COOKIE_SECURE` default → kept off, added prod-mode warning (option a)
+- **Resolved:** 2026-07-07 — took option (a) per the FU's recommended path. Default stays off (right for desktop / LAN self-host over plain HTTP / local dev), but any install running in `DORA_ENV=production` without an explicit `DORA_SECURE_COOKIES` value now sees a loud stderr banner at boot. Fits §7.5 distribution-posture "same artifact, different config" — the operator sees the warning once, makes an explicit choice either way, and it goes quiet.
+- **Cohort caught:** any HTTPS-fronted install (SaaS or self-host behind Let's Encrypt / Cloudflare / LB TLS termination) that forgot the flag. Cohort NOT nagged: desktop app, LAN-only self-host over plain HTTP, dev.
+- **What shipped:**
+  - `dora_api/infrastructure/profile.py` — new `warn_if_insecure_cookies_in_production()` sibling to `validate_production_requirements`. Warns only when the var is **unset** (empty or missing). An explicit `DORA_SECURE_COOKIES=false` is treated as an intentional operator choice (internal LAN behind VPN, home-lab, no cert) and silenced without complaint. `DORA_SKIP_PROD_VALIDATION=true` also silences (same escape hatch as the sibling validator).
+  - `dora_api/startup.py` — called right after `validate_production_requirements()` so the message lands before DI-container / DB / audit setup noise.
+  - `tests/test_profile_warnings.py` (new) — 6 tests: silent-in-dev, fires-when-prod-and-unset, silent-when-explicitly-true, silent-when-explicitly-false, silent-when-skip-flag-set, fires-when-whitespace-only.
+- **Deliberate design calls:**
+  - **Warning, not boot-block.** A prod-mode install intentionally served over plain HTTP (internal LAN behind a VPN) is a legitimate shape; the operator has made a choice and shouldn't be forced to set an override flag. A boot-block would collide with §7.5's "same artifact" rule.
+  - **Silent on explicit `false`.** The whole point is to catch operators who forgot the flag; someone who typed `DORA_SECURE_COOKIES=false` did not forget.
+  - **Kept the default off** rather than flipping on. Flipping on would break every desktop / LAN install on next launch — the very cohort that has no HTTPS. Option (b) from the FU was cleaner in isolation but hostile to §7.5.
+  - **Reused the existing validator's escape hatch** (`DORA_SKIP_PROD_VALIDATION`) so the two prod-mode guards behave consistently.
+- **Verification:**
+  - `pytest tests/ -q` → **824 passed, 0 failed** (up from 818 with the 6 new tests).
+  - R-008 close-gate grep → **0 hits**.
+  - Operator-smoke checklist added to `DORA_VERIFY.md` under a new **Operator** heading — 7 checks covering the 5 warning-decision branches plus a browser cookie-inspector round-trip.
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
+- **Type (original):** finding / policy call.
+- **Cross-ref:** [[FU-459]] (app-wide security headers) — separate hardening item still open; would land in the same Phase-4 hardening pass.
+
+## [RESOLVED] FU-503 — Unused `budgetApi` var on ShoppingListDetail.vue → deleted
+- **Resolved:** 2026-07-07 — deleted the unused declaration (and its now-orphan `BudgetApiService` import) from [ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue). Grep confirmed every `trim-to-budget` call in the file goes through the primary `api` (`ShoppingListApiService`), not `budgetApi` — the local `budgetApi` never had a call-site, so no wiring was intended. ESLint clean on the file after the edit.
+- **Raised:** 2026-07-07 (FU-452 lint pass).
+- **Type (original):** finding / lint noise.
+
+## [RESOLVED] FU-452 — P6-11 location-aware grouping → Surface A (put-away dialog) shipped, Surface B (alerts group-by-location) CUT
+- **Resolved:** 2026-07-07 — user's call: ship Surface A only as an on-demand helper dialog off the finished-list toolbar, cut Surface B permanently ("never do B, don't think it's necessary"). Ephemeral state per user preference — the dialog is a physical-world checklist, not a data commitment.
+- **Surface A (shipped):** Post-`Finish & restock`, a **Put away** button appears in the list's toolbar next to *Copy to new list*. Clicking opens `PutAwayDialog`, which groups the list's ticked lines by their `stock_location_breadcrumb` — one card per location with a tick-per-group affordance ("Freezer · 3") and a "(No location)" bucket at the bottom for unsorted items. Each unsorted line carries an inline "Assign" button that opens a small location picker (walked tree, same shape as the create-stock-item / stock-filter pickers); on save it calls `PATCH /api/stock-items/<id>` with the new `stock_location_id` and triggers a list-detail reload so the item moves group.
+- **Surface B (CUT):** Grouping expiring alerts by location — not built and won't be. User's call: not necessary. No `AlertDto` location enrichment, no `AlertsPage` toggle. If it ever becomes an actual ask, re-open a new FU; the one-liner `.include(StockItem.Fields.STOCK_LOCATION)` in `get_alerts.py` is documented in the FU-452 research report if it ever needs to resurrect.
+- **Guardrails respected:**
+  - No data-model change — feature runs entirely on existing columns (`ShoppingListLine.stock_location_id`, `StockItem.stock_location`, `StockLocation` tree). Explicit per the FU.
+  - No spatial-location / stock-map / location-routing reintroduction (charter Removed-features).
+  - No new alert type (Surface B was cut anyway; wouldn't have added one).
+  - Ephemeral state — `doneGroups` Set + `assignOpen` refs live in the dialog component and reset on every open. No new column, no localStorage, no session storage.
+- **Files touched:**
+  - `web_app/src/components/dialogs/PutAwayDialog.vue` (new).
+  - `web_app/src/pages/ShoppingListDetail.vue` — added the toolbar button (guarded on `detail.status === 'done'`), the `<PutAwayDialog>` element, the `putAwayOpen` ref, the `onPutAwayAssigned` handler (calls the existing `load()` refresh).
+- **Deliberate design calls:**
+  - **Button appears on the *done* list, not automatically after finish.** User's explicit direction — "button shows on a done list. if clicked, basically shows what you recommended." Keeps the finish flow's success toast + list-archived state as-is; put-away is opt-in.
+  - **Inline mini-dialog for location assign** (not the full stock-item edit sheet). The whole point is a fast one-tap sort — opening the heavy detail-page-picker would break the flow. Same walked-tree picker shape as [`CreateStockItemDialog.vue`](web_app/src/components/stock/CreateStockItemDialog.vue:174-186) so the label rendering is consistent.
+  - **Groups keyed by `stock_location_id` with `null` = "(No location)".** Matches the domain: unsorted is a real, queryable state, not an error condition.
+  - **Unsorted group pinned to the bottom** so a tidy pantry doesn't hide the "still to sort" items above real groups.
+  - **Location picker options refreshed on every open** — `watch(modelValue)` calls `locationStore.ensureLoadedAsync()` so a location the user added elsewhere shows up without a page reload.
+- **Verification:**
+  - `pytest tests/ -q` → **818 passed, 0 failed** (unchanged; feature is frontend-only).
+  - `vue-tsc --noEmit` → 4 pre-existing `@capacitor/*` module-not-found errors as baseline; zero new type errors introduced.
+  - `eslint` on the two touched files → clean on the new file; one pre-existing `budgetApi` unused-var on `ShoppingListDetail.vue:1307` from commit `14112c1f` (not caused by this FU) — logged as [[FU-503]].
+  - R-008 close-gate grep → **0 hits** (no prompt-ID / FU-NNN refs introduced in the new code).
+- **Browser-verify:** entry added to `DORA_VERIFY.md` under Shopping lists.
+- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
+- **Type (original):** deferred job (Phase 1 loop item, un-started; fell off the map when spatial locations were retired).
+- **Cross-ref:** [[FU-503]] (unused `budgetApi` — spotted during this session's lint pass).
+
+## [RESOLVED] FU-462 — Prompt-ID + FU-NNN comment sweep → 887 refs stripped app-wide, R-008 hardened
+- **Resolved:** 2026-07-07 — the sweep landed and R-008 in `ENGINEERING_STANDARDS.md` was strengthened with an explicit close-gate grep so this can't rot back in. Full pytest suite still 818/818 after the sweep; vue-tsc unchanged from baseline (the 4 pre-existing `@capacitor/*` errors are unrelated).
+- **Scope discovered vs FU's estimate:** FU-462 estimated ~237 prompt-ID comments. Actual count on 2026-07-07 was **887 references** across 202 files — 793 line-start comments + 72 second-pass comments with looser prefix shapes + 22 hand-fixed residuals. The user opted to include **FU-NNN references** in the same sweep (same category — task/PR refs banned by R-008) rather than leave them for a second FU.
+- **How the sweep ran (serial file-by-file, three passes):**
+  1. Scripted `scratchpad/strip_prefixes.py` (venv Python) with a strict regex handled the well-formed `# ID — substance` / `<!-- ID — substance -->` shapes — 793 transforms across 191 files. Every transform kept the substance (0 lines dropped) — prompt-ID prefixes were pure noise, not standalone WHY.
+  2. A looser second-pass regex swept prefixes with extra descriptor words between the ID and the em-dash (`FU-227 follow-up —`, `FU-333 Buckets B + C —`, `P6-01 lifecycle status —`, etc.) — 72 more transforms across 42 files.
+  3. 22 hand-fixed residuals — comments with period-terminated prefixes (`# P6-01 Chunk 7.`), pure-noise breadcrumbs (`<!-- FU-044 chip -->`, `// P8-09 memory` section-markers), inline comments (`import uuid  # FU-166: ...`), and a handful of FU-cross-refs that needed prose reworking to preserve the WHY without the FU IDs.
+- **Rule shipped alongside** — `docs/01_charter/ENGINEERING_STANDARDS.md` R-008 gained: (a) explicit "a comment must be useful to a reader who has no memory of how the code got here" framing, (b) the explicit close-time grep `rg -nE '(#|//) +(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])' dora_api/ tests/ web_app/src/`, (c) keep-substance-drop-prefix as the standard rework (e.g. `# P8-05 — buy-verdict defaults on because ...` → `# Buy-verdict defaults on because ...`), (d) an explicit WHAT-comment definition + delete signal, (e) a narrow carve-out for *currently-open* FU refs that name a live workaround (delete when the FU closes).
+- **Verification:**
+  - `rg -nE "(#|//|<!--)\s+(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])" dora_api/ tests/ web_app/src/` → **0 hits**.
+  - `rg -nE "\S.*(#|//)\s+(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])" dora_api/ tests/ web_app/src/` (inline) → **0 hits**.
+  - `.venv/Scripts/pytest.exe tests/ -q` → **818 passed, 0 failed** (matches pre-sweep baseline).
+  - `web_app$ npx vue-tsc --noEmit` → same 4 pre-existing `@capacitor/*` errors as baseline; no new type errors introduced.
+- **Carve-outs left in place** — R-0NN / ADR-0NN references (`# R-003 —`, `# ADR-014 —`) survive intentionally; the close-gate grep excludes them.
+- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
+- **Type (original):** deferred job / pre-release polish.
+- **Cross-ref:** [[FU-424]] Tier-2 item 1 also closed by this sweep (audit-trail updated in the FU-424 open block).
+
+## [RESOLVED] FU-502 — `dependency_injector==4.41.0` pin has no py3.12 wheel → bumped to 4.49.1
+- **Resolved:** 2026-07-07 — bumped the pin in `requirements.txt` to `dependency_injector==4.49.1`, which ships a `cp310-abi3` win-amd64 wheel that installs cleanly on py3.12. Full pytest suite green under the new pin (`818 passed, 0 failed`). The `containers.DeclarativeContainer` / `providers.Factory` / `providers.Singleton` surface Dora uses (`dora_api/infrastructure/dependency_container.py`, `service_wiring.py`) is stable across 4.41 → 4.49, so no downstream code needed touching.
+- **Raised:** 2026-07-07 (surfaced during FU-466 env bootstrap).
+- **Type (original):** finding / dep hygiene.
+
+## [RESOLVED] FU-466 — Wider pytest drift pool (~41 failures) → suite green (818/818)
+- **Resolved:** 2026-07-07 — the suite was in a much better state than the FU expected. 5 of the 6 original clusters were **already at zero failures** on current HEAD (fixed by unrelated work between 2026-07-05 and now); the only survivor was 1 flaky test in `test_data_router.py`. Two new drift items had appeared outside the FU's scope (`test_bucket_c_secrets.py` × 6, `test_recipe_is_planned.py` × 1) — resolved in the same pass.
+- **Baseline vs. current, per file:**
+  | File | FU-466 expected | Actual on HEAD | Notes |
+  |---|---:|---:|---|
+  | `test_alerts.py` | 16 | 0 | Resolved by earlier work; no action. |
+  | `test_alerts_digest.py` | 5 | 0 | Resolved by earlier work; no action. |
+  | `test_alerts_push.py` | 4 | 0 | Resolved by earlier work; no action. |
+  | `test_household_tz_boundaries.py` | 2 (500s) | 0 | The suspected real-bug 500 was fixed by earlier work; no action. |
+  | `test_stock_item_router.py` | 3 | 0 | Resolved by earlier work; no action. |
+  | `test_data_router.py` | 11 | 1 | The register-barcode traversal flake (noted in the FU-297 worklog session) — fixed this session. |
+  | `test_bucket_c_secrets.py` (new) | — | 6 | New drift from FU-333 Bucket C; fixed this session. |
+  | `test_recipe_is_planned.py` (new) | — | 1 | Test assumption stale; fixed this session. |
+- **Fixes shipped this session:**
+  - `tests/e2e/dora_api/test_bucket_c_secrets.py` — added the session-scoped `_wrapping_key` fixture the module docstring promised but never had. It writes a fresh `DORA_LLM_KEY_ENCRYPTION_KEY` (Fernet-generated) into the env, clears the `key_encryption._fernet` lru_cache, and restores/rewipes on teardown. Without it, every write-a-secret test hit a 400 "wrapping key isn't configured". Root cause: the fixture was documented but not written when FU-333 Bucket C landed 2026-07-06.
+  - `tests/e2e/dora_api/test_recipe_is_planned.py::test__recipes__is_planned_true_when_future_unconsumed_entry_exists` — was picking `?limit=1` (the first seeded recipe) which already had other future meal-plan entries, so deleting the one we added never flipped `is_planned` to false. Rewritten to pick a recipe that currently reports `is_planned: false`, guaranteeing the flip-back is observable.
+  - `tests/e2e/dora_api/test_data_router.py` — extended `_next_unused_product_id()` with `requires_link=True` (skips forward until the next Product has a `linked_stock_item_id`) and switched the traversal test to use it. Root cause: the traversal test asserts `stock_item_via_product`, which requires a Product with a StockItem linked — the bare round-robin landed on a linked Product only when this file ran in isolation; once earlier tests advanced the counter past the linked seed rows, it fell onto an unlinked Product and returned `product_no_link`. Matches the FU-297 flake symptom.
+- **Verification:** `./.venv/Scripts/pytest.exe tests/ -q` → **818 passed, 0 failed** (up from 810/8 at session start).
+- **Follow-on drift caught & noted separately:** requirements pin `dependency_injector==4.41.0`, which has no py3.12 wheel and can't build from sdist on Windows without a C toolchain. Installed 4.49.1 (which has a py3.12 win-amd64 wheel) — tests are green under it, but the pin should be bumped. Not in this FU's scope; logging as FU-047-adjacent in the worklog for follow-up.
+- **Raised:** 2026-07-05 (surfaced while closing FU-328).
+- **Type (original):** finding (pre-existing drift).
+- **Why deferred (original):** each cluster belonged to its own feature area and needed per-area investigation to distinguish stale-assertion drift from real regressions. In practice 5 of 6 clusters healed themselves via unrelated feature work before we got here.
+- **Cross-ref:** [[FU-328]] (predecessor; resolved 2026-07-05). The register-barcode traversal flake was first noted in the FU-297 close-out worklog entry.
+
+## [RESOLVED] FU-501 — Seasonal-picks table is AU-only → feature removed
+- **Resolved:** 2026-07-07 — user's call: cut the feature rather than localise it. `seasonal_picks` was only ever surfaced as one of ~30 assistant tools — no dashboard tile, no shopping-list suggestion, no page pulled from it. Only path was a user asking Dora "what's in season?" in chat. Low value, and the AU-only data was actively misleading for any non-AU install. Cutting is cheaper than either localising, gating on locale, or admin-uploaded tables.
+- **What shipped (removal):**
+  - `dora_api/features/assistant/tools.py` — removed the `seasonal_picks` tool schema, the `_SEASONAL_AU` table, `_MONTH_NAMES`, `_resolve_month`, the `seasonal_picks` handler, the `_TOOLS` registry entry, and the `_TOOL_NAV` trailing-comment reference.
+  - `dora_api/features/assistant/ask_assistant.py` — dropped the `'what's in season right now' → seasonal_picks` example from the tool-selection prompt.
+  - `web_app/src/pages/DoraHelpPage.vue` — removed the `seasonal_picks` help entry.
+  - `web_app/src/style/icons.ts` — dropped the now-unused `eco: 'mdi-leaf'` token (only site used it).
+- **Verified sweep clean:** `rg "seasonal_picks|SEASONAL_AU|_resolve_month|_MONTH_NAMES"` across code returns nothing outside the follow-ups + worklog audit trail.
+- **Raised:** 2026-07-06 (FU-043 close-gate).
+- **Type (original):** deferred job (locale data).
+- **What (original):** hardcoded AU fruit/veg table with an honest but AU-only "seasonal guide" note; non-AU installs saw AU seasons.
+
+## [RESOLVED] FU-465 — Native push notifications (FCM bridge) not wired → parked until SaaS / Phase 4
+- **Resolved:** 2026-07-07 — user's call: not worth doing now. VAPID web push already covers the browser + PWA install path (the realistic install story pre-release); native push only matters if the Capacitor APK becomes the primary distribution or Phase 4 commercialisation wants push parity across install types. Adds a Firebase dependency, which cuts against the self-host posture (§7.5) — every self-hoster would have to provision FCM credentials for a channel most won't use. Parked as a Phase 4 resurrection item; noted alongside [[FU-461]] under Phase 4 in `docs/01_charter/RECONCILED_FINISHING_PLAN.md`.
+- **Raised:** 2026-07-04 (P8-10 close-gate).
+- **Type:** deferred job.
+- **What:** VAPID web push works in the browser + PWA install path but Android's WebView doesn't expose the Push / PushManager / Notification APIs, so the Capacitor build's push toggle reads `unsupported`. To make proactive alerts (deal-for-you, run-out, expiry) work on the native app, wire `@capacitor/push-notifications` + Firebase Cloud Messaging on Android (and APNS on iOS when that platform is built). Server-side: a native-endpoint subscription store parallel to the web-push VAPID one, plus a fan-out in `push_sender.py`. Manifest already declares `POST_NOTIFICATIONS`.
+- **Why deferred (original):** user picked "keep VAPID web push" at P8-10 scope-lock — smallest surface, avoids a Firebase dependency, matches self-host posture. Native push is only worth the FCM/Firebase cost once there's actual demand.
+- **If resurrected:** Firebase project setup + `google-services.json` + backend fan-out is roughly a half-day of work.
+
 ## [RESOLVED] FU-448 — P2-05 tail: budget-aware auto-generated shopping lists (optimizer piece)
 - **Resolved:** 2026-07-06 — design brief landed at
   [PROPOSAL_BUDGET_AWARE_LISTS.md](docs/04_proposals/PROPOSAL_BUDGET_AWARE_LISTS.md);

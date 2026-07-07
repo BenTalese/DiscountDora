@@ -47,7 +47,7 @@ let booted = false;
 async function probeOnce(): Promise<boolean> {
     if (!online.value) return false;
     const url = resolveHealthUrl();
-    // P8-10 — on native before the user has picked an instance, the URL
+    // on native before the user has picked an instance, the URL
     // resolves to empty; skip the probe cleanly rather than firing a
     // relative fetch at the WebView origin.
     if (!url) return false;

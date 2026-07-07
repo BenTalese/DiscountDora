@@ -154,6 +154,18 @@
                         </BaseButton>
                         <BaseButton
                             v-if="detail && detail.status === 'done'"
+                            variant="primary"
+                            :icon="ICONS.inventory_2"
+                            label="Put away"
+                            @click="putAwayOpen = true"
+                        >
+                            <q-tooltip>
+                                Ephemeral checklist grouped by kitchen location
+                                so you don't forget a corner. Doesn't save.
+                            </q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            v-if="detail && detail.status === 'done'"
                             variant="ghost"
                             :icon="ICONS.content_copy"
                             label="Copy to new list"
@@ -277,7 +289,7 @@
                             <!-- S14: a proper button, not a text link.
                                  Overdue/today fold into the button tone —
                                  one signal instead of button + banner. -->
-                            <!-- FU-006: ambiguous — dynamic color (positive/warning/undefined) with outline; no BaseButton variant covers all tones. Left as raw q-btn for review. -->
+                            <!-- ambiguous — dynamic color (positive/warning/undefined) with outline; no BaseButton variant covers all tones. Left as raw q-btn for review. -->
                             <q-btn
                                 outline
                                 no-caps
@@ -288,7 +300,7 @@
                                 class="q-mt-sm q-px-sm"
                                 @click="openPlannedDateEditor"
                             >
-                                <!-- FU-044 — extended tooltip explains what the
+                                <!-- extended tooltip explains what the
                                      planned date drives beyond "next up". -->
                                 <q-tooltip>
                                     Set the date you plan to shop this list. Helps
@@ -362,7 +374,7 @@
                         </template>
                     </q-banner>
 
-                    <!-- FU-448 — Budget-aware trim banner (money-gated + budget-set).
+                    <!-- Budget-aware trim banner (money-gated + budget-set).
                          Fires when the projected active-list total exceeds the
                          user's period-remaining budget for this list's shop
                          date. Never mutates on load; every mutation is a user
@@ -562,7 +574,7 @@
                                                     v-if="stockItemFor(line.stock_item_id)"
                                                     :stock-item="stockItemFor(line.stock_item_id)!"
                                                 />
-                                                <!-- P8-05 — in-shop "should I buy?" nudge.
+                                                <!-- in-shop "should I buy?" nudge.
                                                      Silent on low-confidence items so the
                                                      line list stays legible; when the pantry
                                                      says the item is stocked and the
@@ -679,7 +691,7 @@
                                                 </q-tooltip>
                                             </q-chip>
                                         </div>
-                                        <!-- FU-215 — PreferredBuy hint: pick one of
+                                        <!-- PreferredBuy hint: pick one of
                                              the item's "what I buy" labels as a
                                              reminder for this line. -->
                                         <div
@@ -756,7 +768,7 @@
                                         </div>
                                         <!-- S17: a real outlined button with a
                                              caret so it reads as clickable. -->
-                                        <!-- FU-006: ambiguous — outline with conditional primary/undefined color; left as raw q-btn for review. -->
+                                        <!-- ambiguous — outline with conditional primary/undefined color; left as raw q-btn for review. -->
                                         <q-btn
                                             outline
                                             dense
@@ -906,7 +918,7 @@
                         </div>
                     </template>
 
-                    <!-- FU-448 — Deferred-to-fit-budget section
+                    <!-- Deferred-to-fit-budget section
                          (PROPOSAL_BUDGET_AWARE_LISTS §6.3). Renders when the
                          list has any lines with `deferred_by_budget=true`.
                          Collapsible; each row shows the frozen reason chip
@@ -954,7 +966,7 @@
                         </q-list>
                     </q-expansion-item>
 
-                    <!-- FU-334 — receipt-photo record-keeping. Visible only
+                    <!-- receipt-photo record-keeping. Visible only
                          once the list is being shopped or finished; pure
                          record-keeping (no OCR, no parsing). Multi-photo;
                          tap to zoom, trash to remove. Source-pick UX
@@ -1118,7 +1130,7 @@
             </div>
         </div>
 
-        <!-- P6-01 Chunk 5 — the New-list dialog lives on the detail page now
+        <!-- the New-list dialog lives on the detail page now
              that Detail is the canonical surface. The router landing page
              also mounts this dialog for the no-lists empty state. -->
         <NewListDialog
@@ -1126,7 +1138,14 @@
             @created="onListCreated"
         />
 
-        <!-- P6-01 Chunk 7 — planned-shop-date editor. Sets/changes/clears
+        <PutAwayDialog
+            v-if="detail && detail.status === 'done'"
+            v-model="putAwayOpen"
+            :lines="detail.lines"
+            @assigned="onPutAwayAssigned"
+        />
+
+        <!-- planned-shop-date editor. Sets/changes/clears
              the planned day for this list. Sort + next-up + button tone
              all read from it. -->
         <BaseDialog v-model="plannedDateOpen" title="Plan this shop for" closable card-style="min-width: 280px">
@@ -1233,6 +1252,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
+    import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
     import PageToolbar from 'src/components/PageToolbar.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
@@ -1266,7 +1286,6 @@
         shoppingListAttachmentUrl,
         type TrimToBudgetResult,
     } from 'src/services/api/shoppingListApiService';
-    import BudgetApiService from 'src/services/api/budgetApiService';
     import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
     import type { ProcessedImage } from 'src/services/files/imageService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
@@ -1284,7 +1303,6 @@
     const router = useRouter();
     const $q = useQuasar();
     const api = new ShoppingListApiService();
-    const budgetApi = new BudgetApiService();
     const templateApi = new ShoppingListTemplateApiService();
     const stockItemApi = new StockItemApiService();
     const store = useShoppingListStore();
@@ -1297,7 +1315,7 @@
     const listId = computed(() => String(route.params.id ?? ''));
     const detail = ref<ShoppingListDetail | null>(null);
 
-    // P8-10 — shop-mode wake lock. Holds the screen on while the list is
+    // shop-mode wake lock. Holds the screen on while the list is
     // in 'shopping' status so the phone doesn't blank between aisles. The
     // computed reads `detail.value?.status` so entering / leaving shop
     // mode toggles the lock without any explicit acquire/release call.
@@ -1560,7 +1578,7 @@
         return line.stock_location_breadcrumb.join(' › ');
     }
 
-    // FU-448 — deferred-by-budget lines render under their own collapsible
+    // deferred-by-budget lines render under their own collapsible
     // section, not the active list. Server-side totals already skip them.
     const baseLines = computed(() =>
         (detail.value?.lines ?? []).filter((l) => !l.deferred_by_budget),
@@ -1792,7 +1810,7 @@
         });
     });
 
-    // C-7 Chunk 3 — nested display. A line with both `stock_item_id` and
+    // nested display. A line with both `stock_item_id` and
     // `product_id` set is a *nested* product under the matching
     // stock-item line; a line with only `product_id` is a *standalone*
     // product-only line. `nestedLinesFor` reorders a group so each parent
@@ -2003,6 +2021,7 @@
     // the ordering rule lives in get_shopping_lists.py, not here) — the
     // client renders the payload order verbatim.
     const newListOpen = ref(false);
+    const putAwayOpen = ref(false);
     const railEntries = computed(() => store.summaries);
     const currentSummary = computed(() =>
         store.summaries.find((s) => s.shopping_list_id === listId.value) ?? null,
@@ -2107,7 +2126,7 @@
         } finally {
             loading.value = false;
         }
-        // FU-448 — refresh the trim-to-budget banner state as soon as the
+        // refresh the trim-to-budget banner state as soon as the
         // list is available. Own try/catch inside; failures never bubble.
         void refreshTrimStatus();
     }
@@ -2117,6 +2136,14 @@
         // parallel so the rail order, next-up marker and cart-button
         // state elsewhere stay accurate.
         await Promise.all([load(), store.refreshAsync()]);
+    }
+
+    async function onPutAwayAssigned(): Promise<void> {
+        // The dialog just persisted a new stock_location for one line's
+        // item. Reload the list detail so the line's breadcrumb + group
+        // membership move with it — the dialog re-reads via v-model on
+        // detail.lines.
+        await load();
     }
 
     // ── Name editing (UX-v2 §5: clearable custom name) ────────────────
@@ -2213,7 +2240,7 @@
         if (wasOpen && !open) void load();
     });
 
-    // FU-157 — react to URL list-id changes. The merged overview-into-
+    // react to URL list-id changes. The merged overview-into-
     // detail design means switching lists (rail, dropdown, rail kebab)
     // only changes `route.params.id` without unmounting this component,
     // so `onMounted` doesn't re-fire.
@@ -2224,7 +2251,7 @@
         // Pull substitutes from the stock item's detail — we don't keep
         // them in the line DTO because they're a per-item attribute and
         // would bloat every line.
-        // C-7 Chunk 3 — product-only lines have no stock_item_id;
+        // product-only lines have no stock_item_id;
         // substitutes don't apply, so bail early.
         if (!line.stock_item_id) return;
         let subs: Substitute[] = [];
@@ -2251,7 +2278,7 @@
         }
         // Filter out subs already on this list — swapping into a duplicate
         // would just delete the line.
-        // C-7 Chunk 3 — drop product-only lines (null stock_item_id) from
+        // drop product-only lines (null stock_item_id) from
         // the dedupe set; they don't anchor a substitute swap.
         const onListIds = new Set(
             (detail.value?.lines ?? [])
@@ -2497,7 +2524,7 @@
         }
     }
 
-    // FU-215 — the chosen preferred-buy label for a line's hint chip.
+    // the chosen preferred-buy label for a line's hint chip.
     function buyHintLabel(line: ShoppingListLine): string | null {
         if (!line.preferred_buy_id) return null;
         return (line.preferred_buys ?? []).find(
@@ -2562,7 +2589,7 @@
         }
     }
 
-    // P8-05 — buy-verdict action for an in-shop line.
+    // buy-verdict action for an in-shop line.
     // - `remove_from_list` targets THIS specific line (line-level intent).
     // - `mark_stocked` closes FU-454: routes through the shared
     //   `useBuyVerdictActions.markStocked` seam so the item flips to the
@@ -2590,7 +2617,7 @@
     async function onRemoveLine(lineId: string) {
         const before = detail.value?.lines.find((l) => l.line_id === lineId);
 
-        // C-7 Chunk 3 rule 4 — removing a product-only line (no
+        // removing a product-only line (no
         // stock_item_id) prompts to also remove the *linked* stock-item
         // line, if one is also on this list. The user added the product
         // intent; removing it usually implies the stock-item placeholder
@@ -2959,7 +2986,7 @@
         await stockItemStore.ensureLoadedAsync();
         // Levels power the StockLevelDot and the restock-review modal.
         await stockLevelStore.ensureLoadedAsync();
-        // C-7 Chunk 3 — needed to resolve a product-only line's
+        // needed to resolve a product-only line's
         // linked stock item for the rule-4 modal and for nested-display
         // grouping.
         await productStore.ensureLoadedAsync();

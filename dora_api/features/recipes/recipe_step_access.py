@@ -37,7 +37,7 @@ class StepWrite:
     hint: str | None
     ingredient_ids: list[UUID]
     tool_ids: list[UUID]
-    # C-4 Chunk 10 — optional section grouping (resolved by the caller
+    # optional section grouping (resolved by the caller
     # from the matching section's client_id before this write). NULL
     # keeps the step in the implicit "main" group.
     section_id: UUID | None = None

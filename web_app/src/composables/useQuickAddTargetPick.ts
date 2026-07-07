@@ -1,4 +1,4 @@
-// P6-01 Chunk 2 — remember the user's quick-add-target choice for the
+// remember the user's quick-add-target choice for the
 // 2+ drafts case. sessionStorage (not localStorage) so the pick lives for
 // the tab session only — opening a fresh tab re-prompts, matching the
 // plan's "remember the session pick" framing.

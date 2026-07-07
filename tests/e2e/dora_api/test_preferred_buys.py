@@ -35,7 +35,7 @@ def test__preferred_buys__add_shows_on_detail(api):
     buys = _preferred_buys(item)
     assert len(buys) == 1
     assert buys[0]["label"] == "Vitasoy Oat Milky 1L"
-    # FU-225: `position` column dropped — list is now sorted alphabetically
+    # `position` column dropped — list is now sorted alphabetically
     # by the detail handler (see get_stock_item_detail.py:419). No `position`
     # field on the DTO.
     assert "position" not in buys[0]

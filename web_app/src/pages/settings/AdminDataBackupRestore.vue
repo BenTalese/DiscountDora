@@ -6,7 +6,7 @@
             :icon="ICONS.cloud_download"
         />
 
-        <!-- FU-342 — Backup library. One row per persisted backup;
+        <!-- Backup library. One row per persisted backup;
              retention (default 5) prunes the oldest above the cap on every
              new create. Rows carry Download / Restore / Delete actions;
              external-file restore lives in the sibling card. -->
@@ -292,7 +292,7 @@
 
             <q-card-actions align="right">
                 <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
-                <!-- FU-006: ambiguous — color="grey"; no BaseButton variant maps to greyscale. Left as raw q-btn for review. -->
+                <!-- ambiguous — color="grey"; no BaseButton variant maps to greyscale. Left as raw q-btn for review. -->
                 <q-btn
                     color="grey"
                     :icon="ICONS.done_all"
@@ -368,7 +368,7 @@
                 </template>
         </BaseDialog>
 
-        <!-- FU-342 — library retention + storage-path admin settings. Sits
+        <!-- library retention + storage-path admin settings. Sits
              at the bottom of the page because it's operator-configuration,
              not day-to-day workflow. -->
         <q-card flat bordered>
@@ -425,7 +425,7 @@
             </q-card-actions>
         </q-card>
 
-        <!-- FU-345 — install-wide image compression. Applied at upload
+        <!-- install-wide image compression. Applied at upload
              time via the shared `processImageFile` helper; every surface
              (stock items, recipes, products, avatars, receipts, store
              logos) picks these up automatically. Forward-only — existing
@@ -510,7 +510,7 @@
     const $q = useQuasar();
     const authStore = useAuthStore();
 
-    // FU-342 — library-facing state. Old download-only path retired;
+    // library-facing state. Old download-only path retired;
     // "Create backup" now POSTs the library create endpoint, and the
     // list at the top of the page shows every persisted backup.
     interface BackupRow {
@@ -538,7 +538,7 @@
     const storagePathInput = ref<string>('');
     const savingSettings = ref(false);
 
-    // FU-345 — install-wide image compression knobs, loaded alongside the
+    // install-wide image compression knobs, loaded alongside the
     // backup settings so admins see the whole storage picture in one
     // place. Saved via the same PATCH /app-settings endpoint.
     const imageQuality = ref<number>(85);
@@ -580,12 +580,12 @@
     const report = ref<RestoreReport | null>(null);
     const reportOpen = ref(false);
 
-    // FU-342: "last backup" now derives from the library list (`SELECT
+    // "last backup" now derives from the library list (`SELECT
     // MAX(created_at)`), not the retired User.last_backup_at column. The
     // header caption at the top of the library card reads the count; a
     // per-row "how long ago" is on each library row.
 
-    // FU-342 — sensitive sections warning. Optional sections carry data
+    // sensitive sections warning. Optional sections carry data
     // Dora doesn't want written to disk casually. Chips + banner surface
     // this so the choice is visible; not blocked (admins may legitimately
     // need a full-fidelity dump for a migration).
@@ -1029,7 +1029,7 @@
             storagePath.value = String(settings.backup_storage_path ?? '');
             retentionInput.value = retentionCount.value;
             storagePathInput.value = storagePath.value;
-            // FU-345 — image compression settings live on the same
+            // image compression settings live on the same
             // /app-settings payload; hydrate their inputs from the same
             // response so both cards render current state after mount.
             imageQuality.value = Number(settings.image_quality ?? 85);
@@ -1046,7 +1046,7 @@
         }
     }
 
-    // FU-345 — image compression dirty check + save. Kept as its own
+    // image compression dirty check + save. Kept as its own
     // section (not folded into onSaveLibrarySettings) so the two cards
     // save independently — an admin tweaking quality shouldn't have to
     // also re-confirm the storage path.
@@ -1364,7 +1364,7 @@
         window.location.reload();
     }
 
-    // FU-016 — a successful restore can invalidate `authStore.currentUser`
+    // a successful restore can invalidate `authStore.currentUser`
     // (users table restored ⇒ different `is_admin`, or the caller's row is
     // gone entirely). "Reload now" is the operator's recommended path, but
     // if they hit Close instead, at least sync the auth cache so the router

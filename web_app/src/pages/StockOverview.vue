@@ -39,7 +39,7 @@
             <BaseButton variant="secondary" :icon="ICONS.more_horiz" label="Export">
                 <q-menu auto-close>
                     <q-list dense style="min-width: 200px">
-                        <!-- C-1 Chunk 1 / L67 — both exports respect the
+                        <!-- both exports respect the
                              currently filtered set. `filteredIds` is undefined
                              when no filters are active so the server-side
                              fast-path stays "export everything". -->
@@ -68,7 +68,7 @@
                 :active-count="filters.activeFilterCount.value"
                 @clear="clearAllFilters"
             />
-            <!-- C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the
+            <!-- inline image-toggle. Flips the
                  per-user `show_stock_images` flag; the row's image
                  slot collapses out of the layout when off. Sits next
                  to the search input so it's reachable without
@@ -115,7 +115,7 @@
         >
             <template #filters>
             <div class="row q-gutter-sm items-center">
-            <!-- C-1 Chunk 2 / L97 — single dropdown defaults to "Any level".
+            <!-- single dropdown defaults to "Any level".
                  Per-level chips with count badges retired; counts live in
                  the sticky footer now (PageCountsFooter).
                  Feedback (2026-06-30): the option list and trigger both
@@ -207,7 +207,7 @@
                 </q-icon>
             </span>
 
-            <!-- C-1 Chunk 2 / L96 — "Used in a recipe" filter removed
+            <!-- "Used in a recipe" filter removed
                  (low signal; the recipe pages own that view). -->
 
             <q-chip
@@ -385,7 +385,7 @@
                  needed — the bar IS the separator. -->
             <template #before>
                 <div class="q-pr-md q-pt-xs">
-                    <!-- C-1 Chunk 1 — small lists keep the glide-in
+                    <!-- small lists keep the glide-in
                          ListTransition (DS4 perceived-perf masking, see
                          STOCK_OVERVIEW_PERF.md); large lists swap to
                          q-virtual-scroll so a >50-item pantry actually
@@ -600,7 +600,7 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
-    // P8-07 — inferred-pantry beliefs, loaded once on mount; StockItemRow
+    // inferred-pantry beliefs, loaded once on mount; StockItemRow
     // reads from the shared cache.
     const pantryBeliefs = usePantryBeliefs();
     const locationStore = useLocationStore();
@@ -617,7 +617,7 @@
     // dropdown on this page.
     const stockGroups = ref<StockGroup[]>([]);
 
-    // C-1 Stock Overview Chunk 1 — virtualisation tuning. Below the
+    // virtualisation tuning. Below the
     // threshold we keep the existing ListTransition glide-in so small
     // pantries feel unchanged; above it we hand off to q-virtual-scroll
     // so a 500-item pantry renders smoothly. Item-size is a rough
@@ -625,7 +625,7 @@
     const VIRTUAL_SCROLL_THRESHOLD = 50;
     const VIRTUAL_SCROLL_ITEM_SIZE = 72;
 
-    // C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the per-user
+    // inline image-toggle. Flips the per-user
     // `show_stock_images` flag via the C-cross composable.
     const { showStockImages, setStockImages } = useImagePrefs();
     const imageToggleBusy = ref(false);
@@ -657,7 +657,7 @@
 
     // Filter panel expanded state — shared between the toolbar's
     // FilterToggleButton and the FilterBar's collapsible panel.
-    // FU-121: persisted per-page across reloads (mobile always starts
+    // persisted per-page across reloads (mobile always starts
     // hidden regardless of saved state).
     const filtersExpanded = useFilterPanelExpanded('stock-overview');
 
@@ -712,7 +712,7 @@
         return typeof seq === 'number' ? seq : null;
     });
 
-    // C-1 Chunk 1 / L67 — id list passed to the export endpoint when ANY
+    // id list passed to the export endpoint when ANY
     // filter (text, level, location, …) is active. `undefined` keeps the
     // server-side "export everything" fast-path so unfiltered exports
     // don't push a URL with hundreds of UUIDs.
@@ -735,7 +735,7 @@
     );
     watch(peekId, (v) => (splitPct.value = v ? 58 : 100));
 
-    // C-1 Chunk 5 / L68 / L71 — two-frame detail nav:
+    // two-frame detail nav:
     //   Desktop  → splitter peek (the embedded drawer).
     //   Mobile   → full page navigation (`/stock/<id>`), no drawer.
     // One shared `StockItemDetailPage` powers both (L69). Bulk mode
@@ -762,11 +762,10 @@
         if (!bulkSelection.value.has(stockItemId)) toggleBulk(stockItemId);
     }
 
-    // ── P8-05 buy-verdict actions ────────────────────────────────────────
-    // FU-437 (add_to_list) and FU-454 (mark_stocked + remove_from_list)
-    // both closed — the card's one-tap intents now round-trip through the
-    // shared `useBuyVerdictActions` composable, which reuses the row's
-    // existing mutation seams (R-003: no duplicated paths).
+    // ── Buy-verdict actions ─────────────────────────────────────────────
+    // The card's one-tap intents round-trip through the shared
+    // `useBuyVerdictActions` composable, which reuses the row's existing
+    // mutation seams (R-003: no duplicated paths).
     const verdictActions = useBuyVerdictActions();
     async function onVerdictAction(
         stockItemId: string,
@@ -862,7 +861,7 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            // FU-018: pass silent so per-item toasts don't storm; one summary at the end.
+            // pass silent so per-item toasts don't storm; one summary at the end.
             const ids = [...bulkSelection.value];
             for (const id of ids) await actions.addToList(id, null, { silent: true });
             $q.notify({
@@ -880,7 +879,7 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            // FU-018: silent per-item, one summary toast.
+            // silent per-item, one summary toast.
             const ids = [...bulkSelection.value];
             for (const id of ids) await actions.markRestocked(id, { silent: true });
             $q.notify({
@@ -1142,7 +1141,7 @@
     }
 
     // ── Navigation ───────────────────────────────────────────────────────
-    // C-1 Chunk 3 — `goToList` retired with the "On N lists" chip; the
+    // `goToList` retired with the "On N lists" chip; the
     // cart button owns the list interaction now.
     function goToRecipes() {
         void router.push('/cookbook');
@@ -1153,7 +1152,7 @@
 
     // ── Create dialog ────────────────────────────────────────────────────
     const createDialogOpen = ref(false);
-    // P8-02 — carries a scan-driven prefill (Open Food Facts hit, EAN-only
+    // carries a scan-driven prefill (Open Food Facts hit, EAN-only
     // fallback, or product_no_link) so the dialog can seed the name/image/
     // barcode and auto-register the EAN on submit. Cleared on close so the
     // next non-scan "New item" click starts blank.
@@ -1183,7 +1182,7 @@
     async function onOverviewScanDecoded(value: string) {
         try {
             const result = await barcodeApi.lookupAsync(value);
-            // FU-056 — both stock-item kinds route directly. `UNIQUE` on
+            // both stock-item kinds route directly. `UNIQUE` on
             // StockItemProduct.product_id guarantees there's no multi-link
             // ambiguity to handle. **P8-02 invariant: already-mapped EANs
             // never trigger the OFF lookup or the add flow** — they jump
@@ -1300,7 +1299,7 @@
             recipeStore.ensureLoadedAsync(),
             loadStockGroups(),
             loadStocktakeCount(),
-            // P8-07 — load the inferred-pantry beliefs once; rows read them
+            // load the inferred-pantry beliefs once; rows read them
             // from the shared cache. Non-blocking-safe (fails soft).
             pantryBeliefs.loadAsync(),
         ]);

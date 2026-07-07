@@ -11,7 +11,7 @@
                 <q-space />
                 <div class="text-h5 ellipsis">{{ recipe.name }}</div>
                 <q-space />
-                <!-- C-3 Chunk 6 — headcount control. Session-only; the
+                <!-- headcount control. Session-only; the
                      saved recipe stays at `recipe.servings`. -->
                 <div class="row items-center q-gutter-xs cooking-for">
                     <q-icon :name="ICONS.group" size="20px" class="dora-text-muted" />
@@ -31,7 +31,7 @@
                         </q-tooltip>
                     </q-input>
                 </div>
-                <!-- C-3 Chunk 2 — Sous Chef. Single labelled button activates
+                <!-- Sous Chef. Single labelled button activates
                      speech + listening; the popover lists the hands-free
                      commands so users don't have to discover them. -->
                 <BaseButton
@@ -41,7 +41,7 @@
                     :class="{ 'text-primary': speechEnabled, 'dora-text-muted': !speechEnabled }"
                     @click="toggleSpeech"
                 >
-                    <!-- FU-044 — tooltip folds the toggle micro-label with a fuller
+                    <!-- tooltip folds the toggle micro-label with a fuller
                          explanation of what Sous Chef does, per IMPL_PLAN_HELP_CHIPS. -->
                     <q-tooltip>
                         {{ speechEnabled ? 'Disable Sous Chef voice.' : 'Enable Sous Chef voice.' }}
@@ -56,7 +56,7 @@
                     :class="{ 'text-negative': listening, 'dora-text-muted': !listening }"
                     @click="toggleListening"
                 >
-                    <!-- FU-044 — extended tooltip explains the mic is independent
+                    <!-- extended tooltip explains the mic is independent
                          of Sous Chef narration. -->
                     <q-tooltip>
                         {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
@@ -121,7 +121,7 @@
             <q-card v-if="!isImageMode" flat bordered class="step-card q-mb-md">
                 <q-card-section>
                     <div class="row items-center q-gutter-xs q-mb-xs">
-                        <!-- C-4 Chunk 10 — section header for the current step. -->
+                        <!-- section header for the current step. -->
                         <q-chip
                             v-if="currentStepObject?.sectionName"
                             dense
@@ -165,7 +165,7 @@
                             label="Start"
                             @click="startTimer(detectedTimerMinutes * 60)"
                         />
-                        <!-- FU-006: ambiguous — color="warning" has no matching BaseButton variant; left as raw q-btn for review. -->
+                        <!-- ambiguous — color="warning" has no matching BaseButton variant; left as raw q-btn for review. -->
                         <q-btn
                             v-else
                             color="warning"
@@ -181,7 +181,7 @@
                             @click="resetTimer"
                         />
                     </div>
-                    <!-- C-3 Chunk 2 — fill-bar that empties as time passes.
+                    <!-- fill-bar that empties as time passes.
                          Tone shifts to negative when finished so the bar
                          itself confirms the toast/audio. -->
                     <q-linear-progress
@@ -196,7 +196,7 @@
             </q-card>
 
             <div v-if="!isImageMode" class="row q-gutter-sm justify-center q-mb-lg">
-                <!-- FU-006: ambiguous, mapped to ghost -->
+                <!-- ambiguous, mapped to ghost -->
                 <BaseButton
                     variant="ghost"
                     size="lg"
@@ -205,7 +205,7 @@
                     :disable="currentStepIndex === 0"
                     @click="prevStep"
                 />
-                <!-- FU-006: ambiguous, mapped to ghost -->
+                <!-- ambiguous, mapped to ghost -->
                 <BaseButton
                     variant="ghost"
                     size="lg"
@@ -223,7 +223,7 @@
                 />
             </div>
 
-            <!-- C-3 Chunk 3 — ingredients grouped by base stock location.
+            <!-- ingredients grouped by base stock location.
                  Stock-level chips intentionally removed mid-cook: the
                  decision to cook this recipe is already made; visual noise
                  about what's low/out only belongs on the finish surface
@@ -338,7 +338,7 @@
                 </div>
             </q-expansion-item>
 
-            <!-- C-3 Chunk 5 — tools panel. Shown only when the recipe lists
+            <!-- tools panel. Shown only when the recipe lists
                  tools (Cookbook Chunk 5 vocab). Highlights the tools the
                  current step needs; un-referenced tools dim out. -->
             <q-expansion-item
@@ -383,7 +383,7 @@
                     >
                         <q-item-section side>{{ idx + 1 }}.</q-item-section>
                         <q-item-section>
-                            <!-- C-4 Chunk 10 — show the section header at the
+                            <!-- show the section header at the
                                  first step of each section in the overview. -->
                             <div
                                 v-if="step.sectionName && (idx === 0 || cookSteps[idx - 1]?.sectionName !== step.sectionName)"
@@ -398,7 +398,7 @@
             </q-expansion-item>
         </template>
 
-        <!-- B8 — cook-session substitute picker (temporary; never edits recipe) -->
+        <!-- cook-session substitute picker (temporary; never edits recipe) -->
         <BaseDialog v-model="swapPickerOpen" :title="`Substitute for ${swapForName}`" closable card-style="min-width: 360px; max-width: 520px">
             <q-card-section v-if="loadingSwapOptions" class="text-center q-py-lg">
                 <AppSpinner size="32px" />
@@ -411,7 +411,7 @@
                 <div class="text-caption dora-text-muted q-mb-sm">
                     Just for this cook — your saved recipe won't change.
                 </div>
-                <!-- FU-034 — when the substitute carries a note or ratio,
+                <!-- when the substitute carries a note or ratio,
                      surface it next to the chip so the cook has the hint
                      in front of them at swap time. Mirrors the detail-page
                      layout so the same shape reads the same in both
@@ -448,7 +448,7 @@
             </template>
         </BaseDialog>
 
-        <!-- C-3 Chunk 1 — finish-flow rewrite. Per-ingredient level control
+        <!-- finish-flow rewrite. Per-ingredient level control
              replaces the old blanket "update stock levels" / "auto-add ran
              out" toggles; `meals_cooked` defaults to 0 ("just ate it" is the
              common case); click-out cancels (BaseDialog v-model leaves the
@@ -553,7 +553,7 @@
         findLevelBySequence,
         OUT_OF_STOCK_SEQUENCE,
     } from 'src/helpers/stockStatus';
-    // P2-13 — extracted browser-speech composables. Cook mode opts into
+    // extracted browser-speech composables. Cook mode opts into
     // continuous listening so the user can keep their hands in the
     // mixing bowl while saying "next" / "start timer".
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
@@ -588,7 +588,7 @@
     const slActions = useShoppingListActions();
     const authStore = useAuthStore();
 
-    // P8-10 — hold the screen awake for the whole cook session (both the
+    // hold the screen awake for the whole cook session (both the
     // running timer and the read-along steps assume a visible screen the
     // user isn't tapping). Released automatically on unmount.
     const wakeLockWanted = ref(true);
@@ -615,7 +615,7 @@
         () => recipe.value?.steps_mode === 'image',
     );
 
-    // C-3 Chunk 6 / C-5.4 — session-only headcount. Seeds from the user's
+    // session-only headcount. Seeds from the user's
     // `household_headcount` (set in onboarding) when present, otherwise the
     // recipe's own `servings`. Never writes back to the saved recipe —
     // matches the B8-substitute discipline of "this cook only".
@@ -680,7 +680,7 @@
 
     const timerRemaining = ref<number | null>(null);
     const timerRunning = ref(false);
-    // C-3 Chunk 2 — captured at start so the fill-bar has a stable
+    // captured at start so the fill-bar has a stable
     // denominator even after pause/reset shuffles `timerRemaining`.
     const timerTotal = ref<number | null>(null);
     let timerIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -691,7 +691,7 @@
         return Math.max(0, Math.min(1, timerRemaining.value / timerTotal.value));
     });
 
-    // C-3 Chunk 2 — Sous Chef voice command list, surfaced via the help
+    // Sous Chef voice command list, surfaced via the help
     // popover so users discover the verbs without trial and error.
     const sousChefCommands: ReadonlyArray<{ label: string; does: string }> = [
         { label: '"Next"', does: 'advance to the next step' },
@@ -703,7 +703,7 @@
         { label: '"Exit"', does: 'leave cook mode' },
     ];
 
-    // C-3 Chunk 5 — step model. Structured recipes (Chunk 4) carry a
+    // step model. Structured recipes (Chunk 4) carry a
     // flat `recipe.steps[]` with optional parent_step_id for one level of
     // sub-steps and per-step ingredient/tool references; we flatten that to
     // a linear sequence (top, its subs, next top, …) for navigation.
@@ -714,7 +714,7 @@
         ingredientIds: string[]; // references RecipeIngredient.recipe_ingredient_id
         toolIds: string[];       // references Tool.tool_id
         isSubStep: boolean;
-        // C-4 Chunk 10 — name of the section this step belongs to (the
+        // name of the section this step belongs to (the
         // sub-step inherits its parent's section so the header doesn't
         // flicker mid-group). Null when the step is unsectioned.
         sectionName: string | null;
@@ -805,12 +805,12 @@
         })),
     );
 
-    // C-3 Chunk 3 — group ingredients by their *base* stock location (the
+    // group ingredients by their *base* stock location (the
     // top-level node of the breadcrumb). Sub-areas collapse into their parent
     // — "Pantry > Spice Rack" reads as "Pantry" — keeping the mid-cook view
     // calm. Ingredients with no location land in a final "No location" group.
     //
-    // C-4 Chunk 10 — when the recipe defines named sections, sections win as
+    // when the recipe defines named sections, sections win as
     // the top-level grouping (their semantic intent — "this is the sauce" —
     // is stronger than where the ingredient lives). Falls back to location
     // grouping for flat recipes so existing recipes render unchanged.
@@ -877,7 +877,7 @@
         return ordered;
     });
 
-    // C-3 Chunk 5 — per-step highlight. Structured recipes use the step's
+    // per-step highlight. Structured recipes use the step's
     // own `ingredient_ids` / `tool_ids` lists; unstructured recipes fall
     // back to matching ingredient names inside the step text (same logic
     // as the pre-Chunk-5 auto-mark behaviour, repurposed for visual
@@ -909,7 +909,7 @@
         return new Set(step.toolIds);
     });
 
-    // C-3 Chunk 5 — tools panel. Resolves the recipe's `tool_ids` against
+    // tools panel. Resolves the recipe's `tool_ids` against
     // the vocab store so the panel can render `{tool_id, name}` rows; only
     // shown when the recipe references any tools at all.
     type CookTool = { tool_id: string; name: string };
@@ -975,7 +975,7 @@
         sessionSwaps.value = new Map(sessionSwaps.value);
     }
 
-    // C-3 Chunk 5 — `markIngredientsUsedInStep` + `toggleStepDone` removed
+    // `markIngredientsUsedInStep` + `toggleStepDone` removed
     // along with `usedIds` / `doneSteps`. "Used" is no longer a per-cook
     // toggle; every ingredient on a recipe is used by definition, and the
     // finish flow now ranges over `recipe.ingredients` directly.
@@ -1009,7 +1009,7 @@
                 timerRemaining.value = 0;
                 pauseTimer();
                 $q.notify({ type: 'positive', message: 'Timer finished!', icon: ICONS.timer });
-                // FU-287 — on iOS / macOS WKWebView a timer callback is not
+                // on iOS / macOS WKWebView a timer callback is not
                 // a user activation, so both `speak()` (HTMLAudioElement)
                 // and `playTimerFinishTone()` (Web Audio) are subject to
                 // the autoplay gate. `useSpeechOutput` primes the audio
@@ -1038,7 +1038,7 @@
         timerTotal.value = null;
     }
 
-    // C-3 Chunk 2 — generated beep via WebAudio. Stays silent if the
+    // generated beep via WebAudio. Stays silent if the
     // browser denies audio (PWA / iOS may require a user gesture before any
     // sound plays; we ignore the failure rather than spam the console). The
     // toast + voice prompt keep the user informed regardless.
@@ -1092,7 +1092,7 @@
 
     function nextStep() {
         resetTimer();
-        // C-3 Chunk 5 — no more per-step tick state; advancing just navigates
+        // no more per-step tick state; advancing just navigates
         // (or opens the finish flow when we've run out of steps).
         if (currentStepIndex.value < steps.value.length - 1) {
             currentStepIndex.value += 1;
@@ -1114,7 +1114,7 @@
     }
 
     // ── Finish flow ──────────────────────────────────────────────────────
-    // C-3 Chunk 1 — per-ingredient finish checklist. The blanket
+    // per-ingredient finish checklist. The blanket
     // `finishUpdateLevels` / `finishAddRanOut` toggles are gone; each used
     // ingredient gets its own action (`down_one` / `out` / `unchanged`) with
     // an optional override to any specific level. `meals_cooked` defaults to
@@ -1153,7 +1153,7 @@
     }
 
     function buildFinishRows(): FinishRow[] {
-        // C-3 Chunk 5 — finish ranges over every ingredient on the recipe,
+        // finish ranges over every ingredient on the recipe,
         // applying any session swaps. The user no longer ticks ingredients
         // mid-cook; cooking the recipe implies using all of them.
         //
@@ -1247,7 +1247,7 @@
         try {
             // Fan out per-row level updates with fail-soft semantics: one
             // failed item doesn't take down the rest of the batch.
-            // P8-07 / FU-449 — tag each finish-driven level change as a
+            // tag each finish-driven level change as a
             // `cook` consumption so the server persists a ConsumptionEvent
             // (the depletion leg of the loop). The server only records one
             // when the level actually drops, so an "unchanged"/manual-up row
@@ -1366,7 +1366,7 @@
         const recipeId = route.params.id as string;
         try {
             await recipeStore.ensureLoadedAsync();
-            // C-3 Chunk 5 — the list endpoint doesn't return `steps[]`
+            // the list endpoint doesn't return `steps[]`
             // (only `has_structured_steps`), and cook mode needs structured
             // steps for per-step highlights / hints. Always fetch detail so
             // `recipe.value.steps` is present when the recipe has them.
@@ -1414,7 +1414,7 @@
         line-height: 1.4;
         font-weight: 400;
     }
-    // C-3 Chunk 3 — calm location-grouped ingredient cards. No mid-cook
+    // calm location-grouped ingredient cards. No mid-cook
     // stock-level colour noise; just legible names + quantities.
     .ingredient-group {
         background: var(--surface-card);
@@ -1425,7 +1425,7 @@
     .ingredient-name {
         font-weight: 500;
     }
-    // C-3 Chunk 2 — fill-bar visually echoes the MM:SS countdown.
+    // fill-bar visually echoes the MM:SS countdown.
     .timer-bar {
         transition: opacity var(--motion-normal, 200ms) ease;
     }
@@ -1441,7 +1441,7 @@
         overflow-y: auto;
         border-radius: var(--radius-md);
     }
-    // C-3 Chunk 5 — per-step highlight. A soft tint + accented border on
+    // per-step highlight. A soft tint + accented border on
     // ingredient rows / tool chips that the current step references; the
     // unhighlighted neighbours dim slightly when at least one highlight is
     // active, so the eye lands where it should.
@@ -1468,7 +1468,7 @@
     .step-hint {
         line-height: 1.4;
     }
-    // C-3 Chunk 6 — headcount input.
+    // headcount input.
     .cook-header {
         flex-wrap: wrap;
     }

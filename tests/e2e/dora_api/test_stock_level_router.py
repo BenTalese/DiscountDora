@@ -6,7 +6,7 @@ from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
 
-# FU-166: the list endpoints now (a) take query options on the query string
+# the list endpoints now (a) take query options on the query string
 # (`?filter=…&sort=…&page=…&limit=…`) rather than as a path segment, and
 # (b) return a pagination envelope `{items, total, page, limit}` instead of a
 # bare array. Query-option errors are surfaced as `bad_request(str(exc))`, so
@@ -169,7 +169,7 @@ def test__get_stock_levels__LimitValueIsNotInteger__IsBadRequest(api):
 
 
 def test__get_stock_levels__PageWithoutLimit__DefaultsLimit(api):
-    # FU-166: the old "you must use page and limit together" rule was removed —
+    # the old "you must use page and limit together" rule was removed —
     # `page` and `limit` are now independently optional (limit defaults to 50).
     _Response = requests.get(f'{base_route}?page=1')
 
@@ -180,7 +180,7 @@ def test__get_stock_levels__PageWithoutLimit__DefaultsLimit(api):
 
 
 def test__get_stock_levels__LimitWithoutPage__DefaultsPage(api):
-    # FU-166: limit alone is now valid; page defaults to 1.
+    # limit alone is now valid; page defaults to 1.
     _Response = requests.get(f'{base_route}?limit=1')
 
     assert _Response.status_code == 200

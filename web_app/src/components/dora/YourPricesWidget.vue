@@ -133,7 +133,7 @@
             </q-card-section>
         </BaseDialog>
 
-        <!-- FU-227 chunk 6 — "Full history" bottom-sheet (C5b). Lazy-fetches
+        <!-- "Full history" bottom-sheet (C5b). Lazy-fetches
              its own unioned series when opened. -->
         <PriceHistoryBottomSheet
             v-if="stockItemId"

@@ -155,7 +155,7 @@ def get_price_history():
             ),
         })
 
-    # FU-227 chunk 6 (H2 + F-3) — the user's own observation overlay + the
+    # the user's own observation overlay + the
     # baseline reference line. Observations are normalised per-unit and the
     # baseline rides the chunk-4 chokepoint (R-003). The SPA renders the
     # observation series only when a product has no offers (the H2 fallback)

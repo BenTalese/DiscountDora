@@ -26,7 +26,7 @@ class StockItem(BaseEntity):
     stocktake_alerts_are_enabled: bool
     expiry_date: date | None = None
     is_flagged: bool = False
-    # FU-189 — the user-curated Store this item is usually bought from. Plain
+    # the user-curated Store this item is usually bought from. Plain
     # UUID (no relationship object), nullable. Drives shopping-list grouping
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) and a "favourite store" hint on the
     # stock-item detail; users can override at trip-build time. SET NULL on

@@ -16,7 +16,7 @@ export type OnboardingState = {
 export type SeedRequest = {
     groups: boolean;
     locations: boolean;
-    // FU-195 — optional per-name filter over the bundled defaults. Null
+    // optional per-name filter over the bundled defaults. Null
     // (or omitted) means "seed all" when the bool is true; a provided
     // list narrows the seed to just those names/paths.
     //
@@ -34,7 +34,7 @@ export type SeedResult = {
     locations_skipped: number;
 };
 
-// C-5.5 — starter catalogue (default groups/locations + starter packs) the
+// starter catalogue (default groups/locations + starter packs) the
 // wizard previews and lets the user pick from. Served by GET /onboarding/catalog.
 export type LocationNode = {
     name: string;
@@ -61,7 +61,7 @@ export type OnboardingCatalog = {
     packs: StarterPack[];
 };
 
-// C-5.5 — create stock items by NAME (group/location resolved server-side
+// create stock items by NAME (group/location resolved server-side
 // against the seeded catalogues). Used for both starter-pack picks and the
 // wizard's first stock items. Idempotent (dedupe by name).
 export type SeedItemInput = {
@@ -79,7 +79,7 @@ export type SeedItemsResult = {
     skipped: number;
 };
 
-// FU-194 — opt-in demo dataset (one recipe + the StockItems it needs + a
+// opt-in demo dataset (one recipe + the StockItems it needs + a
 // current-week MealPlan with one entry). The handler is idempotent; `seeded`
 // is `false` when the demo recipe already existed (so a re-finish never
 // duplicates rows).

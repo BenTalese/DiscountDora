@@ -65,11 +65,11 @@ export type AuthenticatedUser = {
     // sent on registration. Drives the verify-banner on LoginPage and
     // the Settings → Account hint. First-user-is-admin auto-verifies.
     email_verified: boolean;
-    // P2-05 — optional grocery budget. `null` amount = feature off
+    // optional grocery budget. `null` amount = feature off
     // (the user hasn't opted in). Period chooses the rolling window.
     budget_amount: number | null;
     budget_period: BudgetPeriod;
-    // P2-13 — voice opt-ins. Both default false; the SPA seeds its
+    // voice opt-ins. Both default false; the SPA seeds its
     // per-page mic / volume toggles from these on boot.
     voice_input_enabled: boolean;
     voice_output_enabled: boolean;
@@ -88,15 +88,15 @@ export type AuthenticatedUser = {
     // reveals cook-pool affordances + shortfall warning. Use
     // `useBatchEnabled()` to read + write.
     batch_features_enabled: boolean;
-    // FU-316 — when true, `useQuickAddTargetPick` skips the remembered pick
+    // when true, `useQuickAddTargetPick` skips the remembered pick
     // so the "which list?" prompt fires every quick-add for users with more
     // than one draft. Default false = current behaviour (session-remembered).
     always_ask_which_shopping_list: boolean;
-    // FU-181 loose-end 2 — target meal count for the sequential builder.
+    // target meal count for the sequential builder.
     // null = not set → the SPA falls back to `BUILDER_TARGET_MEALS_FALLBACK` (7).
     // Bounds 1–21 enforced server-side.
     meals_per_week: number | null;
-    // P8-07 — Zero-Input Pantry opt-out. Default true (inferred stock
+    // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;
     // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
@@ -111,7 +111,7 @@ export type AuthenticatedUser = {
     // Onboarding C-5.4 — household cooking headcount; null = not set (cook
     // mode falls back to each recipe's own serving size).
     household_headcount: number | null;
-    // C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
+    // alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
     // default; `alerts_email_cadence` is `'off' | 'daily' | 'weekly'` and
     // `alerts_email_day` is the weekly send day (Mon=0 … Sun=6, ignored on
     // daily). The toggle is gated on `features.email_smtp_configured` so a
@@ -128,7 +128,7 @@ export type AuthenticatedUser = {
     // dashboard to seed card order/visibility; persisted via PATCH /auth/me so
     // it survives a cache clear and follows the user across devices.
     dashboard_layout: string | null;
-    // FU-153 §7.1 / §7.4 — per-user assistant config. `llm_provider` picks
+    // per-user assistant config. `llm_provider` picks
     // which client family to build server-side; the relevant of
     // {`llm_base_url`, `llm_model`, `has_llm_api_key`} are required per
     // provider. `has_llm_api_key` is derived server-side from whether an

@@ -273,7 +273,7 @@ def _inspect_inline(payload: dict) -> tuple[dict | None, str | None]:
 @DATA_ROUTER.route("/backup/inspect", methods=["POST"])
 def inspect_backup():
     _Logger = logging.getLogger(__name__)
-    # FU-341 / FU-198 — inspect reads uploaded backup contents,
+    # inspect reads uploaded backup contents,
     # including any user rows the file would carry into a restore.
     # Same admin gate as the restore endpoint itself.
     _, admin_err = require_admin()

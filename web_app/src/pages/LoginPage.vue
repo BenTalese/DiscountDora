@@ -121,7 +121,7 @@
     const mode = ref<'login' | 'register'>('login');
     const showPassword = ref(false);
     const submitting = ref(false);
-    // FU-099 — R-001 form-error plumbing.
+    // R-001 form-error plumbing.
     const { fieldErrors, generalError, handleSaveError, reset: resetErrors } = useFormErrors();
 
     const form = reactive({

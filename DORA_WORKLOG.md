@@ -9,6 +9,368 @@ next.
 
 ---
 
+## 2026-07-07 — FU-425 + FU-424 closed: pricing handoff archived; senior-review Tier-2 all routed
+
+**Why:** User asked to close both audit-only FUs. Two parallel Explore agents did the substantive lookups; this session consolidated + moved artifacts + updated ledgers.
+
+### FU-425 — pricing reassessment handoff delta-check
+
+Every §6 (A–K), §6a (A1 deep-dive + two-mode PriceEntry), and §6b (LC-1..LC-5) decision from `PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` walked against shipped code. **All shipped, no gaps.**
+
+**Coverage confirmed** — folded observation shape, nullable `store_id`, user-editable `observed_at`, dropped `source` enum with FK provenance, count dimension, extracted units module + SPA codegen mirror, flat picker no smart defaults, per-dimension baseline, median + 1.15× + min-3 + trailing-12mo baseline, obs-only baseline (source-blind UI), inline widget + bottom-sheet + price-history page, never-converted offers/observations, colour-coded chart, prefill priority ladder, prefill-and-persist no bulk-copy, `/finish` as only harvest path, sizeless-vs-sized harvest, till total, product-less lines, shared `PriceEntry` component, source-labelled prefill, row button + `mdi-cash-plus`, intra-build staging (not deferral), products-off history, money-gated "Receipt" relabel, UI-gated observation endpoints, removed ingestion→observation path, non-preserving migration + partial UNIQUE (LC-1), extracted `line_paid_unit_price` helper. All present in code.
+
+**Bonus shape-changes en route** (additive within FU-227's chunk sequence, not core reshapes): `pack_count` informational field (FU-232 follow-up), locale display denominators AU-vs-US via `display_denominator_for()` (FU-228 follow-up), chart series helpers `build_stock_item_price_series` / `build_product_observation_series`.
+
+**Artifact moves:**
+- `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` → `docs/06_legacy_prompt_plans/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`. Archive banner added at the top pointing at IMPL_PLAN_YOUR_PRICES.md + this FU as the delta-check.
+- `docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` — status updated to "Executed"; handoff link redirected.
+- Historical WORKLOG entries still reference the old path — deliberately unchanged (audit trail).
+
+### FU-424 — senior-review Tier-2 credibility gaps
+
+Two remaining Tier-2 items audited in parallel with the FU-425 walk:
+
+**Item (2) — half-finished base-component adoption.** Grep result: 54 raw `q-btn` uses across 16 files (mostly straightforward migrations to `BaseButton variant="ghost"`/`"secondary"`/`"icon"`, with 3-4 defensible "unelevated coloured icon button" outliers waiting on a `BaseButton` variant decision — `RecipeCard.vue:99`, `StocktakeRunner.vue:95`, `HelpPage.vue:11` accent-palette). `q-dialog` (8 uses), `q-btn-toggle` (1), `q-btn-dropdown` (1, inside the wrapper) all clean. **Real work bounded and opportunistic** — logged as new [[FU-504]] with the design-gap named. No dedicated sweep FU.
+
+**Item (3) — request-level transaction safety.** Grep result: 72 write handlers, 23 with multiple `save_changes()` calls (torn-state risk on mid-flow failure). Worst offenders: `create_recipe.py` (5 saves), `shopping_list_templates/manage_templates.py` (11 saves across bundled handlers), `meal_plan_templates/manage_templates.py` (3+3 in create+clone), `new_recipe_version.py` (2). **Work already tracked** by the existing [[FU-456]] (unit-of-work refactor starting with `create_recipe.py`). Audit confirms FU-456's proposed shape is right — opportunistic per-touch with the flush-based pattern, not a project-wide sweep. **No new FU needed** for this item.
+
+**Tier-2 final tally:** Postgres (FU-045) ✅ shipped, prompt-IDs (FU-462) ✅ shipped, base-components (FU-504) ✅ scoped, transactions (FU-456) ✅ scoped. Every Tier-2 item now has either shipped code or a bounded FU. FU-424 has no residual work.
+
+### Bookkeeping
+
+- **[[FU-425]]** and **[[FU-424]]** moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **[[FU-504]]** created as `[OPEN]` — bounded design-gap + opportunistic cleanup, not a sweep.
+- **`docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md`** — status + handoff link updated.
+- **`docs/06_legacy_prompt_plans/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`** — archive banner added.
+
+### Verification
+
+- No pytest / vue-tsc / eslint runs — audit only, no code touched.
+- R-008 grep → no new hits (this unit didn't add any code).
+- Doc-move confirmed via `ls` on both paths.
+
+### Engineering-standards close-gate
+
+Audit findings map to R-001 (Componentisation — Audit 1 finding tracks BaseButton adoption gap) and R-005-adjacent (data-access layer's implicit unit-of-work — Audit 2 finding tracks the transaction-boundary discipline that R-005 wants at the repository seam, per FU-456). Neither audit surfaces a new standing rule warranted for ENGINEERING_STANDARDS.md; both are existing-rule-in-progress items already tracked.
+
+### PROJECT_STATE.md refresh
+
+Deferred — no workstream state shifted (audit + docs move only). Next substantive close-gate can pick it up.
+
+**Next up:** whatever the user picks. No leftover work from this unit; the two spun tasks (FU-504 base-components, FU-456 transaction refactor) are properly bounded and opportunistic.
+
+---
+
+## 2026-07-07 — FU-451 + FU-450 design brief locked (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md`)
+
+**Why:** User asked to plan FU-451 (P6-09 budget-defense negotiator). Four scoping questions locked with the user: (1) Wave-C brief first, chunked impl later, (2) fold FU-450's surviving pieces into the same brief (the swap ranker needs the deal-quality signal — shipping FU-451 alone would emit `fake_markdown` traps), (3) UI on Meal-plan week + Dashboard budget card, (4) preview→confirm apply. Explore-agent gathered the grounding (legacy specs, existing code shapes, feedback bullets, cross-cuts with P8-05/P8-07/P8-08); the brief mirrors the 12-section shape of `PROPOSAL_BUDGET_AWARE_LISTS.md`.
+
+**What shipped:**
+- **[`docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md`](docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md)** (new, ~500 lines). Covers both FUs in one plan. Sections: The problem · What already exists · Design decisions (locked with user 2026-07-07) · Two-part algorithm stack (`DealQuality` compute + `good_deal` alert + swap ranker) · Reason-chip vocab · UI surface (Dashboard bullet + meal-plan week Suggestions panel + preview modal) · Backend shape (DTOs, endpoints, `MealPlanSwapLedger` table for undo) · Non-goals · Original-spec cross-check · Sequencing (6 chunks) · Verify checklist · Feedback coverage table.
+- **`DORA_FOLLOWUPS.md`** — FU-451 and FU-450 entries rewritten to name the brief as their design-locked home, with the locked-decision summary inline. Both stay OPEN — the impl-plan is the follow-on session.
+- **`docs/02_feedback/COVERAGE_GAPS.md`** — audit-log row added: brief provides a *solution* home for L254's recipe-cost→meal-plan→budget integration facet, partial for L341 (swap surface sits inside the meal-plan-week context L341 asked for). L342 (templates) deliberately untouched.
+
+**Locked-decision highlights** (full detail in brief §3):
+- Both FUs ship together. Ranker needs `fake_markdown` filter — running FU-451 without FU-450 would recommend inflated-markdown products as savings, which is exactly the honest-behaviour Charter P8 forbids.
+- `cost_per_week` is server-side, on-the-fly, no new column. Reuses the existing `_compute_estimated_cost` per recipe.
+- Trigger = `projected_over` (spent + cost_per_week > budget), not `over_budget` — the point is firing BEFORE the week blows.
+- Swap ranker filters out `fake_markdown=true` candidates entirely, not just down-ranks them.
+- Preview→confirm apply with a `MealPlanSwapLedger` row per apply for deterministic undo. No optimistic apply with toast-undo — swap mutations cascade to the shopping list.
+- Zero substitute-graph reintroduction — swaps are cheaper-product-same-stock-item OR cheaper-recipe-same-slot, never stock-item-to-other-stock-item.
+- Money-features gate on the whole surface — nothing renders when the household has money features off.
+
+**Sequencing (rough — full impl-plan is next session's job):**
+1. `DealQuality` compute (FU-450 core).
+2. Wire `DealQuality` into Buy Verdict (P8-05 back-port).
+3. `good_deal` alert type + threshold col + throttle.
+4. `cost_per_week` + `projected_over` on meal-plan DTO.
+5. Swap ranker + endpoints + `MealPlanSwapLedger` migration.
+6. SPA surface (Suggestions panel + Dashboard bullet + preview modal + undo banner).
+
+Rough total: ~1200-1500 LOC, one migration, one User column. No breaking API changes.
+
+**Verification (brief-only unit — no code touched):**
+- `rg -nE '(#|//|<!--)\s+(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])' dora_api/ tests/ web_app/src/` → still **0 hits** (no code touched).
+- `pytest` — not re-run (no code changed).
+- The design brief itself uses FU-NNN references intentionally as cross-refs in the doc surface (that's the legitimate use — R-008 is about source-code comments, not documentation cross-references).
+
+**Engineering-standards close-gate:** design doc, not code. R-008 not applicable. R-005 (distribution posture) informed the design — money-features gate + server-side compute + no new tenant-affecting columns keeps the SaaS door open. R-009 (safe mutations) directly drove the preview→confirm + `MealPlanSwapLedger` design.
+
+**PROJECT_STATE.md refresh:** deferred. The dashboard tracks workstream state — a written brief isn't a state shift; the impl is. The doc register at the bottom would legitimately gain a row for this new proposal, but per CLAUDE.md the register is rebuilt via multi-agent fan-out on periodic re-verify, not per-doc hand-edit. Next substantive close-gate can pick it up.
+
+**Follow-ups spun off:** none — the brief IS the follow-on for FU-451/450. Both stay OPEN pointing at the brief.
+
+**Next up:** whatever the user picks. Natural next unit is the FU-451/450 chunked impl-plan (~6 chunks per brief §10), but it's a big one — should probably be its own session or two.
+
+---
+
+## 2026-07-07 — FU-460 closed: prod-mode warning when `DORA_SECURE_COOKIES` is unset
+
+**Why:** User asked whether FU-460 was only a SaaS concern. Traced through the install matrix: default-off is correct for desktop / LAN self-host over plain HTTP / dev; wrong for **any HTTPS-fronted install** (SaaS or self-host behind Let's Encrypt). User's call: ship option (a) from the FU now.
+
+**What shipped:**
+- **`dora_api/infrastructure/profile.py`** — new `warn_if_insecure_cookies_in_production()` sibling to the existing `validate_production_requirements`. Loud stderr banner only when `DORA_ENV=production` AND `DORA_SECURE_COOKIES` is empty/unset. An explicit `DORA_SECURE_COOKIES=false` is treated as a deliberate operator choice (internal LAN behind VPN, home-lab install, no cert) and silenced without complaint. `DORA_SKIP_PROD_VALIDATION=true` also silences — same escape hatch as the existing validator.
+- **`dora_api/startup.py`** — call sits right after `validate_production_requirements()` so the warning lands before DI-container / DB / audit setup noise.
+- **`tests/test_profile_warnings.py` (new)** — 6 focused tests: silent-in-dev, fires-when-prod-and-unset, silent-when-explicitly-true, silent-when-explicitly-false, silent-when-skip-flag-set, fires-when-whitespace-only-value.
+
+**Deliberate design calls:**
+- Warning, not boot-block. A prod-mode install intentionally on plain HTTP (VPN-fronted LAN) is a legit shape; hard refusal would collide with §7.5's "same artifact, different config" rule.
+- Silent on explicit `false`. The point is to catch operators who *forgot*; someone who typed `false` did not forget.
+- Kept the default off rather than flipping on. Flipping on would break every desktop / LAN install on next launch — the very cohort that has no HTTPS.
+
+**Verification:**
+- `pytest tests/ -q` → **824 passed, 0 failed** (up from 818, +6 new tests).
+- R-008 close-gate grep → **0 hits**.
+
+**Engineering-standards close-gate:** R-005 (distribution posture) directly informed the design — same artifact runs across desktop / LAN / SaaS, warning-not-block keeps that shape. R-008 respected in the new code (comments are all WHY; no prompt-ID or FU-NNN refs).
+
+**Next up:** whatever the user picks. No leftover work from this unit.
+
+---
+
+## 2026-07-07 — FU-452 closed: Put-away dialog on done lists (Surface A shipped, Surface B cut)
+
+**Why:** User asked to plan + ship FU-452. It had two surfaces:
+- (A) A put-away checklist grouped by kitchen location, offered after `Finish & restock`.
+- (B) A group-by-location toggle on the alerts view for expiring items.
+
+Scoped both surfaces via an Explore-agent report. Confirmed both were feasible with **zero data-model changes** — `ShoppingListLine.stock_location_id` + `stock_location_breadcrumb` already flow on the list-detail response; `StockLocation` still has its zone/area/section tree at `GET /api/locations/tree`; alert-side would have needed a one-liner `.include(StockItem.Fields.STOCK_LOCATION)` + two `AlertDto` fields (not built — B cut).
+
+**User's call on Surface A shape:**
+- On-demand helper dialog (button on a *done* list), not automatic after finish.
+- Ephemeral state — no persistence for the per-group tick.
+- Reuse the app's existing walked-tree location picker shape.
+
+**User's call on Surface B:** Cut permanently. "Never do B, don't think it's necessary." Documented the cut in the FU-452 resolved entry so the intent is preserved if someone re-opens the ask later.
+
+**What shipped (Surface A):**
+- **`web_app/src/components/dialogs/PutAwayDialog.vue` (new).** Takes `modelValue: boolean` + `lines: ShoppingListLine[]`. Filters to ticked lines with a `stock_item_id`, buckets by `stock_location_id` (`null` → "(No location)"), renders one card per group with an item list underneath. Clicking a group header ticks it off and collapses the item list; the "(No location)" group is pinned to the bottom and has no header tick (only per-item Assign). Emits `assigned` after a successful location save so the parent can refresh.
+- **`web_app/src/pages/ShoppingListDetail.vue`.** Added the toolbar **Put away** button (guarded on `detail.status === 'done'`, primary variant, `inventory_2` icon, with a tooltip explaining the ephemeral shape). Added `putAwayOpen` ref, the `<PutAwayDialog>` element, and `onPutAwayAssigned` which re-calls `load()` so the moved item's breadcrumb + group change on the re-render.
+- **Inline location picker for "Assign".** Kept inside `PutAwayDialog` (not opening the heavy stock-item edit sheet) — the whole point is a fast one-tap sort. Same walked-tree option shape as `CreateStockItemDialog` for label consistency.
+
+**Deliberate design calls (also recorded in the resolved entry):**
+- Ephemeral tick state — `doneGroups` Set + `assignOpen` refs live in the dialog and reset on every open (`watch(modelValue)` clears on close).
+- Location picker refreshed on every open via `locationStore.ensureLoadedAsync()` so a location added elsewhere shows up without a page reload.
+- Unsorted group pinned bottom so "still to sort" items don't hide behind clean groups above them.
+
+**Guardrails respected:**
+- No data-model changes — feature runs on existing columns.
+- No spatial-location / stock-map / location-routing reintroduction (charter Removed).
+- No new alert type (Surface B was cut anyway).
+
+**Verification:**
+- `pytest tests/ -q` → **818 passed, 0 failed** (feature is frontend-only; no test surface changed).
+- `vue-tsc --noEmit` → same 4 pre-existing `@capacitor/*` errors as baseline; zero new type errors.
+- `eslint` on the two touched files → clean on the new `PutAwayDialog.vue`; one pre-existing `budgetApi` unused-var on `ShoppingListDetail.vue:1307` from commit `14112c1f` — pre-existing, not caused by this session; logged as [[FU-503]].
+- R-008 close-gate grep → **0 hits** (no prompt-ID / FU-NNN comments introduced in the new code).
+
+**Follow-ups spun off:**
+- [[FU-503]] — pre-existing unused `budgetApi` var on `ShoppingListDetail.vue:1307`. One-line fix; noted but not touched here to stay in scope.
+
+**Browser-verify:** appended to `DORA_VERIFY.md` under **Shopping lists** with 11 checks covering group-tick, group-un-tick, unsorted-pinned-bottom, per-item Assign, ephemeral-reset-on-reopen, zero-lines banner, and the button visibility guard.
+
+**Engineering-standards close-gate:**
+- R-003 (no duplicated paths) — the walked-tree picker is the same shape as CreateStockItemDialog / useStockFilters; not deduped into a shared component this session (three sites now instead of two) — noted but not blocking since the code is 15 lines each and each site's UX around it differs. Could be extracted into a `<LocationPicker>` later if a fourth caller lands.
+- R-008 (WHY-only comments) — new file audited: all comments are WHY (why the picker refreshes on open, why unsorted pins to bottom, why we reuse the walked-tree shape). Zero prompt-ID / FU-NNN refs.
+- No ADR warranted — no recurring pattern promoted.
+
+**PROJECT_STATE.md refresh:** deferred — small user-facing feature, no workstream state shift.
+
+**Next up:** whatever the user picks. No leftover work from this unit.
+
+---
+
+## 2026-07-07 — FU-462 closed: 887 prompt-ID + FU-NNN refs swept, R-008 hardened
+
+**Why:** User asked "do FU-462 and enforce a new engineering rule gate — only comments in the code should be 'why this exists' comments for obscure confusing behaviour. we don't need 'what' comments. we can read the code." Turns out **R-008 already banned WHAT-comments and task/PR/caller references** but wasn't being enforced — 887 prompt-ID + FU-NNN comments were still in shipped code. So this unit did two things: strengthened R-008 with an explicit close-gate + expanded wording, then swept the app-wide backlog.
+
+**Scope vs FU-462's original estimate:**
+
+| | FU-462 estimate | Actual on 2026-07-07 |
+|---|---:|---:|
+| Prompt-ID comments (`P#`, `C-#`, `B#`, `INV-#`) | ~237 | 471 |
+| FU-NNN comments (`# FU-297 —`, etc.) — added to scope this session | — | 416 |
+| Files touched | (not stated) | 202 |
+
+User picked "prompt-IDs + FU-NNN" (same rule, one coherent sweep) over "prompt-IDs only".
+
+**Rule hardening — `docs/01_charter/ENGINEERING_STANDARDS.md` R-008:**
+- Added: "A comment must be useful to a reader who has no memory of how the code got here" as the core framing.
+- Added the explicit close-gate grep: `rg -nE '(#|//) +(P[0-9]|C-[0-9]|B[0-9]|INV-[0-9]|FU-[0-9])' dora_api/ tests/ web_app/src/` — must return **0 hits** before closing any code unit.
+- Added the keep-substance-drop-prefix guidance so future reworkers don't nuke real WHY along with the ID.
+- Added an explicit WHAT-comment definition + delete signal ("if removing it wouldn't confuse a future reader, delete").
+- Added a narrow carve-out for currently-open FUs that name a live workaround (delete when the FU closes).
+- R-0NN / ADR-0NN references remain the standing carve-out (already in R-008); the close-gate grep excludes them by pattern.
+
+**Sweep — serial file-by-file in three passes:**
+
+1. **Scripted strict-shape pass** (`scratchpad/strip_prefixes.py` — Python 3.12 in the .venv, regex-based): 793 transforms across 191 files. Handles the well-formed `# ID — substance` / `<!-- ID — substance -->` shape (with optional `Chunk N`, `§X.Y`, `/ ALT-ID`, `(some-label)` tail tokens). Every transform kept the substance — no lines dropped.
+2. **Scripted loose-shape pass** — extended the regex to allow up to 80 chars of any non-em-dash / non-colon preamble between the ID and the separator, plus an inline-comment variant. 72 more transforms across 42 files.
+3. **Hand-fixed residuals** — 22 remaining comments with period-terminated prefixes (`# P6-01 Chunk 7.`), pure-noise breadcrumbs (`<!-- FU-044 chip -->`, `// P8-09 memory` section-markers), inline `# A2 —` / `# A4 —` micro-refs I hadn't included in the initial pattern class, and a handful of FU cross-refs that needed prose reworking (e.g. `// FU-437 (add_to_list) and FU-454 (mark_stocked + remove_from_list) both closed — the card's one-tap intents ...` → `// The card's one-tap intents ...`).
+
+**Verification:**
+- Close-gate grep on prompt-IDs + FU-NNN across `dora_api/`, `tests/`, `web_app/src/` → **0 hits**.
+- Inline-comment grep → **0 hits**.
+- `pytest tests/ -q` → **818 passed, 0 failed** (matches pre-sweep baseline).
+- `vue-tsc --noEmit` → same 4 pre-existing `@capacitor/*` module-not-found errors as baseline (verified by stashing the sweep + re-running); zero new type errors.
+
+**Engineering-standards close-gate:**
+- R-008 (this rule) — actively strengthened, not violated.
+- R-003 / R-014 / ADR references left intact — the close-gate grep excludes them.
+- No production-code semantics changed — comment sweep only, plus the two `# A2 —` / `# A4 —` inline strippings on `manage_shopping_list.py:358-361` which affect nothing.
+
+**Follow-ups spun off:** none — this closes cleanly.
+
+**PROJECT_STATE.md refresh:** deferred — this unit was code-hygiene, not a workstream mover. Should refresh at the next substantive close.
+
+**Cross-ref updates:** [[FU-424]] Tier-2 item 1 ("~237 prompt-ID comments") audit-trail updated to note this sweep closes it — three of FU-424's four Tier-2 items are now closed (FU-045 Postgres, FU-462 comments, and this one); item (2) base-component adoption and item (3) transaction safety remain.
+
+**Next up:** whatever the user picks. No leftover work from this unit.
+
+---
+
+## 2026-07-07 — FU-502 closed: bumped `dependency_injector` off the 4.41.0 pin
+
+**Why:** FU-466 close-out surfaced that `dependency_injector==4.41.0` has no py3.12 wheel and can't build from sdist on Windows without a C toolchain — a fresh `pip install -r requirements.txt` failed at that step. The workaround during FU-466 was installing 4.49.1 unpinned; this session bakes that in.
+
+**Change:** `requirements.txt` — `dependency_injector==4.41.0` → `==4.49.1`. 4.49.1 ships a `cp310-abi3` win-amd64 wheel that installs cleanly on py3.12. `containers.DeclarativeContainer` / `providers.Factory` / `providers.Singleton` — the entire surface Dora uses (`dora_api/infrastructure/dependency_container.py`, `service_wiring.py`) — is stable across 4.41 → 4.49, so no downstream code needed touching.
+
+**Verification:** `.venv\Scripts\pytest.exe tests/ -q` → **818 passed, 0 failed** under the new pin.
+
+**Engineering-standards close-gate:** version-pin bump only, no rule surface touched, no ADR warranted.
+
+**Next up:** whatever the user picks. No leftover work from this unit.
+
+---
+
+## 2026-07-07 — FU-466 closed: pytest suite green (818/818); env bootstrapped from scratch
+
+**Why:** User asked "let's solve FU-466". The FU tracked a ~41-failure drift
+pool across 6 test files on 2026-07-05. On 2026-07-07 the suite was in a
+much better shape than the FU expected — most clusters had resolved via
+unrelated feature work landing in between; only a handful of failures
+remained (plus two new drift items outside FU-466's scope).
+
+**Environment (no Python was installed on this box):**
+1. `winget install --id Python.Python.3.12 --silent --accept-source-agreements --accept-package-agreements --scope user` → Python 3.12.10.
+2. `python -m venv .venv` (repo already `.gitignore`-covered).
+3. `.venv\Scripts\pip install -r requirements.txt` → **failed** at
+   `dependency_injector==4.41.0` (no py3.12 wheel, sdist needs a C
+   toolchain). Worked around by installing everything else via a filtered
+   requirements file, then `pip install dependency_injector` unpinned →
+   4.49.1 (which has a py3.12 wheel). Logged the pin-bump as
+   [[FU-502]].
+4. `pytest tests/ -q` → **810 passed, 8 failed** (not the ~41 the FU
+   expected).
+
+**Baseline vs. FU-466's expected clusters, on 2026-07-07 HEAD:**
+
+| Cluster | Expected | Actual | Action |
+|---|---:|---:|---|
+| test_alerts.py | 16 | 0 | none — already green |
+| test_alerts_digest.py | 5 | 0 | none — already green |
+| test_alerts_push.py | 4 | 0 | none — already green |
+| test_household_tz_boundaries.py (500s) | 2 | 0 | none — the real-bug 500 was fixed by earlier work |
+| test_stock_item_router.py | 3 | 0 | none — already green |
+| test_data_router.py | 11 | 1 | fixed (see below) |
+| test_bucket_c_secrets.py (new) | — | 6 | fixed |
+| test_recipe_is_planned.py (new) | — | 1 | fixed |
+
+**Fixes:**
+
+- **`tests/e2e/dora_api/test_bucket_c_secrets.py`** — added the
+  session-scoped `_wrapping_key` fixture the module docstring documented
+  but that had never been written. Generates a fresh Fernet key into
+  `DORA_LLM_KEY_ENCRYPTION_KEY`, clears the `key_encryption._fernet`
+  `lru_cache`, and restores/clears on teardown. Without it, every
+  write-a-secret test hit a 400 "wrapping key isn't configured".
+  Root cause: FU-333 Bucket C landed 2026-07-06 with the fixture
+  documented but not implemented.
+- **`tests/e2e/dora_api/test_recipe_is_planned.py`** —
+  `test__recipes__is_planned_true_when_future_unconsumed_entry_exists`
+  was picking `?limit=1` (the first seeded recipe), which the current
+  seed has already-planned via other future entries. Deleting the one
+  entry we added never flipped `is_planned` back to false. Rewrote to
+  first pick a recipe whose current `is_planned` is false, guaranteeing
+  the flip-back is observable.
+- **`tests/e2e/dora_api/test_data_router.py`** — extended
+  `_next_unused_product_id()` with `requires_link=True`, which
+  advances the round-robin counter until the next Product has a
+  `linked_stock_item_id`. Switched the traversal test to use it. Root
+  cause: the traversal test asserts `stock_item_via_product` (needs a
+  Product with a linked StockItem); bare round-robin landed on a
+  linked Product only when the file ran in isolation — once earlier
+  tests advanced the counter past the linked seed rows, it fell onto
+  an unlinked Product and returned `product_no_link`. That's the
+  flake noted in the FU-297 close-out session.
+
+**Verification:** `.venv\Scripts\pytest.exe tests/ -q` → **818 passed,
+0 failed, 268 warnings in 21.6s**. Re-ran clusters individually and
+in full-suite order to confirm no ordering dependency remains.
+
+**Engineering-standards close-gate:** all three fixes are test-only
+changes — R-021 (test isolation) tightened rather than loosened; no
+production code touched; no R-002/R-003 concerns; no ADR warranted.
+
+**PROJECT_STATE.md refresh:** deferred — this unit was test-health
+maintenance, not a workstream mover. If the next unit is substantive,
+refresh then.
+
+**Follow-ups spun off:**
+- [[FU-502]] — bump `dependency_injector` pin off 4.41.0 (no py3.12 wheel).
+
+**Next up:** whatever the user picks. No leftover work from this unit.
+
+---
+
+## 2026-07-07 — FU-501 + FU-465 closed: cut the AU-only seasonal-picks assistant tool; parked native push until SaaS
+
+**Why:** User triaged two open follow-ups. FU-465 (native push / FCM bridge)
+parked as Phase-4/SaaS-only work — noted alongside the already-resolved
+FU-461 (self-serve GDPR account-deletion) under Phase 4 in
+`docs/01_charter/RECONCILED_FINISHING_PLAN.md` so both resurface when
+commercialisation starts. FU-501 (AU-only seasonal-picks table): after
+tracing the feature end-to-end — reachable **only** as a chat tool, no
+page/dashboard/list surface consumed it — user's call was to cut rather
+than localise. Removing a low-value chat capability with actively wrong
+data on non-AU installs beats maintaining a `_SEASONAL_BY_LOCALE` map or
+gating the tool on locale.
+
+**Removal — `seasonal_picks`:**
+- `dora_api/features/assistant/tools.py` — deleted the tool schema block,
+  the `_SEASONAL_AU` table, `_MONTH_NAMES`, `_resolve_month`, the
+  `seasonal_picks` handler, and the `_TOOLS` registry entry. Updated the
+  trailing `_TOOL_NAV` comment ("convert_measurement /
+  suggest_substitution need no nav").
+- `dora_api/features/assistant/ask_assistant.py` — removed the
+  `'what's in season right now' → seasonal_picks` example from the
+  tool-selection prompt so the LLM doesn't try to call a tool that isn't
+  registered.
+- `web_app/src/pages/DoraHelpPage.vue` — removed the help entry.
+- `web_app/src/style/icons.ts` — removed the now-unused `eco: 'mdi-leaf'`
+  token (only site used it).
+- Verified sweep clean: `rg "seasonal_picks|SEASONAL_AU|_resolve_month|_MONTH_NAMES"` returns nothing outside the follow-ups + worklog trail.
+
+**Ledger + plan updates:**
+- FU-501 + FU-465 moved from `DORA_FOLLOWUPS.md` to
+  `DORA_FOLLOWUPS_RESOLVED.md` with resolution rationale.
+- `docs/01_charter/RECONCILED_FINISHING_PLAN.md` Phase 4 section gained
+  a **"SaaS-only work parked in follow-ups"** bullet naming FU-461 and
+  FU-465 so both resurface when Phase 4 kicks off.
+
+**Engineering-standards close-gate:** dead-code removal only; no new
+patterns introduced. `household_today` + `SqlAlchemyRepository` imports
+in `tools.py` remain used by other handlers. No rule violations, no new
+ADR warranted.
+
+**PROJECT_STATE.md refresh:** not regenerated — this unit didn't move any
+workstream forward; it removed a small chat feature + parked one FU. If the
+next unit is substantive, refresh then.
+
+**Next up:** whatever the user picks next; no leftover work from this unit.
+
+---
+
 ## 2026-07-06 — FU-448 shipped: budget-aware trim on auto-generated lists (all 6 steps)
 
 **Why:** User asked "let's start building it" against the design brief

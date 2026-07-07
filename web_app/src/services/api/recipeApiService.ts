@@ -75,7 +75,7 @@ export type RecipeStepCommand = {
 
 export type CreateRecipeCommand = {
     name: string;
-    // C-4 Chunk 2: cuisine + category are FK vocabulary ids (single-select).
+    // cuisine + category are FK vocabulary ids (single-select).
     category_id: string | null;
     cook_time_minutes: number | null;
     cuisine_id: string | null;
@@ -180,7 +180,7 @@ export default class RecipeApiService {
     createAsync = async (recipeToCreate: CreateRecipeCommand): Promise<CreatedResponse> =>
         await this.httpClient.post<CreatedResponse>('/recipes', recipeToCreate);
 
-    // C-4 Chunk 8 — copies the recipe into a sibling version (same
+    // copies the recipe into a sibling version (same
     // `version_group_id`). If the source had no group id yet, the server
     // allocates one and back-fills the source so both rows form the group.
     createNewVersionAsync = async (recipeId: string): Promise<CreatedResponse> =>
@@ -192,7 +192,7 @@ export default class RecipeApiService {
     deleteAsync = async (recipeId: string): Promise<void> =>
         await this.httpClient.delete(`/recipes/${recipeId}`);
 
-    // C-4 Chunk 8 — hits the real detail endpoint so the response carries
+    // hits the real detail endpoint so the response carries
     // `steps[]` + `version_siblings[]`. Filtering the list endpoint by id
     // (the old shape) only returned the list-shape DTO, which silently
     // dropped structured-step + version data for everything downstream.
@@ -313,7 +313,7 @@ function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
 
 export type ImportedRecipe = {
     name: string;
-    // C-4 Chunk 2: importer resolves parsed names to existing vocab ids when
+    // importer resolves parsed names to existing vocab ids when
     // it can; the id is null (with the parsed name kept) when there's no match.
     cuisine_id: string | null;
     cuisine_name: string | null;

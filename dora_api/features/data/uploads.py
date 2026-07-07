@@ -98,7 +98,7 @@ class StartUploadRequest(BaseModel):
 @has_request_body(StartUploadRequest)
 def start_upload():
     _Logger = logging.getLogger(__name__)
-    # FU-341 / FU-198 — the entire /uploads/* chain feeds admin-only
+    # the entire /uploads/* chain feeds admin-only
     # workflows (backup inspect + restore, admin import). Gate on
     # /start so a non-admin can't even open a staging slot; the
     # subsequent /chunk /finish /abort endpoints repeat the gate as

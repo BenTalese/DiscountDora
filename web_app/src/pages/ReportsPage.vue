@@ -274,7 +274,6 @@
                 <header class="report-card-head">
                     <q-icon :name="ICONS.compare_arrows" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">
-                        <!-- FU-044 chip -->
                         Year-over-year
                         <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
                             <q-tooltip>
@@ -417,7 +416,6 @@
         type ReportRange,
         type SavingsCapturedResponse,
         type StockValueResponse,
-        // P8-09 memory
         type MealsCookedResponse,
         type SpendByCategoryResponse,
         type SpendYoYResponse,
@@ -441,7 +439,7 @@
     const router = useRouter();
     const reportsApi = new ReportsApiService();
     const stockApi = new StockItemApiService();
-    // FU-154 — products read through the store so a save on product-search
+    // products read through the store so a save on product-search
     // is visible here without a hard refresh (R-003).
     const productStore = useProductStore();
     const { products: allProducts } = storeToRefs(productStore);
@@ -450,7 +448,7 @@
         { label: '30 days', value: '30d' },
         { label: '90 days', value: '90d' },
         { label: '1 year', value: '1y' },
-        // P8-09 — multi-year windows unlock the culinary-memory section
+        // multi-year windows unlock the culinary-memory section
         // ("what did we cook in the last two years", "how has dairy
         // trended over 5 years").
         { label: '2 years', value: '2y' },
@@ -468,7 +466,6 @@
         keepsOut: false,
         savings: false,
         priceTrends: false,
-        // P8-09 memory
         mealsCooked: false,
         spendByCategory: false,
         spendYoY: false,
@@ -480,7 +477,7 @@
     const keepsOut = ref<KeepsRunningOutResponse | null>(null);
     const savings = ref<SavingsCapturedResponse | null>(null);
     const priceTrends = ref<PriceTrendsResponse | null>(null);
-    // P8-09 memory — read from the range picker like every other card.
+    // read from the range picker like every other card.
     const mealsCooked = ref<MealsCookedResponse | null>(null);
     const spendByCategory = ref<SpendByCategoryResponse | null>(null);
     // YoY only accepts bounded windows; if the user picks "All time",
@@ -721,7 +718,7 @@
     }
     async function loadProductsCatalogue() {
         try {
-            // FU-154 — hydrate via the store so other surfaces see the same
+            // hydrate via the store so other surfaces see the same
             // product list (R-003). The page-local `productOptions` is just
             // a derived display slice, not a shadow of the catalog.
             await productStore.getProductsAsync();
@@ -772,7 +769,6 @@
                 loadKeepsOut(),
                 loadSavings(),
                 loadPriceTrends(),
-                // P8-09 memory
                 loadMealsCooked(),
                 loadSpendByCategory(),
                 loadSpendYoY(),

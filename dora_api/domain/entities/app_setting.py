@@ -17,14 +17,14 @@ class AppSetting(BaseEntity):
     install-wide flag, off by default. Scanning is navigation-only — it never
     does live deal lookup.
     """
-    # FU-153 §7.1 — single install-wide kill-switch for the whole assistant
+    # single install-wide kill-switch for the whole assistant
     # feature. Defence in depth: a user can configure their own LLM per
     # §7.1, but the admin keeps a master toggle that forces every user's
     # AI mode off regardless. Per-user URL / model / provider / API key
     # live on User (see entity below).
     master_llm_enabled: bool = True
     scanning_enabled: bool = False
-    # P8-05 — buy-verdict oracle ("should I buy this?"). Defaults **on**
+    # buy-verdict oracle ("should I buy this?"). Defaults **on**
     # because it's a pure-personal feature: no external calls, no crowd
     # data, no config required — the composer just needs the user's own
     # shopping-list / waste history. Admin can turn it off if the row-level
@@ -42,7 +42,7 @@ class AppSetting(BaseEntity):
     nutrition_enabled: bool = False
     companion_ingestion_enabled: bool = False
     deals_email_enabled: bool = False
-    # FU-209 (PROPOSAL_PRODUCTS_AS_OVERLAY): `products_enabled` removed —
+    # `products_enabled` removed —
     # products is now a *data-presence* overlay. `features.products` is derived
     # server-side from whether any `Product` row exists (see health_check), not
     # from an admin/persona flag. The column is dropped in migration
@@ -72,14 +72,14 @@ class AppSetting(BaseEntity):
     # "Set up in Settings" hint (R-014 reveal-and-disable). See
     # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
     product_search_url: str = ""
-    # FU-227 follow-up — the AU-shelf vs US-shelf display convention for
+    # the AU-shelf vs US-shelf display convention for
     # per-unit prices. `"AU"` shows `/100ml`/`/100g`/`/L`/`/kg`/`/ea` with
     # the flip at 1 L / 1 kg; `"US"` shows `/fl oz`/`/qt`/`/oz`/`/lb`/`/ea`
     # with the flip at 1 qt / 1 lb. Compute math stays in canonical L/kg;
     # only the display denominator changes. Default `"AU"` because Dora's
     # built here and ships AU-first; admin can flip to `"US"` in Settings.
     unit_pricing_locale: str = "AU"
-    # FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
+    # install-wide currency + display
     # locale, so a non-AU install renders money and dates in a form its users
     # recognise. Single-source (R-003): every money render on the client goes
     # through one `Intl.NumberFormat(locale, { style: 'currency', currency })`
@@ -90,7 +90,7 @@ class AppSetting(BaseEntity):
     # Defaults keep AU-shipped behaviour intact for existing installs.
     currency: str = "AUD"
     locale: str = "en-AU"
-    # FU-342 — backup library controls. `backup_retention_count` caps
+    # backup library controls. `backup_retention_count` caps
     # the library; oldest above the cap is auto-dropped on each new
     # write. Default 5 is Pi-disk-conscious. `backup_storage_path`
     # empty ⇒ resolved to `$DORA_DATA_DIR/backups/` at runtime; an
@@ -98,7 +98,7 @@ class AppSetting(BaseEntity):
     # save).
     backup_retention_count: int = 5
     backup_storage_path: str = ""
-    # FU-345 — install-wide image compression knobs. Applied at upload
+    # install-wide image compression knobs. Applied at upload
     # time by the client-side `processImageFile` helper (R-003 pipeline
     # chokepoint) to every image surface. Existing images are untouched
     # — forward-only. 85 is visually indistinguishable from "original";
@@ -115,7 +115,7 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
-    # FU-333 Buckets B + C — operational config that was formerly carried as
+    # operational config that was formerly carried as
     # `DORA_*` env vars. An admin now configures a fresh install through
     # Settings → Admin → System; the two remaining bootstrap-only vars
     # (`DORA_SECRET_KEY`, `DORA_LLM_KEY_ENCRYPTION_KEY`) stay in env because

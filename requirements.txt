@@ -12,7 +12,7 @@ pywebview==5.4
 # the main requirements (vs a separate `requirements-dev.txt`) so
 # the GitHub Actions matrix doesn't have to install it separately.
 pyinstaller==6.10.0
-dependency_injector==4.41.0
+dependency_injector==4.49.1
 Flask_Cors==4.0.0
 Flask_Migrate==4.0.5
 flask_sqlalchemy==3.1.1

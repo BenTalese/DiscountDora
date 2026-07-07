@@ -22,7 +22,7 @@
             </div>
             <q-space v-else />
 
-            <!-- FU-121: Clear sits to the LEFT of Filters so the Filters
+            <!-- Clear sits to the LEFT of Filters so the Filters
                  button stays put when Clear appears/disappears. -->
             <BaseButton
                 v-if="(activeCount ?? 0) > 0"
@@ -86,7 +86,7 @@
     // instead.)
     const expanded = defineModel<boolean>({ default: false });
 
-    // C-1 Chunk 2 / L95 — filter panel hidden by default on desktop too.
+    // filter panel hidden by default on desktop too.
     // Previously opened automatically on >sm; flipped to always start
     // closed so the page header reads as one tidy toolbar (the user
     // toggles the panel when they actually want to filter). Parents

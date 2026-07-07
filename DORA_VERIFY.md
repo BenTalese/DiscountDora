@@ -1,7 +1,10 @@
 # Dora Verification Checklist
 
-Things that can only be confirmed by running the app and clicking. Grouped by
-surface — pick a surface, walk it top-to-bottom.
+The QA pile — anything that needs eyes on the running thing to confirm.
+Browser observations, boot-time / operator smoke checks, container startup,
+migration round-trips, CLI/desktop launch checks — whatever needs manual
+verification lives here. Grouped by surface; pick one and walk it
+top-to-bottom.
 
 ---
 
@@ -339,6 +342,20 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Shopping lists
+
+### Put-away dialog on a finished list — origin FU-452
+- [ ] Finish a list with a mix of ticked lines whose stock items live in different locations (Fridge, Pantry, Freezer) plus at least one item with no location set → list transitions to `done` → toolbar shows a primary **Put away** button next to *Copy to new list*.
+- [ ] Click **Put away** → dialog opens titled "Put away" with grouped cards ("Fridge · 3", "Pantry · 2", "Freezer · 4", "(No location) · 1"). Ticked lines only — un-ticked lines never appear.
+- [ ] Click a location group header → group ticks, collapses (items hide), chip flips to positive/green.
+- [ ] Click the same header again → group un-ticks, items re-appear, chip reverts.
+- [ ] "(No location)" group is pinned to the bottom regardless of alphabetical order — its header has no tick affordance (the ✓ icon slot is empty).
+- [ ] Click **Assign** on an unsorted item → small "Assign a location" mini-dialog opens with a searchable location picker → pick a location → **Save** → toast "Sorted *<item>*" → item disappears from "(No location)" and appears in its new group; the mini-dialog closes.
+- [ ] Cancel/close the mini-dialog without saving → nothing changes.
+- [ ] Close the main Put-away dialog → re-open it → **all group ticks are reset** (ephemeral state is the point).
+- [ ] Open the dialog on a list where every ticked line already has a location → no "(No location)" group appears.
+- [ ] Open the dialog on a list where every ticked line is unsorted → only "(No location)" shows, with per-line Assign buttons.
+- [ ] Open the dialog on a `done` list with zero ticked lines → banner "Nothing to put away — no ticked lines on this list."
+- [ ] Put-away button does **not** appear on a non-`done` list (draft or shopping status).
 
 ### Quick-add toast + "always ask" pref — origin FU-316
 - [ ] Have exactly one draft list open → quick-add a stock item (chip / bulk / detail toolbar) → toast reads **"Added to *<display_name>*."** (destination named — not "Added to your list.")
@@ -1311,6 +1328,19 @@ machine at this session close-time; walked opportunistically.*
 - [ ] Run Docker build → confirm `piper` on PATH in the image
 - [ ] Linux desktop build (`packaging/build-linux.sh`) → bundle contains `piper/` and the app synthesises
 - [ ] Windows desktop build (when scripts land per FU-288) → same
+
+---
+
+## Operator
+
+### Prod-mode secure-cookies boot warning — origin FU-460
+- [ ] Boot the app with `DORA_ENV=production` set and `DORA_SECURE_COOKIES` **unset** → stderr shows the multi-line `═══ WARNING: DORA_ENV=production but DORA_SECURE_COOKIES is unset. ═══` banner before the DI-container / DB / audit log lines
+- [ ] Same boot with `DORA_SECURE_COOKIES=true` set → **no** warning banner in stderr
+- [ ] Same boot with `DORA_SECURE_COOKIES=false` set → **no** warning banner (explicit operator choice)
+- [ ] Same boot with `DORA_SECURE_COOKIES` unset but `DORA_SKIP_PROD_VALIDATION=true` set → **no** warning banner (escape hatch works)
+- [ ] Boot with `DORA_ENV=development` (or unset) and no `DORA_SECURE_COOKIES` → **no** warning banner (dev mode never nags)
+- [ ] With `DORA_ENV=production` + `DORA_SECURE_COOKIES=true`, log in to the SPA over HTTPS → DevTools → Application → Cookies → `dora_session` row shows `Secure: ✓`
+- [ ] Same setup but with `DORA_SECURE_COOKIES=false` (or unset) → `dora_session` row shows `Secure: ✗`
 
 ---
 

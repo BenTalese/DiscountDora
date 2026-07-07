@@ -1,6 +1,6 @@
 // Mirrors DTOs in dora_api/features/shopping_lists/.
 
-// P6-01 lifecycle status — single source of truth for where a list is in the
+// single source of truth for where a list is in the
 // shop loop (mirrors SHOPPING_LIST_STATUS_* on the server). Replaces the old
 // is_archived / is_in_progress boolean pair.
 export type ShoppingListStatus = 'draft' | 'shopping' | 'done';
@@ -192,7 +192,7 @@ export function chosenOfferFor(line: ShoppingListLine): LineProductOffer | null 
 
 export function priceOfLine(line: ShoppingListLine): number {
     const qty = line.quantity ?? 1;
-    // P2-02 — a user-entered actual price overrides any store offer.
+    // a user-entered actual price overrides any store offer.
     if (line.actual_unit_price != null) {
         return line.actual_unit_price * qty;
     }

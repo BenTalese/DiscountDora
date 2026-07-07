@@ -21,14 +21,14 @@ export interface HealthInfo {
         // can land without breaking existing clients.
         [key: string]: boolean;
     };
-    // FU-345 — install-wide image compression knobs the client applies
+    // install-wide image compression knobs the client applies
     // at upload time. Optional in the type because older backends won't
     // emit it; callers default to 85 / 1920.
     image_policy?: {
         quality: number;         // 30–100
         max_dimension: number;   // longest edge in px
     };
-    // FU-043 — install-wide currency (ISO 4217) + display locale (BCP-47)
+    // install-wide currency (ISO 4217) + display locale (BCP-47)
     // for money rendering. Optional in the type because older backends
     // won't emit it; callers default to Dora's AU shipping values.
     locale_policy?: {

@@ -80,7 +80,7 @@ class UpcomingMealPlanEntry:
     scheduled_for: date
     slot: str
     servings: int
-    # FU-298 — cookability flag for the dashboard's "Next to cook" card.
+    # cookability flag for the dashboard's "Next to cook" card.
     # Derived from the shared cookability map (R-003), so the rule lives in one
     # place. `None` for empty recipes (no ingredients to evaluate) OR for
     # recipes with unlinked required ingredients (Chunk 4 tri-state); the
@@ -208,7 +208,7 @@ class GetDashboardSummaryHandler:
             )
         )
         upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))
-        # FU-298 — reuse the cookability map already computed for the recipe
+        # reuse the cookability map already computed for the recipe
         # summary above so we don't load ingredients twice.
         # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: an upcoming meal-plan entry
         # whose recipe has ANY unlinked required ingredient reads

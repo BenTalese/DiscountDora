@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-# FU-045: pin the e2e suite to a SQLite temp database. Postgres is the
+# pin the e2e suite to a SQLite temp database. Postgres is the
 # standard datastore for dev + prod (Decision 5), but tests want zero
 # external dependencies and per-process isolation. `DORA_DB_PATH` is the
 # friendly SQLite shortcut — plain filesystem path; the config layer
@@ -25,7 +25,7 @@ from dora_api.startup import startup
 
 @pytest.fixture(scope="session", autouse=True)
 def api():
-    # FU-166: the e2e suite used to boot a real werkzeug HTTP server in a
+    # the e2e suite used to boot a real werkzeug HTTP server in a
     # thread and drive it with `requests` over the loopback socket — ~2.7s
     # per test (real TCP + the Windows `localhost` IPv6-fallback penalty),
     # ~13.5 min for the suite. We now dispatch in-process through Flask's
@@ -100,7 +100,7 @@ def _adapt(client, method_name: str):
             kwargs["query_string"] = kwargs.pop("params")
         if "files" in kwargs:
             _translate_multipart(kwargs)
-        # FU-197 — auto-attach the double-submit CSRF header from the
+        # auto-attach the double-submit CSRF header from the
         # client's cookie jar so existing tests don't need to know CSRF
         # exists. The browser equivalent lives in axiosHttpClient.ts;
         # this mirrors it for the in-process test client. Tests that

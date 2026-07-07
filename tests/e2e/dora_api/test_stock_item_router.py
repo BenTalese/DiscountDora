@@ -12,7 +12,7 @@ from tests.support import is_valid_datetime, is_valid_uuid
 
 #region ---------------- setup ----------------
 
-# FU-166: list endpoints take query options on the query string and return a
+# list endpoints take query options on the query string and return a
 # `{items, total, page, limit}` envelope; datetimes serialise as ISO 8601
 # (ADR-007); the StockItem DTO grew to the server-owned status fields; query-
 # option errors come back via `bad_request(str(exc))` (message in `title`);
@@ -417,7 +417,7 @@ def test__get_stock_items__LimitValueIsNotInteger__IsBadRequest(api):
 
 
 def test__get_stock_items__PageWithoutLimit__DefaultsLimit(api):
-    # FU-166: page/limit are now independently optional (limit defaults to 50).
+    # page/limit are now independently optional (limit defaults to 50).
     _Response = requests.get(f'{base_route}?page=1')
 
     assert _Response.status_code == 200
@@ -814,7 +814,7 @@ def test__get_stock_item_detail__stock_group_roundtrips_via_patch(api, stock_lev
 
 
 def test__get_stock_item_detail__stock_location_roundtrips_via_patch(api, stock_level_id, stock_location_id):
-    # FU-203 regression — `stock_location` relationship is mapped lazy="noload",
+    # `stock_location` relationship is mapped lazy="noload",
     # so a bare `stock_location = None` doesn't dirty the FK column. The handler
     # has to set `_stock_location_id` directly when clearing. Mirrors the
     # stock_group roundtrip test above; same trap, same fix shape.

@@ -1,4 +1,4 @@
-// C-4 Chunk 6 — shared types for the structured-steps editor. Extracted
+// shared types for the structured-steps editor. Extracted
 // from the .vue files so both `RecipeStepsEditor` and `RecipeStepRow` (and
 // the host page) import from a plain .ts module (cleaner than importing a
 // type from a .vue SFC).

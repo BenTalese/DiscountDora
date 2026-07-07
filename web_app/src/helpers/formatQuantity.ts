@@ -1,4 +1,4 @@
-// C-3 Chunk 2 — DEC-3 unit-spacing rule. A handful of metric/imperial units
+// DEC-3 unit-spacing rule. A handful of metric/imperial units
 // are conventionally written tight against the number ("250g", "2ml");
 // everything else gets a space ("2 cloves", "1 tbsp"). This is the single
 // source of truth for the rule — call sites across cook mode, recipes,

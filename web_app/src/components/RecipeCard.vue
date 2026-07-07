@@ -95,7 +95,7 @@
             >
                 <q-tooltip>Filter stock to this recipe's ingredients</q-tooltip>
             </BaseButton>
-            <!-- FU-006: ambiguous — unelevated round dense with dynamic primary/warning colour; no BaseButton variant fits a coloured raised icon-button. Left as raw q-btn for review. -->
+            <!-- ambiguous — unelevated round dense with dynamic primary/warning colour; no BaseButton variant fits a coloured raised icon-button. Left as raw q-btn for review. -->
             <q-btn
                 unelevated
                 round

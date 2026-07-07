@@ -10,7 +10,7 @@
             :icon="ICONS.smart_toy"
         />
 
-        <!-- FU-153 §7.1 — install-wide master flag layered with the
+        <!-- install-wide master flag layered with the
              per-user toggle. When the install master is off, the user's
              toggle is forced visually off + disabled with an explanatory
              note (R-014 reveal-and-disable). -->
@@ -109,7 +109,7 @@
                     />
                 </SettingsRow>
 
-                <!-- FU-332 — Test connection. Probes the saved config
+                <!-- Test connection. Probes the saved config
                      (or the in-flight draft values if the user hasn't
                      blurred yet) via /api/assistant/probe. Rate-limited
                      server-side at 10/min and audit-logged. -->
@@ -208,7 +208,7 @@
                     />
                 </SettingsRow>
 
-                <!-- FU-332 — Test connection for paid providers. Uses
+                <!-- Test connection for paid providers. Uses
                      the saved encrypted key (server falls back to it
                      when the body's api_key is null); if the user just
                      typed a new key into the masked field, that takes
@@ -267,7 +267,7 @@
 
     const installEnabled = ref(true);
     const saving = ref(false);
-    // FU-332 — Test connection. `probing` gates the button; `probeResult`
+    // Test connection. `probing` gates the button; `probeResult`
     // mirrors the last probe outcome inline next to the button so the
     // user sees the verdict without a toast for the (frequent) "try a
     // few URLs in a row" workflow. Cleared on any field edit so a stale
@@ -450,7 +450,7 @@
         probeResult.value = null;
     }
 
-    // FU-332 — guard the paid-provider Test button: must either have a
+    // guard the paid-provider Test button: must either have a
     // saved key OR a freshly-typed plaintext to send.
     const canTestPaidProvider = computed(() => {
         if (providerDraft.value === 'ollama') return true;

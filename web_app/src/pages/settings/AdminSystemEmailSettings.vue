@@ -88,7 +88,7 @@
                     />
                 </SettingsRow>
 
-                <!-- FU-333 Bucket C — SMTP password lives encrypted-at-rest
+                <!-- SMTP password lives encrypted-at-rest
                      on AppSetting.smtp_password_encrypted. The response DTO
                      never returns the ciphertext; we know only whether one
                      is stored (`smtp_password_configured`). The input is

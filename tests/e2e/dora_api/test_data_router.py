@@ -13,7 +13,7 @@ button, but the inspect + external-file restore endpoints remain as
 before.
 """
 import json
-import uuid  # FU-166: register_product_barcode tests used uuid without importing it.
+import uuid  # register_product_barcode tests used uuid without importing it.
 
 import pytest
 import requests
@@ -74,7 +74,7 @@ def test__get_backup__happy_path__returns_attachment_with_expected_sections(api)
         "recipe_collections",
         "recipes",
         "recipe_ingredients",
-        # FU-164/FU-166: `meals` + `meal_recipes` were removed by the meals→recipes
+        # `meals` + `meal_recipes` were removed by the meals→recipes
         # rework; `product_stock_item_links` (above) is now a real backup section.
         "meal_plans",
         "meal_plan_entries",
@@ -657,26 +657,35 @@ def _first_product_id() -> str:
     return products[0]["product_id"]
 
 
-# FU-056 — per-test product index so each barcode-register test gets a
+# per-test product index so each barcode-register test gets a
 # fresh unbarcoded Product. The new `one Product = one EAN` rule means
 # any test that registers against `products[0]` blocks the next from
 # doing the same. Tests increment this counter at call sites.
 _PRODUCT_INDEX = [0]
 
 
-def _next_unused_product_id() -> str:
+def _next_unused_product_id(*, requires_link: bool = False) -> str:
     """Yield product_ids round-robin from the seed so each barcode test
     starts with a Product that has no barcode registered yet. Each call
     advances by one regardless of seed size; consumers must take the
-    head of the list slice they need."""
+    head of the list slice they need.
+
+    `requires_link=True` skips forward until the next Product has a
+    linked StockItem — used by the traversal test, which needs the
+    `stock_item_via_product` lookup kind."""
     products = requests.get(PRODUCTS_URL).json().get("items") or []
     assert products, "seed data has no products"
-    idx = _PRODUCT_INDEX[0]
-    _PRODUCT_INDEX[0] = idx + 1
-    assert idx < len(products), (
-        f"barcode tests need more seed products (asked for #{idx}, have "
-        f"{len(products)}). Bump the seed or release a product."
-    )
+    while True:
+        idx = _PRODUCT_INDEX[0]
+        _PRODUCT_INDEX[0] = idx + 1
+        assert idx < len(products), (
+            f"barcode tests need more seed products (asked for #{idx}, have "
+            f"{len(products)}). Bump the seed or release a product."
+        )
+        candidate = products[idx]
+        if requires_link and not candidate.get("linked_stock_item_id"):
+            continue
+        return candidate["product_id"]
     return products[idx]["product_id"]
 
 
@@ -697,7 +706,12 @@ def test__register_barcode__against_product__lookup_traverses_via_product(api):
     """FU-056 — registering against a Product that's linked to a StockItem
     yields the `stock_item_via_product` lookup kind (the catalogue case).
     `product_no_link` only fires when the Product has zero linked items."""
-    product_id = _next_unused_product_id()
+    # `requires_link=True` — this test is about the *linked* traversal,
+    # so the picked Product must have a StockItem attached. Bare
+    # round-robin was flaky: it landed on a linked Product when the
+    # test ran in isolation but on an unlinked one once earlier tests
+    # advanced the counter past the linked seed rows.
+    product_id = _next_unused_product_id(requires_link=True)
     barcode = f"TEST-{uuid.uuid4().hex[:10]}"
 
     register = requests.post(REGISTER_URL, json={
@@ -870,7 +884,7 @@ def test__stock_overview_print_view__returns_html(api):
 
 
 def test__meal_plan_export_csv__endpoint_removed__is_404(api):
-    # FU-168: meal-plan CSV export was removed (a plan is a calendar, not a
+    # meal-plan CSV export was removed (a plan is a calendar, not a
     # table); print-view → "Save as PDF" is the export path. The /export route
     # is gone, so it 404s.
     plans = requests.get("http://localhost:5170/api/meal-plans").json().get("items") or []
@@ -895,6 +909,6 @@ def test__meal_plan_print_view__returns_html(api):
     assert response.headers["Content-Type"].startswith("text/html")
 
 
-# FU-342 retired `User.last_backup_at` — the library now owns "when was
+# the library now owns "when was
 # the last backup" via `MAX(Backup.created_at)`. The old test that
 # stamped this column on every download lived here; deleted.

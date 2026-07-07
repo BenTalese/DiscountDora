@@ -66,7 +66,7 @@ export type Recipe = {
      *  exists for this recipe. Server-owned; the cookbook "Planned" /
      *  "Not planned" tri-state filter reads this directly. */
     is_planned: boolean;
-    // C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
+    // cuisine + category are FK vocabularies. The id drives the
     // edit-form selects + filters; the name is carried for display.
     cuisine_id: string | null;
     cuisine_name: string | null;

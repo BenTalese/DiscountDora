@@ -1,4 +1,4 @@
-// P8-08 — wire shape for GET /api/dashboard/dora-score.
+// wire shape for GET /api/dashboard/dora-score.
 // Mirrors dora_api/domain/dora_score.py DoraScoreDto / DoraScoreComponent.
 // The client only renders; the score, components, thresholds and
 // trend hysteresis all live server-side (R-003).

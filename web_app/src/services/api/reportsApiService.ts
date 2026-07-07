@@ -2,7 +2,7 @@ import AxiosHttpClient from './axiosHttpClient';
 
 export type ReportRange = '30d' | '90d' | '1y' | '2y' | '5y' | 'all';
 
-// P8-09 — YoY only accepts bounded windows. Enforce at the type level
+// YoY only accepts bounded windows. Enforce at the type level
 // so callers can't hand the endpoint a range=all it will reject.
 export type YoYReportRange = Exclude<ReportRange, 'all'>;
 
@@ -101,7 +101,7 @@ export interface SavingsCapturedResponse {
     lists: SavingsListBreakdown[];
 }
 
-// P8-09 — culinary memory. Three new report shapes that back the new
+// culinary memory. Three new report shapes that back the new
 // "Memory" section on /reports.
 export interface MealsCookedTopRow {
     recipe_id: string | null;

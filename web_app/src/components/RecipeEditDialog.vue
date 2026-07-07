@@ -10,7 +10,7 @@
             <q-form @submit.prevent="onSubmit" class="q-gutter-md">
                 <FormErrorSummary :message="generalError" />
 
-                <!-- FU-095 reassessment (2026-07-06): the modal creates a
+                <!-- the modal creates a
                      stub — Name + the two primary organisational axes
                      (Cuisine + Category, which drive the overview
                      filters + card grouping) + Collection. Ingredients,
@@ -168,7 +168,7 @@
                 });
                 emit('updated');
             } else {
-                // FU-095 — the modal is a stub-creator; everything else is
+                // the modal is a stub-creator; everything else is
                 // filled on the detail page. Pass the required-typed fields
                 // as their seeded defaults so the create DTO is satisfied.
                 const created = await recipeStore.createRecipeAsync({

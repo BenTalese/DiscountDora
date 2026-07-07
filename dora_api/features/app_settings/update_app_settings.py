@@ -23,12 +23,12 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # FU-153 §7.1 — single install-wide master kill-switch for the
+    # single install-wide master kill-switch for the
     # assistant feature. Per-user LLM URL/model/provider/API key live on
     # the User row now (see auth/update_me).
     master_llm_enabled: bool | None = None
     scanning_enabled: bool | None = None
-    # P8-05 — buy-verdict oracle toggle.
+    # buy-verdict oracle toggle.
     buy_verdict_enabled: bool | None = None
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool | None = None
@@ -53,20 +53,20 @@ class UpdateAppSettingsRequest(BaseModel):
     # problem (the field never echoes back as a clickable link to other
     # users — it ALWAYS opens via target="_blank" rel="noopener").
     product_search_url: str | None = Field(default=None, max_length=500)
-    # FU-227 follow-up — AU vs US per-unit display locale.
+    # AU vs US per-unit display locale.
     unit_pricing_locale: str | None = Field(default=None, max_length=8)
-    # FU-043 — install-wide currency (ISO 4217; 3 uppercase letters) and
+    # install-wide currency (ISO 4217; 3 uppercase letters) and
     # display locale (BCP-47 tag; validated in the handler against Python's
     # Babel-style parse rather than a regex, since BCP-47 has more shapes
     # than a single pattern captures cleanly).
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     locale: str | None = Field(default=None, min_length=2, max_length=35)
-    # FU-342 — backup library controls. Retention 1–100; storage_path
+    # backup library controls. Retention 1–100; storage_path
     # blank ⇒ default `<data-dir>/backups`. Non-blank path is validated
     # for writeability on save.
     backup_retention_count: int | None = Field(default=None, ge=1, le=100)
     backup_storage_path: str | None = Field(default=None, max_length=1024)
-    # FU-345 — image compression knobs. Quality 30–100; max dimension
+    # image compression knobs. Quality 30–100; max dimension
     # 512–8192 (below 512 → images legibly small; above 8192 → cap is
     # bigger than any realistic camera output and the byte cap on the
     # request schema kicks in first).
@@ -78,7 +78,7 @@ class UpdateAppSettingsRequest(BaseModel):
     # degrade the queue.
     stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
     stocktake_auto_tuning_enabled: bool | None = None
-    # FU-333 Buckets B + C — operational config previously carried as
+    # operational config previously carried as
     # `DORA_*` env vars. Bucket-C secrets (SMTP password, VAPID private
     # key) accept plaintext on the wire and are Fernet-encrypted before
     # they touch the DB; the response DTO returns only a `_configured`
@@ -158,7 +158,7 @@ class UpdateAppSettingsHandler:
         if "expiring_soon_window_days" in set_fields and request.expiring_soon_window_days is not None:
             setting.expiring_soon_window_days = request.expiring_soon_window_days
 
-        # FU-227 follow-up — unit_pricing_locale. Validated against the
+        # unit_pricing_locale. Validated against the
         # supported set so a typo can't silently degrade display.
         if "unit_pricing_locale" in set_fields and request.unit_pricing_locale is not None:
             from dora_api.domain.units import SUPPORTED_PRICING_LOCALES
@@ -172,7 +172,7 @@ class UpdateAppSettingsHandler:
                 )
             setting.unit_pricing_locale = _Locale
 
-        # FU-043 — currency + locale. Currency is ISO 4217 (3 uppercase
+        # currency + locale. Currency is ISO 4217 (3 uppercase
         # letters, no digits — the validator here mirrors the client's
         # Intl.NumberFormat constraint). Locale is a BCP-47 tag validated
         # by asking Intl.Locale on the client and, server-side, by a
@@ -210,7 +210,7 @@ class UpdateAppSettingsHandler:
                 )
             setting.product_search_url = _Url
 
-        # FU-342 — backup library controls. Retention is a plain int
+        # backup library controls. Retention is a plain int
         # bounded by the request model; storage path is validated for
         # writeability (an admin pointing at a bad NAS mount finds out
         # here, not on the next backup attempt).
@@ -224,7 +224,7 @@ class UpdateAppSettingsHandler:
                     return UpdateAppSettingsResponse(invalid_reason=invalid)
             setting.backup_storage_path = _Path
 
-        # FU-345 — image compression knobs. Bounds enforced by the
+        # image compression knobs. Bounds enforced by the
         # request model. Applies forward-only: existing images are not
         # re-encoded (out of scope; power users can log a follow-up if
         # they want a re-encode pass).
@@ -258,7 +258,7 @@ class UpdateAppSettingsHandler:
         ):
             setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
 
-        # FU-333 Bucket B — operational config. Strings strip on save; the
+        # operational config. Strings strip on save; the
         # `public_url` scheme guard mirrors `product_search_url` above so a
         # typo can't produce a hostile link in outbound emails.
         if "public_url" in set_fields:
@@ -285,7 +285,7 @@ class UpdateAppSettingsHandler:
                 if _Value is not None:
                     setattr(setting, _NumericOrBool, _Value)
 
-        # FU-333 Bucket C — encrypt-and-store the two operational secrets.
+        # encrypt-and-store the two operational secrets.
         # Empty string is explicit "clear the stored value"; a non-empty
         # value replaces it. Encryption requires `DORA_LLM_KEY_ENCRYPTION_KEY`;
         # if the wrapping key isn't configured we bail with a friendly
@@ -316,7 +316,7 @@ class UpdateAppSettingsHandler:
                 )
             setattr(setting, _ColumnField, token.decode("ascii"))
 
-        # FU-153 §7.1 — the install-wide setting is now a master kill-
+        # the install-wide setting is now a master kill-
         # switch only; the per-user "have you finished setting up?"
         # validation moved to auth/update_me.py.
 

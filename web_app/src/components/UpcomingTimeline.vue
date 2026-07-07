@@ -134,7 +134,7 @@
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
 
-    // C-9.6 — the "this fortnight" forward view. The window + aggregation are
+    // the "this fortnight" forward view. The window + aggregation are
     // server-owned (R-003, GET /alerts/upcoming); this component only renders the
     // grid + per-category dots and expands a clicked day. Token-based dot colours
     // (R-002) so it survives theme switches.

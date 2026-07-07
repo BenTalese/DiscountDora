@@ -1,7 +1,7 @@
 # Implementation Plan — "Your Prices" intelligence (Phase F / S2-10)
 
-**Status:** Plan for execution · **Rewritten:** 2026-06-22 after the pricing-system
-reassessment (handoff: [`docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`](../99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md)).
+**Status:** Executed (all 8 chunks landed under FU-227; delta-check via FU-425 on 2026-07-07 confirmed no gaps). · **Rewritten:** 2026-06-22 after the pricing-system
+reassessment (handoff: [`docs/06_legacy_prompt_plans/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`](../06_legacy_prompt_plans/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md) — archived 2026-07-07).
 **Supersedes:** the prior F-1..F-5 chunking in this file (the reshape adds a conversion
 helper, a folded observation shape, a shared `PriceEntry`, and a harvest path — the
 prior chunks assumed none of these).

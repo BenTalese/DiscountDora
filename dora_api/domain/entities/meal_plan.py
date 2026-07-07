@@ -15,11 +15,11 @@ class MealPlan(BaseEntity):
     # templates (a separate entity) keep their name.
     name: str | None
     start_date: date
-    # C-2.F — provenance: the template this week was forked from, if any. A
+    # provenance: the template this week was forked from, if any. A
     # plain id (not a DB FK) — editing/deleting the template never touches the
     # plan (Decision 1); the UI uses it only for a "re-apply" affordance.
     source_template_id: UUID | None = None
-    # C-2.G — provenance when forked from a rotating template *set*:
+    # provenance when forked from a rotating template *set*:
     # `source_template_set_id` + which item in the set applied to this week.
     source_template_set_id: UUID | None = None
     rotation_index: int | None = None

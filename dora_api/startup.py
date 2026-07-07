@@ -30,9 +30,12 @@ def startup(is_test_env: bool = False):
     # missing. No-op in dev/test. Runs before *anything* else so the
     # friendly error fires before we read appsettings, build the DI
     # container, etc.
-    from dora_api.infrastructure.profile import \
-        validate_production_requirements
+    from dora_api.infrastructure.profile import (
+        validate_production_requirements,
+        warn_if_insecure_cookies_in_production,
+    )
     validate_production_requirements()
+    warn_if_insecure_cookies_in_production()
 
     _Container = build_dependency_container()
     app.container = _Container  # type: ignore
@@ -55,7 +58,7 @@ def startup(is_test_env: bool = False):
 
     # D2: legacy-path migrations run *before* init_db so a relocated
     # DB file is in its new home by the time SQLAlchemy opens it.
-    # FU-045: the legacy-DB migration is a SQLite-only file move; skip it
+    # the legacy-DB migration is a SQLite-only file move; skip it
     # when running on Postgres (no file to relocate).
     from dora_api.infrastructure.path_migration import (
         migrate_legacy_db, migrate_legacy_uploads,
@@ -86,7 +89,7 @@ def startup(is_test_env: bool = False):
             id="audit_retention",
             replace_existing=True,
         )
-        # C-9.7 — alerts email digest. Runs once daily at 07:00; the job
+        # alerts email digest. Runs once daily at 07:00; the job
         # gates per-user cadence + weekly-day internally (PROPOSAL_ALERTS
         # §3.5). 07:00 sits comfortably between the 03:00 audit sweep and
         # the typical workday so a "morning digest" lands before the user
@@ -99,7 +102,7 @@ def startup(is_test_env: bool = False):
             id="alerts_digest",
             replace_existing=True,
         )
-        # C-9.8 — alerts web-push. Hourly at :30 so it staggers from the
+        # alerts web-push. Hourly at :30 so it staggers from the
         # email digest's 07:00 fire. The job self-gates when VAPID isn't
         # configured (returns 0 without mutating the ledger) so an
         # unconfigured install spends nothing.
@@ -181,7 +184,7 @@ def handle_global_exception(error: Exception):
     # Only genuinely unhandled exceptions become 500s.
     if isinstance(error, HTTPException):
         return error
-    # FU-196 (b, partial) — a handler that raises after add()/flush() but
+    # a handler that raises after add()/flush() but
     # before commit leaves dirty state on the request-scoped session.
     # Flask-SQLAlchemy's teardown does eventually `session.remove()`
     # (which rolls back), but doing it explicitly here removes the

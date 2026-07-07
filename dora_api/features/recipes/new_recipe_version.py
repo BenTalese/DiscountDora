@@ -59,7 +59,7 @@ class NewRecipeVersionHandler:
             self.repository
             .get(Recipe)
             .include(Recipe.Fields.INGREDIENTS)
-            # FU-314 — cuisine + category are noload now; the clone below
+            # cuisine + category are noload now; the clone below
             # reads both off `source`, so eager-load them.
             .include(Recipe.Fields.CUISINE)
             .include(Recipe.Fields.CATEGORY)
@@ -119,7 +119,7 @@ class NewRecipeVersionHandler:
             version_group_id=group_id,
             kcal=source.kcal,
             steps_mode=source.steps_mode,
-            # FU-082 — a new version is a fresh row in the household; stamp
+            # a new version is a fresh row in the household; stamp
             # at write time rather than carrying the source's created_at,
             # so the "Recently added" axis surfaces the version when it
             # was actually added here.

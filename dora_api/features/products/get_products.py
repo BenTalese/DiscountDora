@@ -25,14 +25,14 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(slots=True)
 class ProductDto:
     brand: str | None
-    # FU-014 — bytes never travel in list/detail JSON. SPA fetches via
+    # bytes never travel in list/detail JSON. SPA fetches via
     # `GET /products/<id>/image`. Mirrors stock-item / recipe pattern.
     has_image: bool
     is_active: bool
     is_available: bool
     store_id: UUID
     store_name: str
-    # FU-189 carve-out: `merchant_stockcode` is the producer's SKU, kept
+    # `merchant_stockcode` is the producer's SKU, kept
     # verbatim per the rename runbook.
     merchant_stockcode: str | None
     name: str

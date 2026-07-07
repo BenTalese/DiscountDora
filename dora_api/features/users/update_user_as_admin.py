@@ -21,7 +21,7 @@ from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
-# FU-341: `_require_admin` moved to a shared module. Re-exported for
+# `_require_admin` moved to a shared module. Re-exported for
 # feature modules that still import from here — no big-bang rename.
 __all__ = ["AdminUpdateUserRequest", "AdminUpdateUserResponse", "_require_admin"]
 

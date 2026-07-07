@@ -54,7 +54,7 @@
         { path: '/settings/about', label: 'About', icon: ICONS.info },
     ];
 
-    // FU-340 — QR labels only surfaces when scanning is enabled (matches
+    // QR labels only surfaces when scanning is enabled (matches
     // the install-wide gate the page itself enforces). Hiding the nav
     // entry keeps the sidebar honest for installs that never opted in.
     const { scanningEnabled } = useScanningEnabled();
@@ -92,14 +92,14 @@
                 { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
                 { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
                 { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
-                // FU-333 Bucket B — operational config that used to be env-only.
+                // operational config that used to be env-only.
                 { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
                 { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
                 { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
                 { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
             ],
         },
-        // FU-341 — Data sub-group: relocated from the retired `/data`
+        // Data sub-group: relocated from the retired `/data`
         // shell. Backup & restore + Import land here so their chrome
         // matches every other Settings page.
         {

@@ -7,7 +7,7 @@ import ToolApiService from 'src/services/api/toolApiService';
 import type { Ref } from 'vue';
 import { ref } from 'vue';
 
-// C-4 Chunk 2 — shared cache of the three recipe vocabularies, consumed by
+// shared cache of the three recipe vocabularies, consumed by
 // the cookbook overview filters and the recipe edit surfaces. The settings
 // pages talk to the api services directly (CRUD); this store is read-mostly.
 

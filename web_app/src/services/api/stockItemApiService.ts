@@ -153,7 +153,7 @@ export default class StockItemApiService {
             metadata,
         );
 
-    // FU-211 — preferred buys (free-text reminders on a stock item).
+    // preferred buys (free-text reminders on a stock item).
     addPreferredBuyAsync = async (stockItemID: string, label: string): Promise<void> =>
         await this.httpClient.post<void>(`/stock-items/${stockItemID}/preferred-buys`, { label });
 
@@ -169,11 +169,11 @@ export default class StockItemApiService {
             `/stock-items/${stockItemID}/preferred-buys/${preferredBuyID}`,
         );
 
-    // FU-225 (2026-06-18): `reorderPreferredBuysAsync` removed — the SPA now
+    // `reorderPreferredBuysAsync` removed — the SPA now
     // sorts alphabetically client-side and the backend dropped `position` +
     // the `/preferred-buys/reorder` endpoint.
 
-    // FU-227 chunk 2 — folded shape ({total_price, total_measure, unit}).
+    // folded shape ({total_price, total_measure, unit}).
     // Optional store_id (A2). Provenance FK is only set by /finish harvest
     // server-side (chunk 5), not by this manual endpoint. Money-gated at UI.
     addPriceObservationAsync = async (
@@ -196,7 +196,7 @@ export default class StockItemApiService {
             `/stock-items/${stockItemID}/price-observations/${observationID}`,
         );
 
-    // FU-227 chunk 6 — unioned price-history series (observations ∪ linked
+    // unioned price-history series (observations ∪ linked
     // offers, normalised per-unit server-side) for the "Full history"
     // bottom-sheet. Money-gated at the UI surface that opens the sheet.
     getPriceHistoryAsync = async (stockItemID: string): Promise<StockItemPriceHistory> =>

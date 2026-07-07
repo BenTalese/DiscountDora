@@ -57,7 +57,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class StoreDto:
     store_id: UUID
     name: str
-    # FU-014 — bytes never travel in list/detail JSON. SPA fetches via
+    # bytes never travel in list/detail JSON. SPA fetches via
     # `GET /stores/<id>/image`.
     has_image: bool
 
@@ -123,7 +123,7 @@ def get_stores():
 class CreateStoreRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
-    # FU-189 — optional logo on create. Data-URL convention identical to
+    # optional logo on create. Data-URL convention identical to
     # stock-item / product / recipe images; can be replaced via PATCH.
     image: str | None = Field(default=None, max_length=6_000_000)
 

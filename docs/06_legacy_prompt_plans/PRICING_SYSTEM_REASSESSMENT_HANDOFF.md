@@ -1,5 +1,16 @@
 # Pricing System Reassessment — Handoff / Next-Task Brief
 
+**Status (2026-07-07): FULLY EXECUTED — ARCHIVED.** Every §6 / §6a / §6b
+decision landed in shipped code via [IMPL_PLAN_YOUR_PRICES.md](../04_proposals/IMPL_PLAN_YOUR_PRICES.md)
+(all 8 chunks, closed under FU-227 between 2026-06-22 and 2026-07-07).
+Delta-check ran as [FU-425](../../DORA_FOLLOWUPS_RESOLVED.md) close-out on
+2026-07-07 — no gaps. Kept here for historical trail; do not modify.
+Bonus follow-ons (pack-count field, locale display denominators, series
+helpers) all landed additively within the same FU-227 chunk sequence
+without reshaping the core decisions.
+
+---
+
 **Status (2026-06-22): RATIFIED — READY FOR PLAN EXECUTION.** All §6 questions A–K have been
 walked with the user; recommendations and revisions are locked. §6a (A1 deep-dive + entry-surface
 clarification) and §6b (five locked clarifications) capture decisions made during the lock

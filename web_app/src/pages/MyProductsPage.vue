@@ -337,7 +337,7 @@
                         >
                             <q-tooltip>Open at store</q-tooltip>
                         </q-btn>
-                        <!-- FU-128 — adopted AddToListButton row variant with
+                        <!-- adopted AddToListButton row variant with
                              `selected-product-id` so this carries the same
                              cart-state UX (popover on 2+ lists, smart-remove
                              on exactly one) the rest of the app uses. The
@@ -350,7 +350,7 @@
                             :selected-product-id="product.product_id"
                             @click.stop
                         />
-                        <!-- C-7 Chunk 3 — unlinked products add as a
+                        <!-- unlinked products add as a
                              product-only line (L191 standalone). -->
                         <AddToListButton
                             v-else
@@ -610,7 +610,7 @@
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
-    // FU-154 — products comes via the store (R-003) so a save on the
+    // products comes via the store (R-003) so a save on the
     // product-search surface (which goes through `productStore.createProductAsync`)
     // is immediately visible here without a hard refresh. `getProductsAsync`
     // is the force-refetch path the page uses on mount, on retry, and after
@@ -633,7 +633,7 @@
     }
 
     // ── Filters ─────────────────────────────────────────────────────
-    // FU-121: expanded state persisted per-page (mobile always starts hidden).
+    // expanded state persisted per-page (mobile always starts hidden).
     const filtersExpanded = useFilterPanelExpanded('my-products');
     // A8 §3 nav-state — filters/search survive navigation within the
     // session and reset on full reload.
@@ -1003,7 +1003,7 @@
     }
 
     // ── Link-to-stock-item dialog ───────────────────────────────────
-    // FU-208: links the product in place via the stock-item m2m endpoint
+    // links the product in place via the stock-item m2m endpoint
     // (`POST /stock-items/{id}/products`). Previously this bounced to the
     // detail page with a `link_product_id` query hint that nothing consumed
     // (the picker was removed in C-1b.3) — a silent dead-end.
@@ -1081,7 +1081,7 @@
         );
     }
     function levelColourFor(item: StockItem): string | null {
-        // FU-050 — sequence-keyed, not name-keyed (R-003).
+        // sequence-keyed, not name-keyed (R-003).
         const seq = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence;
         return typeof seq === 'number' ? colourForSequence(seq) : null;
     }

@@ -169,7 +169,7 @@
     const clearImage = ref(false);
     const pickError = ref<string | null>(null);
 
-    // FU-335 — the picker verb tracks the current state so screen-reader
+    // the picker verb tracks the current state so screen-reader
     // users hear "Add" for a new store and "Change" for one that already
     // has a logo. Matches the language ImageUploadField uses on the other
     // upload surfaces.

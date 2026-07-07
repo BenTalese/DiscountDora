@@ -59,11 +59,11 @@ def _feature_flags() -> dict[str, bool]:
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
         "scanning": False,      # resolved below — off by default
-        # P8-05 — buy-verdict oracle. Defaults on (pure-personal
+        # buy-verdict oracle. Defaults on (pure-personal
         # feature, no external calls); resolved from AppSetting below.
         "buy_verdict": True,
         "multi_user": True,     # register + admin role
-        # FU-333 Bucket B — the install-wide `email` switch, and the two
+        # the install-wide `email` switch, and the two
         # `*_configured` R-014 signals (used by the SPA to reveal-and-disable
         # per-user channel toggles), now read through the operational-config
         # resolver so admin edits in Settings take effect without a restart.
@@ -83,7 +83,7 @@ def _feature_flags() -> dict[str, bool]:
         "companion_ingestion": False,
         "deals_email": False,
         # Products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY /
-        # FU-209): true iff product data has been ingested — not an admin/user
+        # true iff product data has been ingested — not an admin/user
         # flag. Conservative default false; derived from Product rows below.
         "products": False,
         # C-cross Chunk 3 — derived capability. True when an admin has
@@ -101,7 +101,7 @@ def _feature_flags() -> dict[str, bool]:
             SqlAlchemyRepository
         repo = SqlAlchemyRepository()
         setting = get_or_create_app_setting(repo)
-        # FU-153 §7.1 — install-wide assistant gate is now just the
+        # install-wide assistant gate is now just the
         # master kill-switch. Per-user enable + provider config layers on
         # top (see auth/update_me); useFeatureFlags wires the master flag
         # as the "feature is available here at all" signal.
@@ -113,7 +113,7 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition"] = bool(setting.nutrition_enabled)
         flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
         flags["deals_email"] = bool(setting.deals_email_enabled)
-        # FU-209 — products is on iff product data exists (data-presence gate),
+        # products is on iff product data exists (data-presence gate),
         # not an AppSetting flag. R-003: one server-derived fact via /health.
         from dora_api.domain.entities.product import Product
         flags["products"] = repo.get(Product).count() > 0
@@ -122,7 +122,7 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition_complex_available"] = bool(
             (setting.nutrition_db_source or "").strip()
         )
-        # FU-333 Buckets B + C — email + push signals derive from the
+        # email + push signals derive from the
         # operational-config resolver. Bucket-C secrets (SMTP password,
         # VAPID private key) live encrypted-at-rest on the AppSetting row;
         # the resolver decrypts on read, so a truthy value here means the

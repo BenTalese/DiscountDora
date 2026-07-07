@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import HealthApiService from 'src/services/api/healthApiService';
 
-// FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + locale
+// install-wide currency + locale
 // for every money render in the app. R-003: one source of truth, one
 // formatter. Templates never hardcode `$` or `.toFixed(2)` for money —
 // they call `formatMoney(x)` (or the plain-getter `currentMoneyPolicy()`

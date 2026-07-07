@@ -42,7 +42,7 @@ class GetCategoriesHandler:
 
     def handle(self) -> List[CategoryDto]:
         categories: List[Category] = self.repository.get(Category).all()
-        # FU-314 — Recipe.category is noload now; eager-load so the
+        # Recipe.category is noload now; eager-load so the
         # per-category count below sees the real FK entity.
         recipes = (
             self.repository.get(Recipe).include(Recipe.Fields.CATEGORY).all()

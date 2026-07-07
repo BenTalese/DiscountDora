@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-// FU-300 — module-level state for the log-price sheet. Mirrors useQuickAdd
+// module-level state for the log-price sheet. Mirrors useQuickAdd
 // so any screen can pop it without owning the component. <LogPriceSheet> is
 // mounted once in MainLayout and reads this state; openLogPrice() flips it
 // open. Optionally pre-selects a stock item (skips straight to the

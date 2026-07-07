@@ -36,7 +36,7 @@ class CreateStockItemRequest(BaseModel):
     is_flagged: bool = False
     auto_add_when_low: bool = False
     is_open: bool = False
-    # C-1 Chunk 6 / FU-033 — optional image as a data-URL string
+    # optional image as a data-URL string
     # ("data:image/...;base64,..."). Stored as UTF-8 bytes on the
     # entity; served back via GET /stock-items/<id>/image. Cap matches
     # the recipe-image cap (~4 MB raw → ~6 MB encoded).

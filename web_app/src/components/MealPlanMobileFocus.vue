@@ -9,7 +9,7 @@
             <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
                 <q-tooltip>Next week</q-tooltip>
             </BaseButton>
-            <!-- FU-338 — in-context print. Parent wires this to
+            <!-- in-context print. Parent wires this to
                  `planner.printFocusedWeek` (opens the print-view route in a
                  new tab, then the browser's "Save as PDF" is the export). -->
             <BaseButton

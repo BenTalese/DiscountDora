@@ -1,4 +1,4 @@
-// FU-454 — end-to-end wiring for the BuyVerdictCard's `mark_stocked` +
+// end-to-end wiring for the BuyVerdictCard's `mark_stocked` +
 // `remove_from_list` one-tap actions.
 //
 // The verdict endpoint (`_pick_action` in `get_buy_verdict.py`) returns

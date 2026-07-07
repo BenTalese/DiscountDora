@@ -29,7 +29,7 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 PUBLIC_ENDPOINTS = frozenset({
     "login",
     "register_user",
-    # FU-200 — first-admin bootstrap. `bootstrap_required` is the cheap
+    # first-admin bootstrap. `bootstrap_required` is the cheap
     # GET the SPA hits on cold-start to decide login-vs-setup; the POST
     # creates the first admin and 410s once any user exists.
     "bootstrap_required",
@@ -42,7 +42,7 @@ PUBLIC_ENDPOINTS = frozenset({
     "forgot_password",
     "reset_password",
     "confirm_email_change",
-    # C-10 — the ingestion endpoint authenticates via `Authorization:
+    # the ingestion endpoint authenticates via `Authorization:
     # Bearer <key>` against IngestionSource, not the dora_session
     # cookie. Skipping the session gate here lets the bearer-check inside
     # the handler own auth. The admin CRUD over keys is NOT listed —
@@ -90,7 +90,7 @@ def handle_incoming_request():
     if _AuthFailure is not None:
         return _AuthFailure
 
-    # FU-197 — CSRF double-submit check. Runs after the auth gate so we
+    # CSRF double-submit check. Runs after the auth gate so we
     # only enforce on session-authenticated, mutating, non-public
     # endpoints. The cookie itself is minted in `attach_csrf_cookie` on
     # the response, so cold-load GETs seed the pair before the SPA
@@ -168,7 +168,7 @@ def require_auth_if_protected(endpoint_name: str):
     return unauthorized()
 
 
-# FU-197 — endpoints exempt from the CSRF double-submit check. Mirrors
+# endpoints exempt from the CSRF double-submit check. Mirrors
 # PUBLIC_ENDPOINTS (anything pre-session is exempt since the cookie may
 # not exist yet) plus the bearer-authenticated ingestion endpoint
 # (Bearer tokens can't be replayed CSRF-style — no ambient cookie auth).
@@ -189,7 +189,7 @@ def require_csrf_if_protected(endpoint_name: str):
         return None
     if endpoint_name in CSRF_EXEMPT_ENDPOINTS:
         return None
-    # FU-197 — dev-only escape hatch for ad-hoc curl / shell drivers
+    # dev-only escape hatch for ad-hoc curl / shell drivers
     # that can't easily echo the cookie as a header. Refused outside
     # the development profile so it cannot weaken a production deploy.
     if os.environ.get("DORA_CSRF_DISABLED", "").lower() in ("1", "true", "yes"):
@@ -225,7 +225,7 @@ def deserialise_web_request(request_endpoint: str):
     try:
         _Parsed = _RequestBodySchema.model_validate(request.get_json(silent=True) or {})
     except ValidationError as e:
-        # FU-099 — each Pydantic error is lifted into an ErrorEntry carrying
+        # each Pydantic error is lifted into an ErrorEntry carrying
         # the friendly translation (msg), the structured code (Pydantic's
         # err["type"]), and the raw developer-facing string (raw). The client
         # renders msg; devs see code + raw in console.warn.

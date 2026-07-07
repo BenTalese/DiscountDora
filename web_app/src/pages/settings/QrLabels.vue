@@ -115,7 +115,7 @@
     const { scanningEnabled, scanningLoaded } = useScanningEnabled();
     const stockItemStore = useStockItemStore();
 
-    // FU-340 — this page owns the Print QR labels surface only. The Scan
+    // this page owns the Print QR labels surface only. The Scan
     // tab that used to live alongside it on /data/barcodes was removed:
     // every page that needs scanning already has its own Scan button
     // (Stock Overview toolbar, Add-to-list flows, etc.), and per-item

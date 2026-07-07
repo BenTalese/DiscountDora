@@ -53,6 +53,19 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-504 — Base-component adoption residuals (~54 raw `q-btn` uses across 16 files + one `BaseButton` variant gap)
+- **Raised:** 2026-07-07 (FU-424 audit close-out).
+- **Type:** finding + small design decision.
+- **What:** SPA-wide grep for raw Quasar primitives where a Base* wrapper exists:
+  - `q-btn`: **~54 raw uses across 16 files** — mostly straightforward migrations to `BaseButton variant="ghost"` / `"secondary"` / `"icon"`. Notable defensible cases: `HelpPage.vue:11-19` (uses the `accent` Quasar palette that no `BaseButton` variant exposes), `RecipeCard.vue:99-108` + `StocktakeRunner.vue:95-113` + `AddToListButton` inline chips (all "unelevated coloured icon buttons" — a shape `BaseButton variant="icon"` doesn't currently support).
+  - `q-dialog`: **8 raw uses — all defensible** (panel/sheet patterns like `AlertsBell.vue` right-slide, `MealPlanPickerSheet.vue` bottom-sheet — `BaseDialog` deliberately assumes a centered modal). Verdict CLEAN.
+  - `q-btn-toggle`: 1 defensible use in `AdminSystemStocktakeSettings.vue`. Verdict CLEAN.
+  - `q-btn-dropdown`: only inside `BaseDropdown.vue` (the wrapper itself). Verdict CLEAN.
+- **Design decision inside this FU:** does `BaseButton` gain an `unelevated` + `color` variant to cover the 3-4 icon-button carve-outs, or do those sites stay raw as a documented carve-out?
+- **Why deferred:** not ship-blocking; audit-only for now. The 54 raw uses are cosmetic — no behaviour bug, no accessibility hole (they're all wrapping Quasar which handles a11y).
+- **Recommended resolution:** **opportunistic per-touch** — when any file with a raw `q-btn` is edited for other reasons, migrate it in-pass. No dedicated sweep. The unelevated-coloured-icon-button variant decision is one design call the user needs to make before the last 3-4 offenders can migrate cleanly; deferring until then. ~150-200 LOC if a dedicated pass ever ran.
+- **Cross-ref:** [[FU-424]] (audit that produced this) — resolved 2026-07-07.
+
 ## [OPEN] FU-500 — Apply R-029 (hide, don't nag) app-wide — inverse sweep of the retired FU-176
 - **Raised:** 2026-07-06 (user directive walking back R-014 → new rule R-029 / ADR-025)
 - **Type:** follow-up (cross-cutting presentation change)
@@ -65,58 +78,6 @@ long session summary. Distinct from the other logs:
   - Empty-state usages (dashboard "all clear", meal-plan empty-week banner, `DoraScoreCard`, `YourPricesWidget`) are a **different pattern**; they stay unchanged. Their R-014 comment references can be re-labelled opportunistically (they were mislabelled — "calm empty state" isn't the same rule).
 - **Why deferred:** cross-cutting presentation change touching ~10 files; better as a focused small pass than folded into other work.
 - **Recommended resolution:** opportunistic / a focused sweep — pair with the next touch of each gated surface. Also update **ADR-002**'s stance in `ENGINEERING_STANDARDS.md:1149` to drop the "R-014 partially revisits it" implication (R-002's hide-when-off is now the whole story again).
-
-## [OPEN] FU-501 — Seasonal-picks table is AU-only; needs locale-scoped data
-- **Raised:** 2026-07-06 (FU-043 close-gate).
-- **Type:** deferred job (locale data).
-- **What:** `dora_api/features/assistant/tools.py::seasonal_picks` returns a
-  hardcoded `_SEASONAL_AU` fruit/veg table with the note "Australian seasonal
-  guide — pricing and availability vary by region." Left as-is at FU-043
-  close: the data is factually AU-specific and the tool description is
-  honest, but a non-AU install still sees AU seasons.
-- **Options:** (a) a `_SEASONAL_BY_LOCALE` map keyed on the install locale's
-  country subtag, with AU/NZ/US/GB seed data and a graceful "no seasonal
-  data for your locale" fallback; (b) drop the tool entirely on non-AU
-  installs; (c) let admins upload their own seasonal table.
-- **Recommended resolution:** later — after a real non-AU user surfaces the
-  gap. Not blocking FU-043.
-
-## [OPEN] FU-466 — Wider pytest drift pool discovered while closing FU-328 (~41 failures across alerts / data / stock / tz)
-- **Raised:** 2026-07-05 (surfaced while closing FU-328).
-- **Type:** finding (pre-existing drift; confirmed on clean HEAD via `git stash`).
-- **What:** FU-328 named 4 pre-existing failures on 2026-06-29 when the suite was 540 tests. The suite has since grown to 755 tests, and a full-suite `./.venv/bin/pytest tests/` now shows **44 failures on clean HEAD** — much wider than FU-328's scope. FU-328 was closed strictly on its four named items; this FU tracks the rest so they don't stay invisible. Rough by-file breakdown of the ~41 remaining failures:
-  - `test_alerts.py` — 16 failures (multiple: expired-item scoped key, snooze, dismiss, action, prefs tier, no-planned-meals, shopping-day windowing, history-lists-dismissed, upcoming-expiry).
-  - `test_alerts_digest.py` — 5 failures (opted-in send, dedup-until-clear, cadence off, weekly-day, missing-email).
-  - `test_alerts_push.py` — 4 failures (subscribed-devices, dedup, prune-gone, no-op).
-  - `test_data_router.py` — 11 failures (`get_backup` variants, inspect roundtrip, restore roundtrips, register-barcode traversal — this last one was already flagged flaky in FU-297's worklog entry).
-  - `test_household_tz_boundaries.py` — 2 failures (`test__alerts__expiry_compares_against_household_today`, `test__waste_rescue__horizon_uses_household_today` — both die on `POST /api/stock-items` → 500 under `FORWARD_ZONE=Pacific/Kiritimati`; likely tz-sensitive validation regression).
-  - `test_stock_item_router.py` — 3 failures (`expiry_event__emitted_on_set_push_and_clear`, `history_older_count__caps_at_per_kind_limit`, `expiry_event__no_change_no_event`).
-- **Why deferred:** each cluster belongs to its own feature area and needs a per-area investigation to know whether the test's assertion is stale (FU-099 error-shape drift, changed DTO shape, endpoint moved) or the code has actually regressed. FU-328's guidance — "don't bundle as one job, each failure is its own story" — applies here too, at cluster-granularity.
-- **Recommended resolution:** opportunistic per file. When next touching alerts / backup+restore / stock-item / tz-boundary code, run that file's suite first and fix or rewrite. Two specific priors that will help:
-  - Every neighbouring assertion in these files that uses `validation_err()` / `domain_err()` is a live template for FU-099 error-shape fixes.
-  - The `household_tz` 500s are the most suspicious — a 500 is likely a real bug, not a test-drift issue. Prioritise diagnosing those.
-- **Cross-ref:** [[FU-328]] (the narrow predecessor; resolved 2026-07-05).
-
-## [OPEN] FU-465 — Native push notifications (FCM bridge) not wired
-- **Raised:** 2026-07-04 (P8-10 close-gate).
-- **Type:** deferred job.
-- **What:** VAPID web push works in the browser + PWA install path but Android's WebView doesn't expose the Push / PushManager / Notification APIs, so the Capacitor build's push toggle reads `unsupported`. To make proactive alerts (deal-for-you, run-out, expiry) work on the native app, wire `@capacitor/push-notifications` + Firebase Cloud Messaging on Android (and APNS on iOS when that platform is built). Server-side: a native-endpoint subscription store parallel to the web-push VAPID one, plus a fan-out in `push_sender.py`. Manifest already declares `POST_NOTIFICATIONS`.
-- **Why deferred:** user picked "keep VAPID web push" at P8-10 scope-lock — smallest surface, avoids a Firebase dependency, matches self-host posture. Native push is only worth the FCM/Firebase cost once there's actual demand.
-- **Recommended resolution:** when someone actually installs the native app and complains about missing notifications (or when Phase 4 commercialisation starts). Firebase project setup + `google-services.json` + backend fan-out is roughly a half-day of work.
-
-## [OPEN] FU-462 — Sweep the ~237 prompt-ID comments (`P[0-9]-` / `C-[0-9]` / `B[0-9]`) from shipped source
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (f) sub-part).
-- **Type:** deferred job / pre-release polish.
-- **What:** The senior review flagged ~237 prompt-ID comments in shipped source (e.g. `// C-4 Chunk 2 —`, `# P8-05 — …`) — useful during construction, noise pre-release. Sweep by category: keep the ones that document a *rule* (R-003 / R-014 / ADR references) or an incident's *why*; drop the ones that only name the prompt that produced them. FU-424 also tracks this as one of the review's Tier-2 items — the two FUs are the same finding.
-- **Why deferred:** cross-cutting, pre-release-only polish; no user-visible effect.
-- **Recommended resolution:** later — pre-release polish pass, or fold into FU-424's broader Tier-2 delta re-audit.
-
-## [OPEN] FU-460 — `SESSION_COOKIE_SECURE` default: keep off or flip on?
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
-- **Type:** finding / policy call.
-- **What:** [`app.py:90`](dora_api/app.py) sets `SESSION_COOKIE_SECURE` from `DORA_SECURE_COOKIES` env var, **defaulting off**. Correct for local HTTP dev but a footgun for a first-time SaaS operator who forgets to set the var — session cookies then travel over cookie-visible transports. Options: (a) keep default off, add a boot-time WARNING when `DORA_ENV=prod` + `SECURE_COOKIES` unset; (b) flip default on and require an explicit `DORA_SECURE_COOKIES=false` for dev; (c) auto-detect from request scheme (Flask's `PREFERRED_URL_SCHEME` or `X-Forwarded-Proto`). Distribution-posture rule (§7.5) wants same artifact, different config — option (a) fits that shape best.
-- **Why deferred:** policy call, not a bug per se.
-- **Recommended resolution:** before Phase 4 commercialization. If (a): add the boot-time warning now (10 lines in `startup.py`, mirroring the existing "refuse to boot in production when required env vars are missing" pattern).
 
 ## [OPEN] FU-459 — App-wide security headers (CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy)
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
@@ -139,68 +100,21 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** real refactor, not a one-liner; safer to do after the rollback safety net (done 2026-07-03) rather than before.
 - **Recommended resolution:** later — Type-B aggregates pass, or the next serious cookbook-editor touch.
 
-## [OPEN] FU-452 — P6-11 location-aware grouping (put-away + expiry-by-location) never built
+## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) — DESIGN LOCKED, impl deferred
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** deferred job (Phase 1 loop item, un-started; fell off the map when spatial locations were retired).
-- **What:** `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_6_POLISH.md:688` specified two flows on the (now simple) location tree: **(A)** after `Finish & restock`, offer a put-away checklist grouped by `stock_location` tree node ("Freezer: 3 · Pantry: 2 · Fridge: 4") with tick-per-group + quick-assign for unsorted items; **(B)** in the expiry/alerts view, allow grouping expiring items by location node ("Back of freezer: 2 expiring"). No new alert type — just a presentation grouping over `get_alerts` data. Grep confirms neither flow exists: the only `_group_by_location` hit is in [`export_stock_overview.py`](dora_api/features/data/export_stock_overview.py) (a CSV export helper, not either P6-11 surface). Explicitly **not** on `PROJECT_STATE.md`'s attention list — probably dropped off after the spatial-location idea was cut (they simplified past the goal).
-- **Why deferred:** believed absorbed by other work; nothing built.
-- **Recommended resolution:** later during Phase 1 mop-up. Small — no data model change, uses existing tree + alerts data. Or, if the appetite isn't there, **explicitly cut** and log it (better a clean CUT than a silent drop). MUST NOT reintroduce stock-map / spatial coordinates / location routing (charter Removed-features list).
+- **Type:** deferred job (design locked 2026-07-07; awaiting chunked impl-plan).
+- **Design brief:** [`docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md`](docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md) (2026-07-07). Covers this FU + [[FU-450]] in one plan. Locked decisions: brief-first-then-chunks; both FUs ship together; UI on meal-plan week + Dashboard budget card summary bullet; preview→confirm apply with a MealPlanSwapLedger row for undo; `cost_per_week` computed server-side on-the-fly (no new column); ranker filters out `fake_markdown=true` candidates; two-pass generator (recipe swaps + product swaps) with a closed reason-chip vocab.
+- **What (original):** `PROMPT_PLAN_PART_6_POLISH.md:594` had two halves. **Shipped:** per-recipe cost estimate (Cookbook Chunk 9, uses `paid_price` via FU-216). **Missing:** the headline "negotiator" — `cost_per_week` on meal-plan weeks, and the budget-defense loop that, when a week is over budget, emits ranked swap suggestions with concrete dollar savings and one-tap apply — (a) PRODUCT swap (reuse `compare_prices`), (b) RECIPE swap. Must NOT use a stock-item substitute graph (that surface is retired). Depends on P6-03 deal-quality signal (see [[FU-450]]).
+- **Why deferred:** design brief written; implementation is ~6 chunks (~1200-1500 LOC + one migration + one User column) and warrants a proper chunked impl-plan session rather than being folded into an unrelated turn.
+- **Recommended resolution:** next Phase-1-mop-up session picks up chunks 1-6 in order (see brief §10). Chunks 1-3 (FU-450 upstream) can land independently; chunks 4-6 (FU-451 core + UI) depend on 1-3.
 
-## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) never built
+## [OPEN] FU-450 — P6-03 deal-quality (fake_markdown + good_deal alert) — DESIGN LOCKED, impl deferred
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** deferred job (partial coverage — only the passive tracker half shipped).
-- **What:** `PROMPT_PLAN_PART_6_POLISH.md:594` had two halves. **Shipped:** per-recipe cost estimate (Cookbook Chunk 9, uses `paid_price` via FU-216). **Missing:** the headline "negotiator" — `cost_per_week` on meal-plan weeks (no `cost_per_week` grep hits), and the budget-defense loop that, when a week is over budget, emits ranked swap suggestions with concrete dollar savings and one-tap apply — **(a)** PRODUCT swap ("Buy the on-special <brand> for the chicken instead of your usual → save $X"; reuse `compare_prices`), **(b)** RECIPE swap ("Swap Thursday's <expensive recipe> for <cheaper saved recipe> → save $Y"). Must NOT use a stock-item substitute graph (that surface is retired). Depends on P6-03 deal-quality signal being present (see FU-450) for the "prefer genuinely-good-price products" ranking.
-- **Why deferred:** the negotiator loop needs the P6-03 signal + a design call on where the swaps surface (meal-plan week, budget card, both?); recipe cost shipped standalone and no one closed the rest.
-- **Recommended resolution:** later during Phase 1 mop-up; or fold into the P8-08 Dora Score card (over-budget bullet → "Save $X: apply this swap"), which is where FU-352 already parks the daily-briefing bullets. Do FU-450 (P6-03 signal) first or in parallel.
-
-## [OPEN] FU-450 — P6-03 deal-quality (deal_score / fake_markdown / percentile) never built as spec'd
-- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** deferred job (superseded framing; specific pieces still worth extracting).
-- **What:** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history (`lowest_price`, `is_lowest_in_window`, percentile, **`fake_markdown` flag**, 0–100 `deal_score`), a `good_deal` alert type with one-tap add-to-list + per-user threshold + throttle, and a lowest/median overlay on `PriceHistoryPage.vue`. Zero code hits for `deal_score`, `fake_markdown`, or `is_lowest_in_window`; `find_deals` in `dora_api/features/assistant/tools.py` still returns raw offers. **Superseded framing:** the **P8-05 buy-verdict oracle** (shipped 2026-07-02) answers "is this a good price" with a verdict badge on rows + shopping-lines — different shape, same intent. **Missing pieces still valuable:** (a) the **`fake_markdown` flag** (detects inflated "was" prices — truth-in-advertising for a product literally called Dora that tracks *discounts*); (b) the **`good_deal` alert type** with one-tap add-to-list + throttle (proactive, not just passive on-page).
-- **Why deferred:** framing moved from "score" to "verdict" (P8-05); the leftover pieces weren't back-ported.
-- **Recommended resolution:** opportunistic — fold the `fake_markdown` detection into `BuyVerdictCard` (also un-wires FU-437), and add the `good_deal` alert type to `get_alerts.py`. Skip the 0–100 score + percentile UI — P8-05 replaces that surface. Feeds FU-451 (budget defense wants a deal-quality signal to rank product swaps).
-
-- **What:** P2-05 in the original plan
-  ([`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md:400`](docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_2.md)
-  "Budget-Aware Auto Lists") had **two halves**. The *user-facing budget* half
-  is fully shipped: [`features/budget/budget.py`](dora_api/features/budget/budget.py),
-  migration `a6e3b5d2c8f1_20260606_user_budget.py`,
-  `User.budget_amount` / `budget_period` handled in
-  [`update_me.py:49-56, 164-178`](dora_api/features/auth/update_me.py),
-  budget-vs-spend surfacing at
-  [`DashboardPage.vue:380`](web_app/src/pages/DashboardPage.vue) (the P2-05
-  "Grocery budget" card). The **optimizer half was not built** — the
-  auto-generated shopping-list flow
-  ([`features/shopping_lists/auto_generate.py`](dora_api/features/shopping_lists/auto_generate.py))
-  does not consult `budget_amount` anywhere (verified: `grep -n budget` on that
-  file returns only unrelated `frequently_added_limit` matches). No "keep the
-  list under $X" / "trim items to fit the budget" pass, no per-list
-  `budget_target` / `budget_strategy` columns, no `POST /shopping-lists/optimize`
-  route, no strategy segmented control in the auto-generate modal, no
-  explainability chips ("Deferred because it would exceed budget"), no
-  "Build me a $120 shop" assistant intent. What the original P2-05 spec called
-  for on that side is all missing.
-- **What NOT to keep from the original spec:** `preferred_merchants` +
-  cross-store strategies (`"fewest_stores"` / `"preferred_store"`) are coupled
-  to hosted multi-store scraping, which the reconciled plan explicitly retired
-  (`RECONCILED_FINISHING_PLAN.md` Decision 7). Any brief here should drop those
-  strategies or reshape them around ingested product data (C-10).
-- **Why deferred:** shipped the simpler user-facing budget + alert first; the
-  optimizer wants a proper design (which items to drop first, how essentials +
-  low-stock priorities compose with budget, whether it warns or hard-caps,
-  whether the budget is per-shop or per-period remaining, and how it interacts
-  with P8-05 buy-verdict on individual items).
-- **Recommended resolution:** later (opportunistic Phase 3-ish, or bundled with
-  the next shopping-list intelligence pass) — **needs a proper design brief
-  first, not a direct build.** The brief should cover: (a) UX shape (soft warn
-  vs auto-trim vs suggest-swap), (b) priority stack (essential > low-stock >
-  frequently-added when budget-constrained), (c) whether "budget" ties to
-  `budget_period` remaining or a single-shop cap, (d) explainability (per-line
-  "why deferred" reasons), (e) interaction with P8-05 (each candidate already
-  has a buy/wait/skip verdict — the optimizer can lean on those instead of
-  re-deriving priorities), (f) which of the original P2-05 spec pieces
-  (multi-store strategies, `preferred_merchants`) get dropped per the
-  post-scrape-divorce charter.
+- **Type:** deferred job (design locked 2026-07-07 as part of [[FU-451]]'s brief; awaiting impl).
+- **Design brief:** [`docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md`](docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md) §4a-b + §10 chunks 1-3. Locked decisions: `DealQuality` is a pure function over offer-history + household paid-price history (FU-216); band-only enum (`poor/fair/good/great`), no 0-100 numeric score exposed; `fake_markdown` compares merchant claim against household median paid-price; `good_deal` alert throttled to 1 per (product, band) per 14 days, per-user threshold `good_deal_alert_threshold ∈ {"great", "good"}`; the surviving surface feeds the Buy Verdict card (existing P8-05, not a new UI) — no 0-100 score UI, no new PriceHistoryPage overlay.
+- **What (original):** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history + a `good_deal` alert. **Superseded framing:** P8-05 Buy Verdict shipped 2026-07-02. **Missing pieces still valuable and now designed:** (a) `fake_markdown` flag, (b) `good_deal` alert type.
+- **Why deferred:** implementation is 3 chunks inside the FU-451 impl-plan — same session, same tests.
+- **Recommended resolution:** ships as chunks 1-3 of the FU-451 impl-plan. Can land independently before chunks 4-6 (FU-451 core) if wanted.
 
 ## [OPEN] FU-447 — Security: AUTH_ASSISTANT findings (HIGH CSRF + MEDIUM email-change) still unfixed
 - **Raised:** 2026-07-02 (surfaced by the full doc-register audit).
@@ -261,20 +175,6 @@ long session summary. Distinct from the other logs:
 - **What:** `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` proposes **one capability registry + two renderers** to collapse the three overlapping decision systems ([tools.py](dora_api/features/assistant/tools.py) server-side, [doraIntents.ts](web_app/src/services/doraIntents.ts) client rule engine, [doraContextualActions.ts](web_app/src/services/doraContextualActions.ts) client contextual chips) — none of which agree on what Dora can do. Proposal has been *augmented* multiple times (§2.2.1 mutation-confirmation model, §7 LLM-provider/connectivity) but **the structural refactor was never built** — all three systems still exist, no `CapabilityRegistry` exists anywhere, and `DoraChat.vue`'s missing-ingredients recompute (the Type-A duplication called out in §1) hasn't been deleted. **Collides with the in-flight SLM replacement** (memory `project_dora_slm_assistant`): the SLM direction may supersede parts of this proposal (rule-engine deletion becomes trivial once the SLM is always available), keep others (the capability registry is still the right shape for the SLM to call), or invalidate the whole thing. Nobody has reconciled the two directions.
 - **Why deferred:** the SLM work was in-flight when the proposal was drafted; sequencing was never firmed up.
 - **Recommended resolution:** **discussion first, not build** — a short session to reconcile: (a) which parts of the proposal survive the SLM pivot, (b) whether the capability registry lands before/after the SLM, (c) fate of the client-side rule engine (`doraIntents.ts`) once the SLM is the default. Outcome should either be a refreshed proposal or an explicit "superseded by SLM work, close" call. Tightly coupled to [[FU-390]] (P5-05 eval suite — tests whichever architecture wins) and [[FU-386]] (dangling client-only `doraContextualActions.ts` handle from the state-ownership plan).
-
-## [OPEN] FU-425 — Pricing reassessment handoff: confirm fully executed
-- **Raised:** 2026-07-01 (docs audit).
-- **Type:** finding.
-- **What:** `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` is marked "RATIFIED — READY FOR EXECUTION." Chunks landed via `IMPL_PLAN_YOUR_PRICES` (all 8 built per FU-227). Delta-check that every §6/§6a/§6b decision made it into shipped code + docs, then archive the handoff note.
-- **Why deferred:** verification only.
-- **Recommended resolution:** opportunistic delta-check; then move the note to `06_legacy_prompt_plans/`.
-
-## [OPEN] FU-424 — Senior review Tier-2 credibility gaps — confirm status
-- **Raised:** 2026-07-01 (docs audit).
-- **Type:** finding.
-- **What:** `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md` Tier-1 ship-blockers were closed (register-first-admin, CSRF, build). Tier-2 "credibility gaps" — ~237 prompt-ID comments in shipped source, half-finished base-component adoption, missing request-level transaction safety, unreachable Postgres posture — were not systematically verified this session. Postgres is closed (FU-045). The other three need a delta pass.
-- **Why deferred:** re-audit vs shipped code, not a fix.
-- **Recommended resolution:** before any commercialization gate — grep for prompt-ID comments (`P[0-9]-\|C-[0-9]\|B[0-9]`) in shipped source; count non-Base component usage; audit for missing `db.session.commit()` boundaries. Log a proper FU or plan per finding.
 
 ## [OPEN] FU-422 — Search: display which products already link to a stock item
 - **Raised:** 2026-07-01 (original-spec sweep).

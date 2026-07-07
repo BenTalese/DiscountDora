@@ -55,11 +55,11 @@ class UpdateRecipeIngredientRequest(BaseModel):
     quantity: float | None = None
     unit: str | None = Field(default = None, max_length = 50)
     notes: str | None = Field(default = None, max_length = 255)
-    # C-4 Chunk 6 — see CreateRecipeIngredientRequest.client_id. Optional
+    # see CreateRecipeIngredientRequest.client_id. Optional
     # client-side identifier so `steps[].ingredient_client_ids` can point at
     # this row before the server hands back a real id.
     client_id: str | None = Field(default = None, max_length = 64)
-    # C-4 Chunk 10 — optional section grouping; client_id of one of the
+    # optional section grouping; client_id of one of the
     # sections in the same payload, OR the existing section's UUID string
     # when leaving sections untouched. Null = unsectioned.
     section_client_id: str | None = Field(default = None, max_length = 64)
@@ -107,7 +107,7 @@ class UpdateRecipeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default = None, min_length = 1, max_length = 255)
-    # C-4 Chunk 2: cuisine + category are FK vocabularies (resolved like
+    # cuisine + category are FK vocabularies (resolved like
     # recipe_collection_id below). Explicit null clears the link.
     category_id: UUID | None = None
     cook_time_minutes: int | None = None
@@ -118,24 +118,24 @@ class UpdateRecipeRequest(BaseModel):
     prep_time_minutes: int | None = None
     recipe_collection_id: UUID | None = None
     servings: int | None = None
-    # C-4 Chunk 7 — origin URL for imported recipes. Explicit null clears.
+    # origin URL for imported recipes. Explicit null clears.
     source: str | None = Field(default = None, max_length = 2048)
     time_of_day: str | None = None
-    # C-4 Chunk 9 — simple nutrition (kcal). Explicit null clears.
+    # simple nutrition (kcal). Explicit null clears.
     kcal: int | None = Field(default = None, ge = 0, le = 100_000)
     ingredients: List[UpdateRecipeIngredientRequest] | None = None
-    # C-4 Chunk 2/5 — when present (even as an empty list), the full tag/tool
+    # when present (even as an empty list), the full tag/tool
     # set is replaced. Omit the field to leave the existing set untouched.
     dietary_tag_ids: List[UUID] | None = None
     tool_ids: List[UUID] | None = None
-    # C-4 Chunk 5 — data-URL image string; explicit null clears it. Omit to
+    # data-URL image string; explicit null clears it. Omit to
     # leave the existing image untouched.
     image: str | None = Field(default = None, max_length = 6_000_000)
-    # C-4 Chunk 6 — structured steps. When present (even as []), the full
+    # structured steps. When present (even as []), the full
     # step set is replaced. Omit to leave existing steps untouched. An empty
     # list clears all structure (recipe falls back to plain `instructions`).
     steps: List[UpdateRecipeStepRequest] | None = None
-    # C-4 Chunk 10 — present (even as []) = replace the full section set.
+    # present (even as []) = replace the full section set.
     # Empty list clears all sections; ingredients/steps fall back to the
     # implicit "main" group via ON DELETE SET NULL. Omit to leave
     # existing sections untouched.
@@ -201,7 +201,7 @@ class UpdateRecipeHandler:
                     f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
                 ),
             )
-        # C-2.A — `time_of_day` validated against the household MealSlot
+        # `time_of_day` validated against the household MealSlot
         # vocabulary (R-010); legacy stored values persist.
         if "time_of_day" in _SetFields and request.time_of_day is not None:
             _ValidSlots = get_valid_slot_names(self.repository)
@@ -246,7 +246,7 @@ class UpdateRecipeHandler:
                     return UpdateRecipeResponse(category_not_found = True)
                 _Recipe.category = _Category
 
-        # C-4 Chunk 10 — sections replace first so the new ingredient/step
+        # sections replace first so the new ingredient/step
         # FKs can target the freshly-inserted rows. Empty list clears (rows
         # fall back to the implicit "main" group via ON DELETE SET NULL).
         _SectionClientToReal: dict[str, UUID] = {}
@@ -327,7 +327,7 @@ class UpdateRecipeHandler:
         if "is_favourite" in _SetFields and request.is_favourite is not None:
             _Recipe.is_favourite = request.is_favourite
 
-        # C-4 Chunk 5 — image: explicit null clears, a data-URL string sets it.
+        # image: explicit null clears, a data-URL string sets it.
         if "image" in _SetFields:
             _Recipe.image = request.image.encode("utf-8") if request.image else None
 
@@ -342,7 +342,7 @@ class UpdateRecipeHandler:
                 )
             _Recipe.steps_mode = request.steps_mode
 
-        # C-4 Chunk 2/5 — replace the tag/tool set when explicitly provided.
+        # replace the tag/tool set when explicitly provided.
         # Empty list clears; omitted field leaves untouched.
         if "dietary_tag_ids" in _SetFields and request.dietary_tag_ids is not None:
             try:
@@ -355,7 +355,7 @@ class UpdateRecipeHandler:
             except ValueError as exc:
                 return UpdateRecipeResponse(invalid_tag_message=str(exc))
 
-        # C-4 Chunk 6 — steps replace. Ingredient client_ids resolve via the
+        # steps replace. Ingredient client_ids resolve via the
         # new-ingredients map; any token that didn't match (because the
         # client is keeping existing ingredients untouched) is parsed as a
         # raw UUID and trusted to the access helper's per-recipe validation.

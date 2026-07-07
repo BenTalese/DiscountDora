@@ -17,7 +17,7 @@ class Product(BaseEntity):
     is_active: bool
     is_available: bool
     store: Store
-    # FU-189: `merchant_stockcode` retained — it's the producer's SKU code,
+    # `merchant_stockcode` retained — it's the producer's SKU code,
     # not a reference to the renamed entity. Renaming this column was
     # deliberately deferred (PRODUCTS_OVERLAY_RUNBOOK Phase E).
     merchant_stockcode: str | None

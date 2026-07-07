@@ -3,7 +3,7 @@ import { ICONS } from 'src/style/icons';
 
 export type AlertSeverity = 'high' | 'medium' | 'low';
 
-// C-9.2 — which count bucket an alert falls in: 'actionable' drives the bell
+// which count bucket an alert falls in: 'actionable' drives the bell
 // badge, 'fyi' is shown but never counted into it.
 export type AlertTier = 'actionable' | 'fyi';
 
@@ -14,7 +14,7 @@ export type AlertKind =
     | 'low_stock'
     | 'stocktake_overdue'
     | 'essential_low'
-    // C-9.4 — forward-looking nudges (no stock item).
+    // forward-looking nudges (no stock item).
     | 'no_planned_meals'
     | 'shopping_day';
 
@@ -143,7 +143,7 @@ export function iconFor(kind: AlertKind): string {
 // Severity ladder — returned string is the class-suffix Quasar's `color` prop
 // consumes (`bg-<name>` / `text-<name>`). Matching utility classes live in
 // `web_app/src/css/colours.scss` and read from the tokens in tokens.scss.
-// FU-313 (2026-07-06) — was Quasar numbered palette (red-6/orange-7/amber-7);
+// was Quasar numbered palette (red-6/orange-7/amber-7);
 // now theme-aware via `light-dark()` tokens.
 export function colorFor(severity: AlertSeverity): string {
     if (severity === 'high') return 'severity-critical';

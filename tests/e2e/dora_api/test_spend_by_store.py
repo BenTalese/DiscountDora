@@ -29,7 +29,7 @@ def test__spend_by_store__honours_actual_unit_price_over_picked(api):
     suffix = uuid.uuid4().hex[:8]
     store_name = f"FU229Store-{suffix}"
 
-    # FU-189a — product create no longer auto-spawns a Store; stores are
+    # product create no longer auto-spawns a Store; stores are
     # user-curated. Create the store explicitly first.
     store_resp = requests.post(STORES, json={"name": store_name})
     assert store_resp.status_code == 201, store_resp.text

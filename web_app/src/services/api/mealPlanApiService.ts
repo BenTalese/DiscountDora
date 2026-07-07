@@ -11,7 +11,7 @@ export type MealPlanEntryCommand = {
 };
 
 export type CreateMealPlanCommand = {
-    name?: string; // C-2.E: optional — the planner creates nameless week-plans.
+    name?: string; // optional — the planner creates nameless week-plans.
     start_date: string;
     entries: MealPlanEntryCommand[];
 };

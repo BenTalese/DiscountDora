@@ -25,7 +25,7 @@ DEFAULT_TIER_BY_KIND: dict[str, str] = {
     "out_of_stock": TIER_ACTIONABLE,
     "low_stock": TIER_FYI,
     "stocktake_overdue": TIER_FYI,
-    # C-9.4 — forward-looking nudges (no stock item): planner + shopping-day.
+    # forward-looking nudges (no stock item): planner + shopping-day.
     "no_planned_meals": TIER_FYI,
     "shopping_day": TIER_FYI,
 }

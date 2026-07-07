@@ -69,7 +69,7 @@ def configure_mappings(db: SQLAlchemy):
 
     # ── Tables ────────────────────────────────────────────────────────────────
 
-    # FU-189 — user-curated stores (was `Merchant`). `image` mirrors the
+    # user-curated stores (was `Merchant`). `image` mirrors the
     # StockItem/Product/Recipe pattern: a large blob, deferred at the mapper
     # so list endpoints don't drag bytes; a dedicated `/stores/<id>/image`
     # route hydrates on demand. Zero logos ship — Dora has no prefilled
@@ -84,11 +84,11 @@ def configure_mappings(db: SQLAlchemy):
     app_setting_table = Table(
         "AppSetting", metadata,
         Column("id", UUIDType, primary_key=True),
-        # FU-153 §7.1 — install-wide master kill-switch. Per-user URL /
+        # install-wide master kill-switch. Per-user URL /
         # model / provider / API key live on the User table.
         Column("master_llm_enabled", Boolean, nullable=False, server_default=true()),
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
-        # P8-05 — buy-verdict oracle. Defaults on because it's pure-personal;
+        # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
         Column("buy_verdict_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
@@ -97,7 +97,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("nutrition_enabled", Boolean, nullable=False, server_default=false()),
         Column("companion_ingestion_enabled", Boolean, nullable=False, server_default=false()),
         Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
-        # FU-209: `products_enabled` column dropped (migration f1a2b3c4d5e6) —
+        # `products_enabled` column dropped (migration f1a2b3c4d5e6) —
         # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).
         # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
         Column("nutrition_db_source", String(255), nullable=False, server_default=""),
@@ -108,23 +108,23 @@ def configure_mappings(db: SQLAlchemy):
         # Phase D / FU-186 — admin-set URL the Product Search nav opens.
         # Empty string ⇒ unset; see entity comment.
         Column("product_search_url", String(500), nullable=False, server_default=""),
-        # FU-227 follow-up — AU vs US per-unit display convention. Compute
+        # AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
         Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
-        # FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
+        # install-wide currency + display
         # locale for money rendering. Read via /api/health so every client
         # session pulls the same values; the client formatter is a thin
         # wrapper around Intl.NumberFormat(locale, {style:'currency', currency}).
         # Household-scoped by design (see entity comment).
         Column("currency", String(3), nullable=False, server_default="AUD"),
         Column("locale", String(35), nullable=False, server_default="en-AU"),
-        # FU-342 — backup library: retention cap + storage path.
+        # backup library: retention cap + storage path.
         # Retention 5 (not 10) is disk-conscious for Pi self-hosts.
         # Empty storage_path ⇒ resolved to `$DORA_DATA_DIR/backups/`
         # at runtime by the config helper — see backup_library.py.
         Column("backup_retention_count", Integer, nullable=False, server_default="5"),
         Column("backup_storage_path", String(1024), nullable=False, server_default=""),
-        # FU-345 — install-wide image compression knobs. Client-side
+        # install-wide image compression knobs. Client-side
         # `processImageFile` reads these on load and applies them at
         # upload time to every image surface.
         Column("image_quality", Integer, nullable=False, server_default="85"),
@@ -135,7 +135,7 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
-        # FU-333 Buckets B + C — operational config promoted from `DORA_*`
+        # operational config promoted from `DORA_*`
         # env vars. `resolved_operational_config()` is now a straight
         # AppSetting projection (env fallbacks dropped 2026-07-06 —
         # pre-release, no operators to preserve). Bucket C secrets
@@ -175,7 +175,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("price_now", Float),
         Column("price_was", Float),
         Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), nullable=False),
-        # C-10.2 — provenance string. Nullable: historic points minted by
+        # provenance string. Nullable: historic points minted by
         # the pre-C-10 `create_product` path predate this column.
         Column("source", String(64), nullable=True),
     )
@@ -188,7 +188,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("is_active", Boolean, nullable=False),
         Column("is_available", Boolean, nullable=False),
         Column("store_id", UUIDType, ForeignKey("Store.id", ondelete="RESTRICT"), nullable=False),
-        # FU-189 carve-out: `merchant_stockcode` retained verbatim — it's the
+        # `merchant_stockcode` retained verbatim — it's the
         # producer's SKU code on the offer, not a reference to the renamed
         # entity. The runbook explicitly excludes it from the rename.
         Column("merchant_stockcode", String(255), nullable=True),
@@ -246,12 +246,12 @@ def configure_mappings(db: SQLAlchemy):
         # excludes items where snoozed_until > now. Indexed to keep the
         # filter cheap on big pantries.
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
-        # FU-189 — usual store hint. SET NULL on store delete so the item
+        # usual store hint. SET NULL on store delete so the item
         # survives the store going away (R-005 referential safety).
         Column("usual_store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
     )
 
-    # FU-056 — hybrid `Barcode` table: real EANs can attach to a Product
+    # hybrid `Barcode` table: real EANs can attach to a Product
     # (1:1, the catalogue case) AND/OR a StockItem (m:n, the
     # lightweight-install + direct-registration case). At least one of the
     # two FKs must be set; both being set is fine and useful (the same
@@ -309,13 +309,13 @@ def configure_mappings(db: SQLAlchemy):
         # NULL = no custom name; the API serves a date-derived display_name
         # (UX-v2 — custom name is clearable, lists self-label from dates).
         Column("name", String(255), nullable=True),
-        # P6-01 lifecycle status (draft/shopping/done) — replaces the old
+        # replaces the old
         # is_archived / is_in_progress flag pair. "Primary" is inferred from
         # DRAFT-count at read time (Chunk 2), not stored.
         Column("status", String(16), nullable=False, server_default="draft"),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("completed_at", DateTime(timezone=True), nullable=True),
-        # P6-01 Chunk 7. Optional shop day the user is planning this list
+        # Optional shop day the user is planning this list
         # for. Nullable because most lists don't have one — null reads as
         # "no shop day set", not "today".
         Column("planned_shop_date", Date, nullable=True),
@@ -325,7 +325,7 @@ def configure_mappings(db: SQLAlchemy):
         "ShoppingListLine", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("shopping_list_id", UUIDType, ForeignKey("ShoppingList.id", ondelete="CASCADE"), nullable=False),
-        # C-7 Chunk 3 — a line is anchored by `stock_item_id` OR
+        # a line is anchored by `stock_item_id` OR
         # `product_id` (or both, when a product is nested under a
         # stock item). Both columns are nullable individually; a
         # CHECK enforces that at least one is set.
@@ -343,7 +343,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("added_at", DateTime(timezone=True), nullable=True),
         Column("picked_offer_price", Float, nullable=True),
         Column("list_price_at_pick", Float, nullable=True),
-        # P2-02 purchase memory — what the shopper actually paid / where
+        # what the shopper actually paid / where
         # they bought it. NULL when the user didn't override the planned
         # offer; reports & the assistant fall back to picked_offer_price.
         Column("actual_unit_price", Float, nullable=True),
@@ -352,19 +352,19 @@ def configure_mappings(db: SQLAlchemy):
             ForeignKey("Store.id", ondelete="SET NULL"),
             nullable=True,
         ),
-        # FU-215 — optional PreferredBuy hint. Plain UUID, NO ForeignKey:
-        # adding an FK to ShoppingListLine in SQLite batch mode is the exact
-        # FU-178 breakage; SQLite doesn't enforce FKs anyway, and a dangling
+        # optional PreferredBuy hint. Plain UUID, NO ForeignKey:
+        # adding an FK to ShoppingListLine in SQLite batch mode breaks the
+        # migration path; SQLite doesn't enforce FKs anyway, and a dangling
         # id after a PreferredBuy delete is tolerated (the SPA shows no hint).
         Column("preferred_buy_id", UUIDType, nullable=True),
-        # FU-448 — trim-to-budget optimiser. True when the line was set
+        # trim-to-budget optimiser. True when the line was set
         # aside by the "Trim to fit" pass (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
         # `deferred_reason` freezes the chip vocab (brief §5) at trim time.
         Column("deferred_by_budget", Boolean, nullable=False, server_default=false()),
         Column("deferred_reason", String(64), nullable=True),
     )
 
-    # FU-334 — receipt-photo record-keeping. One row per attached photo on a
+    # receipt-photo record-keeping. One row per attached photo on a
     # shopping list (status='shopping' or 'done'). Image blob is the same
     # `data:image/...;base64,...` UTF-8 bytes shape as Recipe.image /
     # RecipeStepImage (so processImageFile → server → bytes endpoint stays
@@ -400,7 +400,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
     )
 
-    # FU-056 — the m:n relation is asymmetric: many Products can satisfy
+    # the m:n relation is asymmetric: many Products can satisfy
     # one StockItem (e.g. Coles + Pauls + Vitasoy all linked to "Milk"),
     # but a Product satisfies exactly one StockItem (a specific SKU has a
     # specific pantry purpose). `UNIQUE(product_id)` enforces the second
@@ -422,11 +422,11 @@ def configure_mappings(db: SQLAlchemy):
         "StockItemSubstitute", metadata,
         Column("stock_item_a_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
         Column("stock_item_b_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
-        # FU-034 — free-text hint ("don't use in baking", "1:1 in soups", …).
+        # free-text hint ("don't use in baking", "1:1 in soups", …).
         # Bounded to 255 chars at the API layer; column stays untyped-length
         # because the original migration set it that way.
         Column("notes", String, nullable=True),
-        # FU-034 — optional structured ratio, all-or-none (DB CHECK + API
+        # optional structured ratio, all-or-none (DB CHECK + API
         # validation). Stored in the canonical A→B direction; readers (e.g.
         # get_stock_item_detail) invert when displaying from B's side.
         Column("ratio_quantity_in", Float, nullable=True),
@@ -453,7 +453,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("changed_at", DateTime(timezone=True), nullable=False),
     )
 
-    # FU-211 — free-text "what I actually buy" reminders on a stock item
+    # free-text "what I actually buy" reminders on a stock item
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Owned child rows; CASCADE when the
     # stock item is deleted. FU-225 dropped the `position` column — manual
     # reorder retired; SPA sorts alphabetically client-side.
@@ -465,7 +465,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # FU-227 chunk 2 — reshaped from FU-213. Folded `{total_price, total_measure,
+    # reshaped from FU-213. Folded `{total_price, total_measure,
     # unit}` (A1); nullable `store_id` (A2 — "Last seen at Coles"); nullable
     # `shopping_list_line_id` provenance FK (A4 revised — replaces the old
     # `source` enum). Partial UNIQUE on the FK lives in the Alembic migration
@@ -490,7 +490,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("pack_count", Integer, nullable=True),
     )
 
-    # P2-04 — user's negative decisions on Dora suggestions. One row per
+    # user's negative decisions on Dora suggestions. One row per
     # (kind, dedup_key) the user has dismissed or snoozed. The generator
     # filters proposed suggestions against this table on every call.
     dora_suggestion_suppression_table = Table(
@@ -503,7 +503,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # C-9.1 — per-user interaction state for derived alerts (read / snooze /
+    # per-user interaction state for derived alerts (read / snooze /
     # dismiss). One row per (user_id, alert_key); absence = untouched. The
     # alerts themselves are never stored — only the user's decisions.
     alert_interaction_table = Table(
@@ -515,13 +515,13 @@ def configure_mappings(db: SQLAlchemy):
         Column("read_at", DateTime(timezone=True), nullable=True),
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
         Column("dismissed_at", DateTime(timezone=True), nullable=True),
-        # C-9.7 — email-digest delivery dedup (PROPOSAL_ALERTS §4.2).
+        # email-digest delivery dedup (PROPOSAL_ALERTS §4.2).
         Column("last_emailed_at", DateTime(timezone=True), nullable=True),
-        # C-9.8 — web-push delivery dedup; sibling to last_emailed_at.
+        # web-push delivery dedup; sibling to last_emailed_at.
         Column("last_pushed_at", DateTime(timezone=True), nullable=True),
     )
 
-    # C-9.8 — one row per browser+device push registration (PROPOSAL_
+    # one row per browser+device push registration (PROPOSAL_
     # ALERTS §3.5 / §4.4). `endpoint` is unique — the same browser
     # re-subscribing produces the same endpoint, so the API does an
     # upsert keyed on it. Capped string length covers the longest
@@ -538,7 +538,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("last_seen_at", DateTime(timezone=True), nullable=True),
     )
 
-    # C-9.2 — per-user, per-kind alert preference (enable/disable + tier
+    # per-user, per-kind alert preference (enable/disable + tier
     # override). One row per (user_id, kind); absence = default (enabled +
     # the kind's default tier, PROPOSAL_ALERTS §5).
     alert_preference_table = Table(
@@ -577,7 +577,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("occurred_at", DateTime(timezone=True), nullable=False),
     )
 
-    # P6-07 / FU-449 — append-only log of a stock item being drawn DOWN
+    # append-only log of a stock item being drawn DOWN
     # (by cooking, manual level-drop, or waste). The missing depletion leg
     # of the loop: purchases record intake, this records outflow, so
     # run-out prediction + the P8-07 belief blend consumption rhythm with
@@ -596,7 +596,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("occurred_at", DateTime(timezone=True), nullable=False),
     )
 
-    # FU-342 — persisted backup library. One row per generated backup;
+    # persisted backup library. One row per generated backup;
     # `storage_path` points at the file on disk. See entity docstring.
     backup_table = Table(
         "Backup", metadata,
@@ -633,7 +633,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("name", String(255), nullable=False),
     )
 
-    # C-4 Chunk 2 — user-configurable recipe vocabularies (cuisine, category,
+    # user-configurable recipe vocabularies (cuisine, category,
     # dietary tags). Each is a simple {id, name, sequence} lookup edited in
     # settings; recipes link to them by FK (cuisine/category single-select,
     # dietary tags many-to-many).
@@ -659,7 +659,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
     )
 
-    # C-4 Chunk 5 — user-configurable kitchen-tool vocabulary.
+    # user-configurable kitchen-tool vocabulary.
     tool_table = Table(
         "Tool", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -667,7 +667,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
     )
 
-    # C-2.A — household-wide meal-slot vocabulary. Same {id, name, sequence}
+    # household-wide meal-slot vocabulary. Same {id, name, sequence}
     # lookup shape as the recipe vocabs, but NOT an FK target:
     # `MealPlanEntry.slot` / `Recipe.time_of_day` hold the slot name as free
     # text, validated against this table at write-time. Deleting a row leaves
@@ -698,20 +698,20 @@ def configure_mappings(db: SQLAlchemy):
         Column("prep_time_minutes", Integer, nullable=True),
         Column("recipe_collection_id", UUIDType, ForeignKey("RecipeCollection.id", ondelete="SET NULL"), nullable=True),
         Column("servings", Integer, nullable=True),
-        # C-4 Chunk 7 — origin URL for imported recipes.
+        # origin URL for imported recipes.
         Column("source", String(2048), nullable=True),
         Column("time_of_day", String(50), nullable=True),
-        # C-4 Chunk 8 — version sibling grouping (DEC-2). NULL = singleton.
+        # version sibling grouping (DEC-2). NULL = singleton.
         # Indexed because every detail load asks "who else has this id?".
         Column("version_group_id", UUIDType, nullable=True, index=True),
-        # C-4 Chunk 9 — simple nutrition (kcal). NULL when unset.
+        # simple nutrition (kcal). NULL when unset.
         Column("kcal", Integer, nullable=True),
         # PROPOSAL_RECIPE_IMAGE_STEPS — explicit steps payload selector
         # ('structured' | 'freeform' | 'image'). Server-default 'freeform'
         # so new recipes start in the dumbest mode; backfill migration
         # promotes existing recipes with RecipeStep rows to 'structured'.
         Column("steps_mode", String(16), nullable=False, server_default="freeform"),
-        # FU-082 — when the recipe row was added to this household. Powers
+        # when the recipe row was added to this household. Powers
         # the cookbook "Recently added" sort axis (IMPL_PLAN_COOKBOOK
         # Chunk 1's missing fifth axis). The create handlers stamp this at
         # write time; historical rows were backfilled from last_made_on
@@ -719,7 +719,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # C-4 Chunk 2 — recipe → dietary-tag association. The tag vocabulary is
+    # recipe → dietary-tag association. The tag vocabulary is
     # now the `DietaryTag` entity (was an in-code catalogue); this table pins
     # which tag(s) belong to a recipe. No standalone mapping is registered
     # (matching the StockItemProduct/StockItemSubstitute pattern); handlers
@@ -730,7 +730,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("dietary_tag_id", UUIDType, ForeignKey("DietaryTag.id", ondelete="CASCADE"), primary_key=True),
     )
 
-    # C-4 Chunk 5 — recipe → tool association (pure link, no standalone
+    # recipe → tool association (pure link, no standalone
     # mapping; accessed via recipe_tool_access helpers).
     recipe_tool_table = Table(
         "RecipeTool", metadata,
@@ -738,7 +738,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("tool_id", UUIDType, ForeignKey("Tool.id", ondelete="CASCADE"), primary_key=True),
     )
 
-    # C-4 Chunk 10 — named groups within a recipe (DEC-3 option A). Optional;
+    # named groups within a recipe (DEC-3 option A). Optional;
     # ingredients/steps with NULL section_id are the implicit "main" group.
     recipe_section_table = Table(
         "RecipeSection", metadata,
@@ -762,7 +762,7 @@ def configure_mappings(db: SQLAlchemy):
         # raw_text to be set per row.
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="RESTRICT"), nullable=True),
         Column("unit", String(50), nullable=True),
-        # C-4 Chunk 10 — nullable section grouping (ON DELETE SET NULL so
+        # nullable section grouping (ON DELETE SET NULL so
         # removing a section keeps its ingredients, just unsectioned).
         Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
         # Cookbook revision §1.9 — optional ingredients are ignored by the
@@ -779,7 +779,7 @@ def configure_mappings(db: SQLAlchemy):
         ),
     )
 
-    # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`
+    # structured recipe steps. Self-referential `parent_step_id`
     # enables one level of sub-steps (a sub-step's parent must itself be a
     # top-level step; depth>1 is rejected in the access helper). Two link
     # tables: which of the recipe's own ingredients this step uses, and which
@@ -793,7 +793,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
         Column("text", String, nullable=False),
         Column("hint", String, nullable=True),
-        # C-4 Chunk 10 — nullable section grouping. Top-level steps may
+        # nullable section grouping. Top-level steps may
         # belong to a section; sub-steps inherit visually but the FK is
         # stored per-row to keep reads flat.
         Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
@@ -828,10 +828,10 @@ def configure_mappings(db: SQLAlchemy):
     meal_plan_table = Table(
         "MealPlan", metadata,
         Column("id", UUIDType, primary_key=True),
-        # C-2.E — instances are nameless (UI shows "Week starting <date>").
+        # instances are nameless (UI shows "Week starting <date>").
         Column("name", String(255), nullable=True),
         Column("start_date", Date, nullable=False),
-        # C-2.F / C-2.G — provenance only (plain ids, no DB FK; see entity).
+        # provenance only (plain ids, no DB FK; see entity).
         Column("source_template_id", UUIDType, nullable=True),
         Column("source_template_set_id", UUIDType, nullable=True),
         Column("rotation_index", Integer, nullable=True),
@@ -899,16 +899,16 @@ def configure_mappings(db: SQLAlchemy):
         Column("theme", String(20), nullable=False, server_default="system"),
         Column("font_family", String(20), nullable=False, server_default="default"),
         Column("font_size", String(2), nullable=False, server_default="md"),
-        # FU-174 — wall-clock event; the `timezone=True` flag was missing
+        # wall-clock event; the `timezone=True` flag was missing
         # so DoraJSONProvider had to retag naive reads as UTC. Now declared
         # consistently with every other wall-clock column (R-021).
         Column("onboarding_completed_at", DateTime(timezone=True), nullable=True),
         Column("email_verified", Boolean, nullable=False, server_default=false()),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),
-        # P2-05 — grocery budget. NULL amount = feature off.
+        # grocery budget. NULL amount = feature off.
         Column("budget_amount", Float, nullable=True),
         Column("budget_period", String(16), nullable=False, server_default="weekly"),
-        # P2-13 — voice opt-ins. Off by default; SPA seeds the in-page
+        # voice opt-ins. Off by default; SPA seeds the in-page
         # toggles from these and the user can override per session.
         Column("voice_input_enabled", Boolean, nullable=False, server_default=false()),
         Column("voice_output_enabled", Boolean, nullable=False, server_default=false()),
@@ -923,15 +923,15 @@ def configure_mappings(db: SQLAlchemy):
         # posture. Default False ("fresh"); when True, the planner reveals
         # the cook-pool affordances + shortfall warning + "to cook by" line.
         Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
-        # FU-316 — per-user "always ask which draft list on quick-add" flag.
+        # per-user "always ask which draft list on quick-add" flag.
         # Default False; when True the SPA skips the remembered pick so the
         # picker fires every time (see useStockItemActions.addToList).
         Column("always_ask_which_shopping_list", Boolean, nullable=False, server_default=false()),
-        # FU-181 loose-end 2 — target meal count for the sequential builder.
+        # target meal count for the sequential builder.
         # NULL = not set → SPA falls back to `BUILDER_TARGET_MEALS` (7).
         # Bounds enforced at the update-me boundary (1–21).
         Column("meals_per_week", Integer, nullable=True),
-        # P8-07 — Zero-Input Pantry opt-out. Default True (inference is the
+        # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
@@ -942,7 +942,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("show_stock_images", Boolean, nullable=False, server_default=true()),
         # Onboarding C-5.4 — household cooking headcount (NULL = not set).
         Column("household_headcount", Integer, nullable=True),
-        # C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
+        # alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
         # Off by default; cadence values 'off' | 'daily' | 'weekly'; day is
         # the weekly send day Mon=0…Sun=6 (ignored on the daily cadence).
         Column("alerts_email_enabled", Boolean, nullable=False, server_default=false()),
@@ -955,7 +955,7 @@ def configure_mappings(db: SQLAlchemy):
         # Postgres/SQLite portability (R-005/006). Not deferred — it's tiny and
         # read on the /me path; never selected on user-list rows in practice.
         Column("dashboard_layout", Text, nullable=True),
-        # FU-153 §7.1 / §7.4 — per-user assistant config. `llm_provider`
+        # per-user assistant config. `llm_provider`
         # is a closed-set sentinel ('ollama' | 'openai' | 'anthropic' |
         # 'gemini') validated at update_me. API key blob is Fernet
         # ciphertext (see infrastructure/llm/key_encryption.py); deferred
@@ -968,7 +968,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("llm_api_key_encrypted", LargeBinary, nullable=True),
     )
 
-    # C-10.1 — admin-minted bearer credential for `POST /api/ingest`. The
+    # admin-minted bearer credential for `POST /api/ingest`. The
     # raw key is only shown once at creation; rest holds the SHA-256 hash
     # (mirrors AuthToken). Counters + last_used feed the API access page's
     # observability (C-10.3). `trust` is captured per PROPOSAL_INGESTION_API
@@ -988,7 +988,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("failed_count", Integer, nullable=False, server_default="0"),
     )
 
-    # C-10.2 — consumed `Idempotency-Key`s from `POST /api/ingest`
+    # consumed `Idempotency-Key`s from `POST /api/ingest`
     # batches. Re-sending the same key under the same source is a no-op
     # (PROPOSAL_INGESTION_API §2.3). TTL via `expires_at` lets the table
     # stay bounded.
@@ -1001,7 +1001,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # C-10.2 / FU-190 — external store name → Dora Store mapping
+    # external store name → Dora Store mapping
     # per IngestionSource. Quarantined when `store_id` is NULL; the
     # admin maps or rejects on the API access page.
     ingestion_store_mapping_table = Table(
@@ -1035,7 +1035,7 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(Store, store_table, properties={
         "_id_col": store_table.c.id,
         "id": store_table.c.id,
-        # FU-189 — defer the logo blob so list endpoints don't drag bytes
+        # defer the logo blob so list endpoints don't drag bytes
         # per row just to render the Stores grid. The dedicated
         # `/stores/<id>/image` route triggers the load on attribute access;
         # `has_image: bool` on StoreDto is hydrated from a separate
@@ -1074,7 +1074,7 @@ def configure_mappings(db: SQLAlchemy):
         # `has_image`. The `/users/<id>/image` route loads it on access;
         # list `has_image` is hydrated via a separate IS-NOT-NULL select.
         "image": deferred(user_table.c.image),
-        # FU-153 — defer the api-key ciphertext too; only the assistant
+        # defer the api-key ciphertext too; only the assistant
         # request path needs the bytes. The /me DTO surfaces a derived
         # `has_llm_api_key: bool` instead.
         "llm_api_key_encrypted": deferred(user_table.c.llm_api_key_encrypted),
@@ -1096,7 +1096,7 @@ def configure_mappings(db: SQLAlchemy):
         "_id_col": product_table.c.id,
         "_store_id": product_table.c.store_id,
         "id": product_table.c.id,
-        # FU-014 — defer the image blob so list endpoints (get_products,
+        # defer the image blob so list endpoints (get_products,
         # best-deals) never pull megabytes per row. The dedicated
         # `/products/<id>/image` route triggers the load on attribute
         # access; `has_image` on ProductDto is derived from a separate
@@ -1113,10 +1113,10 @@ def configure_mappings(db: SQLAlchemy):
         "_stock_level_id": stock_item_table.c.stock_level_id,
         "_stock_location_id": stock_item_table.c.stock_location_id,
         "id": stock_item_table.c.id,
-        # FU-189 — usual_store_id is a real domain attribute on the entity,
+        # usual_store_id is a real domain attribute on the entity,
         # mapped publicly so it round-trips through generic CRUD.
         "usual_store_id": stock_item_table.c.usual_store_id,
-        # C-1 Chunk 6 / FU-033 — defer the image blob so the list endpoint
+        # defer the image blob so the list endpoint
         # never pulls megabytes per row just to set `has_image`. The
         # dedicated `/stock-items/<id>/image` route triggers the load on
         # attribute access; `has_image` is hydrated via a separate SELECT
@@ -1239,7 +1239,7 @@ def configure_mappings(db: SQLAlchemy):
         "_recipe_id": recipe_ingredient_table.c.recipe_id,
         "_stock_item_id": recipe_ingredient_table.c.stock_item_id,
         "id": recipe_ingredient_table.c.id,
-        # C-4 Chunk 10 — section_id is a real domain attribute (nullable),
+        # section_id is a real domain attribute (nullable),
         # mapped publicly so it round-trips through `from_entity`.
         "section_id": recipe_ingredient_table.c.section_id,
         # Cookbook revision §1.9 — optional flag.
@@ -1247,7 +1247,7 @@ def configure_mappings(db: SQLAlchemy):
         "stock_item": relationship(StockItem, lazy="noload"),
     })
 
-    # C-4 Chunk 10 — recipe sections (named groups). No relationship from
+    # recipe sections (named groups). No relationship from
     # Recipe; sections are loaded directly by the access helper (matches
     # the RecipeStep pattern).
     _mapper_registry.map_imperatively(RecipeSection, recipe_section_table, properties={
@@ -1270,7 +1270,7 @@ def configure_mappings(db: SQLAlchemy):
         "image": deferred(recipe_step_image_table.c.image),
     })
 
-    # C-4 Chunk 6 — structured step rows. Ingredient + tool links are not
+    # structured step rows. Ingredient + tool links are not
     # mapped as SQLAlchemy relationships; the access helper queries the link
     # tables directly when hydrating the DTO (matches the dietary-tag/tool
     # pattern). All entity fields are publicly mapped (recipe_id/
@@ -1283,7 +1283,7 @@ def configure_mappings(db: SQLAlchemy):
         "sequence": recipe_step_table.c.sequence,
         "text": recipe_step_table.c.text,
         "hint": recipe_step_table.c.hint,
-        # C-4 Chunk 10 — nullable section grouping for top-level steps.
+        # nullable section grouping for top-level steps.
         "section_id": recipe_step_table.c.section_id,
     })
 
@@ -1434,7 +1434,7 @@ def configure_mappings(db: SQLAlchemy):
         ),
     })
 
-    # FU-334 — receipt attachments. Bytes deferred so list/detail JSON never
+    # receipt attachments. Bytes deferred so list/detail JSON never
     # drags blob payloads; the dedicated
     # `/shopping-lists/<id>/attachments/<attachment_id>` route triggers the
     # load on attribute access.

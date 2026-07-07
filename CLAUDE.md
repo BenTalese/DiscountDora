@@ -74,11 +74,14 @@ To keep handoffs clean:
    items live in a separate archive (`DORA_FOLLOWUPS_RESOLVED.md`) — only
    consult that if you need history on a specific FU id.
 6. **Do NOT pre-scan `DORA_VERIFY.md`** at session start. It is the user's
-   personal browser-verify checklist — they walk it on their own time. Only
-   read it if (a) the user explicitly references a verify item, or (b) the
-   current task touches the same surface and you want to fold a new verify
-   step into an existing section. Never list verify items as "open work" in
-   your start-of-session summary; that's not the file's purpose.
+   personal **QA pile** — a catch-all checklist for every kind of manual
+   verification he wants to walk on his own time (browser observations, but
+   also boot-time log checks, operator sanity checks, container-runtime
+   spot-checks, anything that needs eyes-on-the-running-thing to confirm).
+   Only read it if (a) the user explicitly references a verify item, or (b)
+   the current task touches the same surface and you want to fold a new
+   verify step into an existing section. Never list verify items as "open
+   work" in your start-of-session summary; that's not the file's purpose.
 
 ## On ending a work unit — ALWAYS
 
@@ -96,17 +99,20 @@ workstream stands (e.g. a pure doc tidy), no refresh is needed.
 **Also update the follow-ups ledger** with anything the current job spun off.
 **There are two separate ledgers — pick the right one for each item:**
 
-- **`DORA_VERIFY.md`** — the **browser-verify checklist**. If your only
-  outstanding work on something is "look at it in the running app and confirm
-  it behaves" (no design call, no further code), it goes here. Append a tight
-  checklist under the relevant surface heading (Cookbook / Cook mode /
-  Meal plans / Shopping lists / Stock / Dashboard / Alerts / Settings /
-  Onboarding / Build / Cross-cutting). One verb-first checkbox per check;
-  end the heading with `— origin FU-NNN` (or omit if not spun from an FU).
-  Prefix the heading with `⚠️` only if the verify blocks other work.
-  **Do not open a new FU-NNN for pure browser-verify** — those clutter the
-  followups ledger and the user manages this file by deleting items as he
-  walks through them. No archive needed; no two-way links.
+- **`DORA_VERIFY.md`** — the **user's QA pile**. Any check whose outstanding
+  work is "look at the running thing and confirm it behaves" goes here — not
+  just browser observations. Also fair game: boot-time log lines, container
+  startup behaviour, CLI/desktop-app launch smoke checks, migration
+  round-trips inspected by hand, cron/scheduled-task fires, any operator-
+  facing sanity check the user wants eyes on. Append a tight checklist under
+  the relevant surface heading (Cookbook / Cook mode / Meal plans / Shopping
+  lists / Stock / Dashboard / Alerts / Settings / Onboarding / Build /
+  Operator / Cross-cutting — add a heading if none fits). One verb-first
+  checkbox per check; end the heading with `— origin FU-NNN` (or omit if not
+  spun from an FU). Prefix the heading with `⚠️` only if the verify blocks
+  other work. **Do not open a new FU-NNN for a pure verify item** — those
+  clutter the followups ledger and the user manages this file by deleting
+  items as he walks through them. No archive needed; no two-way links.
 - **`DORA_FOLLOWUPS.md`** — everything else: deferred jobs, leftovers, design
   questions, findings, real bugs that need a fix, decisions that need a
   call. `[OPEN]` items only, newest at the top, each with a **recommended
@@ -120,7 +126,10 @@ workstream stands (e.g. a pure doc tidy), no refresh is needed.
 
 **Picking the right ledger — quick rule:**
 - "Verify the friendly error toast renders with a ref-id suffix." →
-  **DORA_VERIFY** (pure browser observation).
+  **DORA_VERIFY** (browser observation).
+- "Boot the app with `DORA_ENV=production` and confirm the stderr banner
+  fires." → **DORA_VERIFY** (operator smoke check — same shape, just not a
+  browser).
 - "Friendly error rollout missed the inline-product Axis-B picker." →
   **DORA_FOLLOWUPS** (real bug, needs a fix).
 - "Reported defect that didn't reproduce in static read; confirm in

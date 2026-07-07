@@ -34,7 +34,7 @@ def test__health__products_flag_reflects_data_presence(api):
 
 
 def test__app_settings__no_longer_carries_products_enabled(api):
-    # FU-209 dropped the flag: GET must not expose it, and PATCHing it is
+    # GET must not expose it, and PATCHing it is
     # rejected by the request model (extra="forbid").
     assert "products_enabled" not in requests.get(APP_SETTINGS).json()
     rejected = requests.patch(APP_SETTINGS, json={"products_enabled": True})

@@ -1,5 +1,5 @@
 <template>
-    <!-- P6-01 Chunk 5 — landing for /shopping-lists. The detail page is
+    <!-- landing for /shopping-lists. The detail page is
          the canonical surface (with a list-selector in its header);
          when this route is reached with one or more lists, the
          **`beforeEnter` route guard in routes.ts** redirects to the

@@ -102,7 +102,7 @@
                 <BaseButton variant="icon" :icon="ICONS.more_vert">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 220px">
-                            <!-- C-4 Chunk 8 — copies the recipe into a sibling version
+                            <!-- copies the recipe into a sibling version
                                  (same `version_group_id`) and routes into it. -->
                             <q-item
                                 clickable
@@ -130,7 +130,7 @@
             <div class="row q-col-gutter-lg">
                 <!-- â”€â”€ Main editor column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
                 <div class="col-12 col-md-8">
-                    <!-- C-4 Chunk 5 — recipe image (FU-039). -->
+                    <!-- recipe image (FU-039). -->
                     <q-card flat bordered class="q-mb-md">
                         <q-card-section>
                             <ImageUploadField
@@ -220,7 +220,7 @@
                                     class="col-6 col-sm-2"
                                     @update:model-value="markDirty"
                                 />
-                                <!-- C-4 Chunk 9 — simple nutrition (kcal).
+                                <!-- simple nutrition (kcal).
                                      Gated on C-cross nutrition opt-in being
                                      in `simple` (or `complex` once that
                                      ships); hidden when `off`. -->
@@ -405,7 +405,7 @@
                                 }"
                                 v-bind="ingredientDnd.bind(ing).rowProps"
                             >
-                                <!-- FU-118 / R-022 — drag handle via
+                                <!-- drag handle via
                                      `useDragDropList`. Only this icon is
                                      draggable; the row body keeps default
                                      cursor so the selects/inputs stay
@@ -526,7 +526,7 @@
                                     />
                                 </q-item-section>
 
-                                <!-- C-4 Chunk 10 — section picker, only when
+                                <!-- section picker, only when
                                      the recipe has named sections. -->
                                 <q-item-section
                                     v-if="form.sections.length > 0"
@@ -564,7 +564,7 @@
 
                                 <q-item-section side top>
                                     <div class="row q-gutter-xs items-center">
-                                        <!-- C-7 Chunk 1 — unified AddToListButton.
+                                        <!-- unified AddToListButton.
                                              State-aware + toggle behaviour;
                                              replaces the row's hand-rolled
                                              "add to primary" path. -->
@@ -691,7 +691,7 @@
                         </q-card-section>
                     </q-card>
 
-                    <!-- C-4 Chunk 9 — freeform Nutrition field deliberately
+                    <!-- freeform Nutrition field deliberately
                          no longer rendered/edited. The simple-mode kcal
                          input lives next to servings/prep/cook above. The
                          freeform column survives in the form/DTO for
@@ -730,7 +730,7 @@
                         </q-tooltip>
                     </q-card>
 
-                    <!-- FU-083 — read-only "last cooked". The cook + log-cook
+                    <!-- read-only "last cooked". The cook + log-cook
                          actions in the top toolbar update this value;
                          displaying it here closes the loop ("when did I make
                          this last?") without needing a separate journal view. -->
@@ -746,7 +746,7 @@
                         </q-card-section>
                     </q-card>
 
-                    <!-- C-4 Chunk 9 / DEC-5 — cost estimate. Server-derived
+                    <!-- cost estimate. Server-derived
                          from linked product offers; rendered only when the
                          C-cross money opt-in is on AND at least one
                          ingredient could be priced. "Estimate" is the loud
@@ -789,7 +789,7 @@
                         </q-card-section>
                     </q-card>
 
-                    <!-- C-4 Chunk 9 — kcal card. Read-only echo of the
+                    <!-- kcal card. Read-only echo of the
                          editor field; renders only when nutrition is in
                          simple/complex mode AND the recipe has a value. -->
                     <q-card
@@ -870,7 +870,7 @@
                         </q-list>
                     </q-card>
 
-                    <!-- C-4 Chunk 8 — Versions card. Only renders when this
+                    <!-- Versions card. Only renders when this
                          recipe has siblings sharing its version_group_id.
                          A lone group-id (singleton that's never been
                          versioned) hides the card. -->
@@ -960,7 +960,7 @@
         </BaseDialog>
 
         <!-- â”€â”€ Import-from-URL dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <!-- FU-102 — shared dialog. The detail surface adds the
+        <!-- shared dialog. The detail surface adds the
              "overwrite" caption sentence via :degraded-hint and handles
              the confirm-then-patch flow on `@imported`. -->
         <RecipeImportDialog
@@ -1117,7 +1117,7 @@
     // C-cross Chunk 5 — recipe-image render gate (covers the saved-
     // preview branch only; pick/clear is always live).
     const { showRecipeImages } = useImagePrefs();
-    // C-4 Chunk 9 — money + nutrition gates for the new estimate/kcal
+    // money + nutrition gates for the new estimate/kcal
     // surfaces. Both render-only; consumers fall back to no-render when
     // either flag is off.
     const { moneyEnabled } = useMoneyEnabled();
@@ -1131,7 +1131,7 @@
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
 
-    // C-2.A — `time_of_day` reads the household meal-slot vocabulary; falls
+    // `time_of_day` reads the household meal-slot vocabulary; falls
     // back to the seed constant only before the store's first load.
     const timeOfDayOptions = computed(() =>
         mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
@@ -1177,7 +1177,7 @@
         prep_time_minutes: number | null;
         recipe_collection_id: string | null;
         servings: number | null;
-        // C-4 Chunk 7 — origin URL.
+        // origin URL.
         source: string | null;
         time_of_day: string | null;
         ingredients: IngredientForm[];
@@ -1186,7 +1186,7 @@
         // null = no change (existing image, shown via the endpoint). A data URL
         // sets a new image; explicit null + imageDirty clears it.
         image: string | null;
-        // C-4 Chunk 6 — structured steps editor state.
+        // structured steps editor state.
         steps: EditableRecipeStep[];
         // Editor mode toggle. PROPOSAL_RECIPE_IMAGE_STEPS extended this to
         // a tri-state — `structured` sends `steps[]`, `freeform` sends an
@@ -1202,10 +1202,10 @@
         // the user reorders / adds / removes, so we only POST step_images
         // when there's been a change.
         step_images: EditableStepImage[];
-        // C-4 Chunk 9 — simple nutrition kcal. Editor input renders only
+        // simple nutrition kcal. Editor input renders only
         // when nutrition is enabled; the form field exists regardless.
         kcal: number | null;
-        // C-4 Chunk 10 — named sections. Empty list = flat recipe.
+        // named sections. Empty list = flat recipe.
         // Hydrated from `recipe.sections`; the existing section_id is
         // reused as client_id so unchanged sections round-trip and
         // ingredient `section_client_id` references stay valid.
@@ -1271,7 +1271,7 @@
             unit: i.unit,
             notes: i.notes,
             client_id: i.recipe_ingredient_id,
-            // C-4 Chunk 10 — re-use the existing section UUID as client_id
+            // re-use the existing section UUID as client_id
             // (see hydrate below) so round-tripping keeps the reference.
             section_client_id: i.section_id,
             // Cookbook revision §1.9 — optional flag round-trip.
@@ -1290,7 +1290,7 @@
             hint: s.hint,
             ingredient_client_ids: [...s.ingredient_ids],
             tool_ids: [...s.tool_ids],
-            // FU-117 — round-trip the section grouping so editing
+            // round-trip the section grouping so editing
             // existing recipes preserves the importer's HowToSection
             // assignments (and any subsequent picks).
             section_client_id: s.section_id,
@@ -1378,7 +1378,7 @@
         return level?.name ?? null;
     }
     function levelColourFor(stockItemId: string): string | null {
-        // FU-050 — sequence-keyed (R-003). The item's own
+        // sequence-keyed (R-003). The item's own
         // `stock_level_sequence` is populated by the server; fall back to a
         // store lookup if absent (older cached items).
         const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
@@ -1513,7 +1513,7 @@
             if (created) {
                 form.ingredients[idx]!.stock_item_id = created.stock_item_id;
                 markDirty();
-                // FU-319 — copy shifted from "Created stock item" (internal
+                // copy shifted from "Created stock item" (internal
                 // jargon) to a user-facing "Added to your pantry" so the user
                 // isn't surprised by a new tracked item on the next Stock
                 // overview visit. The inline-create path persists the item
@@ -1540,7 +1540,7 @@
             quantity: null,
             unit: null,
             notes: null,
-            // C-4 Chunk 6 — every ingredient row needs a stable client_id so
+            // every ingredient row needs a stable client_id so
             // a step can highlight it before the server assigns a real UUID.
             client_id: newClientId(),
             section_client_id: null,
@@ -1550,7 +1550,7 @@
         markDirty();
     }
 
-    // C-4 Chunk 10 — section helpers.
+    // section helpers.
     function addSection() {
         form.sections.push({
             client_id: newClientId(),
@@ -1571,7 +1571,7 @@
                 ing.section_client_id = null;
             }
         }
-        // FU-117 — detach any top-level steps that pointed at it too.
+        // detach any top-level steps that pointed at it too.
         for (const step of form.steps) {
             if (step.section_client_id === removed.client_id) {
                 step.section_client_id = null;
@@ -1729,7 +1729,7 @@
             // L286 — true PATCH semantics: only send scalar fields that
             // actually changed, so re-saving an unchanged name can't trip the
             // name-uniqueness check. Arrays are always sent (replace semantics).
-            // C-4 Chunk 10 — sections always go with the ingredient
+            // sections always go with the ingredient
             // replace so a renamed section keeps its rows. Empty array =
             // clear all sections; rows fall back to the implicit main
             // group via ON DELETE SET NULL on the server.
@@ -1753,7 +1753,7 @@
             if (form.cook_time_minutes !== src.cook_time_minutes) command.cook_time_minutes = toIntOrNull(form.cook_time_minutes);
             if (form.difficulty !== src.difficulty) command.difficulty = form.difficulty;
             if (form.instructions !== src.instructions) command.instructions = form.instructions;
-            // C-4 Chunk 6 — always send `steps` so the server knows whether
+            // always send `steps` so the server knows whether
             // this save replaces the structured set or clears it (freeform
             // mode sends []). Map the editor's EditableStep shape into the
             // wire RecipeStepCommand.
@@ -1771,7 +1771,7 @@
                     hint: s.hint,
                     ingredient_client_ids: [...s.ingredient_client_ids],
                     tool_ids: [...s.tool_ids],
-                    // FU-117 — round-trip the section grouping. Sub-steps
+                    // round-trip the section grouping. Sub-steps
                     // stay null (the editor doesn't expose a picker on
                     // depth-1 rows); server flattens by parent.
                     section_client_id: s.parent_client_id === null
@@ -1858,7 +1858,7 @@
         if (!isDirty.value && !nameError.value) goToCookMode();
     }
 
-    // C-7 Chunk 1 — `onAddRowToList` retired; the per-row
+    // `onAddRowToList` retired; the per-row
     // AddToListButton owns the click now.
 
     // Add-all-missing → opens the shared per-ingredient picker (Chunk B §1.4)
@@ -1990,7 +1990,7 @@
         form.servings = imported.servings;
         form.prep_time_minutes = imported.prep_time_minutes;
         form.cook_time_minutes = imported.cook_time_minutes;
-        // C-4 Chunk 7 — `source` is its own field now; stop appending
+        // `source` is its own field now; stop appending
         // "Source: <url>" to the instructions blob.
         form.instructions = imported.instructions || null;
         form.source = imported.source_url || null;
@@ -2017,7 +2017,7 @@
         // are hand-entered only. Pre-flip back if the user was just
         // experimenting before kicking off an import.
         form.steps_mode = 'freeform';
-        // C-4 Chunk 6 — adopt parsed structured steps when the source
+        // adopt parsed structured steps when the source
         // shipped HowToStep / HowToSection. Empty list ⇒ source only had a
         // string, freeform mode stays active.
         if (imported.steps && imported.steps.length > 0) {

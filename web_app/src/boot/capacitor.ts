@@ -1,4 +1,4 @@
-// P8-10 — Capacitor boot.
+// Capacitor boot.
 //
 // Runs before the router mounts so `loadBackendBaseUrl()` populates the
 // in-module cache from `@capacitor/preferences` first. Any component that

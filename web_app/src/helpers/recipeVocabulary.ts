@@ -3,7 +3,7 @@
 // constants in `dora_api/domain/entities/recipe.py`
 // (`ALLOWED_DIFFICULTY_VALUES`, `DEFAULT_MEAL_SLOTS`).
 //
-// C-2.A: the meal-slot vocabulary is now the household-wide `MealSlot`
+// the meal-slot vocabulary is now the household-wide `MealSlot`
 // table (mealSlotStore / `/api/meal-slots`). `DEFAULT_MEAL_SLOTS` here is
 // kept only as the seeded default + a pre-first-load fallback for the slot
 // dropdowns — the store is the live source of truth once loaded.

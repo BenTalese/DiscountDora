@@ -54,7 +54,7 @@ export type LevelChange = {
     stock_level_name: string | null;
 };
 
-// C-1b.5 / INV-7 — lifecycle timeline inputs. The History tab merges
+// lifecycle timeline inputs. The History tab merges
 // these with `level_history` (and synthesises Opened/Checked rows from
 // current state) into a single date-sorted q-timeline.
 export type WasteEvent = {
@@ -109,7 +109,7 @@ export type ExpiryEvent = {
     delta_days: number | null;
 };
 
-// FU-211 — free-text "what I actually buy" reminders on a stock item
+// free-text "what I actually buy" reminders on a stock item
 // (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Everyday-user construct, separate from
 // the Product overlay; always present, never gated.
 export type PreferredBuy = {
@@ -117,7 +117,7 @@ export type PreferredBuy = {
     label: string;
 };
 
-// FU-227 chunk 2 — folded shape (A1). Money-gated at the UI. Per-unit cost
+// folded shape (A1). Money-gated at the UI. Per-unit cost
 // derived server-side (R-003) — client never divides total_price by total_measure.
 // `store_name` populated when a store was attached at entry (A2). When the row
 // was harvested from a finished shopping line at /finish (chunk 5),
@@ -139,7 +139,7 @@ export type PriceObservation = {
     pack_count: number | null;
 };
 
-// FU-227 chunk 3 — what the PriceEntry widget seeds itself with on open (F2).
+// what the PriceEntry widget seeds itself with on open (F2).
 // Resolved server-side so the source_label stays consistent. Null when no
 // prior observation exists for the item.
 export type PriceEntryPrefill = {
@@ -152,7 +152,7 @@ export type PriceEntryPrefill = {
     source_label: string;
 };
 
-// FU-227 chunk 4 — server-derived baseline + signal (R-003). The widget
+// server-derived baseline + signal (R-003). The widget
 // reads booleans / numbers and renders; never re-computes. `offers_sidecar`
 // (LC-2) is a separate UI region — never folded into the median or count.
 export type OfferSidecar = {

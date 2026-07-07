@@ -71,7 +71,7 @@ export type UseVoiceInputOptions = {
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const continuous = options.continuous ?? false;
-    // FU-043 Layer B — default the recognition locale from the install-
+    // default the recognition locale from the install-
     // wide locale setting, falling back to the browser's own locale, then
     // to en-AU as the ultimate safety net. Never a hardcoded `en-AU` when
     // the admin has chosen otherwise.

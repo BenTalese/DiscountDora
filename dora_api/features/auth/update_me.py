@@ -35,7 +35,7 @@ class UpdateMeRequest(BaseModel):
 
     # Day of the week (0 = Mon … 6 = Sun) the weekly deals email should be sent.
     send_deals_on_day: int | None = Field(default=None, ge=0, le=6)
-    # FU-197 — `email` is intentionally absent. Email changes only flow
+    # `email` is intentionally absent. Email changes only flow
     # through the verified `POST /auth/me/email` path (password proof +
     # confirmation link + old-address notice). `extra="forbid"` on this
     # model means a stray `{"email": …}` payload now hard-rejects with
@@ -46,7 +46,7 @@ class UpdateMeRequest(BaseModel):
     theme: str | None = None
     font_family: str | None = None
     font_size: str | None = None
-    # P2-05 — grocery budget controls. `budget_amount` is the opt-in:
+    # grocery budget controls. `budget_amount` is the opt-in:
     # sending a positive number turns the feature on, sending
     # `clear_budget_amount: true` turns it off. Period change without
     # an amount change is allowed (lets the user re-pick weekly vs
@@ -54,7 +54,7 @@ class UpdateMeRequest(BaseModel):
     budget_amount: float | None = Field(default=None, ge=0)
     clear_budget_amount: bool = False
     budget_period: str | None = None
-    # P2-13 — voice opt-in toggles. Booleans only (no clear variant);
+    # voice opt-in toggles. Booleans only (no clear variant);
     # the feature is two-state per setting.
     voice_input_enabled: bool | None = None
     voice_output_enabled: bool | None = None
@@ -68,13 +68,13 @@ class UpdateMeRequest(BaseModel):
     # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
     # posture. Boolean only.
     batch_features_enabled: bool | None = None
-    # FU-316 — per-user "always ask which draft list on quick-add" toggle.
+    # per-user "always ask which draft list on quick-add" toggle.
     always_ask_which_shopping_list: bool | None = None
-    # FU-181 loose-end 2 — target meal count for the sequential builder.
+    # target meal count for the sequential builder.
     # Present-in-body sets it (null clears back to the 7 fallback); bounds
     # 1–21 enforced here so the request never persists an out-of-range value.
     meals_per_week: int | None = Field(default=None, ge=1, le=21)
-    # P8-07 — Zero-Input Pantry opt-out (default True on the entity).
+    # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # Validated against NUTRITION_MODE_VALUES at the boundary
@@ -85,7 +85,7 @@ class UpdateMeRequest(BaseModel):
     show_stock_images: bool | None = None
     # Onboarding C-5.4 — household cooking headcount (1–99; null clears it).
     household_headcount: int | None = Field(default=None, ge=1, le=99)
-    # C-9.7 — alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
+    # alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
     # Cadence is a closed-set sentinel validated at this boundary (R-010
     # carve-out, same shape as `nutrition_mode`). Day is Mon=0 … Sun=6
     # and only consulted on the weekly cadence; saved either way so a
@@ -104,7 +104,7 @@ class UpdateMeRequest(BaseModel):
     # the default layout. Opaque to the backend (client view-state); the cap is
     # generous for the small JSON but bounds abuse.
     dashboard_layout: str | None = Field(default=None, max_length=20_000)
-    # FU-153 §7.1 / §7.4 — per-user assistant config. Provider is a
+    # per-user assistant config. Provider is a
     # closed-set sentinel (R-010, validated below against
     # ALLOWED_LLM_PROVIDERS). API key is write-only: clients send the
     # plaintext on `llm_api_key`, the handler encrypts and stores it;
@@ -169,7 +169,7 @@ class UpdateMeHandler:
                 return None, f"Invalid font size '{request.font_size}'."
             _User.font_size = request.font_size
 
-        # P2-05 — budget. `clear_budget_amount` wins over any amount set
+        # budget. `clear_budget_amount` wins over any amount set
         # in the same payload so a clear+set in one request is unambiguous
         # (we treat clear as the user's primary intent).
         if request.clear_budget_amount:
@@ -185,7 +185,7 @@ class UpdateMeHandler:
                 return None, f"Invalid budget period '{request.budget_period}'."
             _User.budget_period = request.budget_period
 
-        # P2-13 — voice prefs. Plain bool fields; null is ignored.
+        # voice prefs. Plain bool fields; null is ignored.
         if "voice_input_enabled" in _SetFields and request.voice_input_enabled is not None:
             _User.voice_input_enabled = request.voice_input_enabled
         if "voice_output_enabled" in _SetFields and request.voice_output_enabled is not None:
@@ -213,12 +213,12 @@ class UpdateMeHandler:
             and request.always_ask_which_shopping_list is not None
         ):
             _User.always_ask_which_shopping_list = request.always_ask_which_shopping_list
-        # FU-181 loose-end 2 — present-in-body sets the target; a null
+        # present-in-body sets the target; a null
         # payload clears back to the SPA's 7 fallback. Range already
         # validated by the request model above.
         if "meals_per_week" in _SetFields:
             _User.meals_per_week = request.meals_per_week
-        # P8-07 — Zero-Input Pantry opt-out.
+        # Zero-Input Pantry opt-out.
         if (
             "inferred_pantry_enabled" in _SetFields
             and request.inferred_pantry_enabled is not None
@@ -258,7 +258,7 @@ class UpdateMeHandler:
         if "household_headcount" in _SetFields:
             _User.household_headcount = request.household_headcount
 
-        # C-9.7 — alerts email digest. Plain bool + closed-set cadence +
+        # alerts email digest. Plain bool + closed-set cadence +
         # 0–6 day. R-014 (shown-disabled when SMTP unset) is enforced on
         # the *frontend* via the `email_smtp_configured` feature flag;
         # the backend accepts the prefs regardless so a self-hosted user
@@ -287,7 +287,7 @@ class UpdateMeHandler:
         if "dashboard_layout" in _SetFields:
             _User.dashboard_layout = request.dashboard_layout
 
-        # FU-153 §7.1 / §7.4 — per-user assistant config. Provider is a
+        # per-user assistant config. Provider is a
         # closed-set sentinel; URL/model/api_key are partial fields the
         # SPA edits in place. The plaintext API key is encrypted on
         # write (Fernet, see infrastructure.llm.key_encryption); the

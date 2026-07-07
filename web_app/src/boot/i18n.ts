@@ -1,4 +1,4 @@
-// FU-043 (PROPOSAL_LOCALE_I18N Layer A / decision §2.3a) — vue-i18n is
+// vue-i18n is
 // **adopt-lite**: kept installed as the natural home for future locale
 // work (number/date/currency wrappers, and eventually string translation
 // if Layer C is greenlit), but the app's money renders route through

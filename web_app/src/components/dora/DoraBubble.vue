@@ -59,7 +59,7 @@
                     NEW
                     <q-tooltip>A newer version of Dashy Dora is available.</q-tooltip>
                 </q-badge>
-                <!-- P2-04 — suggestion count badge. Skipped while the
+                <!-- suggestion count badge. Skipped while the
                      NEW (update) badge is showing so they don't stack. -->
                 <q-badge
                     v-if="!updateBadge && suggestionCount > 0 && !open"
@@ -102,7 +102,7 @@
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const helpApi = new HelpApiService();
-    // P2-04 — suggestion count drives the badge on the launcher and
+    // suggestion count drives the badge on the launcher and
     // gives DoraChat the data when it opens. Refreshed on mount and
     // when the chat closes (cheap; the endpoint is read-only).
     const suggestionStore = useSuggestionStore();

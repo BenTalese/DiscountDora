@@ -23,7 +23,7 @@ class RecipeStep(BaseEntity):
     sequence: int
     text: str
     hint: str | None
-    # C-4 Chunk 10 — nullable section grouping (DEC-3 option A). Top-level
+    # nullable section grouping (DEC-3 option A). Top-level
     # steps may belong to a named section; sub-steps inherit their parent's
     # section visually. Stored on every row to keep the read path flat.
     section_id: UUID | None = None

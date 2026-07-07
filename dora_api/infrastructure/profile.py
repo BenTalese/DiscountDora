@@ -125,3 +125,49 @@ def validate_production_requirements(extra: Sequence[str] = ()) -> None:
     import sys
     print(msg, file=sys.stderr, flush=True)
     sys.exit(1)
+
+
+def warn_if_insecure_cookies_in_production() -> None:
+    """Loud stderr warning (not a hard refusal) when `DORA_ENV=production`
+    but `DORA_SECURE_COOKIES` is **unset**. Any HTTPS-fronted install
+    (SaaS or self-host behind Let's Encrypt) should flip the flag on so
+    the session cookie isn't sent over plain HTTP if the SPA ever hits
+    an `http://` URL.
+
+    Only fires when the var is unset entirely — an explicit
+    `DORA_SECURE_COOKIES=false` is treated as an intentional operator
+    choice (internal LAN behind a VPN, home-lab install with no cert)
+    and silenced without complaint.
+
+    Warns rather than boot-blocks so a prod-mode install served over
+    plain HTTP on purpose stays runnable; the operator sees the message
+    once, sets the flag explicitly (either way), and it goes quiet.
+
+    Escape hatch: `DORA_SKIP_PROD_VALIDATION=true` silences the warning
+    regardless — same override as `validate_production_requirements`.
+    """
+    if not is_production():
+        return
+    if (os.environ.get("DORA_SKIP_PROD_VALIDATION") or "").lower() in {"1", "true", "yes", "on"}:
+        return
+    if (os.environ.get("DORA_SECURE_COOKIES") or "").strip():
+        return
+
+    lines = [
+        "",
+        "═══════════════════════════════════════════════════════════════",
+        " WARNING: DORA_ENV=production but DORA_SECURE_COOKIES is unset.",
+        " The session cookie will NOT carry the `Secure` attribute, so",
+        " a browser will send it over plain HTTP too. If this install",
+        " is fronted by HTTPS (Let's Encrypt, Cloudflare, load-balancer",
+        " TLS termination, etc.) set DORA_SECURE_COOKIES=true in your",
+        " env and restart.",
+        "",
+        " If you deliberately serve the app over plain HTTP (internal",
+        " LAN behind a VPN, home-lab install with no cert) set",
+        " DORA_SECURE_COOKIES=false explicitly to silence this warning.",
+        "═══════════════════════════════════════════════════════════════",
+        "",
+    ]
+    import sys
+    print("\n".join(lines), file=sys.stderr, flush=True)

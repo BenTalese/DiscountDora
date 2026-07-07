@@ -64,7 +64,7 @@ def test__summaries__expose_status_not_legacy_flags(api):
 
 
 def test__unfinish_endpoint_is_removed(api):
-    # FU-163: undo posture retired — /unfinish (Reopen) no longer exists.
+    # undo posture retired — /unfinish (Reopen) no longer exists.
     list_id = _create_list(f"Lifecycle no-reopen {uuid4()}")
     assert requests.post(f"{SHOPPING_LISTS}/{list_id}/start").status_code == 204
     assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200

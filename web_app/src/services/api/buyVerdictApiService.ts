@@ -52,7 +52,7 @@ export interface BuyVerdict {
     reasons: BuyVerdictReason[];
     one_tap_action: BuyVerdictAction;
     data_used: BuyVerdictDataUsed;
-    // P8-06 — populated only on `wait` verdicts when a confident cycle
+    // populated only on `wait` verdicts when a confident cycle
     // is detected; `null` otherwise.
     wait_hint: BuyVerdictWaitHint | null;
 }

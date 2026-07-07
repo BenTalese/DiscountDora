@@ -95,10 +95,9 @@ class AuthenticatedUserDto:
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
     # `complex` (complex requires admin-configured nutrition source).
     nutrition_mode: str
-    # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
-    # Both default True (visual richness on; users opt out).
+    # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
+    # Default True. FU-508 dropped the stock-image companion.
     show_recipe_images: bool
-    show_stock_images: bool
     # Onboarding C-5.4 — household cooking headcount; None = not set.
     household_headcount: int | None
     # alerts email digest channel (PROPOSAL_ALERTS §3.5).
@@ -164,7 +163,6 @@ class AuthenticatedUserDto:
             ),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
-            show_stock_images=bool(user.show_stock_images),
             household_headcount=(
                 int(user.household_headcount)
                 if user.household_headcount is not None else None

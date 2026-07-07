@@ -49,25 +49,6 @@
                 @update:model-value="emit('bulk-toggle', item.stock_item_id)"
             />
 
-            <div
-                v-if="showStockImages"
-                class="stock-row__image"
-                :aria-hidden="true"
-            >
-                <img
-                    v-if="item.has_image && !imgFailed"
-                    :src="stockItemImageUrl(item.stock_item_id, stockItemStore.imageVersionOf(item.stock_item_id))"
-                    :alt="item.name"
-                    @error="imgFailed = true"
-                />
-                <q-icon
-                    v-else
-                    :name="ICONS.image"
-                    size="22px"
-                    class="dora-text-muted"
-                />
-            </div>
-
             <!-- ──────────────────────────────────────────────────────
                  Stock-level button (L70): big, coloured, text-less.
                  Replaces both the chip avatar and the old right-side
@@ -307,10 +288,8 @@
     import { useBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
-    import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import { isLowStockSequence, isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
@@ -320,7 +299,7 @@
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { useLocationStore } from 'src/stores/locationStore';
     import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
-    import { computed, ref, watch } from 'vue';
+    import { computed, ref } from 'vue';
 
     const props = defineProps<{
         item: StockItem;
@@ -372,22 +351,10 @@
         && verdict.value !== null
         && verdict.value.confidence !== 'low',
     );
-    // defensive fallback. If the bytes endpoint
-    // 404s mid-render (race with a delete, transient error), drop the
-    // <img> rather than show a broken icon — placeholder takes over.
-    // reset the latch when the image-version bumps (a new
-    // upload may succeed where the previous attempt failed).
-    const imgFailed = ref(false);
-
     const stockItemStore = useStockItemStore();
-    watch(
-        () => stockItemStore.imageVersionOf(props.item.stock_item_id),
-        () => { imgFailed.value = false; },
-    );
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
     const locationStore = useLocationStore();
-    const { showStockImages } = useImagePrefs();
 
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { stockLocations } = storeToRefs(stockLocationStore);
@@ -617,11 +584,41 @@
     const openBusy = ref(false);
     async function onToggleOpen() {
         const next = !props.item.is_open;
+        // FU-507 — when marking a sealed item as opened, prompt for an
+        // updated effective expiry. Opened milk shortens fast; opened jam
+        // barely moves — a universal rule is wrong per-item, so we ask.
+        // Cancel = open the item but leave expiry alone (the default-
+        // unchanged shape). OK saves both in one PATCH.
+        let expiryPatch: string | null | undefined = undefined;
+        if (next) {
+            const currentExpiry = props.item.expiry_date ?? '';
+            const picked = await new Promise<string | null | undefined>((resolve) => {
+                $q.dialog({
+                    title: `Marking "${props.item.name}" as open`,
+                    message: 'Update its effective expiry? Leave as-is if opening doesn\'t change how fast it goes off.',
+                    prompt: {
+                        model: currentExpiry,
+                        type: 'date',
+                        isValid: (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v),
+                    },
+                    cancel: 'Skip',
+                    ok: 'Update expiry',
+                    persistent: false,
+                })
+                    .onOk((val: string) => resolve(val || null))
+                    .onCancel(() => resolve(undefined))
+                    .onDismiss(() => {});
+            });
+            if (picked !== undefined && picked !== currentExpiry) {
+                expiryPatch = picked;
+            }
+        }
         openBusy.value = true;
         try {
             await stockItemStore.updateStockItemAsync({
                 stock_item_id: props.item.stock_item_id,
                 is_open: next,
+                ...(expiryPatch !== undefined ? { expiry_date: expiryPatch } : {}),
             });
             $q.notify({
                 type: 'positive',
@@ -877,28 +874,4 @@
         color: var(--text-primary);
     }
 
-    /* FU-125 — leading image slot. Fixed-width tile, stretched
-       vertically past the section's q-py-sm padding so it visually
-       fills more of the row height while leaving a small gap to the
-       row's status outline. Pulled partway toward the card's left
-       edge by a small negative margin-left for visual weight. */
-    .stock-row__image {
-        flex: 0 0 48px;
-        width: 48px;
-        height: 48px;
-        margin-left: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--surface-sunken, color-mix(in srgb, var(--text-primary) 6%, transparent));
-        overflow: hidden;
-        border-radius: var(--radius-sm, 4px);
-    }
-    .stock-row__image img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-        transform: scale(1.18);
-    }
 </style>

@@ -459,6 +459,26 @@ export function useMealPlanner() {
                     ? `Added ${result.added_count} ${itemWord} to your list.`
                     : `Shopping list created with ${result.added_count} ${itemWord}.`,
             });
+            // FU-505 — recipe ingredients that aren't linked to any StockItem
+            // can't be turned into shopping-list lines (there's no stock-item
+            // id to anchor the line). Surface them so the user knows what's
+            // still missing rather than silently dropping them.
+            if (result.unlinked_skipped && result.unlinked_skipped.length > 0) {
+                const lines = result.unlinked_skipped
+                    .map((u) => `• ${u.ingredient_name} (${u.recipe_name})`)
+                    .join('\n');
+                $q.dialog({
+                    title: 'Add these manually',
+                    message:
+                        `${result.unlinked_skipped.length} recipe `
+                        + `ingredient${result.unlinked_skipped.length === 1 ? '' : 's'} `
+                        + "aren't linked to your pantry, so we couldn't add "
+                        + `${result.unlinked_skipped.length === 1 ? 'it' : 'them'} to the list. `
+                        + 'Add them by hand or link them from the recipe next time:\n\n'
+                        + lines,
+                    ok: 'Got it',
+                });
+            }
             if (result.shopping_list_id) {
                 void router.push(`/shopping-lists/${result.shopping_list_id}`);
             }

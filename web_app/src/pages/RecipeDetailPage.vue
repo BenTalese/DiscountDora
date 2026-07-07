@@ -427,7 +427,8 @@
                                 <q-item-section style="min-width: 240px">
                                     <!-- Stock-item autocomplete with inline create. The
                                          picker shows existing tracked items, and offers
-                                         "Create '<typed>'" when there's no exact match. -->
+                                         "Create '<typed>'" or "Use as free-text" (FU-506)
+                                         when there's no exact match. -->
                                     <q-select
                                         v-model="ing.stock_item_id"
                                         dense
@@ -439,7 +440,7 @@
                                         option-label="label"
                                         emit-value
                                         map-options
-                                        label="Stock item"
+                                        :label="ing.raw_text && !ing.stock_item_id ? 'Free-text ingredient' : 'Stock item'"
                                         @filter="onIngredientFilter"
                                         @update:model-value="onIngredientChosen($event, idx)"
                                     >
@@ -466,8 +467,33 @@
                                                     Create "{{ ingredientFilter }}"
                                                 </q-item-section>
                                             </q-item>
+                                            <!-- FU-506 — free-text ingredient path.
+                                                 Saves the typed text as raw_text with
+                                                 no linked pantry item. Cookability
+                                                 stays "unknown" while any required
+                                                 ingredient is unlinked; user can link
+                                                 later from the same picker. -->
+                                            <q-item
+                                                clickable
+                                                @click="useAsRawText(idx, ingredientFilter)"
+                                            >
+                                                <q-item-section avatar>
+                                                    <q-icon :name="ICONS.edit" color="secondary" />
+                                                </q-item-section>
+                                                <q-item-section class="dora-text-secondary">
+                                                    Use "{{ ingredientFilter }}" as free text (no pantry link)
+                                                </q-item-section>
+                                            </q-item>
                                         </template>
                                     </q-select>
+                                    <!-- FU-506 — surface the free-text label so an
+                                         unlinked row isn't just a blank picker. -->
+                                    <div
+                                        v-if="ing.raw_text && !ing.stock_item_id"
+                                        class="text-caption dora-text-muted q-mt-xs ellipsis"
+                                    >
+                                        "{{ ing.raw_text }}"
+                                    </div>
                                 </q-item-section>
 
                                 <!-- L292 — one status chip per row. "Missing"
@@ -1537,6 +1563,7 @@
     function addIngredient() {
         form.ingredients.push({
             stock_item_id: '',
+            raw_text: null,
             quantity: null,
             unit: null,
             notes: null,
@@ -1547,6 +1574,21 @@
             // Cookbook revision §1.9 — new rows default to required.
             is_optional: false,
         });
+        markDirty();
+    }
+
+    // FU-506 — save the typed text as an unlinked ingredient. Server
+    // accepts `stock_item_id=null` when `raw_text` is set (the
+    // recipe_ingredient_anchor CHECK constraint). The user can link
+    // it later from the same picker.
+    function useAsRawText(idx: number, rawText: string) {
+        const text = rawText.trim();
+        if (!text) return;
+        const row = form.ingredients[idx];
+        if (!row) return;
+        row.stock_item_id = null;
+        row.raw_text = text;
+        ingredientFilter.value = '';
         markDirty();
     }
 

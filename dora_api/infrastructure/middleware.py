@@ -128,6 +128,57 @@ def attach_csrf_cookie(response):
     return response
 
 
+#  Content-Security-Policy: permissive-but-honest starter policy.
+#
+#  - `default-src 'self'` fences everything to same-origin by default.
+#  - `script-src` needs `'unsafe-inline'` and `'unsafe-eval'` for now: Quasar's
+#    runtime uses eval-style paths and Vue injects small inline scripts on the
+#    HTML shell. Tightening these requires either a nonce-per-response scheme
+#    or a build-time change; either is a bigger job than the header itself.
+#  - `style-src 'unsafe-inline'` covers Vue's scoped-style injection and
+#    Quasar's dynamic theming.
+#  - `img-src` allows `data:` (our base64 image blobs) and `blob:` (fresh
+#    uploads) alongside `https:` for legitimate external product/store images.
+#  - `connect-src` allows `https:` so a self-hosted install can point the
+#    assistant at an external LLM without a header edit.
+#  - `frame-ancestors 'none'` is the CSP-native companion to
+#    `X-Frame-Options: DENY` — modern browsers prefer this one but the legacy
+#    header is still sent for older UA coverage.
+_DEFAULT_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+])
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer-when-downgrade",
+    "Content-Security-Policy": _DEFAULT_CSP,
+}
+
+
+@MIDDLEWARE.after_app_request
+def attach_security_headers(response):
+    """FU-459 — app-wide security headers.
+
+    Runs on every response (API + any static served through Flask) but
+    yields to headers already set upstream: if a reverse proxy owns the
+    CSP, we don't stomp on it. `DORA_DISABLE_SECURITY_HEADERS=1` opts
+    out entirely (escape hatch when a specific proxy/CDN configuration
+    conflicts — not for production use)."""
+    if os.environ.get("DORA_DISABLE_SECURITY_HEADERS", "").lower() in ("1", "true", "yes"):
+        return response
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 @MIDDLEWARE.after_app_request
 def stamp_request_id(response):
     """Echo X-Request-Id on every response so the SPA can correlate its

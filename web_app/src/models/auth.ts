@@ -103,11 +103,10 @@ export type AuthenticatedUser = {
     // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
     // the composable layers this with install `features.nutrition`.
     nutrition_mode: 'off' | 'simple' | 'complex';
-    // C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
-    // Both default true (visual richness on). Use `useImagePrefs()` to
-    // read + write — the composable owns the optimistic-flip + rollback.
+    // C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
+    // Defaults true. Use `useImagePrefs()` to read + write. FU-508
+    // dropped the stock-image companion.
     show_recipe_images: boolean;
-    show_stock_images: boolean;
     // Onboarding C-5.4 — household cooking headcount; null = not set (cook
     // mode falls back to each recipe's own serving size).
     household_headcount: number | null;

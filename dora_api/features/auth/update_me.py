@@ -80,9 +80,9 @@ class UpdateMeRequest(BaseModel):
     # Validated against NUTRITION_MODE_VALUES at the boundary
     # (R-010 carve-out for closed-set sentinels).
     nutrition_mode: str | None = None
-    # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+    # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
+    # FU-508 dropped the stock-image companion.
     show_recipe_images: bool | None = None
-    show_stock_images: bool | None = None
     # Onboarding C-5.4 — household cooking headcount (1–99; null clears it).
     household_headcount: int | None = Field(default=None, ge=1, le=99)
     # alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
@@ -244,13 +244,11 @@ class UpdateMeHandler:
                     )
             _User.nutrition_mode = mode
 
-        # C-cross Chunk 5 — image-display opt-ins. Plain bools; null is
+        # C-cross Chunk 5 — recipe-image opt-in. Plain bool; null is
         # ignored. Saved image bytes survive a toggle (only the render
-        # is suppressed).
+        # is suppressed). FU-508 dropped the stock-image companion.
         if "show_recipe_images" in _SetFields and request.show_recipe_images is not None:
             _User.show_recipe_images = request.show_recipe_images
-        if "show_stock_images" in _SetFields and request.show_stock_images is not None:
-            _User.show_stock_images = request.show_stock_images
 
         # Onboarding C-5.4 — household headcount. Present-in-body sets it (a
         # null clears it back to "use each recipe's servings"); the 1–99

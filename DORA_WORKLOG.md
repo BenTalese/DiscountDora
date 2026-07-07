@@ -9,6 +9,243 @@ next.
 
 ---
 
+## 2026-07-07 — FU-367 closed as superseded; FU-510 opened (late-game library-vs-hand-rolled sweep)
+
+**Why:** User flagged that FU-367 could be resolved now, and asked for a new late-game FU to audit the codebase for hand-rolled implementations that a battle-tested library would do better.
+
+### FU-367 — superseded (bookkeeping catch-up)
+
+Already superseded on 2026-07-06; the ledger just hadn't caught up. `docs/04_proposals/PROPOSAL_HELP_OVERLAY.md` carries a 📦 SUPERSEDED banner and points at `IMPL_PLAN_HELP_CHIPS.md` — the narrower `(?)` help-chip pattern shipped via [[FU-503]] + [[FU-044]] (both resolved 2026-07-06). The full opt-in overlay engine (toolbar `?` toggle + `v-help` directive + coachmark engine + DoraBot fronting) is retired. Moved [[FU-367]] to `DORA_FOLLOWUPS_RESOLVED.md` with the archive banner referenced. Also patched the dangling cross-ref inside FU-361 ("Distinct from [[FU-367]] (Help overlay shell)") to note the shell is retired and content lives on HelpPage / DoraBot.
+
+### FU-510 — new [OPEN] late-game sweep
+
+Two-phase: **Phase 1 assessment-only** → produce `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md` listing each hand-rolled site with a per-site verdict (`keep` / `replace` / `wrap-thin-adapter`), weighed against Charter Anti-creep + supply-chain risk. No code touched in Phase 1. **Phase 2 action** → per-item FUs (or IMPL plans for broad surfaces) sequenced by blast radius, one browser-verify per swap. Seeded focus areas: security-adjacent (CSRF, Fernet, security headers vs Flask-Talisman — [[FU-459]]'s hand-rolled headers explicitly in-scope), HTTP/API surface (pagination + query-string parsing, response envelope), data access (the generic repository + `EntityField` + include chains), domain infra (units + timezone + fuzzy wrappers), frontend (drag-drop, shortcut registry, offline queue, rollback registry), ops (config layering vs pydantic-settings, rate limiting). Scheduled to **late-game / Phase 4 kick-off**, paired with [[FU-412]] / [[FU-409]] / [[FU-424]] hardening cluster.
+
+### Bookkeeping
+
+- [[FU-367]] moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- [[FU-510]] added at top of `DORA_FOLLOWUPS.md`.
+- No code changes; no CHANGELOG entry; no DORA_VERIFY entries.
+- Ledger net: −1 open FU (FU-367) + 1 new open FU (FU-510) = 0 net change. FU-510 is deliberate late-game work, not a fresh open loop from a fixed bug.
+
+### Verification
+
+- N/A. Docs / ledger only.
+
+### Engineering-standards close-gate
+
+- No code touched → no rule interactions. FU-510 itself is the pre-registered "check every hand-rolled site against the standards" audit; that's on the standards doc's ADR log implicitly via R-007 (scope discipline) and the "explain-or-flag" rule for any bespoke wheel.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-459 shipped: app-wide security response headers
+
+**Why:** User asked to do FU-459 next. Hardening / security-review Tier-2 backlog item — add CSP + framing / referrer / sniff headers to every response.
+
+### What shipped
+
+`dora_api/infrastructure/middleware.py`: new `attach_security_headers` `@MIDDLEWARE.after_app_request` hook that stamps four headers on every response.
+
+**Headers:**
+- `X-Content-Type-Options: nosniff` — browser won't second-guess our declared Content-Type.
+- `X-Frame-Options: DENY` — no iframe embedding of any Dora page. PWA doesn't need it.
+- `Referrer-Policy: no-referrer-when-downgrade` — send full referrer to same-scheme peers, downgrade to none when crossing HTTPS→HTTP.
+- `Content-Security-Policy` — permissive-but-honest starter policy (see below).
+
+**CSP starter policy** (`_DEFAULT_CSP` module constant, joined with `; `):
+- `default-src 'self'` — deny-by-default.
+- `script-src 'self' 'unsafe-inline' 'unsafe-eval'` — required for Quasar's runtime (eval-style code paths) and Vue's HTML-shell inline bootstrapping. Tightening off these two needs either a nonce-per-response scheme or a build-time change; either is a larger job than the header itself. Not blocking on that here.
+- `style-src 'self' 'unsafe-inline'` — Vue scoped styles inject inline `<style>` blocks; Quasar's dynamic theming does the same.
+- `img-src 'self' data: blob: https:` — `data:` for base64 image blobs (recipe / user avatar / step images), `blob:` for fresh upload previews, `https:` for external product/store images.
+- `font-src 'self' data:`.
+- `connect-src 'self' https:` — so a self-hosted install can point the assistant at an external LLM without a header edit.
+- `frame-ancestors 'none'` — CSP-native companion to `X-Frame-Options: DENY` (modern browsers prefer this one; the legacy header still lands for older UA coverage).
+- `base-uri 'self'`, `form-action 'self'`.
+
+**Delivery discipline:**
+- `response.headers.setdefault(...)` — a reverse proxy or CDN that already set any of these wins. Doesn't stomp.
+- `DORA_DISABLE_SECURITY_HEADERS=1` env opt-out — escape hatch for when a specific proxy/CDN conflicts. Not for production; deliberate opt-in-to-disable.
+- Runs on every response (API JSON + any static Flask serves). JSON responses see near-noop protection; the HTML shell is where CSP actually earns its keep.
+
+### Bookkeeping
+
+- **[[FU-459]]** moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **CHANGELOG.md** `[Unreleased]` → Added entry documenting the header set + the intentional `'unsafe-inline'/'unsafe-eval'` for Quasar/Vue + the `setdefault` yielding rule + the env opt-out.
+- **DORA_VERIFY.md** → new Cross-cutting section "Security response headers — origin FU-459" with a browser-walk checklist (cold-load, walk every major surface, watch DevTools Console for CSP violations, confirm print/uploads/Piper still work, `curl -I` on the plain-HTTP path).
+
+### Verification (this session)
+
+- `ast.parse` on the edited middleware.py — ok.
+- No new pytest / vue-tsc runs — code-only unit; user runs the app + tests per [[feedback_working_style]].
+- Browser walk is deliberately deferred to DORA_VERIFY (per [[feedback_close_when_only_verify_left]]) — code-complete + green enough to close.
+
+### Engineering-standards close-gate
+
+- **R-005 / R-014-family:** the header set doesn't touch data access or auth — pure response-side hardening.
+- **R-007 (scope discipline):** hand-rolled 4-header hook, ~15 executable lines, no Flask-Talisman dependency. Matches the FU's "hand-rolled is fine" language.
+- **R-029 (respect the off-state):** not applicable — this is unconditionally on unless the operator opts out via env.
+- No new ADR — the hook is small enough not to warrant one; ENGINEERING_STANDARDS's security posture is unchanged.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. Single hardening line item closed.
+
+**Next up:** whatever the user picks. Zero residual work from this unit.
+
+---
+
+## 2026-07-07 — FU-505, FU-506, FU-507, FU-508, FU-509 shipped: five spin-offs resolved same session
+
+**Why:** User pushback on FU proliferation — asked me to solve the five just-created FUs rather than let them accumulate. Batched design calls up front, then executed.
+
+### Design calls (user, one round)
+
+- **FU-505** — warning banner over free-text lines. `ShoppingListLine` has no `raw_text` (line is anchored by `stock_item_id` OR `product_id`); adding a text-only line shape would demand a column + relaxing the CHECK + a new rendering path + how-do-you-snapshot-a-priceless-line. Banner is honest and cheap.
+- **FU-508** — drop entirely. User explicitly asked to remove the whole feature (column + show/hide toggle + everything hanging off it).
+- **FU-509** — document. Split is intentional (OS convention on desktop, tail-friendly on dev); no unify needed.
+- **FU-506 + FU-507** — both implemented.
+
+### FU-509 — logging split documented
+
+Added a `Note on log_dir` block to `configure_logging()` in `dora_api/infrastructure/logging_setup.py` explaining desktop uses `platformdirs.user_log_dir` and dev/web uses `./data/logs/<service>/`. No behaviour change.
+
+### FU-508 — StockItem.image feature dropped
+
+**Migration:** `a4c9e1f2b3d5_20260707_drop_stock_item_image` — drops `StockItem.image` (LargeBinary) and `User.show_stock_images` (Boolean).
+
+**Server:** `StockItem.image` field + `IMAGE` Fields entry gone; `image` deferred mapper removed; `LargeBinary` column dropped from `table_mappings.py`. `has_image` field + entire `_hydrate_has_image` method + call sites gone from `get_stock_items.py`. `has_image`/`has_own_image` gone from `get_stock_item_detail.py` + hydration logic. `image` field + storage line dropped from `create_stock_item.py` and `update_stock_item.py`. `get_stock_item_image.py` route file **deleted**. `show_stock_images` gone from `User` entity, `register_user.AuthenticatedUserDto`, `update_me.py` (DTO + apply block).
+
+**SPA:** `models/auth.ts` and `authApiService.ts` drop `show_stock_images`. `models/stockItem.ts` + `models/stockItemDetail.ts` drop `has_image`/`has_own_image`. `stockItemApiService.ts` drops `stockItemImageUrl` + the `image` fields on Create/Update commands + the now-unused `resolveBaseURL` import. `stockItemStore.ts` drops the `imageVersions` map + `imageVersionOf`/`bumpImageVersion` + the version-bump-on-image-PATCH line. `StockItemRow.vue` drops the leading image tile + `<img>` fallback + `imgFailed` state + related CSS block + `useImagePrefs`/`stockItemImageUrl` imports. `StockItemDetailPage.vue` drops the `ImageUploadField` + preview URL computed + `onPickImage`/`onClearImage` handlers + `has_image` sync in the reactive `si`-mirror. `StockOverview.vue` drops the image-toggle button + `onToggleStockImages` handler + `useImagePrefs` import. `useImagePrefs.ts` slimmed to recipe-only.
+
+**Companion touches:** `recipe_step_image.py` docstring reference to `StockItem.image` cleaned up. `authApiService.userImageUrl` doc comment de-referenced. Test `test_stock_item_router.py` DTO shape trimmed (`has_image` gone from the expected keyset).
+
+**Kept:** `Product.image` (product photos), `Store.image` (store logos), `User.image` (avatars), `Recipe.image` + `RecipeStepImage`, `show_recipe_images` opt-in — all untouched. FU-508 was specifically the stock-item-only surface.
+
+### FU-505 — unlinked-ingredient warning banner
+
+**Server** (`dora_api/features/shopping_lists/auto_generate.py`): added `_UnlinkedSkip(recipe_name, ingredient_name)` dataclass, plumbed a `unlinked_skipped: List[_UnlinkedSkip]` accumulator through `_collect_recipes` and `_collect_meal_plan_week` — every ingredient with `stock_item is None` is captured with `raw_text` as the ingredient name (or "(unnamed ingredient)" fallback). Included in `AutoGenerateResponse` + `_response_payload`.
+
+**SPA** (`useMealPlanner.generateListForWeek`): after the success toast, if `result.unlinked_skipped.length > 0`, pops a `$q.dialog` titled "Add these manually" listing them (`• <ingredient> (<recipe>)`), with an "Add them by hand or link them from the recipe next time" message and a single "Got it" acknowledge. `AutoGenerateResult` and new `AutoGenerateUnlinkedSkip` types added to `shoppingListApiService.ts`.
+
+`NewListDialog.vue` doesn't currently invoke recipe/meal-plan sources; the response shape carries the field regardless, so the banner is ready when it does.
+
+### FU-506 — recipe editor free-text ingredient path
+
+`RecipeDetailPage.vue`: added a second no-match option under `#after-options` in the ingredient picker: **Use "<typed>" as free text (no pantry link)** — clicking calls `useAsRawText(idx, text)` which sets `stock_item_id=null` + `raw_text=text` on the row (server accepts this shape via the `recipe_ingredient_anchor` CHECK). The row surfaces its `raw_text` as an italic dora-text-muted caption below the picker so an unlinked row isn't a blank field, and the picker label flips to "Free-text ingredient" when unlinked. `addIngredient()` defaults `raw_text: null` on new rows. Save path already sent `raw_text` (Chunk 4 shape), no server change.
+
+### FU-507 — expiry-on-open prompt
+
+Both `StockItemRow.vue:onToggleOpen` and `StockItemDetailPage.vue:onToggleOpen`: when the user flips `is_open` true, awaits a Quasar `$q.dialog({ prompt: { model: currentExpiry, type: 'date' } })` titled `Marking "<name>" as open` with message *"Update its effective expiry? Leave as-is if opening doesn't change how fast it goes off."*. Buttons: **Skip** (leaves expiry untouched, sends `is_open: true` only) and **Update expiry** (sends both `is_open: true` and `expiry_date: <picked>` in one PATCH). Going from open → sealed unchanged (no prompt). Server side already accepted `expiry_date` — no endpoint change.
+
+### Bookkeeping
+
+- **[[FU-505]]**, **[[FU-506]]**, **[[FU-507]]**, **[[FU-508]]**, **[[FU-509]]** all moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- No new FUs spun off — this session net −5 open FUs.
+- **CHANGELOG.md** `[Unreleased]` gains Added entries for FU-505/506/507, a Removed entry for FU-508, and no user-visible change for FU-509 (comment-only).
+
+### Verification
+
+- Server-side syntax spot-checked with `ast.parse` on all touched Python files.
+- `grep` sweeps for dangling references (`StockItem.image`, `show_stock_images`, `has_own_image`, `stockItemImageUrl`, `imageVersionOf` on the stock store) all come back clean. Only remaining hits are (a) unrelated features (User avatar `imageVersionOf` in authStore, Product/Store `has_image` in reports), (b) old migrations (deliberate — never edit history), and (c) new comments explicitly citing FU-508.
+- No pytest / vue-tsc runs — code-only unit; user runs the app + tests per [[feedback_working_style]].
+- Two browser-verify checks land in [[DORA_VERIFY.md]] below.
+
+### Engineering-standards close-gate
+
+- **R-005 (portable data access, referential safety):** migration uses `batch_alter_table` so SQLite rebuilds cleanly; `LargeBinary` drop preserves other columns. Postgres-safe.
+- **R-004 (single source of truth):** the doubled image-preference (`show_recipe_images` + `show_stock_images` for two similar surfaces) collapsed to one. The `useImagePrefs` composable now owns just the recipe half; if a photo-heavy surface ever comes back, it'll pick the right side to gate.
+- **R-007 (scope discipline):** FU-508 is explicitly what the user asked for — full removal, not a "hide the button but keep the column" half-measure. Anti-creep call.
+- **R-003 (state ownership):** the "unlinked_skipped" list is derived server-side by the auto-gen collectors — the SPA doesn't recompute which ingredients were unlinked.
+- No violations to explain-in-place or log.
+- **No new ADR** — every change fits existing rules. R-021 (calendar-day dates) is respected by the FU-507 prompt using `expiry_date` (Date) with a `YYYY-MM-DD` validator.
+
+### DORA_VERIFY additions
+
+Added two browser-verify checks under Stock / Cook mode surfaces:
+1. Marking a stock item as opened → expiry dialog appears prefilled with the current expiry; Skip leaves expiry alone, Update expiry saves both fields.
+2. Meal-plan → generate shopping list, with at least one recipe carrying an unlinked ingredient → "Add these manually" dialog fires listing the skipped items.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase board / workstream state moved (FU counts changed but that's below the dashboard threshold).
+
+**Next up:** whatever the user picks. Zero residual work from this unit.
+
+---
+
+## 2026-07-07 — FU-420, FU-417, FU-416, FU-415, FU-414 closed: five audit/decision FUs walked; five bounded spin-offs
+
+**Why:** User asked to resolve the audit + decision cluster (FU-420 unlinked-recipe-ingredient trace, FU-417 magic-behaviour verdicts delta, FU-416 orphaned-fields delta, FU-415 expiry-vs-open decision, FU-414 logging delta). Four parallel Explore agents did the code-side lookups; one user decision resolved FU-415.
+
+### FU-420 — recipe unlinked-ingredient trace
+
+End-to-end trace of `stock_item_id = NULL` recipe ingredients. **Model / cookability / cook-mode:** clean — nullable with `recipe_ingredient_anchor` CHECK constraint (`raw_text` required if unlinked); `recipe_cookability.py:26-94` returns tri-state (`None` when any required ingredient is unlinked); cook-mode finish doesn't deduct per-ingredient stock so unlinked rows are safe. **Two real gaps found:** (1) `auto_generate.py:321,380` silently drops unlinked ingredients from shopping-list generation — spun off as [[FU-505]]; (2) recipe editor has no UI path to create an unlinked ingredient manually (only URL/paste import) — spun off as [[FU-506]].
+
+### FU-417 — magic-behaviour verdicts delta
+
+All 18 verdicts (F1–F18) in `MAGIC_BEHAVIOUR_AUDIT.md` accounted for. 13 keep-silent/already-right confirmed; 3 upgrades shipped (F1→FU-315, F3→FU-316, F9→FU-319 — all resolved); 2 outstanding but already tracked (F5→FU-317 awaiting proposal, F7→FU-318 small + bounded). Zero new FUs needed.
+
+### FU-416 — orphaned fields delta
+
+Every field re-checked against current schema. Wired: `StockItemSubstitute.notes`. Removed: `StockItem.preferred_product_id` (migration `d2a7f4c9e6b1`), `StockItem.barcode` (migration `a3f1c7d2e9b4`, P6-02). Backend-only-by-design: `ShoppingListLine.picked_offer_price` + `list_price_at_pick` (reports/budget/waste only). Still orphaned: **`StockItem.image`** — column exists + `has_image` flag hydrated, but no upload UI, no DTO field, no display chain. Spun off as [[FU-508]] for keep-or-drop.
+
+### FU-415 — expiry ↔ open decision
+
+**User decision: prompt on open.** When `is_open` flips true, the SPA prompts for an updated effective expiry (default: unchanged). Chosen over "independent" (loses real information) and "fixed % shortening" (universal rule is wrong per-item: opened milk vs opened jam). Implementation spun off as [[FU-507]] — small dialog + optional `expires_on` in the same PATCH; no new endpoint.
+
+### FU-414 — logging delta
+
+6 of 7 shipped: time-based rotation (FU-027), `.YYYY-MM-DD` suffix, 14-day backup, stdout retained, `.secret_key` relocated (FU-037), data/cache split preserved. **Outstanding:** desktop (`platformdirs.user_log_dir`) vs dev (`./data/logs/<service>/`) log-location split — spun off as [[FU-509]] for unify-or-document call.
+
+### Bookkeeping
+
+- **[[FU-420]]**, **[[FU-417]]**, **[[FU-416]]**, **[[FU-415]]**, **[[FU-414]]** moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **Five new `[OPEN]` FUs** created: [[FU-505]] shopping-list auto-gen unlinked-drop-off (finding, spec gap), [[FU-506]] recipe editor no-unlinked-affordance (finding, UI gap), [[FU-507]] expiry-on-open prompt (deferred job, implementation), [[FU-508]] `StockItem.image` keep-or-drop (finding, unfinished feature), [[FU-509]] logging desktop-vs-dev location (deferred job, small decision).
+- No code touched this unit — audit + decision + bookkeeping only.
+- No CHANGELOG entry (no product change).
+
+### Verification
+
+- No pytest / vue-tsc / eslint runs — no code changed.
+- R-008 grep → no new hits (nothing added).
+
+### Engineering-standards close-gate
+
+No code changes → no rules touched. FU-415's decision is a Charter product-rubric call (Effortless: match the user's mental model that opening ≠ zero shelf-life change, but *some* items do shorten). No new ADR.
+
+### PROJECT_STATE.md refresh
+
+Deferred — no workstream row shifted state (audit + decisions only, no shipped features). Ledger counts changed (5 closed, 5 opened; net 0 open FUs) but that's below the dashboard's "material state change" bar.
+
+**Next up:** whatever the user picks. All five spin-offs are properly bounded — none demand attention now; each names its own next-touch trigger.
+
+---
+
+## 2026-07-07 — FU-419 closed: recipe healthiness rating dropped
+
+**Why:** User asked to resolve FU-419 (original-spec sweep leftover — 5★ recipe healthiness rating + filter/sort).
+
+**Call:** **Drop.** Anti-creep tiebreak from the Charter. A manual 5★ healthiness field is subjective (no clear input signal — who decides the star count?) and adds a field users must maintain forever. Cookbook already carries tags + favourites for the "I feel like something light" cue. If a nutrition-complex mode is ever built later, it can carry an *objective, derived* health score from real macros — not a manual rating.
+
+**Bookkeeping:**
+- [[FU-419]] moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`, flipped `[OPEN]` → `[RESOLVED]`.
+- No code touched. No CHANGELOG entry (no product change).
+- No new FUs spun off.
+
+**Engineering-standards close-gate:** No code changes → no rules touched. Decision itself is a Charter (product-rubric) call, not an ENGINEERING_STANDARDS one — no new ADR.
+
+**PROJECT_STATE.md refresh:** Not needed — no workstream state shifted; this was one closed line in the followups ledger.
+
+**Next up:** whatever the user picks.
+
+---
+
 ## 2026-07-07 — FU-425 + FU-424 closed: pricing handoff archived; senior-review Tier-2 all routed
 
 **Why:** User asked to close both audit-only FUs. Two parallel Explore agents did the substantive lookups; this session consolidated + moved artifacts + updated ledgers.

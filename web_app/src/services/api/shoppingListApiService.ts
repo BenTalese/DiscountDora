@@ -177,12 +177,24 @@ export type AutoGenerateLine = {
     detail: string | null;
 };
 
+/** FU-505 — a recipe / meal-plan ingredient that couldn't be turned into
+ *  a shopping-list line because it isn't linked to any StockItem. The SPA
+ *  renders these as a "you'll need to add these manually" banner right
+ *  after the auto-generate call resolves. */
+export type AutoGenerateUnlinkedSkip = {
+    recipe_name: string;
+    ingredient_name: string;
+};
+
 export type AutoGenerateResult = {
     shopping_list_id: string | null;
     added_count: number;
     skipped_already_on_list: number;
     nothing_to_add: boolean;
     lines: AutoGenerateLine[];
+    /** FU-505 — recipe ingredients auto-gen couldn't include. Empty when
+     *  every ingredient was either linked or already stocked. */
+    unlinked_skipped: AutoGenerateUnlinkedSkip[];
 };
 
 export type MoveUntickedResult = {

@@ -238,15 +238,14 @@ class User(BaseEntity):
     # the install-wide `nutrition_enabled` AppSetting via
     # `useNutritionMode()` (ADR-005).
     nutrition_mode: str = NUTRITION_MODE_OFF
-    # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+    # C-cross Chunk 5 — per-user image-display opt-in (proposal §2.8).
     # **Default True** — Charter P1 Effortless leans toward visual
-    # richness; users who prefer a text-only UI flip these via inline
-    # buttons on each surface (recipes overview ships its button this
-    # chunk; stock overview ships its button when C-1 row redesign
-    # next runs — FU-106). Image upload/edit/delete keeps working
-    # regardless; only the *render* is suppressed.
+    # richness; users who prefer a text-only UI flip it via the inline
+    # button on the recipes overview. Image upload/edit/delete keeps
+    # working regardless; only the *render* is suppressed. FU-508
+    # dropped the stock-image half of this pair (photos of pantry items
+    # were never meaningfully used; a linked Product carries the visual).
     show_recipe_images: bool = True
-    show_stock_images: bool = True
     # Onboarding C-5.4 — how many people the household usually cooks for.
     # NULL = not set (cook mode falls back to each recipe's own `servings`).
     # Read by RecipeCookMode to seed its per-session serving scaler (L44).
@@ -321,7 +320,6 @@ class User(BaseEntity):
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
-        SHOW_STOCK_IMAGES = "show_stock_images"
         HOUSEHOLD_HEADCOUNT = "household_headcount"
         ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"

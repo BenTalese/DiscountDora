@@ -68,23 +68,6 @@
                 :active-count="filters.activeFilterCount.value"
                 @clear="clearAllFilters"
             />
-            <!-- inline image-toggle. Flips the
-                 per-user `show_stock_images` flag; the row's image
-                 slot collapses out of the layout when off. Sits next
-                 to the search input so it's reachable without
-                 expanding filters. -->
-            <BaseButton
-                variant="icon"
-                :icon="showStockImages ? ICONS.image : ICONS.image_not_supported"
-                :color="showStockImages ? 'primary' : undefined"
-                :aria-label="showStockImages ? 'Hide row images' : 'Show row images'"
-                :loading="imageToggleBusy"
-                @click="onToggleStockImages"
-            >
-                <q-tooltip>
-                    {{ showStockImages ? 'Hide row images (denser rows)' : 'Show row images' }}
-                </q-tooltip>
-            </BaseButton>
             <q-input
                 ref="searchInputRef"
                 v-model="filters.searchText.value"
@@ -535,7 +518,6 @@
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
@@ -624,26 +606,6 @@
     // average — Quasar self-corrects after the first measure.
     const VIRTUAL_SCROLL_THRESHOLD = 50;
     const VIRTUAL_SCROLL_ITEM_SIZE = 72;
-
-    // inline image-toggle. Flips the per-user
-    // `show_stock_images` flag via the C-cross composable.
-    const { showStockImages, setStockImages } = useImagePrefs();
-    const imageToggleBusy = ref(false);
-    async function onToggleStockImages() {
-        imageToggleBusy.value = true;
-        try {
-            await setStockImages(!showStockImages.value);
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not save image preference.',
-            });
-            void err;
-        } finally {
-            imageToggleBusy.value = false;
-        }
-    }
 
     const filters = useStockFilters({
         stockItems: () => stockItems.value,

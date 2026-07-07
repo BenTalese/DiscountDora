@@ -39,12 +39,6 @@ class StockItemDto:
     is_open: bool
     opened_on: date | None
     last_checked_at: datetime | None
-    # whether the row has an image to render. The
-    # bytes themselves never travel in the list/detail JSON (the `image`
-    # column is deferred); the SPA fetches them via
-    # `GET /stock-items/<id>/image`, which itself falls back to a linked
-    # Product's image when the stock item has none. Hydrated below.
-    has_image: bool = False
     # count of linked products. Drives the "2+ products →
     # combined choice modal" decision in `AddToListButton`. 0 = generic
     # stock-item line (no offer); 1 = preselect; 2+ = open QuickAddSheet
@@ -102,10 +96,8 @@ class GetStockItemsHandler:
     def _hydrate_linked_product_count(
         self, dtos: list[StockItemDto]
     ) -> list[StockItemDto]:
-        """C-7 Chunk 2 — bulk-count linked products per stock item. Same
-        cost class as `_hydrate_has_image` (a single GROUP BY against
-        the link table); kept as its own pass so callers can read the
-        intent on the call site.
+        """C-7 Chunk 2 — bulk-count linked products per stock item.
+        A single GROUP BY against the link table.
 
         FU-463 — built with the ORM `select()` (not raw `text()`) so
         SQLAlchemy adapts UUID bindings to whatever the column type uses
@@ -147,76 +139,12 @@ class GetStockItemsHandler:
             for d in dtos
         ]
 
-    def _hydrate_has_image(self, dtos: list[StockItemDto]) -> list[StockItemDto]:
-        """C-1 Chunk 6 / FU-033 — bulk-derive `has_image` from a single SQL
-        pass that never touches the deferred image blob. The flag is true
-        when **either** the stock item carries its own image **or** any
-        linked product carries one (the product-image fallback). Mirrors
-        the get-image route's fallback rule so the SPA's "show thumbnail"
-        decision matches what the bytes endpoint will actually serve.
-
-        Built with the ORM `select()` (not raw `text()`) so SQLAlchemy
-        adapts UUID bindings to whatever the column type uses on each
-        engine — the original raw-SQL version silently never matched on
-        SQLite because the string IDs in the IN clause didn't compare
-        against the UUIDType column (`project_sqlite_uuid_text_binding`
-        memory). Symptom was every row falling back to placeholder
-        regardless of own/product image.
-        """
-        if not dtos:
-            return dtos
-        import dataclasses
-        from sqlalchemy import case, func, literal, select
-        from dora_api.app import db
-
-        stock_item_table = db.metadata.tables["StockItem"]
-        link_table = db.metadata.tables["StockItemProduct"]
-        product_table = db.metadata.tables["Product"]
-
-        ids = [d.stock_item_id for d in dtos]
-        # Own-image OR (linked product with an image). LEFT JOIN keeps
-        # rows that have no link rows at all (own-image only path); the
-        # GROUP BY collapses the multi-product case to one row per item.
-        stmt = (
-            select(
-                stock_item_table.c.id,
-                case(
-                    (stock_item_table.c.image.isnot(None), literal(1)),
-                    else_=func.max(
-                        case((product_table.c.image.isnot(None), literal(1)), else_=literal(0))
-                    ),
-                ).label("has_image"),
-            )
-            .select_from(
-                stock_item_table
-                .outerjoin(link_table, link_table.c.stock_item_id == stock_item_table.c.id)
-                .outerjoin(product_table, product_table.c.id == link_table.c.product_id)
-            )
-            .where(stock_item_table.c.id.in_(ids))
-            .group_by(stock_item_table.c.id, stock_item_table.c.image)
-        )
-        rows = db.session.execute(stmt).all()
-
-        def _key(v) -> str:
-            if isinstance(v, UUID):
-                return str(v)
-            if isinstance(v, bytes):
-                return str(UUID(bytes=v))
-            return str(v)
-        flag_by_id = {_key(row[0]): bool(row[1]) for row in rows}
-        return [
-            dataclasses.replace(d, has_image=flag_by_id.get(str(d.stock_item_id), False))
-            for d in dtos
-        ]
-
     def handle(self, options) -> Page[StockItemDto]:
         import dataclasses
         page = self._base_query().paginate(
             options, StockItemDto.from_entity, field_map=_FIELD_MAP
         )
-        items = self._hydrate_linked_product_count(
-            self._hydrate_has_image(page.items)
-        )
+        items = self._hydrate_linked_product_count(page.items)
         return dataclasses.replace(page, items=items)
 
     def handle_by_id(self, stock_item_id: UUID) -> StockItemDto | None:
@@ -224,9 +152,7 @@ class GetStockItemsHandler:
         if entity is None:
             return None
         dto = StockItemDto.from_entity(entity)
-        return self._hydrate_linked_product_count(
-            self._hydrate_has_image([dto])
-        )[0]
+        return self._hydrate_linked_product_count([dto])[0]
 
 
 @STOCK_ITEM_ROUTER.route("")

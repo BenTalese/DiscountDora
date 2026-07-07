@@ -6,6 +6,46 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Free-text ingredient path in the recipe editor — FU-506 (2026-07-07).**
+  The recipe editor's ingredient picker now offers a second no-match option
+  next to "Create '<typed>'": **Use "<typed>" as free text (no pantry link)**.
+  Picking it saves the row as an unlinked ingredient (server-supported since
+  the paste-import Chunk 4 landed) — the recipe keeps the ingredient name for
+  cook-mode and display, but doesn't demand a pantry entry. Unlinked rows show
+  the raw text as an italic caption under the picker so the row isn't blank,
+  and the picker label flips to "Free-text ingredient". Cookability stays
+  "unknown" while any required ingredient is unlinked, per the existing tri-
+  state rule.
+- **Unlinked-ingredient warning after auto-generating a shopping list from a
+  meal plan — FU-505 (2026-07-07).** Auto-gen only produces stock-item-
+  anchored lines, so recipe / meal-plan ingredients without a linked StockItem
+  used to vanish silently. The auto-generate response now carries an
+  `unlinked_skipped` list (recipe + ingredient name), and the meal-plan
+  generator pops a dismissible **Add these manually** dialog listing them
+  after the success toast. No new line shape — the model kept its stock-item
+  contract; the dialog is the honesty layer.
+- **Expiry prompt when marking a stock item as opened — FU-507 (2026-07-07).**
+  Toggling a stock item to "opened" (row action or detail-page toggle) now
+  opens a small date-prompt dialog prefilled with the current expiry, asking
+  **Update its effective expiry?** — opened milk shortens fast, opened jam
+  barely moves, so no universal rule works. **Skip** leaves the expiry alone
+  (default-unchanged, the previous behaviour). **Update expiry** saves the
+  new date and the open flip in one PATCH. Marking back to sealed is
+  unchanged (no prompt).
+- **App-wide security response headers — FU-459 (2026-07-07).** Every
+  response now carries `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`,
+  and a permissive-but-honest `Content-Security-Policy` (default-src
+  self; script-src self 'unsafe-inline' 'unsafe-eval' — Quasar's runtime
+  needs both; style-src self 'unsafe-inline'; img-src self data: blob:
+  https:; connect-src self https:; frame-ancestors 'none'; base-uri +
+  form-action self). Hand-rolled hook in `middleware.py` — no
+  Flask-Talisman dependency. `response.headers.setdefault()` yields to
+  any header a reverse proxy already set. `DORA_DISABLE_SECURITY_HEADERS=1`
+  opts out (escape hatch when a specific proxy/CDN conflicts — not
+  intended for production use). Tightening `script-src` off
+  'unsafe-inline'/'unsafe-eval' requires a nonce-per-response scheme
+  (bigger job than the header itself, deferred).
 - **Boot-time warning when `DORA_SECURE_COOKIES` is unset in production —
   FU-460 (2026-07-07).** Any install running `DORA_ENV=production`
   without an explicit `DORA_SECURE_COOKIES` value now sees a loud stderr
@@ -58,6 +98,17 @@ semver — major bumps signal schema or breaking-config changes.
   date and the fix session.
 
 ### Removed
+- **Per-stock-item image feature dropped entirely — FU-508 (2026-07-07).**
+  The half-built `StockItem.image` surface (upload column, `has_image` DTO
+  plumbing, `/stock-items/<id>/image` bytes endpoint, thumbnail slot on the
+  stock row, upload field on the detail page, "show row images" toggle in
+  the stock overview, and the `show_stock_images` user preference) is gone.
+  Pantry-item photos never carried much information — linked Products
+  already supply the visual, and the toggle button in the toolbar was
+  clutter. Migration `a4c9e1f2b3d5_20260707_drop_stock_item_image` drops
+  both DB columns (`StockItem.image`, `User.show_stock_images`). Recipe
+  image + user avatar image surfaces are untouched; the recipe-image
+  render toggle (`show_recipe_images`) is untouched.
 - **Assistant tool `seasonal_picks` removed — FU-501 (2026-07-07).** The Dora
   assistant no longer exposes a "what's in season?" tool. It was only ever
   reachable via chat (no page, no dashboard tile, no shopping-list

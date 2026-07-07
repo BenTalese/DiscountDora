@@ -8,7 +8,7 @@ from dora_api.domain.entities.base_entity import BaseEntity
 class RecipeStepImage(BaseEntity):
     """C-4 add-on (image-mode steps) — one ordered photo of a recipe's
     procedural steps. Stored as data-URL bytes mirroring Recipe.image /
-    User.image / StockItem.image: the row holds the encoded `data:image/...;
+    User.image: the row holds the encoded `data:image/...;
     base64,...` UTF-8 bytes and the bytes endpoint at
     `GET /recipes/<recipe_id>/step-images/<image_id>` decodes + serves raw.
 

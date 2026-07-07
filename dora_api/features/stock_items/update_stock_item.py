@@ -54,9 +54,6 @@ class UpdateStockItemRequest(BaseModel):
     # `is_open` flips True, but the spec also wants a manual edit path
     # ("I can edit the date a stock item was opened on…").
     opened_on: date | None = None
-    # data-URL string to set the image, null to
-    # clear, omit to leave untouched. Mirrors the recipe-update contract.
-    image: str | None = Field(default = None, max_length = 6_000_000)
     # usual store hint. Send a UUID to bind, omit to leave alone;
     # send `clear_usual_store=true` to blank an existing value (the same
     # clear-vs-unset pattern as ShoppingListLine fields).
@@ -206,12 +203,6 @@ class UpdateStockItemHandler:
                     delta_days = _Delta,
                     occurred_at = datetime.now(UTC),
                 ))
-
-        # explicit null clears, data-URL string sets.
-        if "image" in _SetFields:
-            _StockItem.image = (
-                request.image.encode("utf-8") if request.image else None
-            )
 
         if "is_flagged" in _SetFields and request.is_flagged is not None:
             _StockItem.is_flagged = request.is_flagged

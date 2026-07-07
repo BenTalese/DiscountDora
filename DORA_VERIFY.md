@@ -79,6 +79,14 @@ top-to-bottom.
 
 ## Cookbook & recipes
 
+### Free-text ingredient path in the recipe editor — origin FU-506
+- [ ] Open any recipe → **Add ingredient** → in the picker, type a name that matches nothing (e.g. "star anise" on a fresh install)
+- [ ] Two options appear under the option list: **Create "star anise"** and **Use "star anise" as free text (no pantry link)** (the second option, secondary-coloured with a pencil icon)
+- [ ] Tap **Use as free text** → row's picker field label flips to **Free-text ingredient**, and the string `"star anise"` appears as a muted italic caption beneath the picker
+- [ ] Save the recipe → refresh → the row still shows as unlinked with the same caption
+- [ ] The recipe's cookability badge is **Unknown** (not "In stock" / "Missing") because a required ingredient is unlinked (tri-state)
+- [ ] Later, on the same row, type in the picker and pick an actual stock item → row flips back to linked; caption disappears
+
 ### RecipeEditDialog stub-creator reshape — origin FU-095
 - [ ] Cookbook → **New Recipe**: the modal now shows exactly four fields — Name, Cuisine, Category, Collection — and nothing else (no ingredients repeater, no image upload, no instructions textarea, no dietary tags / tools multi-selects, no times / servings / difficulty / time-of-day).
 - [ ] Primary button reads **Create & open** (not "Save").
@@ -295,6 +303,14 @@ top-to-bottom.
 ---
 
 ## Meal plans
+
+### Unlinked-ingredient warning after meal-plan → shopping list — origin FU-505
+- [ ] Build a meal plan for the week where at least one planned recipe has an ingredient with **no linked stock item** (either a paste-imported recipe that never got linked, or one you added a "Use as free text" ingredient to per FU-506)
+- [ ] Trigger **Generate shopping list for this week** from the meal-plan surface
+- [ ] Success toast fires normally (added-count line)
+- [ ] **Immediately after**, a dialog titled **Add these manually** appears listing each unlinked ingredient as `• <ingredient> (<recipe>)`, with a single **Got it** button
+- [ ] Tap **Got it** → dialog closes; navigation to the new shopping list still happens
+- [ ] Repeat with a meal plan whose recipes are **all fully linked** → success toast, no dialog
 
 ### Meals-per-week preference — origin FU-181
 - [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`, min 1 / max 21
@@ -522,6 +538,19 @@ top-to-bottom.
 ---
 
 ## Stock
+
+### Expiry-on-open prompt — origin FU-507
+- [ ] On a stock item's row, tap the **open / lock** icon on a currently-sealed item — a dialog appears titled **Marking "&lt;name&gt;" as open** with the current expiry prefilled in a date picker and the message "Update its effective expiry?"
+- [ ] Pick a new date and tap **Update expiry** → row is marked open AND the new expiry saves (row's expiry chip reflects it)
+- [ ] Repeat but tap **Skip** → row is marked open, expiry is unchanged
+- [ ] On the stock-item **Detail page**, flip the **Opened** toggle → same dialog fires, same behaviour
+- [ ] Toggle a currently-open item back to sealed → **no dialog** (the prompt only fires on open, not on close)
+
+### StockItem.image feature dropped — origin FU-508
+- [ ] Stock overview: no image thumbnail column on rows; no "Show row images" / "Hide row images" toggle button in the toolbar next to search
+- [ ] Stock-item detail page: no image upload field on the Overview tab (the fact list starts at Name)
+- [ ] Nothing calls `/api/stock-items/&lt;id&gt;/image` — network tab clean on stock pages
+- [ ] Recipes still render their images; user avatars still render; store logos still render (these are separate features and must be untouched)
 
 ### Stocktake redesign — Chunk 3 Settings + Stock Overview surfacing — origin PROPOSAL_STOCKTAKE_MODE
 *Verifies the Settings block + Overview filter chip + row pulse outline. Chunk 3 lands the surfaces users find the redesign from.*
@@ -1345,6 +1374,17 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Cross-cutting
+
+### Security response headers — origin FU-459 (2026-07-07)
+*Confirms the app-wide CSP + framing / referrer / sniff headers land on every response and don't break any page. Do this walk with DevTools **Console + Network** panels open — a CSP violation logs a red console error naming the blocked directive.*
+- [ ] Any request in DevTools → Network → Headers → **Response Headers** shows `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; …frame-ancestors 'none'; …`
+- [ ] Cold-load the SPA → no CSP violations in Console
+- [ ] Walk Dashboard, Stock overview, Stock item detail, Cookbook overview, Recipe detail (with an image), Cook mode, Meal plans, Shopping list detail, Settings → each page renders normally, no red CSP errors on any surface
+- [ ] Recipe / product / store images render (base64 `data:` blobs + external `https:` sources both work under `img-src`)
+- [ ] Upload a recipe/user image (data-URL / blob path) → preview renders (blob: is allowed)
+- [ ] Print view opens and renders (if any style-src / script-src violation would clobber it, it'd be visible here)
+- [ ] Piper TTS synthesis + assistant chat still work end-to-end (connect-src covers the `/api` calls; anything to an external LLM URL relies on `https:` allowance)
+- [ ] `curl -I` any endpoint → same four headers present on the plain HTTP response
 
 ### Recipe-picker inline-create toast — origin FU-319 (2026-07-06)
 - [ ] Open any recipe in the cookbook, edit ingredients, add a new ingredient row → type a name that doesn't match any existing stock item → tap the "Create '<typed>'" no-option row in the picker → **positive toast reads `Added "<name>" to your pantry.`** (not the old "Created stock item …" copy)

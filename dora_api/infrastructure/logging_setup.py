@@ -55,6 +55,17 @@ def configure_logging(
     """Wire stdout + rotating-file handlers on the root logger with the
     request-context filter. Safe to call more than once.
 
+    Note on `log_dir` — the caller chooses, deliberately per runtime:
+        - dev / hosted web run: `./data/logs/<service>/`, co-located with the
+          data dir so `tail -f data/logs/dapi/dapi.log` just works.
+        - desktop build: `platformdirs.user_log_dir(...)`, the OS-standard
+          per-user log location (survives reinstall, no root needed). On
+          Linux that's `~/.local/state/dashy-dora/logs`, on macOS
+          `~/Library/Logs/dashy-dora`, on Windows `%LOCALAPPDATA%\dashy-dora\logs`.
+        The split is intentional (FU-509): OS convention on packaged
+        distributions, developer convenience on unpackaged runs. Both are
+        correct for their runtime; this function doesn't care which.
+
     Args:
         service_name: Short identifier ("dapi"). Used for the log file name.
         log_dir: Directory the rotating log file goes in. Created if

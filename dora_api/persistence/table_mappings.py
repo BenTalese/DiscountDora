@@ -229,7 +229,6 @@ def configure_mappings(db: SQLAlchemy):
         "StockItem", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("expiry_date", Date, nullable=True),
-        Column("image", LargeBinary, nullable=True),
         Column("is_flagged", Boolean, nullable=False, server_default=false()),
         Column("is_open", Boolean, nullable=False, server_default=false()),
         Column("opened_on", Date, nullable=True),
@@ -936,10 +935,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
         Column("nutrition_mode", String(16), nullable=False, server_default="off"),
-        # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
-        # Default True (visual richness on by default; users opt out).
+        # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
+        # Default True. FU-508 dropped the stock-image companion column.
         Column("show_recipe_images", Boolean, nullable=False, server_default=true()),
-        Column("show_stock_images", Boolean, nullable=False, server_default=true()),
         # Onboarding C-5.4 — household cooking headcount (NULL = not set).
         Column("household_headcount", Integer, nullable=True),
         # alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
@@ -1116,12 +1114,6 @@ def configure_mappings(db: SQLAlchemy):
         # usual_store_id is a real domain attribute on the entity,
         # mapped publicly so it round-trips through generic CRUD.
         "usual_store_id": stock_item_table.c.usual_store_id,
-        # defer the image blob so the list endpoint
-        # never pulls megabytes per row just to set `has_image`. The
-        # dedicated `/stock-items/<id>/image` route triggers the load on
-        # attribute access; `has_image` is hydrated via a separate SELECT
-        # (mirrors the recipe-image pattern from Cookbook Chunk 5 / FU-090).
-        "image": deferred(stock_item_table.c.image),
         "stock_group": relationship(StockGroup, lazy="noload"),
         "stock_level": relationship(StockLevel, lazy="noload"),
         "stock_location": relationship(StockLocation, lazy="noload"),

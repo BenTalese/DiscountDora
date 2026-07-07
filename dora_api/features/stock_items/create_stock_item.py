@@ -36,11 +36,6 @@ class CreateStockItemRequest(BaseModel):
     is_flagged: bool = False
     auto_add_when_low: bool = False
     is_open: bool = False
-    # optional image as a data-URL string
-    # ("data:image/...;base64,..."). Stored as UTF-8 bytes on the
-    # entity; served back via GET /stock-items/<id>/image. Cap matches
-    # the recipe-image cap (~4 MB raw → ~6 MB encoded).
-    image: str | None = Field(default = None, max_length = 6_000_000)
 
 
 @dataclass(slots=True)
@@ -94,7 +89,6 @@ class CreateStockItemHandler:
         # `features/stocktake/cadence.py`). New items just start silent
         # until the engagement gate picks them up.
         _NewStockItem = StockItem(
-            image = request.image.encode("utf-8") if request.image else None,
             name = request.name,
             notes = None,
             stock_group = _StockGroup,

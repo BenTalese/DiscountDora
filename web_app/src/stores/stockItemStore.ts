@@ -78,23 +78,6 @@ export const useStockItemStore = defineStore('stockItem', () => {
         });
     }
 
-    /** FU-125 — per-item image-version counter. Bumped whenever an
-     *  `image` field is sent on an `updateStockItemAsync` call so any
-     *  consumer that paints the image URL can append `?v=...` and
-     *  reliably bust the browser cache after upload / clear (the bytes
-     *  endpoint sends `Cache-Control: no-cache`, but a reactive query
-     *  param is the surest cross-surface live-refresh signal). */
-    const imageVersions = ref<Record<string, number>>({});
-    function imageVersionOf(stockItemId: string): number {
-        return imageVersions.value[stockItemId] ?? 0;
-    }
-    function bumpImageVersion(stockItemId: string): void {
-        imageVersions.value = {
-            ...imageVersions.value,
-            [stockItemId]: (imageVersions.value[stockItemId] ?? 0) + 1,
-        };
-    }
-
     let hydrated = false;
     let inflight: Promise<void> | null = null;
 
@@ -200,9 +183,6 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[idx] = refreshed;
             stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
         }
-        // bump the image version when the PATCH touched the image
-        // so every surface displaying this item refetches the bytes.
-        if ('image' in cmd) bumpImageVersion(stock_item_id);
         // `saveField`-style level changes on the detail page also
         // go through this path (they carry `stock_level_id`), so the
         // auto-add hook can fire here too.
@@ -222,8 +202,6 @@ export const useStockItemStore = defineStore('stockItem', () => {
         updateStockLevelAsync,
         updateStockItemAsync,
         deleteStockItemAsync,
-        imageVersions: readonly(imageVersions),
-        imageVersionOf,
     };
 });
 

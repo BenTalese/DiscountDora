@@ -194,10 +194,6 @@ export type StockItemDetail = {
      *  grouping + a small picker on the stock-item detail. */
     usual_store_id: string | null;
     usual_store_name: string | null;
-    /** FU-125 — true only when the user has uploaded their own image (no
-     *  product-fallback). Drives whether the image field reads "Add" /
-     *  "Change + Remove" — a fallback preview shouldn't show Remove. */
-    has_own_image?: boolean;
     products: LinkedProduct[];
     recipes: LinkedRecipe[];
     substitutes: Substitute[];
@@ -242,10 +238,6 @@ export type StockItemDetail = {
      *  timeline as a synthetic Checked entry when it differs from the
      *  most recent level change. Null = never checked. */
     last_checked_at?: string | null;
-    /** C-1 Chunk 6 / FU-033 — true when the item has its own image OR a
-     *  linked product carries one. Bytes served via
-     *  `GET /stock-items/<id>/image`. */
-    has_image?: boolean;
 };
 
 export type PricePoint = {

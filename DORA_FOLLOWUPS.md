@@ -53,6 +53,22 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
+- **Raised:** 2026-07-07 (user request).
+- **Type:** deferred job (audit-first, then refactor).
+- **What:** Full-codebase pass looking for **wheels we reinvented** — hand-rolled implementations of problems a well-known, well-maintained library solves better (correctness, security, ergonomics, performance). Focus areas to check (non-exhaustive):
+  - **Security-adjacent:** custom CSRF double-submit vs Flask-WTF / Flask-SeaSurf, hand-rolled Fernet key handling vs `cryptography` recipes, the hand-rolled security headers (FU-459) vs Flask-Talisman, session/cookie hardening, password hashing choices.
+  - **HTTP / API surface:** pagination + query-string parsing (`queryStringBuilder.ts`, `parse_query_options`) vs Flask-Smorest / API-spec libs; response envelope + error translation vs a marshalling lib; audit-retention + audit hooks.
+  - **Data access:** the generic repository (`SqlAlchemyRepository`), `EntityField`, `include`/`then_include` chains — vs plain SQLAlchemy 2.0 selectinload/joinedload patterns. Is our wrapper carrying its weight or fighting the ORM?
+  - **Domain infra:** unit conversion (`units.py`), locale display denominators, currency + locale formatting, timezone / calendar-day helpers (`household_today`), fuzzy matching (RapidFuzz already used, but check the wrappers around it).
+  - **Frontend:** own drag-drop composables (`useDragDropList`) vs vue-draggable / dnd-kit; own toast/notify wrappers; own shortcut registry (`useShortcut`) vs a library; own offline queue (`useOfflineQueue`) vs Workbox background sync; own rollback registry vs a proper undo/redo stack lib.
+  - **Ops:** log rotation (already time-based), scheduling (APScheduler in place), rate limiting (present? if hand-rolled, flag it), config layering (`ConfigurationManager`) vs pydantic-settings.
+- **Method (two phases, do not skip Phase 1):**
+  1. **Phase 1 — assessment only.** Produce `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md` listing each hand-rolled site: what it is, what library would replace it, honest verdict `keep` / `replace` / `wrap-thin-adapter`, and rough effort/risk. **No code touched.** Verdict has to weigh Charter tie-breaks (Effortless + Anti-creep): sometimes the hand-rolled thing is right because it's smaller, has no supply-chain risk, and stays coupled to our domain. Do NOT default to "always prefer library."
+  2. **Phase 2 — action.** For each `replace` verdict, open a per-item FU (or an implementation plan when the surface is broad, e.g. auth stack replacement). Sequence by risk + blast radius; ship one at a time with browser-verify per swap.
+- **Why deferred:** late-game / pre-commercialization hardening. Not urgent while the app is still gaining new surfaces; do it when the feature surface has stabilised so a lib swap doesn't collide with in-flight redesigns. Doing it earlier risks churning code that's about to be reshaped anyway.
+- **Recommended resolution:** **late-game / Phase 4 kick-off.** Pair with the pre-commercialization hardening pass ([[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta) — same window, same "batten down the hatches before we ask anyone to trust this" mindset. Cross-check every existing `[Removed]` and `[Kept-because…]` verdict against ENGINEERING_STANDARDS on the way out so the assessment doc becomes source-of-truth for "here's why we didn't take the lib."
+
 ## [OPEN] FU-504 — Base-component adoption residuals (~54 raw `q-btn` uses across 16 files + one `BaseButton` variant gap)
 - **Raised:** 2026-07-07 (FU-424 audit close-out).
 - **Type:** finding + small design decision.
@@ -78,13 +94,6 @@ long session summary. Distinct from the other logs:
   - Empty-state usages (dashboard "all clear", meal-plan empty-week banner, `DoraScoreCard`, `YourPricesWidget`) are a **different pattern**; they stay unchanged. Their R-014 comment references can be re-labelled opportunistically (they were mislabelled — "calm empty state" isn't the same rule).
 - **Why deferred:** cross-cutting presentation change touching ~10 files; better as a focused small pass than folded into other work.
 - **Recommended resolution:** opportunistic / a focused sweep — pair with the next touch of each gated surface. Also update **ADR-002**'s stance in `ENGINEERING_STANDARDS.md:1149` to drop the "R-014 partially revisits it" implication (R-002's hide-when-off is now the whole story again).
-
-## [OPEN] FU-459 — App-wide security headers (CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy)
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (e) sub-part).
-- **Type:** deferred job / hardening.
-- **What:** No app-wide security-header middleware. Add a response-hook in `infrastructure/middleware.py` that sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, and a permissive-but-honest `Content-Security-Policy` (script-src 'self' 'unsafe-inline'/'unsafe-eval' initially — Quasar's runtime uses eval-ish patterns; tighten later). Flask-Talisman is one option; hand-rolled is fine at this scope.
-- **Why deferred:** Tier-2 hardening, not ship-blocking; CSP tuning has to be done carefully to avoid breaking Piper TTS / print-view / any inline styles the SPA relies on.
-- **Recommended resolution:** later — pair with the security-review Tier-2 delta re-audit (FU-424). Write a one-hit browser-verify sweep after landing (all pages still render, no CSP violations in the console).
 
 ## [OPEN] FU-457 — Boot-time resolved-route assertion for reflection-based wiring
 - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (c)).
@@ -182,48 +191,6 @@ long session summary. Distinct from the other logs:
 - **What:** Original spec (`docs/00_original_spec/Unprocessed Ideas (from Google Docs).md`) asked that when searching for products, the UI should visibly mark ones **already linked to a stock item** so the user isn't tempted to re-link. Search now lives in the companion, but the *linkage-display* rule may still belong in Dora (the "Products" tab on a stock item) or become part of the companion's ingestion contract. Decide where it lives.
 - **Why deferred:** search moved to companion mid-flight; the rule was never re-homed.
 - **Recommended resolution:** during any companion↔Dora ingestion-boundary work — call whether Dora surfaces "already-linked" itself, or the companion queries a Dora endpoint. If the latter, add to the ingestion API's read-side.
-
-## [OPEN] FU-420 — Recipes: non-linked ingredients still fully accounted for (verify model)
-- **Raised:** 2026-07-01 (original-spec sweep).
-- **Type:** finding (verification).
-- **What:** Original spec required that not every recipe ingredient needs to be linked to a stock item, but **all** ingredients are still accounted for in the system (for shopping lists, cook mode, missing-count). Verify: does `RecipeIngredient` support a `stock_item_id`-null row cleanly through shopping-list generation, cook-mode, and `cookable`/`missing_count`? Or are unlinked ingredients silently skipped?
-- **Why deferred:** unverified in this audit.
-- **Recommended resolution:** during Cookbook C-4 next-touch or opportunistic — trace the null-`stock_item_id` path through `auto_generate.py`, cook-mode finish flow, and cookable derivation; fix any drop-offs.
-
-## [OPEN] FU-419 — Recipes: healthy/unhealthy rating + filter/sort
-- **Raised:** 2026-07-01 (original-spec sweep).
-- **Type:** deferred job (dropped intent).
-- **What:** Original spec proposed a 5-star healthiness rating on recipes with corresponding filter/sort. Never surfaced in Wave-C; nutrition mode does kcal only. Overlaps with the nutrition-off/simple/complex ladder but is a separate axis (perceived healthiness ≠ kcal).
-- **Why deferred:** de-emphasised when nutrition was scoped to off+simple.
-- **Recommended resolution:** discussion — decide whether this is (a) a distinct healthiness dimension, (b) subsumed by the nutrition-complex mode when eventually built, or (c) dropped. Not now; revisit when nutrition or Cookbook next opens.
-
-## [OPEN] FU-417 — MAGIC_BEHAVIOUR_AUDIT verdicts — confirm each landed
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** finding (delta check).
-- **What:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` has a "Verdicts (2026-06-28)" section listing keep / clean-up calls on specific magic behaviours. Not all verdicts were verified against shipped code in this session.
-- **Why deferred:** delta-check only.
-- **Recommended resolution:** opportunistic — walk each verdict, confirm code state, close.
-
-## [OPEN] FU-416 — ORPHANED_FIELDS_AUDIT: confirm all placements acted on
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** finding (delta check).
-- **What:** `docs/05_investigations/ORPHANED_FIELDS_AUDIT.md` has a "Recommended placement in the prompt plan" section. Some fields were fixed via later work (e.g. `StockItem.barcode` dropped via P6-02); the full list wasn't re-verified this session.
-- **Why deferred:** delta-check only.
-- **Recommended resolution:** opportunistic — cross-reference each orphan against current schema; close-or-open per finding.
-
-## [OPEN] FU-415 — FEATURE_CLARIFICATIONS: expiry ↔ open interaction rule
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** deferred job (decision).
-- **What:** `docs/05_investigations/FEATURE_CLARIFICATIONS.md §(c)` asks whether expiry and "opened" state affect each other (e.g. opened item → shortened effective expiry). No decision recorded. Currently they're independent.
-- **Why deferred:** never resolved.
-- **Recommended resolution:** discussion — 5-minute call on the rule (independent / opened shortens expiry by X / prompt for reminder). If a rule is chosen, small code change; if independent, close as decided.
-
-## [OPEN] FU-414 — LOGGING_AND_DATA_LAYOUT investigation: delta-check
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** finding.
-- **What:** `docs/05_investigations/LOGGING_AND_DATA_LAYOUT.md` had recommendations around log rolling / `.local` layout. Some landed; comprehensive delta not confirmed.
-- **Why deferred:** verification only.
-- **Recommended resolution:** opportunistic; when next touching logging config or data-dir layout.
 
 ## [OPEN] FU-413 — EMAIL_SETUP_FINDINGS: promote proposal to IMPL
 - **Raised:** 2026-07-01 (investigations audit).
@@ -533,13 +500,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** single-locale is fine while personal-use.
 - **Recommended resolution:** before commercialization (Phase 4-adjacent) — many customers won't be AU-based. Overlaps with [[FU-402]] Stripe (multi-currency).
 
-## [OPEN] FU-367 — PROPOSAL_HELP_OVERLAY: not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Proposal for a contextual help overlay; §4 open decisions (`:146`); no IMPL. Distinct from [[FU-366]] A-4 Help *content* — this is the UI shell.
-- **Why deferred:** noted but not scheduled.
-- **Recommended resolution:** discussion — decide whether overlay + content are one work-unit or two; if two, sequence overlay before content so content has a place to render into.
-
 ## [OPEN] FU-366 — Deferred surfaces: Reports, Settings shell, Mobile view
 - **Raised:** 2026-07-01 (Wave-C audit).
 - **Type:** deferred job.
@@ -588,7 +548,7 @@ long session summary. Distinct from the other logs:
 - **Type:** deferred job (content task).
 - **What:** `COVERAGE_GAPS.md` A-4 — 5 feedback bullets all about **content**: detailed per-feature help, guides, FAQ, easy navigability, UI screenshots / diagrams. No brief.
 - **Why deferred:** content task typically deferred to post-launch.
-- **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. Distinct from [[FU-367]] (Help overlay shell).
+- **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. The overlay-shell counterpart (FU-367) was retired in favour of the shipped `(?)` help chips, so this content work no longer has an overlay to render into — it lives on HelpPage / DoraBot.
 
 ## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).

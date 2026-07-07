@@ -10,7 +10,7 @@ import AxiosHttpClient, { NormalisedApiError, resolveBaseURL } from './axiosHttp
 
 /** Settings rebuild Phase 4 — URL for a user's profile-picture bytes (served
  *  raw; 404 when unset). Pass a `version` (a counter bumped after upload /
- *  clear) to bust the browser cache. Mirrors `stockItemImageUrl`. */
+ *  clear) to bust the browser cache. */
 export function userImageUrl(userId: string, version?: number | string): string {
     const base = resolveBaseURL();
     const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
@@ -75,10 +75,10 @@ export type UpdateMeCommand = {
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';
-    /** C-cross Chunk 5 — per-user image-display opt-ins. Saved photos
-     *  survive a toggle (only rendering is suppressed). */
+    /** C-cross Chunk 5 — per-user recipe-image opt-in. Saved photos
+     *  survive a toggle (only rendering is suppressed). FU-508 dropped
+     *  the stock-image companion. */
     show_recipe_images?: boolean;
-    show_stock_images?: boolean;
     /** Onboarding C-5.4 — household cooking headcount (1–99). Server clears
      *  when `null` is sent. Drives serving-aware suggestions / shopping
      *  quantity hints. */

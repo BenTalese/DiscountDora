@@ -16,7 +16,6 @@ class StockItem(BaseEntity):
     # stocktake_alert`) retired in the 2026-07-04 cleanup. The queue now
     # resolves cadence server-side (global default + Auto + Essential +
     # Low/Out bump); see `features/stocktake/cadence.py`.
-    image: bytes | None
     name: str
     notes: str | None
     stock_group: StockGroup | None
@@ -70,7 +69,6 @@ class StockItem(BaseEntity):
     class Fields(BaseEntity.Fields):
         AUTO_ADD_WHEN_LOW = "auto_add_when_low"
         EXPIRY_DATE = "expiry_date"
-        IMAGE = "image"
         IS_FLAGGED = "is_flagged"
         IS_OPEN = "is_open"
         NAME = "name"

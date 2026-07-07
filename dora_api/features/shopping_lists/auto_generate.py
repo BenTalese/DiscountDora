@@ -131,6 +131,17 @@ class _LineResult:
 
 
 @dataclass(slots=True)
+class _UnlinkedSkip:
+    """FU-505 — a recipe ingredient the auto-generator couldn't turn into a
+    shopping-list line because it isn't linked to any StockItem. Surfaced to
+    the SPA as a warning banner so users know which items they still need to
+    add manually (auto-gen only produces stock-item-anchored lines; a free-
+    text-only line shape doesn't exist)."""
+    recipe_name: str
+    ingredient_name: str
+
+
+@dataclass(slots=True)
 class AutoGenerateResponse:
     shopping_list_id: Optional[UUID] = None
     list_not_found: bool = False
@@ -138,6 +149,7 @@ class AutoGenerateResponse:
     added_count: int = 0
     skipped_already_on_list: int = 0
     lines: List[_LineResult] = field(default_factory=list)
+    unlinked_skipped: List[_UnlinkedSkip] = field(default_factory=list)
 
 
 class AutoGenerateHandler:
@@ -163,6 +175,10 @@ class AutoGenerateHandler:
 
         # ── Collect candidates ────────────────────────────────────────────
         candidates: Dict[UUID, _Candidate] = {}
+        # FU-505 — recipe / meal-plan collectors append here whenever an
+        # ingredient can't be turned into a stock-item-anchored line. The
+        # SPA renders these as a "you'll need to add these manually" banner.
+        unlinked_skipped: List[_UnlinkedSkip] = []
 
         if request.sources.low_stock or request.sources.out_of_stock:
             self._collect_low_or_out(candidates, request.sources)
@@ -171,10 +187,12 @@ class AutoGenerateHandler:
             self._collect_flagged(candidates)
 
         if request.sources.recipes:
-            self._collect_recipes(candidates, request.sources.recipes)
+            self._collect_recipes(candidates, request.sources.recipes, unlinked_skipped)
 
         if request.sources.meal_plan_week is not None:
-            self._collect_meal_plan_week(candidates, request.sources.meal_plan_week)
+            self._collect_meal_plan_week(
+                candidates, request.sources.meal_plan_week, unlinked_skipped,
+            )
 
         if request.sources.frequently_added:
             self._collect_frequently_added(
@@ -183,7 +201,9 @@ class AutoGenerateHandler:
 
         if not candidates:
             return AutoGenerateResponse(
-                shopping_list_id=target.id, nothing_to_add=True
+                shopping_list_id=target.id,
+                nothing_to_add=True,
+                unlinked_skipped=unlinked_skipped,
             )
 
         # ── Append, skipping items already on the target ─────────────────
@@ -225,6 +245,7 @@ class AutoGenerateHandler:
             added_count=len(added),
             skipped_already_on_list=skipped,
             lines=added,
+            unlinked_skipped=unlinked_skipped,
         )
 
     # ── List creation ───────────────────────────────────────────────────
@@ -305,10 +326,15 @@ class AutoGenerateHandler:
         self,
         candidates: Dict[UUID, _Candidate],
         recipe_ids: List[UUID],
+        unlinked_skipped: List[_UnlinkedSkip],
     ) -> None:
         # Pull each recipe with ingredients, then for each ingredient stock
         # item: if it's not stocked, schedule it. Recipe name goes into
         # `detail` so the UI can render "auto: recipe Tomato Soup".
+        # FU-505 — ingredients without a linked StockItem can't be turned
+        # into a shopping-list line (no stock-item id to anchor the line);
+        # collect them so the response can carry a "you'll need to add
+        # these manually" warning back to the SPA.
         for rid in recipe_ids:
             recipe = (
                 self.repository.get(Recipe)
@@ -318,6 +344,12 @@ class AutoGenerateHandler:
             if recipe is None:
                 continue
             ingredients = recipe.ingredients or []
+            for ing in ingredients:
+                if ing.stock_item is None:
+                    unlinked_skipped.append(_UnlinkedSkip(
+                        recipe_name=recipe.name,
+                        ingredient_name=(ing.raw_text or "").strip() or "(unnamed ingredient)",
+                    ))
             stock_item_ids = [ing.stock_item.id for ing in ingredients if ing.stock_item]
             if not stock_item_ids:
                 continue
@@ -343,6 +375,7 @@ class AutoGenerateHandler:
         self,
         candidates: Dict[UUID, _Candidate],
         week_start: date,
+        unlinked_skipped: List[_UnlinkedSkip],
     ) -> None:
         # Window = 7 days starting at week_start. Pull every entry in range,
         # then every recipe their meals reference, then ingredients. Items
@@ -377,6 +410,12 @@ class AutoGenerateHandler:
             if recipe is None:
                 continue
             ingredients = recipe.ingredients or []
+            for ing in ingredients:
+                if ing.stock_item is None:
+                    unlinked_skipped.append(_UnlinkedSkip(
+                        recipe_name=recipe.name,
+                        ingredient_name=(ing.raw_text or "").strip() or "(unnamed ingredient)",
+                    ))
             stock_item_ids = [ing.stock_item.id for ing in ingredients if ing.stock_item]
             if not stock_item_ids:
                 continue
@@ -458,6 +497,16 @@ def _response_payload(response: AutoGenerateResponse) -> dict:
                 "detail": l.detail,
             }
             for l in response.lines
+        ],
+        # FU-505 — unlinked recipe/meal-plan ingredients the auto-generator
+        # couldn't turn into stock-item-anchored lines. SPA renders a
+        # warning banner listing them.
+        "unlinked_skipped": [
+            {
+                "recipe_name": u.recipe_name,
+                "ingredient_name": u.ingredient_name,
+            }
+            for u in response.unlinked_skipped
         ],
     }
 

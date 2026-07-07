@@ -19,12 +19,6 @@ export type StockItem = {
     is_out_of_stock?: boolean;
     is_low_stock?: boolean;
     needs_restock?: boolean;
-    /** C-1 Chunk 6 / FU-033 — whether the row has an image to render.
-     *  True when the item has its own image OR any linked product
-     *  carries one (server-side fallback). Bytes are served via
-     *  `GET /stock-items/<id>/image`; the SPA uses
-     *  `stockItemImageUrl()` to build the `<img src>`. */
-    has_image?: boolean;
     /** C-7 Chunk 2 — count of linked products. Drives the combined
      *  modal decision in `AddToListButton`: 2+ → open QuickAddSheet
      *  (one combined surface) instead of stacking two prompts. */

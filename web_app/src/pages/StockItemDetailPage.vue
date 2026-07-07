@@ -109,17 +109,7 @@
                         @action="onBuyVerdictAction"
                     />
                     <div class="row q-col-gutter-md items-start">
-                        <div class="col-12 col-sm-5 col-md-4">
-                            <ImageUploadField
-                                :preview-url="imagePreviewUrl"
-                                :name="detail?.name"
-                                :alt="detail?.name ?? 'Stock item image'"
-                                :can-clear="!!pendingImage || !!detail?.has_own_image"
-                                @pick="onPickImage"
-                                @clear="onClearImage"
-                            />
-                        </div>
-                        <div class="col-12 col-sm-7 col-md-8">
+                        <div class="col-12">
                             <q-list separator class="dora-inline-edit">
                                 <q-item>
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Name</q-item-section>
@@ -1034,7 +1024,6 @@
     import { useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
-    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
     import { formatQuantity } from 'src/helpers/formatQuantity';
@@ -1057,7 +1046,7 @@
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
     import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
-    import StockItemApiService, { stockItemImageUrl } from 'src/services/api/stockItemApiService';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -1243,11 +1232,6 @@
     const storeOptions = computed(() =>
         storesStore.stores.map((s) => ({ label: s.name, value: s.store_id })),
     );
-    // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
-    // Saves immediately — uploading a photo isn't coupled to the basics
-    // form's Save button. Cache-bust is owned by the store now (FU-125
-    // `imageVersionOf`) so a save here reactively refreshes every row /
-    // surface displaying the same item, not just this detail page.
     // resolve the level *sequence* (StockLevelDot maps it to a
     // colour, or the sunken fallback when null). Untracked items (no
     // level_id) get null → muted bg via the component's internal
@@ -1258,49 +1242,6 @@
         const seq = stockLevelStore.stockLevels.find((l) => l.stock_level_id === levelId)?.sequence;
         return typeof seq === 'number' ? seq : null;
     });
-
-    const pendingImage = ref<string | null>(null);
-    const imageCleared = ref(false);
-    const imagePreviewUrl = computed<string | null>(() => {
-        if (pendingImage.value) return pendingImage.value;
-        if (imageCleared.value) return null;
-        if (!detail.value?.has_image) return null;
-        return stockItemImageUrl(
-            detail.value.stock_item_id,
-            stockItemStore.imageVersionOf(detail.value.stock_item_id),
-        );
-    });
-    async function onPickImage(dataUrl: string) {
-        if (!detail.value) return;
-        pendingImage.value = dataUrl;
-        try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: detail.value.stock_item_id,
-                image: dataUrl,
-            });
-            imageCleared.value = false;
-            pendingImage.value = null;
-            await loadDetail();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image updated.' });
-        } catch (err) {
-            pendingImage.value = null;
-            notifyErr('Could not save image.', err);
-        }
-    }
-    async function onClearImage() {
-        if (!detail.value) return;
-        try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: detail.value.stock_item_id,
-                image: null,
-            });
-            imageCleared.value = true;
-            await loadDetail();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image removed.' });
-        } catch (err) {
-            notifyErr('Could not remove image.', err);
-        }
-    }
 
     // ── Inline-edit field savers (C-1b.1) ───────────────────────────────
     // Each row's editor calls one of these; the partial PATCH already
@@ -1505,8 +1446,37 @@
     async function onToggleOpen() {
         if (!detail.value) return;
         const next = !detail.value.is_open;
+        // FU-507 — prompt for an updated effective expiry when marking as
+        // opened (default: unchanged). Mirrors StockItemRow.onToggleOpen.
+        let expiryPatch: string | null | undefined = undefined;
+        if (next) {
+            const currentExpiry = detail.value.expiry_date ?? '';
+            const picked = await new Promise<string | null | undefined>((resolve) => {
+                $q.dialog({
+                    title: `Marking "${detail.value!.name}" as open`,
+                    message: 'Update its effective expiry? Leave as-is if opening doesn\'t change how fast it goes off.',
+                    prompt: {
+                        model: currentExpiry,
+                        type: 'date',
+                        isValid: (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v),
+                    },
+                    cancel: 'Skip',
+                    ok: 'Update expiry',
+                })
+                    .onOk((val: string) => resolve(val || null))
+                    .onCancel(() => resolve(undefined))
+                    .onDismiss(() => {});
+            });
+            if (picked !== undefined && picked !== currentExpiry) {
+                expiryPatch = picked;
+            }
+        }
         await withBusyReload(() =>
-            stockItemStore.updateStockItemAsync({ stock_item_id: stockItemId.value, is_open: next }),
+            stockItemStore.updateStockItemAsync({
+                stock_item_id: stockItemId.value,
+                is_open: next,
+                ...(expiryPatch !== undefined ? { expiry_date: expiryPatch } : {}),
+            }),
         );
     }
     async function onAddToList() {
@@ -2214,9 +2184,6 @@
         }
         if (si.stock_level_name !== undefined && si.stock_level_name !== detail.value.stock_level_name) {
             detail.value.stock_level_name = si.stock_level_name;
-        }
-        if (si.has_image !== undefined && si.has_image !== detail.value.has_image) {
-            detail.value.has_image = si.has_image;
         }
     }, { deep: true });
 

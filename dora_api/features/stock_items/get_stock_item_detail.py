@@ -314,15 +314,6 @@ class StockItemDetailDto:
     # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
     # the timeline whenever it differs from the most recent level change.
     last_checked_at: datetime | None = None
-    # image presence flag (own-image OR linked-
-    # product image fallback). Bytes served via
-    # `GET /stock-items/<id>/image`; never inlined in the JSON.
-    has_image: bool = False
-    # true only when the stock item carries its OWN uploaded
-    # image (no fallback). Lets the detail page render "Add image" instead
-    # of "Change image / Remove" when the preview is being served from a
-    # linked product (there's nothing the user could "remove").
-    has_own_image: bool = False
 
 
 # 2026-06-30 — one number, one policy. Every event-kind projection
@@ -859,12 +850,6 @@ class GetStockItemDetailHandler:
 
             last_checked_at = _StockItem.last_checked_at,
             level_history = _LevelHistory,
-            # own-image OR any linked product image.
-            # `_LinkedProducts` already loaded above; checks are cheap.
-            has_image = bool(_StockItem.image) or any(
-                bool(getattr(p, "image", None)) for p in (_StockItem.products or [])
-            ),
-            has_own_image = bool(_StockItem.image),
         )
 
 

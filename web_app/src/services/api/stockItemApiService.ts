@@ -3,7 +3,7 @@ import type { StockItemDetail } from 'src/models/stockItemDetail';
 import type { PantryBeliefsResponse } from 'src/models/pantryBelief';
 import type { StockItemPriceHistory } from './priceHistoryApiService';
 import type { CreatedResponse } from './axiosHttpClient';
-import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
+import AxiosHttpClient from './axiosHttpClient';
 import { createQueryString, FilterOperator, type Page } from './queryStringBuilder';
 
 /** FU-034 — wire-level body for substitute notes + optional ratio. All
@@ -16,16 +16,6 @@ export interface SubstituteMetadataInput {
     ratio_unit_in?: string | null;
     ratio_quantity_out?: number | null;
     ratio_unit_out?: string | null;
-}
-
-/** C-1 Chunk 6 / FU-033 — URL for a stock item's image (served as raw
- *  bytes; falls back to a linked product's image server-side). Pass a
- *  `version` (e.g. a counter bumped after upload) to bust the
- *  browser cache after a re-upload. */
-export function stockItemImageUrl(stockItemId: string, version?: number | string): string {
-    const base = resolveBaseURL();
-    const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
-    return `${base}/stock-items/${stockItemId}/image${suffix}`;
 }
 
 export default class StockItemApiService {
@@ -214,9 +204,6 @@ export type CreateStockItemCommand = {
     is_flagged?: boolean;
     auto_add_when_low?: boolean;
     is_open?: boolean;
-    /** C-1 Chunk 6 / FU-033 — image as a data-URL string, or
-     *  null/omitted for none. */
-    image?: string | null;
 };
 
 /** FU-315 — server-populated payload on a level-transition PATCH that fires
@@ -242,9 +229,6 @@ export type UpdateStockItemCommand = {
     auto_add_when_low?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
-    /** C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
-     *  clear, omit to leave untouched. */
-    image?: string | null;
     /** FU-189 — usual store hint. UUID to bind; use `clear_usual_store` to clear. */
     usual_store_id?: string | null;
     clear_usual_store?: boolean;

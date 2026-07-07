@@ -109,8 +109,14 @@ const routes: RouteRecordRaw[] = [
             { path: 'cookbook/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
             { path: 'cookbook/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },
-            { path: 'meal-plans/board', component: () => import('pages/MealPlansBoardPage.vue'), meta: { title: 'Meal plans (board)' } },
-            { path: 'meal-plans/templates', component: () => import('pages/MealPlanTemplatesPage.vue'), meta: { title: 'Meal plan templates' } },
+            // FU-304 closed 2026-07-07 — Direction A won the A/B experiment;
+            // `/meal-plans/board` (Direction B) is retired. Redirect any
+            // deep-links / bookmarks back to the surviving planner surface.
+            { path: 'meal-plans/board', redirect: '/meal-plans' },
+            // FU-308 (2026-07-07) — page repurposed to Rotating template
+            // sets only; per-template CRUD moved to the planner's drawer.
+            // Route path kept for existing deep-links / bookmarks.
+            { path: 'meal-plans/templates', component: () => import('pages/MealPlanTemplatesPage.vue'), meta: { title: 'Rotating template sets' } },
             {
                 path: 'shopping-lists',
                 component: () => import('pages/ShoppingListsOverview.vue'),
@@ -411,6 +417,14 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/system/stocktake',
                         component: () => import('pages/settings/AdminSystemStocktakeSettings.vue'),
                         meta: { title: 'System: Stocktake' }
+                    },
+                    // FU-511 — install-wide auto-add mode
+                    // (off / essential-only / all). Collapsed here from the
+                    // retired per-item `StockItem.auto_add_when_low` toggle.
+                    {
+                        path: 'admin/system/stock',
+                        component: () => import('pages/settings/AdminSystemStockSettings.vue'),
+                        meta: { title: 'System: Stock' }
                     },
                     {
                         // Old single System page → first of the four.

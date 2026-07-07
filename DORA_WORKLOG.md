@@ -9,6 +9,635 @@ next.
 
 ---
 
+## 2026-07-07 — FU-350 shipped: import template `example` is now dict-keyed; module-load validation fails at boot on drift
+
+**Why:** User asked to fix FU-350 (post-FU-343 self-review had flagged that `ImportTemplate.example` was a positional tuple hand-crafted to match `TARGET_FIELDS` — a reorder or new field would silently misalign example cells under the wrong headers).
+
+### What shipped
+
+**`dora_api/features/data/import_spreadsheet.py`:**
+
+- `ImportTemplate.example` changed from `tuple[str, ...]` to `dict[str, str]`. Positional drift is now structurally impossible.
+- The one shipping template (`stock_items`) rewritten as a keyed dict — `{"name": "Rice", "level": "In stock", "location": "Pantry", "group": "Grains", "expiry": "2027-01-01", "is_essential": "no"}`.
+- The CSV emit path in `download_import_template` now projects through `headers` at write time: `[template.example.get(h, "") for h in template.headers]`. Reordering `TARGET_FIELDS` reorders the row automatically; adding a column widens it; missing keys emit as empty cells rather than misaligning.
+- New `_COMMIT_KNOWN_SECTIONS: dict[str, tuple[str, ...]]` map — today `{"stock_items": TARGET_FIELDS}` — explicitly names each section the commit handler understands and the header tuple it expects. When a second-section handler lands (recipes / shopping-lists / …), whoever wires it MUST add their pair here or the template validator will refuse to boot. Keeping it explicit (rather than deriving from a dispatch table that doesn't exist yet) means adding a section is one clearly-marked line, not a spelunk through the handler.
+- New `_validate_import_templates()` module-load helper enforces four invariants:
+  1. Unique section per template (belt-and-braces: a typo can't silently overwrite an entry in `IMPORT_TEMPLATES_BY_SECTION`).
+  2. Section registered in `_COMMIT_KNOWN_SECTIONS` (no template ships for a section the commit path doesn't process).
+  3. `set(t.headers) == set(expected_headers)` (headers can't drift from the source-of-truth tuple for that section).
+  4. `set(t.example.keys()) <= set(t.headers)` (no stale keys quietly disappearing at emit time).
+  
+  Called at module scope, so failures crash the API at boot with a readable message — not at user download time. Each error message names the offending template and shows the sets that don't match, so the fix is obvious.
+
+**`tests/e2e/dora_api/test_data_router.py`:**
+
+- New `test__import_template__example_cells_line_up_with_headers`. Downloads the template, zips `header → example` into a dict, and asserts each of the six shipping fields lands under its own header (`Rice` under `name`, `In stock` under `level`, `2027-01-01` under `expiry`, etc.). A future refactor that reorders `TARGET_FIELDS`, renames a column, or breaks the dict-projection would surface here — same failure the user would see downloading the CSV, caught in CI.
+
+### Deliberately not shipped
+
+- Unit tests for `_validate_import_templates` firing on hand-crafted bad templates. Validation happens at module load — a bad template would crash the API at boot with the exception's message, and the e2e template-download test would fail loudly before any user download hit. Bolting on a monkey-patched-module-globals unit test is more contraption than the invariant deserves.
+- Extraction of the loop body into a `_validate_single_template(t, seen)` helper. Same reason — the validator is 20 lines called once, not a reusable primitive.
+
+### Bookkeeping
+
+- **[[FU-350]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with the full "what shipped, what deliberately didn't" trail.
+- **`CHANGELOG.md`** `[Unreleased]` → new `### Changed` entry above the FU-354/FU-355 block, documenting the dict-keyed shape + the boot-fail-on-drift semantics + the new `_COMMIT_KNOWN_SECTIONS` seam.
+- **`DORA_VERIFY.md`** → no new entry. The invariant is now a boot-crash + a green/red e2e test; there's nothing meaningful to walk in a browser (the existing FU-343 "Download template" section already exercises the download path, and its FU-349 subsection already round-trips the file).
+
+### Verification
+
+- Not run. `pytest tests/e2e/dora_api/test_data_router.py -k template` is the next step; `vue-tsc` isn't relevant (server-only change). If the module-load validator finds an accidental drift already in the codebase, the API refuses to boot with a clear message — that's the desired failure mode.
+
+### Engineering-standards close-gate
+
+- **R-003 (single source of truth):** `_COMMIT_KNOWN_SECTIONS` becomes the one place that names what the commit path processes; the template validator reads from it, not from an implicit "everyone remember to update both". ✓
+- **R-005 (portable data access):** no data-access changes; validator is pure-Python module load. ✓
+- **R-007 (scope discipline):** did exactly what the FU asked (dict-keyed example + three boot-load assertions), plus one bonus (duplicate-section check) that's a tiny extension of the same defensive posture. Did *not* refactor `TARGET_FIELDS` itself, did *not* introduce a section-dispatch table for the commit handler, did *not* pre-add a recipes template. ✓
+- **R-008 (comment hygiene):** new comments name the FU + the *why* (positional drift risk, single-source seam) + the assertion messages themselves name the fix (add an entry to `_COMMIT_KNOWN_SECTIONS`, not just "invalid template"). No FU breadcrumbs on lines that don't need them. ✓
+- **R-010 (validate inputs at the boundary):** module load *is* the boundary for template schema — invalid data can't reach the download endpoint. Same posture the auth-write validators already carry. ✓
+- **Charter tiebreak (Effortless + Anti-creep):** Anti-creep — didn't build a section-dispatch abstraction just because one might land later; the explicit map is honest for today's one-section reality and equally clear for the day a second section lands. Effortless (for the *next* engineer) — a boot crash with a message that literally names the fix beats "user downloads a broken CSV and reports it a week later". ✓
+- No new rule / ADR — this is R-003 + R-010 applied to a specific schema; nothing recurring enough to promote.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved; this is polish inside the shipped import surface.
+
+**Next up:** `pytest tests/e2e/dora_api/test_data_router.py -k template`. After that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-337 closed as obsolete + FU-355 shipped (auth store clears useListState) + FU-354 shipped (targeted useListState rollout across meal-planner picker + shopping-list-detail groupBy)
+
+**Why:** User confirmed FU-337 (docs over-promising `.exe`/`.dmg`) is obsolete now that FU-327 + FU-333 Bucket D corrected the README, and asked to do FU-355 + FU-354 in the same unit. All three touch the same A8 §3 "list-state policy" surface, so bundling made sense.
+
+### FU-337 — closed as won't-do (obsolete)
+
+Static-verified the README's current copy (`README.md:206/208/234/244`): it names the AppImage as the only shipping artefact, explicitly says the single-file `.exe` installer and the notarised `.dmg` are *not* built, and calls out that only the Linux path is CI-verified. FU-327 shipped the Windows/macOS *build scripts* (directory-tree bundles with `Dora.exe` / a `.app`) 2026-07-03; FU-333 Bucket D touched `README.md` in its files-list on 2026-07-06. The FU's original grievance ("docs reference artifacts that don't actually ship") no longer holds. The remaining `.exe`/`.dmg` mentions in the repo live only in `docs/00_original_spec/` (labelled historical + non-authoritative in CLAUDE.md) and in `PLATFORM_BUILDS_AUDIT.md` (the FU-337 audit doc itself — a point-in-time snapshot). Neither is user-facing.
+
+### FU-355 — shipped
+
+`web_app/src/stores/authStore.ts`:
+- Imported `clearAllListState` from `src/composables/useListState`.
+- Called it from **both** cleanup paths:
+  - `logoutAsync`'s `finally` block (explicit sign-out).
+  - `handleSessionExpired`, the axios interceptor's silent 401-recovery hook.
+
+Both call sites carry FU-355 comments naming the reason (shared-device concern; per-page filter/search/sort is UI-only, not sensitive, but the honest close is to reset it on every logical session boundary rather than trust the router to full-reload). No test file added — the behaviour is a two-line hook against a single-purpose helper that FU-355's originating unit (A8 §3) explicitly shipped as this hook's escape hatch. The DORA_VERIFY walk covers both paths.
+
+### FU-354 — shipped as a targeted sweep
+
+Surveyed each page named in FU-354's list. Migrated only the pages with genuine filter/search/sort/view-mode state:
+
+- `web_app/src/composables/useMealPlanner.ts` — `recipeSearch` now rides `useListState('meal-plans-overview', …)`. The picker's search string survives nav-away-and-back within the session. Other refs in the composable (`ingredients`, `generating`, `isInitialLoading`, `focusedMonday`) are lifecycle / URL-synced / derived state and don't want persistence; left alone.
+- `web_app/src/pages/ShoppingListDetail.vue` — the `groupBy: GroupByMode` line-grouping toggle now rides `useListState('shopping-list-detail', …)`. Single scope (not per-list-id) because per-list scope would silently reset on switch-list, which defeats the point. `useListState` import added.
+
+**Deliberately not migrated** (surveyed, found nothing to persist):
+- `ShoppingListsOverview.vue` — only `newListOpen` dialog toggle.
+- `StocktakePage.vue` — no filter/search/sort refs (FU's own "if it grows filters" caveat still applies).
+- `MealPlanTemplatesPage.vue` — post-FU-308 the page is Rotating Sets only; refs are set-editor dialog state, not list filters.
+- `settings/UsersAdminSettings.vue`, `settings/StoresSettings.vue`, `settings/ApiAccessSettings.vue` — all three are CRUD-dialog pages. No filter/search/sort surface.
+
+R-026 (the *policy*) remains the going-forward rule. If any of those "no state today" pages grows a search box or sort dropdown later, wrap it in `useListState` at the same time. The pattern is now shown-by-example across five surfaces (`StockOverview` via `useStockFilters`, `RecipesOverview`, `MyProductsPage`, `MealPlansOverview` via the composable, `ShoppingListDetail`).
+
+### Bookkeeping
+
+- **[[FU-337]]**, **[[FU-355]]**, **[[FU-354]]** all moved to `DORA_FOLLOWUPS_RESOLVED.md`. FU-337's state note names both the resolving units (FU-327 + FU-333 Bucket D) and points at the concrete README lines. FU-354's state note lists both migrated + skipped pages with reasons so a future reader knows the sweep was surveyed, not lazy.
+- **`CHANGELOG.md`** `[Unreleased]` → two new `### Changed` entries (FU-354 + FU-355) placed above the existing FU-308 entry. Kept FU-354 and FU-355 as siblings — they're conceptually one change to the "list-state persistence surface" — but split so grep-by-FU still works.
+- **`DORA_VERIFY.md`** → new section **useListState — full sweep across meal planner + shopping list detail** slotted just above the FU-306 "Show-all-slots" section (grouped by surface: meal planner). Covers picker-search survives, groupBy survives, groupBy carries across lists (per-page not per-list), sign-out clears both, silent-401 clears both, hard-reload clears both, and a grep-verify that the CACHE is still module-scope (not localStorage).
+
+### Verification
+
+- Not run. `vue-tsc` + `eslint` on the four touched files (`authStore.ts`, `useListState.ts` [not touched, just re-imported], `useMealPlanner.ts`, `ShoppingListDetail.vue`) is the next step. Then the new DORA_VERIFY section walks in the browser.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation):** No new components; `useListState` was already the shared primitive. Both migrations reduce local `ref(...)` copies in favour of the shared cache. ✓
+- **R-003 (single source of truth):** `useListState` remains the only path to session-persistent list state. `clearAllListState` remains the only teardown path — the auth store now hooks it from both places instead of leaving the map to grow across sessions. ✓
+- **R-007 (scope discipline):** Targeted sweep. Did *not* wrap every ref on every page the FU listed — surveyed each, migrated only the ones with real user-picked filter/search/sort state, and documented the skip reasons in the resolved-ledger entry. Did *not* refactor the composable's other refs. Did *not* graduate any state to localStorage (that's a separate design decision; per-device localStorage is FU-306's mechanism for a genuinely device-scoped preference; session-scope Map is right for filter/search/sort). ✓
+- **R-008 (comment hygiene):** New FU anchors name *why* (session-scope, not per-list; auth-store hook rationale) not *what*. No breadcrumbs. ✓
+- **R-026 (nav-state via `useListState`):** two more callers now demonstrate the pattern, and the resolved ledger names R-026 as the going-forward rule for any list surface that grows a filter later. ✓
+- **Charter tiebreak (Effortless):** the meal-plan picker no longer loses your typed search when you tap through to a recipe; the shopping list detail no longer resets your grouping every time you glance at the dashboard. Small but repeated frictions removed. ✓
+- No new rule / ADR — FU-354 is an application of the R-026 policy R-026 already codifies; FU-355 is an application of R-003 (single teardown path).
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. All three FUs are polish inside shipped surfaces (auth flow, meal planner, shopping list detail).
+
+**Next up:** `vue-tsc` + `eslint`; then the new DORA_VERIFY section walk. After that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-306 shipped (show-all-slots persists to localStorage) + FU-308 shipped (per-template CRUD folded into drawer; page narrowed to Rotating Sets)
+
+**Why:** User picked FU-306 option 1 (small, per-device localStorage) after I gave three sizing options for that FU, then asked to do FU-308 in the same unit.
+
+### FU-306 — Show-all-slots persistence
+
+`web_app/src/pages/MealPlansOverview.vue`:
+- Added `SHOW_ALL_SLOTS_KEY = 'mealPlanShowAllSlots'` (values `'0'` / `'1'`) + a `readShowAllSlots()` reader that seeds the ref.
+- Added `watch(showAllSlots, ...)` that persists on every change.
+- Wrapped both read + write in `try/catch` so private-mode Safari / disk-quota-exceeded environments degrade to the previous session-local behaviour without a console throw.
+- Imported `watch` from `vue`.
+
+Chose per-device localStorage over the FU's `User.Preference` column alternative because: (a) it's genuinely a *view* choice, not a household state; (b) the graduation path to `Preference` later is trivial (localStorage becomes the fallback); (c) charter Anti-creep — no new settings-UI + migration for a single ref.
+
+### FU-308 — Templates drawer + Sets page — hybrid
+
+**Decision shape:** the FU offered (a) fold everything into the drawer + retire the page, or (b) keep the page as heavy management + add a discoverable entry point. Went **hybrid**: (a) for per-template actions, (b) for rotating sets, connected by a footer link.
+
+**Rationale for the split:** Per-template actions (Apply / Rename / Clone / Delete + Save-current-week / Apply-recurring) are single-item and fit the drawer's 440px width with inline rename beating the page's old `$q.dialog.prompt` on ergonomics. Rotating sets are heavier — multi-template ordered list + reorder controls + a nested set-editor dialog. Cramming that into a 440px drawer forces a nested-in-nested surface and demotes the page's already-decent UX. Anti-creep: don't invent a novel pattern when a page already fits the job.
+
+**What shipped:**
+- `web_app/src/components/MealPlanTemplatesDrawer.vue`:
+  - New **Clone** icon-button (`ICONS.content_copy`) beside Apply / Rename / Delete on each template row. Wired through `templateStore.cloneAsync` — the same call site the retired page used. Per-template `cloningId` ref so multiple concurrent clones each spin their own row's icon.
+  - New footer **Manage rotating sets →** ghost button that closes the drawer via `emit('update:modelValue', false)` and routes to `/meal-plans/templates` via `useRouter`.
+  - `useRouter` import + `onClone` / `onManageSets` functions added.
+- `web_app/src/pages/MealPlanTemplatesPage.vue`:
+  - Deleted the entire Templates card (list + Rename + Clone + Delete). That surface now lives in the drawer.
+  - Retitled page header from **Meal plan templates** to **Rotating template sets** with a caption directing users to the drawer for per-template actions.
+  - Dropped `renameTemplate` / `cloneTemplate` / `deleteTemplate` functions + the unused `MealPlanTemplateSummary` type import.
+  - `templates` still loaded on mount because the set-editor's "Add a template" picker needs the list of available templates (dropdown options only, no rendering).
+- `web_app/src/router/routes.ts`:
+  - Route `path: 'meal-plans/templates'` kept (existing bookmarks / deep-links work) but `meta.title` retitled to "Rotating template sets" to match the page's narrowed purpose.
+- `web_app/src/composables/useMealPlanner.ts`:
+  - Removed the dead `goToManageTemplates(): void { router.push('/meal-plans/templates') }` helper + its return-object export. Zero callers (grep-confirmed) — it was a leftover from the retired Direction-B planner draft. The drawer's own `onManageSets` covers the nav path now. Left a tombstone comment naming FU-308.
+
+**Deliberately not built:**
+- Description editing on templates. The FU's original text flagged it as an example of a page-only feature, but static read showed neither the drawer's inline rename nor the page's `$q.dialog.prompt` supported it — a gap in *both* surfaces, not a page-only feature. Adding a description field to the save-template dialog + a description edit path in the drawer is a fresh FU shape, not FU-308's scope.
+- Folding rotating sets into the drawer. See the "why the split" reasoning above.
+
+### Bookkeeping
+
+- **[[FU-306]]** and **[[FU-308]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with full state notes.
+- **`CHANGELOG.md`** `[Unreleased]` → new `### Changed` block above the existing `### Fixed` (FU-161 partner-bug). Two entries: FU-308 documenting the drawer/page split + FU-306 documenting the localStorage persistence.
+- **`DORA_VERIFY.md`** → two new sections under `## Dashboard` → wait no, under Meal Planner. Slotted just before the FU-305 "R-Phase 1 extraction + Phases 2–6" section. First section (FU-306) walks toggle persistence + private-mode fallback + per-device scope. Second section (FU-308) walks the drawer's new Clone, the drawer footer's sets-page jump, the retitled page header, the deep-link check, and a grep-verify that `goToManageTemplates` is gone.
+- No new open FUs.
+
+### Verification
+
+- Not run. `vue-tsc` + `eslint` on the four touched files (`MealPlansOverview.vue`, `MealPlanTemplatesDrawer.vue`, `MealPlanTemplatesPage.vue`, `useMealPlanner.ts`) is the next step; then the two new DORA_VERIFY sections for the browser walk. Nothing on the backend moved.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation):** FU-308 consolidates per-template CRUD in one component (the drawer) instead of two nearly-identical surfaces. The Sets page loses redundant logic and keeps only what fits page-shape. ✓
+- **R-003 (single source of truth):** Per-template Rename / Clone / Delete now have exactly one call site each (the drawer). The `$q.dialog.prompt` rename on the page — a divergent, worse UX — is gone. ✓
+- **R-007 (scope discipline):** Kept both FUs tight. FU-306 didn't graduate to a household `Preference` (deliberate deferred call). FU-308 didn't touch description editing (out of scope; noted as a fresh FU shape). Did remove the dead `goToManageTemplates` helper because it lived in a file I was editing anyway — R-008 hygiene, not scope creep. ✓
+- **R-008 (comment hygiene):** New comments name *why* + the FU number as a discoverable anchor. Tombstone comment on `goToManageTemplates`'s deletion explains *why* it's gone so a reader doesn't try to reintroduce it. ✓
+- **R-010 (validate inputs at the boundary):** FU-306's localStorage read wraps `getItem` in try/catch and treats anything ≠ `'1'` as false, so a hand-poked bad value degrades to the safe default. ✓
+- **Charter tiebreak (Effortless + Anti-creep):** FU-306 — Effortless: one fewer flick per session for the multi-slot household. FU-308 — Anti-creep: didn't invent a nested-in-nested surface just to consolidate; used the right container for each surface's shape. ✓
+- No new rule / ADR — FU-306 is R-010 applied to localStorage; FU-308 is R-001 + R-003 applied to a specific pair of surfaces.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. Both FUs are polish inside a shipped surface (the meal planner rebuild).
+
+**Next up:** `vue-tsc` + `eslint`; then the two new DORA_VERIFY sections. After that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-307 closed as obsolete (Direction B retired, its rich-card enhancement has no target surface left)
+
+**Why:** User flagged FU-307 as "old now?" — the FU was scoped explicitly to the Direction-B meal card ("§6.5 calls for status accent + tag") and recommended "opportunistic — when Direction B is named the winner". Direction B lost in [[FU-304]] earlier this session; the target surface is gone.
+
+### Decision
+
+Closed as **won't-do (obsolete)**. Presented the user with two options — pure won't-do vs. rescope-and-defer (per-entry cookability on the surviving mobile rich card + desktop A chip) — and defaulted to won't-do since the original scope statement is dead. If per-entry cookability is later wanted on any surviving surface, a **fresh FU** with a scope statement that names the specific target (mobile / desktop A chip / both) is the right shape — the query-expansion trade-off (`include(MealPlanEntry.recipe.ingredients)` + folded `missing_count_for(...)` / `cookable` on the DTO) needs to be argued on the survivor's terms, not against the retired B card's "polished card is the point" framing.
+
+### Bookkeeping
+
+- **[[FU-307]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`. State note names the underlying idea explicitly so a future reader knows the concept is dormant, not lost — and knows the exact shape a fresh FU should take if the user wants it later.
+- **No code changes.** No `CHANGELOG.md` entry. No `DORA_VERIFY.md` entry — nothing to walk.
+
+### Engineering-standards close-gate
+
+- Docs-only unit; no rule interactions. FU-307's own scope statement is what triggered the close, and the resolved-ledger entry captures the reasoning + the "spin a fresh FU if you want this on the survivors" escape hatch.
+
+### PROJECT_STATE.md refresh
+
+Not needed — closing a stale enhancement FU doesn't move any phase-board row.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-161 closed (verified working) + partner-bug fixed on recipe ingredient DnD
+
+**Why:** User confirmed the shopping-list drag-and-drop reorder is now behaving correctly in the running app (FU-161's L414 "index off / wrong items being swapped" complaint is gone). While confirming, the user reported the same shape of off-by-one on the **recipe ingredient** DnD in the recipe editor.
+
+### The bug
+
+`RecipeDetailPage.vue` `ingredientDnd.onDrop` did:
+
+```js
+const fromIdx = form.ingredients.indexOf(source);
+form.ingredients.splice(fromIdx, 1);           // ← mutation
+const toIdx = form.ingredients.indexOf(target);   // ← indexOf on the mutated array
+form.ingredients.splice(toIdx, 0, source);
+```
+
+When dragging **downwards** (source above target originally, e.g. B onto D in `[A, B, C, D, E]`), the `splice(fromIdx, 1)` had already removed B, so `indexOf(target)` returned `2` for D (which was originally at index 3). Inserting at 2 produced `[A, C, B, D, E]` — B landed one row *above* the drop point. Classic remove-then-search off-by-one; identical shape to feedback L414 on shopping lists.
+
+Both `ShoppingListDetail.vue` `lineDnd.onDrop` and `RecipeStepsEditor.vue` `dnd.onDrop` already use the correct pattern (capture **both** `fromIdx` and `toIdx` before any mutation, then splice-remove + splice-insert). Ingredient DnD was the outlier. `RecipeStepsEditor.vue`'s own comment already claimed the pattern "matches the other DnD surfaces in the app (shopping-list lines, recipe ingredients) so the user's mental model stays consistent" — the comment reflected the intent; the ingredient code just didn't. This fix makes the comment true.
+
+### What shipped
+
+`web_app/src/pages/RecipeDetailPage.vue` — rewrote `ingredientDnd.onDrop`:
+- Capture `fromIdx` **and** `toIdx` before any mutation. Bail early with `if (fromIdx < 0 || toIdx < 0) return;` — the "target vanished between dragstart and drop" branch is now unreachable (indexOf returns -1 up-front is the same signal), so the half-mutation-rollback code path is gone.
+- Splice-remove source, splice-insert source at `toIdx`. Same shape as `ShoppingListDetail.vue` and `RecipeStepsEditor.vue`.
+- Cross-section move preserved — `source.section_client_id = target.section_client_id ?? null` still fires atomically with the reorder, so dragging an ingredient from Section 1 onto a row in Section 2 still moves + reorders in one gesture.
+- `markDirty()` still fires.
+- Refreshed the comment block to name FU-161 as the partner-bug anchor and to explain the pre-vs-post-mutation-index distinction so this pattern doesn't drift again.
+
+### Bookkeeping
+
+- **[[FU-161]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`. State note names both the shopping-list confirmation (the FU's primary subject) and the recipe-ingredient partner-fix (bundled into the same close).
+- **CHANGELOG.md** `[Unreleased]` → new `### Fixed` entry (placed above `### Removed`), documenting the recipe-ingredient half of the fix + the "shopping-list fix verified" line. FU-161 as the anchor.
+- **DORA_VERIFY.md** → **Ingredient DnD** section (FU-118) header stamped with the FU-161 partner-fix date, plus two new checkboxes: an explicit "drag B onto D → result is `A, C, D, B, E`, not `A, C, B, D, E`" downward-drag regression check + a matching upward-drag check to confirm the symmetry with shopping-list DnD.
+
+### Verification
+
+- Not run. Static reason: the bug's shape is identical to the shopping-list one that the user just verified fixed, and the fix code is a byte-for-byte match against `RecipeStepsEditor.vue`'s working `onDrop` (which the user has been using without complaint). Next step is the two new DORA_VERIFY checkboxes — drag B→D and D→B in a real recipe editor.
+
+### Engineering-standards close-gate
+
+- **R-003 (single source of truth):** Three DnD surfaces (shopping lines, recipe steps, recipe ingredients) now all use the same "capture both indices before any mutation" pattern. `RecipeStepsEditor.vue`'s existing comment about that consistency finally holds. ✓
+- **R-007 (scope discipline):** Fix is scoped to the buggy site. Did not "while I'm here" refactor `useDragDropList` (it's already correct — the composable delegates the reorder effect to consumers), did not touch shared DnD styling, did not tackle the standing item about hand-rolled DnD vs a library (that's [[FU-510]]). ✓
+- **R-008 (comment hygiene):** New comment names *why* (the L414 partner-bug shape) + the *invariant* (both indices before mutation), not the *task*. The FU number is a discoverable anchor, not a breadcrumb. ✓
+- **Charter tiebreak (Effortless):** Direct-manipulation drag-and-drop is Effortless *only* when the result matches the user's intent to the pixel. Off-by-one violates that at the exact moment the user commits. Justifies fixing this now rather than deferring behind a hand-rolled-vs-library sweep. ✓
+- No new rule / ADR — this is an application of R-003, not a novel pattern.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. FU-161 was a Phase-1-shipped-surface residue; closing it doesn't change any phase board row.
+
+**Next up:** the two new DORA_VERIFY checkboxes (B→D and D→B in the recipe editor). After that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-304 closed: Direction A wins the meal-planner A/B; Direction B page + toggle deleted
+
+**Why:** User asked to close off FU-304, leaning A. Assessed B's unique surfaces up-front against A before killing — the honest read (in this thread's earlier turn) landed on "one thing worth porting (the rich meal card), everything else is B-specific noise tied to the grid layout". User then chose the plain kill-B-keep-A cleanup with no port. Two-week experiment done; time to collapse to one surface.
+
+### What shipped
+
+**Deleted:**
+- `web_app/src/pages/MealPlansBoardPage.vue` — the Direction B page (top strip · sticky consequences bar · pinnable picker drawer · calendar-as-popover · group-by-slot toggle).
+- `web_app/src/components/MealPlanWeekBoard.vue` — B's day-major 7-day grid + group-by-slot alt view.
+- `web_app/src/composables/useMealPlannerView.ts` — the localStorage A/B persistence helper (`resolvePlannerView` / `setPlannerView`) that survived to bridge the toggle across reloads.
+
+**Kept (deliberately):**
+- `web_app/src/components/MealPlanRichCard.vue` — **still live-referenced by `MealPlanMobileFocus.vue`** (shared mobile focus renders the rich card on both platforms; A's desktop chose the flat `MealPlanEntryChip`). Deleting it would break mobile.
+- All server-side `MealPlanEntryDto` enrichments from R-Phase 3 (`has_image`, `cook_time_minutes`, `cuisine_name`, `category_name`, plus the bulk-hydrated `has_image` path) — still consumed by the rich card on mobile. Nothing to unwind server-side.
+- Every other shared surface: `useMealPlanner`, `MealPlanCalendar`, `MealPlanShoppingSummary`, `MealPlanFirstRun`, `MealPlanRecipePicker`, `MealPlanWeekStatus`, `MealPlanSkeleton`, `MealPlanTemplatesDrawer`, `MealPlanPickerSheet`, `SequentialBuilderDialog`, `MealPlanEntryChip`, `MealPlanWeekDayCard` — unchanged.
+
+**Edited:**
+- `web_app/src/pages/MealPlansOverview.vue`:
+  - Removed the desktop-only `BaseSegmented` A/B (List/Grid) toggle from the top nav row.
+  - Removed `onViewToggle` handler + the `onMounted` "restore Grid view" redirect that used to punt users off to `/meal-plans/board` if a previous session had saved `view=grid`.
+  - Removed now-dead imports: `BaseSegmented`, `resolvePlannerView`, `setPlannerView`, `useRoute`, `useRouter`, and `onMounted` (only used by the retired redirect).
+  - Left an inline FU-304 breadcrumb comment where the toggle used to sit, so a future reader doesn't wonder why the top row has just one button + a `q-space`.
+- `web_app/src/router/routes.ts`:
+  - Replaced `{ path: 'meal-plans/board', component: () => import('pages/MealPlansBoardPage.vue'), meta: … }` with `{ path: 'meal-plans/board', redirect: '/meal-plans' }`. Kept the row so any stale bookmark / deep-link / old localStorage-nudged reload lands cleanly on the surviving planner instead of 404'ing. The redirect can be dropped in a later grep-sweep when we're sure no external doc points at `/meal-plans/board`.
+
+### Design assessment (from the earlier turn, folded here for the trail)
+
+Read both pages side-by-side. B's genuinely unique surfaces vs A, and why only one is worth porting:
+
+| B feature | Verdict vs A | Reason |
+|---|---|---|
+| Rich meal cards (thumbnail + name + slot tag + servings + cook-time icon + monogram fallback) | Worth porting (later, if desired) | Content-forward "polished" bar from brief §7. Leaf swap inside `MealPlanWeekDayCard`; the server enrichment already flows to A. `MealPlanEntryChip` on desktop A is spartan next to the mobile rich card. User chose not to port in this cleanup. |
+| Sticky bottom "consequences bar" | Skip | A has this as the right-rail `MealPlanShoppingSummary` inside `.planner-sticky` — same intent, different shape (bar suits the grid below; rail suits the carousel beside). Not equivalent-better. |
+| Slot-as-tag (vs slot-as-rows) | Skip | This is B's *core reframing*. Porting kills A's F46 slot-row scaffold — the very reason to pick A. |
+| "Group by slot" toggle | Skip | Only meaningful on a day-major grid; A's carousel is already slot-row-major. |
+| Pinnable picker drawer | Skip | A already has the picker as an always-pinned sticky left rail. Same behaviour, no drawer chrome needed. |
+| Calendar-as-popover in top strip | Skip | A has the calendar as a right-rail widget; both work, A's placement suits the rail. |
+
+### Bookkeeping
+
+- **[[FU-304]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with the full "why A, what stayed, what got deleted, what was deliberately not ported" trail.
+- **`CHANGELOG.md`** `[Unreleased]` → new `### Removed` entry above the FU-349 `### Changed` block, documenting the retirement + the mobile-focus dependency that keeps `MealPlanRichCard` alive.
+- **`DORA_VERIFY.md`** — three stale references to `/meal-plans/board` / the "Board page" tightened:
+  - `### In-context Print on the Board page` (FU-338) → retitled to `In-context Print on the meal planner` + Board-page-specific checkboxes dropped; added a redirect-verify checkbox.
+  - The FU-181 "meals-per-week" checkbox that mentioned `/meal-plans/board` → collapsed to `/meal-plans` only, with an inline FU-304 breadcrumb.
+  - The FU-338 "Print icon works from both meal-plan surfaces" checkbox → collapsed to the surviving surface, with an inline FU-304 breadcrumb.
+- No new open FUs. The one legitimate spin-off — "port `MealPlanRichCard` into A's `MealPlanWeekDayCard` so desktop stops looking spartan next to mobile" — is deliberately not raised as a new FU: user's call to keep the cleanup pure; if desktop feels spartan in real use, that's when to raise it.
+- **[[FU-308]]** stays open — different templates surface, not the A/B decision.
+
+### Verification
+
+- Not run. Change is a code-deletion + one route-swap + import-list tidy on the surviving page. `vue-tsc` + `eslint` on `MealPlansOverview.vue` + `routes.ts` is the next step; a quick browser walk of the DORA_VERIFY meal-plan sections after that will confirm the redirect works and no import went stale in the JS bundle.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation):** deletion, not consolidation. The kept components (`useMealPlanner`, leaf components) still cover the surviving surface. ✓
+- **R-003 (single source of truth):** killing the A/B toggle removes the *localStorage* copy of "which layout is the user on" — a piece of duplicated state whose only purpose was the experiment. No new derivations introduced. ✓
+- **R-007 (scope discipline):** stuck to the pure kill-B cleanup per the user's redirect. Did not port `MealPlanRichCard` to desktop A (it's the one B-derived improvement I flagged in the earlier assessment — the user's call to skip it is honoured in code; the analysis lives in the resolved-ledger entry for future reference). Did not touch shared components. Did not delete the server enrichment fields even though they're only used by mobile now — the fields cost nothing and pulling them would be a bigger change. ✓
+- **R-008 (comment hygiene):** replaced the old `BaseSegmented` toggle with an inline FU-304 breadcrumb noting *why* the row has just one button now, so a future reader doesn't wonder. Kept the route redirect + its explanatory comment so the "board bookmark still works" property is discoverable. No FU-NNN drift in the code. ✓
+- **Charter tiebreak (Effortless + Anti-creep):** Anti-creep says close the experiment before the second surface becomes load-bearing. Effortless says one meal-planner is easier to explain than two. Both applied. ✓
+- No new rule / ADR — this is a routine "close a bounded UX experiment" cleanup.
+
+### PROJECT_STATE.md refresh
+
+Not needed — FU-304 was itself a workstream-inside-a-workstream (the meal-planner rebuild landed in Phase 1); closing it doesn't move a phase-board row, and the surviving planner shipped its browser-verify (FU-305) weeks ago.
+
+**Next up:** `vue-tsc` + `eslint` on the two touched files; then a browser walk (open `/meal-plans`, confirm no A/B toggle, deep-link `/meal-plans/board`, confirm it redirects). After that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-349 shipped (option A): inline `#` hint row on import template + parser strips comment rows on re-upload
+
+**Why:** User picked **option A** on the FU-349 fix — the cheapest of the three options captured in the ledger. The stock-items import template's example row uses seeded StockLevel/StockLocation/StockGroup names (`In stock`, `Pantry`, `Grains`), so any install that renamed those in Settings → Kitchen setup was getting a template that would fail row-level validation on first re-upload. Option A: add an inline `#`-prefixed comment row explaining the values are illustrative, and rely on the user to overwrite. Kept option B (dynamic template that reads the install's actual seeded names) and option C (drop the example row entirely) rejected — the ledger has the trail.
+
+### The one bit the FU didn't spell out — the parser has to skip `#` rows
+
+The FU's option A said "add a `#` row, rely on the user to overwrite". That's incomplete on its own: if the user downloads the template, adds real rows *below* the hint, and re-uploads, the parser would try to import a stock item literally named "# example values are illustrative…" — silent data corruption. The safe implementation of option A is: emit the `#` row on download AND filter `#` rows on ingest. Option A isn't option A without both halves. The extra ~20 lines are worth it.
+
+### What shipped
+
+**`dora_api/features/data/import_spreadsheet.py`:**
+- New `_COMMENT_ROW_STOCK_ITEMS` module constant carrying the user-facing hint copy: *"# example values are illustrative — replace them, and use your own level/location/group names (see Settings → Kitchen setup)."* Named module-scoped (not inline) so a future second template with its own hint row has a clean pattern to follow.
+- `ImportTemplate` dataclass gains `comment_rows: tuple[tuple[str, ...], ...] = ()` — defaults to empty tuple so templates that don't need a hint just omit it. The `stock_items` template sets `comment_rows=(_COMMENT_ROW_STOCK_ITEMS,)`.
+- `download_import_template` now writes `header → example → *comment_rows` (header first for real column names, example second for shape hand-holding, hint row(s) last so they read as annotations, not required rows).
+- New `_strip_comment_rows(rows)` + `_is_comment_row(row)` helpers. Called from `_read_sheets` for both the `.csv` and `.xlsx` branches so re-uploads of the same file don't turn the hint into a data row. Row 0 is always preserved (the header), so a user who deleted the header row and put a `#` line at the top gets an honest failure instead of a silently-reshaped sheet.
+
+**`tests/e2e/dora_api/test_data_router.py`:** two new e2e tests, both scoped and self-contained:
+- `test__import_template__csv_download__includes_hash_comment_row` — asserts the downloaded body contains at least one `#`-prefixed line. Regression guard: a future refactor that drops the hint row would silently regress the FU-349 fix without this.
+- `test__import_template__hash_comment_row__stripped_on_reupload` — round-trips the raw downloaded template through `/import/spreadsheet/inspect` and asserts no row in `preview_rows` starts with `#`. Regression guard: the parser can't silently forget to strip.
+- Deliberately chose `inspect` over `commit` for the round-trip test — commit would leave state (a new "Rice" stock item) in the test DB; inspect's `preview_rows` reflects exactly the rows the commit path would see, without any writes.
+
+### Bookkeeping
+
+- **[[FU-349]]** moved to `DORA_FOLLOWUPS_RESOLVED.md` with a full state note covering the choice + what was and wasn't built.
+- **CHANGELOG.md** `[Unreleased]` → new `### Changed` entry (placed above the FU-351 `### Added` block) documenting the hint row + the parser filter.
+- **DORA_VERIFY.md** → the pre-existing FU-343 "Download template button" section extended with two new FU-349 checkboxes: verify the hint row is present in the downloaded body, and verify the round-trip drops it (using both the untouched template AND a hand-crafted `#`-starting row).
+
+### Verification
+
+- Not run. The two e2e tests are the automated regression guard; a manual browser walk of the DORA_VERIFY checkboxes is the next step. `pytest tests/e2e/dora_api/test_data_router.py -k template` should exercise the full new surface.
+
+### Engineering-standards close-gate
+
+- **R-003 (single source of truth):** The comment-row copy is a module-level constant, not duplicated between the template def and the download handler. The comment-strip predicate (`_is_comment_row`) is one function called from two branches — no divergent CSV-vs-XLSX rules. ✓
+- **R-005 (portable data access):** No DB queries added, no ORM change. Same runtime on SQLite + Postgres. ✓
+- **R-007 (scope discipline):** Stuck to option A. Did not build option B (dynamic seeded-name injection) or option C (drop example row). Did not touch the `.xlsx`-with-dropdown-validation deferred follow-on. ✓
+- **R-008 (comment hygiene):** New code comments name the *why* (FU-349, safety property "row 0 is always preserved"), not the *what*. FU number appears as a discoverable anchor on the constant + the two new helpers. ✓
+- **R-010 (validate enum inputs at the boundary):** Parser is defensive — `_is_comment_row` handles `None`, empty, and non-string first cells before `startswith`. ✓
+- Charter tiebreak (Effortless + Anti-creep): Effortless — user gets a template that explains itself. Anti-creep — didn't add a DB read on the download path (option B was rejected precisely for that). ✓
+- No new rule / ADR — this is a small-surface application of R-003 + R-010.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved.
+
+**Next up:** `pytest tests/e2e/dora_api/test_data_router.py -k template` + the two new DORA_VERIFY checkboxes; after that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-351 shipped: P6-10 "Draft my shop" one-click dashboard card on top of the existing /auto-generate engine
+
+**Why:** User asked to do FU-351. The legacy P6-10 self-drafting-weekly-shop engine has been sitting on the server since X5 (`auto_generate.py`); the FU flagged that the *engine is done, the prominent one-click entry point is missing*. The FU explicitly asked for a small design brief first: entry-point location, default source set, reason chip strategy — then a bounded implementation on top of `auto_generate.py`.
+
+### Design calls (up-front, per the FU's ask)
+
+- **Entry-point location — Dashboard, `act` zone.** One prominent CTA on the surface the user opens most often, next to the other "act now" cards (Attention, Suggestions). Charter P1 Effortless: the home screen *does*, not just shows. Did **not** add it to ShoppingListsOverview (empty-state-only; a first-time user with zero data would click through to an empty-draft toast — NewListDialog covers them) or to ShoppingListDetail (that's the *inside* of a list, not the "start a new shop" moment).
+- **Default source set — meal plan + low/out + flagged.** Matches the FU's own suggestion:
+  - `low_stock: true, out_of_stock: true` — restock what's running low.
+  - `flagged: true` — always-include essentials.
+  - `meal_plan_week: <today ISO>` — **rolling 7-day forward window** anchored on today. The server collector already skips `consumed_at IS NOT NULL` entries, so past days of "this week" are filtered naturally regardless of the user's week-start convention.
+  - `frequently_added: false` — noisy on a *weekly* draft (surfaces recent-buys already covered by low/out or essentials); the multi-checkbox NewListDialog remains the venue for that wider mix.
+  - `essentials_only_for_low: false` — all low items count, not just flagged ones (flagged is a separate source already).
+  - `recipes: []` — the meal-plan window covers this.
+- **Reason chip — reuse existing.** `ShoppingListDetail.vue:615` already renders `added_via` chips on every line ("auto: meal plan", "auto: low stock", "auto: essential" / "auto: flagged", etc.). The engine already stamps every produced line with the correct provenance via `PROVENANCE_PRIORITY` (recipe > meal plan > flagged > essential > low stock > frequently added). Building a second chip would have been duplication. R-003 compliance for free.
+
+### What shipped
+
+**Server (`dora_api/features/shopping_lists/auto_generate.py`):**
+- Reordered `AutoGenerateHandler.handle` — deferred list creation on the **create-new path** until *after* candidate collection. If the create-new call yields zero candidates, the response is `nothing_to_add: true, shopping_list_id: null` (no phantom empty "Weekly shop · Sat 12 Jul" list left in the sidebar). Merge-into-existing path is unchanged (target must exist before the handler; the handler still returns `nothing_to_add: true` with the caller-supplied `shopping_list_id`). NewListDialog's flow is untouched because it always passes a `merge_into_list_id` (it creates the list *before* calling `/auto-generate` and passes the id in).
+- No API contract change — the response envelope already declared `shopping_list_id: UUID | None` (and the client type already had `string | null`), so this tightening required no schema edit.
+
+**Frontend — new component (`web_app/src/components/dashboard/DraftShopCard.vue`):**
+- Self-contained: owns its `busy` ref, the API call, the empty-state info toast, the error toast, the store refresh, and the router push. The card body renders a short blurb explaining what the button will produce (meal plan + low/out + essentials), a **Draft my shop** button, and nothing else.
+- On click: POSTs `/shopping-lists/auto-generate` with the sensible-default source mix and a human-friendly name (`Weekly shop · <weekday> <day> <month>`, e.g. "Weekly shop · Sat 12 Jul") — beats the server's generic "Auto N · date" default because the name expresses intent.
+- On `nothing_to_add`: honest info toast "Nothing to draft yet." caption "Plan some meals, or mark items as essential — then try again." No navigation, no empty list.
+- On success: positive toast "Drafted N items." caption "Review the list, then start shopping when ready." + `listStore.refreshAsync()` (so the sidebar list-selector shows the new list from the moment the user lands) + `router.push(/shopping-lists/<id>)`.
+- On error: negative toast with the error caption via the shared `toastCaption()` helper.
+
+**Frontend — `web_app/src/pages/DashboardPage.vue`:**
+- Registered `draft_shop` in `CARD_DEFS` in the `act` zone (label: "Draft this week's shop", icon: `playlist_add_check`). Slotted between `attention` and `suggestions` — the natural "act" ordering is "what's on fire now → what should I start now → what does Dora think".
+- Added the render block right before the Primary-shopping-list card, wrapped in the standard `isCardVisible('draft_shop')` / `cardCssOrder('draft_shop')` guard so the Cards menu toggles it like every other card.
+- Imported `DraftShopCard` alongside `DashboardCard` / `DoraScoreCard`.
+
+### Bookkeeping
+
+- **[[FU-351]]** moved to `DORA_FOLLOWUPS_RESOLVED.md` with the full design-call trail + files-touched list.
+- **CHANGELOG.md** `[Unreleased]` → new `### Added` entry (placed before `### Changed` because this is a new user-visible surface, not a modification of an existing one) documenting the card + the honest-empty-state fix.
+- **DORA_VERIFY.md** → new `### Draft my shop — one-click card — origin FU-351` section under `## Dashboard`. Covers the happy path, the empty case (with the "no phantom list" check), the error case, the priority-rule check on chip rendering, the "consumed meal-plan entry is filtered" check, and the toggle-off/on lever.
+
+### Verification
+
+- Not run. Bundled UI + a small server-side refactor of `_create_list` timing. The DORA_VERIFY section is the browser-walk script; next step is `alembic upgrade head` (no new migration, but head is good hygiene), boot the app, open the dashboard, walk the six checkboxes.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation-first):** New card is its own file — DraftShopCard.vue — not inlined into DashboardPage's 3080-line body. Follows the pattern DoraScoreCard set. ✓
+- **R-003 (single source of truth):** No new provenance-chip UI — reused the existing `added_via` chip on `ShoppingListDetail.vue`. No new "sensible defaults" logic on the server — the client picks the source flags and the server's engine (which is already the R-003 authority for auto-gen) handles the rest. ✓
+- **R-005 (portable data access):** Server change is a reorder of two existing lines' evaluation order; touches no query patterns; runs identically on SQLite + Postgres. ✓
+- **R-007 (scope discipline):** Kept scope tight. Did not build a preview modal (deliberately noted — the draft *is* the review surface), did not add the CTA to Overview or Detail (both would have been "while I'm here" scope-creep), did not build the per-line "usually rebuy ~every 12 days" cadence copy (out of scope — that's P8-07 Zero-Input Pantry / Restock Radar territory). ✓
+- **R-008 (comment hygiene):** New comments name the *why* (Charter Effortless, R-003, the "consumed_at" filter semantics) + the FU number as the discoverable anchor. Kept two module-level FU-351 anchors in the server file's docstring paragraph and the client card's docstring — both are load-bearing (they name a design *decision*, not the *task*). ✓
+- **Charter tiebreak (Effortless + Anti-creep):** Effortless says "put the doing where the user is" — dashboard. Anti-creep says "no preview modal on top of a draft that *is* the review surface" — direct-to-draft navigation. Both applied. ✓
+- No new rule / ADR — this is a small-surface application of R-001 + R-003, not a novel pattern.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. FU-351 was inside a shipped Phase-1 workstream (P6-10 engine) and this closes its residual UX piece; no phase board row changes state, and the "Recently shipped" summary already flows out of CHANGELOG.
+
+**Next up:** browser-verify the DORA_VERIFY section; after that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-352 decided: keep Attention + Kitchen Health as coexisting cards (no fold); FU-356 gamification re-confirmed as still-parked
+
+**Why:** User asked to do FU-352. This FU is a **decision task**, not a build task — the P8-08 Dora Score card shipped 2026-07-04 with per-component reasons + launchpads (the *score portion* of the FU), and the only remaining open piece was the design call: **(a)** leave the pre-existing **Needs your attention** card + the new **Kitchen health** card as two coexisting dashboard surfaces, or **(b)** fold Attention into the Score card as additional "briefing rows" beneath the five signals. FU-356 (gamification) explicitly asked to be co-decided in the same session against the shipped Score card.
+
+### The decision — keep coexisting (option A). No merge.
+
+Read both card shapes side by side before deciding:
+- **Attention** (`web_app/src/pages/DashboardPage.vue:215`): summary chip row grouped by alert kind, then a peek list of the top few most-urgent items with **inline per-row quick actions** (Push +7d, Mark stocked, etc.) and deep-link `<router-link>`s per row. Answers *"what should I click NOW?"*.
+- **Kitchen health** (`web_app/src/components/dashboard/DoraScoreCard.vue`): composite 0–100 hero number + trend chip, then five signal bars (Waste / Budget / Freshness / Runouts / Stocktake), each with a server-authored reason sentence and one launchpad. Answers *"how am I doing OVERALL?"*.
+
+The dashboard's own zone structure already models the two answers: Attention lives in the `act` zone (top of page), Kitchen Health lives in the `kitchen` zone (lower). *Act first, gauge second* is already the layout — the coexistence isn't accidental, it's how the dashboard is laid out.
+
+Merging would force one of two bad outcomes: **(1)** drop the inline row actions (kills Attention's whole point — it stops being actionable and becomes a summary), or **(2)** keep them and let the Score card grow into a tall wall of mixed shapes (a hero number, five bars, then a queue of alert rows with buttons — Charter P3 "don't dashboard everything" violated at the component scale).
+
+The FU-352 update's proposed *"briefing bullets beyond the 5 signals"* (no-planned-meals-next-week, top-active-alerts summary, likely-due items) each already have first-class dashboard homes: the **Meal Plan** card, the **Attention** card itself, and the **Restock Radar** card respectively. Surfacing them a second time on the Score card would be pure duplication.
+
+Both cards are toggleable in the Cards menu (`CARD_DEFS` at `DashboardPage.vue:1205`), so a user who genuinely wants only one surface has that lever without a code change.
+
+### The gamification co-decision (FU-356) — still parked.
+
+Fresh look against the shipped Score card confirms the 2026-06-04 §7 Decision 3c call. The Score card already carries a mild *"you're improving"* signal via `trend_direction` + `trend_delta` (the small ▲/▼/— chip with a signed points delta over the trend window) — that's the piece of gamification that fits Dora's tone. Streaks / "N shops on budget in a row" / "waste-free week" / first-time badges would each add a *new feedback surface* (extra UI + server-side counters + a notifications channel) on top of information the composite score already reflects — a whole feature bucket, not a small addition. Charter Anti-creep + P3 keep them on the someday-list.
+
+### What shipped
+
+**No code changes.** This is a decision + docs unit.
+
+- `docs/01_charter/RECONCILED_FINISHING_PLAN.md` §7 Decision 3c — appended a 2026-07-07 re-check stamp explaining that gamification stays parked because the Score card's trend chip already delivers the fitting slice of it. Full audit trail lives in the [[FU-356]] resolved entry; the stamp is the discoverable summary for anyone reading the charter.
+- `DORA_FOLLOWUPS.md` — [[FU-352]] and [[FU-356]] both moved to `DORA_FOLLOWUPS_RESOLVED.md` with full state notes (the decision, the rationale, the shipped-card references).
+- `DORA_FOLLOWUPS.md` — refreshed two cross-refs that pointed at FU-352's "fold" path so they don't leave a stale detour in the ledger:
+    - **[[FU-391]] P5-06 first-week experience** — dropped its "fold into the P8-08 Dora Score card brief when FU-352 opens" recommendation; updated to "treat as a small standalone brief" (either an Attention-card nudges list or first-week-only overlay chips), explicitly *not* a Score-card row.
+    - **[[FU-379]] PROPOSAL_ALERTS §7 open decisions** — dropped its "or fold into FU-352 Dora Score card" fallback clause; resolution is now scoped to the Alerts surface itself when it's next touched.
+    - **[[FU-385]] Dashboard card extraction + new-low signal** — dropped its "feeds into FU-352 Dora Score card too" tail; scope is the shared `DashboardCard` component + the server-side new-low signal, no Score-card branch.
+
+### Bookkeeping
+
+- **[[FU-352]]** and **[[FU-356]]** moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **[[FU-391]]**, **[[FU-379]]**, **[[FU-385]]** in-place edits (recommended-resolution lines) to remove stale "fold into FU-352" detours.
+- **No CHANGELOG entry** — no product/code change.
+- **No DORA_VERIFY entries** — nothing to walk in a browser; the shipped dashboard cards continue to behave exactly as they did before.
+
+### Verification
+
+- N/A. Docs + ledger only. The cards themselves haven't moved.
+
+### Engineering-standards close-gate
+
+- **R-007 (scope discipline):** Kept scope tight to the decision + the three stale cross-refs it invalidates. Did not open new refactors, did not "while I'm here" the dashboard. ✓
+- **R-008 (comment hygiene):** No new code comments introduced. Prose in the resolved-ledger entry names the *why* + the shipped-file paths so future readers can retrace the reasoning without spelunking. ✓
+- **Charter tiebreak (Effortless + Anti-creep):** Both applied. Effortless favours *not* making users decode a single dense card; Anti-creep rejects duplicating already-surfaced signals under a new heading. Both point at keep-coexisting.
+- No new rule / ADR warranted — this is a design call, not a recurring pattern.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. FU-352 was already the "decide" residue of a shipped Phase-3 workstream (P8-08); closing it doesn't change any Phase-board status. FU-356 was and remains on the someday-list; no change to that surface either.
+
+**Next up:** whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-511 shipped: auto-add on low collapsed to a single install-wide 3-state setting
+
+**Why:** User approved the FU-511 assessment I logged in the previous unit and asked to build it now. Retire the per-item `StockItem.auto_add_when_low` boolean and replace it with a single `AppSetting.auto_add_mode` slider (`off` / `essential_only` (default) / `all`) at Settings → Admin → System → Stock.
+
+### What shipped
+
+**DB / entity:**
+- New migration `dora_api/persistence/migrations/versions/b8f2c1d4e6a9_20260707_auto_add_mode.py` — adds `AppSetting.auto_add_mode` (String(16), NOT NULL, server_default `'essential_only'`) and drops `StockItem.auto_add_when_low`. Non-preserving; pre-release breaking-changes-OK.
+- `dora_api/domain/entities/app_setting.py` — new `auto_add_mode: str = "essential_only"` field + `AUTO_ADD_MODE` Fields entry, with a comment block covering the three modes and why `essential_only` is the closest-to-legacy default.
+- `dora_api/domain/entities/stock_item.py` — removed `auto_add_when_low` field + `AUTO_ADD_WHEN_LOW` Fields entry. Left a short reference comment pointing at the new source of truth.
+- `dora_api/persistence/table_mappings.py` — dropped the StockItem column; added the AppSetting column.
+
+**Server logic:**
+- `dora_api/features/stock_items/update_stock_item.py` — dropped `auto_add_when_low` from the pydantic request + the `setattr` branch. Added `_auto_add_enabled_for(stock_item)` which reads the setting via `get_or_create_app_setting`, and hardened the auto-add hook: `off` returns False unconditionally; `all` returns True unconditionally; anything else (default + unknown) requires `is_flagged`. This is deliberately not exception-throwing on unknown modes — bad data degrades to the seeded default rather than silently disabling auto-add for flagged items.
+- `dora_api/features/stock_items/create_stock_item.py` — removed the field from `CreateStockItemRequest` + the constructor call.
+- `dora_api/features/stock_items/get_stock_item_detail.py` + `get_stock_items.py` — removed the field from the DTOs and the entity→DTO mapping.
+- `dora_api/features/app_settings/get_app_settings.py` — added `auto_add_mode: str` to `AppSettingsDto` + the mapping in `_to_dto`. Unknown/absent values default to `"essential_only"` at the DTO boundary (defence in depth alongside the entity default).
+- `dora_api/features/app_settings/update_app_settings.py` — added the field to the pydantic request, an enum-validated write branch, and a module-level `_VALID_AUTO_ADD_MODES` frozenset.
+- `dora_api/persistence/seed.py` — dropped the `auto_add=` kwargs from the four seed items that had them (they were `**kw` and silently ignored, but the file was going to grow stale). Also removed a stale `image=None` from the StockItem constructor (leftover from FU-508's `StockItem.image` drop that hadn't been cleaned up — inline fix since I was already touching the file).
+- `dora_api/features/data/import_spreadsheet.py` — removed `auto_add_when_low=False` from the raw insert; also removed the equivalent stale `image=None` (same FU-508 leftover). Import contract otherwise unchanged.
+- `dora_api/features/data/export_stock_overview.py` — dropped the `auto_add_when_low` column from the CSV export header + row body.
+- `dora_api/features/assistant/tools.py` — dropped the field from the stock-item context dict the assistant tool passes to the LLM.
+- `dora_api/domain/entities/shopping_list.py` — refreshed the `added_via` comment (previously named the retired boolean explicitly; now points at the setting-driven hook).
+
+**Frontend:**
+- `web_app/src/services/api/appSettingsApiService.ts` — new `AutoAddMode` type union + `auto_add_mode: AutoAddMode` on `AppSettings`. `UpdateAppSettingsCommand` inherits it via the `Partial<AppSettings>` shape.
+- `web_app/src/models/stockItem.ts`, `web_app/src/models/stockItemDetail.ts`, `web_app/src/services/api/stockItemApiService.ts` — removed `auto_add_when_low` from every StockItem-shaped type + the Create/Update command types.
+- `web_app/src/pages/StockItemDetailPage.vue` — removed the **Auto-add when low** `q-toggle` row + its `onToggleAutoAdd` handler + the field from the local `FieldPatch` type. Left an inline breadcrumb comment pointing at the new Settings location.
+- `web_app/src/composables/useStockFilters.ts` — deleted `autoAddOnly` from persisted and ephemeral state, the filter predicate, `activeFilterCount`, `clearFilters`, and the return object. The `Auto-add` `PageCount` in the sticky footer is dropped; the comment block above `footerCounts` was rewritten to reflect the new **Shown · Needs attention · <levels> · Essential · On a list** shape.
+- `web_app/src/pages/StockOverview.vue` — removed the **Will auto-add on low** `FilterChip` + its help-icon block.
+- `web_app/src/stores/stockItemStore.ts` — refreshed the `handleAutoAddedResponse` docstring so it names the new setting-driven trigger instead of the retired per-item boolean. Toast text unchanged.
+- **New page:** `web_app/src/pages/settings/AdminSystemStockSettings.vue` — eager-save `q-btn-toggle` with the three modes, mirroring the pattern the neighbouring Stocktake settings page uses (revert on save failure, no explicit Save button, disable while pending). Uses the `inventory_2` icon.
+- `web_app/src/router/routes.ts` — new route `admin/system/stock` under the settings shell (admin-guarded via the parent).
+- `web_app/src/pages/SettingsShell.vue` — added the **Stock** entry to the Admin → System nav group, right below **Stocktake**.
+
+**Tests:**
+- `tests/e2e/dora_api/test_stock_item_router.py` — dropped `auto_add_when_low` from the schema-shape assertion.
+- `tests/e2e/dora_api/test_data_router.py` — dropped the column from the CSV export-header assertion.
+
+### Bookkeeping
+
+- **[[FU-511]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with a detailed state note listing every surface touched.
+- **`CHANGELOG.md`** `[Unreleased]` → new `### Changed` entry for FU-511 with the three-mode explanation + the migration reference + the two inline FU-508 cleanups.
+- **`DORA_VERIFY.md`** → the pre-existing "Auto-add-when-low toast + line chip" section (originally FU-315) rewritten to name FU-511 in the header, cover all three modes explicitly, and add checkboxes for the retired chip/count/toggle. Not a new section — this is the same behaviour with a new dial, so it lives under the same heading in the user's QA pile.
+- No new open FUs. The two stale `image=None` kwargs are folded into this unit (fix while touching).
+
+### Verification
+
+- Not run. Change spans DB migration + server + SPA + a new Settings page; the user is set up to build-to-plan and verify later. Type-check + `alembic upgrade head` + a browser walk of the three modes is the next step. The FU-315 `DORA_VERIFY.md` section (now retitled for FU-511) is the walkthrough script.
+
+### Engineering-standards close-gate
+
+- **R-002 (theme tokens only):** No raw palette values introduced. New settings page reuses the existing `SettingsSection` / `SettingsRow` / `SettingsPageHeader` primitives. ✓
+- **R-003 (single source of truth):** The whole point of the change — one install-wide setting replaces N per-item copies of the same intent. The server's `_auto_add_enabled_for` is now the *only* place that decides whether the hook fires; both `essential_only` and `all` branches route through it. ✓
+- **R-005 (portable data access):** Migration uses `op.batch_alter_table` (SQLite-safe) + `String(16)`; no dialect-specific SQL; nothing behaves differently on Postgres. ✓
+- **R-006 (clean migrations):** Migration has both `upgrade()` and `downgrade()` and a docstring explaining the *why*. Non-preserving on downgrade (the boolean comes back as `False` for every item) — acceptable per the pre-release breaking-changes-OK memory. ✓
+- **R-007 (scope discipline):** Kept scope tight. The two `image=None` inline cleanups are legitimately in the same construction sites I was editing (R-007 doesn't require ignoring genuine broken code adjacent to the target change) — they're logged in the changelog + worklog as inline FU-508 leftovers so nothing is silent. ✓
+- **R-008 (comment hygiene):** New comments name the FU + the *why*, not the *what*. Old FU-NNN breadcrumbs that named the retired boolean were rewritten or dropped rather than left dangling. ✓
+- **R-010 (validate enum inputs at the boundary):** `_VALID_AUTO_ADD_MODES` frozenset validates on write; the entity default + DTO-layer fallback protects the read path. ✓
+- No new rule / ADR warranted — this is a single-instance application of R-003, not a novel pattern.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. This is polish inside a shipped surface (Stock Overview + item detail + Settings shell), same as the FU-365 unit.
+
+**Next up:** browser-verify FU-511 (the DORA_VERIFY section is ready to walk); after that, whatever the user picks.
+
+---
+
+## 2026-07-07 — FU-365 closed: essential-flag row button removed, stripe re-styled; FU-511 opened for auto-add collapse assessment
+
+**Why:** User asked to close FU-365 with a different disposition than originally recommended — no row-level quick-toggle. Instead, kill the pre-existing essential-flag button from the row's right cluster (essential is a set-and-forget action, not a frequent one), thicken the row's left-edge stripe, and swap its colour to the app's secondary palette. The **Essential** footer count colour must match. User also raised auto-add as a candidate for the same treatment — move it from a per-item toggle to a global 3-state slider in Settings — but asked for an **assessment**, not implementation.
+
+### What shipped (FU-365)
+
+`web_app/src/components/stock/StockItemRow.vue`:
+- Removed the interactive essential-flag `RowActionButton` from the right cluster (previously between the expiry button and the open/sealed toggle).
+- Removed `onToggleFlagged` + `flagBusy` state; no other call sites — detail page owns the toggle already.
+- Left-edge stripe (`.stock-row__essential-stripe`) width `3px` → `5px`; `background: var(--q-warning)` → `var(--q-secondary)`.
+- Comment block updated: essential is set-and-forget; stripe is now the sole row indicator.
+
+`web_app/src/components/PageCountsFooter.vue`: added `secondary` to `PageCount['tone']` union + a `'text-secondary'` case in `toneClass()`.
+
+`web_app/src/composables/useStockFilters.ts`: Essential footer count `tone: 'warning'` → `tone: 'secondary'` + refreshed the paragraph comment above the footer definitions.
+
+`web_app/src/pages/StockOverview.vue`: Essential `FilterChip` `active-color="warning"` → `active-color="secondary"`.
+
+Row alert/warn outlines (essential + low = amber; essential + out / expired = red) intentionally unchanged — those signal *needs-attention*, not *essential*.
+
+### Assessment (FU-511 — logged, not built)
+
+Should `stock_items.auto_add_when_low` collapse from a per-item boolean into a global tri-state Settings toggle (**off / essential-only (default) / all**)?
+
+**Recommendation: yes, worth doing.** Same set-and-forget logic that just retired the row-level essential button applies. The detail-page tooltip already reads "Use for essentials you never want to run out of" — the concepts are already coupled; the per-item flag is redundant with `is_flagged` for most users. Collapse deletes the column, the API field, the filter chip, the footer count, the detail toggle, the `autoAddOnly` filter state, and the spreadsheet-import column. Pre-release breaking-changes-OK posture makes the migration trivial. Trade-off: loses "auto-add flour but not spices" precision — user should confirm nobody actually uses that discrimination before committing.
+
+Deliverable is a decision from the user (keep / collapse / defer). If **collapse**, spin a small IMPL plan; small enough to bundle with a Settings-shell touch or run standalone. FU-511 carries the full sketch of the change surface.
+
+### Bookkeeping
+
+- **[[FU-365]]** moved to `DORA_FOLLOWUPS_RESOLVED.md` with a full state-note describing the reversal + the row + stripe + palette changes.
+- **[[FU-511]]** added to `DORA_FOLLOWUPS.md` (top of open list) for the auto-add assessment.
+- **CHANGELOG.md** `[Unreleased]` → new `### Changed` entry for the FU-365 row treatment.
+- No `DORA_VERIFY.md` entries. This is UI-only + visual; the user is about to look at it directly.
+
+### Verification
+
+- Not run. Change is small and mechanical — one row button removed + a CSS re-tint + one type-union widening + three call-site tone flips. Type-check + browser look is the user's next step. Not adding a `DORA_VERIFY` entry because the user is about to run it directly.
+
+### Engineering-standards close-gate
+
+- **R-002 (theme tokens only):** `--q-secondary` is a theme token; no raw palette values introduced. `PageCountsFooter`'s new `secondary` case routes through Quasar's `.text-secondary` utility which reads `--q-secondary`. ✓
+- **R-003 (single source of truth):** No new state; only removed a per-row toggle path. Detail page remains the single write site for `is_flagged` on the item edit surface. ✓
+- **R-007 (scope discipline):** Kept scope tight to FU-365's row/footer/chip cluster. Auto-add refactor deliberately deferred to [[FU-511]] as an assessment — no drive-by changes on the API/DB. ✓
+- **R-008 (comment hygiene):** New comments describe *why* the button was removed (set-and-forget) and *why* the stripe was thickened + re-tinted (sole indicator now). No FU-NNN drift beyond a couple of "FU-365 round 2" anchors — those name the *decision*, not the *task*, and match the round-tag pattern already used elsewhere in the file. ✓
+- No new rule/ADR warranted.
+
+### PROJECT_STATE.md refresh
+
+Not needed — no phase-board / workstream state moved. This is polish inside a shipped surface (Stock Overview row rebuild), not a new workstream or a phase transition.
+
+**Next up:** user decides on FU-511 (auto-add collapse — keep / collapse / defer). Otherwise whatever the user picks.
+
+---
+
 ## 2026-07-07 — FU-367 closed as superseded; FU-510 opened (late-game library-vs-hand-rolled sweep)
 
 **Why:** User flagged that FU-367 could be resolved now, and asked for a new late-game FU to audit the codebase for hand-rolled implementations that a battle-tested library would do better.

@@ -264,7 +264,6 @@ class StockItemDetailDto:
     is_open: bool
     opened_on: date | None
     is_flagged: bool
-    auto_add_when_low: bool
     # usual store hint (nullable). Surfaced as a small picker on the
     # stock-item detail; drives the shopping-list grouping
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) when set.
@@ -829,7 +828,6 @@ class GetStockItemDetailHandler:
             is_open = bool(_StockItem.is_open),
             opened_on = _StockItem.opened_on,
             is_flagged = bool(_StockItem.is_flagged),
-            auto_add_when_low = bool(_StockItem.auto_add_when_low),
             usual_store_id = _StockItem.usual_store_id,
             usual_store_name = _UsualStoreName,
             products = _LinkedProducts,

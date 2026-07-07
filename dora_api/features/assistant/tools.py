@@ -1780,7 +1780,6 @@ def stock_item_detail(args: dict) -> list[dict]:
         "is_flagged": bool(item.is_flagged),
         "is_open": bool(item.is_open),
         "opened_on": item.opened_on.isoformat() if getattr(item, "opened_on", None) else None,
-        "auto_add_when_low": bool(getattr(item, "auto_add_when_low", False)),
         "stock_level_last_updated": (
             item.stock_level_last_updated.isoformat()
             if getattr(item, "stock_level_last_updated", None) else None

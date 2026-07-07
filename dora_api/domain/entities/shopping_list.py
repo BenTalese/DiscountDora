@@ -62,10 +62,11 @@ class ShoppingListLine(BaseEntity):
     is_ticked: bool = False
     selected_product_id: UUID | None = None
     sequence: int = 0
-    # X5 provenance. "manual" for user-typed adds; one of the auto_* values
-    # when the line came from /auto-generate or the auto_add_when_low
-    # trigger. If a user later edits the line (quantity/product), the
-    # caller flips this back to "manual" so the chip disappears.
+    # Provenance. "manual" for user-typed adds; one of the auto_* values
+    # when the line came from /auto-generate or the low-stock auto-add
+    # hook (FU-511: fires per AppSetting.auto_add_mode + is_flagged). If
+    # a user later edits the line (quantity/product), the caller flips
+    # this back to "manual" so the chip disappears.
     added_via: str = ADDED_VIA_MANUAL
     added_at: datetime | None = None
     # Snapshot pair captured at the *commit-to-offer* moment: when the line

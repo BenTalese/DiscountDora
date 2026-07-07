@@ -72,6 +72,191 @@ semver — major bumps signal schema or breaking-config changes.
   location) was explicitly cut this session.
 
 ### Changed
+- **Import templates: example row is now dict-keyed + boot-fails on
+  drift — FU-350 (2026-07-07).** `ImportTemplate.example` changed from
+  a positional `tuple[str, ...]` (silent misalignment if `TARGET_FIELDS`
+  ever reordered or grew) to a `dict[str, str]` keyed by field name.
+  The CSV writer projects the dict through `headers` at emit time, so
+  reordering a column reorders the emitted example automatically and
+  missing keys emit as empty cells (never misaligned under the wrong
+  header). New `_validate_import_templates` module-load helper crashes
+  the API at boot if a template drifts — duplicate section, stale
+  example key, header set out of sync with the commit handler's
+  expected fields, or a section the commit path doesn't understand.
+  A new `_COMMIT_KNOWN_SECTIONS` map is the one place that names what
+  the commit handler processes, so registering a template for a
+  new section without wiring the handler fails loudly at boot instead
+  of shipping a broken CSV.
+
+### Changed
+- **List-page state (meal-plan picker search, shopping-list-detail line
+  grouping) now survives navigate-away-and-back within a session —
+  FU-354 rollout (2026-07-07).** R-026 (`useListState`) was previously
+  applied to Stock Overview, Cookbook, and My Products; this rollout
+  covers the meal planner's picker `recipeSearch` and the shopping list
+  detail's line `groupBy` toggle. Navigate away to a recipe and back →
+  the picker still has your search string; navigate away from a
+  shopping list to another surface and back → the grouping mode is
+  still what you set. Sign-out clears every persisted scope (FU-355);
+  a full page reload also clears them (module-scope Map wipes with the
+  bundle). The remaining pages named in FU-354 (Shopping Lists overview,
+  Stocktake, Rotating Sets, Users Admin, Stores, API Access) were
+  surveyed and skipped — none of them carry filter/search/sort state
+  worth persisting today; R-026 is the rule going forward when any of
+  them grows one.
+- **Sign-out and 401-recovery both clear per-page filter/search/sort
+  state — FU-355 (2026-07-07).** `useListState`'s module-scope Map
+  used to persist across `logoutAsync` (which is a soft router push,
+  not a full reload) and across the silent `handleSessionExpired`
+  interceptor path. On a shared device the next user could inherit the
+  previous session's list-page UI shape. Both handlers now call
+  `clearAllListState()` (which is the escape hatch the FU-355
+  originating unit shipped for exactly this hook) — the fallout was
+  minor (per-page view knobs, not sensitive data) but the close is
+  honest either way.
+- **Meal-plan Templates drawer now owns per-template CRUD; the dedicated
+  page is Rotating Sets only — FU-308 (2026-07-07).** The
+  `/meal-plans/templates` page shipped before the R-Phase 5 Templates
+  drawer and had been carrying redundant per-template CRUD (rename /
+  clone / delete). All three actions now live in the drawer — **Clone**
+  folded in as a new icon-button beside Apply / Rename / Delete on each
+  row — and the drawer picked up a footer link **Manage rotating sets →**
+  so the sets page stays discoverable from where users manage individual
+  templates. The `/meal-plans/templates` page itself was narrowed to
+  Rotating Sets only, retitled **Rotating template sets**, with a caption
+  pointing users at the drawer for per-template actions. Sets stayed on a
+  page (not a drawer sub-view) because a multi-template ordered list with
+  reorder controls doesn't fit gracefully in a 440px drawer; that call
+  matches the FU's "keep the page as the heavy management screen" branch
+  for sets and its "fold into the drawer" branch for templates. The
+  dead `goToManageTemplates` helper in `useMealPlanner` — a leftover
+  from the retired Direction-B planner draft — was dropped in the same
+  pass; the drawer's own footer button covers the nav.
+- **"Show all slots" toggle on the meal planner now survives a reload —
+  FU-306 (2026-07-07).** The de-sprawled meal-planner default is "used
+  slots only" — the toggle that reveals every household slot per day used
+  to reset back to that default on every page load. It now persists to
+  `localStorage` as a per-device view preference (`mealPlanShowAllSlots`
+  key, `'0'` / `'1'` values). Wrapped in `try/catch` so private-mode
+  Safari / quota-exceeded environments degrade to the previous
+  session-local behaviour rather than throwing. Household-scoped sync
+  across devices (via a `User.Preference` column) is available as a
+  future graduation path if a real user asks for it; for now, the toggle
+  is a per-device view choice, not a household preference.
+
+### Fixed
+- **Recipe ingredient drag-and-drop landed one row above where the user
+  dropped when dragging downwards — FU-161 partner-bug (2026-07-07).**
+  The ingredient reorder in `RecipeDetailPage.vue` was computing the
+  target's index **after** the source had already been spliced out of
+  the array — so when the user dragged an ingredient *down* the list,
+  the target's index had shifted down by one and the source landed one
+  row above the drop point. Same failure mode as feedback L414 on
+  shopping lists (fixed in P6-01 Chunk 6); the shopping-list fix was
+  verified working in the same session and its "capture both indices
+  before any mutation" pattern is now applied identically here. Recipe
+  step reorder (`RecipeStepsEditor.vue`) was already on the correct
+  pattern. Section-move (dropping an ingredient from Section 1 onto a
+  row in Section 2 to move it) still works — the section-copy happens
+  atomically with the reorder.
+
+### Removed
+- **Meal planner Direction B page + A/B toggle — FU-304 (2026-07-07).**
+  After living with both layouts for ~2 weeks, **Direction A** (the
+  de-sprawled vertical carousel with slot-rows-per-day) is now the sole
+  meal-planner surface. Direction B (the desktop week-board grid with
+  slot-as-tag rich cards + sticky consequences bar + pinnable picker
+  drawer) is retired. Deleted: `MealPlansBoardPage.vue`,
+  `MealPlanWeekBoard.vue`, `useMealPlannerView.ts` (localStorage
+  persistence helper). Removed from `MealPlansOverview.vue`: the
+  desktop `BaseSegmented` List/Grid toggle, the mount-time restore-Grid
+  redirect, and the associated imports. The `/meal-plans/board` route
+  now redirects to `/meal-plans` so any stale bookmark or deep-link
+  lands cleanly on the surviving planner. `MealPlanRichCard.vue` is
+  preserved — it's still consumed by `MealPlanMobileFocus.vue` (shared
+  mobile focus) — and the server-side `MealPlanEntryDto` enrichments
+  (`has_image`, `cook_time_minutes`, `cuisine_name`, `category_name`)
+  are kept for the same reason. Desktop A continues to render meals as
+  the flat `MealPlanEntryChip`.
+
+### Changed
+- **Import templates: inline `#` hint row explaining the illustrative
+  example values — FU-349 (2026-07-07).** The downloaded stock-items
+  import template now carries an inline `#`-prefixed hint row after the
+  example: *"# example values are illustrative — replace them, and use
+  your own level/location/group names (see Settings → Kitchen setup)."*
+  Users on customised installs — anyone who renamed a StockLevel,
+  StockLocation, or StockGroup in Settings → Kitchen setup — now see
+  a note explaining why the placeholder names ("In stock", "Pantry",
+  "Grains") may not match their install, instead of hitting a row-level
+  validation failure on first re-upload. The spreadsheet parser now
+  filters `#`-prefixed rows on ingest (both `.csv` and `.xlsx`), so a
+  user who re-uploads the untouched template — or keeps the hint row
+  alongside their real data — doesn't accidentally import a stock item
+  named "# example values are illustrative…". Row 0 is always preserved
+  (headers stay headers); only data rows whose first cell begins with
+  `#` are dropped.
+
+### Added
+- **"Draft my shop" one-click dashboard card — FU-351 (2026-07-07).** The
+  legacy P6-10 self-drafting-weekly-shop entry point that had been
+  sitting on top of the existing `/auto-generate` engine as an
+  unadvertised checkbox modal now has a first-class home. A new **Draft
+  this week's shop** dashboard card in the `act` zone (between
+  Attention and Suggestions) exposes a one-click **Draft my shop**
+  button. Defaults: **meal plan for the next 7 days** (rolling from
+  today; already-consumed entries are filtered), **low + out of stock**
+  items, and **flagged essentials**. On success, the SPA lands the user
+  in the freshly-created DRAFT list — each line already renders the
+  existing `added_via` chip ("auto: meal plan", "auto: low stock",
+  "auto: essential" / "auto: flagged") so provenance is visible without
+  extra chrome. Empty-input case (fresh install, no meal plan, no low
+  stock, no essentials) shows an honest "Nothing to draft yet" toast
+  and **no phantom empty list is created** — the `/auto-generate`
+  handler now defers list creation on the create-new path until after
+  candidate collection, so zero-candidate calls return
+  `shopping_list_id: null` + `nothing_to_add: true` instead of leaving
+  a lonely empty list in the sidebar (merge-into-existing path
+  unchanged; NewListDialog always passes a `merge_into_list_id`, so
+  its behaviour is untouched). Card is toggleable via the Cards menu
+  like every other dashboard card.
+
+### Changed
+- **Auto-add on low: per-item toggle collapsed into a single install-wide
+  3-state setting — FU-511 (2026-07-07).** The pre-existing per-item
+  `Auto-add when low` toggle (a boolean column, filter chip, footer count,
+  and detail-page row) is retired. Auto-add is now controlled by one
+  install-wide setting at **Settings → Admin → System → Stock** with three
+  modes:
+    - **Off** — never auto-add on low.
+    - **Essential only** (default) — fire only for items with the Essential
+      flag on. Matches the pre-existing "staple you never want to run out
+      of" mental model without a per-item duplicate of that concept.
+    - **All items** — fire on any Stocked → Low/Out transition.
+
+  Server owns the branching in `update_stock_item._auto_add_enabled_for`,
+  which reads `AppSetting.auto_add_mode` and this item's `is_flagged`.
+  The auto-add response envelope + toast are unchanged behaviourally.
+  Non-preserving DB migration (`b8f2c1d4e6a9`) drops
+  `StockItem.auto_add_when_low` and adds `AppSetting.auto_add_mode`.
+  Removed SPA surfaces: the **Will auto-add on low** filter chip, the
+  **Auto-add** footer count, and the **Auto-add when low** toggle on the
+  item detail page. Also removed while touching neighbouring code: a stale
+  `image=None` kwarg in `seed.py`'s StockItem construction (leftover from
+  FU-508's `StockItem.image` drop) and the equivalent in the spreadsheet
+  importer's raw insert.
+- **Essential flag: row treatment simplified — FU-365 (2026-07-07).**
+  Essential is set-and-forget, so the per-row essential-flag button was
+  removed from the Stock Overview row's right cluster (`StockItemRow.vue`).
+  Management is now detail-page-only. The left-edge stripe becomes the sole
+  row indicator — bumped 3px → 5px and re-tinted from warning to the app's
+  secondary colour so it scans without an accompanying icon. Matching
+  palette changes so the concept reads as one visual family: the
+  **Essential** footer count and the **Essential** filter chip both switch
+  from the warning tone to the secondary tone. `PageCountsFooter` gained a
+  `secondary` tone. Row alert/warn outlines (essential + low = amber;
+  essential + out / expired = red) unchanged — those signal *needs-
+  attention*, not *essential*.
 - **Comment-hygiene sweep — FU-462 (2026-07-07).** Removed 887 prompt-ID
   (`P#`, `C-#`, `B#`, `INV-#`) and FU-NNN task-ID comments from shipped
   source across 202 files (`dora_api/`, `tests/`, `web_app/src/`). Where

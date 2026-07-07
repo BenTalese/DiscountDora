@@ -189,7 +189,6 @@ export type StockItemDetail = {
     is_open: boolean;
     opened_on: string | null;
     is_flagged: boolean;
-    auto_add_when_low: boolean;
     /** FU-189 — usual store hint (nullable). Drives the shopping-list
      *  grouping + a small picker on the stock-item detail. */
     usual_store_id: string | null;

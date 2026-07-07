@@ -318,6 +318,20 @@
                 </DashboardCard>
             </div>
 
+            <!-- ───── Draft my shop (FU-351 / P6-10) ──────────────────────── -->
+            <!-- One-click "Draft my shop" entry point on top of the existing
+                 /auto-generate engine (meal plan + low/out + flagged as
+                 sensible defaults). Lands the user in a fresh DRAFT list
+                 ready to edit before they head out. Component owns its own
+                 fetch + navigate + toast branches. -->
+            <div
+                v-if="isCardVisible('draft_shop')"
+                class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('draft_shop') }"
+            >
+                <DraftShopCard />
+            </div>
+
             <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
             <div
                 v-if="isCardVisible('primary_list') && quickAddTargetSummary"
@@ -1090,6 +1104,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
+    import DraftShopCard from 'src/components/dashboard/DraftShopCard.vue';
     import { storeToRefs } from 'pinia';
     import {
         actionsFor as alertActionsFor,
@@ -1204,6 +1219,11 @@
     // can reorder within a zone; their saved order overrides this.
     const CARD_DEFS: CardDef[] = [
         { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active, zone: 'act' },
+        // FU-351 — P6-10 one-click "Draft my shop" entry point. Sits in
+        // the `act` zone (home screen *does*) between Attention and
+        // Suggestions. Reuses the /auto-generate engine with sensible
+        // defaults (meal-plan-for-the-week + low/out + flagged).
+        { id: 'draft_shop', label: 'Draft this week\'s shop', icon: ICONS.playlist_add_check, zone: 'act' },
         { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome', zone: 'act' },
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },

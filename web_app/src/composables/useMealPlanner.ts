@@ -1,5 +1,6 @@
 import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
+import { useListState } from 'src/composables/useListState';
 import { useMealPlanExport } from 'src/composables/useMealPlanExport';
 import { useReducedMotion } from 'src/composables/useReducedMotion';
 import { useStockStatus } from 'src/composables/useStockStatus';
@@ -68,7 +69,15 @@ export function useMealPlanner() {
     const ingredients = ref<MealPlanIngredient[]>([]);
     const ingredientsLoading = ref(false);
     const generating = ref(false);
-    const recipeSearch = ref('');
+    // FU-354 — the picker's search string survives navigate-away-and-back
+    // within the session (A8 §3 nav-state policy). Full reload /
+    // sign-out (via `clearAllListState` from FU-355) resets it to empty.
+    // The composable's other refs (ingredients, generating, ...) reset
+    // on remount — they're derived / lifecycle state, not user-picked
+    // filters, so they don't want persistence.
+    const { recipeSearch } = useListState('meal-plans-overview', () => ({
+        recipeSearch: ref(''),
+    }));
     // R-Phase 6 §9-I — initial-load flag. The page mounts ~10 parallel store
     // hydrations; until they finish we render skeleton screens so the user
     // sees the grid/list shape instantly (Doherty) instead of a popcorn of
@@ -397,9 +406,10 @@ export function useMealPlanner() {
     function cookRecipe(recipeId: string) {
         void router.push(`/cookbook/${recipeId}/cook`);
     }
-    function goToManageTemplates() {
-        void router.push('/meal-plans/templates');
-    }
+    // FU-308 (2026-07-07) — `goToManageTemplates` retired. The Templates
+    // drawer now houses per-template CRUD; the drawer itself owns the
+    // "Manage rotating sets →" jump to `/meal-plans/templates`, so a
+    // composable-level nav helper isn't needed.
 
     // ── Generate shopping list (composes the C-7 target picker) ────────────
     async function pickGenerateTarget(): Promise<string | null | undefined> {
@@ -766,7 +776,6 @@ export function useMealPlanner() {
         goNextWeek,
         goToRecipe,
         cookRecipe,
-        goToManageTemplates,
         onKeydown,
         onTouchStart,
         onTouchEnd,

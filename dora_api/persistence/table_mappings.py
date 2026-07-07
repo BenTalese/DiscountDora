@@ -135,6 +135,9 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
+        # FU-511 — install-wide auto-add mode ('off' | 'essential_only' | 'all').
+        # Replaces the per-item StockItem.auto_add_when_low column.
+        Column("auto_add_mode", String(16), nullable=False, server_default="essential_only"),
         # operational config promoted from `DORA_*`
         # env vars. `resolved_operational_config()` is now a straight
         # AppSetting projection (env fallbacks dropped 2026-07-06 —
@@ -232,7 +235,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("is_flagged", Boolean, nullable=False, server_default=false()),
         Column("is_open", Boolean, nullable=False, server_default=false()),
         Column("opened_on", Date, nullable=True),
-        Column("auto_add_when_low", Boolean, nullable=False, server_default=false()),
         Column("name", String(255)),
         Column("notes", String(255), nullable=True),
         Column("stock_group_id", UUIDType, ForeignKey("StockGroup.id", ondelete="SET NULL"), nullable=True),

@@ -202,13 +202,13 @@ export type CreateStockItemCommand = {
     stock_group_id?: string | null;
     expiry_date?: string | null;
     is_flagged?: boolean;
-    auto_add_when_low?: boolean;
     is_open?: boolean;
 };
 
-/** FU-315 — server-populated payload on a level-transition PATCH that fires
- *  the auto-add-when-low hook. Undefined body means no trigger fired (server
- *  returned 204). See `update_stock_item.py` `_try_auto_add`. */
+/** Server-populated payload on a level-transition PATCH that fires the
+ *  low-stock auto-add hook (FU-511: driven by `AppSetting.auto_add_mode`
+ *  + `is_flagged`). Undefined body means no trigger fired (server returned
+ *  204). See `update_stock_item.py` `_try_auto_add`. */
 export type UpdateStockItemResponse = {
     auto_added?: {
         line_id: string;
@@ -226,7 +226,6 @@ export type UpdateStockItemCommand = {
     stock_group_id?: string | null;
     expiry_date?: string | null;
     is_flagged?: boolean;
-    auto_add_when_low?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
     /** FU-189 — usual store hint. UUID to bind; use `clear_usual_store` to clear. */

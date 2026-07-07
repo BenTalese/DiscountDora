@@ -164,14 +164,21 @@ class AutoGenerateHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: AutoGenerateRequest) -> AutoGenerateResponse:
-        # ── Pick / create target list ────────────────────────────────────
-        target: Optional[ShoppingList]
+        # ── Resolve target list on the merge path (existence check first) ─
+        # For the create-new path we defer construction until after candidate
+        # collection so a call that yields zero candidates doesn't leave a
+        # lonely empty list behind (FU-351 — the "Draft my shop" one-click
+        # entry point on the dashboard leans on this: if the user has no
+        # meal plan / no low stock / no essentials, they get an honest
+        # "nothing to draft" notice rather than a "Weekly shop · Sat 12 Jul"
+        # phantom in the sidebar). NewListDialog always passes a
+        # merge_into_list_id (it creates the list before auto-gen), so this
+        # only affects the standalone create-new callers.
+        target: Optional[ShoppingList] = None
         if request.merge_into_list_id is not None:
             target = self.repository.get(ShoppingList).by_id(request.merge_into_list_id)
             if target is None or target.is_done:
                 return AutoGenerateResponse(list_not_found=True)
-        else:
-            target = self._create_list(request.name)
 
         # ── Collect candidates ────────────────────────────────────────────
         candidates: Dict[UUID, _Candidate] = {}
@@ -200,11 +207,21 @@ class AutoGenerateHandler:
             )
 
         if not candidates:
+            # Create-new path with zero candidates: don't materialise an
+            # empty list; return a null shopping_list_id + nothing_to_add.
+            # Merge-into path with zero candidates: the target already
+            # exists (user picked it), so still return its id so the
+            # client can navigate to it.
             return AutoGenerateResponse(
-                shopping_list_id=target.id,
+                shopping_list_id=target.id if target is not None else None,
                 nothing_to_add=True,
                 unlinked_skipped=unlinked_skipped,
             )
+
+        # Candidates exist → we're committing writes; the create-new path
+        # can safely materialise the list now.
+        if target is None:
+            target = self._create_list(request.name)
 
         # ── Append, skipping items already on the target ─────────────────
         existing_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(

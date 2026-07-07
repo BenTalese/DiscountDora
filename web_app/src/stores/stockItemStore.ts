@@ -45,12 +45,14 @@ export const useStockItemStore = defineStore('stockItem', () => {
     const stockItems: Ref<StockItem[]> = ref([]);
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
-    /** FU-315 — when a level-change PATCH transitions a stock item to
-     *  Low/Out and `auto_add_when_low` is on, the server drops it onto the
-     *  unambiguous draft list and returns `{ auto_added: { line_id,
-     *  shopping_list_id } }`. Fire a positive toast naming the list + the
-     *  item, and refresh the shopping-list store so the new line renders
-     *  everywhere it's watched. Silent no-op for the 204 no-trigger case. */
+    /** When a level-change PATCH transitions a stock item to Low/Out and
+     *  the install-wide auto-add mode says fire (FU-511: `off` never,
+     *  `essential_only` iff `is_flagged`, `all` always), the server drops
+     *  it onto the unambiguous draft list and returns
+     *  `{ auto_added: { line_id, shopping_list_id } }`. Fire a positive
+     *  toast naming the list + the item, and refresh the shopping-list
+     *  store so the new line renders everywhere it's watched. Silent
+     *  no-op for the 204 no-trigger case. */
     async function handleAutoAddedResponse(
         stockItemId: string,
         result: UpdateStockItemResponse | { queued: true },

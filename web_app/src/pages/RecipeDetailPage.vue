@@ -1642,27 +1642,30 @@
     // ── FU-118 / R-022 — ingredient DnD reorder + cross-section move ───
     // `useDragDropList` owns the drag state machine + the dragover/leave/
     // drop wiring. We supply the per-drop effect: re-insert source at the
-    // target's slot AND copy the target's `section_client_id` to source,
-    // so reorder-within-section and move-between-sections are one gesture.
-    // Empty sections still need the per-row Section picker (you can't
-    // drop onto something that doesn't exist).
+    // target's original slot AND copy the target's `section_client_id` to
+    // source, so reorder-within-section and move-between-sections are one
+    // gesture. Empty sections still need the per-row Section picker (you
+    // can't drop onto something that doesn't exist).
+    //
+    // FU-161 partner-bug — both indices are captured BEFORE the splice so
+    // the "insert at target's original slot" semantic matches shopping-list
+    // and recipe-step DnD. The previous pattern computed `toIdx` AFTER
+    // removing the source, which shifted the target's index down by one
+    // whenever the user dragged downwards — the drop landed one row above
+    // where the user let go. Same shape as feedback L414 on shopping
+    // lists; the fix is the same too.
     const ingredientDnd = useDragDropList<IngredientForm>({
         mime: 'application/x-dora-recipe-ingredient',
         getId: (ing) => ing.client_id ?? null,
         onDrop: ({ item: source }, { item: target }) => {
             const fromIdx = form.ingredients.indexOf(source);
-            if (fromIdx < 0) return;
-            form.ingredients.splice(fromIdx, 1);
             const toIdx = form.ingredients.indexOf(target);
-            if (toIdx < 0) {
-                // Target vanished between dragstart and drop (very rare).
-                form.ingredients.splice(fromIdx, 0, source);
-                return;
-            }
+            if (fromIdx < 0 || toIdx < 0) return;
             // `section_client_id` is optional on the command type but always
             // present in form rows (null = unsectioned). Normalise so the
             // assignment stays well-typed under exactOptionalPropertyTypes.
             source.section_client_id = target.section_client_id ?? null;
+            form.ingredients.splice(fromIdx, 1);
             form.ingredients.splice(toIdx, 0, source);
             markDirty();
         },

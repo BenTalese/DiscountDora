@@ -206,7 +206,6 @@ def seed_dev_data():
     # ---------------- STOCK ITEMS ---------------- #
     def make_item(*, name, group, level, location, **kw):
         item = StockItem(
-            image=None,
             name=name,
             notes=kw.get("notes"),
             stock_group=group,
@@ -216,7 +215,6 @@ def seed_dev_data():
             stocktake_alerts_are_enabled=kw.get("stocktake_alerts", False),
             expiry_date=kw.get("expiry"),
             is_flagged=kw.get("flagged", False),
-            auto_add_when_low=kw.get("auto_add", False),
             is_open=kw.get("is_open", False),
             opened_on=kw.get("opened_on"),
             products=kw.get("products", []),
@@ -236,7 +234,7 @@ def seed_dev_data():
     pasta = make_item(name="Barilla Pasta", group=g_pantry, level=stocked, location=top_shelf,
                       products=[pasta_barilla])
     milk = make_item(name="Full Cream Milk", group=g_dairy, level=low, location=fridge,
-                     expiry=today + timedelta(days=2), auto_add=True, is_open=True,
+                     expiry=today + timedelta(days=2), is_open=True,
                      opened_on=today - timedelta(days=2), products=[milk_woolies, milk_coles],
                      updated_days_ago=1)
     eggs = make_item(name="Free Range Eggs", group=g_dairy, level=stocked, location=fridge,
@@ -250,14 +248,14 @@ def seed_dev_data():
                           flagged=True, is_open=True, opened_on=today - timedelta(days=20),
                           products=[oil_aldi])
     parmesan = make_item(name="Parmesan Cheese", group=g_dairy, level=out, location=fridge,
-                         auto_add=True, products=[parmesan_coles])
+                         products=[parmesan_coles])
     chicken = make_item(name="Chicken Breast", group=g_meat, level=stocked, location=freezer)
     rice = make_item(name="Jasmine Rice", group=g_pantry, level=stocked, location=middle_right)
     soy = make_item(name="Soy Sauce", group=g_pantry, level=stocked, location=middle_left)
     broccoli = make_item(name="Broccoli", group=g_fruit, level=low, location=crisper,
-                         expiry=today + timedelta(days=1), auto_add=True, stocktake_alerts=True)
+                         expiry=today + timedelta(days=1), stocktake_alerts=True)
     bread = make_item(name="Sourdough Bread", group=g_pantry, level=out, location=None,
-                      flagged=True, auto_add=True)
+                      flagged=True)
     coffee = make_item(name="Coffee Beans", group=g_pantry, level=stocked, location=top_shelf,
                        flagged=True, is_open=True, opened_on=today - timedelta(days=3),
                        products=[coffee_iga])

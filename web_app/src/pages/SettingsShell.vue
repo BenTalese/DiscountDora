@@ -90,6 +90,7 @@
                 { path: '/settings/admin/system/locale', label: 'Currency & locale', icon: ICONS.language },
                 { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
                 { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
+                { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
                 { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
                 { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
                 // operational config that used to be env-only.

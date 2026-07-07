@@ -6,7 +6,6 @@ export type StockItem = {
     stock_location_id: string | null;
     expiry_date?: string | null;
     is_flagged?: boolean;
-    auto_add_when_low?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
     stock_level_last_updated?: string | null;

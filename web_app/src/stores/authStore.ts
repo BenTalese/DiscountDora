@@ -9,6 +9,7 @@ import type {
 } from 'src/services/api/authApiService';
 import AuthApiService from 'src/services/api/authApiService';
 import { NormalisedApiError, setUnauthorizedHandler } from 'src/services/api/axiosHttpClient';
+import { clearAllListState } from 'src/composables/useListState';
 import { computed, readonly, ref } from 'vue';
 
 const authApiService = new AuthApiService();
@@ -149,6 +150,13 @@ export const useAuthStore = defineStore('auth', () => {
             await authApiService.logoutAsync();
         } finally {
             currentUser.value = null;
+            // FU-355 — clear any per-page filter / search / sort state that
+            // `useListState` cached in its module-level Map. Sign-out is a
+            // soft router push, not a full reload, so without this the next
+            // user on a shared device would inherit the previous session's
+            // list-page UI shape. The fallout is minor (per-page view
+            // knobs, no sensitive data) but honest is better.
+            clearAllListState();
         }
     };
 
@@ -156,6 +164,10 @@ export const useAuthStore = defineStore('auth', () => {
     // 401 — typically means the cookie expired or was cleared server-side.
     const handleSessionExpired = () => {
         currentUser.value = null;
+        // FU-355 — same reasoning as `logoutAsync`. A silent 401 could
+        // also mean "someone else's session started" on a shared device;
+        // don't hand them the previous user's filter shape.
+        clearAllListState();
     };
     setUnauthorizedHandler(handleSessionExpired);
 

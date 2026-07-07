@@ -4,46 +4,22 @@
             <BaseButton variant="icon" :icon="ICONS.chevron_left" @click="goToPlanner">
                 <q-tooltip>Back to the planner</q-tooltip>
             </BaseButton>
-            <div class="text-h6 q-ml-sm">Meal plan templates</div>
+            <div class="q-ml-sm">
+                <div class="text-h6">Rotating template sets</div>
+                <div class="text-caption dora-text-muted">
+                    Ordered lists of templates that rotate week-to-week.
+                    Manage individual templates from the planner's
+                    <strong>Templates</strong> drawer.
+                </div>
+            </div>
         </div>
 
-        <!-- ── Templates ──────────────────────────────────────────────── -->
-        <q-card flat bordered>
-            <q-card-section class="q-pb-xs">
-                <div class="text-subtitle1">Templates</div>
-                <div class="text-caption dora-text-muted">
-                    Saved week shapes. Apply them to a week from the planner.
-                </div>
-            </q-card-section>
-            <q-separator />
-            <q-list separator>
-                <q-item v-for="t in templates" :key="t.meal_plan_template_id">
-                    <q-item-section>
-                        <q-item-label>{{ t.name }}</q-item-label>
-                        <q-item-label caption>
-                            {{ t.entry_count }} meal{{ t.entry_count === 1 ? '' : 's' }}
-                            <span v-if="t.description"> · {{ t.description }}</span>
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <div class="row items-center q-gutter-xs">
-                            <BaseButton variant="icon" :icon="ICONS.edit" @click="renameTemplate(t)">
-                                <q-tooltip>Rename</q-tooltip>
-                            </BaseButton>
-                            <BaseButton variant="ghost" dense label="Clone" @click="cloneTemplate(t)" />
-                            <BaseButton variant="icon" :icon="ICONS.delete" @click="deleteTemplate(t)">
-                                <q-tooltip>Delete</q-tooltip>
-                            </BaseButton>
-                        </div>
-                    </q-item-section>
-                </q-item>
-                <q-item v-if="templates.length === 0">
-                    <q-item-section class="dora-text-muted text-center q-py-md">
-                        No templates yet — save a week from the planner first.
-                    </q-item-section>
-                </q-item>
-            </q-list>
-        </q-card>
+        <!-- FU-308 (2026-07-07) — the Templates section was retired
+             here. The planner's Templates drawer now owns Apply / Rename /
+             Clone / Delete / Save-current-week / Apply-recurring, and its
+             inline rename is a nicer surface than the old
+             `$q.dialog.prompt` this page used. This page is now
+             Sets-only. -->
 
         <!-- ── Rotating sets ──────────────────────────────────────────── -->
         <q-card flat bordered>
@@ -143,7 +119,6 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';
     import MealPlanTemplateSetApiService from 'src/services/api/mealPlanTemplateSetApiService';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
@@ -170,29 +145,11 @@
         void router.push('/meal-plans');
     }
 
-    // ── Templates ──────────────────────────────────────────────────────────
-    function renameTemplate(t: MealPlanTemplateSummary) {
-        $q.dialog({
-            title: 'Rename template',
-            prompt: { model: t.name, type: 'text', isValid: (v: string) => v.trim().length > 0 },
-            cancel: { noCaps: true },
-            ok: { label: 'Save', noCaps: true, color: 'primary' },
-        }).onOk((name: string) => void run(
-            () => templateStore.updateAsync(t.meal_plan_template_id, { name: name.trim() }),
-            'Renamed.',
-        ));
-    }
-    function cloneTemplate(t: MealPlanTemplateSummary) {
-        void run(() => templateStore.cloneAsync(t.meal_plan_template_id), 'Cloned.');
-    }
-    function deleteTemplate(t: MealPlanTemplateSummary) {
-        $q.dialog({
-            title: 'Delete template',
-            message: `Delete "${t.name}"? Weeks already created from it are unaffected.`,
-            cancel: { noCaps: true },
-            ok: { label: 'Delete', noCaps: true, color: 'negative' },
-        }).onOk(() => void run(() => templateStore.deleteAsync(t.meal_plan_template_id), 'Deleted.'));
-    }
+    // FU-308 (2026-07-07) — per-template CRUD (rename / clone / delete)
+    // retired from this page; the planner's Templates drawer is now the
+    // single surface for those actions. `templates` is still loaded on
+    // mount because the set-editor's "Add a template" picker needs the
+    // list of available templates.
 
     // ── Sets ─────────────────────────────────────────────────────────────────
     const setEditorOpen = ref(false);

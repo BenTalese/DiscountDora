@@ -118,10 +118,12 @@ top-to-bottom.
 - [ ] Old `POST /api/recipes/import-from-url` returns 404 (route deleted); the new `POST /api/recipes/import-from-content` is the only import path
 - [ ] From RecipeDetailPage → kebab → "Import over this recipe" → paste flow, confirm-overwrite dialog, fields patched
 
-### Ingredient DnD — reorder + cross-section move — origin FU-118
+### Ingredient DnD — reorder + cross-section move — origin FU-118 (partner-fix from FU-161 2026-07-07)
 - [ ] Open a recipe in edit mode that has 2+ sections + several ingredients in each. Each ingredient row has a drag handle (`drag_indicator` icon) on the far left, with grab cursor on hover
 - [ ] Grab an ingredient by the handle (NOT by the row body — text inputs and selects should keep their normal click/drag-to-select behaviour); the source row dims to ~50% opacity while dragging
 - [ ] Hover over another ingredient row → only that row lights with a primary-coloured outline ring (no flash on other rows; no row-shift)
+- [ ] **FU-161 partner-bug regression check.** In a section with ingredients A, B, C, D, E (top→bottom), grab **B** and drop it on **D** (dragging *downwards*). Result must be `A, C, D, B, E` — i.e. B landed *just past D*, not one row above it. Before the fix, B landed at C's original slot (`A, C, B, D, E`), one row above the drop point
+- [ ] Same list, grab **D** and drop it on **B** (dragging *upwards*). Result must be `A, D, B, C, E` — D at B's original slot, B pushes down. Same as shopping-list DnD's symmetric-with-shopping-list "insert at target's original slot" behaviour
 - [ ] Drop within the same section → the source row lands at the target's slot; section_client_id unchanged; "Save" enables (dirty)
 - [ ] Drop onto an ingredient in a *different* section → the source row lands at the target's slot AND the Section picker on the moved row now reads the target's section; "Save" enables
 - [ ] Drop onto an unsectioned row → moved ingredient becomes unsectioned (Section picker reads "(Main)")
@@ -314,19 +316,44 @@ top-to-bottom.
 
 ### Meals-per-week preference — origin FU-181
 - [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`, min 1 / max 21
-- [ ] With the field blank, open the sequential builder on `/meal-plans` (list view) or `/meal-plans/board` → the header count still reads `/ 7`, matching the fallback
+- [ ] With the field blank, open the sequential builder on `/meal-plans` → the header count still reads `/ 7`, matching the fallback *(FU-304 closed 2026-07-07: `/meal-plans/board` is retired and now redirects to `/meal-plans`; only the surviving planner needs checking.)*
 - [ ] Set the input to **5** → save toast reads "Meals per week set to 5." → **without reloading**, reopen the sequential builder → header count now reads `/ 5`
 - [ ] Clear the input (or type a value outside 1–21) → save toast reads "Meals per week reset to the default (7)." → builder count returns to `/ 7`; the field snaps to blank (placeholder shows again)
 - [ ] Type a decimal (e.g. `3.7`) → server rounds it, saved value is the rounded integer; a value <1 or >21 collapses to null (reset toast)
 - [ ] `PATCH /auth/me { meals_per_week: 22 }` from DevTools returns 400 (server-side bounds guard)
 
-### In-context Print on the Board page — origin FU-338
-- [ ] Open `/meal-plans/board` on desktop with a focused week that has at least one meal planned. The top strip shows a small **Print** icon-button (printer glyph) between the recipe-picker/Templates buttons and the Templates label — tooltip on hover reads "Print this week"
-- [ ] Click the Print button → a **new tab** opens the meal-plan print view for the focused week (calendar layout with the week's meals). The Board page tab is unchanged (no navigation on it)
-- [ ] Switch to a focused week with **no plan at all** (empty week) → the Print icon disappears from the top strip (no dead affordance)
-- [ ] Resize to mobile (<md) → the Board switches to the mobile focus. The Print icon lives in the week-nav row, right of the "Next week" arrow. Only shown when the focused week has ≥1 planned meal
-- [ ] Tap Print on mobile → same behaviour (new tab with the print view)
+### In-context Print on the meal planner — origin FU-338 (Board page portion retired with FU-304, 2026-07-07)
 - [ ] `MealPlansOverview` (`/meal-plans`) still has its existing Print icon in the week header — no regression there
+- [ ] Resize to mobile (<md) → the mobile focus renders. The Print icon lives in the week-nav row, right of the "Next week" arrow. Only shown when the focused week has ≥1 planned meal
+- [ ] Tap Print on mobile → new tab opens the meal-plan print view for the focused week
+- [ ] Direct-navigate to `/meal-plans/board` (or any stale bookmark from the old Direction-B page) → clean redirect to `/meal-plans`; the surviving planner's Print icon works as above
+
+### useListState — full sweep across meal planner + shopping list detail — origin FU-354 + FU-355 (2026-07-07)
+- [ ] Open `/meal-plans` → type a distinctive search string (e.g. "spag") into the recipe picker's search input → the picker filters to matching recipes
+- [ ] Navigate to a recipe from the picker (or any other page, e.g. `/cookbook`) → hit browser back → return to `/meal-plans` → the picker search still reads "spag" (was blank in the pre-FU-354 behaviour)
+- [ ] Open any `/shopping-lists/<id>` detail → set the top-right group toggle to **Location** (or **Store**) → navigate away (dashboard or another list) → return → the toggle is still **Location** (was reset to **None** before)
+- [ ] Switch to a different shopping list → the group toggle carries over (the scope is per-page, not per-list — verify this matches the intent; the FU note explains why per-list would silently reset on switch-list)
+- [ ] **Sign-out clears both**: on `/meal-plans` with a picker search set + on `/shopping-lists/<id>` with a groupBy set → open the account menu → **Sign out** → log back in → the picker search is empty, the group toggle is None again (FU-355's `clearAllListState()` fires in `logoutAsync`)
+- [ ] **Silent 401 recovery clears both too**: with the same setup, force a session expiry (server restart, or hand-clear the session cookie in DevTools) → make any API call → the 401 interceptor's `handleSessionExpired` fires → SPA lands on the login page → after re-auth, both list-state values are empty
+- [ ] Hard-reload (Ctrl-Shift-R) on either page → both list-state values reset (module-scope Map wipes with the fresh bundle) — this is by A8 §3 design ("a full reload should feel like a clean slate")
+- [ ] Grep-verify (`web_app/src/composables/useListState.ts`) the `CACHE` Map is still module-scope (not localStorage) — the persistence contract is session-only
+
+### Show-all-slots persistence — origin FU-306 (2026-07-07)
+- [ ] Open `/meal-plans` on desktop. The "Show all slots" toggle above the carousel is **off** by default (only used slots render per day)
+- [ ] Flip it **on** → every household slot renders per day → hard-reload the page → toggle stays **on**, all slots still render
+- [ ] Flip it **off** → hard-reload → toggle stays **off**, used-slots-only again
+- [ ] DevTools → Application → Local Storage → `mealPlanShowAllSlots` is `'1'` when on, `'0'` when off
+- [ ] Private-window / storage-disabled sanity: open the page in a private window with storage blocked — the toggle still works within the session; reload reverts to off (no error toast, no console throw)
+- [ ] The setting is per-device — flip on in browser A, open in browser B on the same account → browser B is off (this is a device-scoped preference, not a household one)
+
+### Templates drawer owns per-template CRUD; page is Sets-only — origin FU-308 (2026-07-07)
+- [ ] Planner (`/meal-plans`) → open the Templates drawer from the right rail's Templates card. Each template row shows **Apply · Rename · Clone · Delete** actions (Clone is a document-copy icon between Rename and Delete)
+- [ ] Click Clone on a template → row shows a brief loading spin → positive toast "Cloned." → the drawer's list refreshes and shows the new template (usually named "Copy of …" depending on server behaviour)
+- [ ] Click **Manage rotating sets →** at the drawer footer → the drawer closes and the SPA navigates to `/meal-plans/templates`
+- [ ] The page header now reads **Rotating template sets** with a caption ending "Manage individual templates from the planner's **Templates** drawer." No **Templates** card is visible on the page anymore — Rotating sets is the only management surface here
+- [ ] From the sets page, create a new rotating set → the "Add a template" picker still lists every template (the page still loads the template store for that dropdown, even though it doesn't render its own template list)
+- [ ] Direct-navigate to `/meal-plans/templates` (deep-link / bookmark) → lands cleanly on the sets-only page; browser tab title reads **Rotating template sets**
+- [ ] Grep-verify (`useMealPlanner.ts`) no longer exports `goToManageTemplates` and nothing in the app tries to call it — no console error, no dead menu item
 
 ### Meal Planner R-Phase 1 extraction + Phases 2–6 — origin FU-305
 - [ ] Left palette: search filters trays; click-add into a focused slot; drag-and-drop from a recipe row to a day-slot (mouse only); pool ± / log-cook dialog; "Cancel" clears focused-target banner
@@ -654,18 +681,26 @@ top-to-bottom.
 - [ ] "Log waste…" with a single item selected → summary reads **"Logged 1 item as wasted."** (singular)
 - [ ] Sanity — the single-item "Log waste" from the row's expiry menu still works and still shows the per-item toast + Undo (bulk path didn't regress the single path)
 
-### Auto-add-when-low toast + line chip — origin FU-315 (re-verify: FU-464 fixed a Low-transition regression 2026-07-04)
-*Requires a stock item with `auto_add_when_low` on and exactly one open draft shopping list.*
-- [ ] From stock overview, tap the stock-level chip on a Stocked item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)
+### Auto-add-on-low toast + line chip — origin FU-315 (re-verify: FU-464 fixed a Low-transition regression 2026-07-04; FU-511 collapsed the per-item toggle to an install-wide 3-state setting 2026-07-07)
+*Auto-add is now controlled by **Settings → Admin → System → Stock** — three modes:*
+*`Off` never fires. `Essential only` (default) fires only for items with the Essential flag on. `All items` fires on any Stocked → Low/Out transition. Server owns the branching in `update_stock_item._try_auto_add`.*
+
+*For the toast-behaviour checks below, set the install to `Essential only` (default) and use a stock item with the Essential flag on and exactly one open draft shopping list.*
+- [ ] Settings → Admin → System → Stock loads; the three-way toggle reads the current mode; switching between modes saves eagerly (positive toast) and survives a hard refresh
+- [ ] From stock overview, tap the stock-level chip on a Stocked Essential item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)
 - [ ] Same setup but set to **Out** on an item that was already Stocked → same toast fires
 - [ ] Open the draft list → the new line renders **without a manual refresh** (the store refreshed itself)
 - [ ] Line shows an `auto: low stock` chip at normal density — visible next to the item name, not crowded out by price / quantity chips
-- [ ] Turn `auto_add_when_low` off on the item, set it to Stocked → then Low → **no toast fires** (server-side hook doesn't trigger)
-- [ ] Set item to Low when it's already on any active shopping list → no toast (server dedup: "user already knows")
-- [ ] Set item to Low when the user has **0 draft lists** or **2+ draft lists** → no toast (server only auto-adds when the target is unambiguous)
+- [ ] Switch mode to **Off**, then set a Stocked Essential item to Low → **no toast fires**
+- [ ] Switch mode to **All items**, then set a Stocked *non-Essential* item to Low → toast fires (previously it wouldn't have — this is the deliberate 3-state expansion)
+- [ ] Switch mode back to **Essential only**, then set a Stocked *non-Essential* item to Low → **no toast fires**
+- [ ] Set an Essential item to Low when it's already on any active shopping list → no toast (server dedup: "user already knows")
+- [ ] Set an Essential item to Low when the user has **0 draft lists** or **2+ draft lists** → no toast (server only auto-adds when the target is unambiguous)
 - [ ] Item level change on the detail page (Level row) → toast fires the same way (`updateStockItemAsync` path)
 - [ ] Cook mode's per-ingredient level decrement that flips an ingredient to Low → toast fires per triggered item (multiple toasts stack — verify readability)
-- [ ] Offline stock-level flip → queued (blue "Queued: Update stock level" toast); when back online + queue drains → auto-add toast fires *if* the flipped item genuinely transitions on the server side
+- [ ] Offline stock-level flip → queued (blue "Queued: Update stock level" toast); when back online + queue drains → auto-add toast fires *if* the flipped item genuinely transitions on the server side and the mode allows it
+- [ ] Stock overview no longer shows the "Will auto-add on low" filter chip or the "Auto-add" footer count (both retired with the per-item toggle)
+- [ ] Stock-item detail page no longer shows an "Auto-add when low" toggle row (Essential flag remains; the auto-add branching happens off it plus the install-wide mode)
 
 ### ⭐ Zero-Input Pantry — inferred inventory (P8-07) — origin champion plan
 Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8` (ConsumptionEvent) + `a3e8b1f6c2d9` (User.inferred_pantry_enabled) on SQLite **and** Postgres; `verify_mappings()` passes for `ConsumptionEvent`; `pytest tests/test_pantry_belief.py` green.
@@ -833,6 +868,19 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 ---
 
 ## Dashboard
+
+### Draft my shop — one-click card — origin FU-351
+- [ ] Dashboard renders a **Draft this week's shop** card in the `act` zone (between Attention and Suggestions) — icon: playlist-check
+- [ ] Card body shows the blurb ("One-click starter list — meal plan for the next 7 days, plus anything low, out, or flagged as an essential. Nothing shopped yet; you edit before heading out.") + a **Draft my shop** button (auto-fix icon)
+- [ ] Happy path — with an active meal plan (at least one recipe scheduled today+6d), at least one Low/Out stock item, and at least one flagged essential: click Draft my shop → button spins → positive toast "Drafted N items." (caption "Review the list, then start shopping when ready.") → SPA navigates to the newly-created draft's detail page
+- [ ] New list appears in the sidebar list-selector under the name `Weekly shop · <weekday> <day> <month>` (e.g. "Weekly shop · Sat 12 Jul") — not the generic "Auto N · date"
+- [ ] On the detail page, every produced line renders the existing `added_via` chip — meal-planned recipes' items get "auto: meal plan", low/out items get "auto: low stock", flagged items get "auto: flagged" (with the priority rule: recipe > meal plan > flagged > essential > low stock > frequently added, so an item on both the meal plan and low gets "auto: meal plan")
+- [ ] Empty case — a fresh account with no meal plan, no low stock, and no essentials: click Draft my shop → button spins → info toast "Nothing to draft yet." (caption "Plan some meals, or mark items as essential — then try again.") → **stays on the dashboard** (no navigation) → sidebar list-selector shows **no phantom "Weekly shop · …" empty list** (the /auto-generate handler defers list creation on the create-new path until candidates exist)
+- [ ] Error case — force a 500 (kill the API or unplug network mid-click): negative toast "Could not draft the shop." with the error caption; button un-spins and re-enables
+- [ ] Card is toggleable via the Dashboard's Cards menu (labelled **Draft this week's shop**, grouped under the `act` zone); hiding removes the card, showing it puts it back
+- [ ] The existing `NewListDialog` multi-checkbox flow (New list → check "Items that are low or out of stock" / "Flagged as always-include" / "Frequently added") is unchanged — it always passes a `merge_into_list_id` to `/auto-generate`, so the "defer list creation" server change doesn't touch its path
+- [ ] Meal-plan window sanity check: click Draft my shop today; then advance a meal-plan entry from today to yesterday (or mark today's entry as consumed) → click again → the "consumed" / past-day entry is filtered by the server's `consumed_at IS NULL` guard and does NOT re-appear on the new draft
+- [ ] Sidebar list-selector is refreshed via `listStore.refreshAsync()` before the router push lands on the new detail, so the list-selector shows the new list from the moment the user arrives
 
 ### ⭐ P8-08 Dora Score — Kitchen health card — origin champion-plan §P8-08
 - [ ] Dashboard renders a new **Kitchen health** card in the "Your kitchen" zone above the Pantry donut card (icon ♥ heart)
@@ -1032,11 +1080,13 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] Each option's caption is descriptive (e.g. "Rolls the whole import back on any row-level failure. Off ⇒ valid rows land; errors are reported row-by-row.")
 - [ ] Toggling any option flips the boolean state (verify via the subsequent Import commit: skip_duplicates on/off behaviour is unchanged)
 
-### Import templates — Download template button (FU-343, 2026-07-01)
+### Import templates — Download template button (FU-343, 2026-07-01; hint row FU-349 2026-07-07)
 - [ ] `/settings/admin/data/import`: the "Spreadsheet import" card's header row shows a **Download template** button on the right, next to the title / caption
-- [ ] Click it → the browser downloads `dora-import-stock_items.csv`. Opening it in a text editor: first line is `name,level,location,group,expiry,is_essential`; second line is an illustrative row (`Rice,In stock,Pantry,Grains,2027-01-01,no`)
+- [ ] Click it → the browser downloads `dora-import-stock_items.csv`. Opening it in a text editor: first line is `name,level,location,group,expiry,is_essential`; second line is an illustrative row (`Rice,In stock,Pantry,Grains,2027-01-01,no`); **third line begins with `#`** and reads *"# example values are illustrative — replace them, and use your own level/location/group names (see Settings → Kitchen setup)."* (FU-349)
 - [ ] Hover the button → tooltip shows the section caption ("One row per pantry item. Only `name` is required; the rest are optional.")
 - [ ] Round-trip: open the CSV in Excel / Sheets, edit the example row (or add more), save, upload via the file picker below. Inspect step auto-maps every column; commit succeeds (or reports row-level errors as before)
+- [ ] FU-349 round-trip — download the template, DON'T edit it, upload it as-is. Inspect preview shows **one** data row (the Rice example), not two — the `#` hint row is filtered by the parser. Commit with `skip_duplicates=true` creates just the one row (or zero if "Rice" already exists)
+- [ ] FU-349 negative case — hand-edit a CSV so the second row starts with `#` (`#TestImport,Low,Pantry,,,`). Upload → inspect + commit → that row does NOT get imported (was filtered as a comment)
 - [ ] Non-admin session: `/api/data/import/templates` and `/api/data/import/templates/stock_items.csv` both return 403
 
 ### Backup library — retention + storage path settings (FU-342)
@@ -1397,7 +1447,7 @@ tooltip renders (not clipped), and the copy reads correctly.*
 - [ ] Dashboard: Kitchen health card title, You've saved card title
 - [ ] Reports: Year-over-year card title, Meals-worth metric in Meals cooked card
 - [ ] Alerts: header "N need action · M FYI" tooltip; per-kind tier segmented control in the Manage panel
-- [ ] Meal plans: Shortfall / cook-by chip in the week status (renders on both Overview and Board pages — shared component)
+- [ ] Meal plans: Shortfall / cook-by chip in the week status *(FU-304 closed 2026-07-07: Board page retired; the chip lives on `MealPlansOverview` only.)*
 - [ ] Recipe detail: "N unallocated of M cooked" caption in the Available meals card
 - [ ] Cookbook overview: Cookable now filter chip has a `(?)` beside it explaining the distinction from "Have meals in pool"
 - [ ] Cook mode: Sous Chef button tooltip now includes the fuller explanation; hands-free mic tooltip explains it's independent of narration
@@ -1487,7 +1537,7 @@ Every other platform: no visible effect; already worked.*
 - [ ] From a recipe detail: the Print action still opens the print-view in a new tab (unchanged)
 - [ ] From a shopping list detail: the toolbar menu still exposes "Print / Save as PDF" (unchanged)
 - [ ] From `/stock`: the toolbar export menu still exposes CSV + Print (unchanged)
-- [ ] From `/meal-plans` and `/meal-plans/board`: the Print icon-buttons added in FU-338 still open the print-view (unchanged)
+- [ ] From `/meal-plans`: the Print icon-button added in FU-338 still opens the print-view (unchanged). *(FU-304 closed 2026-07-07: `/meal-plans/board` retired; nothing to check on the old Board page.)*
 - [ ] No console errors on any of the above about a missing route or a missing component
 
 ### Settings shell — independent sidebar/main scroll — origin worklog 2026-07-01

@@ -1,6 +1,10 @@
 import AxiosHttpClient from './axiosHttpClient';
 import type { CadenceBand } from './stocktakeApiService';
 
+/** FU-511 — install-wide auto-add mode. Kept as a shared enum so the
+ *  Settings page and any surface that reads the setting stay in sync. */
+export type AutoAddMode = 'off' | 'essential_only' | 'all';
+
 export type AppSettings = {
     // single install-wide master kill-switch for the
     // assistant feature. Per-user LLM URL/model/provider/API key live
@@ -37,6 +41,13 @@ export type AppSettings = {
     // 2026-07-04 cleanup.
     stocktake_default_cadence_band: CadenceBand;
     stocktake_auto_tuning_enabled: boolean;
+    /** FU-511 — install-wide auto-add mode. Replaces the retired per-item
+     *  `StockItem.auto_add_when_low` toggle. Auto-add fires per the mode:
+     *    'off'            — never.
+     *    'essential_only' — only for items with `is_flagged=true` (default).
+     *    'all'            — always on a Stocked → Low/Out transition.
+     *  Server owns the branching in `update_stock_item._try_auto_add`. */
+    auto_add_mode: AutoAddMode;
     // operational config promoted from DORA_* env vars.
     // Bucket-C secrets (SMTP password, VAPID private key) live encrypted-at-
     // rest on the AppSetting row; the read DTO surfaces a `_configured` bool

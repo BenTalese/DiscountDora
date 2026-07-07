@@ -45,8 +45,7 @@ def _build_csv(items) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow([
-        "location", "name", "level", "expiry", "is_flagged", "is_open",
-        "auto_add_when_low", "notes",
+        "location", "name", "level", "expiry", "is_flagged", "is_open", "notes",
     ])
     for location, group in _group_by_location(items):
         for item in group:
@@ -57,7 +56,6 @@ def _build_csv(items) -> str:
                 item.expiry_date.isoformat() if item.expiry_date else "",
                 "true" if item.is_flagged else "false",
                 "true" if item.is_open else "false",
-                "true" if item.auto_add_when_low else "false",
                 item.notes or "",
             ])
     return buffer.getvalue()

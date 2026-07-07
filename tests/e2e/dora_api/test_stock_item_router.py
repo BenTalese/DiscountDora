@@ -38,7 +38,6 @@ EXPECTED_KEYS = {
     'stock_level_last_updated',
     'expiry_date',
     'is_flagged',
-    'auto_add_when_low',
     'is_open',
     'opened_on',
     'last_checked_at',

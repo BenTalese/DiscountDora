@@ -52,6 +52,8 @@ class AppSettingsDto:
     # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     stocktake_default_cadence_band: str
     stocktake_auto_tuning_enabled: bool
+    # FU-511 — install-wide auto-add mode. 'off' | 'essential_only' | 'all'.
+    auto_add_mode: str
     # operational config (was `DORA_*` env vars).
     # Bucket-C secrets (SMTP password, VAPID private key) are stored
     # encrypted-at-rest on the row; the DTO exposes a `<field>_configured`
@@ -101,6 +103,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         stocktake_auto_tuning_enabled=bool(
             getattr(setting, "stocktake_auto_tuning_enabled", True)
         ),
+        auto_add_mode=(getattr(setting, "auto_add_mode", None) or "essential_only"),
         smtp_host=getattr(setting, "smtp_host", None) or "",
         smtp_port=int(getattr(setting, "smtp_port", 587) or 587),
         smtp_username=getattr(setting, "smtp_username", None) or "",

@@ -78,6 +78,10 @@ class UpdateAppSettingsRequest(BaseModel):
     # degrade the queue.
     stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
     stocktake_auto_tuning_enabled: bool | None = None
+    # FU-511 — install-wide auto-add mode. Validated against
+    # `_VALID_AUTO_ADD_MODES` in the handler so a typo can't silently
+    # degrade behaviour to the seeded default.
+    auto_add_mode: str | None = Field(default=None, max_length=16)
     # operational config previously carried as
     # `DORA_*` env vars. Bucket-C secrets (SMTP password, VAPID private
     # key) accept plaintext on the wire and are Fernet-encrypted before
@@ -258,6 +262,19 @@ class UpdateAppSettingsHandler:
         ):
             setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
 
+        # FU-511 — auto-add mode. Enum-validated so a typo can't silently
+        # degrade to the seeded default.
+        if "auto_add_mode" in set_fields and request.auto_add_mode is not None:
+            _Mode = request.auto_add_mode.strip().lower()
+            if _Mode not in _VALID_AUTO_ADD_MODES:
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{_Mode}' is not a valid auto-add mode. "
+                        f"Allowed: {sorted(_VALID_AUTO_ADD_MODES)}."
+                    ),
+                )
+            setting.auto_add_mode = _Mode
+
         # operational config. Strings strip on save; the
         # `public_url` scheme guard mirrors `product_search_url` above so a
         # typo can't produce a hostile link in outbound emails.
@@ -323,6 +340,8 @@ class UpdateAppSettingsHandler:
         self.repository.save_changes()
         return UpdateAppSettingsResponse(dto=_to_dto(setting))
 
+
+_VALID_AUTO_ADD_MODES = frozenset({"off", "essential_only", "all"})
 
 _BCP47_SUBTAG = re.compile(r"^[A-Za-z0-9]{1,8}$")
 

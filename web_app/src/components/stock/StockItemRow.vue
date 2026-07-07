@@ -24,10 +24,12 @@
         :class="rowClasses"
         @click="emit('click', item.stock_item_id)"
     >
-        <!-- Feedback 2026-06-18: essential items get a warning-toned left-edge
-             stripe so flagged rows scan from the page edge. Paired with the
-             flag icon in the right cluster — the stripe is ambient, the icon
-             is the tappable affordance (filter / open). -->
+        <!-- FU-365 round 2: essential is set-and-forget (managed on the
+             detail page), so the row-level toggle button was dropped from
+             the right cluster. The left-edge stripe is now the sole row
+             indicator — thicker + secondary-toned so it scans without an
+             accompanying icon. Colour matches the "Essential" footer count
+             + filter chip so the concept reads as one visual family. -->
         <div v-if="item.is_flagged" class="stock-row__essential-stripe" aria-hidden="true" />
         <q-card-section class="row items-center no-wrap stock-row__body">
             <!-- ──────────────────────────────────────────────────────
@@ -223,20 +225,9 @@
                 </q-menu>
             </RowActionButton>
 
-            <!-- Essential flag — interactive toggle (round 2 feedback).
-                 Active state mirrors the left-edge stripe colour. -->
-            <RowActionButton
-                :icon="ICONS.flag"
-                :color="item.is_flagged ? 'warning' : undefined"
-                :loading="flagBusy"
-                @click.stop="onToggleFlagged"
-            >
-                <q-tooltip>
-                    {{ item.is_flagged
-                        ? 'Essential — click to unmark'
-                        : 'Mark as essential' }}
-                </q-tooltip>
-            </RowActionButton>
+            <!-- FU-365 round 2: essential-flag button removed here.
+                 Essential is set-and-forget; managed on the item's detail
+                 page. Row indication is the left-edge stripe. -->
 
             <!-- Open / in-use toggle. Primary when open so the state pops. -->
             <RowActionButton
@@ -551,34 +542,8 @@
     // cart button is now `AddToListButton`; the dead
     // `cart` computed + `onCartClick` + `cartStateFor` import retired.
 
-    // ── Essential toggle ────────────────────────────────────────────────
-    const flagBusy = ref(false);
-    async function onToggleFlagged() {
-        const next = !props.item.is_flagged;
-        flagBusy.value = true;
-        try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: props.item.stock_item_id,
-                is_flagged: next,
-            });
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: next
-                    ? `Marked "${props.item.name}" as essential.`
-                    : `"${props.item.name}" is no longer essential.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not update.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            flagBusy.value = false;
-        }
-    }
+    // FU-365 round 2: `onToggleFlagged` + `flagBusy` retired with the
+    // row-level essential button. Detail page still owns the toggle.
 
     // ── Open / in-use toggle ────────────────────────────────────────────
     const openBusy = ref(false);
@@ -764,16 +729,18 @@
         padding: 6px 12px;
         gap: 14px; /* breathing room between image / level / name / cluster */
     }
-    /* Feedback 2026-06-18: essentials get a quiet warning stripe on the
-       left edge. Paired with the right-cluster flag icon — the stripe is
-       passive (ambient marker), the icon explains why on hover. */
+    /* FU-365 round 2: essentials get a secondary-toned left-edge stripe
+       — the sole row-level indicator now that the flag button has been
+       retired from the right cluster (essential is set-and-forget). A
+       little thicker than before so it scans without an accompanying
+       icon. Colour matches the "Essential" footer count + filter chip. */
     .stock-row__essential-stripe {
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
-        width: 3px;
-        background: var(--q-warning);
+        width: 5px;
+        background: var(--q-secondary);
         pointer-events: none;
     }
 

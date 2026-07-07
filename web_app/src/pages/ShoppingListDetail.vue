@@ -1294,6 +1294,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useListState } from 'src/composables/useListState';
     import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -1333,8 +1334,18 @@
     // UX-v2 M2 revision: grouping is a *manual* view preference only —
     // shopping does NOT default to location (stock location is where the
     // item lives at home, not where it sits on a shelf).
+    //
+    // FU-354 — wrapped in `useListState` so the picked grouping survives
+    // navigate-away-and-back within the session (A8 §3 nav-state
+    // policy). Full reload / sign-out (via `clearAllListState` from
+    // FU-355) still resets to `'none'`. Single scope, not per-list — the
+    // groupBy is a *view* preference the user re-uses across lists; a
+    // per-list scope would silently reset the moment they open a new
+    // list, defeating the point.
     type GroupByMode = 'none' | 'location' | 'store';
-    const groupBy = ref<GroupByMode>('none');
+    const { groupBy } = useListState('shopping-list-detail', () => ({
+        groupBy: ref<GroupByMode>('none'),
+    }));
 
     // ── Lifecycle: start / finish ────────────────────────────────────
     const togglingProgress = ref(false);

@@ -32,11 +32,10 @@ class StockItem(BaseEntity):
     # store delete so removing a store doesn't break the items that referenced
     # it — they fall back to "no usual store".
     usual_store_id: UUID | None = None
-    # When True, transitioning this item to Low or Out of stock auto-adds it
-    # to the primary shopping list. Independent of `is_flagged` — that one
-    # drives auto-generate and severity weighting on alerts, this one is
-    # the "always restock" preference.
-    auto_add_when_low: bool = False
+    # FU-511 — per-item `auto_add_when_low` was collapsed into
+    # `AppSetting.auto_add_mode` (off / essential_only / all). Auto-add
+    # now derives from that install-wide setting + this item's
+    # `is_flagged`, not a per-item toggle.
     # "I've cracked open the jar" — true while the item is being actively
     # consumed. `opened_on` is set automatically when `is_open` flips to
     # True; flipping back to False clears it.
@@ -67,7 +66,6 @@ class StockItem(BaseEntity):
     # here. See features/stock_items/add_substitute.py and get_stock_item_detail.
 
     class Fields(BaseEntity.Fields):
-        AUTO_ADD_WHEN_LOW = "auto_add_when_low"
         EXPIRY_DATE = "expiry_date"
         IS_FLAGGED = "is_flagged"
         IS_OPEN = "is_open"

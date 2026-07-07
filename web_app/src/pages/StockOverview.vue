@@ -139,7 +139,7 @@
             <q-separator vertical class="q-mx-sm" />
 
             <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="warning">
+                <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="secondary">
                     Essential
                 </FilterChip>
                 <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
@@ -150,17 +150,6 @@
                 </q-icon>
             </span>
 
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.autoAddOnly.value" :icon="ICONS.bolt" active-color="primary">
-                    Will auto-add on low
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Items with the Auto-add when low toggle on — they drop into
-                        your primary shopping list automatically when they hit Low.
-                    </q-tooltip>
-                </q-icon>
-            </span>
 
             <span class="row items-center no-wrap">
                 <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">

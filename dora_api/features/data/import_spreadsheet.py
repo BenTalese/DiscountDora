@@ -128,7 +128,7 @@ def _read_sheets(path: str, filename: str) -> dict[str, list[list[Any]]]:
             data = data[3:]
         text = data.decode("utf-8", errors="replace")
         reader = csv.reader(io.StringIO(text))
-        rows = [row for row in reader]
+        rows = _strip_comment_rows([row for row in reader])
         sheet_name = os.path.basename(filename) or "csv"
         return {sheet_name: rows}
 
@@ -145,7 +145,7 @@ def _read_sheets(path: str, filename: str) -> dict[str, list[list[Any]]]:
                 rows: list[list[Any]] = []
                 for row in ws.iter_rows(values_only=True):
                     rows.append(list(row))
-                out[sheet] = rows
+                out[sheet] = _strip_comment_rows(rows)
             return out
         finally:
             wb.close()
@@ -154,6 +154,39 @@ def _read_sheets(path: str, filename: str) -> dict[str, list[list[Any]]]:
         f"Unsupported file type for spreadsheet import: '{filename}'. "
         "Supported: .xlsx, .csv."
     )
+
+
+def _strip_comment_rows(rows: list[list[Any]]) -> list[list[Any]]:
+    """FU-349 — drop rows whose first cell begins with ``#``.
+
+    The downloaded templates include one or more `#`-prefixed rows that
+    explain the illustrative example values (see `ImportTemplate.
+    comment_rows`). If the user re-uploads the file without deleting the
+    hint row, the parser must not treat it as a data row — otherwise the
+    commit path would try to import "example values are illustrative…"
+    as a stock item name.
+
+    Row 0 is preserved unconditionally: it's the header row, and a user
+    who deleted headers and put a `#` line at the top would want us to
+    surface the failure honestly rather than silently reshape the sheet.
+    """
+    if not rows:
+        return rows
+    kept: list[list[Any]] = [rows[0]]
+    for row in rows[1:]:
+        if _is_comment_row(row):
+            continue
+        kept.append(row)
+    return kept
+
+
+def _is_comment_row(row: list[Any]) -> bool:
+    if not row:
+        return False
+    first = row[0]
+    if first is None:
+        return False
+    return str(first).strip().startswith("#")
 
 
 def _build_auto_mapping(headers: list[str]) -> dict[str, str | None]:
@@ -470,7 +503,6 @@ class CommitSpreadsheetHandler:
                     id=uuid4(),
                     name=row_name,
                     notes=None,
-                    image=None,
                     stocktake_alerts_are_enabled=False,
                     stock_level_id=stock_level_id,
                     stock_location_id=stock_location_id,
@@ -479,7 +511,6 @@ class CommitSpreadsheetHandler:
                     expiry_date=expiry,
                     is_flagged=is_flagged,
                     is_open=False,
-                    auto_add_when_low=False,
                     opened_on=None,
                 ))
                 existing_item_names[row_name.lower()] = True  # mark for downstream dup checks
@@ -667,9 +698,33 @@ class ImportTemplate:
     label: str
     caption: str
     headers: tuple[str, ...]
-    # One-line example row shown as the second line of the CSV so users
-    # see the expected shape at a glance. Optional cells may be blank.
-    example: tuple[str, ...]
+    # FU-350 — one-line example row keyed by field name (was a positional
+    # `tuple[str, ...]`). Keying by name means reordering `TARGET_FIELDS`
+    # or renaming a column can't silently misalign the example cells
+    # under the wrong headers — the CSV writer projects `example` through
+    # `headers` at emit time (see `download_import_template` below).
+    # Missing keys emit as an empty cell (optional fields may be blank).
+    # Cross-checked at module load — see `_validate_import_templates`.
+    example: dict[str, str]
+    # FU-349 — additional rows written after the example, each prefixed
+    # with `#` so `_read_sheets` treats them as comments and strips them
+    # on re-upload. Used to warn users that the illustrative
+    # level/location/group names may not match their install.
+    comment_rows: tuple[tuple[str, ...], ...] = ()
+
+
+# FU-349 (option A) — comment rows travel with the downloaded template so
+# a user opening the CSV in Excel/Numbers can read *why* the example row's
+# level/location/group names may not match their install (the seeded
+# StockLevel / StockLocation / StockGroup rows are user-editable, so the
+# defaults "In stock" / "Pantry" / "Grains" are illustrative, not truth).
+# The parser (`_read_sheets` → `_strip_comment_rows`) skips any row whose
+# first cell begins with `#`, so this row round-trips harmlessly if the
+# user re-uploads the same file without deleting it.
+_COMMENT_ROW_STOCK_ITEMS: tuple[str, ...] = (
+    "# example values are illustrative — replace them, "
+    "and use your own level/location/group names (see Settings → Kitchen setup).",
+)
 
 
 IMPORT_TEMPLATES: tuple[ImportTemplate, ...] = (
@@ -680,12 +735,95 @@ IMPORT_TEMPLATES: tuple[ImportTemplate, ...] = (
         headers=TARGET_FIELDS,
         # Example values are illustrative — the level / location / group
         # matchers are name-based, so any string that resembles an existing
-        # entity is a valid starting point for a real import.
-        example=("Rice", "In stock", "Pantry", "Grains", "2027-01-01", "no"),
+        # entity is a valid starting point for a real import. The user-
+        # facing "these are placeholders" hint travels next to the row in
+        # the CSV as a `#`-prefixed comment line (see FU-349 /
+        # `_COMMENT_ROW_STOCK_ITEMS`); the parser strips comment rows
+        # before commit.
+        # FU-350 — keyed by field name (was positional). Reordering
+        # `TARGET_FIELDS` or adding a seventh field can no longer silently
+        # misalign the example row.
+        example={
+            "name": "Rice",
+            "level": "In stock",
+            "location": "Pantry",
+            "group": "Grains",
+            "expiry": "2027-01-01",
+            "is_essential": "no",
+        },
+        comment_rows=(_COMMENT_ROW_STOCK_ITEMS,),
     ),
 )
 
 IMPORT_TEMPLATES_BY_SECTION: dict[str, ImportTemplate] = {t.section: t for t in IMPORT_TEMPLATES}
+
+
+# FU-350 — sections the commit handler currently knows how to process,
+# mapped to the header tuple it expects for each. Today `stock_items` is
+# the only real target and its expected headers are `TARGET_FIELDS`.
+# When a second section handler lands (recipes, shopping lists, …),
+# whoever wires it MUST add its `(section, expected_headers)` pair here
+# so `_validate_import_templates` catches a template that ships without
+# a matching commit path. Keeping the map explicit (not derived from a
+# dispatch table that doesn't exist yet) means adding a second section
+# is one clearly-marked line, not a spelunk through the handler.
+_COMMIT_KNOWN_SECTIONS: dict[str, tuple[str, ...]] = {
+    "stock_items": TARGET_FIELDS,
+}
+
+
+def _validate_import_templates() -> None:
+    """FU-350 — fail at module load, not at user download time.
+
+    Three drift risks the FU-343 shipping shape carried:
+      1. `example` cells were positional; a reordered / renamed / added
+         target field would silently misalign the example under the
+         wrong headers. Now dict-keyed, so any stale key or missing
+         column raises here instead of shipping a broken CSV.
+      2. Header tuples could diverge from the source of truth
+         (`TARGET_FIELDS` for stock_items, and whichever tuple owns
+         each future section). Enforced via `_COMMIT_KNOWN_SECTIONS`.
+      3. A template could ship for a section the commit handler
+         doesn't understand — download works, upload silently fails.
+         Enforced via section-membership check.
+    """
+    seen_sections: set[str] = set()
+    for t in IMPORT_TEMPLATES:
+        if t.section in seen_sections:
+            raise ValueError(
+                f"Duplicate ImportTemplate for section '{t.section}'."
+            )
+        seen_sections.add(t.section)
+
+        if t.section not in _COMMIT_KNOWN_SECTIONS:
+            raise ValueError(
+                f"ImportTemplate section '{t.section}' has no matching "
+                f"entry in `_COMMIT_KNOWN_SECTIONS` — the commit handler "
+                f"doesn't know how to process it. Add a "
+                f"'{t.section}': <expected_headers> entry there before "
+                f"registering a template."
+            )
+
+        expected_headers = _COMMIT_KNOWN_SECTIONS[t.section]
+        if set(t.headers) != set(expected_headers):
+            raise ValueError(
+                f"ImportTemplate('{t.section}').headers {set(t.headers)} "
+                f"drifted from the commit handler's expected headers "
+                f"{set(expected_headers)}."
+            )
+
+        example_keys = set(t.example.keys())
+        header_set = set(t.headers)
+        stale_keys = example_keys - header_set
+        if stale_keys:
+            raise ValueError(
+                f"ImportTemplate('{t.section}').example has keys "
+                f"{sorted(stale_keys)} that aren't in .headers — "
+                f"they'd silently disappear from the emitted CSV."
+            )
+
+
+_validate_import_templates()
 
 
 @DATA_ROUTER.route("/import/templates", methods=["GET"])
@@ -720,12 +858,24 @@ def download_import_template(section: str):
         return not_found("Import template", section)
 
     # Build the CSV in memory — headers row + one example row so the shape
-    # is obvious. StringIO + csv.writer keeps escaping honest for names
-    # containing commas / quotes even in the illustrative row.
+    # is obvious, then any `#`-prefixed comment rows so users see the
+    # "these placeholders may not match your install" hint (FU-349, opt A).
+    # StringIO + csv.writer keeps escaping honest for names containing
+    # commas / quotes even in the illustrative row.
+    #
+    # FU-350 — the example row is emitted by projecting the dict-keyed
+    # `example` through `headers` at write time. Reordering `TARGET_FIELDS`
+    # or adding a column reorders / grows the emitted row automatically;
+    # missing keys emit as empty cells rather than misaligning under the
+    # wrong header. Module-load validation (`_validate_import_templates`)
+    # has already guaranteed no stale keys and no drift from the commit
+    # handler's expected headers.
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(template.headers)
-    writer.writerow(template.example)
+    writer.writerow([template.example.get(h, "") for h in template.headers])
+    for comment_row in template.comment_rows:
+        writer.writerow(comment_row)
     # prepend a UTF-8 BOM so Excel-on-Windows opens the file in
     # UTF-8 by default (without BOM it guesses ANSI/CP-1252 and any
     # accented character in an example row / template header renders as

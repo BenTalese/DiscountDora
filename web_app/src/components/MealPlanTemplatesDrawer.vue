@@ -100,6 +100,17 @@
                                     <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(t)">
                                         <q-tooltip>Rename</q-tooltip>
                                     </BaseButton>
+                                    <!-- FU-308 — Clone folded in from the retired templates
+                                         page. Same call site (`templateStore.cloneAsync`);
+                                         the drawer now covers the full per-template CRUD. -->
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.content_copy"
+                                        :loading="cloningId === t.meal_plan_template_id"
+                                        @click="onClone(t)"
+                                    >
+                                        <q-tooltip>Clone</q-tooltip>
+                                    </BaseButton>
                                     <BaseButton variant="danger-ghost" :icon="ICONS.delete_outline" round dense @click="confirmDelete(t)">
                                         <q-tooltip>Delete</q-tooltip>
                                     </BaseButton>
@@ -108,6 +119,23 @@
                         </q-item-section>
                     </q-item>
                 </q-list>
+
+                <!-- FU-308 — Rotating sets are the "heavy management"
+                     surface (multi-template ordered list + set-editor); they
+                     don't fit gracefully in a 440px drawer, so the dedicated
+                     `/meal-plans/templates` page owns them. This footer link
+                     makes it discoverable from where users manage individual
+                     templates. -->
+                <q-separator />
+                <div class="q-pa-md">
+                    <BaseButton
+                        variant="ghost"
+                        :icon="ICONS.event_repeat"
+                        label="Manage rotating sets →"
+                        class="full-width"
+                        @click="onManageSets"
+                    />
+                </div>
             </q-card-section>
         </q-card>
     </q-dialog>
@@ -119,6 +147,7 @@
     import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';
     import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
     import { useQuasar } from 'quasar';
+    import { useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { ref } from 'vue';
 
@@ -136,11 +165,16 @@
     }>();
 
     const $q = useQuasar();
+    const router = useRouter();
     const templateStore = useMealPlanTemplateStore();
 
     const renamingId = ref<string | null>(null);
     const renameDraft = ref('');
     const saving = ref(false);
+    // FU-308 — per-template pending state for the Clone action. Scoped
+    // per-template (not global) so multiple concurrent clones each spin
+    // their own row's icon.
+    const cloningId = ref<string | null>(null);
 
     function startRename(t: MealPlanTemplateSummary) {
         renamingId.value = t.meal_plan_template_id;
@@ -195,6 +229,33 @@
 
     function onApply(t: MealPlanTemplateSummary) {
         emit('applyTemplate', t.meal_plan_template_id);
+    }
+
+    // FU-308 — Clone folded in from the retired templates page. Same
+    // `templateStore.cloneAsync` call site; the store refreshes the list
+    // so the new template appears in the drawer without a manual reload.
+    async function onClone(t: MealPlanTemplateSummary) {
+        if (cloningId.value) return;
+        cloningId.value = t.meal_plan_template_id;
+        try {
+            await templateStore.cloneAsync(t.meal_plan_template_id);
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Cloned.' });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not clone the template.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            cloningId.value = null;
+        }
+    }
+
+    // FU-308 — jump to the dedicated Rotating Sets page. Close the drawer
+    // first so the transition doesn't overlap the route push.
+    function onManageSets() {
+        emit('update:modelValue', false);
+        void router.push('/meal-plans/templates');
     }
 </script>
 

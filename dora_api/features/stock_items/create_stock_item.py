@@ -34,7 +34,6 @@ class CreateStockItemRequest(BaseModel):
     stock_group_id: UUID | None = None
     expiry_date: date | None = None
     is_flagged: bool = False
-    auto_add_when_low: bool = False
     is_open: bool = False
 
 
@@ -100,7 +99,6 @@ class CreateStockItemHandler:
             stocktake_alerts_are_enabled = False,
             expiry_date = request.expiry_date,
             is_flagged = request.is_flagged,
-            auto_add_when_low = request.auto_add_when_low,
             is_open = request.is_open,
             # R-021 — opened_on is the household calendar day, not server-local.
             opened_on = household_today(self.repository) if request.is_open else None,

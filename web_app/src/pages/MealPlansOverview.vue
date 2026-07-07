@@ -44,19 +44,9 @@
             <template v-else>
             <div class="row items-center q-mb-sm">
                 <q-space />
-                <!-- A/B toggle (desktop-only; temp, §8.2) — flips the user to
-                    the Direction B board page. View choice persists across
-                    reload via localStorage. -->
-                <BaseSegmented
-                    :model-value="'list'"
-                    @update:model-value="onViewToggle"
-                    class="q-mr-md"
-                    dense unelevated
-                    :options="[
-                        { label: 'List', value: 'list' },
-                        { label: 'Grid', value: 'grid' },
-                    ]"
-                />
+                <!-- FU-304 closed 2026-07-07 — Direction A won; the A/B
+                     `BaseSegmented` toggle and the sibling `/meal-plans/board`
+                     page were retired. -->
                 <BaseButton
                     variant="secondary"
                     :icon="ICONS.lightbulb"
@@ -344,7 +334,6 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MealPlanCalendar from 'components/MealPlanCalendar.vue';
     import MealPlanFirstRun from 'src/components/MealPlanFirstRun.vue';
     import MealPlanMobileFocus from 'src/components/MealPlanMobileFocus.vue';
@@ -360,48 +349,47 @@
     // target-count sourced from the user's `meals_per_week` pref
     // via this composable (fallback 7 when unset).
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
-    import { resolvePlannerView, setPlannerView } from 'src/composables/useMealPlannerView';
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
-    import { useRoute, useRouter } from 'vue-router';
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
     const { mealsPerWeek } = useMealsPerWeek();
-    const route = useRoute();
-    const router = useRouter();
     const $q = useQuasar();
 
-    // ── A/B view persistence (§8.2) ────────────────────────────────────────
-    // If a previous visit left the user on the Grid (Direction B), respect
-    // that as soon as this page mounts. `?view=` query wins over storage so a
-    // direct "open in list view" link still works.
-    onMounted(() => {
-        const desired = resolvePlannerView(route.query as Record<string, unknown>, 'list');
-        if (desired === 'grid') {
-            void router.replace({
-                path: '/meal-plans/board',
-                query: { ...route.query, view: 'grid' },
-            });
-        }
-    });
-    function onViewToggle(value: string | number | null) {
-        if (value === 'grid') {
-            setPlannerView('grid');
-            void router.replace({
-                path: '/meal-plans/board',
-                query: { ...route.query, view: 'grid' },
-            });
-        } else if (value === 'list') {
-            setPlannerView('list');
-        }
-    }
+    // FU-304 closed 2026-07-07 — Direction A wins. The A/B view helper
+    // (`useMealPlannerView`), the desktop `BaseSegmented` toggle, and the
+    // `onMounted` "restore Grid view" redirect were all retired with the
+    // Direction B page. `MealPlansOverview` is now the only planner surface.
 
     // ── Q2 — slot visibility default ───────────────────────────────────────
     // Default off: only used slots render per day (collapses the empty-cell
     // sprawl, U1). Toggle reveals every household slot if the user prefers
     // the legacy view.
-    const showAllSlots = ref(false);
+    //
+    // FU-306 — the toggle is a per-device view preference (not a household
+    // pref), so it rides `localStorage` rather than a User/Preference column.
+    // Multi-slot households that flip it "on" now keep it on across reloads;
+    // a genuine per-household setting can graduate to `Preference` later if
+    // the same user wants it synced across their devices.
+    const SHOW_ALL_SLOTS_KEY = 'mealPlanShowAllSlots';
+    const showAllSlots = ref(readShowAllSlots());
+    watch(showAllSlots, (value) => {
+        try {
+            localStorage.setItem(SHOW_ALL_SLOTS_KEY, value ? '1' : '0');
+        } catch {
+            // localStorage can be unavailable (private-mode Safari, disk
+            // quota exceeded) — fail silent; the session-local ref still
+            // works, we just lose cross-reload persistence.
+        }
+    });
+    function readShowAllSlots(): boolean {
+        try {
+            return localStorage.getItem(SHOW_ALL_SLOTS_KEY) === '1';
+        } catch {
+            return false;
+        }
+    }
 
     const plannedCount = computed(
         () => (planner.focusedPlan.value?.entries ?? []).filter((e) => !e.consumed_at).length,

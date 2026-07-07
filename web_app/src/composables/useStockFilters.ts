@@ -73,8 +73,6 @@ export function useStockFilters(sources: {
             essentialsOnly: ref(false),
             openOnly: ref(false),
             hasAlertOnly: ref(false),
-            // X5 — "items that will silently jump onto my list when low".
-            autoAddOnly: ref(false),
             // PROPOSAL_STOCKTAKE_MODE §7 — "in the stocktake queue right now".
             needsCheckOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
@@ -90,7 +88,6 @@ export function useStockFilters(sources: {
             essentialsOnly: ref(false),
             openOnly: ref(false),
             hasAlertOnly: ref(false),
-            autoAddOnly: ref(false),
             needsCheckOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
@@ -98,7 +95,7 @@ export function useStockFilters(sources: {
         };
     const {
         searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
-        openOnly, hasAlertOnly, autoAddOnly, needsCheckOnly, cartFilter,
+        openOnly, hasAlertOnly, needsCheckOnly, cartFilter,
         recipeFilter, sortBy,
     } = state;
 
@@ -246,7 +243,6 @@ export function useStockFilters(sources: {
             if (groupFilter.value !== null && item.stock_group_id !== groupFilter.value)
                 return false;
             if (essentialsOnly.value && !item.is_flagged) return false;
-            if (autoAddOnly.value && !item.auto_add_when_low) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
             if (needsCheckOnly.value) {
@@ -328,7 +324,6 @@ export function useStockFilters(sources: {
         if (locationFilter.value !== null) n++;
         if (groupFilter.value !== null) n++;
         if (essentialsOnly.value) n++;
-        if (autoAddOnly.value) n++;
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
@@ -354,14 +349,12 @@ export function useStockFilters(sources: {
         const byLevel = new Map<string, number>();
         const cartMap = cartStateById.value;
         let flagged = 0;
-        let autoAdd = 0;
         let attention = 0;
         let onAnyList = 0;
         for (const it of items) {
             if (it.stock_level_id)
                 byLevel.set(it.stock_level_id, (byLevel.get(it.stock_level_id) ?? 0) + 1);
             if (it.is_flagged) flagged++;
-            if (it.auto_add_when_low) autoAdd++;
             if (hasAlert(it)) attention++;
             // Round-10: count items present on at least one active shopping
             // list — once per item, not per line/list. Anything other than
@@ -369,17 +362,19 @@ export function useStockFilters(sources: {
             if ((cartMap.get(it.stock_item_id) ?? 'none') !== 'none') onAnyList++;
         }
         // minified labels; matches the plan's order:
-        // Shown · Stocked · Low · Out · Flagged · Auto-add ·
-        // Needs-attention. Level names are shortened for the chip
-        // ("Low Stock" → "Low", "Out of Stock" → "Out") so they fit in
-        // a single sticky row.
+        // Shown · Stocked · Low · Out · Essential · Needs-attention.
+        // Level names are shortened for the chip ("Low Stock" → "Low",
+        // "Out of Stock" → "Out") so they fit in a single sticky row.
+        // FU-511 — "Auto-add" per-item count dropped; auto-add is now a
+        // single install-wide setting (Settings → Admin → Stock),
+        // nothing to count per-item.
         const shortLabel = (name: string): string =>
             name
                 .replace(/\bLow Stock\b/i, 'Low')
                 .replace(/\bOut of Stock\b/i, 'Out');
-        // `hideOnMobile: true` on the level + essential + auto-add stats:
-        // narrow viewports get only Shown + Needs attention so the
-        // sticky footer doesn't eat vertical space (round-6 feedback).
+        // `hideOnMobile: true` on the level + essential stats: narrow
+        // viewports get only Shown + Needs attention so the sticky
+        // footer doesn't eat vertical space (round-6 feedback).
         const levelStats: PageCount[] = sources.stockLevels().map((l) => ({
             label: shortLabel(l.name),
             value: byLevel.get(l.stock_level_id) ?? 0,
@@ -389,28 +384,21 @@ export function useStockFilters(sources: {
         }));
         // Feedback 2026-06-18 (round 2):
         //   • "Shown" stays neutral (default text colour).
-        //   • Essential keeps the warning tone (same colour as the row
-        //     stripe + flag icon).
-        //   • Auto-add now reads neutral — it's an *info* count, not a
-        //     status. Matches the "Shown" tone the user asked for.
-        //   • Order is Essential → Auto-add → Needs attention (Essential
-        //     above Auto-add per the feedback).
+        //   • Essential rides the secondary tone (FU-365 round 2) —
+        //     matches the row's left-edge stripe + the Essential filter
+        //     chip so the concept reads as one visual family.
         //   • Label is "Essential" (not "Flagged") so the wording stays
         //     consistent with the field on the detail page + the row's
         //     tooltip + the filter chip.
         // `group` drives PageCountsFooter's three-cluster justify-evenly
-        // layout: [Shown] · [stock levels] · [other counts].
-        // Round-18: "Needs attention" moved into the `shown` cluster
-        // (right of Shown) so the two summary numbers — total visible +
-        // total acting-required — read as one pair. The middle cluster
-        // is the level breakdown; the right cluster is Essential /
-        // Auto-add / On a list.
+        // layout: [Shown] · [stock levels] · [other counts]. The right
+        // cluster is Essential / On a list; Auto-add was retired here
+        // by FU-511 (no per-item value to count).
         return [
             { label: 'Shown', value: items.length, group: 'shown' as const },
             { label: 'Needs attention', value: attention, tone: 'negative' as const, group: 'shown' as const },
             ...levelStats,
-            { label: 'Essential', value: flagged, tone: 'warning' as const, group: 'other' as const, hideOnMobile: true },
-            { label: 'Auto-add', value: autoAdd, group: 'other' as const, hideOnMobile: true },
+            { label: 'Essential', value: flagged, tone: 'secondary' as const, group: 'other' as const, hideOnMobile: true },
             { label: 'On a list', value: onAnyList, group: 'other' as const, hideOnMobile: true },
         ];
     });
@@ -425,7 +413,6 @@ export function useStockFilters(sources: {
         locationFilter.value = null;
         groupFilter.value = null;
         essentialsOnly.value = false;
-        autoAddOnly.value = false;
         openOnly.value = false;
         hasAlertOnly.value = false;
         cartFilter.value = 'all';
@@ -439,7 +426,6 @@ export function useStockFilters(sources: {
         locationFilter,
         groupFilter,
         essentialsOnly,
-        autoAddOnly,
         openOnly,
         hasAlertOnly,
         needsCheckOnly,

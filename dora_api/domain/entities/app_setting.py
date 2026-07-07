@@ -115,6 +115,19 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
+    # FU-511 — install-wide auto-add mode. Replaces the per-item
+    # `StockItem.auto_add_when_low` boolean with one setting shared by
+    # every item. Values:
+    #   `'off'`            — never auto-add on low.
+    #   `'essential_only'` — fire only for items flagged as essential
+    #                        (`is_flagged=True`). Default.
+    #   `'all'`            — fire for any item that transitions Stocked
+    #                        → Low/Out.
+    # The `essential_only` default is the closest single behaviour to
+    # the pre-migration pattern (auto-add was conceptually a marker of
+    # "staple you never want to run out of" — same shape as Essential).
+    # Server-side authority; see `update_stock_item._try_auto_add`.
+    auto_add_mode: str = "essential_only"
     # operational config that was formerly carried as
     # `DORA_*` env vars. An admin now configures a fresh install through
     # Settings → Admin → System; the two remaining bootstrap-only vars
@@ -176,6 +189,7 @@ class AppSetting(BaseEntity):
         IMAGE_MAX_DIMENSION = "image_max_dimension"
         STOCKTAKE_DEFAULT_CADENCE_BAND = "stocktake_default_cadence_band"
         STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"
+        AUTO_ADD_MODE = "auto_add_mode"
         SMTP_HOST = "smtp_host"
         SMTP_PORT = "smtp_port"
         SMTP_USERNAME = "smtp_username"

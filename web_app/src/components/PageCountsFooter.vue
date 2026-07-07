@@ -44,7 +44,7 @@
         label: string;
         value: number | string;
         /** Optional semantic colour for the value. */
-        tone?: 'positive' | 'negative' | 'warning' | 'info' | 'primary' | 'muted';
+        tone?: 'positive' | 'negative' | 'warning' | 'info' | 'primary' | 'secondary' | 'muted';
         /** Optional cluster id — counts sharing a `group` render together
          *  with smaller inter-stat spacing; clusters are centered across
          *  the bar. Default order: `shown` → `levels` → `other`. */
@@ -91,6 +91,7 @@
             case 'warning': return 'text-warning';
             case 'info': return 'text-info';
             case 'primary': return 'text-primary';
+            case 'secondary': return 'text-secondary';
             case 'muted': return 'dora-text-muted';
             default: return '';
         }

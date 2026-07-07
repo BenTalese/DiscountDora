@@ -338,29 +338,16 @@
                                     </q-item-section>
                                 </q-item>
 
-                                <q-item>
-                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Auto-add when low</q-item-section>
-                                    <q-item-section>
-                                        <div class="row items-center q-gutter-sm">
-                                            <q-toggle
-                                                :model-value="detail.auto_add_when_low"
-                                                :disable="busy"
-                                                @update:model-value="onToggleAutoAdd"
-                                            />
-                                            <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
-                                                <q-tooltip max-width="320px">
-                                                    Drops this item onto your
-                                                    primary shopping list the
-                                                    moment its level falls to
-                                                    Low or Out — silent, with
-                                                    an undoable toast. Use for
-                                                    essentials you never want
-                                                    to run out of.
-                                                </q-tooltip>
-                                            </q-icon>
-                                        </div>
-                                    </q-item-section>
-                                </q-item>
+                                <!-- FU-511 — per-item "Auto-add when low"
+                                     toggle removed. Auto-add is now a
+                                     single install-wide setting managed at
+                                     Settings → Admin → System → Stock
+                                     (off / essential-only / all), which
+                                     branches on this item's Essential flag
+                                     above. Rationale: the per-item toggle
+                                     was redundant with `is_flagged` for
+                                     the "staple you never want to run
+                                     out of" use it was designed for. -->
 
                                 <!-- Feedback 2026-06-18 (round 3): notes
                                      gets a real outlined input so the
@@ -1254,7 +1241,6 @@
         stock_location_id?: string | null;
         stock_group_id?: string | null;
         is_flagged?: boolean;
-        auto_add_when_low?: boolean;
         expiry_date?: string | null;
         usual_store_id?: string | null;
         clear_usual_store?: boolean;
@@ -1328,9 +1314,6 @@
     }
     async function onToggleFlagged(value: boolean) {
         await saveField({ is_flagged: value });
-    }
-    async function onToggleAutoAdd(value: boolean) {
-        await saveField({ auto_add_when_low: value });
     }
     function shiftExpiry(days: number) {
         // From the current expiry if set, otherwise from today. Date math in

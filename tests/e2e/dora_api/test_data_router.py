@@ -509,6 +509,97 @@ def test__import_template__csv_download__starts_with_utf8_bom(api):
     )
 
 
+def test__import_template__example_cells_line_up_with_headers(api):
+    """FU-350 — the example row is now keyed by field name and projected
+    through `headers` at write time. Reordering / renaming / adding a
+    target field can no longer silently misalign example cells under the
+    wrong headers. Contract: for the shipping stock_items template each
+    non-empty example cell reads sensibly for its column (Rice under
+    `name`, `In stock` under `level`, etc.)."""
+    import csv as _csv
+    response = requests.get(
+        "http://localhost:5170/api/data/import/templates/stock_items.csv"
+    )
+    assert response.status_code == 200, response.text
+    body = response.content
+    if body.startswith(b"\xef\xbb\xbf"):
+        body = body[3:]
+    reader = _csv.reader(body.decode("utf-8").splitlines())
+    rows = list(reader)
+    assert len(rows) >= 2, f"Expected header + example row, got {rows!r}"
+    header, example = rows[0], rows[1]
+    assert len(header) == len(example), (
+        f"Header ({len(header)} cells) and example ({len(example)} cells) "
+        f"drifted apart: {header!r} vs {example!r}"
+    )
+    zipped = dict(zip(header, example))
+    # Spot-check the fields that today's shipping template populates —
+    # each cell reads sensibly for its column. If a future refactor
+    # reorders TARGET_FIELDS or renames a column, the misalignment would
+    # surface here (e.g. `expiry`'s example date landing under
+    # `is_essential`) instead of shipping to users.
+    assert zipped.get("name") == "Rice", f"name column got {zipped!r}"
+    assert zipped.get("level") == "In stock", f"level column got {zipped!r}"
+    assert zipped.get("location") == "Pantry", f"location column got {zipped!r}"
+    assert zipped.get("group") == "Grains", f"group column got {zipped!r}"
+    assert zipped.get("expiry") == "2027-01-01", f"expiry column got {zipped!r}"
+    assert zipped.get("is_essential") == "no", f"is_essential column got {zipped!r}"
+
+
+def test__import_template__csv_download__includes_hash_comment_row(api):
+    """FU-349 (option A) — the downloaded template ships with an inline
+    `#`-prefixed hint row explaining that the example values are
+    illustrative, so users who never saw the FU know their install's
+    actual level/location/group names may not match the placeholders.
+    Emitting the row is the whole point of the option-A fix; without
+    this assertion a future refactor could silently drop it and the
+    user-facing hint would disappear."""
+    response = requests.get(
+        "http://localhost:5170/api/data/import/templates/stock_items.csv"
+    )
+    assert response.status_code == 200, response.text
+    body = response.content
+    # Strip the BOM to compare cleanly.
+    if body.startswith(b"\xef\xbb\xbf"):
+        body = body[3:]
+    text = body.decode("utf-8")
+    lines = [line for line in text.splitlines() if line]
+    # At least one line starting with `#` after the header + example.
+    assert any(line.startswith("#") for line in lines), (
+        "Template CSV must include a #-prefixed hint row explaining "
+        f"that example values are illustrative; got: {lines!r}"
+    )
+
+
+def test__import_template__hash_comment_row__stripped_on_reupload(api):
+    """FU-349 (option A) — round-trip: the `#` hint row we ship in the
+    template must be filtered by the parser on re-upload so a user who
+    doesn't delete it doesn't accidentally import a stock item named
+    "# example values are illustrative…". Uses /inspect (not commit) so
+    the test doesn't leave state behind — the `preview_rows` reflects
+    exactly the rows the commit path would process."""
+    response = requests.get(
+        "http://localhost:5170/api/data/import/templates/stock_items.csv"
+    )
+    assert response.status_code == 200, response.text
+    upload_id = _stage_bytes(response.content)
+
+    inspect = requests.post(IMPORT_INSPECT_URL, json={
+        "upload_id": upload_id, "filename": "stock_items.csv",
+    })
+    assert inspect.status_code == 200, inspect.text
+    inspect_body = inspect.json()
+    preview = inspect_body["preview_rows"]["stock_items.csv"]
+    # Every previewed row's first cell must NOT start with `#`. The header
+    # row is separated in the response envelope (via `sheets`), so preview
+    # is data-only; a leaked `#` row here would be a real regression.
+    for row in preview:
+        first = row[0] if row else ""
+        assert not str(first or "").startswith("#"), (
+            f"Comment row leaked into preview_rows: {row!r}"
+        )
+
+
 def test__import_template__csv_download__body_after_bom_parses(api):
     """The BOM is only for Excel — server-side parsers (including our
     own upload path) must still be able to consume the file. Round-trip
@@ -866,7 +957,7 @@ def test__stock_overview_export_csv__returns_csv_with_header(api):
     header = response.text.splitlines()[0]
     for col in (
         "location", "name", "level", "expiry", "is_flagged",
-        "is_open", "auto_add_when_low", "notes",
+        "is_open", "notes",
     ):
         assert col in header
 

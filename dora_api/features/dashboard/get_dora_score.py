@@ -46,17 +46,17 @@ from dora_api.domain.stock_status import OUT_OF_STOCK_SEQUENCE
 from dora_api.features.budget.budget import GetBudgetStatusHandler
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class GetDoraScoreHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID) -> DoraScoreDto:
         # Snapshot the wall clock once — every window boundary and
@@ -112,7 +112,7 @@ class GetDoraScoreHandler:
         has_budget = False
         budget_over_pct: float | None = None
         if not lagged:
-            budget = get_container().inject(GetBudgetStatusHandler).handle(user_id)
+            budget = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
             if budget is not None and budget.amount is not None and budget.enabled:
                 has_budget = True
                 if budget.amount > 0:
@@ -218,7 +218,7 @@ def get_dora_score():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    dto = get_container().inject(GetDoraScoreHandler).handle(user_id)
+    dto = GetDoraScoreHandler(SqlAlchemyRepository()).handle(user_id)
     _LOGGER.info(
         "Dora Score user=%s composite=%s trend=%s (delta=%s)",
         user_id,

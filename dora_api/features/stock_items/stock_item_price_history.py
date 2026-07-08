@@ -23,8 +23,8 @@ from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.your_prices import (
     build_stock_item_price_series, build_your_prices_for_item)
 from dora_api.infrastructure.api_response import not_found, ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,8 +53,8 @@ class StockItemPriceHistoryDto:
 
 
 class StockItemPriceHistoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, stock_item_id: UUID) -> StockItemPriceHistoryDto | None:
         item = self.repository.get(StockItem).by_id(stock_item_id)
@@ -89,7 +89,7 @@ class StockItemPriceHistoryHandler:
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/price-history", methods=["GET"])
 def get_stock_item_price_history(stock_item_id: UUID):
-    _Result = get_container().inject(StockItemPriceHistoryHandler).handle(stock_item_id)
+    _Result = StockItemPriceHistoryHandler(SqlAlchemyRepository()).handle(stock_item_id)
     if _Result is None:
         return not_found(StockItem.__name__, stock_item_id)
     logging.getLogger(__name__).debug(

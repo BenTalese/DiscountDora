@@ -69,45 +69,28 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** late-game / pre-commercialization hardening. Not urgent while the app is still gaining new surfaces; do it when the feature surface has stabilised so a lib swap doesn't collide with in-flight redesigns. Doing it earlier risks churning code that's about to be reshaped anyway.
 - **Recommended resolution:** **late-game / Phase 4 kick-off.** Pair with the pre-commercialization hardening pass ([[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta) — same window, same "batten down the hatches before we ask anyone to trust this" mindset. Cross-check every existing `[Removed]` and `[Kept-because…]` verdict against ENGINEERING_STANDARDS on the way out so the assessment doc becomes source-of-truth for "here's why we didn't take the lib."
 
-## [OPEN] FU-504 — Base-component adoption residuals (~54 raw `q-btn` uses across 16 files + one `BaseButton` variant gap)
-- **Raised:** 2026-07-07 (FU-424 audit close-out).
-- **Type:** finding + small design decision.
-- **What:** SPA-wide grep for raw Quasar primitives where a Base* wrapper exists:
-  - `q-btn`: **~54 raw uses across 16 files** — mostly straightforward migrations to `BaseButton variant="ghost"` / `"secondary"` / `"icon"`. Notable defensible cases: `HelpPage.vue:11-19` (uses the `accent` Quasar palette that no `BaseButton` variant exposes), `RecipeCard.vue:99-108` + `StocktakeRunner.vue:95-113` + `AddToListButton` inline chips (all "unelevated coloured icon buttons" — a shape `BaseButton variant="icon"` doesn't currently support).
-  - `q-dialog`: **8 raw uses — all defensible** (panel/sheet patterns like `AlertsBell.vue` right-slide, `MealPlanPickerSheet.vue` bottom-sheet — `BaseDialog` deliberately assumes a centered modal). Verdict CLEAN.
-  - `q-btn-toggle`: 1 defensible use in `AdminSystemStocktakeSettings.vue`. Verdict CLEAN.
-  - `q-btn-dropdown`: only inside `BaseDropdown.vue` (the wrapper itself). Verdict CLEAN.
-- **Design decision inside this FU:** does `BaseButton` gain an `unelevated` + `color` variant to cover the 3-4 icon-button carve-outs, or do those sites stay raw as a documented carve-out?
-- **Why deferred:** not ship-blocking; audit-only for now. The 54 raw uses are cosmetic — no behaviour bug, no accessibility hole (they're all wrapping Quasar which handles a11y).
-- **Recommended resolution:** **opportunistic per-touch** — when any file with a raw `q-btn` is edited for other reasons, migrate it in-pass. No dedicated sweep. The unelevated-coloured-icon-button variant decision is one design call the user needs to make before the last 3-4 offenders can migrate cleanly; deferring until then. ~150-200 LOC if a dedicated pass ever ran.
-- **Cross-ref:** [[FU-424]] (audit that produced this) — resolved 2026-07-07.
-
-## [OPEN] FU-500 — Apply R-029 (hide, don't nag) app-wide — inverse sweep of the retired FU-176
-- **Raised:** 2026-07-06 (user directive walking back R-014 → new rule R-029 / ADR-025)
-- **Type:** follow-up (cross-cutting presentation change)
-- **What:** R-014 (reveal-and-disable) is retired. R-029 (respect the off-state — hide, don't nag) is the new rule: user- or household-disabled or install-unconfigured features are **hidden** (`v-if`) outside their own settings screen, not shown-disabled with a "Set up X" hint. Sweep the app for the pattern R-014 previously prescribed and flip each site to `v-if`:
-  - **Meal-plan builder Email button (C-2.J)** — `useFeatureFlags().hasEmail` false → hide the button entirely (already respec'd in `IMPL_PLAN_MEAL_PLANS.md`; verify implementation when C-2.J is built or, if already built, revisit and flip disable → hide).
-  - **`NotificationsSettings.vue`** — the C-9.7 alerts email digest row + C-9.8 push row are on the settings screen that *owns* the config, so they legitimately stay (R-029 carve-out). But if any *other* surface references those and shows a disabled affordance, hide it.
-  - **`AssistantSettings.vue`, `VoiceSettings.vue`, `AdminSystemEmailSettings.vue`, `AdminSystemPushSettings.vue`** — all on their own settings screens; the disabled-when-unconfigured control is the R-029 carve-out and stays. Sweep only if any of these render R-014 patterns on *other* pages.
-  - **`MainLayout.vue`** (product-search-URL unconfigured hint), **`models/auth.ts`** (SMTP-unconfigured control disabled), **`useFeatureFlags.ts`** helper comments, **`menuButtonProps.ts`** (`disabledWithTooltip`) — check each usage site: if it's the config surface, keep; if it's a workflow surface elsewhere, hide.
-  - **`StockItemDetailPage.vue:796`** references the scanning flag with an R-014 comment; per the user's original example, the scanning button (and any related UI outside `AdminSystemScanningSettings`) should be **hidden** when `scanning_enabled=false`, restoring the original ADR-002 hide-when-off.
-  - Empty-state usages (dashboard "all clear", meal-plan empty-week banner, `DoraScoreCard`, `YourPricesWidget`) are a **different pattern**; they stay unchanged. Their R-014 comment references can be re-labelled opportunistically (they were mislabelled — "calm empty state" isn't the same rule).
-- **Why deferred:** cross-cutting presentation change touching ~10 files; better as a focused small pass than folded into other work.
-- **Recommended resolution:** opportunistic / a focused sweep — pair with the next touch of each gated surface. Also update **ADR-002**'s stance in `ENGINEERING_STANDARDS.md:1149` to drop the "R-014 partially revisits it" implication (R-002's hide-when-off is now the whole story again).
-
-## [OPEN] FU-457 — Boot-time resolved-route assertion for reflection-based wiring
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (c)).
-- **Type:** finding / hardening.
-- **What:** [`startup.py:135`](dora_api/startup.py) uses `get_attributes_ending_with('router', ...)` to auto-register blueprints; [`service_wiring.py:17`](dora_api/infrastructure/service_wiring.py) and [`decorators.py:13`](dora_api/infrastructure/decorators.py) also do reflection-based wiring. If a router file has a broken import or is renamed, the failure surfaces at the first request (opaque 404), not at boot. Add a boot-time assertion that (a) every discovered `*_ROUTER` was successfully registered on `app.url_map` (compare expected vs `app.url_map.iter_rules()`), (b) every `@has_request_body`-decorated handler has a registered URL rule. Fail-fast → operator sees the misconfiguration on `flask run`, not on the first 404.
-- **Why deferred:** Tier-2 hardening; current failure mode is a 404 which is diagnosable, just not obvious.
-- **Recommended resolution:** opportunistic — small (30-line assertion in `startup.py` after `register_routers()`), useful the first time a router silently breaks.
-
-## [OPEN] FU-456 — Unit-of-work refactor for multi-commit handlers (starting with `create_recipe.py`)
-- **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (b)).
+## [OPEN] FU-512 — Sweep other multi-commit handlers to the FU-456 unit-of-work pattern
+- **Raised:** 2026-07-08 (FU-456 close-out — spun off the "sweep other handlers" half).
+- **Analysis complete:** 2026-07-08. See [`docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md`](docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md) — per-handler refactor plan, batching recommendation, deliverable checklist. **The next session can execute mechanically against that runbook.**
 - **Type:** deferred job / architecture.
-- **What:** [`create_recipe.py`](dora_api/features/recipes/create_recipe.py) calls `self.repository.save_changes()` five times in one handler (L273/317/332/362/379) — no unit-of-work; a partial failure leaves committed rows plus dirty session state. FU-196's belt-and-braces `db.session.rollback()` in the global handler (shipped 2026-07-03) covers the *dirty-session* half; the *partial-commit* half needs the handler restructured to a single commit at the end. Sweep other multi-commit handlers when this pattern is decided (grep `save_changes` for count-per-file). Constraint: some handlers `add()` a parent → need its id → then `add()` children referencing that id, which currently uses an interstitial `save_changes()` to force a flush. Look at whether `db.session.flush()` (no commit) is enough for those cases so the whole handler stays one transaction.
-- **Why deferred:** real refactor, not a one-liner; safer to do after the rollback safety net (done 2026-07-03) rather than before.
-- **Recommended resolution:** later — Type-B aggregates pass, or the next serious cookbook-editor touch.
+- **What (corrected after analysis):** The original inventory of "~20 multi-commit handlers" over-counted. After per-class reading, **only 10 handlers genuinely multi-commit** and need the FU-456 pattern applied; **9 handlers are already fine** (mutually-exclusive branches — one commit per request; or the raw line ref pointed at a sibling route handler, not the named class). Full split in the runbook.
+- **Actually refactoring** (10): `CreateMealPlanTemplateHandler`, `CloneMealPlanTemplateHandler`, `CreateSetHandler` (meal_plan_template_sets), `SeedHandler` (onboarding — the only handler with a genuine parent/child flush point), `NewRecipeVersionHandler`, `AutoGenerateHandler` (has one CRITICAL watch-out — see runbook), `CopyShoppingListHandler`, `CreateTemplateHandler` + `InstantiateTemplateHandler` + `SnapshotFromListHandler` (shopping-list templates).
+- **Already fine, no refactor needed** (9): `AlertInteractionHandler`, `PushSubscriptionHandler`, `PreferredBuyHandler`, `PriceObservationHandler`, `MoveStockItemHandler`, `CreateProductHandler`, `GetOnboardingStateHandler` route bodies, `GetSuggestionsHandler`, `LogWasteEventHandler` — all one-commit-per-request (details in runbook).
+- **Batching (from runbook):**
+  - **Batch 1** — 7 trivial pattern-mirrors, ship in one PR.
+  - **Batch 2** — 1 handler (`NewRecipeVersionHandler`), same shape as CreateRecipe.
+  - **Batch 3** — 2 moderate (`AutoGenerateHandler`, `SeedHandler`), ship in a second PR.
+- **Why deferred (still):** even at 10 handlers, this is ~150-300 LOC + 10 new e2e test files. Focused sweep, not folded work.
+- **Recommended resolution:** dedicated session (or two — one per batch). Runbook is the source of truth; the FU-456 diff in [`create_recipe.py`](dora_api/features/recipes/create_recipe.py) + [`test_create_recipe_unit_of_work.py`](tests/e2e/dora_api/test_create_recipe_unit_of_work.py) is the reference implementation.
+- **Cross-ref:** [[FU-456]] resolved 2026-07-08 — pattern-setter. [[FU-513]] opened 2026-07-08 — surprise finding surfaced by this analysis (GET /api/suggestions performs writes).
+
+## [OPEN] FU-513 — GET /api/suggestions performs writes on every dashboard load
+- **Raised:** 2026-07-08 (surprise finding from the FU-512 handler analysis).
+- **Type:** finding / architecture smell.
+- **What:** [`GetSuggestionsHandler`](dora_api/features/suggestions/suggestions.py) at L109-110 removes expired snoozes and commits, **on every GET /api/suggestions request**. Every dashboard load takes a write lock. Under any real DB contention this will start failing (SQLite `database is locked`; Postgres serialisation retries). It's also violates the standard "GETs don't mutate" contract downstream tooling relies on (browser back-cache, HTTP cache proxies, retry-on-network-failure logic).
+- **Why deferred:** not FU-512's scope (FU-512 is the multi-commit-handler shape sweep). This is a separate design decision: where should opportunistic snooze-cleanup run? Options: (a) background scheduler tick (APScheduler is already wired), (b) at write time when a new snooze is created (piggyback on existing commits), (c) at read time but on a separate `/api/suggestions/prune` POST that the frontend calls opportunistically, (d) leave expired snoozes forever and just filter them out at read time (cheap; the table stays lean via a rare housekeeping job).
+- **Recommended resolution:** discuss options → most likely (d) with an occasional APScheduler cleanup, since expired-snooze rows are tiny and read-time filtering costs nothing. Ship as a small dedicated FU after FU-512 lands (so the write-in-GET isn't the only outlier).
+- **Cross-ref:** surfaced during [[FU-512]] analysis 2026-07-08.
 
 ## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) — DESIGN LOCKED, impl deferred
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).

@@ -21,7 +21,9 @@
             <div class="text-subtitle1 col">Your prices</div>
         </div>
 
-        <!-- Below MIN_SAMPLES / null baseline → empty state (R-014). -->
+        <!-- Below MIN_SAMPLES / null baseline → calm empty state
+             (distinct from R-029 hide-when-off — this is a not-enough-
+             data case, not an opt-out). -->
         <template v-if="!yourPrices || yourPrices.baseline == null">
             <div class="text-body2 dora-text-secondary q-mb-xs">
                 {{ emptyStateCopy }}

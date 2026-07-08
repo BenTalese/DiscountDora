@@ -28,6 +28,7 @@
         | 'danger-ghost'
         | 'icon'
         | 'danger-icon'
+        | 'filled-icon'
         | 'positive';
 
     const props = withDefaults(
@@ -44,6 +45,11 @@
             to?: string | object | undefined;
             href?: string | undefined;
             target?: string | undefined;
+            // Optional Quasar palette override. When set, replaces the variant's
+            // default color — lets callers do dynamic coloring on icon variants
+            // (e.g. RecipeCard chef-hat toggling primary/warning) without
+            // reaching for raw q-btn.
+            color?: string | undefined;
         }>(),
         {
             variant: 'primary',
@@ -63,26 +69,31 @@
     }
 
     const qBtnAttrs = computed(() => {
-        switch (props.variant) {
-            case 'primary':
-                return { unelevated: true, color: 'primary' };
-            case 'secondary':
-                return { outline: true, color: 'primary' };
-            case 'ghost':
-                return { flat: true };
-            case 'danger':
-                return { unelevated: true, color: 'negative' };
-            case 'danger-ghost':
-                return { flat: true, color: 'negative' };
-            case 'icon':
-                return { flat: true, round: true, dense: true };
-            case 'danger-icon':
-                return { flat: true, round: true, dense: true, color: 'negative' };
-            case 'positive':
-                return { unelevated: true, color: 'positive' };
-            default:
-                return { unelevated: true, color: 'primary' };
-        }
+        const base = (() => {
+            switch (props.variant) {
+                case 'primary':
+                    return { unelevated: true, color: 'primary' };
+                case 'secondary':
+                    return { outline: true, color: 'primary' };
+                case 'ghost':
+                    return { flat: true };
+                case 'danger':
+                    return { unelevated: true, color: 'negative' };
+                case 'danger-ghost':
+                    return { flat: true, color: 'negative' };
+                case 'icon':
+                    return { flat: true, round: true, dense: true };
+                case 'danger-icon':
+                    return { flat: true, round: true, dense: true, color: 'negative' };
+                case 'filled-icon':
+                    return { unelevated: true, round: true, dense: true, color: 'primary' };
+                case 'positive':
+                    return { unelevated: true, color: 'positive' };
+                default:
+                    return { unelevated: true, color: 'primary' };
+            }
+        })();
+        return props.color !== undefined ? { ...base, color: props.color } : base;
     });
 </script>
 
@@ -98,7 +109,8 @@
             background-color var(--motion-normal, 200ms) ease;
     }
     .dora-btn--icon,
-    .dora-btn--danger-icon {
+    .dora-btn--danger-icon,
+    .dora-btn--filled-icon {
         min-height: 36px;
         min-width: 36px;
         border-radius: var(--radius-full);

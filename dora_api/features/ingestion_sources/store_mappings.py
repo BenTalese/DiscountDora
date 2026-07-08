@@ -30,9 +30,10 @@ from dora_api.features.routers import INGESTION_SOURCE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +70,8 @@ class UpsertStoreMappingRequest(BaseModel):
 
 
 class ListStoreMappingsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, source_id: UUID) -> list[StoreMappingDto] | None:
         if self.repository.get(IngestionSource).by_id(source_id) is None:
@@ -98,8 +99,8 @@ class ListStoreMappingsHandler:
 
 
 class UpsertStoreMappingHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self, source_id: UUID, req: UpsertStoreMappingRequest
@@ -140,8 +141,8 @@ class UpsertStoreMappingHandler:
 
 
 class DeleteStoreMappingHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, source_id: UUID, mapping_id: UUID) -> bool:
         field_src = EntityField(
@@ -167,7 +168,7 @@ def list_store_mappings(source_id: UUID):
     _, err = _require_admin()
     if err is not None:
         return err
-    items = get_container().inject(ListStoreMappingsHandler).handle(source_id)
+    items = ListStoreMappingsHandler(SqlAlchemyRepository()).handle(source_id)
     if items is None:
         return not_found("IngestionSource", source_id)
     return {"items": [asdict(it) for it in items]}
@@ -180,7 +181,7 @@ def upsert_store_mapping(source_id: UUID):
     if err is not None:
         return err
     req: UpsertStoreMappingRequest = get_request_body()
-    result, error = get_container().inject(UpsertStoreMappingHandler).handle(source_id, req)
+    result, error = UpsertStoreMappingHandler(SqlAlchemyRepository()).handle(source_id, req)
     if error == "source_not_found":
         return not_found("IngestionSource", source_id)
     if error == "store_not_found":
@@ -199,7 +200,7 @@ def delete_store_mapping(source_id: UUID, mapping_id: UUID):
     _, err = _require_admin()
     if err is not None:
         return err
-    ok = get_container().inject(DeleteStoreMappingHandler).handle(source_id, mapping_id)
+    ok = DeleteStoreMappingHandler(SqlAlchemyRepository()).handle(source_id, mapping_id)
     if not ok:
         return not_found("IngestionStoreMapping", mapping_id)
     return no_content()

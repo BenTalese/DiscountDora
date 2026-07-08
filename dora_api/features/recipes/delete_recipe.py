@@ -5,9 +5,9 @@ from uuid import UUID
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(slots=True)
@@ -16,8 +16,8 @@ class DeleteRecipeResponse:
 
 
 class DeleteRecipeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, recipe_id: UUID) -> DeleteRecipeResponse:
         _Recipe = (
@@ -40,7 +40,7 @@ class DeleteRecipeHandler:
 def delete_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to delete recipe.")
-    _Handler: DeleteRecipeHandler = get_container().inject(DeleteRecipeHandler)
+    _Handler: DeleteRecipeHandler = DeleteRecipeHandler(SqlAlchemyRepository())
     _Response = _Handler.handle(recipe_id)
 
     if _Response.recipe_not_found:

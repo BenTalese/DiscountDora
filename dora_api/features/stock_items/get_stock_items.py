@@ -12,10 +12,10 @@ from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +79,8 @@ _FIELD_MAP: dict[str, EntityField] = {
 
 
 class GetStockItemsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def _base_query(self):
         return (
@@ -158,7 +158,7 @@ def get_stock_items():
     _Logger = logging.getLogger(__name__)
     try:
         _Options = parse_query_options(request.args)
-        _Page = get_container().inject(GetStockItemsHandler).handle(_Options)
+        _Page = GetStockItemsHandler(SqlAlchemyRepository()).handle(_Options)
     except InvalidQueryParameter as exc:
         return bad_request(str(exc))
     _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} stock items.")

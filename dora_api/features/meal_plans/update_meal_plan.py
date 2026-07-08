@@ -17,10 +17,10 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failures,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import (field_of, get_request_body)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateMealPlanEntryRequest(BaseModel):
@@ -55,8 +55,8 @@ class UpdateMealPlanResponse:
 
 
 class UpdateMealPlanHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateMealPlanRequest, meal_plan_id: UUID) -> UpdateMealPlanResponse:
         _Plan = (
@@ -130,7 +130,7 @@ class UpdateMealPlanHandler:
 @has_request_body(UpdateMealPlanRequest)
 def update_meal_plan(meal_plan_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(UpdateMealPlanHandler)
+    _Handler = UpdateMealPlanHandler(SqlAlchemyRepository())
     _Request: UpdateMealPlanRequest = get_request_body()
     _Response = _Handler.handle(_Request, meal_plan_id)
 

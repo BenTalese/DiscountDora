@@ -9,9 +9,10 @@ from dora_api.features.routers import LOCATION_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateLocationRequest(BaseModel):
@@ -31,8 +32,8 @@ class UpdateLocationResponse:
 
 
 class UpdateLocationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateLocationRequest, location_id: UUID) -> UpdateLocationResponse:
         location: StockLocation | None = self.repository.get(StockLocation).by_id(location_id)
@@ -79,7 +80,7 @@ class UpdateLocationHandler:
 @has_request_body(UpdateLocationRequest)
 def update_location(location_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(UpdateLocationHandler)
+    _Handler = UpdateLocationHandler(SqlAlchemyRepository())
     _Request: UpdateLocationRequest = get_request_body()
     _Response = _Handler.handle(_Request, location_id)
 

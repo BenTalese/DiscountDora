@@ -48,8 +48,9 @@ from dora_api.features.recipes.imported_recipe_dtos import (
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,8 +76,8 @@ class ImportFromContentRequest(BaseModel):
 
 
 class ImportRecipeFromContentHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, content: str, source_url: str) -> ImportedRecipeDto:
         parsed = parse_recipe_from_text(content)
@@ -156,7 +157,7 @@ class ImportRecipeFromContentHandler:
 @has_request_body(ImportFromContentRequest)
 def import_from_content():
     request_body: ImportFromContentRequest = get_request_body()
-    handler = get_container().inject(ImportRecipeFromContentHandler)
+    handler = ImportRecipeFromContentHandler(SqlAlchemyRepository())
     result = handler.handle(request_body.content, request_body.source_url)
     _LOGGER.info(
         "Imported recipe %r from pasted content (%d chars) with %d ingredients "

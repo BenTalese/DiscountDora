@@ -45,10 +45,11 @@ from dora_api.infrastructure.api_response import (bad_request,
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── DTOs ─────────────────────────────────────────────────────────────
@@ -95,8 +96,8 @@ def _stamp_has_image(repository, dtos: List[StoreDto]) -> None:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetStoresHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, options) -> Page[StoreDto]:
         page = self.repository.get(Store).paginate(
@@ -111,7 +112,7 @@ def get_stores():
     _Logger = logging.getLogger(__name__)
     try:
         _Options = parse_query_options(request.args)
-        _Page = get_container().inject(GetStoresHandler).handle(_Options)
+        _Page = GetStoresHandler(SqlAlchemyRepository()).handle(_Options)
     except InvalidQueryParameter as exc:
         return bad_request(str(exc))
     _Logger.info("Retrieved %d of %d stores.", len(_Page.items), _Page.total)
@@ -135,8 +136,8 @@ class CreateStoreResponse:
 
 
 class CreateStoreHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, req: CreateStoreRequest) -> CreateStoreResponse:
         existing = self.repository.get(Store).all()
@@ -157,7 +158,7 @@ class CreateStoreHandler:
 def create_store():
     _Logger = logging.getLogger(__name__)
     _Request: CreateStoreRequest = get_request_body()
-    _Response = get_container().inject(CreateStoreHandler).handle(_Request)
+    _Response = CreateStoreHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(
             f"A store named '{_Request.name}' already exists."
@@ -190,8 +191,8 @@ class UpdateStoreResponse:
 
 
 class UpdateStoreHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self, req: UpdateStoreRequest, store_id: UUID
@@ -220,7 +221,7 @@ class UpdateStoreHandler:
 def update_store(store_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateStoreRequest = get_request_body()
-    _Response = get_container().inject(UpdateStoreHandler).handle(_Request, store_id)
+    _Response = UpdateStoreHandler(SqlAlchemyRepository()).handle(_Request, store_id)
     if _Response.not_found:
         return not_found("Store", store_id)
     if _Response.duplicate:
@@ -252,8 +253,8 @@ class DeleteStoreHandler:
       are both `ON DELETE SET NULL` — they're hints; nulling them is the
       correct degrade.
     """
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, store_id: UUID) -> DeleteStoreResponse:
         store: Store | None = self.repository.get(Store).by_id(store_id)
@@ -282,7 +283,7 @@ class DeleteStoreHandler:
 @STORE_ROUTER.route("/<store_id>", methods=["DELETE"])
 def delete_store(store_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteStoreHandler).handle(store_id)
+    _Response = DeleteStoreHandler(SqlAlchemyRepository()).handle(store_id)
     if _Response.not_found:
         return not_found("Store", store_id)
     if _Response.has_products:

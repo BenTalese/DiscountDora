@@ -54,9 +54,9 @@ from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.features.stocktake.stocktake import resolve_overdue_map
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Severities are an ordinal scale — the UI sorts high first, then medium,
@@ -149,8 +149,8 @@ def _active_snooze_until(interaction: AlertInteraction | None, now: datetime) ->
 
 
 class GetAlertsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID | None = None) -> AlertsDto:
         items: List[StockItem] = (
@@ -440,7 +440,7 @@ class GetAlertsHandler:
 @ALERT_ROUTER.route("", methods=["GET"])
 def get_alerts():
     _Logger = logging.getLogger(__name__)
-    _Alerts = get_container().inject(GetAlertsHandler).handle(_current_user_id())
+    _Alerts = GetAlertsHandler(SqlAlchemyRepository()).handle(_current_user_id())
     _Logger.debug(
         "Alerts: %d actionable, %d fyi, %d snoozed",
         _Alerts.actionable_count, _Alerts.fyi_count, _Alerts.snoozed_count,

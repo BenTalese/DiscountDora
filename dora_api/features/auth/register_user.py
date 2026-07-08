@@ -40,9 +40,10 @@ from dora_api.infrastructure.auth_helpers import (
 )
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.email_sender import render_template, send_email
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 SESSION_USER_ID_KEY = "user_id"
@@ -204,8 +205,8 @@ class RegisterUserResponse:
 
 
 class RegisterUserHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: RegisterUserRequest) -> RegisterUserResponse:
         # refuse self-serve registration until an admin exists.
@@ -282,7 +283,7 @@ def register_user():
             type="https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
         ))
 
-    handler = get_container().inject(RegisterUserHandler)
+    handler = RegisterUserHandler(SqlAlchemyRepository())
     response = handler.handle(request_body)
 
     if response.bootstrap_required:

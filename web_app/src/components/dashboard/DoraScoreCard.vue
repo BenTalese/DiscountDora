@@ -155,8 +155,9 @@
                 // via the StockItemRow expiry dropdown's "Mark as wasted"
                 // action, and review history per-item on StockItemDetail's
                 // History tab; there is no aggregated "waste review" surface
-                // to link to. R-014: score row still explains the number,
-                // just without a dead button.
+                // to link to. Score row still explains the number, just
+                // without a dead button — this is the calm-empty-state
+                // pattern, not R-029 hide-when-off.
                 return null;
             case 'budget':
                 // The budget input lives in Preferences → Money.

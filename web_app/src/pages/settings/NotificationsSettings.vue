@@ -58,7 +58,9 @@
 
         <hr class="settings-divider" />
 
-        <!-- Alerts email digest. SMTP-gated (R-014). -->
+        <!-- Alerts email digest. SMTP-gated. R-029 carve-out: this screen
+             owns the per-user opt-in, so the disabled toggle + "ask an
+             admin" hint legitimately render here (and only here). -->
         <SettingsSection>
             <template #title>Alerts email digest</template>
             <template #description>
@@ -110,7 +112,8 @@
 
         <hr class="settings-divider" />
 
-        <!-- Push notifications. VAPID-gated (R-014). -->
+        <!-- Push notifications. VAPID-gated. R-029 carve-out — same
+             pattern as the email row above. -->
         <SettingsSection>
             <template #title>Push notifications</template>
             <template #description>

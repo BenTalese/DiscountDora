@@ -28,9 +28,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── Create ─────────────────────────────────────────────────────────────
@@ -48,8 +49,8 @@ class CreateShoppingListResponse:
 
 
 class CreateShoppingListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateShoppingListRequest) -> CreateShoppingListResponse:
         now = datetime.now(timezone.utc)
@@ -72,7 +73,7 @@ class CreateShoppingListHandler:
 def create_shopping_list():
     _Logger = logging.getLogger(__name__)
     _Request: CreateShoppingListRequest = get_request_body()
-    _Response = get_container().inject(CreateShoppingListHandler).handle(_Request)
+    _Response = CreateShoppingListHandler(SqlAlchemyRepository()).handle(_Request)
     _Logger.info(f"Created shopping list {_Response.shopping_list_id}")
     from dora_api.features.shopping_lists.get_shopping_lists import \
         get_shopping_lists
@@ -110,8 +111,8 @@ class UpdateShoppingListResponse:
 
 
 class UpdateShoppingListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateShoppingListRequest, shopping_list_id: UUID) -> UpdateShoppingListResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -148,7 +149,7 @@ class UpdateShoppingListHandler:
 def update_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateShoppingListRequest = get_request_body()
-    _Response = get_container().inject(UpdateShoppingListHandler).handle(_Request, shopping_list_id)
+    _Response = UpdateShoppingListHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     if _Response.invalid_status:
@@ -172,8 +173,8 @@ class DeleteShoppingListResponse:
 
 
 class DeleteShoppingListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID) -> DeleteShoppingListResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -187,7 +188,7 @@ class DeleteShoppingListHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>", methods=["DELETE"])
 def delete_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteShoppingListHandler).handle(shopping_list_id)
+    _Response = DeleteShoppingListHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(f"Deleted shopping list {shopping_list_id}")
@@ -226,8 +227,8 @@ class FinishShoppingListHandler:
     "move unchecked" flow.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: FinishShoppingListRequest, shopping_list_id: UUID) -> FinishShoppingListResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -367,7 +368,7 @@ class FinishShoppingListHandler:
 def finish_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: FinishShoppingListRequest = get_request_body() or FinishShoppingListRequest()
-    _Response = get_container().inject(FinishShoppingListHandler).handle(_Request, shopping_list_id)
+    _Response = FinishShoppingListHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     if _Response.invalid_level:
@@ -398,8 +399,8 @@ class CopyShoppingListResponse:
 
 
 class CopyShoppingListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CopyShoppingListRequest, shopping_list_id: UUID) -> CopyShoppingListResponse:
         source: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -442,7 +443,7 @@ def copy_shopping_list(shopping_list_id: UUID):
     _Request: CopyShoppingListRequest = get_request_body()
     if _Request.include not in ("all", "unticked"):
         return business_rule_violation("`include` must be 'all' or 'unticked'.")
-    _Response = get_container().inject(CopyShoppingListHandler).handle(_Request, shopping_list_id)
+    _Response = CopyShoppingListHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(
@@ -465,8 +466,8 @@ class StartShoppingResponse:
 
 
 class StartShoppingHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID) -> StartShoppingResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -482,7 +483,7 @@ class StartShoppingHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/start", methods=["POST"])
 def start_shopping(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(StartShoppingHandler).handle(shopping_list_id)
+    _Response = StartShoppingHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     if _Response.archived:

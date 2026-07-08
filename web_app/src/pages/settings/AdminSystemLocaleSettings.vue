@@ -59,6 +59,7 @@
                         <strong>{{ formatMoney(12.5) }}</strong>
                         <span class="dora-text-muted q-ml-xs">· {{ formatMoney(1234.56) }}</span>
                     </div>
+                    <!-- carve-out — raw q-btn: outline with Quasar 'secondary' palette color has no matching BaseButton variant. -->
                     <q-btn
                         color="secondary"
                         no-caps

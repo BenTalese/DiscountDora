@@ -134,7 +134,7 @@ def resolve_add_plan(raw_items: Any) -> dict[str, Any]:
 def commit_add(shopping_list_id: UUID, resolved_items: list[dict[str, Any]]) -> dict[str, Any]:
     """Add each resolved (stock_item_id, quantity) to the list. Idempotent per
     item via AddLineHandler's existing dedupe."""
-    handler = AddLineHandler()
+    handler = AddLineHandler(SqlAlchemyRepository())
     added = 0
     already = 0
     missing = 0

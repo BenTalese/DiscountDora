@@ -40,10 +40,10 @@ from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import bad_request, not_found, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -528,8 +528,8 @@ def load_recipe_cookability(
 
 
 class GetRecipesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
         # Populated by `_restrict_query` when the C-waste cookbook filter
         # is active; consumed by `_hydrate_expiring_count` so the count
         # query runs once per request.
@@ -1142,7 +1142,7 @@ def _parse_recipe_filters(args) -> RecipeFilters:
 
 @RECIPE_ROUTER.route("/<recipe_id>", methods=["GET"])
 def get_recipe(recipe_id: UUID):
-    handler = get_container().inject(GetRecipesHandler)
+    handler = GetRecipesHandler(SqlAlchemyRepository())
     dto = handler.handle_by_id(recipe_id)
     if dto is None:
         from dora_api.domain.entities.recipe import Recipe as _Recipe
@@ -1159,7 +1159,7 @@ def get_recipes():
         return bad_request(str(exc))
     _Filters = _parse_recipe_filters(request.args)
     try:
-        _Page = get_container().inject(GetRecipesHandler).handle(_Options, _Filters)
+        _Page = GetRecipesHandler(SqlAlchemyRepository()).handle(_Options, _Filters)
     except InvalidQueryParameter as exc:
         return bad_request(str(exc))
     _Logger.info(

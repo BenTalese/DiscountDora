@@ -12,9 +12,10 @@ from dora_api.features.stock_locations.get_stock_locations import \
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateStockLocationRequest(BaseModel):
@@ -31,8 +32,8 @@ class CreateStockLocationResponse:
 
 class CreateStockLocationHandler:
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateStockLocationRequest) -> CreateStockLocationResponse:
         _StockLocationName = EntityField(StockLocation, StockLocation.Fields.NAME)
@@ -60,7 +61,7 @@ class CreateStockLocationHandler:
 def create_stock_location():
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to create stock location.")
-    _Handler = get_container().inject(CreateStockLocationHandler)
+    _Handler = CreateStockLocationHandler(SqlAlchemyRepository())
     _Request: CreateStockLocationRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
@@ -71,7 +72,7 @@ def create_stock_location():
     _Logger.info(f"Successfully created stock location with ID: {_Response.new_stock_location_id}")
     from dora_api.features.stock_locations.get_stock_locations import \
         GetStockLocationsHandler
-    _Dto = get_container().inject(GetStockLocationsHandler).handle_by_id(
+    _Dto = GetStockLocationsHandler(SqlAlchemyRepository()).handle_by_id(
         _Response.new_stock_location_id
     )
     return created(

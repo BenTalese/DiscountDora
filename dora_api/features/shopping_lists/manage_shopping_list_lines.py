@@ -33,9 +33,10 @@ from dora_api.features.shopping_lists.primary_target_resolver import (
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── Add line ───────────────────────────────────────────────────────────
@@ -64,8 +65,8 @@ class AddLineResponse:
 
 
 class AddLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: AddLineRequest, shopping_list_id: UUID) -> AddLineResponse:
         # anchor validation. At least one of
@@ -141,7 +142,7 @@ class AddLineHandler:
 def add_line(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: AddLineRequest = get_request_body()
-    _Response = get_container().inject(AddLineHandler).handle(_Request, shopping_list_id)
+    _Response = AddLineHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.list_not_found:
         return not_found("ShoppingList", shopping_list_id)
     if _Response.no_anchor:
@@ -215,8 +216,8 @@ class UpdateLineResponse:
 
 
 class UpdateLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -313,7 +314,7 @@ class UpdateLineHandler:
 def update_line(shopping_list_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateLineRequest = get_request_body()
-    _Response = get_container().inject(UpdateLineHandler).handle(_Request, shopping_list_id, line_id)
+    _Response = UpdateLineHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id, line_id)
     if _Response.line_not_found:
         return not_found("ShoppingListLine", line_id)
     _Logger.debug(f"Updated line {line_id} on list {shopping_list_id}")
@@ -328,8 +329,8 @@ class DeleteLineResponse:
 
 
 class DeleteLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID, line_id: UUID) -> DeleteLineResponse:
         line: ShoppingListLine | None = self.repository.get(ShoppingListLine).by_id(line_id)
@@ -367,7 +368,7 @@ class DeleteLineHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines/<line_id>", methods=["DELETE"])
 def delete_line(shopping_list_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteLineHandler).handle(shopping_list_id, line_id)
+    _Response = DeleteLineHandler(SqlAlchemyRepository()).handle(shopping_list_id, line_id)
     if _Response.line_not_found:
         return not_found("ShoppingListLine", line_id)
     _Logger.info(f"Deleted line {line_id} from list {shopping_list_id}")
@@ -390,8 +391,8 @@ class RemoveLineByStockItemHandler:
     race where another tab already removed it.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID, stock_item_id: UUID) -> RemoveByStockItemResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -432,7 +433,7 @@ class RemoveLineByStockItemHandler:
 )
 def remove_line_by_stock_item(shopping_list_id: UUID, stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(RemoveLineByStockItemHandler).handle(
+    _Response = RemoveLineByStockItemHandler(SqlAlchemyRepository()).handle(
         shopping_list_id, stock_item_id,
     )
     if _Response.list_not_found:
@@ -473,8 +474,8 @@ class QuickAddToPrimaryHandler:
     pick for the rest of the tab session.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: QuickAddRequest) -> QuickAddResponse:
         item: StockItem | None = self.repository.get(StockItem).by_id(request.stock_item_id)
@@ -537,7 +538,7 @@ class QuickAddToPrimaryHandler:
 def quick_add_to_primary():
     _Logger = logging.getLogger(__name__)
     _Request: QuickAddRequest = get_request_body()
-    _Response = get_container().inject(QuickAddToPrimaryHandler).handle(_Request)
+    _Response = QuickAddToPrimaryHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.result == "item_not_found":
         return not_found("StockItem", _Request.stock_item_id)
     if _Response.result == "hint_invalid":

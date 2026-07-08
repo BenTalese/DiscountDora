@@ -24,7 +24,7 @@ from dora_api.features.data.export_shared import (
 from dora_api.features.recipes.get_recipes import GetRecipesHandler, RecipeDto
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import bad_request, not_found
-from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 def _build_csv(recipe: RecipeDto) -> str:
@@ -122,7 +122,7 @@ def export_recipe(recipe_id: UUID):
             f"Unsupported export format '{fmt}'. Supported: csv. "
             "For PDF, open the print-view and 'Save as PDF' from your browser."
         )
-    recipe = get_container().inject(GetRecipesHandler).handle_by_id(recipe_id)
+    recipe = GetRecipesHandler(SqlAlchemyRepository()).handle_by_id(recipe_id)
     if recipe is None:
         return not_found("Recipe", recipe_id)
     body = _build_csv(recipe)
@@ -138,7 +138,7 @@ def export_recipe(recipe_id: UUID):
 
 @RECIPE_ROUTER.route("/<recipe_id>/print-view", methods=["GET"])
 def print_view_recipe(recipe_id: UUID):
-    recipe = get_container().inject(GetRecipesHandler).handle_by_id(recipe_id)
+    recipe = GetRecipesHandler(SqlAlchemyRepository()).handle_by_id(recipe_id)
     if recipe is None:
         return not_found("Recipe", recipe_id)
     html = _render_print_view(recipe)

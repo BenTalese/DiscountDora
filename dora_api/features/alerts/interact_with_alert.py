@@ -27,9 +27,10 @@ from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import no_content, unauthorized
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 def _current_user_id() -> UUID | None:
@@ -48,8 +49,8 @@ class SnoozeRequest(BaseModel):
 
 
 class AlertInteractionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def _find(self, user_id: UUID, alert_key: str) -> AlertInteraction | None:
         return self.repository.get(AlertInteraction).one(
@@ -94,7 +95,7 @@ class AlertInteractionHandler:
 
     def mark_all_read(self, user_id: UUID) -> None:
         # Server-derived: read the user's current active set and stamp each.
-        alerts = get_container().inject(GetAlertsHandler).handle(user_id)
+        alerts = GetAlertsHandler(SqlAlchemyRepository()).handle(user_id)
         changed = False
         for alert in alerts.items:
             interaction = self._get_or_create(user_id, alert.alert_id)
@@ -110,7 +111,7 @@ def read_all_alerts():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    get_container().inject(AlertInteractionHandler).mark_all_read(user_id)
+    AlertInteractionHandler(SqlAlchemyRepository()).mark_all_read(user_id)
     return no_content()
 
 
@@ -119,7 +120,7 @@ def mark_alert_read(alert_id: str):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    get_container().inject(AlertInteractionHandler).set_read(user_id, alert_id, True)
+    AlertInteractionHandler(SqlAlchemyRepository()).set_read(user_id, alert_id, True)
     return no_content()
 
 
@@ -128,7 +129,7 @@ def mark_alert_unread(alert_id: str):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    get_container().inject(AlertInteractionHandler).set_read(user_id, alert_id, False)
+    AlertInteractionHandler(SqlAlchemyRepository()).set_read(user_id, alert_id, False)
     return no_content()
 
 
@@ -139,7 +140,7 @@ def snooze_alert(alert_id: str):
     if user_id is None:
         return unauthorized()
     _Request: SnoozeRequest = get_request_body()
-    get_container().inject(AlertInteractionHandler).snooze(user_id, alert_id, _Request.days)
+    AlertInteractionHandler(SqlAlchemyRepository()).snooze(user_id, alert_id, _Request.days)
     logging.getLogger(__name__).info("Alert %s snoozed %dd by %s", alert_id, _Request.days, user_id)
     return no_content()
 
@@ -149,7 +150,7 @@ def dismiss_alert(alert_id: str):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    get_container().inject(AlertInteractionHandler).dismiss(user_id, alert_id)
+    AlertInteractionHandler(SqlAlchemyRepository()).dismiss(user_id, alert_id)
     return no_content()
 
 
@@ -158,5 +159,5 @@ def clear_alert_suppression(alert_id: str):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    get_container().inject(AlertInteractionHandler).clear_suppression(user_id, alert_id)
+    AlertInteractionHandler(SqlAlchemyRepository()).clear_suppression(user_id, alert_id)
     return no_content()

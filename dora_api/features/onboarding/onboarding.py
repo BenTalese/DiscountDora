@@ -41,9 +41,10 @@ from dora_api.features.routers import ONBOARDING_ROUTER
 from dora_api.infrastructure.api_response import (no_content, not_found, ok,
                                                   unauthorized)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,8 +98,8 @@ class OnboardingStateDto:
 
 
 class GetOnboardingStateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user: User) -> OnboardingStateDto:
         total_users = self.repository.get(User).count()
@@ -123,7 +124,7 @@ def get_onboarding_state():
     user = repo.get(User).by_id(user_id)
     if user is None:
         return not_found("User", user_id)
-    state = get_container().inject(GetOnboardingStateHandler).handle(user)
+    state = GetOnboardingStateHandler(SqlAlchemyRepository()).handle(user)
     return ok(state)
 
 
@@ -189,8 +190,8 @@ class SeedResultDto:
 
 
 class SeedHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: SeedRequest) -> SeedResultDto:
         groups_created = groups_skipped = 0
@@ -336,7 +337,7 @@ def seed_onboarding():
         # Nothing requested — return zero-counts rather than 400 so the
         # frontend can call this unconditionally as "advance step 3".
         return ok(SeedResultDto(0, 0, 0, 0))
-    result = get_container().inject(SeedHandler).handle(request)
+    result = SeedHandler(SqlAlchemyRepository()).handle(request)
     _LOGGER.info(
         "Onboarding seed (user %s): groups +%d/-%d, locations +%d/-%d",
         user_id,
@@ -464,8 +465,8 @@ class SeedItemsResultDto:
 
 
 class SeedItemsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: SeedItemsRequest) -> SeedItemsResultDto:
         if not request.items:
@@ -533,7 +534,7 @@ def seed_items_onboarding():
     if user_id is None:
         return unauthorized("Sign in to use the onboarding endpoints.")
     request: SeedItemsRequest = get_request_body()
-    result = get_container().inject(SeedItemsHandler).handle(request)
+    result = SeedItemsHandler(SqlAlchemyRepository()).handle(request)
     _LOGGER.info(
         "Onboarding seed-items (user %s): +%d/-%d",
         user_id, result.created, result.skipped,
@@ -580,8 +581,8 @@ class SeedDemoResultDto:
 
 
 class SeedDemoHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> SeedDemoResultDto:
         # Idempotency: skip the whole thing if the demo recipe already
@@ -704,7 +705,7 @@ def seed_demo_onboarding():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized("Sign in to use the onboarding endpoints.")
-    result = get_container().inject(SeedDemoHandler).handle()
+    result = SeedDemoHandler(SqlAlchemyRepository()).handle()
     _LOGGER.info(
         "Onboarding seed-demo (user %s): seeded=%s items=+%d recipe=%s plan=%s",
         user_id, result.seeded, result.items_created,

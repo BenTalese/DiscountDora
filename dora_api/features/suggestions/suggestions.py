@@ -30,9 +30,10 @@ from dora_api.features.routers import SUGGESTIONS_ROUTER
 from dora_api.features.suggestions.generators import generate_all, Suggestion
 from dora_api.infrastructure.api_response import no_content, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Cap the surfaced count — the dashboard card + chat panel are designed
@@ -77,8 +78,8 @@ class SuggestionDto:
 
 
 class GetSuggestionsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID | None) -> list[SuggestionDto]:
         suggestions: list[Suggestion] = generate_all(self.repository, user_id)
@@ -89,6 +90,13 @@ class GetSuggestionsHandler:
         # generated. We fetch the whole table and filter in Python — the
         # row count is bounded by user decisions and a composite index
         # exists on (kind, dedup_key) for the lookup pattern.
+        # Expired snoozes are ignored by `_is_suppressed_now`; a daily
+        # APScheduler job (`prune_expired_snoozes`) sweeps them out of
+        # the table so this read path is write-free. FU-513, 2026-07-08:
+        # the previous inline delete-and-commit here took a write lock
+        # on every dashboard load, which is unacceptable under contention
+        # and violates the "GETs don't mutate" contract downstream tooling
+        # (browser caches, retry logic) relies on.
         now = datetime.now(timezone.utc)
         suppressions = self.repository.get(DoraSuggestionSuppression).all()
         active_suppressions = {
@@ -96,18 +104,6 @@ class GetSuggestionsHandler:
             for s in suppressions
             if _is_suppressed_now(s, now)
         }
-        # Opportunistic cleanup: snoozes that have elapsed get removed
-        # so the table doesn't accrete stale rows. Done here rather than
-        # via a cron job because the read path is hot enough that doing
-        # the housekeeping inline is cheaper than another scheduled task.
-        for s in suppressions:
-            if (
-                s.decision == SUPPRESSION_DECISION_SNOOZED
-                and s.snoozed_until is not None
-                and s.snoozed_until <= now
-            ):
-                self.repository.remove(s)
-        self.repository.save_changes()
 
         filtered = [
             sugg for sugg in suggestions
@@ -136,7 +132,7 @@ class GetSuggestionsHandler:
 def get_suggestions():
     _Logger = logging.getLogger(__name__)
     user_id = _current_user_id()
-    rows = get_container().inject(GetSuggestionsHandler).handle(user_id)
+    rows = GetSuggestionsHandler(SqlAlchemyRepository()).handle(user_id)
     _Logger.debug("Generated %d suggestions for user=%s", len(rows), user_id)
     return ok({"suggestions": rows, "count": len(rows)})
 

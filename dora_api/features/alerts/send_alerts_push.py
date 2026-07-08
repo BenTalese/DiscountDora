@@ -93,7 +93,7 @@ def _process_user(
     now: datetime,
     sender: Callable,
 ) -> int:
-    alerts: AlertsDto = GetAlertsHandler().handle(user_id=user_id)
+    alerts: AlertsDto = GetAlertsHandler(SqlAlchemyRepository()).handle(user_id=user_id)
     current_keys = {a.alert_id for a in alerts.items} | {
         a.alert_id for a in alerts.snoozed
     }

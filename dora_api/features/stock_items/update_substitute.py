@@ -23,8 +23,9 @@ from dora_api.features.substitutes.metadata import (
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateSubstituteRequest(BaseModel):
@@ -52,8 +53,8 @@ class UpdateSubstituteResponse:
 
 
 class UpdateSubstituteHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -112,7 +113,7 @@ class UpdateSubstituteHandler:
 @has_request_body(UpdateSubstituteRequest)
 def update_substitute(stock_item_id: UUID, substitute_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(UpdateSubstituteHandler)
+    _Handler = UpdateSubstituteHandler(SqlAlchemyRepository())
     _Request: UpdateSubstituteRequest = get_request_body()
     _Response = _Handler.handle(stock_item_id, substitute_id, _Request)
 

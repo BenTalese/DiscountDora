@@ -20,7 +20,6 @@ from dora_api.infrastructure.audit_retention import prune_audit_events
 from dora_api.infrastructure.configuration_manager import DORA_CONFIG
 from dora_api.infrastructure.logging_setup import configure_logging
 from dora_api.infrastructure.middleware import MIDDLEWARE
-from dora_api.infrastructure.service_wiring import build_dependency_container
 from dora_api.infrastructure.utils import get_attributes_ending_with
 from dora_api.persistence.seed import seed_dev_data
 
@@ -28,17 +27,13 @@ from dora_api.persistence.seed import seed_dev_data
 def startup(is_test_env: bool = False):
     # D3: refuse to boot in production when required env vars are
     # missing. No-op in dev/test. Runs before *anything* else so the
-    # friendly error fires before we read appsettings, build the DI
-    # container, etc.
+    # friendly error fires before we read appsettings, wire routes, etc.
     from dora_api.infrastructure.profile import (
         validate_production_requirements,
         warn_if_insecure_cookies_in_production,
     )
     validate_production_requirements()
     warn_if_insecure_cookies_in_production()
-
-    _Container = build_dependency_container()
-    app.container = _Container  # type: ignore
 
     # D3: profile-aware CORS pinning. Dev = open localhost list, prod
     # = whatever DORA_CORS_ORIGINS contains (validated to be non-empty
@@ -100,6 +95,19 @@ def startup(is_test_env: bool = False):
             send_alerts_digest,
             CronTrigger(hour=7, minute=0),
             id="alerts_digest",
+            replace_existing=True,
+        )
+        # Daily prune of elapsed suggestion snoozes. Moved off the
+        # GET /api/suggestions read path per FU-513 (2026-07-08); the
+        # read filter already ignores expired snoozes for correctness,
+        # this just keeps the table from accreting stale rows. 03:30
+        # staggers cleanly from the 03:00 audit sweep.
+        from dora_api.features.suggestions.prune_expired_snoozes import \
+            prune_expired_snoozes
+        scheduler.add_job(
+            prune_expired_snoozes,
+            CronTrigger(hour=3, minute=30),
+            id="suggestions_snooze_cleanup",
             replace_existing=True,
         )
         # alerts web-push. Hourly at :30 so it staggers from the

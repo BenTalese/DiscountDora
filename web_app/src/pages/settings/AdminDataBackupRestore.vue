@@ -193,11 +193,9 @@
                                 <q-icon :name="ICONS.attach_file" />
                             </template>
                             <template #append>
-                                <q-btn
+                                <BaseButton
                                     v-if="pickedFile"
-                                    flat
-                                    dense
-                                    round
+                                    variant="icon"
                                     :icon="ICONS.close"
                                     @click.stop="onClearPick"
                                 />

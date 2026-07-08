@@ -1425,6 +1425,23 @@ machine at this session close-time; walked opportunistically.*
 
 ## Cross-cutting
 
+### R-029 hide-don't-nag sweep — Product Search nav entry — origin FU-500 (2026-07-08)
+*The one behavioural change from the R-029 sweep: when `features.products` is on but no `product_search_url` is configured, the Product Search entry disappears from the nav instead of rendering disabled-with-tooltip. Quick eye-check to confirm the three states.*
+- [ ] With **products off** in Settings → System → Features → Products: no Product Search entry in the main navigation (unchanged behaviour)
+- [ ] With **products on** but `product_search_url` **blank**: no Product Search entry in the main navigation (the new behaviour — was previously visible but disabled with a "Not set up yet …" tooltip)
+- [ ] With **products on** and a **valid URL** configured: Product Search entry visible, clicking opens the URL in a new tab (unchanged behaviour)
+- [ ] Side menu (narrow viewport) mirrors the above: entry appears/disappears in lockstep with the main menu
+- [ ] Confirm no other surface still advertises "Product search not set up" — should be silent everywhere except the config row on Settings → System → Features
+
+### Base-component `<BaseButton>` sweep — origin FU-504 (2026-07-08)
+*40 raw `<q-btn>` sites were migrated to `<BaseButton>` in one pass; `BaseButton` also gained a new `filled-icon` variant + optional `color` prop. Pure componentisation refactor — visuals should be identical everywhere except MyProductsPage's empty-state CTA (raised → unelevated primary, intentional). Cheap eye-check per surface, no action beyond looking.*
+- [ ] **RecipeCard chef-hat button** (cookbook overview, any recipe card) — round filled icon, colour toggles primary/warning based on cookability; click still opens cook mode
+- [ ] **DoraChat** — open the assistant panel: header voice / help-what-can-D.O.R.A.-do / close buttons render as round icon buttons; mic + send buttons in the input; chip-row rotate-suggestions button; in-message action rows (Confirm / Cancel / Snooze 1d / Dismiss / Add to <list>) render identically
+- [ ] **MyProductsPage** — open the page: bulk-select mode banner buttons (Select / Select all visible / Select on-deal / Add on-deal to list / Unlink / Mark inactive / Done) render + wire; row-overflow menus (`⋮`) still open; empty-state "Open Product Search" CTA is now unelevated primary (visual delta from raised to unelevated is expected); dialog action rows in the "unlink" and "mark inactive" confirmations
+- [ ] **ScanOverlay** — trigger the scanner (Stock overview → scan button, if scanning enabled): the Submit button in the overlay renders on the dark background
+- [ ] **Settings pages** — Backup & restore (clear-file button), Data import (browse button), Email settings (Save + Clear buttons), Push settings (Test push + Clear subscription), API access (copy token button), Users admin (copy invite-link button) — all render + still wire
+- [ ] **Kept-raw carve-outs render unchanged** — Help page "Meet D.O.R.A." accent CTA + release-notes anchor; RecipeCookMode warning-coloured pause button; ShoppingListDetail dynamic-coloured outline buttons; StocktakeRunner change-level big button; Backup/restore grey button; timezone + locale settings secondary-outline buttons
+
 ### Security response headers — origin FU-459 (2026-07-07)
 *Confirms the app-wide CSP + framing / referrer / sniff headers land on every response and don't break any page. Do this walk with DevTools **Console + Network** panels open — a CSP violation logs a red console error naming the blocked directive.*
 - [ ] Any request in DevTools → Network → Headers → **Response Headers** shows `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; …frame-ancestors 'none'; …`

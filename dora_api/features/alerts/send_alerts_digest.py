@@ -96,7 +96,7 @@ def _process_user(
     if not _is_send_day(user, now):
         return False
 
-    alerts: AlertsDto = GetAlertsHandler().handle(user_id=user.id)
+    alerts: AlertsDto = GetAlertsHandler(SqlAlchemyRepository()).handle(user_id=user.id)
     current_keys = _all_known_keys(alerts)
 
     # Stale-flag cleanup: any prior email-stamp for an alert key the user

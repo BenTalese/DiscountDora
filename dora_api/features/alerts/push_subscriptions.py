@@ -35,9 +35,10 @@ from dora_api.infrastructure.api_response import (no_content, ok,
                                                   unauthorized)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.push_sender import vapid_public_key
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 def _current_user_id() -> UUID | None:
@@ -73,8 +74,8 @@ class UnsubscribeRequest(BaseModel):
 
 
 class PushSubscriptionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def upsert(self, user_id: UUID, payload: SubscribeRequest) -> None:
         """Add or update the subscription keyed by endpoint. If an
@@ -142,7 +143,7 @@ def subscribe_to_push():
     # request header so we don't lose the breadcrumb on older clients.
     if not _Request.user_agent:
         _Request.user_agent = (request.headers.get("User-Agent") or "")[:255] or None
-    get_container().inject(PushSubscriptionHandler).upsert(user_id, _Request)
+    PushSubscriptionHandler(SqlAlchemyRepository()).upsert(user_id, _Request)
     logging.getLogger(__name__).info(
         "Push subscription upserted for user %s (ua=%s)",
         user_id, _Request.user_agent or "?",
@@ -157,7 +158,7 @@ def unsubscribe_from_push():
     if user_id is None:
         return unauthorized()
     _Request: UnsubscribeRequest = get_request_body()
-    removed = get_container().inject(PushSubscriptionHandler).remove(
+    removed = PushSubscriptionHandler(SqlAlchemyRepository()).remove(
         user_id, _Request.endpoint,
     )
     logging.getLogger(__name__).info(

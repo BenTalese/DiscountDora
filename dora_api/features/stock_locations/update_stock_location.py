@@ -9,9 +9,10 @@ from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateStockLocationRequest(BaseModel):
@@ -27,8 +28,8 @@ class UpdateStockLocationResponse:
 
 
 class UpdateStockLocationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateStockLocationRequest, stock_location_id: UUID) -> UpdateStockLocationResponse:
         # Get existing stock location
@@ -59,7 +60,7 @@ class UpdateStockLocationHandler:
 def update_stock_location(stock_location_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to update stock location.")
-    _Handler = get_container().inject(UpdateStockLocationHandler)
+    _Handler = UpdateStockLocationHandler(SqlAlchemyRepository())
     _Request: UpdateStockLocationRequest = get_request_body()
     _Response = _Handler.handle(_Request, stock_location_id)
 

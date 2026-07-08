@@ -19,8 +19,8 @@ from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +45,8 @@ class ShoppingListSummaryDto:
 
 
 class GetShoppingListsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[ShoppingListSummaryDto]:
         # Two cheap queries are simpler than a join + group_by here, and the
@@ -136,6 +136,6 @@ def _next_up_list_id(lists: List[ShoppingList]) -> UUID | None:
 @SHOPPING_LIST_ROUTER.route("", methods=["GET"])
 def get_shopping_lists():
     _Logger = logging.getLogger(__name__)
-    _Summaries = get_container().inject(GetShoppingListsHandler).handle()
+    _Summaries = GetShoppingListsHandler(SqlAlchemyRepository()).handle()
     _Logger.debug("Returned %d shopping list summaries", len(_Summaries))
     return ok(_Summaries)

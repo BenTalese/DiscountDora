@@ -26,9 +26,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 from flask import request
 
 # Default horizon (the "fortnight"); clamped so a caller can't ask for an
@@ -73,8 +73,8 @@ class UpcomingDto:
 
 
 class GetUpcomingHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, days: int) -> UpcomingDto:
         today = household_today(self.repository)
@@ -150,7 +150,7 @@ def get_upcoming():
     except (TypeError, ValueError):
         days = _DEFAULT_DAYS
     days = max(1, min(days, _MAX_DAYS))
-    _Upcoming = get_container().inject(GetUpcomingHandler).handle(days)
+    _Upcoming = GetUpcomingHandler(SqlAlchemyRepository()).handle(days)
     logging.getLogger(__name__).debug(
         "Upcoming: %d day(s) with events over a %d-day window",
         len(_Upcoming.dates), days,

@@ -12,11 +12,11 @@ from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
-from dora_api.infrastructure.utils import get_container
 from dora_api.app import db
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Non-frozen so we can stamp `linked_stock_item_*` on after the page comes
@@ -130,8 +130,8 @@ def stamp_linked_stock_items(repository, dtos: list[ProductDto]) -> None:
 
 
 class GetProductsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, options) -> Page[ProductDto]:
         page = (
@@ -153,8 +153,8 @@ class GetBestDealsHandler:
     product and sort/slice in the browser. The server now owns the rank + slice
     and returns only the top N, using the one `discount_percent` rule (R-003).
     """
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, limit: int) -> list[ProductDto]:
         products = (
@@ -186,7 +186,7 @@ def get_products():
     _Logger = logging.getLogger(__name__)
     try:
         _Options = parse_query_options(request.args)
-        _Page = get_container().inject(GetProductsHandler).handle(_Options)
+        _Page = GetProductsHandler(SqlAlchemyRepository()).handle(_Options)
     except InvalidQueryParameter as exc:
         return bad_request(str(exc))
     _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} products.")
@@ -207,6 +207,6 @@ def get_best_deals():
     if _Limit < 1:
         return bad_request("`limit` must be at least 1.")
     _Limit = min(_Limit, 20)
-    _Deals = get_container().inject(GetBestDealsHandler).handle(_Limit)
+    _Deals = GetBestDealsHandler(SqlAlchemyRepository()).handle(_Limit)
     _Logger.info(f"Retrieved {len(_Deals)} best deals (limit={_Limit}).")
     return ok(_Deals)

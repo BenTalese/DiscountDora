@@ -68,8 +68,9 @@
                 </div>
             </div>
 
-            <!-- Calm per-day add affordance (R-014). Replaces the 5× italic
-                "tap to add" sprawl when showAllSlots is false. -->
+            <!-- Calm per-day add affordance — replaces the 5× italic
+                "tap to add" sprawl when showAllSlots is false. Empty-state
+                pattern, distinct from R-029. -->
             <button
                 v-if="!isPast && unusedSlots.length"
                 type="button"

@@ -35,9 +35,10 @@ from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # How far ahead "expiring soon" looks by default. Mirrors the assistant's
@@ -84,8 +85,8 @@ class WasteRescueDto:
 
 
 class GetWasteRescueHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, horizon_days: int) -> WasteRescueDto:
         horizon_days = max(0, min(horizon_days, _MAX_HORIZON_DAYS))
@@ -192,7 +193,7 @@ def get_waste_rescue():
         horizon = int(request.args.get("horizon_days", _DEFAULT_HORIZON_DAYS))
     except (TypeError, ValueError):
         horizon = _DEFAULT_HORIZON_DAYS
-    dto = get_container().inject(GetWasteRescueHandler).handle(horizon)
+    dto = GetWasteRescueHandler(SqlAlchemyRepository()).handle(horizon)
     _Logger.debug(
         "waste rescue horizon=%d items=%d recipes=%d",
         dto.horizon_days, len(dto.items), len(dto.recipes),
@@ -216,8 +217,8 @@ class LogWasteEventResponse:
 
 
 class LogWasteEventHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: LogWasteEventRequest) -> LogWasteEventResponse:
         if request.reason not in WASTE_REASON_VALUES:
@@ -243,7 +244,7 @@ class LogWasteEventHandler:
 def log_waste_event():
     _Logger = logging.getLogger(__name__)
     _Request: LogWasteEventRequest = get_request_body()
-    _Response = get_container().inject(LogWasteEventHandler).handle(_Request)
+    _Response = LogWasteEventHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.invalid_reason:
         return bad_request(
             f"Invalid reason '{_Request.reason}'. Allowed: "

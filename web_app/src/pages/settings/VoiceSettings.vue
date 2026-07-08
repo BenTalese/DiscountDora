@@ -120,7 +120,10 @@
         {
             label: "Dora's voice",
             value: 'piper',
-            // Reveal-and-disable (R-014) when the engine binary isn't present.
+            // R-029 carve-out: this is the voice settings screen (the one
+            // legitimate place the disabled Piper option shows the "engine
+            // binary isn't present on this install" state — every other
+            // surface just hides voice affordances when off).
             disabled: !piperAvailable.value,
         },
         { label: 'Browser', value: 'browser' },

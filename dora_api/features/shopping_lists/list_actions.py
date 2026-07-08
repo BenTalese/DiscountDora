@@ -33,9 +33,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── Move unticked → existing list ──────────────────────────────────────
@@ -51,8 +51,8 @@ class MoveUntickedResponse:
 
 
 class MoveUntickedHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, source_id: UUID, target_id: UUID) -> MoveUntickedResponse:
         if source_id == target_id:
@@ -101,7 +101,7 @@ class MoveUntickedHandler:
 )
 def move_unticked_to(source_id: UUID, target_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(MoveUntickedHandler).handle(source_id, target_id)
+    _Response = MoveUntickedHandler(SqlAlchemyRepository()).handle(source_id, target_id)
     if _Response.source_not_found:
         return not_found("ShoppingList (source)", source_id)
     if _Response.target_not_found:
@@ -148,8 +148,8 @@ class RefreshDealsHandler:
     crosses into ingestion-producer territory and is out of scope here.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID) -> RefreshDealsResponse:
         lst = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -192,7 +192,7 @@ class RefreshDealsHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/refresh-deals", methods=["POST"])
 def refresh_deals(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(RefreshDealsHandler).handle(shopping_list_id)
+    _Response = RefreshDealsHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(
@@ -214,8 +214,8 @@ class ClearListResponse:
 
 
 class ClearListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID) -> ClearListResponse:
         lst = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -233,7 +233,7 @@ class ClearListHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/clear", methods=["POST"])
 def clear_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(ClearListHandler).handle(shopping_list_id)
+    _Response = ClearListHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(f"Cleared {_Response.removed_count} lines from list {shopping_list_id}")

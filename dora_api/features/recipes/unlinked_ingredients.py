@@ -36,9 +36,10 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failure,
                                                   ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,8 +91,8 @@ class BulkLinkResultDto:
 
 
 class GetUnlinkedIngredientsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> UnlinkedIngredientsDto:
         # RecipeIngredient rows where the FK is null are the unlinked
@@ -142,8 +143,8 @@ class GetUnlinkedIngredientsHandler:
 
 
 class BulkLinkHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, raw_text: str, stock_item_id: UUID) -> BulkLinkResultDto | tuple[str, str]:
         target = self.repository.get(StockItem).by_id(stock_item_id)
@@ -183,7 +184,7 @@ class BulkLinkHandler:
 
 @RECIPE_ROUTER.route("unlinked-ingredients", methods=["GET"])
 def get_unlinked_ingredients():
-    handler = get_container().inject(GetUnlinkedIngredientsHandler)
+    handler = GetUnlinkedIngredientsHandler(SqlAlchemyRepository())
     dto = handler.handle()
     _LOGGER.info(
         "Unlinked ingredient groups: %d groups across %d rows.",
@@ -197,7 +198,7 @@ def get_unlinked_ingredients():
 @has_request_body(BulkLinkRequest)
 def bulk_link_unlinked_ingredients():
     request_body: BulkLinkRequest = get_request_body()
-    handler = get_container().inject(BulkLinkHandler)
+    handler = BulkLinkHandler(SqlAlchemyRepository())
     result = handler.handle(request_body.raw_text, request_body.stock_item_id)
     if isinstance(result, tuple):
         kind, detail = result

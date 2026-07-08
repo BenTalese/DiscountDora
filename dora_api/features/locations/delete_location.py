@@ -6,9 +6,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import LOCATION_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(slots=True)
@@ -17,8 +17,8 @@ class DeleteLocationResponse:
 
 
 class DeleteLocationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, location_id: UUID) -> DeleteLocationResponse:
         location: StockLocation | None = self.repository.get(StockLocation).by_id(location_id)
@@ -63,7 +63,7 @@ class DeleteLocationHandler:
 @LOCATION_ROUTER.route("/<location_id>", methods=["DELETE"])
 def delete_location(location_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteLocationHandler).handle(location_id)
+    _Response = DeleteLocationHandler(SqlAlchemyRepository()).handle(location_id)
     if _Response.location_not_found:
         return not_found("StockLocation", location_id)
     _Logger.info(f"Deleted location subtree rooted at {location_id}")

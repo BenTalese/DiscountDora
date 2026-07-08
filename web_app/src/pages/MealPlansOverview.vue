@@ -130,9 +130,10 @@
                         :cook-by-label="planner.cookByLabel.value"
                     />
 
-                    <!-- R-014 empty-week banner (recipes exist, this week is
-                        empty). Replaces 7 days of "tap to add" sprawl with one
-                        designed CTA. -->
+                    <!-- Empty-week banner (recipes exist, this week is
+                        empty). Replaces 7 days of "tap to add" sprawl with
+                        one designed CTA. Calm empty state, distinct from
+                        R-029 hide-when-off. -->
                     <q-card
                         v-if="plannedCount === 0"
                         flat bordered

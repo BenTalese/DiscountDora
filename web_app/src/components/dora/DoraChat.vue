@@ -28,11 +28,9 @@
                      has no SpeechSynthesis support. The toggle persists
                      across reloads via the user's saved preference; the
                      in-page click only flips the session-local view. -->
-                <q-btn
+                <BaseButton
                     v-if="voiceOutputAvailable"
-                    flat
-                    round
-                    dense
+                    variant="icon"
                     :icon="voiceOutputEnabled ? 'volume_up' : 'volume_off'"
                     :color="voiceOutputEnabled ? 'primary' : undefined"
                     :aria-label="voiceOutputEnabled ? 'Mute Dora\'s voice' : 'Enable Dora\'s voice'"
@@ -41,18 +39,16 @@
                     <q-tooltip>
                         {{ voiceOutputEnabled ? 'Mute Dora\'s replies' : 'Have Dora speak her replies' }}
                     </q-tooltip>
-                </q-btn>
-                <q-btn
-                    flat
-                    round
-                    dense
+                </BaseButton>
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.help_outline"
                     class="dora-accent-btn"
                     @click="openDoraHelp"
                 >
                     <q-tooltip>What can D.O.R.A. do?</q-tooltip>
-                </q-btn>
-                <q-btn flat round dense :icon="ICONS.close" @click="emit('close')" />
+                </BaseButton>
+                <BaseButton variant="icon" :icon="ICONS.close" @click="emit('close')" />
             </div>
             <div class="text-caption dora-text-muted">
                 Your in-app helper. {{ pageHintForHeader }}
@@ -145,30 +141,25 @@
                         </div>
                     </q-expansion-item>
                     <div class="row q-gutter-xs q-mt-xs">
-                        <q-btn
+                        <BaseButton
                             v-if="suggestion.primary_action"
+                            variant="primary"
                             dense
-                            no-caps
                             size="sm"
-                            unelevated
-                            color="primary"
                             :label="suggestion.primary_action.label"
                             @click="onAcceptSuggestion(suggestion)"
                         />
-                        <q-btn
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             size="sm"
-                            flat
                             label="Snooze 1d"
                             @click="onSnoozeSuggestion(suggestion)"
                         />
-                        <q-btn
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             size="sm"
-                            flat
-                            color="grey"
                             label="Dismiss"
                             @click="onDismissSuggestion(suggestion)"
                         />
@@ -190,16 +181,15 @@
                         v-if="message.navigateTo || message.externalLink"
                         class="dora-chat-actions q-mt-xs"
                     >
-                        <q-btn
+                        <BaseButton
                             v-if="message.navigateTo"
+                            variant="primary"
                             size="sm"
-                            no-caps
-                            color="primary"
-                            unelevated
                             :icon-right="iconForNav(message.navigateTo.path)"
                             :label="message.navigateTo.label"
                             @click="onNavigate(message.navigateTo.path)"
                         />
+                        <!-- carve-out — raw q-btn: type="a" anchor form is not in BaseButton's type union. -->
                         <q-btn
                             v-if="message.externalLink"
                             size="sm"
@@ -225,20 +215,16 @@
                         class="dora-action-card q-mt-sm"
                     >
                         <div class="row q-gutter-sm q-mt-xs">
-                            <q-btn
+                            <BaseButton
+                                variant="primary"
                                 size="sm"
-                                no-caps
-                                unelevated
-                                color="primary"
                                 :icon="ICONS.check"
                                 label="Confirm"
                                 @click="confirmAction(message)"
                             />
-                            <q-btn
+                            <BaseButton
+                                variant="ghost"
                                 size="sm"
-                                no-caps
-                                flat
-                                color="grey"
                                 label="Cancel"
                                 @click="cancelAction(message)"
                             />
@@ -293,12 +279,10 @@
                                 </q-chip>
                             </div>
                         </div>
-                        <q-btn
+                        <BaseButton
                             v-if="!message.done"
+                            variant="primary"
                             size="sm"
-                            no-caps
-                            unelevated
-                            color="primary"
                             icon-right="add_shopping_cart"
                             class="q-mt-sm"
                             :label="`Add to ${message.action.shopping_list?.name ?? 'list'}`"
@@ -364,18 +348,16 @@
                         {{ chip.label }}
                     </q-chip>
                 </div>
-                <q-btn
+                <BaseButton
                     v-if="canRotateChips"
-                    flat
-                    dense
-                    round
+                    variant="icon"
                     size="sm"
                     :icon="ICONS.refresh"
                     class="dora-help-btn q-ml-xs"
                     @click="rotateChips"
                 >
                     <q-tooltip>Show different suggestions</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </div>
 
             <q-input
@@ -392,11 +374,9 @@
                          Hidden when the browser doesn't expose the Web
                          Speech API. Disabled while Dora is sending so
                          we don't overwrite the user's draft mid-flight. -->
-                    <q-btn
+                    <BaseButton
                         v-if="voiceInputAvailable"
-                        flat
-                        round
-                        dense
+                        variant="icon"
                         :icon="voiceListening ? 'mic' : 'mic_none'"
                         :color="voiceListening ? 'negative' : undefined"
                         :class="voiceListening ? 'dora-mic-listening' : ''"
@@ -406,11 +386,9 @@
                         <q-tooltip>
                             {{ voiceListening ? 'Stop listening' : 'Voice input' }}
                         </q-tooltip>
-                    </q-btn>
-                    <q-btn
-                        flat
-                        round
-                        dense
+                    </BaseButton>
+                    <BaseButton
+                        variant="icon"
                         :icon="ICONS.send"
                         :class="draft.trim() ? 'dora-accent-btn' : ''"
                         :disable="!draft.trim()"

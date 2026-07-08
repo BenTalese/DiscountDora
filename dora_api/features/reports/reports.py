@@ -65,9 +65,9 @@ from dora_api.domain.stock_status import (StockStatus, get_stock_item_unit_cost_
                                           level_for_status)
 from dora_api.features.routers import REPORTS_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _Logger = logging.getLogger(__name__)
@@ -150,8 +150,8 @@ class StockValueOverTimeHandler:
     app targets.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None) -> List[StockValuePoint]:
         session = self.repository.session
@@ -341,7 +341,7 @@ def _cheapest_as_of(
 @REPORTS_ROUTER.route("/stock-value-over-time", methods=["GET"])
 def stock_value_over_time():
     _Since = _parse_range(request.args.get("range"))
-    _Points = get_container().inject(StockValueOverTimeHandler).handle(_Since)
+    _Points = StockValueOverTimeHandler(SqlAlchemyRepository()).handle(_Since)
     return ok({
         "range": request.args.get("range", "30d"),
         "estimate_note": (
@@ -363,8 +363,8 @@ class StoreSpendRow:
 
 
 class SpendByStoreHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None) -> List[StoreSpendRow]:
         session = self.repository.session
@@ -448,7 +448,7 @@ class SpendByStoreHandler:
 @REPORTS_ROUTER.route("/spend-by-store", methods=["GET"])
 def spend_by_store():
     _Since = _parse_range(request.args.get("range"))
-    _Rows = get_container().inject(SpendByStoreHandler).handle(_Since)
+    _Rows = SpendByStoreHandler(SqlAlchemyRepository()).handle(_Since)
     return ok({
         "range": request.args.get("range", "30d"),
         "rows": [asdict(r) for r in _Rows],
@@ -465,8 +465,8 @@ class MostBoughtRow:
 
 
 class MostBoughtItemsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None, limit: int) -> List[MostBoughtRow]:
         session = self.repository.session
@@ -515,7 +515,7 @@ def most_bought_items():
         _Limit = max(1, min(int(request.args.get("limit", "10")), 50))
     except (TypeError, ValueError):
         _Limit = 10
-    _Rows = get_container().inject(MostBoughtItemsHandler).handle(_Since, _Limit)
+    _Rows = MostBoughtItemsHandler(SqlAlchemyRepository()).handle(_Since, _Limit)
     return ok({
         "range": request.args.get("range", "30d"),
         "rows": [asdict(r) for r in _Rows],
@@ -541,8 +541,8 @@ class KeepsRunningOutHandler:
     rather than guessed.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, limit: int) -> List[KeepsRunningOutRow]:
         session = self.repository.session
@@ -639,7 +639,7 @@ def keeps_running_out():
         _Limit = max(1, min(int(request.args.get("limit", "10")), 50))
     except (TypeError, ValueError):
         _Limit = 10
-    _Rows = get_container().inject(KeepsRunningOutHandler).handle(_Limit)
+    _Rows = KeepsRunningOutHandler(SqlAlchemyRepository()).handle(_Limit)
     return ok({"rows": [asdict(r) for r in _Rows]})
 
 
@@ -662,8 +662,8 @@ class PriceTrendSeries:
 class PriceTrendsHandler:
     MAX_PRODUCTS = 5
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -738,7 +738,7 @@ def price_trends():
             )
 
     _Since = _parse_range(request.args.get("range"))
-    _Series = get_container().inject(PriceTrendsHandler).handle(product_ids, _Since)
+    _Series = PriceTrendsHandler(SqlAlchemyRepository()).handle(product_ids, _Since)
     return ok({
         "range": request.args.get("range", "30d"),
         "series": [
@@ -771,8 +771,8 @@ class SavingsCapturedHandler:
     contribute zero to savings but still count toward picked_total
     (so the "total spent" matches spend-by-store)."""
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None) -> dict:
         session = self.repository.session
@@ -852,7 +852,7 @@ class SavingsCapturedHandler:
 @REPORTS_ROUTER.route("/savings-captured", methods=["GET"])
 def savings_captured():
     _Since = _parse_range(request.args.get("range"))
-    _Result = get_container().inject(SavingsCapturedHandler).handle(_Since)
+    _Result = SavingsCapturedHandler(SqlAlchemyRepository()).handle(_Since)
     _Result["range"] = request.args.get("range", "30d")
     return ok(_Result)
 
@@ -880,8 +880,8 @@ class PriceDropsHandler:
     true, not "cheapest right now". Ranked by drop percent, sliced server-side
     (state-ownership §8.2)."""
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, limit: int) -> list[PriceDropRow]:
         products = (
@@ -982,7 +982,7 @@ def price_drops():
         _Limit = max(1, min(int(request.args.get("limit", "5")), 20))
     except (TypeError, ValueError):
         _Limit = 5
-    _Rows = get_container().inject(PriceDropsHandler).handle(_Limit)
+    _Rows = PriceDropsHandler(SqlAlchemyRepository()).handle(_Limit)
     return ok({"rows": [asdict(r) for r in _Rows]})
 
 
@@ -1010,8 +1010,8 @@ class MealsCookedBucketPoint:
 
 
 class MealsCookedHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None, limit: int) -> dict:
         session = self.repository.session
@@ -1110,7 +1110,7 @@ def meals_cooked():
         limit = max(1, min(int(request.args.get("limit", "10")), 50))
     except (TypeError, ValueError):
         limit = 10
-    payload = get_container().inject(MealsCookedHandler).handle(since, limit)
+    payload = MealsCookedHandler(SqlAlchemyRepository()).handle(since, limit)
     return ok({
         "range": request.args.get("range", "30d"),
         **payload,
@@ -1136,8 +1136,8 @@ class SpendByCategoryRow:
 
 
 class SpendByCategoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, since: datetime | None) -> tuple[List[SpendByCategoryRow], float]:
         session = self.repository.session
@@ -1228,7 +1228,7 @@ class SpendByCategoryHandler:
 @REPORTS_ROUTER.route("/spend-by-category", methods=["GET"])
 def spend_by_category():
     since = _parse_range(request.args.get("range"))
-    rows, total = get_container().inject(SpendByCategoryHandler).handle(since)
+    rows, total = SpendByCategoryHandler(SqlAlchemyRepository()).handle(since)
     return ok({
         "range": request.args.get("range", "30d"),
         "total_spent": total,
@@ -1253,8 +1253,8 @@ class SpendYoYCategoryRow:
 
 
 class SpendYoYHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -1377,7 +1377,7 @@ def spend_year_over_year():
     current_since = now - timedelta(days=days)
     previous_since = now - timedelta(days=days * 2)
     previous_until = current_since
-    payload = get_container().inject(SpendYoYHandler).handle(
+    payload = SpendYoYHandler(SqlAlchemyRepository()).handle(
         current_since, previous_since, previous_until,
     )
     return ok({

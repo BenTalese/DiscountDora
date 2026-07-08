@@ -7,8 +7,8 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.substitutes.canonical import canonical_pair
 from dora_api.infrastructure.api_response import no_content, not_found
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(slots=True)
@@ -18,8 +18,8 @@ class RemoveSubstituteResponse:
 
 
 class RemoveSubstituteHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, stock_item_id: UUID, substitute_id: UUID) -> RemoveSubstituteResponse:
         if not self.repository.get(StockItem).exists(stock_item_id):
@@ -45,7 +45,7 @@ class RemoveSubstituteHandler:
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/substitutes/<substitute_id>", methods=["DELETE"])
 def remove_substitute(stock_item_id: UUID, substitute_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(RemoveSubstituteHandler)
+    _Handler = RemoveSubstituteHandler(SqlAlchemyRepository())
     _Response = _Handler.handle(stock_item_id, substitute_id)
 
     if _Response.stock_item_not_found:

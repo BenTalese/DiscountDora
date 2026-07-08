@@ -14,9 +14,9 @@ export interface MenuButtonProps {
      *  instead of a router-link. Used by the Phase D "Product Search" nav
      *  entry which opens an admin-configured URL. */
     href?: string;
-    /** R-014 reveal-and-disable: render visible-disabled with a tooltip
-     *  explaining how to enable it. Wins over `link` / `href`. */
-    disabled?: boolean;
-    /** Tooltip surfaced on a disabled item. */
-    disabledTooltip?: string;
+    // R-029: nav entries no longer carry a `disabled` / `disabledTooltip`
+    // shape. Not-configured / off-by-flag features are hidden from the nav
+    // (the router-caller passes `null`), not shown-disabled-with-a-hint.
+    // The settings screen that owns the config is the one legitimate place
+    // the off-state is visible.
 }

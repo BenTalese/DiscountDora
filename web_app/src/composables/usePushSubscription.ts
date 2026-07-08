@@ -8,9 +8,10 @@
 //
 // Layered with `useFeatureFlags().pushVapidConfigured`: if the backend has
 // no VAPID keys, this composable still loads but `subscribe()` short-
-// circuits with an explicit error message (R-014 — the consumer renders
-// the toggle as disabled before calling subscribe, but the guard is
-// belt-and-braces).
+// circuits with an explicit error message. NotificationsSettings (the
+// R-029 carve-out screen that owns the per-user push opt-in) checks the
+// flag and renders its toggle disabled before subscribe is ever called;
+// this guard is belt-and-braces for that path.
 
 import { computed, onMounted, ref } from 'vue';
 import AlertApiService from 'src/services/api/alertApiService';

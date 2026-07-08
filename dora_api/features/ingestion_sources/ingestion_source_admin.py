@@ -39,9 +39,10 @@ from dora_api.infrastructure.api_response import (bad_request, forbidden,
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.ingestion_auth import (hash_ingestion_key,
                                                     mint_ingestion_key)
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 def _require_admin() -> tuple[UUID | None, object]:
@@ -122,8 +123,8 @@ class UpdateIngestionSourceRequest(BaseModel):
 # ── Handlers ───────────────────────────────────────────────────────────
 
 class ListIngestionSourcesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> list[IngestionSourceDto]:
         rows: list[IngestionSource] = (
@@ -134,8 +135,8 @@ class ListIngestionSourcesHandler:
 
 
 class CreateIngestionSourceHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, req: CreateIngestionSourceRequest) -> CreateIngestionSourceResponse:
         raw = mint_ingestion_key()
@@ -156,8 +157,8 @@ class CreateIngestionSourceHandler:
 
 
 class UpdateIngestionSourceHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, source_id: UUID, req: UpdateIngestionSourceRequest) -> IngestionSourceDto | None:
         target: IngestionSource | None = (
@@ -175,8 +176,8 @@ class UpdateIngestionSourceHandler:
 
 
 class DeleteIngestionSourceHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, source_id: UUID) -> bool:
         target: IngestionSource | None = (
@@ -196,7 +197,7 @@ def list_ingestion_sources():
     _, err = _require_admin()
     if err is not None:
         return err
-    items = get_container().inject(ListIngestionSourcesHandler).handle()
+    items = ListIngestionSourcesHandler(SqlAlchemyRepository()).handle()
     return {"items": [asdict(it) for it in items]}
 
 
@@ -209,7 +210,7 @@ def create_ingestion_source():
     req: CreateIngestionSourceRequest = get_request_body()
     if req.trust not in ALLOWED_TRUSTS:
         return bad_request(f"trust must be one of {ALLOWED_TRUSTS}.")
-    result = get_container().inject(CreateIngestionSourceHandler).handle(req)
+    result = CreateIngestionSourceHandler(SqlAlchemyRepository()).handle(req)
     logging.getLogger(__name__).info(
         "Minted IngestionSource %s (label=%s, trust=%s)",
         result.source.id, result.source.label, result.source.trust,
@@ -224,7 +225,7 @@ def update_ingestion_source(source_id: UUID):
     if err is not None:
         return err
     req: UpdateIngestionSourceRequest = get_request_body()
-    updated = get_container().inject(UpdateIngestionSourceHandler).handle(source_id, req)
+    updated = UpdateIngestionSourceHandler(SqlAlchemyRepository()).handle(source_id, req)
     if updated is None:
         return not_found("IngestionSource", source_id)
     return asdict(updated)
@@ -235,7 +236,7 @@ def delete_ingestion_source(source_id: UUID):
     _, err = _require_admin()
     if err is not None:
         return err
-    ok = get_container().inject(DeleteIngestionSourceHandler).handle(source_id)
+    ok = DeleteIngestionSourceHandler(SqlAlchemyRepository()).handle(source_id)
     if not ok:
         return not_found("IngestionSource", source_id)
     logging.getLogger(__name__).info("Revoked IngestionSource %s", source_id)

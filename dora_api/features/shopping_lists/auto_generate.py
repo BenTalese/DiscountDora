@@ -49,9 +49,10 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Stock level sequences (seed.py): 0=Stocked, 1=Low, 2=Out.
@@ -160,8 +161,8 @@ class AutoGenerateHandler:
     render added_via chips without an extra round-trip.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: AutoGenerateRequest) -> AutoGenerateResponse:
         # ── Resolve target list on the merge path (existence check first) ─
@@ -533,7 +534,7 @@ def _response_payload(response: AutoGenerateResponse) -> dict:
 def auto_generate():
     _Logger = logging.getLogger(__name__)
     _Request: AutoGenerateRequest = get_request_body()
-    _Response = get_container().inject(AutoGenerateHandler).handle(_Request)
+    _Response = AutoGenerateHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.list_not_found:
         return not_found("ShoppingList", _Request.merge_into_list_id or "?")
     _Logger.info(

@@ -29,8 +29,8 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SEARCH_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 ALL_TYPES = (
@@ -109,8 +109,8 @@ def _breadcrumb(location: StockLocation, loc_by_id: dict[UUID, StockLocation]) -
 
 
 class GlobalSearchHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, query: str, types: Sequence[str], limit: int) -> SearchResponseDto:
         query = (query or "").strip()
@@ -273,6 +273,6 @@ def global_search():
         _Limit = DEFAULT_LIMIT
     _Limit = max(1, min(_Limit, MAX_LIMIT))
 
-    _Response = get_container().inject(GlobalSearchHandler).handle(_Query, _Types, _Limit)
+    _Response = GlobalSearchHandler(SqlAlchemyRepository()).handle(_Query, _Types, _Limit)
     _Logger.info("Search '%s' (types=%s, limit=%d): %d results", _Query, _Types or "all", _Limit, len(_Response.results))
     return ok(_Response)

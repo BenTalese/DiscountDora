@@ -47,7 +47,8 @@ from dora_api.features.data.restore_shared import (
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import bad_request, internal_server_error, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 MODE_ALL_SKIP_DUPLICATES = "all_skip_duplicates"
@@ -368,7 +369,7 @@ def restore_backup():
     if err is not None:
         return err
     _Request: RestoreBackupRequest = get_request_body()
-    _Result = get_container().inject(RestoreBackupHandler).handle(_Request)
+    _Result = RestoreBackupHandler().handle(_Request)
     if isinstance(_Result, str):
         _Logger.warning("Restore validation failed: %s", _Result)
         # User-facing errors land as 400; "rolled back" as 500.

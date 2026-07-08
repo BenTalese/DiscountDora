@@ -10,8 +10,9 @@ from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, no_content, not_found
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateProductRequest(BaseModel):
@@ -30,8 +31,8 @@ class UpdateProductResponse:
 
 
 class UpdateProductHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateProductRequest, product_id: UUID) -> UpdateProductResponse:
         _Product: Product | None = (
@@ -79,7 +80,7 @@ class UpdateProductHandler:
 def update_product(product_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to update product.")
-    _Handler = get_container().inject(UpdateProductHandler)
+    _Handler = UpdateProductHandler(SqlAlchemyRepository())
     _Request: UpdateProductRequest = get_request_body()
     _Response = _Handler.handle(_Request, product_id)
 

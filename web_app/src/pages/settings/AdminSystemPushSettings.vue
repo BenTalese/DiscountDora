@@ -63,18 +63,16 @@
                             :disable="saving"
                         />
                         <div class="row q-gutter-sm">
-                            <q-btn
-                                unelevated no-caps
+                            <BaseButton
+                                variant="primary"
                                 label="Save"
-                                color="primary"
                                 :disable="saving || privateKeyDraft.length === 0"
                                 @click="() => onSavePrivateKey(privateKeyDraft)"
                             />
-                            <q-btn
+                            <BaseButton
                                 v-if="privateKeyConfigured"
-                                flat no-caps
+                                variant="danger-ghost"
                                 label="Clear"
-                                color="negative"
                                 :disable="saving"
                                 @click="() => onSavePrivateKey('')"
                             />
@@ -88,6 +86,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AppSettingsApiService, { type AppSettings } from 'src/services/api/appSettingsApiService';

@@ -50,8 +50,9 @@ from dora_api.features.data.uploads import staged_path
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import bad_request, internal_server_error, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Target fields with their synonyms for auto-mapping. Lowercased,
@@ -314,7 +315,7 @@ def inspect_spreadsheet():
     if err is not None:
         return err
     _Request: InspectSpreadsheetRequest = get_request_body()
-    _Result = get_container().inject(InspectSpreadsheetHandler).handle(_Request)
+    _Result = InspectSpreadsheetHandler().handle(_Request)
     if isinstance(_Result, str):
         if _Result.startswith("No staged upload"):
             return not_found("Upload", _Request.upload_id)
@@ -364,8 +365,8 @@ class CommitSpreadsheetResponse:
 
 
 class CommitSpreadsheetHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CommitSpreadsheetRequest) -> CommitSpreadsheetResponse | str:
         path = staged_path(request.upload_id)
@@ -657,7 +658,7 @@ def commit_spreadsheet():
     if err is not None:
         return err
     _Request: CommitSpreadsheetRequest = get_request_body()
-    _Result = get_container().inject(CommitSpreadsheetHandler).handle(_Request)
+    _Result = CommitSpreadsheetHandler(SqlAlchemyRepository()).handle(_Request)
     if isinstance(_Result, str):
         if _Result.startswith("No staged upload"):
             return not_found("Upload", _Request.upload_id)

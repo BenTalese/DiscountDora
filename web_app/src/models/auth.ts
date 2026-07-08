@@ -113,8 +113,11 @@ export type AuthenticatedUser = {
     // alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
     // default; `alerts_email_cadence` is `'off' | 'daily' | 'weekly'` and
     // `alerts_email_day` is the weekly send day (Mon=0 … Sun=6, ignored on
-    // daily). The toggle is gated on `features.email_smtp_configured` so a
-    // self-hosted install without SMTP shows the control disabled (R-014).
+    // daily). The toggle is rendered on NotificationsSettings gated on
+    // `features.email_smtp_configured`; that screen is the R-029 carve-out
+    // (it owns the per-user opt-in), so the disabled state legitimately
+    // appears there and only there. No other surface should reference this
+    // field as a disabled affordance — hide the entry point instead.
     alerts_email_enabled: boolean;
     alerts_email_cadence: 'off' | 'daily' | 'weekly';
     alerts_email_day: number;

@@ -65,7 +65,7 @@ from dora_api.infrastructure.api_response import (
 )
 from dora_api.infrastructure.configuration_manager import DORA_CONFIG
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -190,7 +190,7 @@ def create_backup():
 
     # Build the payload via the existing handler (fresh dump each call —
     # matches user expectation "backup now == right now, not yesterday").
-    result = get_container().inject(GetBackupHandler).handle(user_id, selected)
+    result = GetBackupHandler(SqlAlchemyRepository()).handle(user_id, selected)
 
     # Write the file with a unique id so parallel admin calls don't
     # clobber. `mkdir` inside get_backups_dir() ensures the parent exists.
@@ -329,7 +329,7 @@ def restore_saved_backup(backup_id: str):
         mode="all_skip_duplicates",
         backup=body,
     )
-    _Result = get_container().inject(RestoreBackupHandler).handle(restore_request)
+    _Result = RestoreBackupHandler().handle(restore_request)
     if isinstance(_Result, str):
         _Logger.warning("Library restore failed: %s", _Result)
         if _Result.startswith("Restore failed and was rolled back"):

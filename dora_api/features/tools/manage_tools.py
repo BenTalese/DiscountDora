@@ -21,8 +21,9 @@ from dora_api.features.routers import TOOL_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +46,8 @@ def _recipe_counts() -> dict[UUID, int]:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetToolsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[ToolDto]:
         tools: List[Tool] = self.repository.get(Tool).all()
@@ -66,7 +67,7 @@ class GetToolsHandler:
 
 @TOOL_ROUTER.route("", methods=["GET"])
 def get_tools():
-    return ok(get_container().inject(GetToolsHandler).handle())
+    return ok(GetToolsHandler(SqlAlchemyRepository()).handle())
 
 
 # ───── Create ────────────────────────────────────────────────────────────
@@ -83,8 +84,8 @@ class CreateToolResponse:
 
 
 class CreateToolHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateToolRequest) -> CreateToolResponse:
         existing = self.repository.get(Tool).all()
@@ -103,7 +104,7 @@ class CreateToolHandler:
 def create_tool():
     _Logger = logging.getLogger(__name__)
     _Request: CreateToolRequest = get_request_body()
-    _Response = get_container().inject(CreateToolHandler).handle(_Request)
+    _Response = CreateToolHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(f"A tool named '{_Request.name}' already exists.")
     _Logger.info(f"Created tool {_Response.tool_id} '{_Request.name}'")
@@ -129,8 +130,8 @@ class UpdateToolResponse:
 
 
 class UpdateToolHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateToolRequest, tool_id: UUID) -> UpdateToolResponse:
         tool: Tool | None = self.repository.get(Tool).by_id(tool_id)
@@ -150,7 +151,7 @@ class UpdateToolHandler:
 @has_request_body(UpdateToolRequest)
 def update_tool(tool_id: UUID):
     _Request: UpdateToolRequest = get_request_body()
-    _Response = get_container().inject(UpdateToolHandler).handle(_Request, tool_id)
+    _Response = UpdateToolHandler(SqlAlchemyRepository()).handle(_Request, tool_id)
     if _Response.not_found:
         return not_found("Tool", tool_id)
     if _Response.duplicate:
@@ -167,8 +168,8 @@ class DeleteToolResponse:
 
 
 class DeleteToolHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, tool_id: UUID) -> DeleteToolResponse:
         tool: Tool | None = self.repository.get(Tool).by_id(tool_id)
@@ -183,7 +184,7 @@ class DeleteToolHandler:
 @TOOL_ROUTER.route("/<tool_id>", methods=["DELETE"])
 def delete_tool(tool_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteToolHandler).handle(tool_id)
+    _Response = DeleteToolHandler(SqlAlchemyRepository()).handle(tool_id)
     if _Response.not_found:
         return not_found("Tool", tool_id)
     _Logger.info(f"Deleted tool {tool_id}; {_Response.recipes_affected} link(s) removed")

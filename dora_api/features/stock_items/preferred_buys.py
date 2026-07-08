@@ -22,9 +22,10 @@ from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class AddPreferredBuyRequest(BaseModel):
@@ -47,8 +48,8 @@ class PreferredBuyMutationResponse:
 
 
 class PreferredBuyHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def _scoped(self, stock_item_id: UUID, preferred_buy_id: UUID) -> PreferredBuy | None:
         # Scope the lookup to the stock item so a mismatched pair 404s rather
@@ -97,7 +98,7 @@ class PreferredBuyHandler:
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys", methods=["POST"])
 @has_request_body(AddPreferredBuyRequest)
 def add_preferred_buy(stock_item_id: UUID):
-    _Handler = get_container().inject(PreferredBuyHandler)
+    _Handler = PreferredBuyHandler(SqlAlchemyRepository())
     _Request: AddPreferredBuyRequest = get_request_body()
     _Response = _Handler.add(stock_item_id, _Request)
     if _Response.stock_item_not_found:
@@ -111,7 +112,7 @@ def add_preferred_buy(stock_item_id: UUID):
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys/<preferred_buy_id>", methods=["PATCH"])
 @has_request_body(UpdatePreferredBuyRequest)
 def update_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
-    _Handler = get_container().inject(PreferredBuyHandler)
+    _Handler = PreferredBuyHandler(SqlAlchemyRepository())
     _Request: UpdatePreferredBuyRequest = get_request_body()
     _Response = _Handler.rename(stock_item_id, preferred_buy_id, _Request)
     if _Response.preferred_buy_not_found:
@@ -123,7 +124,7 @@ def update_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys/<preferred_buy_id>", methods=["DELETE"])
 def delete_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
-    _Handler = get_container().inject(PreferredBuyHandler)
+    _Handler = PreferredBuyHandler(SqlAlchemyRepository())
     _Response = _Handler.delete(stock_item_id, preferred_buy_id)
     if _Response.preferred_buy_not_found:
         return not_found(PreferredBuy.__name__, preferred_buy_id)

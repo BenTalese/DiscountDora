@@ -25,9 +25,10 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation, ok,
                                                   unauthorized)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateMeRequest(BaseModel):
@@ -120,8 +121,8 @@ class UpdateMeRequest(BaseModel):
 
 
 class UpdateMeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -345,7 +346,7 @@ def update_me():
         return unauthorized()
 
     _Request: UpdateMeRequest = get_request_body()
-    _Dto, _Error = get_container().inject(UpdateMeHandler).handle(_Request, _UserId)
+    _Dto, _Error = UpdateMeHandler(SqlAlchemyRepository()).handle(_Request, _UserId)
 
     if _Error is not None:
         return business_rule_violation(_Error)

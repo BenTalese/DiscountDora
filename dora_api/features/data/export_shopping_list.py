@@ -27,7 +27,7 @@ from dora_api.features.shopping_lists.get_shopping_list_detail import (
     ShoppingListLineDto,
 )
 from dora_api.infrastructure.api_response import not_found
-from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 # ── Shared row prep ────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ def _render_print_view(detail: ShoppingListDetailDto) -> str:
 
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/print-view", methods=["GET"])
 def print_view_shopping_list(shopping_list_id: UUID):
-    detail = get_container().inject(GetShoppingListDetailHandler).handle(shopping_list_id)
+    detail = GetShoppingListDetailHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if detail is None:
         return not_found("ShoppingList", shopping_list_id)
     html = _render_print_view(detail)

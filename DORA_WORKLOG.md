@@ -9,6 +9,294 @@ next.
 
 ---
 
+## 2026-07-08 — DI container removed; constructor injection via Protocols (R-031 / ADR-027; FU-457 dissolved)
+
+**Why:** User asked whether the app benefits from DI. Static audit: 175/179 handlers just constructed `SqlAlchemyRepository()` in `__init__`; the `DependencyContainer` was being used as a service locator (`get_container().inject(X)`); zero tests exercised it; the whole shape (`I`-prefix generic interfaces, `SqlAlchemyGateway[T]`, reflection-based wiring) was a .NET convention ported into a Python codebase. User's follow-up question — "would industry-standard include DI, or is the code just not written well enough?" — resolved as: **constructor injection yes, DI container no**. Ripped out the container, introduced Protocol-based ctor injection.
+
+### What shipped
+
+- **New `dora_api/infrastructure/ports.py`** — a `Repository` Protocol (structural typing, no ABC inheritance) matching `SqlAlchemyRepository`'s public surface: `session`, `add`, `get`, `remove`, `reattach_and_save`, `flush`, `save_changes`. This is the only Protocol added this session — Clock / EmailSender / PushSender wait until a real swap surface arrives (R-005 auth interface, email transport for the SMTP/SES split, push transport). No premature abstraction.
+- **175 handler `__init__` signatures rewritten** mechanically. Every `def __init__(self):\n    self.repository = SqlAlchemyRepository()` → `def __init__(self, repository: Repository) -> None:\n    self.repository = repository`. `Repository` import added to each of the 98 files that hosts a rewritten handler.
+- **~200 `get_container().inject(X)` callsites rewritten** to `X(SqlAlchemyRepository())`. Two multi-line variants in `manage_shopping_list_attachments.py` were hand-fixed after the regex missed them. The `get_container` import was removed from every file where it became unused.
+- **~24 direct `Handler()` construction sites** (the assistant tool-call layer + a handful of internal callers) also got `SqlAlchemyRepository()` passed in. `AskAssistantHandler` was skipped — it legitimately has no repo dep (builds an LLM client per-user from Flask session context).
+- **Three handlers without an `__init__`** — `RestoreBackupHandler`, `InspectSpreadsheetHandler`, `GetShortfallHandler` — kept parameter-less. The five callsites that had been auto-wrapped with `SqlAlchemyRepository()` were reverted to no-arg. Uniform "every handler takes a repo" would have been a lie — these three genuinely don't need one.
+- **Container + wiring files deleted**: `dora_api/infrastructure/service_wiring.py` (21 LOC) and `dora_api/infrastructure/dependency_container.py` (215 LOC). `get_container()` and the `DependencyContainer` import removed from `utils.py`. `build_dependency_container()` call + `app.container = _Container` removed from `startup.py`. `TService` (only used by `.inject()`) removed from `domain/generics.py`. `DependencyConstructionError` + `DuplicateServiceError` (only raised by the container) removed from `domain/exceptions.py`.
+- **`dependency_injector==4.49.1` removed** from `requirements.txt`.
+- **Three tests updated** to use ctor injection directly (payoff realised immediately):
+  - `tests/test_reports_memory.py::TestMealsCookedGrouping._run` — was `handler = MealsCookedHandler(); with patch.object(handler, "repository", stub_repo): ...`. Now: `MealsCookedHandler(stub_repo).handle(None, 10)`. 5 lines shorter, no `patch.object`.
+  - `tests/test_reports_memory.py::TestSpendYoYMath._run` — `SpendYoYHandler(SimpleNamespace())` (the handler is unused; the test replicates the compute inline to pin the shape — that's a pre-existing test smell, not this refactor's concern).
+  - `tests/test_unlinked_ingredients.py::TestGroupUnlinkedIngredients._run_with_rows` — same simplification; `patch` import removed.
+
+### Verification
+
+`pytest` → **828 passed, 2 failed**. Both failures pre-existing per the FU-456 worklog entry (`test__onboarding_seed_items__creates_prelocated_and_dedupes` — StockItem-schema drift; `test__import_template__csv_download__includes_hash_comment_row` — CSV import surface). **Net effect: 0 regressions across 175 handler rewrites + 200+ callsite rewrites.**
+
+### FU-457 dissolved by construction
+
+The FU asked for a boot-time assertion protecting the reflection-based `service_wiring.py` (auto-registering handlers by name). That file is deleted. No reflection-based handler-wiring surface remains. Moved [[FU-457]] from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with a note that if the router-discovery reflection in `startup.py` (`get_attributes_ending_with('router', ...)`) ever needs the same treatment, that's a much smaller focused FU to reopen — the router discovery is 40-odd blueprints, all present at boot, with no dependency graph.
+
+### Engineering-standards close-gate
+
+- **New rule R-031** and **new ADR-027** added to `docs/01_charter/ENGINEERING_STANDARDS.md`. R-031 codifies "Constructor injection via Protocols; no DI container." ADR-027 records the walk-back with alternatives considered (kept for future readers who inherit the pattern and wonder why we don't have a container).
+- The `I`-prefix nominal interface convention (`IRepository`, `IConfigurationManager`) is now discouraged for new work; use `typing.Protocol`. This is anchored in R-031's "Apply" clause and ADR-027's rationale block. Existing usages are legacy and can be tidied opportunistically — no sweep FU opened.
+
+### Deliberately not shipped
+
+- **Additional Protocols in `ports.py` beyond `Repository`.** Clock / EmailSender / PushSender / LLM-client / blob-storage are all real swap surfaces the app *will* want when the corresponding features land — R-005 (auth interface), the SMTP transport split, per-tenant LLM clients if SaaS lands. But adding them now with no consumer is premature abstraction. Do it *when the seam is real*, not before. ADR-027 documents the shape.
+- **Tidying the `Repository` import placement.** The mechanical script appended the import at the end of the from-block in many files (aesthetically ungrouped but syntactically correct). Not worth 175 targeted Edits; will normalise opportunistically when those files are touched again.
+- **Rewriting the router-discovery reflection in `startup.py`.** Out of scope — this FU was about the handler-wiring container. If we want an explicit `ROUTERS = [...]` list later, it's a small change but a separate one.
+- **A dedicated FU or impl-plan for the wider "swap-surface Protocols" work.** Wait until R-005's auth interface has a concrete design or the SMTP transport wants a null-sender. Adding Protocols with no second implementation is a shape-first exercise that ADR-027 explicitly warns against.
+
+### Bookkeeping
+
+- **[[FU-457]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with the "dissolved by construction" note.
+- **`ENGINEERING_STANDARDS.md`** — R-031 added after R-030; ADR-027 added after ADR-026.
+- **`CHANGELOG.md`** — new `### Changed` entry under `[Unreleased]`.
+- **`PROJECT_STATE.md`** — hand-edited (top-level "Recently shipped" + regen date). Full regen wasn't warranted; this is a cross-cutting refactor, not a workstream state shift.
+- **`DORA_VERIFY.md`** — no new entry. The full pytest suite exercises the refactor end-to-end; nothing browser-shaped changed.
+
+### Next up
+
+Whatever the user picks. Related open: [[FU-512]] (unit-of-work sweep of the ~20 other multi-commit handlers, runbook ready); [[FU-500]] follow-through if any R-014 sites still get flagged; [[FU-510]] late-game "hand-rolled code that should be a library" sweep — R-031 is now one of the standing rules that sweep will honour when it lands.
+
+---
+
+## 2026-07-08 — FU-512 analysis (no code change): runbook written, inventory corrected, one surprise finding logged
+
+**Why:** User asked to do the FU-512 analysis so a subsequent session can close the FU mechanically. Research-only turn — no code changed.
+
+### What shipped
+
+- **[`docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md`](docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md)** — per-handler refactor plan for the 10 handlers that genuinely multi-commit. Each block: shape, save-point map, failure surfaces, refactor plan, complexity verdict, test-to-write, and watch-outs. Ends with a 3-batch execution recommendation and a deliverable checklist.
+
+### Corrected inventory (the FU's original count of ~20 was inflated)
+
+- **10 handlers actually multi-commit**: `CreateMealPlanTemplateHandler`, `CloneMealPlanTemplateHandler`, `CreateSetHandler`, `SeedHandler` (only one with a genuine parent/child flush point), `NewRecipeVersionHandler`, `AutoGenerateHandler`, `CopyShoppingListHandler`, `CreateTemplateHandler`, `InstantiateTemplateHandler`, `SnapshotFromListHandler`.
+- **9 handlers already fine** — mutually-exclusive branches (one commit per request) or the raw line ref pointed at a sibling route handler: `AlertInteractionHandler` (the "5-commit boss" turned out to be 5 methods behind 5 different routes), `PushSubscriptionHandler`, `PreferredBuyHandler`, `PriceObservationHandler`, `MoveStockItemHandler`, `CreateProductHandler`, `GetOnboardingStateHandler` route bodies, `GetSuggestionsHandler`, `LogWasteEventHandler`.
+- **General lesson:** trust the class scope, not the raw line refs, when auditing multi-commit shape. Every "misread" came from the same source — awk on line numbers doesn't respect Python class boundaries.
+
+### Batching (from the runbook)
+
+1. **Batch 1** — 7 trivial pattern-mirrors (all the template/set/list-copy creators). Ship in one PR.
+2. **Batch 2** — `NewRecipeVersionHandler` (structural mirror of CreateRecipe).
+3. **Batch 3** — `AutoGenerateHandler` + `SeedHandler` (moderate; one has a CRITICAL pending-insert-visibility watch-out).
+
+### Surprise finding — logged as [[FU-513]]
+
+**`GetSuggestionsHandler` performs writes inside a GET.** `dora_api/features/suggestions/suggestions.py` L109-110 removes expired snoozes + commits on every `GET /api/suggestions` request. Every dashboard load takes a write lock. Not FU-512's scope; opened as its own FU with four resolution options sketched.
+
+### Deliberately not shipped
+
+- Any code changes. Analysis-only per the user's request.
+- Execution of the runbook. That's the follow-up session.
+- Docstring cleanup on the 9 no-refactor handlers to defuse future drive-by greps. Optional; called out in the runbook's Batch 4.
+
+### Bookkeeping
+
+- **[[FU-512]]** in `DORA_FOLLOWUPS.md` updated with the runbook link + corrected inventory + batching. Still `[OPEN]` — analysis-only.
+- **[[FU-513]]** opened in `DORA_FOLLOWUPS.md`.
+- No `CHANGELOG.md` entry (no code change).
+- No `PROJECT_STATE.md` refresh (no state change beyond the two FU entries).
+- No `DORA_VERIFY.md` entry.
+
+### Engineering-standards close-gate
+
+Not applicable — no code touched. The runbook itself encodes R-003 / R-023 guidance for the executor.
+
+### Next up
+
+Whatever the user picks. If FU-512 execution comes next, the runbook is the source of truth — pick Batch 1 first.
+
+---
+
+## 2026-07-08 — FU-456 shipped: `create_recipe` is now a unit of work (5 commits → 1)
+
+**Why:** User asked to action FU-456. The FU had two clauses: (a) refactor `create_recipe.py` to a single commit, (b) sweep other multi-commit handlers "when this pattern is decided." Shipped (a) as the pattern-setter with a matching e2e-test contract; spun (b) off as a new FU with a runbook so it can be picked up as a focused sweep.
+
+### What shipped in `dora_api/features/recipes/create_recipe.py`
+
+- All 5 interior `save_changes()` calls (recipe / sections / tags / steps / step-images) collapsed to one commit at the end of the success path.
+- After `add(_NewRecipe)`, `self.repository.flush()` runs so the FK is visible to downstream Core-level inserts in the access helpers (`set_tag_ids_for_recipe`, `replace_sections_for_recipe`, `replace_steps_for_recipe`, `replace_step_images_for_recipe` — all execute directly against the session via `db.session.execute(insert(...))`). Autoflush would cover most of these anyway; the explicit flush documents intent and stays truthful under FK-enforced backends.
+- Every early-return `CreateRecipeResponse(invalid_*=...)` path drops `new_recipe_id`. Pre-refactor those returned the uuid4 of a *committed* partial recipe; post-refactor no row is committed on any error branch, so returning an id would be a lie. Router-side consumers already didn't read `new_recipe_id` from the error branches (verified by grep).
+- Error branches don't need an explicit `rollback()` — Flask-SQLAlchemy's teardown calls `session.remove()` (= rollback + close) on request end, and `auto_audit_after_request` skips 4xx responses (audit.py:239), so a dirty session on a 400 return can't accidentally get committed by the middleware.
+
+### What shipped in `tests/e2e/dora_api/test_create_recipe_unit_of_work.py` (new file, 3 tests)
+
+Pins the invariant that would have silently regressed pre-refactor:
+
+- **`test__create_recipe__invalid_dietary_tag__rolls_back_the_whole_recipe`** — bogus `dietary_tag_ids: [<random uuid>]` → 400, recipe list unchanged, no row by name. Pre-refactor the recipe would have committed at old-L295 before the tag branch tripped.
+- **`test__create_recipe__invalid_step_parent__rolls_back_the_whole_recipe`** — a section + a step with a `parent_client_id` that doesn't match any sibling step → 400, both roll back. Pre-refactor: recipe committed at old-L295 AND sections committed at old-L339 before the steps ValueError.
+- **`test__create_recipe__all_valid__commits_and_returns_the_id`** — golden-path smoke: 201, `recipe_id` returned, count +1.
+
+### Verification (full pytest run)
+
+`.venv/Scripts/python.exe -m pytest` → **828 passed, 2 failed**. Both failures pre-existing and unrelated:
+
+- `test__onboarding_seed_items__creates_prelocated_and_dedupes` fails with `TypeError: __init__() got an unexpected keyword argument 'image'` in `onboarding.py:513` (StockItem-schema drift; predates this change).
+- `test__import_template__csv_download__includes_hash_comment_row` — CSV import surface, pre-existing.
+
+Confirmed pre-existing by `git stash` + rerun on main: same two failures. Net effect of this unit: **+3 new tests, 0 regressions.**
+
+### Follow-up spun off
+
+- **[[FU-512]]** — Sweep of the ~20 other multi-commit handlers to the same shape. Reference implementation is now in place; each handler ships with a matching `test_*_unit_of_work.py`. Priority: 2-commit handlers first, `AlertInteractionHandler` (5 commits) last.
+
+### Deliberately not shipped
+
+- A `with self.repository.unit_of_work():` context-manager primitive. The one-commit-at-the-end pattern is small enough that an abstraction would be premature. If FU-512 finds the boilerplate tedious across 20 handlers, that's the moment.
+- Any change to the access helpers (`set_tag_ids_for_recipe` etc.). They're the R-003 single authority for their join tables; the refactor is scoped to the outer handler.
+- Rolling out to `AlertInteractionHandler`, `SeedHandler`, etc. in the same turn. Bounded scope keeps the review small and the change reversible.
+
+### Engineering-standards close-gate
+
+- **R-003** reinforced — partial-commit knowledge moves OUT of the handler and into the request-scoped session as the single unit-of-work owner.
+- No new ADR/rule promoted. The "one commit per handler" convention was already implicit (most handlers already do this — `create_recipe.py` was the outlier). Formalising it as `R-0NN` wants the FU-512 sweep first so the rule is universal, not aspirational.
+
+### Bookkeeping
+
+- **[[FU-456]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **[[FU-512]]** opened in `DORA_FOLLOWUPS.md` with the runbook + affected-file list.
+- **`CHANGELOG.md`** — new `### Changed` entry.
+- **`PROJECT_STATE.md`** — hand-edited row + regen date.
+- **`DORA_VERIFY.md`** — no new entry needed. The 3 new e2e tests exercise the whole invariant end-to-end; there's nothing browser-shaped to walk.
+
+### Next up
+
+Whatever the user picks. Related open: [[FU-512]] (the sweep this FU set the pattern for), [[FU-457]] (boot-time router assertion — the other FU-196 disassembly item still open).
+
+---
+
+## 2026-07-08 — FU-500 shipped: R-029 (hide, don't nag) app-wide sweep
+
+**Why:** User asked to action FU-500 — the inverse sweep of the retired FU-176. R-014 (reveal-and-disable) was walked back on 2026-07-06 by ADR-025 → R-029, but the app still carried R-014-shaped comments and one live workflow-surface offender (`MainLayout.vue`'s Product Search nav entry showing disabled-with-hint when the URL wasn't configured).
+
+### Findings
+
+Grepping `R-014` + `reveal-and-disable` across `web_app/src/` surfaced 18 hits across 14 files. Categorised:
+
+1. **One live workflow-surface offender** — `MainLayout.vue`'s Product Search nav entry.
+2. **Legitimate R-029 carve-outs** (the settings screen that *owns* the config) — 6 sites in `NotificationsSettings`, `AssistantSettings`, `VoiceSettings`, `useFeatureFlags.ts`, `usePushSubscription.ts`, `models/auth.ts`, `StockItemDetailPage.vue` (behaviour already correct).
+3. **Mislabelled R-014 references** — 8 sites where the comment referenced R-014 but the code wasn't a reveal-and-disable pattern at all (empty states, lifecycle helpers, state-hydration comments, swallow-error comments).
+
+### What shipped — behaviour changes
+
+- **`web_app/src/layouts/MainLayout.vue`** — Product Search nav entry: when `features.products` is on but `product_search_url` is unset, the entry now returns `null` (hidden). Removed the disabled + tooltip fallback and its unused `isAdmin` binding. Admins configure the URL on Settings → System → Features; nowhere else advertises the not-set-up state.
+- **`web_app/src/components/menu/menuButtonProps.ts`** — dropped `disabled?: boolean` + `disabledTooltip?: string` from `MenuButtonProps`. Enforces R-029 at the type level for the nav.
+- **`web_app/src/components/menu/MainMenuButton.vue`** + **`SideMenuButton.vue`** — deleted the `v-if="disabled"` render branches and their scoped-style blocks. The only consumer (Product Search) no longer needs them.
+
+### What shipped — comment relabels
+
+R-014 → R-029 (still a valid gating comment, just under the new rule id, with the carve-out framing made explicit):
+
+- `web_app/src/composables/useFeatureFlags.ts` (email + push flag docstrings)
+- `web_app/src/composables/usePushSubscription.ts`
+- `web_app/src/models/auth.ts` (`alerts_email_enabled` field comment)
+- `web_app/src/pages/settings/AssistantSettings.vue`, `NotificationsSettings.vue` (×2), `VoiceSettings.vue`
+- `web_app/src/pages/StockItemDetailPage.vue` (Barcodes section — behaviour was already `v-if`; only the label was stale)
+
+### What shipped — mislabelled R-014 tags removed
+
+These were never reveal-and-disable patterns; the R-014 label was cargo:
+
+- `useWakeLock.ts` — was a lifecycle note.
+- `SubstituteMetadataDialog.vue` — was a state-hydration note.
+- `StockItemRowPriceButton.vue` — was a swallow-errors note.
+- `DashboardPage.vue` (attention card, Dora-suggests, `.dora-empty-ok` style), `MealPlansOverview.vue` (empty-week banner), `MealPlanWeekDayCard.vue` (per-day add), `DoraScoreCard.vue` (waste-null case), `YourPricesWidget.vue` (below-MIN_SAMPLES) — all calm-empty-state patterns, now labelled with an explicit "distinct from R-029" note so the next reader doesn't re-conflate them.
+
+### What shipped — `docs/01_charter/ENGINEERING_STANDARDS.md`
+
+- **ADR-002** Consequences section gains an explicit **Presentation** line re-affirming hide-when-off + a "See also: R-029 / ADR-025" cross-reference. Closes the loop the FU asked for.
+
+### Sites deliberately left alone
+
+- **`NotificationsSettings.vue`, `AssistantSettings.vue`, `VoiceSettings.vue`, `AdminSystemEmailSettings.vue`, `AdminSystemPushSettings.vue`** — the R-029 carve-out list; they own the per-user opt-in / admin config, so their disabled controls legitimately render.
+- **`pages/settings/QrLabels.vue`** — renders an "ask an admin to enable scanning" banner when off, but the nav entry is already hidden, so the banner only appears via a stale bookmark. Not a nag surface.
+- **Meal-plan builder Email button (C-2.J)** — not yet built; `IMPL_PLAN_MEAL_PLANS.md` already specs hide-when-off, no flip needed.
+
+### Verification
+
+- `npx vue-tsc --noEmit` — no new TS errors introduced (only pre-existing `@capacitor/*` and `DashboardPage.vue CardId` errors, unrelated).
+- Not run: browser verify. Removing the disabled Product Search nav entry is behaviour: when Products is on but URL is unset, the nav item disappears instead of showing a tooltip. Logged in `DORA_VERIFY.md` under Cross-cutting.
+
+### Engineering-standards close-gate
+
+- **R-029 (hide, don't nag)** — this whole unit *is* R-029 enforcement. One workflow surface flipped from disabled-with-tooltip to hidden; all comment references audited and consistently labelled.
+- No rule violations introduced. No new ADR promoted — this is enforcement of an existing rule.
+
+### Bookkeeping
+
+- **[[FU-500]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **`CHANGELOG.md`** — new `### Changed` entry.
+- **`PROJECT_STATE.md`** — hand-edited "Recently shipped" row + regen date.
+- **`DORA_VERIFY.md`** — new "Product Search nav entry" check under Cross-cutting.
+
+### Next up
+
+Whatever the user picks. Related open items: [[FU-445]] (stale "no code yet" doc headers — batch cosmetic), [[FU-510]] (late-game hand-rolled-vs-library audit).
+
+---
+
+## 2026-07-08 — FU-504 shipped: raw `q-btn` sweep + `BaseButton` variant gap closed
+
+**Why:** User asked to do FU-504 (the FU-424 audit's residual — ~54 raw `<q-btn>` uses across 16 files, plus the one open design call on whether `BaseButton` should gain a variant for "unelevated coloured icon buttons" like the RecipeCard chef-hat). Dedicated sweep, not the opportunistic-per-touch resolution the FU originally proposed.
+
+### Design decision (baked into `BaseButton.vue`)
+
+Two extensions, together they retire the last "no variant fits" carve-outs:
+
+1. **New `filled-icon` variant** — `{ unelevated: true, round: true, dense: true, color: 'primary' }`. Picks up the same `min-width/min-height/border-radius: var(--radius-full)` block as `icon`/`danger-icon`.
+2. **New optional `color?` prop** — when set, spreads *over* the variant's default color. Lets `variant="icon"` and `variant="filled-icon"` carry a dynamic `:color=` binding (e.g. RecipeCard's chef-hat toggling primary/warning) without callers reaching for raw q-btn.
+
+Not added: an `accent`-palette variant or a Quasar-`secondary`-palette variant. Only 4 remaining sites want those, and each is a real design carve-out (Help "Meet D.O.R.A." accent CTA, timezone/locale settings outline-secondary buttons). Better to keep them explicitly documented than to widen `BaseButton`'s surface for a handful of one-offs.
+
+### What shipped (40 migrations across 16 files)
+
+- **`components/RecipeCard.vue`** — chef-hat → `variant="filled-icon"` + `:color="cookButtonColor"`. This was the marquee case behind the design decision.
+- **`components/ScanOverlay.vue`** — Submit btn → `ghost` + `color="white"`.
+- **`components/dora/DoraChat.vue`** — 13 migrated (header voice/help/close, in-message chip-action rows, mic + send, rotate-chips).
+- **`pages/MyProductsPage.vue`** — 17 migrated (bulk-select banner, empty-state CTA, list-row overflow menus, dialog action rows).
+- **Settings pages** — 8 migrated across `AdminDataBackupRestore` / `AdminDataImport` / `AdminSystemEmailSettings` / `AdminSystemPushSettings` / `ApiAccessSettings` / `UsersAdminSettings`. `AdminSystemEmailSettings` and `AdminSystemPushSettings` had no prior `BaseButton` import; added.
+
+### Kept raw as documented carve-outs (10 sites)
+
+All carry an inline HTML comment naming the reason:
+
+- `HelpPage.vue:11` — `color="accent"`, `HelpPage.vue:41` — `type="a"` anchor.
+- `RecipeCookMode.vue` — pause btn `color="warning"`.
+- `ShoppingListDetail.vue` — 2 sites, dynamic positive/warning/undefined outline.
+- `StocktakeRunner.vue` — labeled dynamic-color button with custom `runner-change-level` stacked children (not an icon shape).
+- `AdminDataBackupRestore.vue` — `color="grey"`; `AdminSystemLocaleSettings.vue` — `color="secondary"` outline (added matching carve-out comment during this sweep); `AdminSystemTimezoneSettings.vue` — `color="secondary"` outline.
+- `DoraChat.vue` — one external-link `type="a"` button.
+
+### Deliberately not shipped
+
+- No `accent` or Quasar-secondary-palette `BaseButton` variant. 4 sites don't earn a new variant; the explicit carve-out comments are the durable record.
+- No touch of any of the wrapper components themselves (`BaseButton.vue`'s own `<q-btn>`, `BaseDropdown.vue`, `BaseSegmented.vue`) — these are the wrappers, not consumers.
+- `q-btn-toggle` in `AdminSystemStockSettings.vue` + `AdminSystemStocktakeSettings.vue` — different primitive, out of scope, still CLEAN per the original audit.
+
+### Bookkeeping
+
+- **[[FU-504]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with the full "what shipped / kept raw" trail.
+- **`CHANGELOG.md`** — new `### Changed` entry under `[Unreleased]`.
+- **`PROJECT_STATE.md`** — hand-edited: the "Recently shipped" row picks up FU-504; the FU count in the dashboard drops by one.
+- **`DORA_VERIFY.md`** — new "Base-component sweep" section under "Cross-cutting". Sweep touched ~16 surfaces; nothing behavioural changed but the eye-check is cheap.
+
+### Verification
+
+- `npx vue-tsc --noEmit` — no new TS errors introduced (only pre-existing `@capacitor/*` and `DashboardPage.vue CardId` errors, unrelated to this sweep).
+- Not run: browser verify. The migrations are pure attribute-to-variant swaps; MyProductsPage's empty-state CTA went from raised `color="primary"` to unelevated primary (trivial visual delta, consistent with the rest of the app's primary CTAs). Logged in DORA_VERIFY.
+
+### Engineering-standards close-gate
+
+- **R-003 (componentisation-first)** — this whole unit *is* R-003 enforcement. 40 sites now use the wrapper instead of the raw primitive.
+- No rule violations introduced. No new ADR promoted — the `color`-prop-override + `filled-icon`-variant pattern is a natural extension of R-003, not a new decision worth codifying.
+
+### Next up
+
+- Whatever the user picks. Related open items: [[FU-500]] (R-029 hide-don't-nag sweep — another cross-cutting presentation pass), [[FU-445]] (stale "no code yet" doc headers — batch cosmetic).
+
+---
+
 ## 2026-07-07 — FU-350 shipped: import template `example` is now dict-keyed; module-load validation fails at boot on drift
 
 **Why:** User asked to fix FU-350 (post-FU-343 self-review had flagged that `ImportTemplate.example` was a positional tuple hand-crafted to match `TARGET_FIELDS` — a reorder or new field would silently misalign example cells under the wrong headers).

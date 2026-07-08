@@ -10,6 +10,98 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-457 — Boot-time resolved-route assertion for reflection-based wiring
+- **Resolved:** 2026-07-08 — **dissolved by construction.** The FU asked for a boot-time assertion that would catch failures in reflection-based handler-wiring; the underlying reflection was deleted instead. `service_wiring.py` (`get_classes_ending_with('handler', ...)` reflection) and `dependency_container.py` are gone; the `DependencyContainer` was replaced with explicit constructor injection typed against a `Repository` Protocol in `dora_api/infrastructure/ports.py`. No handler-wiring reflection surface remains to protect. See [[R-031]] + [[ADR-027]] in `ENGINEERING_STANDARDS.md`.
+- **Note on the router-discovery half:** the FU originally cited *two* reflection surfaces — handler-wiring in `service_wiring.py` (deleted) and router-discovery in `startup.py` (`get_attributes_ending_with('router', ...)`, still present). The router-discovery reflection is a smaller, tighter surface: 40-odd blueprints, all present at boot, no dependency graph. If a broken-import router silently misses registration and starts causing 404s, reopen a focused FU for a `register_routers()` post-condition assertion — but do not carry FU-457 open on that basis; the original umbrella was 95% handler-wiring.
+- **Type:** finding / hardening (resolved by removal, not by the originally-proposed assertion).
+- **Original:**
+  - **Raised:** 2026-07-03 (FU-196 umbrella disassembly — item (c)).
+  - **Type:** finding / hardening.
+  - **What:** [`startup.py:135`](dora_api/startup.py) uses `get_attributes_ending_with('router', ...)` to auto-register blueprints; `service_wiring.py:17` and `decorators.py:13` also do reflection-based wiring. If a router file has a broken import or is renamed, the failure surfaces at the first request (opaque 404), not at boot. Add a boot-time assertion that (a) every discovered `*_ROUTER` was successfully registered on `app.url_map` (compare expected vs `app.url_map.iter_rules()`), (b) every `@has_request_body`-decorated handler has a registered URL rule. Fail-fast → operator sees the misconfiguration on `flask run`, not on the first 404.
+  - **Why deferred:** Tier-2 hardening; current failure mode is a 404 which is diagnosable, just not obvious.
+  - **Recommended resolution:** opportunistic — small (30-line assertion in `startup.py` after `register_routers()`), useful the first time a router silently breaks.
+
+---
+
+## [RESOLVED] FU-456 — Unit-of-work refactor for multi-commit handlers (starting with `create_recipe.py`)
+- **Resolved:** 2026-07-08 — pattern-setter shipped on `create_recipe.py` (5 commits → 1). Sweep of the other ~20 multi-commit handlers spun off as [[FU-512]] so this FU stays focused on the reference implementation. Under the FU's own framing this closes the "starting with `create_recipe.py`" clause; the FU-512 follow-up carries the "sweep other multi-commit handlers when this pattern is decided" clause.
+- **What shipped in `dora_api/features/recipes/create_recipe.py`:**
+  - Every interior `save_changes()` deleted (L295 / L339 / L354 / L384 / L401 in the pre-refactor file). One `save_changes()` remains at the very end of the success path.
+  - After `add(_NewRecipe)`, `self.repository.flush()` runs so downstream Core-level inserts (tags / tools / sections / steps / step images — all reach the DB via `db.session.execute(...)` in their access helpers) can reference the recipe row's FK without tripping on it. Autoflush would have covered most of these anyway but the explicit flush documents intent and stays truthful under FK-enforced backends (Postgres always; SQLite when `PRAGMA foreign_keys=ON`).
+  - Every early-return `CreateRecipeResponse(invalid_*=...)` path drops `new_recipe_id`. Pre-refactor those error responses returned the uuid4 of a *committed* row — a partial recipe with the sub-part missing. After the refactor no row is committed on any error path, so the id would name a row that doesn't exist. Callers already didn't consume `new_recipe_id` on the error branches (router just translates the message → 400), verified by grep.
+  - Error branches rely on Flask-SQLAlchemy's teardown to `session.remove()` = rollback. `auto_audit_after_request` middleware skips 4xx responses (verified `audit.py:239`) so it can't accidentally commit dirty state. FU-196's belt-and-braces `db.session.rollback()` in the global handler still runs on unhandled exceptions.
+- **What shipped in `tests/e2e/dora_api/test_create_recipe_unit_of_work.py`** (new file, 3 tests):
+  - `test__create_recipe__invalid_dietary_tag__rolls_back_the_whole_recipe` — POSTs with a bogus `dietary_tag_ids: [<random uuid>]`; asserts the response is 400 AND the recipe list count is unchanged AND no row with that name exists. Pre-refactor the recipe row would have committed at L295 before the tag branch tripped; the invariant would have failed.
+  - `test__create_recipe__invalid_step_parent__rolls_back_the_whole_recipe` — POSTs with a section + a step whose `parent_client_id` doesn't match any sibling step (triggers `raise ValueError` in `_validate_parent_shape`). Asserts the recipe + its sections all roll back. Pre-refactor the recipe committed at L295 and the sections committed at L339 before the steps branch tripped.
+  - `test__create_recipe__all_valid__commits_and_returns_the_id` — golden path smoke: one successful commit at the end, `recipe_id` returned, count +1.
+- **Verification (full run):** `.venv/Scripts/python.exe -m pytest` → **828 passed, 2 failed** — both failures pre-existing (confirmed by `git stash` + rerun on main: same two failures). `test__onboarding_seed_items__creates_prelocated_and_dedupes` fails on a `TypeError: __init__() got an unexpected keyword argument 'image'` in `onboarding.py:513` (unrelated StockItem-drift); `test__import_template__csv_download__includes_hash_comment_row` also pre-existing. Neither is in the create_recipe blast radius. **+3 new passing tests, 0 regressions.**
+- **Deliberately not shipped:**
+  - The sweep of the other ~20 multi-commit handlers. Spun off as [[FU-512]] with the runbook + reference implementation named.
+  - A unit-of-work primitive / context-manager (`with self.repository.unit_of_work():`). The one-commit-at-the-end pattern is small enough that abstraction would be premature; if 5+ handlers pick up the same shape and the boilerplate gets tedious, that's the moment. Not yet.
+  - Ripping out `set_tag_ids_for_recipe` / `set_tool_ids_for_recipe` etc. and inlining. These access helpers survived the refactor unchanged; they're still the right R-003 single-authority for their join tables, and each handles its own delete-then-insert against a single table.
+- **Engineering standards close-gate:**
+  - **R-003** (single authority) — reinforced; the change moves partial-commit knowledge OUT of individual handlers and into the request-scoped session as the single unit-of-work owner.
+  - No new ADR/rule promoted. The "one commit per handler" convention was already implicit in the codebase (most handlers already do this — `create_recipe.py` was the outlier). Formalising it as a rule wants the full FU-512 sweep first so the standing pattern is universal, not aspirational.
+- **Cross-ref:** [[FU-196]] (rollback safety net that made this refactor safe) — resolved 2026-07-03. [[FU-512]] (sweep of remaining multi-commit handlers) — opened 2026-07-08.
+
+## [RESOLVED] FU-500 — Apply R-029 (hide, don't nag) app-wide — inverse sweep of the retired FU-176
+- **Resolved:** 2026-07-08 — focused sweep. Only one live workflow-surface offender was found (`MainLayout.vue` Product Search nav entry); flipped to hide. Nine `R-014` comment references relabelled to R-029 or removed depending on whether the site was still a genuine carve-out or had been mislabelled. `MenuButtonProps` shed its now-dead `disabled` / `disabledTooltip` fields and both menu-button components lost the disabled render branch. ADR-002's presentation stance updated in `ENGINEERING_STANDARDS.md` to explicitly re-confirm hide-when-off as the whole story.
+- **What shipped — behaviour changes:**
+  - **`web_app/src/layouts/MainLayout.vue`** — Product Search nav entry: when `features.products` is on but `product_search_url` is unset, the entry now returns `null` (hidden) instead of a `disabled + disabledTooltip` shape. Admins configure it on Settings → System → Features; nowhere else advertises the not-set-up state. Removed the unused `isAdmin` binding while touching the file.
+  - **`web_app/src/components/menu/menuButtonProps.ts`** — dropped the `disabled?: boolean` + `disabledTooltip?: string` fields from the `MenuButtonProps` interface. Enforces R-029 at the type level — no future nav entry can carry a "here but disabled" shape.
+  - **`web_app/src/components/menu/MainMenuButton.vue`** — deleted the `v-if="disabled"` render branch + the associated `.dora-mainMenuButton-disabled` scoped-style block.
+  - **`web_app/src/components/menu/SideMenuButton.vue`** — same: deleted the `v-if="disabled"` render branch + `.dora-sideMenuButton-disabled` style.
+- **What shipped — comment relabels (no behavioural change):**
+  - **`useFeatureFlags.ts`** (both `emailSmtpConfigured` and `pushVapidConfigured` comments) — R-014 → R-029, wording clarified to name `NotificationsSettings` as the sole legitimate carve-out screen.
+  - **`usePushSubscription.ts`** — R-014 → R-029 with the same carve-out framing.
+  - **`models/auth.ts`** (`alerts_email_enabled` field comment) — R-014 → R-029; explicit that no other surface should reference the field as a disabled affordance.
+  - **`AssistantSettings.vue`** — R-014 → R-029, marked as the assistant's own settings-screen carve-out.
+  - **`NotificationsSettings.vue`** (both the email-digest and push section headers) — R-014 → R-029 carve-out.
+  - **`VoiceSettings.vue`** (Piper-engine disabled option) — R-014 → R-029 voice-settings-screen carve-out.
+  - **`StockItemDetailPage.vue`** (Barcodes section comment) — R-014 → R-029; behaviour was already `v-if="scanningEnabled"` (hidden when off), only the label was stale.
+- **What shipped — mislabelled-R-014 tags removed** (these were never reveal-and-disable patterns; the R-014 label was cargo):
+  - **`useWakeLock.ts`** — the "call from `setup()`; release on unmount" note was about lifecycle, not gating.
+  - **`SubstituteMetadataDialog.vue`** — the drafts-rehydration comment was about state, not gating.
+  - **`StockItemRowPriceButton.vue`** — the "silent — form still works without prefill" note was a swallow-errors comment, not gating.
+  - **`DashboardPage.vue`** (three sites: attention card empty state, Dora-suggests empty state, `.dora-empty-ok` style comment) — all calm-empty-state, distinct pattern; relabelled with explicit "distinct from R-029" note.
+  - **`MealPlansOverview.vue`** (empty-week banner) — same calm-empty-state relabel.
+  - **`MealPlanWeekDayCard.vue`** (per-day add affordance) — same.
+  - **`DoraScoreCard.vue`** (waste-action-null case) — same.
+  - **`YourPricesWidget.vue`** (below-`MIN_SAMPLES` empty state) — same.
+- **What shipped — `ENGINEERING_STANDARDS.md`:**
+  - **ADR-002 Consequences section** — added an explicit "**Presentation:** when the flag is off, entry points **hide** — this is the R-029 rule (ADR-025). The 2026-06-14 ADR-009 / R-014 'reveal-and-disable' detour that partially revisited this presentation was walked back on 2026-07-06; ADR-002's original hide-when-off is the whole story again." + a new "See also: R-029 / ADR-025" line. Closes the loop the FU asked for.
+- **Sites deliberately not touched** (already correct or genuine R-029 carve-outs — flagged for the reviewer):
+  - `NotificationsSettings.vue` (email + push toggles), `AssistantSettings.vue`, `VoiceSettings.vue`, `AdminSystemEmailSettings.vue`, `AdminSystemPushSettings.vue` — all are the config-owning screen R-029 explicitly carves out.
+  - `pages/settings/QrLabels.vue` — when scanning is off it renders an "ask an admin" banner, but only via a stale-bookmark path (the nav entry is already hidden). Leaving as-is; not a nag surface.
+  - **Meal-plan builder Email button (C-2.J)** — hasn't been built yet; `IMPL_PLAN_MEAL_PLANS.md` already specs it hide-when-off. Nothing to flip today.
+- **Verification:** `npx vue-tsc --noEmit` — no new errors introduced (only pre-existing `@capacitor/*` module-not-found + `DashboardPage.vue CardId` errors, unrelated).
+- **Follow-ups spun off:** none. Every R-014 reference in the SPA has been relabelled or removed; the rule's audit-trail entry in the standards doc is preserved.
+- **Cross-ref:** ADR-025 / R-029 (the rule this FU enforces); superseded ADR-009 / R-014 (the rule this FU inverts). Retired FU-176 was the *inverse* sweep that first added R-014-shaped disabled affordances — this FU walked those back.
+
+## [RESOLVED] FU-504 — Base-component adoption residuals (~54 raw `q-btn` uses across 16 files + one `BaseButton` variant gap)
+- **Resolved:** 2026-07-08 — dedicated sweep rather than opportunistic per-touch. 40 raw q-btns migrated to `<BaseButton>` across 16 files; 10 kept raw as documented carve-outs.
+- **Design decision:** `BaseButton` gains a new **`filled-icon`** variant (`{ unelevated, round, dense, color: 'primary' }`) plus an **optional `color` prop** that overrides the variant's default color. Together these cover the "unelevated coloured icon button" shape (e.g. `RecipeCard` chef-hat toggling primary/warning) without callers reaching for raw q-btn.
+- **What shipped in `web_app/src/components/BaseButton.vue`:**
+  - New `filled-icon` variant added to the `Variant` union + switch.
+  - New optional `color?: string | undefined` prop. When set, spreads over the variant's base color — so `variant="icon"` + `:color="dynamic"` and `variant="filled-icon"` + `:color="dynamic"` both work.
+  - `.dora-btn--filled-icon` picks up the same `min-width/min-height/border-radius: var(--radius-full)` block as the existing icon variants.
+- **What shipped in the SPA sweep (40 migrations):**
+  - `components/RecipeCard.vue` — chef-hat → `filled-icon` with dynamic `:color="cookButtonColor"`.
+  - `components/ScanOverlay.vue` — Submit → `ghost` + `color="white"`.
+  - `components/dora/DoraChat.vue` — 13 migrated (header voice/help/close, chip/action buttons, mic, send, rotate-chips).
+  - `pages/MyProductsPage.vue` — 17 migrated (bulk-select toolbar row, empty-state CTA, list-row overflow menus, dialog action rows).
+  - `pages/settings/AdminDataBackupRestore.vue`, `AdminDataImport.vue`, `AdminSystemEmailSettings.vue` (×2, + import added), `AdminSystemPushSettings.vue` (×2, + import added), `ApiAccessSettings.vue`, `UsersAdminSettings.vue` — 8 migrated.
+- **Kept raw as documented carve-outs (10 sites):** all now carry an inline `<!-- ambiguous ... -->` or `<!-- carve-out — raw q-btn: ... -->` comment naming the reason.
+  - `HelpPage.vue:11` (`color="accent"` — Quasar palette no variant exposes), `HelpPage.vue:41` (`type="a"` anchor).
+  - `RecipeCookMode.vue` — pause btn with `color="warning"`.
+  - `ShoppingListDetail.vue` — 2 sites with dynamic positive/warning/undefined outline.
+  - `StocktakeRunner.vue` — labeled dynamic-color button with custom `runner-change-level` stacked children (labeled, not an icon shape).
+  - `AdminDataBackupRestore.vue` (`color="grey"`), `AdminSystemLocaleSettings.vue` (`color="secondary"` Quasar palette + outline — added matching carve-out comment), `AdminSystemTimezoneSettings.vue` (`color="secondary"` Quasar palette + outline).
+  - `DoraChat.vue` — one external-link `type="a"` btn kept raw.
+- **Verification:** `npx vue-tsc --noEmit` — no new errors introduced (only pre-existing `@capacitor/*` and `DashboardPage.vue CardId` errors, unrelated).
+- **Follow-ups spun off:** none. The remaining 10 raw q-btns are all defensible; a future `accent`-palette or Quasar-secondary-palette variant would only make sense if the count grows.
+- **Cross-ref:** [[FU-424]] (senior-review audit that produced this).
+
 ## [RESOLVED] FU-350 — Import templates: example is now dict-keyed + boot-fails on drift
 - **Resolved:** 2026-07-07 — shipped as the FU recommended, with all three assertions the FU asked for + one it didn't (duplicate-section check).
 - **What shipped in `dora_api/features/data/import_spreadsheet.py`:**

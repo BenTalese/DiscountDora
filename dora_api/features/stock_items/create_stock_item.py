@@ -19,10 +19,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created,
                                                   entity_existence_failure)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import (field_of, get_request_body)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateStockItemRequest(BaseModel):
@@ -47,8 +47,8 @@ class CreateStockItemResponse:
 
 
 class CreateStockItemHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateStockItemRequest) -> CreateStockItemResponse:
         _StockLevel = self.repository.get(StockLevel).by_id(request.stock_level_id)
@@ -134,7 +134,7 @@ class CreateStockItemHandler:
 def create_stock_item():
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to create stock item.")
-    _Handler = get_container().inject(CreateStockItemHandler)
+    _Handler = CreateStockItemHandler(SqlAlchemyRepository())
     _Request: CreateStockItemRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
@@ -163,7 +163,7 @@ def create_stock_item():
 
     _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id}")
     from dora_api.features.stock_items.get_stock_items import GetStockItemsHandler
-    _Dto = get_container().inject(GetStockItemsHandler).handle_by_id(
+    _Dto = GetStockItemsHandler(SqlAlchemyRepository()).handle_by_id(
         _Response.new_stock_item_id
     )
     return created(

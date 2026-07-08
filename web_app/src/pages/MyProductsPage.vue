@@ -56,24 +56,21 @@
             </span>
             <template #action>
                 <template v-if="!bulkMode">
-                    <q-btn
-                        flat
-                        no-caps
+                    <BaseButton
+                        variant="ghost"
                         :icon="ICONS.checklist"
                         label="Select"
                         @click="enterBulkMode"
                     />
                 </template>
                 <template v-else>
-                    <q-btn
-                        flat
-                        no-caps
+                    <BaseButton
+                        variant="ghost"
                         label="Select all visible"
                         @click="selectAllVisible"
                     />
-                    <q-btn
-                        flat
-                        no-caps
+                    <BaseButton
+                        variant="ghost"
                         label="Select on-deal"
                         @click="selectOnDealVisible"
                     >
@@ -82,36 +79,33 @@
                             special — a shortcut for bulk actions like adding all
                             deals to your primary list.
                         </q-tooltip>
-                    </q-btn>
-                    <q-btn
-                        flat
-                        no-caps
+                    </BaseButton>
+                    <BaseButton
+                        variant="ghost"
+                        color="primary"
                         :icon="ICONS.add_shopping_cart"
                         :label="`Add ${onDealSelectedCount} on-deal to list`"
-                        color="primary"
                         :disable="onDealSelectedCount === 0"
                         :loading="bulkBusy"
                         @click="onBulkAddOnDeal"
                     />
-                    <q-btn
-                        flat
-                        no-caps
+                    <BaseButton
+                        variant="ghost"
                         :icon="ICONS.link_off"
                         label="Unlink"
                         :disable="selectedIds.size === 0"
                         :loading="bulkBusy"
                         @click="onBulkUnlink"
                     />
-                    <q-btn
-                        flat
-                        no-caps
+                    <BaseButton
+                        variant="ghost"
                         :icon="ICONS.visibility_off"
                         label="Mark inactive"
                         :disable="selectedIds.size === 0"
                         :loading="bulkBusy"
                         @click="onBulkInactive"
                     />
-                    <q-btn flat no-caps label="Done" @click="exitBulkMode" />
+                    <BaseButton variant="ghost" label="Done" @click="exitBulkMode" />
                 </template>
             </template>
         </q-banner>
@@ -181,19 +175,17 @@
                 save deals.
             </div>
             <div v-else>No products match the current filters.</div>
-            <q-btn
+            <BaseButton
                 v-if="products.length === 0"
-                color="primary"
-                no-caps
+                variant="primary"
                 :icon="ICONS.search"
                 label="Open Product Search"
                 class="q-mt-md"
                 to="/product-search"
             />
-            <q-btn
+            <BaseButton
                 v-else-if="hasAnyFilter"
-                flat
-                no-caps
+                variant="ghost"
                 color="primary"
                 label="Clear filters"
                 class="q-mt-md"
@@ -324,11 +316,10 @@
 
                     <q-separator />
                     <q-card-actions align="right" class="q-py-sm">
-                        <q-btn
+                        <BaseButton
                             v-if="product.web_url"
-                            flat
+                            variant="ghost"
                             dense
-                            no-caps
                             :icon="ICONS.open_in_new"
                             :href="product.web_url"
                             target="_blank"
@@ -336,7 +327,7 @@
                             @click.stop
                         >
                             <q-tooltip>Open at store</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                         <!-- adopted AddToListButton row variant with
                              `selected-product-id` so this carries the same
                              cart-state UX (popover on 2+ lists, smart-remove
@@ -359,7 +350,7 @@
                             @click.stop
                         />
 
-                        <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
+                        <BaseButton variant="icon" :icon="ICONS.more_vert" @click.stop>
                             <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
                                     <q-item
@@ -415,7 +406,7 @@
                                     </q-item>
                                 </q-list>
                             </q-menu>
-                        </q-btn>
+                        </BaseButton>
                     </q-card-actions>
                 </q-card>
             </div>
@@ -445,11 +436,9 @@
                     />
                 </q-card-section>
                 <template #actions>
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Add"
                         :loading="bulkBusy"
                         :disable="!bulkAddTargetListId"
@@ -499,25 +488,21 @@
                             </q-item-section>
                             <q-item-section side>
                                 <div class="row q-gutter-xs">
-                                    <q-btn
-                                        flat
-                                        round
-                                        dense
-                                        :icon="ICONS.search"
+                                    <BaseButton
+                                        variant="icon"
                                         color="primary"
+                                        :icon="ICONS.search"
                                         @click="searchForOrphan(item)"
                                     >
                                         <q-tooltip>Find a product</q-tooltip>
-                                    </q-btn>
-                                    <q-btn
-                                        flat
-                                        round
-                                        dense
+                                    </BaseButton>
+                                    <BaseButton
+                                        variant="icon"
                                         :icon="ICONS.open_in_new"
                                         @click="goToStockItem(item.stock_item_id)"
                                     >
                                         <q-tooltip>Open stock item</q-tooltip>
-                                    </q-btn>
+                                    </BaseButton>
                                 </div>
                             </q-item-section>
                         </q-item>
@@ -548,11 +533,9 @@
                     />
                 </q-card-section>
                 <template #actions>
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Link"
                         :loading="linkBusy"
                         :disable="!linkChoiceStockItemId"

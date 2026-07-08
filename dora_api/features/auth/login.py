@@ -16,9 +16,10 @@ from dora_api.infrastructure.auth_helpers import (
     rate_limit, rate_limit_remaining_seconds,
 )
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class LoginRequest(BaseModel):
@@ -34,8 +35,8 @@ class LoginResponse:
 
 
 class LoginHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: LoginRequest) -> LoginResponse:
         _UsernameField = EntityField(User, User.Fields.USERNAME)
@@ -65,7 +66,7 @@ def login():
             max(1, rate_limit_remaining_seconds("auth.login", 5)),
         )
         return response
-    _Handler = get_container().inject(LoginHandler)
+    _Handler = LoginHandler(SqlAlchemyRepository())
     _Request: LoginRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 

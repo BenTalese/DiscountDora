@@ -31,8 +31,9 @@ from dora_api.features.shopping_lists.shopping_list_attachment_access import (
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _DATA_URL_RE = _re.compile(
@@ -59,8 +60,8 @@ class AddShoppingListAttachmentResponse:
 
 
 class AddShoppingListAttachmentHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -93,9 +94,9 @@ class AddShoppingListAttachmentHandler:
 def add_shopping_list_attachment(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: AddShoppingListAttachmentRequest = get_request_body()
-    _Response = get_container().inject(
-        AddShoppingListAttachmentHandler
-    ).handle(_Request, shopping_list_id)
+    _Response = AddShoppingListAttachmentHandler(SqlAlchemyRepository()).handle(
+        _Request, shopping_list_id,
+    )
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
     if _Response.draft_rejected:
@@ -120,8 +121,8 @@ class DeleteShoppingListAttachmentResponse:
 
 
 class DeleteShoppingListAttachmentHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self, shopping_list_id: UUID, attachment_id: UUID,
@@ -145,9 +146,9 @@ def delete_shopping_list_attachment(
     shopping_list_id: UUID, attachment_id: UUID,
 ):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(
-        DeleteShoppingListAttachmentHandler
-    ).handle(UUID(str(shopping_list_id)), UUID(str(attachment_id)))
+    _Response = DeleteShoppingListAttachmentHandler(SqlAlchemyRepository()).handle(
+        UUID(str(shopping_list_id)), UUID(str(attachment_id)),
+    )
     if _Response.not_found:
         return not_found("ShoppingListAttachment", attachment_id)
     _Logger.info(

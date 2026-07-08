@@ -8,9 +8,6 @@ from typing import Any, List
 
 from pydantic import BaseModel
 
-from dora_api.infrastructure.dependency_container import DependencyContainer
-
-
 def apply_exclusion_filter(collection: List[str], exclusion_patterns: List[str]) -> None:
     '''
     Summary
@@ -105,12 +102,3 @@ def get_request_body() -> Any:
     return getattr(request, 'request_body', None)
 
 
-def get_container() -> DependencyContainer:
-    '''
-    Retrieves the dependency container from the current Flask application context.
-
-    Returns:
-        The dependency container instance, or None if not found.
-    '''
-    from flask import current_app
-    return getattr(current_app, 'container')

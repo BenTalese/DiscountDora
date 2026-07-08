@@ -8,7 +8,6 @@ normalisation drift can't silently split what the user sees as one
 group.
 """
 from types import SimpleNamespace
-from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -60,8 +59,6 @@ def _row(raw_text: str, recipe_id: UUID) -> SimpleNamespace:
 @pytest.mark.unit
 class TestGroupUnlinkedIngredients:
     def _run_with_rows(self, rows) -> UnlinkedIngredientsDto:
-        handler = GetUnlinkedIngredientsHandler()
-
         class _StubBuilder:
             def all(self, condition=None):
                 return rows
@@ -70,8 +67,8 @@ class TestGroupUnlinkedIngredients:
             def get(self, entity_type):
                 return _StubBuilder()
 
-        with patch.object(handler, "repository", _StubRepo()):
-            return handler.handle()
+        # Constructor injection — no patch.object needed.
+        return GetUnlinkedIngredientsHandler(_StubRepo()).handle()
 
     def test__groups_by_normalised_raw_text(self):
         recipe_a, recipe_b = uuid4(), uuid4()

@@ -32,9 +32,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── DTOs ──────────────────────────────────────────────────────────────
@@ -69,8 +70,8 @@ class TemplateDetailDto:
 # ───── List summaries ────────────────────────────────────────────────────
 
 class GetTemplatesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[TemplateSummaryDto]:
         templates: List[ShoppingListTemplate] = self.repository.get(ShoppingListTemplate).all()
@@ -99,7 +100,7 @@ class GetTemplatesHandler:
 @SHOPPING_LIST_TEMPLATE_ROUTER.route("", methods=["GET"])
 def get_templates():
     _Logger = logging.getLogger(__name__)
-    _Result = get_container().inject(GetTemplatesHandler).handle()
+    _Result = GetTemplatesHandler(SqlAlchemyRepository()).handle()
     _Logger.debug("Returned %d template summaries", len(_Result))
     return ok(_Result)
 
@@ -107,8 +108,8 @@ def get_templates():
 # ───── Get detail ────────────────────────────────────────────────────────
 
 class GetTemplateDetailHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID) -> TemplateDetailDto | None:
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -151,7 +152,7 @@ class GetTemplateDetailHandler:
 
 @SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>", methods=["GET"])
 def get_template_detail(template_id: UUID):
-    _Result = get_container().inject(GetTemplateDetailHandler).handle(template_id)
+    _Result = GetTemplateDetailHandler(SqlAlchemyRepository()).handle(template_id)
     if _Result is None:
         return not_found("ShoppingListTemplate", template_id)
     return ok(_Result)
@@ -177,8 +178,8 @@ class CreateTemplateResponse:
 
 
 class CreateTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateTemplateRequest) -> CreateTemplateResponse:
         now = datetime.now(timezone.utc)
@@ -209,7 +210,7 @@ class CreateTemplateHandler:
 def create_template():
     _Logger = logging.getLogger(__name__)
     _Request: CreateTemplateRequest = get_request_body()
-    _Response = get_container().inject(CreateTemplateHandler).handle(_Request)
+    _Response = CreateTemplateHandler(SqlAlchemyRepository()).handle(_Request)
     _Logger.info(
         f"Created template {_Response.template_id} '{_Request.name}' with {len(_Request.lines)} line(s)"
     )
@@ -234,8 +235,8 @@ class UpdateTemplateResponse:
 
 
 class UpdateTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateTemplateRequest, template_id: UUID) -> UpdateTemplateResponse:
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -253,7 +254,7 @@ class UpdateTemplateHandler:
 def update_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateTemplateRequest = get_request_body()
-    _Response = get_container().inject(UpdateTemplateHandler).handle(_Request, template_id)
+    _Response = UpdateTemplateHandler(SqlAlchemyRepository()).handle(_Request, template_id)
     if _Response.not_found:
         return not_found("ShoppingListTemplate", template_id)
     _Logger.info(f"Updated template {template_id}")
@@ -268,8 +269,8 @@ class DeleteTemplateResponse:
 
 
 class DeleteTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID) -> DeleteTemplateResponse:
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -283,7 +284,7 @@ class DeleteTemplateHandler:
 @SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>", methods=["DELETE"])
 def delete_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteTemplateHandler).handle(template_id)
+    _Response = DeleteTemplateHandler(SqlAlchemyRepository()).handle(template_id)
     if _Response.not_found:
         return not_found("ShoppingListTemplate", template_id)
     _Logger.info(f"Deleted template {template_id}")
@@ -307,8 +308,8 @@ class AddTemplateLineResponse:
 
 
 class AddTemplateLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: AddTemplateLineRequest, template_id: UUID) -> AddTemplateLineResponse:
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -347,7 +348,7 @@ class AddTemplateLineHandler:
 def add_template_line(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: AddTemplateLineRequest = get_request_body()
-    _Response = get_container().inject(AddTemplateLineHandler).handle(_Request, template_id)
+    _Response = AddTemplateLineHandler(SqlAlchemyRepository()).handle(_Request, template_id)
     if _Response.template_not_found:
         return not_found("ShoppingListTemplate", template_id)
     if _Response.item_not_found:
@@ -367,8 +368,8 @@ class DeleteTemplateLineResponse:
 
 
 class DeleteTemplateLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID, line_id: UUID) -> DeleteTemplateLineResponse:
         line: ShoppingListTemplateLine | None = self.repository.get(ShoppingListTemplateLine).by_id(line_id)
@@ -386,7 +387,7 @@ class DeleteTemplateLineHandler:
 @SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>/lines/<line_id>", methods=["DELETE"])
 def delete_template_line(template_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteTemplateLineHandler).handle(template_id, line_id)
+    _Response = DeleteTemplateLineHandler(SqlAlchemyRepository()).handle(template_id, line_id)
     if _Response.not_found:
         return not_found("ShoppingListTemplateLine", line_id)
     _Logger.info(f"Deleted template line {line_id} from template {template_id}")
@@ -406,8 +407,8 @@ class UpdateTemplateLineResponse:
 
 
 class UpdateTemplateLineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -434,7 +435,7 @@ class UpdateTemplateLineHandler:
 def update_template_line(template_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateTemplateLineRequest = get_request_body()
-    _Response = get_container().inject(UpdateTemplateLineHandler).handle(
+    _Response = UpdateTemplateLineHandler(SqlAlchemyRepository()).handle(
         _Request, template_id, line_id,
     )
     if _Response.not_found:
@@ -467,8 +468,8 @@ class InstantiateTemplateHandler:
     docstring for the reasoning.
     """
 
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: InstantiateTemplateRequest, template_id: UUID) -> InstantiateTemplateResponse:
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -518,7 +519,7 @@ class InstantiateTemplateHandler:
 def instantiate_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: InstantiateTemplateRequest = get_request_body()
-    _Response = get_container().inject(InstantiateTemplateHandler).handle(_Request, template_id)
+    _Response = InstantiateTemplateHandler(SqlAlchemyRepository()).handle(_Request, template_id)
     if _Response.not_found:
         return not_found("ShoppingListTemplate", template_id)
     _Logger.info(
@@ -550,8 +551,8 @@ class SnapshotResponse:
 
 
 class SnapshotFromListHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: SnapshotRequest, source_list_id: UUID) -> SnapshotResponse:
         source: ShoppingList | None = self.repository.get(ShoppingList).by_id(source_list_id)
@@ -593,7 +594,7 @@ class SnapshotFromListHandler:
 def snapshot_from_list(source_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: SnapshotRequest = get_request_body()
-    _Response = get_container().inject(SnapshotFromListHandler).handle(_Request, source_list_id)
+    _Response = SnapshotFromListHandler(SqlAlchemyRepository()).handle(_Request, source_list_id)
     if _Response.source_not_found:
         return not_found("ShoppingList", source_list_id)
     _Logger.info(

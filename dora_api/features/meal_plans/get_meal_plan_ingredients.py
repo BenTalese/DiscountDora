@@ -11,9 +11,10 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,8 +78,8 @@ def aggregate_meal_plan_ingredients(
 
 
 class GetMealPlanIngredientsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, meal_plan_id: UUID) -> List[MealPlanIngredientDto] | None:
         _Plan = (
@@ -106,7 +107,7 @@ class GetMealPlanIngredientsHandler:
 @MEAL_PLAN_ROUTER.route("<meal_plan_id>/ingredients")
 def get_meal_plan_ingredients(meal_plan_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(GetMealPlanIngredientsHandler)
+    _Handler = GetMealPlanIngredientsHandler(SqlAlchemyRepository())
     _Result = _Handler.handle(meal_plan_id)
     if _Result is None:
         return not_found(MealPlan.__name__, meal_plan_id)
@@ -128,8 +129,8 @@ class PreviewIngredientsRequest(BaseModel):
 
 
 class PreviewIngredientsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: PreviewIngredientsRequest) -> List[MealPlanIngredientDto]:
         recipe_id_to_servings: dict[UUID, int] = {}
@@ -142,5 +143,5 @@ class PreviewIngredientsHandler:
 @has_request_body(PreviewIngredientsRequest)
 def preview_meal_plan_ingredients():
     _Request: PreviewIngredientsRequest = get_request_body()
-    _Result = get_container().inject(PreviewIngredientsHandler).handle(_Request)
+    _Result = PreviewIngredientsHandler(SqlAlchemyRepository()).handle(_Request)
     return ok(_Result)

@@ -15,9 +15,10 @@ from dora_api.features.products.get_products import get_products
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, created
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateProductRequest(BaseModel):
@@ -62,8 +63,8 @@ class CreateProductResponse:
 
 
 class CreateProductHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
         _StoreName = EntityField(Store, Store.Fields.NAME)
@@ -149,7 +150,7 @@ class CreateProductHandler:
 @has_request_body(CreateProductRequest)
 def create_product():
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(CreateProductHandler)
+    _Handler = CreateProductHandler(SqlAlchemyRepository())
     _Request: CreateProductRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 

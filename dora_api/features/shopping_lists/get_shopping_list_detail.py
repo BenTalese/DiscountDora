@@ -23,9 +23,9 @@ from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.features.shopping_lists.shopping_list_attachment_access import (
     get_attachment_metadata_for_list)
 from dora_api.infrastructure.api_response import not_found, ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,8 +207,8 @@ class ShoppingListDetailDto:
 
 
 class GetShoppingListDetailHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, shopping_list_id: UUID) -> ShoppingListDetailDto | None:
         _List: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
@@ -451,7 +451,7 @@ class GetShoppingListDetailHandler:
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>", methods=["GET"])
 def get_shopping_list_detail(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Detail = get_container().inject(GetShoppingListDetailHandler).handle(shopping_list_id)
+    _Detail = GetShoppingListDetailHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if _Detail is None:
         return not_found("ShoppingList", shopping_list_id)
     _Logger.debug(

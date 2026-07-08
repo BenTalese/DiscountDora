@@ -12,9 +12,9 @@ from uuid import UUID
 from dora_api.domain.entities.product import Product
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,8 +31,8 @@ class PriceHistoryDto:
 
 
 class GetPriceHistoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, product_id: UUID) -> PriceHistoryDto | None:
         _Product: Product | None = (
@@ -67,7 +67,7 @@ class GetPriceHistoryHandler:
 @PRODUCT_ROUTER.route("<product_id>/price-history")
 def get_price_history(product_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _History = get_container().inject(GetPriceHistoryHandler).handle(product_id)
+    _History = GetPriceHistoryHandler(SqlAlchemyRepository()).handle(product_id)
     if _History is None:
         return not_found(Product.__name__, product_id)
     _Logger.debug("Product %s price history: %d points", product_id, len(_History.points))

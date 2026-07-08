@@ -14,8 +14,9 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Allowed parent kind per child kind, so the tree can't grow sideways
@@ -45,8 +46,8 @@ class CreateLocationResponse:
 
 
 class CreateLocationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateLocationRequest) -> CreateLocationResponse:
         if request.kind not in ALLOWED_LOCATION_KINDS:
@@ -82,7 +83,7 @@ class CreateLocationHandler:
 @has_request_body(CreateLocationRequest)
 def create_location():
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(CreateLocationHandler)
+    _Handler = CreateLocationHandler(SqlAlchemyRepository())
     _Request: CreateLocationRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 

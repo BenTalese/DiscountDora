@@ -164,8 +164,8 @@
     const qtyOutDraft = ref<number | null>(null);
     const unitOutDraft = ref<string | null>(null);
 
-    // R-014: hydrate drafts from props every time the dialog re-opens so
-    // a cancelled edit doesn't leak into the next session.
+    // Hydrate drafts from props every time the dialog re-opens so a
+    // cancelled edit doesn't leak into the next session.
     watch(
         () => props.modelValue,
         (isOpen) => {

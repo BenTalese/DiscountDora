@@ -157,7 +157,7 @@
     const route = useRoute();
     const router = useRouter();
     const authStore = useAuthStore();
-    const { currentUser, isAdmin } = storeToRefs(authStore);
+    const { currentUser } = storeToRefs(authStore);
 
     // ── Global keyboard shortcuts (S5) ──────────────────────────────────
     const { openCheatsheet } = useShortcutRegistry();
@@ -191,10 +191,11 @@
 
     // Phase D / FU-186 — the "Product Search" entry:
     //   - hidden when products is off (no product data ⇒ no search surface)
-    //   - visible-but-disabled with a "set up in Settings" hint when products
-    //     is on but no `product_search_url` is configured (R-014). The hint
-    //     names the exact settings path so the user knows where to go without
-    //     having to dig through the admin nav.
+    //   - hidden when products is on but no `product_search_url` is
+    //     configured (R-029: respect the off-state, don't nag). Admins who
+    //     need to set the URL find the row on Settings → System → Features
+    //     — the config screen is the one legitimate place the not-set-up
+    //     state is visible.
     //   - external link (new tab) when both flags are good. The destination
     //     (a sibling companion / a static page / whatever the operator runs)
     //     is **never named** here — it's just "Product Search".
@@ -204,21 +205,7 @@
     const productSearchEntry = computed<MenuButtonProps | null>(() => {
         if (!features.products.value) return null;
         const url = productSearch.url.value.trim();
-        if (!url) {
-            return {
-                label: 'Product Search',
-                icon: ICONS.search,
-                link: '',
-                disabled: true,
-                // R-014 "path to enable it" — name the exact settings route
-                // so the hint is actionable, not just informative. Hover →
-                // q-tooltip; side-menu also renders this as a caption under
-                // the label (SideMenuButton.vue:14).
-                disabledTooltip: isAdmin.value
-                    ? 'Not set up yet — set the Product search URL in Settings → System → Features.'
-                    : 'Not set up yet — ask an admin to set the Product search URL in System → Features.',
-            };
-        }
+        if (!url) return null;
         return {
             label: 'Product Search',
             icon: ICONS.search,

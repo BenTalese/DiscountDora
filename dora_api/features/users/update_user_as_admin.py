@@ -17,9 +17,10 @@ from dora_api.features.routers import USER_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 # `_require_admin` moved to a shared module. Re-exported for
 # feature modules that still import from here — no big-bang rename.
@@ -48,8 +49,8 @@ class AdminUpdateUserResponse:
 
 
 class AdminUpdateUserHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -109,7 +110,7 @@ def admin_update_user(user_id: UUID):
         return err
 
     _Request: AdminUpdateUserRequest = get_request_body()
-    _Response = get_container().inject(AdminUpdateUserHandler).handle(_Request, user_id)
+    _Response = AdminUpdateUserHandler(SqlAlchemyRepository()).handle(_Request, user_id)
 
     if _Response.user_not_found:
         return not_found("User", user_id)

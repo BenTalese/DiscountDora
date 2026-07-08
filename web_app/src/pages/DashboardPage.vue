@@ -213,9 +213,11 @@
             </div>
 
             <!-- ───── Needs your attention (P12) ─────────────────────────── -->
-            <!-- R-014: renders whenever the card is visible — a calm "all clear"
-                 state instead of vanishing, so the dashboard looks best (not
-                 emptiest) when nothing's wrong. -->
+            <!-- Calm empty-state: renders whenever the card is visible —
+                 an "all clear" state instead of vanishing, so the dashboard
+                 looks best (not emptiest) when nothing's wrong. This is a
+                 different pattern from R-029 (hide-when-off) — a happy zero
+                 isn't an off-state, so the card stays. -->
             <div
                 v-if="isCardVisible('attention')"
                 class="col-12 col-lg-6"
@@ -460,8 +462,8 @@
             </div>
 
             <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
-            <!-- R-014: calm empty state instead of vanishing when Dora has
-                 nothing to suggest. -->
+            <!-- Calm empty state instead of vanishing when Dora has
+                 nothing to suggest — separate pattern from R-029. -->
             <div
                 v-if="isCardVisible('suggestions')"
                 class="col-12 col-sm-6 col-lg-6"
@@ -3008,7 +3010,8 @@
     }
 
     /* Positive ("all clear") empty state — softer + green-tinted so a calm
-       dashboard reads as reassuring rather than broken (R-014). */
+       dashboard reads as reassuring rather than broken. Distinct from
+       R-029 (hide-when-off) — a happy zero isn't an opt-out. */
     .dora-empty-ok {
         display: flex;
         align-items: center;

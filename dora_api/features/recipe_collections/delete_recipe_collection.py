@@ -5,8 +5,8 @@ from uuid import UUID
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.features.routers import RECIPE_COLLECTION_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(slots=True)
@@ -15,8 +15,8 @@ class DeleteRecipeCollectionResponse:
 
 
 class DeleteRecipeCollectionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, recipe_collection_id: UUID) -> DeleteRecipeCollectionResponse:
         _Collection = self.repository.get(RecipeCollection).by_id(recipe_collection_id)
@@ -32,7 +32,7 @@ class DeleteRecipeCollectionHandler:
 @RECIPE_COLLECTION_ROUTER.route("<recipe_collection_id>", methods=["DELETE"])
 def delete_recipe_collection(recipe_collection_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(DeleteRecipeCollectionHandler)
+    _Handler = DeleteRecipeCollectionHandler(SqlAlchemyRepository())
     _Response = _Handler.handle(recipe_collection_id)
 
     if _Response.recipe_collection_not_found:

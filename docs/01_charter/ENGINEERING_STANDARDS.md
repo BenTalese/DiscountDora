@@ -1194,6 +1194,47 @@ exceptions, which still must be commented) · **Source** (where it was establish
   C (2 encrypted secrets), D (desktop first-run) shipped end-to-end. Env
   footprint went from 19 → 2 on server self-host and 0 on desktop.
 
+### R-031 — Constructor injection via Protocols; no DI container
+- **Rule:** Handlers (and other collaborators-owning classes) declare their
+  dependencies as constructor parameters typed against **structural**
+  Protocols in `dora_api/infrastructure/ports.py` — not against
+  `I`-prefixed ABCs, not by resolving them from a container at call time.
+  Wiring happens explicitly at the router / app-factory edge: `Handler(
+  repository=SqlAlchemyRepository()).handle(...)`. No reflection-based
+  auto-wiring. No `get_container().inject(X)`.
+- **Why:** In Python, a Protocol + explicit constructor call gives you the
+  entire testability + composability payoff of DI with a fraction of the
+  ceremony a container brings. Handler tests substitute a fake by passing
+  it to the constructor — no `patch.object`, no framework registration.
+  A container earns its keep when you have deep dependency graphs,
+  layered lifetimes, and many swappable implementations decided at boot;
+  this app has none of that. The prior `dependency_injector`-based
+  `DependencyContainer` was reflection over 175 handlers whose only real
+  dependency was `SqlAlchemyRepository`, and the container was used as
+  a service locator (`get_container().inject(X)`) rather than as real
+  DI — a .NET habit imported where it doesn't fit. See ADR-027 for the
+  full walk-back.
+- **Apply:** New handler → `def __init__(self, repository: Repository) ->
+  None: self.repository = repository`. New collaborator that's genuinely
+  swappable (email transport, push transport, LLM client, clock, blob
+  storage) → add a Protocol to `ports.py`, take it in the ctor, wire the
+  concrete at the router or in the app factory. When a real swap surface
+  arrives (auth per R-005, email transport, etc.), do it by adding a
+  Protocol + a small wiring step in `create_app` — do not reintroduce a
+  container.
+- **Violation signal:** any new file importing a "container" or a
+  registration API; any handler that constructs its own `SqlAlchemyRepository()`
+  inside `__init__` instead of receiving one; any `I`-prefix nominal
+  interface used as a DI seam.
+- **Carve-outs (must be commented):** a handler that legitimately needs
+  no repository (e.g. `AskAssistantHandler`, which builds an LLM client
+  per-user from Flask session context) skips the parameter — that's
+  fine, and the `__init__`'s absence is self-documenting. Never
+  synthesise a fake ctor arg just for uniformity.
+- **Source:** ADR-027; user directive 2026-07-08 ("is this app just not
+  in need of DI, or is the code not written well enough to make use of
+  it?") — resolved as "constructor injection yes, container no."
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1262,8 +1303,13 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   Rules out scattering feature policy across client code or spinning up a store per
   flag. Health flags are the single read path — keep `_feature_flags()` honest
   (this task fixed a latent bug where `assistant` never reflected the real setting).
+  **Presentation:** when the flag is off, entry points **hide** — this is the
+  R-029 rule (ADR-025). The 2026-06-14 ADR-009 / R-014 "reveal-and-disable"
+  detour that partially revisited this presentation was walked back on
+  2026-07-06; ADR-002's original hide-when-off is the whole story again.
 - **Promotes rule:** none (a pattern/recipe, not a new standing rule; R-003
   state-ownership already covers "server owns domain facts").
+- **See also:** R-029 / ADR-025 (the presentation rule this ADR relies on).
 
 ### ADR-003 — Strong types over stringly-typed matching
 - **Date / task:** 2026-06-07 (P6-01 Chunk 1; user request)
@@ -1959,6 +2005,24 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   - Rotating `DORA_LLM_KEY_ENCRYPTION_KEY` invalidates the two operational secrets + every per-user LLM API key; the resolver degrades to dry-run (with a warning log) rather than crashing. Admin re-enters secrets in Settings — documented in `key_encryption.py` and `.env.example`.
   - Desktop bundle: `desktop_app._detect_bundled_piper_paths()` + `_seed_desktop_paths()` write detected `piper_bin` / `piper_bundled_voice_dir` into the row *post-init*; no env fallback path to lose in the resolver.
 - **Promotes rule:** R-030.
+
+### ADR-027 — Constructor injection via Protocols; no DI container
+- **Date / task:** 2026-07-08 (rip-out of the `dependency_injector`-based `DependencyContainer`).
+- **Status:** accepted
+- **Context:** The codebase had a `DependencyContainer` (a ~215-line wrapper around `dependency_injector.containers.DynamicContainer`) that auto-registered every `*Handler` under `dora_api/features/` via reflection, then routers resolved handlers with `get_container().inject(FooHandler)` at 200+ callsites. An audit found: **175 of 179 handlers** just constructed `self.repository = SqlAlchemyRepository()` in `__init__` — no injected params, no interfaces exercised, no lifetime rules beyond `Factory`. The container's own example lines for interface-based registration (`IRepository[Merchant]`, `IConfigurationManager`) were commented out. Zero tests used the container. In practice it was a fancy service-locator around a zero-arg constructor call, plus a boot-time reflection surface that spawned its own hardening FU ([[FU-457]] — boot-time resolved-route assertion). The whole shape (`I`-prefix nominal interfaces, generic-alias name mangling, `SqlAlchemyGateway[T]`) read as C#/.NET conventions ported into a language that doesn't need them.
+- **Decision:** Adopt **R-031**. Delete the container; delete `service_wiring.py`; delete the `get_container()` accessor; remove `dependency_injector` from requirements. Introduce `dora_api/infrastructure/ports.py` with a `Repository` Protocol (structural typing — any object with the right method surface satisfies it, no ABC inheritance). Rewrite every handler `__init__(self)` → `__init__(self, repository: Repository)`. Rewrite every `get_container().inject(X)` callsite → `X(SqlAlchemyRepository())`. Three handlers that legitimately don't need a repository (`RestoreBackupHandler`, `InspectSpreadsheetHandler`, `GetShortfallHandler`) stay parameter-less; `AskAssistantHandler` remains as the "no repo, per-user LLM client" carve-out it already was.
+- **Alternatives considered:**
+  - **Keep the container, add the boot-time assertion FU-457 wants.** Rejected — the assertion protects a reflection surface we can just delete. Cheaper to remove the fragility than to shore it up.
+  - **Handler ctor with `repository: Repository | None = None` defaulting to `SqlAlchemyRepository()`.** Rejected — pragmatic but dishonest. Hides the dependency and lets callers keep the old service-locator habit indefinitely. Force the caller to pass it.
+  - **Move to `I`-prefix ABCs + a hand-rolled DI without the container.** Rejected — `typing.Protocol` is the Python-native, structural way to say "this shape". Any nominal hierarchy is unnecessary ceremony.
+- **Consequences:**
+  - `-215` LOC (`dependency_container.py`), `-21` LOC (`service_wiring.py`), `-1` runtime dep (`dependency_injector`). ~200 callsites became a direct constructor call.
+  - Testability payoff realised immediately — 3 tests that previously did `patch.object(handler, "repository", stub)` now pass the stub through the constructor and are 3-5 lines shorter each.
+  - **FU-457 dissolved by construction.** No reflection-based handler-wiring surface left to protect. Router discovery (`get_attributes_ending_with('router', ...)`) is a separate reflection surface; if it needs the same boot-time assertion, that's a much smaller FU to reopen.
+  - The 4 files in `dora_api/features/data/` that didn't already import `SqlAlchemyRepository` got the import added.
+  - When a genuine swap surface arrives (R-005 auth interface; email transport per FU-500 sweep; push transport; LLM client per-tenant), the pattern is: **add a Protocol to `ports.py`, take it in the ctor, wire the concrete at the router edge or on `app.services` in `create_app`.** No container.
+  - The .NET-flavoured naming (`I`-prefix generic interfaces, `SqlAlchemyGateway[T]`) is now discouraged for new work — this ADR is the reference for "why we don't do that here."
+- **Promotes rule:** R-031.
 
 ---
 

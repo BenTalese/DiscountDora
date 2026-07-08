@@ -11,10 +11,10 @@ from dora_api.features.routers import USER_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +66,8 @@ def _stamp_has_image(repository, dtos: list[UserDto]) -> None:
 
 
 class GetUsersHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, options) -> Page[UserDto]:
         page = self.repository.get(User).paginate(
@@ -87,7 +87,7 @@ def get_users():
         return err
     try:
         _Options = parse_query_options(request.args)
-        _Page = get_container().inject(GetUsersHandler).handle(_Options)
+        _Page = GetUsersHandler(SqlAlchemyRepository()).handle(_Options)
     except InvalidQueryParameter as exc:
         return bad_request(str(exc))
     _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} users.")

@@ -25,9 +25,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +80,8 @@ def _template_names(repository, template_ids: List[UUID]) -> dict[UUID, str]:
 # ───── List ────────────────────────────────────────────────────────────────
 
 class GetSetsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[TemplateSetSummaryDto]:
         sets: List[MealPlanTemplateSet] = self.repository.get(MealPlanTemplateSet).all()
@@ -109,14 +110,14 @@ class GetSetsHandler:
 
 @MEAL_PLAN_TEMPLATE_SET_ROUTER.route("", methods=["GET"])
 def get_template_sets():
-    return ok(get_container().inject(GetSetsHandler).handle())
+    return ok(GetSetsHandler(SqlAlchemyRepository()).handle())
 
 
 # ───── Detail ────────────────────────────────────────────────────────────────
 
 class GetSetDetailHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, set_id: UUID) -> TemplateSetDetailDto | None:
         s: MealPlanTemplateSet | None = self.repository.get(MealPlanTemplateSet).by_id(set_id)
@@ -143,7 +144,7 @@ class GetSetDetailHandler:
 
 @MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<set_id>", methods=["GET"])
 def get_template_set_detail(set_id: UUID):
-    _Result = get_container().inject(GetSetDetailHandler).handle(set_id)
+    _Result = GetSetDetailHandler(SqlAlchemyRepository()).handle(set_id)
     if _Result is None:
         return not_found("MealPlanTemplateSet", set_id)
     return ok(_Result)
@@ -172,8 +173,8 @@ def _missing_templates(repository, template_ids: List[UUID]) -> tuple[UUID, ...]
 
 
 class CreateSetHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateSetRequest) -> CreateSetResponse:
         missing = _missing_templates(self.repository, request.template_ids)
@@ -202,7 +203,7 @@ class CreateSetHandler:
 def create_template_set():
     _Logger = logging.getLogger(__name__)
     _Request: CreateSetRequest = get_request_body()
-    _Response = get_container().inject(CreateSetHandler).handle(_Request)
+    _Response = CreateSetHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.missing_template_ids:
         return business_rule_violation(
             f"Unknown template id(s): {', '.join(str(t) for t in _Response.missing_template_ids)}"
@@ -233,8 +234,8 @@ class UpdateSetResponse:
 
 
 class UpdateSetHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateSetRequest, set_id: UUID) -> UpdateSetResponse:
         s: MealPlanTemplateSet | None = self.repository.get(MealPlanTemplateSet).by_id(set_id)
@@ -265,7 +266,7 @@ class UpdateSetHandler:
 @has_request_body(UpdateSetRequest)
 def update_template_set(set_id: UUID):
     _Request: UpdateSetRequest = get_request_body()
-    _Response = get_container().inject(UpdateSetHandler).handle(_Request, set_id)
+    _Response = UpdateSetHandler(SqlAlchemyRepository()).handle(_Request, set_id)
     if _Response.not_found:
         return not_found("MealPlanTemplateSet", set_id)
     if _Response.missing_template_ids:
@@ -283,8 +284,8 @@ class DeleteSetResponse:
 
 
 class DeleteSetHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, set_id: UUID) -> DeleteSetResponse:
         s: MealPlanTemplateSet | None = self.repository.get(MealPlanTemplateSet).by_id(set_id)
@@ -298,7 +299,7 @@ class DeleteSetHandler:
 @MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<set_id>", methods=["DELETE"])
 def delete_template_set(set_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteSetHandler).handle(set_id)
+    _Response = DeleteSetHandler(SqlAlchemyRepository()).handle(set_id)
     if _Response.not_found:
         return not_found("MealPlanTemplateSet", set_id)
     _Logger.info(f"Deleted template set {set_id}")

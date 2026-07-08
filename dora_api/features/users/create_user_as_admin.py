@@ -29,9 +29,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation, ok,
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import is_valid_email, normalise_email
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Same 12-char alphanumeric one-time pad as reset_user_password — readable
@@ -57,8 +58,8 @@ class AdminCreateUserResponse:
 
 
 class AdminCreateUserHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: AdminCreateUserRequest) -> AdminCreateUserResponse:
         username_field = EntityField(User, User.Fields.USERNAME)
@@ -112,7 +113,7 @@ def admin_create_user():
             type="https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
         ))
 
-    _Response = get_container().inject(AdminCreateUserHandler).handle(_Request)
+    _Response = AdminCreateUserHandler(SqlAlchemyRepository()).handle(_Request)
 
     if _Response.username_taken:
         return business_rule_violation(

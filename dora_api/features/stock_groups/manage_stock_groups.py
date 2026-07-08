@@ -28,9 +28,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +44,8 @@ class StockGroupDto:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetStockGroupsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[StockGroupDto]:
         groups: List[StockGroup] = self.repository.get(StockGroup).all()
@@ -70,7 +71,7 @@ class GetStockGroupsHandler:
 @STOCK_GROUP_ROUTER.route("", methods=["GET"])
 def get_stock_groups():
     _Logger = logging.getLogger(__name__)
-    _Result = get_container().inject(GetStockGroupsHandler).handle()
+    _Result = GetStockGroupsHandler(SqlAlchemyRepository()).handle()
     _Logger.debug("Returned %d stock groups", len(_Result))
     return ok(_Result)
 
@@ -89,8 +90,8 @@ class CreateStockGroupResponse:
 
 
 class CreateStockGroupHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateStockGroupRequest) -> CreateStockGroupResponse:
         # Case-insensitive uniqueness — "Dairy" and "dairy" shouldn't both
@@ -112,7 +113,7 @@ class CreateStockGroupHandler:
 def create_stock_group():
     _Logger = logging.getLogger(__name__)
     _Request: CreateStockGroupRequest = get_request_body()
-    _Response = get_container().inject(CreateStockGroupHandler).handle(_Request)
+    _Response = CreateStockGroupHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(
             f"A stock group named '{_Request.name}' already exists."
@@ -140,8 +141,8 @@ class UpdateStockGroupResponse:
 
 
 class UpdateStockGroupHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self, request: UpdateStockGroupRequest, stock_group_id: UUID
@@ -165,7 +166,7 @@ class UpdateStockGroupHandler:
 def update_stock_group(stock_group_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: UpdateStockGroupRequest = get_request_body()
-    _Response = get_container().inject(UpdateStockGroupHandler).handle(_Request, stock_group_id)
+    _Response = UpdateStockGroupHandler(SqlAlchemyRepository()).handle(_Request, stock_group_id)
     if _Response.not_found:
         return not_found("StockGroup", stock_group_id)
     if _Response.duplicate:
@@ -185,8 +186,8 @@ class DeleteStockGroupResponse:
 
 
 class DeleteStockGroupHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, stock_group_id: UUID) -> DeleteStockGroupResponse:
         group: StockGroup | None = self.repository.get(StockGroup).by_id(stock_group_id)
@@ -207,7 +208,7 @@ class DeleteStockGroupHandler:
 @STOCK_GROUP_ROUTER.route("/<stock_group_id>", methods=["DELETE"])
 def delete_stock_group(stock_group_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteStockGroupHandler).handle(stock_group_id)
+    _Response = DeleteStockGroupHandler(SqlAlchemyRepository()).handle(stock_group_id)
     if _Response.not_found:
         return not_found("StockGroup", stock_group_id)
     _Logger.info(

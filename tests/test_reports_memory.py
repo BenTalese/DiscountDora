@@ -102,7 +102,7 @@ class TestSpendYoYMath:
     def _run(self, current: dict, previous: dict):
         """Stub SpendYoYHandler with pre-computed per-category totals."""
         from dora_api.features.reports.reports import SpendYoYHandler
-        handler = SpendYoYHandler()
+        handler = SpendYoYHandler(SimpleNamespace())  # repo unused — compute pinned below
         current_total = sum(current.values())
         previous_total = sum(previous.values())
 
@@ -226,7 +226,6 @@ def _cook_row(recipe_id, name, meals=1, occurred_at=None):
 class TestMealsCookedGrouping:
     def _run(self, rows) -> dict:
         from dora_api.features.reports.reports import MealsCookedHandler
-        handler = MealsCookedHandler()
 
         class _Session:
             def execute(self, _query):
@@ -236,8 +235,8 @@ class TestMealsCookedGrouping:
                 return _Res()
 
         stub_repo = SimpleNamespace(session=_Session())
-        with patch.object(handler, "repository", stub_repo):
-            return handler.handle(None, 10)
+        # Constructor injection — no patch.object needed.
+        return MealsCookedHandler(stub_repo).handle(None, 10)
 
     def test__empty_input_returns_zeros(self):
         out = self._run([])

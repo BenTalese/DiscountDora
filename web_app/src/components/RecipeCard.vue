@@ -95,17 +95,14 @@
             >
                 <q-tooltip>Filter stock to this recipe's ingredients</q-tooltip>
             </BaseButton>
-            <!-- ambiguous — unelevated round dense with dynamic primary/warning colour; no BaseButton variant fits a coloured raised icon-button. Left as raw q-btn for review. -->
-            <q-btn
-                unelevated
-                round
-                dense
+            <BaseButton
+                variant="filled-icon"
                 :icon="ICONS.chef_hat"
                 :color="cookButtonColor"
                 @click.stop="emit('cook', recipe.recipe_id)"
             >
                 <q-tooltip>{{ cookButtonTooltip }}</q-tooltip>
-            </q-btn>
+            </BaseButton>
             <q-space />
             <BaseButton
                 variant="icon"

@@ -26,9 +26,10 @@ from dora_api.features.alerts.alert_kinds import (KNOWN_KINDS, default_tier_for,
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok, unauthorized
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 def _current_user_id() -> UUID | None:
@@ -63,8 +64,8 @@ class UpdateAlertPrefRequest(BaseModel):
 
 
 class AlertPrefsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def _rows(self, user_id: UUID) -> dict[str, AlertPreference]:
         rows: List[AlertPreference] = self.repository.get(AlertPreference).all(
@@ -110,7 +111,7 @@ def get_alert_prefs():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    return ok(get_container().inject(AlertPrefsHandler).get_prefs(user_id))
+    return ok(AlertPrefsHandler(SqlAlchemyRepository()).get_prefs(user_id))
 
 
 @ALERT_ROUTER.route("/prefs", methods=["PATCH"])
@@ -129,7 +130,7 @@ def update_alert_pref():
         and not is_valid_tier(request.tier_override)
     ):
         return bad_request(f"Invalid alert tier '{request.tier_override}'.")
-    handler = get_container().inject(AlertPrefsHandler)
+    handler = AlertPrefsHandler(SqlAlchemyRepository())
     handler.update_pref(user_id, request)
     logging.getLogger(__name__).info("Alert pref updated: kind=%s by %s", request.kind, user_id)
     return ok(handler.get_prefs(user_id))

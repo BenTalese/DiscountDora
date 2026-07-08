@@ -57,6 +57,7 @@ from dora_api.infrastructure.ingestion_auth import (extract_bearer_token,
                                                     stamp_used)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _Logger = logging.getLogger(__name__)
@@ -169,8 +170,8 @@ class _IngestionContext:
 
 
 class SubmitIngestionBatchHandler:
-    def __init__(self) -> None:
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     # — entrypoints —
 
@@ -416,7 +417,7 @@ def submit_ingestion_batch():
 
     idempotency_key = (request.headers.get("Idempotency-Key") or "").strip() or None
 
-    handler = SubmitIngestionBatchHandler()
+    handler = SubmitIngestionBatchHandler(SqlAlchemyRepository())
     result = handler.handle(source, idempotency_key, payload)
 
     _Logger.info(

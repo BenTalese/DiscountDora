@@ -18,7 +18,7 @@ from dora_api.features.meal_plans.get_meal_plans import (
 )
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import not_found
-from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 # Conventional meal slots; entries with unrecognised slots fall into "Other"
@@ -125,7 +125,7 @@ def _render_print_view(plan: MealPlanDto) -> str:
 
 @MEAL_PLAN_ROUTER.route("/<meal_plan_id>/print-view", methods=["GET"])
 def print_view_meal_plan(meal_plan_id: UUID):
-    plan = get_container().inject(GetMealPlansHandler).handle_by_id(meal_plan_id)
+    plan = GetMealPlansHandler(SqlAlchemyRepository()).handle_by_id(meal_plan_id)
     if plan is None:
         return not_found("MealPlan", meal_plan_id)
     html = _render_print_view(plan)

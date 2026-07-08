@@ -60,10 +60,9 @@
                     @keyup.enter="onManualSubmit"
                 >
                     <template #append>
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             color="white"
                             label="Submit"
                             :disable="!manualValue.trim()"

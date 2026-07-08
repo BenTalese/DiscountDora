@@ -18,9 +18,9 @@ from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, created,
                                                   entity_existence_failures)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import (field_of, get_request_body)
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateMealPlanEntryRequest(BaseModel):
@@ -51,8 +51,8 @@ class CreateMealPlanResponse:
 
 
 class CreateMealPlanHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateMealPlanRequest) -> CreateMealPlanResponse:
         _Today = household_today(self.repository)
@@ -107,7 +107,7 @@ class CreateMealPlanHandler:
 @has_request_body(CreateMealPlanRequest)
 def create_meal_plan():
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(CreateMealPlanHandler)
+    _Handler = CreateMealPlanHandler(SqlAlchemyRepository())
     _Request: CreateMealPlanRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
@@ -126,7 +126,7 @@ def create_meal_plan():
         )
 
     from dora_api.features.meal_plans.get_meal_plans import GetMealPlansHandler
-    _Dto = get_container().inject(GetMealPlansHandler).handle_by_id(
+    _Dto = GetMealPlansHandler(SqlAlchemyRepository()).handle_by_id(
         _Response.new_meal_plan_id
     )
     return created(

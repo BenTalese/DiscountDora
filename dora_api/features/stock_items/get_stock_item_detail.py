@@ -37,9 +37,9 @@ from dora_api.domain.stock_status import get_stock_item_unit_cost_at
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.your_prices import build_your_prices_for_item
 from dora_api.infrastructure.api_response import not_found, ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,8 +323,8 @@ HISTORY_PER_KIND_CAP = 50
 
 
 class GetStockItemDetailHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, stock_item_id: UUID) -> StockItemDetailDto | None:
         _StockItem: StockItem | None = (
@@ -854,7 +854,7 @@ class GetStockItemDetailHandler:
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/detail")
 def get_stock_item_detail(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Detail = get_container().inject(GetStockItemDetailHandler).handle(stock_item_id)
+    _Detail = GetStockItemDetailHandler(SqlAlchemyRepository()).handle(stock_item_id)
     if _Detail is None:
         return not_found(StockItem.__name__, stock_item_id)
     _Logger.debug(

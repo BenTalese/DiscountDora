@@ -24,9 +24,10 @@ from dora_api.features.routers import MEAL_SLOT_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,8 +43,8 @@ class MealSlotDto:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetMealSlotsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[MealSlotDto]:
         slots: List[MealSlot] = self.repository.get(MealSlot).all()
@@ -68,7 +69,7 @@ class GetMealSlotsHandler:
 
 @MEAL_SLOT_ROUTER.route("", methods=["GET"])
 def get_meal_slots():
-    _Result = get_container().inject(GetMealSlotsHandler).handle()
+    _Result = GetMealSlotsHandler(SqlAlchemyRepository()).handle()
     return ok(_Result)
 
 
@@ -86,8 +87,8 @@ class CreateMealSlotResponse:
 
 
 class CreateMealSlotHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateMealSlotRequest) -> CreateMealSlotResponse:
         existing = self.repository.get(MealSlot).all()
@@ -106,7 +107,7 @@ class CreateMealSlotHandler:
 def create_meal_slot():
     _Logger = logging.getLogger(__name__)
     _Request: CreateMealSlotRequest = get_request_body()
-    _Response = get_container().inject(CreateMealSlotHandler).handle(_Request)
+    _Response = CreateMealSlotHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(f"A meal slot named '{_Request.name}' already exists.")
     _Logger.info(f"Created meal slot {_Response.meal_slot_id} '{_Request.name}'")
@@ -139,8 +140,8 @@ class ReorderMealSlotsResponse:
 
 
 class ReorderMealSlotsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ReorderMealSlotsRequest) -> ReorderMealSlotsResponse:
         by_id = {s.id: s for s in self.repository.get(MealSlot).all()}
@@ -158,7 +159,7 @@ class ReorderMealSlotsHandler:
 def reorder_meal_slots():
     _Logger = logging.getLogger(__name__)
     _Request: ReorderMealSlotsRequest = get_request_body()
-    _Response = get_container().inject(ReorderMealSlotsHandler).handle(_Request)
+    _Response = ReorderMealSlotsHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.unknown_ids:
         return business_rule_violation(f"Unknown meal slot IDs: {_Response.unknown_ids}")
     _Logger.info(f"Reordered {len(_Request.slots)} meal slot(s)")
@@ -179,8 +180,8 @@ class UpdateMealSlotResponse:
 
 
 class UpdateMealSlotHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateMealSlotRequest, meal_slot_id: UUID) -> UpdateMealSlotResponse:
         slot: MealSlot | None = self.repository.get(MealSlot).by_id(meal_slot_id)
@@ -200,7 +201,7 @@ class UpdateMealSlotHandler:
 @has_request_body(UpdateMealSlotRequest)
 def update_meal_slot(meal_slot_id: UUID):
     _Request: UpdateMealSlotRequest = get_request_body()
-    _Response = get_container().inject(UpdateMealSlotHandler).handle(_Request, meal_slot_id)
+    _Response = UpdateMealSlotHandler(SqlAlchemyRepository()).handle(_Request, meal_slot_id)
     if _Response.not_found:
         return not_found("MealSlot", meal_slot_id)
     if _Response.duplicate:
@@ -217,8 +218,8 @@ class DeleteMealSlotResponse:
 
 
 class DeleteMealSlotHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, meal_slot_id: UUID) -> DeleteMealSlotResponse:
         slot: MealSlot | None = self.repository.get(MealSlot).by_id(meal_slot_id)
@@ -238,7 +239,7 @@ class DeleteMealSlotHandler:
 @MEAL_SLOT_ROUTER.route("/<meal_slot_id>", methods=["DELETE"])
 def delete_meal_slot(meal_slot_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteMealSlotHandler).handle(meal_slot_id)
+    _Response = DeleteMealSlotHandler(SqlAlchemyRepository()).handle(meal_slot_id)
     if _Response.not_found:
         return not_found("MealSlot", meal_slot_id)
     _Logger.info(f"Deleted meal slot {meal_slot_id}; {_Response.entries_affected} entry(ies) keep the label")

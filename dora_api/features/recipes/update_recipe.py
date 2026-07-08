@@ -35,10 +35,10 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failures,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import (field_of, get_request_body)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateRecipeIngredientRequest(BaseModel):
@@ -177,8 +177,8 @@ _NULLABLE_PLAIN_ATTRS = (
 
 
 class UpdateRecipeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateRecipeRequest, recipe_id: UUID) -> UpdateRecipeResponse:
         _Recipe: Recipe | None = (
@@ -412,7 +412,7 @@ class UpdateRecipeHandler:
 def update_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to update recipe.")
-    _Handler = get_container().inject(UpdateRecipeHandler)
+    _Handler = UpdateRecipeHandler(SqlAlchemyRepository())
     _Request: UpdateRecipeRequest = get_request_body()
     _Response = _Handler.handle(_Request, recipe_id)
 

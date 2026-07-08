@@ -25,6 +25,7 @@ from dora_api.app import db
 from dora_api.domain.entities.user import User
 from dora_api.features.data.restore_shared import SECTIONS, SECTION_BY_BACKUP_KEY
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Schema version for the on-disk format. Bump when the JSON shape changes in
@@ -82,8 +83,8 @@ class BackupResult:
 
 
 class GetBackupHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,

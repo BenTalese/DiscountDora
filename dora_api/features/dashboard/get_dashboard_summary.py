@@ -24,9 +24,9 @@ from dora_api.features.app_settings.clock import household_today
 from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,8 +112,8 @@ class DashboardSummaryDto:
 
 
 class GetDashboardSummaryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> DashboardSummaryDto:
         session = self.repository.session
@@ -261,7 +261,7 @@ class GetDashboardSummaryHandler:
 @DASHBOARD_ROUTER.route("/summary")
 def get_dashboard_summary():
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(GetDashboardSummaryHandler)
+    _Handler = GetDashboardSummaryHandler(SqlAlchemyRepository())
     _Summary = _Handler.handle()
     _Logger.debug(
         "Dashboard summary: %d stock items (%d low, %d out)",

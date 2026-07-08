@@ -34,9 +34,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── DTOs ──────────────────────────────────────────────────────────────
@@ -81,8 +82,8 @@ def _entries_for(repository, template_id: UUID) -> List[MealPlanTemplateEntry]:
 # ───── List ────────────────────────────────────────────────────────────────
 
 class GetMealPlanTemplatesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[MealPlanTemplateSummaryDto]:
         templates: List[MealPlanTemplate] = self.repository.get(MealPlanTemplate).all()
@@ -108,15 +109,15 @@ class GetMealPlanTemplatesHandler:
 
 @MEAL_PLAN_TEMPLATE_ROUTER.route("", methods=["GET"])
 def get_meal_plan_templates():
-    _Result = get_container().inject(GetMealPlanTemplatesHandler).handle()
+    _Result = GetMealPlanTemplatesHandler(SqlAlchemyRepository()).handle()
     return ok(_Result)
 
 
 # ───── Detail ────────────────────────────────────────────────────────────────
 
 class GetMealPlanTemplateDetailHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID) -> MealPlanTemplateDetailDto | None:
         template: MealPlanTemplate | None = self.repository.get(MealPlanTemplate).by_id(template_id)
@@ -152,7 +153,7 @@ class GetMealPlanTemplateDetailHandler:
 
 @MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>", methods=["GET"])
 def get_meal_plan_template_detail(template_id: UUID):
-    _Result = get_container().inject(GetMealPlanTemplateDetailHandler).handle(template_id)
+    _Result = GetMealPlanTemplateDetailHandler(SqlAlchemyRepository()).handle(template_id)
     if _Result is None:
         return not_found("MealPlanTemplate", template_id)
     return ok(_Result)
@@ -175,8 +176,8 @@ class CreateMealPlanTemplateResponse:
 
 
 class CreateMealPlanTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateMealPlanTemplateRequest) -> CreateMealPlanTemplateResponse:
         plan: MealPlan | None = (
@@ -226,7 +227,7 @@ class CreateMealPlanTemplateHandler:
 def create_meal_plan_template():
     _Logger = logging.getLogger(__name__)
     _Request: CreateMealPlanTemplateRequest = get_request_body()
-    _Response = get_container().inject(CreateMealPlanTemplateHandler).handle(_Request)
+    _Response = CreateMealPlanTemplateHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.source_not_found:
         return not_found("MealPlan", _Request.source_meal_plan_id)
     if _Response.no_entries:
@@ -254,8 +255,8 @@ class UpdateMealPlanTemplateResponse:
 
 
 class UpdateMealPlanTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateMealPlanTemplateRequest, template_id: UUID) -> UpdateMealPlanTemplateResponse:
         template: MealPlanTemplate | None = self.repository.get(MealPlanTemplate).by_id(template_id)
@@ -275,7 +276,7 @@ class UpdateMealPlanTemplateHandler:
 @has_request_body(UpdateMealPlanTemplateRequest)
 def update_meal_plan_template(template_id: UUID):
     _Request: UpdateMealPlanTemplateRequest = get_request_body()
-    _Response = get_container().inject(UpdateMealPlanTemplateHandler).handle(_Request, template_id)
+    _Response = UpdateMealPlanTemplateHandler(SqlAlchemyRepository()).handle(_Request, template_id)
     if _Response.not_found:
         return not_found("MealPlanTemplate", template_id)
     return no_content()
@@ -289,8 +290,8 @@ class DeleteMealPlanTemplateResponse:
 
 
 class DeleteMealPlanTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID) -> DeleteMealPlanTemplateResponse:
         template: MealPlanTemplate | None = self.repository.get(MealPlanTemplate).by_id(template_id)
@@ -306,7 +307,7 @@ class DeleteMealPlanTemplateHandler:
 @MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>", methods=["DELETE"])
 def delete_meal_plan_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteMealPlanTemplateHandler).handle(template_id)
+    _Response = DeleteMealPlanTemplateHandler(SqlAlchemyRepository()).handle(template_id)
     if _Response.not_found:
         return not_found("MealPlanTemplate", template_id)
     _Logger.info(f"Deleted meal-plan template {template_id}")
@@ -322,8 +323,8 @@ class CloneMealPlanTemplateResponse:
 
 
 class CloneMealPlanTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, template_id: UUID) -> CloneMealPlanTemplateResponse:
         source: MealPlanTemplate | None = self.repository.get(MealPlanTemplate).by_id(template_id)
@@ -355,7 +356,7 @@ class CloneMealPlanTemplateHandler:
 @MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>/clone", methods=["POST"])
 def clone_meal_plan_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(CloneMealPlanTemplateHandler).handle(template_id)
+    _Response = CloneMealPlanTemplateHandler(SqlAlchemyRepository()).handle(template_id)
     if _Response.not_found:
         return not_found("MealPlanTemplate", template_id)
     _Logger.info(f"Cloned meal-plan template {template_id} -> {_Response.template_id}")
@@ -443,8 +444,8 @@ class ApplyTemplateResponse:
 
 
 class ApplyTemplateHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ApplyTemplateRequest) -> ApplyTemplateResponse:
         template: MealPlanTemplate | None = self.repository.get(MealPlanTemplate).by_id(request.template_id)
@@ -467,7 +468,7 @@ class ApplyTemplateHandler:
 def apply_template():
     _Logger = logging.getLogger(__name__)
     _Request: ApplyTemplateRequest = get_request_body()
-    _Response = get_container().inject(ApplyTemplateHandler).handle(_Request)
+    _Response = ApplyTemplateHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.template_not_found:
         return not_found("MealPlanTemplate", _Request.template_id)
     _Logger.info(
@@ -503,8 +504,8 @@ class ApplyRecurringResponse:
 
 
 class ApplyRecurringHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ApplyRecurringRequest) -> ApplyRecurringResponse:
         if (request.template_id is None) == (request.template_set_id is None):
@@ -576,7 +577,7 @@ class ApplyRecurringHandler:
 def apply_template_recurring():
     _Logger = logging.getLogger(__name__)
     _Request: ApplyRecurringRequest = get_request_body()
-    _Response = get_container().inject(ApplyRecurringHandler).handle(_Request)
+    _Response = ApplyRecurringHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.not_found_kind is not None:
         return not_found(_Response.not_found_kind, _Request.template_set_id or _Request.template_id)
     if _Response.invalid is not None:

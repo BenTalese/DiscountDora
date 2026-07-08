@@ -20,9 +20,9 @@ from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.shopping_lists.primary_target_resolver import \
     resolve_primary_target
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,8 +53,8 @@ class MembershipDto:
 
 
 class GetMembershipHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> MembershipDto:
         # Active (non-archived) lists only — archived lists shouldn't paint
@@ -107,7 +107,7 @@ class GetMembershipHandler:
 @SHOPPING_LIST_ROUTER.route("/membership", methods=["GET"])
 def get_membership():
     _Logger = logging.getLogger(__name__)
-    _Result = get_container().inject(GetMembershipHandler).handle()
+    _Result = GetMembershipHandler(SqlAlchemyRepository()).handle()
     _Logger.debug(
         "Membership: quick_add_target=%s, %d items on at least one active list",
         _Result.quick_add_target_list_id, len(_Result.items),

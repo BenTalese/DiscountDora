@@ -1,20 +1,6 @@
 <template>
     <q-item
-        v-if="disabled"
-        class="dora-mainMenuButton dora-mainMenuButton-disabled"
-        :class="{ 'is-expanded': isExpanded }"
-        :disable="true"
-        no-caps
-        tag="div"
-    >
-        <div class="dora-mainMenuButton-inner column items-center justify-center">
-            <q-icon :name="icon" class="dora-mainMenuButton-icon" />
-            <div class="dora-mainMenuButton-label">{{ label }}</div>
-        </div>
-        <q-tooltip v-if="disabledTooltip">{{ disabledTooltip }}</q-tooltip>
-    </q-item>
-    <q-item
-        v-else-if="href"
+        v-if="href"
         :href="href"
         target="_blank"
         rel="noopener"
@@ -139,16 +125,6 @@
 
     .dora-mainMenuButton-active {
         color: var(--q-accent);
-    }
-
-    .dora-mainMenuButton-disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        /* No `pointer-events: none` — that would kill hover, and with it
-           the q-tooltip on the disabled state (e.g. Product Search's
-           "Not set up yet — set the URL in Settings → System → Features"
-           hint). Quasar's `:disable="true"` on the q-item already blocks
-           click events, so we don't need to also block pointer events. */
     }
 
     // Hover tint on inactive buttons — previews the active accent colour,

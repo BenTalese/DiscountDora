@@ -71,8 +71,9 @@ from dora_api.infrastructure.llm import (EncryptionFailed,
                                          LlmUnavailable,
                                          build_assistant_client_from_provider,
                                          decrypt_api_key)
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _Logger = logging.getLogger(__name__)
@@ -105,8 +106,8 @@ class ProbeAssistantResponse:
 
 
 class ProbeAssistantHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ProbeAssistantRequest, user_id: UUID) -> ProbeAssistantResponse:
         user: User | None = self.repository.get(User).by_id(user_id)
@@ -207,7 +208,7 @@ def probe_assistant():
         )
 
     request: ProbeAssistantRequest = get_request_body()
-    response = get_container().inject(ProbeAssistantHandler).handle(request, user_id)
+    response = ProbeAssistantHandler(SqlAlchemyRepository()).handle(request, user_id)
 
     # Audit-log every probe — abuse trail per the threat model in the
     # module docstring. Payload captures the provider + host (not the

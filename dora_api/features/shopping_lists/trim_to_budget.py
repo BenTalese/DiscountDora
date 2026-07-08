@@ -47,9 +47,10 @@ from dora_api.features.stock_items.get_buy_verdict import (BuyVerdictDto,
                                                            compose_verdict)
 from dora_api.infrastructure.api_response import not_found, ok, unauthorized
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (get_container, get_request_body)
+from dora_api.infrastructure.utils import (get_request_body)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,8 +145,8 @@ class _Ctx:
 
 
 class TrimToBudgetHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -593,7 +594,7 @@ def trim_to_budget(shopping_list_id: UUID):
         # is small enough that a runtime check keeps the error message
         # clearer than a validator dump.
         return {"error": "mode must be 'preview' or 'apply'"}, 400
-    response = get_container().inject(TrimToBudgetHandler).handle(
+    response = TrimToBudgetHandler(SqlAlchemyRepository()).handle(
         shopping_list_id, request, user_id,
     )
     if response is None:

@@ -20,8 +20,8 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import LOCATION_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass
@@ -47,8 +47,8 @@ class LocationNodeDto:
 
 
 class GetLocationTreeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[LocationNodeDto]:
         locations: List[StockLocation] = self.repository.get(StockLocation).all()
@@ -117,6 +117,6 @@ class GetLocationTreeHandler:
 @LOCATION_ROUTER.route("", methods=["GET"])
 def get_location_tree():
     _Logger = logging.getLogger(__name__)
-    _Tree = get_container().inject(GetLocationTreeHandler).handle()
+    _Tree = GetLocationTreeHandler(SqlAlchemyRepository()).handle()
     _Logger.info(f"Returning location tree with {len(_Tree)} root zones.")
     return ok(_Tree)

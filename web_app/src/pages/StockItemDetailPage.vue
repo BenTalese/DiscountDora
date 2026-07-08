@@ -770,11 +770,12 @@
                     />
 
                     <!-- Barcodes section. Gated on the install-wide
-                         scanning flag (R-014: when off, the surface stays
-                         hidden — scanning isn't an active capability on this
-                         install). Shows direct registrations + via-Product
-                         derivations; Add/Remove available for direct rows
-                         only (via-Product live on the Product). -->
+                         scanning flag (R-029: when off, the surface stays
+                         hidden — scanning isn't an active capability on
+                         this install). Shows direct registrations +
+                         via-Product derivations; Add/Remove available for
+                         direct rows only (via-Product live on the
+                         Product). -->
                     <div v-if="scanningEnabled" class="q-mt-lg">
                         <div class="row items-center q-mb-sm">
                             <div class="text-subtitle1">Barcodes</div>

@@ -16,8 +16,9 @@ from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class MoveStockItemRequest(BaseModel):
@@ -34,8 +35,8 @@ class MoveStockItemResponse:
 
 
 class MoveStockItemHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: MoveStockItemRequest, stock_item_id: UUID) -> MoveStockItemResponse:
         item: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
@@ -62,7 +63,7 @@ class MoveStockItemHandler:
 @has_request_body(MoveStockItemRequest)
 def move_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(MoveStockItemHandler)
+    _Handler = MoveStockItemHandler(SqlAlchemyRepository())
     _Request: MoveStockItemRequest = get_request_body()
     _Response = _Handler.handle(_Request, stock_item_id)
 

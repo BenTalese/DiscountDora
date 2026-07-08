@@ -1680,7 +1680,7 @@ def recipes_using_item(args: dict) -> list[dict]:
 def get_alerts(args: dict) -> list[dict]:
     """Delegate to the alerts handler that powers the bell icon, then expose
     the rows in a model-friendly shape (with optional severity/kind filters)."""
-    handler = GetAlertsHandler()
+    handler = GetAlertsHandler(SqlAlchemyRepository())
     payload = handler.handle()
     severity = (args.get("severity") or "").strip().lower() or None
     kind = (args.get("kind") or "").strip().lower() or None
@@ -2049,7 +2049,7 @@ def list_suggestions(_args: dict) -> list[dict]:
             user_id = UUID(raw)
         except (ValueError, TypeError):
             user_id = None
-    rows = GetSuggestionsHandler().handle(user_id)
+    rows = GetSuggestionsHandler(SqlAlchemyRepository()).handle(user_id)
     if not rows:
         return [{
             "status": "no_suggestions",
@@ -2086,7 +2086,7 @@ def expiry_rescue(args: dict) -> list[dict]:
         horizon = int(args.get("horizon_days", 7))
     except (TypeError, ValueError):
         horizon = 7
-    dto = GetWasteRescueHandler().handle(horizon)
+    dto = GetWasteRescueHandler(SqlAlchemyRepository()).handle(horizon)
     items = [
         {
             "name": i.name,
@@ -2205,7 +2205,7 @@ def budget_status(_args: dict) -> list[dict]:
     except (ValueError, TypeError):
         return [{"error": "not signed in"}]
 
-    dto = GetBudgetStatusHandler().handle(user_id)
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
     if dto is None:
         return [{"error": "user not found"}]
     if not dto.enabled:
@@ -2626,7 +2626,7 @@ def meals_cooked_in_range(args: dict) -> list[dict]:
     except (TypeError, ValueError):
         limit = 10
     since = _parse_range(range_token)
-    payload = get_container().inject(MealsCookedHandler).handle(since, limit)
+    payload = MealsCookedHandler(SqlAlchemyRepository()).handle(since, limit)
     return [{
         "range": range_token,
         "cook_count": payload["cook_count"],
@@ -2645,7 +2645,7 @@ def spend_by_category(args: dict) -> list[dict]:
     )
     range_token = args.get("range") or "90d"
     since = _parse_range(range_token)
-    rows, total = get_container().inject(SpendByCategoryHandler).handle(since)
+    rows, total = SpendByCategoryHandler(SqlAlchemyRepository()).handle(since)
     return [{
         "range": range_token,
         "total_spent": total,
@@ -2670,7 +2670,7 @@ def spend_year_over_year(args: dict) -> list[dict]:
     now = datetime.now(timezone.utc)
     current_since = now - timedelta(days=days)
     previous_since = now - timedelta(days=days * 2)
-    payload = get_container().inject(SpendYoYHandler).handle(
+    payload = SpendYoYHandler(SqlAlchemyRepository()).handle(
         current_since, previous_since, current_since,
     )
     return [{

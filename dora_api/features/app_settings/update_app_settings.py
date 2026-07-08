@@ -18,6 +18,7 @@ from dora_api.infrastructure.api_response import bad_request, ok
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateAppSettingsRequest(BaseModel):
@@ -114,8 +115,8 @@ class UpdateAppSettingsResponse:
 
 
 class UpdateAppSettingsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateAppSettingsRequest) -> UpdateAppSettingsResponse:
         setting = get_or_create_app_setting(self.repository)
@@ -404,7 +405,7 @@ def update_app_settings():
     if err is not None:
         return err
     _Request: UpdateAppSettingsRequest = get_request_body()
-    _Response = UpdateAppSettingsHandler().handle(_Request)
+    _Response = UpdateAppSettingsHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.invalid_reason is not None:
         return bad_request("Invalid settings.", detail=_Response.invalid_reason)
     _Logger.info("Admin updated app settings (master_llm_enabled=%s)", _Response.dto.master_llm_enabled)

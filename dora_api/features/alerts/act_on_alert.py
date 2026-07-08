@@ -31,8 +31,9 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 ACTION_RESET_EXPIRY = "reset_expiry"
@@ -53,8 +54,8 @@ class AlertActionResponse:
 
 
 class AlertActionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, stock_item_id: UUID, action: str) -> AlertActionResponse:
         item: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
@@ -97,7 +98,7 @@ def act_on_alert(alert_id: str):
     stock_item_id = parsed.stock_item_id
 
     _Request: AlertActionRequest = get_request_body()
-    _Response = get_container().inject(AlertActionHandler).handle(
+    _Response = AlertActionHandler(SqlAlchemyRepository()).handle(
         stock_item_id, _Request.action
     )
     if _Response.item_not_found:

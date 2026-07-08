@@ -72,6 +72,91 @@ semver — major bumps signal schema or breaking-config changes.
   location) was explicitly cut this session.
 
 ### Changed
+- **Dependency injection walk-back: constructor injection via Protocols; no DI container — R-031 / ADR-027 (2026-07-08).**
+  The `dependency_injector`-based `DependencyContainer` (~215 LOC) plus
+  its reflection-based `service_wiring.py` were deleted. Handlers now
+  receive their repository as a constructor parameter typed against a
+  `Repository` Protocol in `dora_api/infrastructure/ports.py` — 175
+  handler `__init__` signatures rewritten, ~200 `get_container().inject(X)`
+  callsites rewritten to `X(SqlAlchemyRepository())`. Test seams are now
+  the constructor itself: three tests that previously did `patch.object(
+  handler, "repository", stub)` now pass the stub through the ctor.
+  `dependency_injector` dropped from requirements. Reflection-based
+  handler wiring is gone → the boot-time assertion FU-457 asked for is
+  dissolved by construction (no reflection surface left to protect).
+  This is a Python-idiomatic pattern: structural `typing.Protocol`
+  interfaces, explicit wiring at the router/app-factory edge, no
+  container ceremony. The .NET-flavoured `I`-prefix nominal interfaces
+  + generic-alias name mangling that the old container relied on are
+  now discouraged for new code — see [[ADR-027]] for the rationale
+  walk-through and when a real seam (auth, email transport, push, LLM
+  client) will earn its own Protocol.
+- **`POST /recipes` is now a unit of work — FU-456 (2026-07-08).**
+  The recipe-create handler used to commit 5 times (recipe → sections
+  → tags → steps → step-images). A validation failure on tags or steps
+  left a partial recipe row + sections behind — the recipe would show
+  up in the cookbook missing the sub-part the caller was trying to add.
+  Now every interior commit is replaced with an explicit `flush()` (so
+  downstream FK-referencing inserts still see the recipe row) and one
+  `save_changes()` runs at the end of the success path. Any validation
+  ValueError inside the handler returns 400 and rolls back everything;
+  no partial recipe persists. Error-branch responses drop `new_recipe_id`
+  — pre-refactor that id named a committed partial row; post-refactor
+  no row exists to name. 3 new e2e tests in
+  `tests/e2e/dora_api/test_create_recipe_unit_of_work.py` pin the
+  invariant (invalid tag → rollback, invalid step-parent → rollback,
+  happy path → single commit). Full test suite 828 pass, 2 pre-existing
+  unrelated fails. The sweep of the other ~20 multi-commit handlers is
+  tracked as FU-512.
+
+### Changed
+- **R-029 (hide, don't nag) app-wide sweep — FU-500 (2026-07-08).**
+  The one live R-014-shaped offender still in the app — the
+  Product Search entry in the main navigation — now **hides** when the
+  admin hasn't configured a `product_search_url`, instead of rendering
+  disabled with a "Not set up yet — set the URL in Settings → System →
+  Features" tooltip. Admins configure the URL on the settings screen
+  that owns the field; nowhere else advertises the not-set-up state.
+  `MenuButtonProps` shed its now-dead `disabled` / `disabledTooltip`
+  fields and both menu-button components lost the disabled render
+  branch, so no future nav entry can carry a "here but disabled" shape.
+  Nine `R-014` comment references across `useFeatureFlags.ts`,
+  `usePushSubscription.ts`, `models/auth.ts`, `AssistantSettings`,
+  `NotificationsSettings`, `VoiceSettings`, `StockItemDetailPage`
+  relabelled to R-029 (still valid carve-outs — the settings screen
+  that owns the config). Eight mislabelled `R-014` tags on lifecycle,
+  state-hydration, swallow-error, and calm-empty-state comments were
+  removed or relabelled with an explicit "distinct from R-029" note.
+  `ENGINEERING_STANDARDS.md` ADR-002 gains a Presentation line
+  re-affirming hide-when-off + a "See also: R-029 / ADR-025"
+  cross-reference. Purely a presentation refactor — no functional
+  behaviour changes beyond the Product Search nav flip.
+
+### Changed
+- **Base-component sweep: 40 raw `<q-btn>` sites migrated to
+  `<BaseButton>`; `BaseButton` gains a `filled-icon` variant + optional
+  `color` prop — FU-504 (2026-07-08).** The FU-424 senior-review audit
+  had left ~54 raw `<q-btn>` uses across 16 files as the last
+  base-component adoption residuals, plus one open design call on
+  whether `BaseButton` should cover the "unelevated coloured icon
+  button" shape (RecipeCard's chef-hat toggling primary/warning was
+  the marquee case). Both closed in one sweep: `BaseButton` picks up
+  a **`filled-icon`** variant (`unelevated round dense`, primary by
+  default) and an **optional `color` prop** that overrides the
+  variant's default color when set — so `variant="icon"` and
+  `variant="filled-icon"` can now carry a dynamic `:color=` binding
+  without callers reaching for raw q-btn. 40 sites migrated across
+  `RecipeCard`, `ScanOverlay`, `DoraChat`, `MyProductsPage`, and 6
+  settings pages; 10 raw sites deliberately kept as documented
+  carve-outs (accent-palette CTA on Help, Quasar-secondary outline
+  buttons on timezone/locale settings, `type="a"` anchors, dynamic
+  positive/warning outlines on ShoppingListDetail, and StocktakeRunner's
+  labeled-dynamic-color change-level button with its custom stacked
+  children). Purely a componentisation refactor — no behavioural
+  change, no styling delta beyond the intended visual unification of
+  MyProductsPage's empty-state CTA to the standard unelevated primary.
+
+### Changed
 - **Import templates: example row is now dict-keyed + boot-fails on
   drift — FU-350 (2026-07-07).** `ImportTemplate.example` changed from
   a positional `tuple[str, ...]` (silent misalignment if `TARGET_FIELDS`

@@ -12,8 +12,9 @@ from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 def _current_user_id() -> UUID | None:
@@ -41,8 +42,8 @@ class CookRecipeResponse:
 
 
 class CookRecipeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(
         self,
@@ -76,7 +77,7 @@ class CookRecipeHandler:
 @has_request_body(CookRecipeRequest)
 def cook_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(CookRecipeHandler)
+    _Handler = CookRecipeHandler(SqlAlchemyRepository())
     _Request: CookRecipeRequest = get_request_body()
     _Response = _Handler.handle(_Request, recipe_id, _current_user_id())
     if _Response.recipe_not_found:

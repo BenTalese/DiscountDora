@@ -17,8 +17,8 @@ from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 from flask import request
 
 
@@ -31,8 +31,8 @@ class FrequentlyAddedDto:
 
 
 class GetFrequentlyAddedHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, limit: int) -> List[FrequentlyAddedDto]:
         session = self.repository.session
@@ -73,6 +73,6 @@ def get_frequently_added():
     except (TypeError, ValueError):
         _Limit = 12
     _Limit = max(1, min(_Limit, 50))
-    _Results = get_container().inject(GetFrequentlyAddedHandler).handle(_Limit)
+    _Results = GetFrequentlyAddedHandler(SqlAlchemyRepository()).handle(_Limit)
     _Logger.debug("Frequently-added returned %d items (limit %d)", len(_Results), _Limit)
     return ok(_Results)

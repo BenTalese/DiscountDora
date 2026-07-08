@@ -78,8 +78,7 @@
             const detail = await stockItemApi.getDetailAsync(props.stockItemId);
             prefill.value = detail.price_entry_prefill ?? null;
         } catch {
-            // Silent — form still works without prefill (R-014 reveal-and-disable
-            // does not apply: the affordance is fully usable).
+            // Silent — form still works without prefill.
         } finally {
             busy.value = false;
         }

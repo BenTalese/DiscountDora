@@ -25,9 +25,10 @@ from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ───── Bulk tick / untick ─────────────────────────────────────────────────
@@ -47,8 +48,8 @@ class BulkTickResponse:
 
 
 class BulkTickHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: BulkTickRequest, shopping_list_id: UUID) -> BulkTickResponse:
         if not request.line_ids:
@@ -75,7 +76,7 @@ class BulkTickHandler:
 def bulk_tick(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: BulkTickRequest = get_request_body()
-    _Response = get_container().inject(BulkTickHandler).handle(_Request, shopping_list_id)
+    _Response = BulkTickHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     _Logger.info(
         f"Bulk-{'tick' if _Request.is_ticked else 'untick'} on list {shopping_list_id}: "
         f"updated {_Response.updated_count} of {len(_Request.line_ids)} requested"
@@ -105,8 +106,8 @@ class ReorderResponse:
 
 
 class ReorderHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ReorderRequest, shopping_list_id: UUID) -> ReorderResponse:
         # Pull every line on the list so we can both validate the request
@@ -146,7 +147,7 @@ class ReorderHandler:
 def reorder_lines(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Request: ReorderRequest = get_request_body()
-    _Response = get_container().inject(ReorderHandler).handle(_Request, shopping_list_id)
+    _Response = ReorderHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.mismatched:
         return bad_request(
             "Some line ids don't belong to this list.",

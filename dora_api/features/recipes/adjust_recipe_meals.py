@@ -8,8 +8,9 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class AdjustRecipeMealsRequest(BaseModel):
@@ -27,8 +28,8 @@ class AdjustRecipeMealsResponse:
 
 
 class AdjustRecipeMealsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: AdjustRecipeMealsRequest, recipe_id: UUID) -> AdjustRecipeMealsResponse:
         _Recipe = self.repository.get(Recipe).by_id(recipe_id)
@@ -47,7 +48,7 @@ class AdjustRecipeMealsHandler:
 @has_request_body(AdjustRecipeMealsRequest)
 def adjust_recipe_meals(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(AdjustRecipeMealsHandler)
+    _Handler = AdjustRecipeMealsHandler(SqlAlchemyRepository())
     _Request: AdjustRecipeMealsRequest = get_request_body()
     _Response = _Handler.handle(_Request, recipe_id)
     if _Response.recipe_not_found:

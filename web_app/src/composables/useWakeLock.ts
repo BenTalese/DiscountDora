@@ -17,7 +17,7 @@
 // We reacquire on `visibilitychange` back to `visible` for as long as the
 // consumer's `enabled` flag stays true (e.g. shop mode still active).
 //
-// R-014 — this composable can be called from a component `setup()`; it
+// Lifecycle: this composable can be called from a component `setup()`; it
 // registers `onUnmounted` to release the lock cleanly even if the caller
 // forgets. No manual `release()` required for the golden path.
 

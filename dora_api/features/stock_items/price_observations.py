@@ -26,9 +26,10 @@ from dora_api.domain.entities.store import Store
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request, no_content, not_found
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class AddPriceObservationRequest(BaseModel):
@@ -55,8 +56,8 @@ class PriceObservationMutationResponse:
 
 
 class PriceObservationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def add(self, stock_item_id: UUID, request: AddPriceObservationRequest) -> PriceObservationMutationResponse:
         if not self.repository.get(StockItem).exists(stock_item_id):
@@ -107,7 +108,7 @@ class PriceObservationHandler:
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/price-observations", methods=["POST"])
 @has_request_body(AddPriceObservationRequest)
 def add_price_observation(stock_item_id: UUID):
-    _Handler = get_container().inject(PriceObservationHandler)
+    _Handler = PriceObservationHandler(SqlAlchemyRepository())
     _Request: AddPriceObservationRequest = get_request_body()
     _Response = _Handler.add(stock_item_id, _Request)
     if _Response.stock_item_not_found:
@@ -125,7 +126,7 @@ def add_price_observation(stock_item_id: UUID):
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/price-observations/<observation_id>", methods=["DELETE"])
 def delete_price_observation(stock_item_id: UUID, observation_id: UUID):
-    _Handler = get_container().inject(PriceObservationHandler)
+    _Handler = PriceObservationHandler(SqlAlchemyRepository())
     _Response = _Handler.delete(stock_item_id, observation_id)
     if _Response.observation_not_found:
         return not_found(StockItemPriceObservation.__name__, observation_id)

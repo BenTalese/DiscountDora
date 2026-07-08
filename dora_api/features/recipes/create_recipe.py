@@ -38,10 +38,10 @@ from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failure,
                                                   entity_existence_failures)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import (field_of, get_request_body)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateRecipeIngredientRequest(BaseModel):
@@ -175,8 +175,8 @@ class CreateRecipeResponse:
 
 
 class CreateRecipeHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateRecipeRequest) -> CreateRecipeResponse:
         # §1.7/§1.12 — closed-set vocabularies (R-010).
@@ -291,8 +291,15 @@ class CreateRecipeHandler:
         )
 
         self.repository.add(_NewRecipe)
-        # Save first so the recipe row exists before the tag FK insert.
-        self.repository.save_changes()
+        # FU-456 unit-of-work: one commit, at the end. Flush so downstream
+        # Core-level inserts (tags / tools / sections / steps / images
+        # access helpers all reach the DB via `db.session.execute(...)`)
+        # can reference the recipe row's FK without tripping on it. Any
+        # ValueError below returns early WITHOUT committing; teardown
+        # rolls the whole thing back so a partial recipe never persists.
+        # Error responses drop `new_recipe_id` accordingly — the id was
+        # only ever a Python-side uuid4, never a real DB row.
+        self.repository.flush()
 
         # insert sections, then back-fill ingredient
         # rows with their resolved section_id. Sections live as their
@@ -317,10 +324,7 @@ class CreateRecipeHandler:
                     ).items()
                 }
             except ValueError as exc:
-                return CreateRecipeResponse(
-                    new_recipe_id=_NewRecipe.id,
-                    invalid_section_message=str(exc),
-                )
+                return CreateRecipeResponse(invalid_section_message=str(exc))
             # Back-fill section_id on the freshly-inserted ingredients.
             if _SectionClientToReal:
                 from dora_api.app import db
@@ -336,7 +340,6 @@ class CreateRecipeHandler:
                         .where(_IngTable.c.id == ing_ent.id)
                         .values(section_id=real)
                     )
-            self.repository.save_changes()
 
         if request.dietary_tag_ids or request.tool_ids:
             try:
@@ -345,13 +348,7 @@ class CreateRecipeHandler:
                 if request.tool_ids:
                     set_tool_ids_for_recipe(_NewRecipe.id, request.tool_ids)
             except ValueError as exc:
-                # The recipe row stays — invalid tag/tool input shouldn't fail
-                # the whole create; surface the bad id to the caller.
-                return CreateRecipeResponse(
-                    new_recipe_id=_NewRecipe.id,
-                    invalid_tag_message=str(exc),
-                )
-            self.repository.save_changes()
+                return CreateRecipeResponse(invalid_tag_message=str(exc))
 
         if request.steps:
             try:
@@ -377,11 +374,7 @@ class CreateRecipeHandler:
                 ]
                 replace_steps_for_recipe(_NewRecipe.id, _StepWrites)
             except ValueError as exc:
-                return CreateRecipeResponse(
-                    new_recipe_id=_NewRecipe.id,
-                    invalid_step_message=str(exc),
-                )
-            self.repository.save_changes()
+                return CreateRecipeResponse(invalid_step_message=str(exc))
 
         # PROPOSAL_RECIPE_IMAGE_STEPS — write step images last so the FK to
         # the just-created recipe is satisfied. The replace helper validates
@@ -394,12 +387,10 @@ class CreateRecipeHandler:
                 ]
                 replace_step_images_for_recipe(_NewRecipe.id, _ImageWrites)
             except ValueError as exc:
-                return CreateRecipeResponse(
-                    new_recipe_id=_NewRecipe.id,
-                    invalid_step_message=str(exc),
-                )
-            self.repository.save_changes()
+                return CreateRecipeResponse(invalid_step_message=str(exc))
 
+        # Single commit at the end — everything or nothing.
+        self.repository.save_changes()
         return CreateRecipeResponse(new_recipe_id = _NewRecipe.id)
 
 
@@ -408,7 +399,7 @@ class CreateRecipeHandler:
 def create_recipe():
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to create recipe.")
-    _Handler = get_container().inject(CreateRecipeHandler)
+    _Handler = CreateRecipeHandler(SqlAlchemyRepository())
     _Request: CreateRecipeRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
@@ -466,7 +457,7 @@ def create_recipe():
 
     _Logger.info(f"Successfully created recipe with ID: {_Response.new_recipe_id}")
     from dora_api.features.recipes.get_recipes import GetRecipesHandler
-    _Dto = get_container().inject(GetRecipesHandler).handle_by_id(_Response.new_recipe_id)
+    _Dto = GetRecipesHandler(SqlAlchemyRepository()).handle_by_id(_Response.new_recipe_id)
     return created(
         _Response.new_recipe_id,
         f"{RECIPE_ROUTER.name}.{get_recipes.__name__}",

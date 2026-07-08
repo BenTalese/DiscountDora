@@ -110,18 +110,16 @@
                             :placeholder="passwordConfigured ? '••••••••' : 'Enter SMTP password'"
                             :disable="saving"
                         />
-                        <q-btn
-                            unelevated no-caps
+                        <BaseButton
+                            variant="primary"
                             label="Save"
-                            color="primary"
                             :disable="saving || passwordDraft.length === 0"
                             @click="() => onSavePassword(passwordDraft)"
                         />
-                        <q-btn
+                        <BaseButton
                             v-if="passwordConfigured"
-                            flat no-caps
+                            variant="danger-ghost"
                             label="Clear"
-                            color="negative"
                             :disable="saving"
                             @click="() => onSavePassword('')"
                         />
@@ -134,6 +132,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AppSettingsApiService, { type AppSettings } from 'src/services/api/appSettingsApiService';

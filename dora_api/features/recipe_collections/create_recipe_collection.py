@@ -12,9 +12,10 @@ from dora_api.features.routers import RECIPE_COLLECTION_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateRecipeCollectionRequest(BaseModel):
@@ -30,8 +31,8 @@ class CreateRecipeCollectionResponse:
 
 
 class CreateRecipeCollectionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateRecipeCollectionRequest) -> CreateRecipeCollectionResponse:
         _NameField = EntityField(RecipeCollection, RecipeCollection.Fields.NAME)
@@ -49,7 +50,7 @@ class CreateRecipeCollectionHandler:
 @has_request_body(CreateRecipeCollectionRequest)
 def create_recipe_collection():
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(CreateRecipeCollectionHandler)
+    _Handler = CreateRecipeCollectionHandler(SqlAlchemyRepository())
     _Request: CreateRecipeCollectionRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
@@ -61,7 +62,7 @@ def create_recipe_collection():
 
     from dora_api.features.recipe_collections.get_recipe_collections import \
         GetRecipeCollectionsHandler
-    _Dto = get_container().inject(GetRecipeCollectionsHandler).handle_by_id(
+    _Dto = GetRecipeCollectionsHandler(SqlAlchemyRepository()).handle_by_id(
         _Response.new_recipe_collection_id
     )
     return created(

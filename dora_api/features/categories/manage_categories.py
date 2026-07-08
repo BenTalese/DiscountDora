@@ -21,9 +21,10 @@ from dora_api.features.routers import CATEGORY_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +38,8 @@ class CategoryDto:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetCategoriesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[CategoryDto]:
         categories: List[Category] = self.repository.get(Category).all()
@@ -66,7 +67,7 @@ class GetCategoriesHandler:
 
 @CATEGORY_ROUTER.route("", methods=["GET"])
 def get_categories():
-    _Result = get_container().inject(GetCategoriesHandler).handle()
+    _Result = GetCategoriesHandler(SqlAlchemyRepository()).handle()
     return ok(_Result)
 
 
@@ -84,8 +85,8 @@ class CreateCategoryResponse:
 
 
 class CreateCategoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateCategoryRequest) -> CreateCategoryResponse:
         existing = self.repository.get(Category).all()
@@ -104,7 +105,7 @@ class CreateCategoryHandler:
 def create_category():
     _Logger = logging.getLogger(__name__)
     _Request: CreateCategoryRequest = get_request_body()
-    _Response = get_container().inject(CreateCategoryHandler).handle(_Request)
+    _Response = CreateCategoryHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(f"A category named '{_Request.name}' already exists.")
     _Logger.info(f"Created category {_Response.category_id} '{_Request.name}'")
@@ -130,8 +131,8 @@ class UpdateCategoryResponse:
 
 
 class UpdateCategoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateCategoryRequest, category_id: UUID) -> UpdateCategoryResponse:
         category: Category | None = self.repository.get(Category).by_id(category_id)
@@ -151,7 +152,7 @@ class UpdateCategoryHandler:
 @has_request_body(UpdateCategoryRequest)
 def update_category(category_id: UUID):
     _Request: UpdateCategoryRequest = get_request_body()
-    _Response = get_container().inject(UpdateCategoryHandler).handle(_Request, category_id)
+    _Response = UpdateCategoryHandler(SqlAlchemyRepository()).handle(_Request, category_id)
     if _Response.not_found:
         return not_found("Category", category_id)
     if _Response.duplicate:
@@ -168,8 +169,8 @@ class DeleteCategoryResponse:
 
 
 class DeleteCategoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, category_id: UUID) -> DeleteCategoryResponse:
         category: Category | None = self.repository.get(Category).by_id(category_id)
@@ -186,7 +187,7 @@ class DeleteCategoryHandler:
 @CATEGORY_ROUTER.route("/<category_id>", methods=["DELETE"])
 def delete_category(category_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteCategoryHandler).handle(category_id)
+    _Response = DeleteCategoryHandler(SqlAlchemyRepository()).handle(category_id)
     if _Response.not_found:
         return not_found("Category", category_id)
     _Logger.info(f"Deleted category {category_id}; {_Response.recipes_affected} recipe(s) nulled")

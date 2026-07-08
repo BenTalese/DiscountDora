@@ -10,10 +10,13 @@
             :icon="ICONS.smart_toy"
         />
 
-        <!-- install-wide master flag layered with the
-             per-user toggle. When the install master is off, the user's
-             toggle is forced visually off + disabled with an explanatory
-             note (R-014 reveal-and-disable). -->
+        <!-- install-wide master flag layered with the per-user toggle.
+             When the install master is off, the user's toggle is forced
+             visually off + disabled with an explanatory note. R-029
+             carve-out: this is the assistant's own per-user settings
+             screen (the one legitimate place the disabled state may
+             render); every other surface hides the assistant entry point
+             when the master is off. -->
         <q-banner
             v-if="!installEnabled"
             class="dora-bg-sunken"

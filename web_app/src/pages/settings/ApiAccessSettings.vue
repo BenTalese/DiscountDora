@@ -268,10 +268,8 @@
                     class="reveal-readout"
                 >
                     <template #append>
-                        <q-btn
-                            flat
-                            round
-                            dense
+                        <BaseButton
+                            variant="icon"
                             :icon="ICONS.content_copy"
                             @click="copyRevealed"
                         />

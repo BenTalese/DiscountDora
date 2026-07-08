@@ -32,9 +32,9 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   forbidden, no_content,
                                                   not_found)
 from dora_api.infrastructure.audit import emit as audit_emit
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # Tables that carry a plain `user_id` column with no FK-cascade — we clear
@@ -53,8 +53,8 @@ class AdminDeleteUserResponse:
 
 
 class AdminDeleteUserHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID) -> AdminDeleteUserResponse:
         _Target: User | None = self.repository.get(User).by_id(user_id)
@@ -90,7 +90,7 @@ def admin_delete_user(user_id: UUID):
             "remove you, or use a future self-serve account-close flow."
         )
 
-    _Response = get_container().inject(AdminDeleteUserHandler).handle(user_id)
+    _Response = AdminDeleteUserHandler(SqlAlchemyRepository()).handle(user_id)
 
     if _Response.user_not_found:
         return not_found("User", user_id)

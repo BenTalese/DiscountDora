@@ -24,9 +24,10 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   entity_existence_failure,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateStockItemRequest(BaseModel):
@@ -93,8 +94,8 @@ class UpdateStockItemResponse:  # noqa: D401
 
 
 class UpdateStockItemHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateStockItemRequest, stock_item_id: UUID) -> UpdateStockItemResponse:
         _StockItem: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
@@ -402,7 +403,7 @@ class UpdateStockItemHandler:
 def update_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to update stock item.")
-    _Handler = get_container().inject(UpdateStockItemHandler)
+    _Handler = UpdateStockItemHandler(SqlAlchemyRepository())
     _Request: UpdateStockItemRequest = get_request_body()
     _Response = _Handler.handle(_Request, stock_item_id)
 

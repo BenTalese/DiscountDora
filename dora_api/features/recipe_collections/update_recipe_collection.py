@@ -9,9 +9,10 @@ from dora_api.features.routers import RECIPE_COLLECTION_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateRecipeCollectionRequest(BaseModel):
@@ -27,8 +28,8 @@ class UpdateRecipeCollectionResponse:
 
 
 class UpdateRecipeCollectionHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateRecipeCollectionRequest, recipe_collection_id: UUID) -> UpdateRecipeCollectionResponse:
         _Collection = self.repository.get(RecipeCollection).by_id(recipe_collection_id)
@@ -49,7 +50,7 @@ class UpdateRecipeCollectionHandler:
 @has_request_body(UpdateRecipeCollectionRequest)
 def update_recipe_collection(recipe_collection_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Handler = get_container().inject(UpdateRecipeCollectionHandler)
+    _Handler = UpdateRecipeCollectionHandler(SqlAlchemyRepository())
     _Request: UpdateRecipeCollectionRequest = get_request_body()
     _Response = _Handler.handle(_Request, recipe_collection_id)
 

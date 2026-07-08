@@ -22,9 +22,10 @@ from dora_api.features.routers import CUISINE_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,8 +39,8 @@ class CuisineDto:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetCuisinesHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[CuisineDto]:
         cuisines: List[Cuisine] = self.repository.get(Cuisine).all()
@@ -67,7 +68,7 @@ class GetCuisinesHandler:
 
 @CUISINE_ROUTER.route("", methods=["GET"])
 def get_cuisines():
-    _Result = get_container().inject(GetCuisinesHandler).handle()
+    _Result = GetCuisinesHandler(SqlAlchemyRepository()).handle()
     return ok(_Result)
 
 
@@ -85,8 +86,8 @@ class CreateCuisineResponse:
 
 
 class CreateCuisineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateCuisineRequest) -> CreateCuisineResponse:
         existing = self.repository.get(Cuisine).all()
@@ -105,7 +106,7 @@ class CreateCuisineHandler:
 def create_cuisine():
     _Logger = logging.getLogger(__name__)
     _Request: CreateCuisineRequest = get_request_body()
-    _Response = get_container().inject(CreateCuisineHandler).handle(_Request)
+    _Response = CreateCuisineHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(f"A cuisine named '{_Request.name}' already exists.")
     _Logger.info(f"Created cuisine {_Response.cuisine_id} '{_Request.name}'")
@@ -131,8 +132,8 @@ class UpdateCuisineResponse:
 
 
 class UpdateCuisineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateCuisineRequest, cuisine_id: UUID) -> UpdateCuisineResponse:
         cuisine: Cuisine | None = self.repository.get(Cuisine).by_id(cuisine_id)
@@ -152,7 +153,7 @@ class UpdateCuisineHandler:
 @has_request_body(UpdateCuisineRequest)
 def update_cuisine(cuisine_id: UUID):
     _Request: UpdateCuisineRequest = get_request_body()
-    _Response = get_container().inject(UpdateCuisineHandler).handle(_Request, cuisine_id)
+    _Response = UpdateCuisineHandler(SqlAlchemyRepository()).handle(_Request, cuisine_id)
     if _Response.not_found:
         return not_found("Cuisine", cuisine_id)
     if _Response.duplicate:
@@ -169,8 +170,8 @@ class DeleteCuisineResponse:
 
 
 class DeleteCuisineHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, cuisine_id: UUID) -> DeleteCuisineResponse:
         cuisine: Cuisine | None = self.repository.get(Cuisine).by_id(cuisine_id)
@@ -189,7 +190,7 @@ class DeleteCuisineHandler:
 @CUISINE_ROUTER.route("/<cuisine_id>", methods=["DELETE"])
 def delete_cuisine(cuisine_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteCuisineHandler).handle(cuisine_id)
+    _Response = DeleteCuisineHandler(SqlAlchemyRepository()).handle(cuisine_id)
     if _Response.not_found:
         return not_found("Cuisine", cuisine_id)
     _Logger.info(f"Deleted cuisine {cuisine_id}; {_Response.recipes_affected} recipe(s) nulled")

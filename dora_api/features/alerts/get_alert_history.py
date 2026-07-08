@@ -18,9 +18,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.alerts.alert_key import SCOPE_STOCK, parse_alert_key
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 STATE_DISMISSED = "dismissed"
@@ -71,8 +71,8 @@ def _state_and_at(row: AlertInteraction):
 
 
 class GetAlertHistoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID, limit: int) -> AlertHistoryDto:
         rows: List[AlertInteraction] = self.repository.get(AlertInteraction).all(
@@ -124,7 +124,7 @@ def get_alert_history():
     except (TypeError, ValueError):
         limit = _DEFAULT_LIMIT
     limit = max(1, min(limit, _MAX_LIMIT))
-    _History = get_container().inject(GetAlertHistoryHandler).handle(user_id, limit)
+    _History = GetAlertHistoryHandler(SqlAlchemyRepository()).handle(user_id, limit)
     logging.getLogger(__name__).debug(
         "Alert history: %d entries for %s", len(_History.entries), user_id
     )

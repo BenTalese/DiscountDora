@@ -23,8 +23,9 @@ from dora_api.features.routers import DIETARY_TAG_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,8 +49,8 @@ def _recipe_counts() -> dict[UUID, int]:
 # ───── List ──────────────────────────────────────────────────────────────
 
 class GetDietaryTagsHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self) -> List[DietaryTagDto]:
         tags: List[DietaryTag] = self.repository.get(DietaryTag).all()
@@ -70,7 +71,7 @@ class GetDietaryTagsHandler:
 
 @DIETARY_TAG_ROUTER.route("", methods=["GET"])
 def get_dietary_tags():
-    _Result = get_container().inject(GetDietaryTagsHandler).handle()
+    _Result = GetDietaryTagsHandler(SqlAlchemyRepository()).handle()
     return ok(_Result)
 
 
@@ -89,8 +90,8 @@ class CreateDietaryTagResponse:
 
 
 class CreateDietaryTagHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateDietaryTagRequest) -> CreateDietaryTagResponse:
         existing = self.repository.get(DietaryTag).all()
@@ -113,7 +114,7 @@ class CreateDietaryTagHandler:
 def create_dietary_tag():
     _Logger = logging.getLogger(__name__)
     _Request: CreateDietaryTagRequest = get_request_body()
-    _Response = get_container().inject(CreateDietaryTagHandler).handle(_Request)
+    _Response = CreateDietaryTagHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.duplicate:
         return business_rule_violation(f"A dietary tag named '{_Request.name}' already exists.")
     _Logger.info(f"Created dietary tag {_Response.dietary_tag_id} '{_Request.name}'")
@@ -140,8 +141,8 @@ class UpdateDietaryTagResponse:
 
 
 class UpdateDietaryTagHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateDietaryTagRequest, dietary_tag_id: UUID) -> UpdateDietaryTagResponse:
         tag: DietaryTag | None = self.repository.get(DietaryTag).by_id(dietary_tag_id)
@@ -164,7 +165,7 @@ class UpdateDietaryTagHandler:
 @has_request_body(UpdateDietaryTagRequest)
 def update_dietary_tag(dietary_tag_id: UUID):
     _Request: UpdateDietaryTagRequest = get_request_body()
-    _Response = get_container().inject(UpdateDietaryTagHandler).handle(_Request, dietary_tag_id)
+    _Response = UpdateDietaryTagHandler(SqlAlchemyRepository()).handle(_Request, dietary_tag_id)
     if _Response.not_found:
         return not_found("DietaryTag", dietary_tag_id)
     if _Response.duplicate:
@@ -181,8 +182,8 @@ class DeleteDietaryTagResponse:
 
 
 class DeleteDietaryTagHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, dietary_tag_id: UUID) -> DeleteDietaryTagResponse:
         tag: DietaryTag | None = self.repository.get(DietaryTag).by_id(dietary_tag_id)
@@ -198,7 +199,7 @@ class DeleteDietaryTagHandler:
 @DIETARY_TAG_ROUTER.route("/<dietary_tag_id>", methods=["DELETE"])
 def delete_dietary_tag(dietary_tag_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(DeleteDietaryTagHandler).handle(dietary_tag_id)
+    _Response = DeleteDietaryTagHandler(SqlAlchemyRepository()).handle(dietary_tag_id)
     if _Response.not_found:
         return not_found("DietaryTag", dietary_tag_id)
     _Logger.info(f"Deleted dietary tag {dietary_tag_id}; {_Response.recipes_affected} link(s) removed")

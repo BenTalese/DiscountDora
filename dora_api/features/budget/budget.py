@@ -49,9 +49,9 @@ from dora_api.domain.entities.user import (BUDGET_PERIOD_MONTHLY,
 from dora_api.features.routers import BUDGET_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import ok, unauthorized
-from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 # ── Period boundaries ────────────────────────────────────────────────────
@@ -189,8 +189,8 @@ class BudgetStatusDto:
 
 
 class GetBudgetStatusHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID) -> BudgetStatusDto | None:
         user: User | None = self.repository.get(User).by_id(user_id)
@@ -282,7 +282,7 @@ def get_budget_status():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    dto = get_container().inject(GetBudgetStatusHandler).handle(user_id)
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
     if dto is None:
         return unauthorized()
     _Logger.debug(
@@ -307,8 +307,8 @@ class BudgetHistoryRowDto:
 
 
 class GetBudgetHistoryHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, user_id: UUID, periods: int) -> list[BudgetHistoryRowDto] | None:
         user: User | None = self.repository.get(User).by_id(user_id)
@@ -391,7 +391,7 @@ def get_budget_history():
     # Clamp to a sensible spread — the SPA never needs hundreds of rows
     # and an open-ended N is an easy DoS surface.
     periods = max(1, min(periods, 26))
-    rows = get_container().inject(GetBudgetHistoryHandler).handle(user_id, periods)
+    rows = GetBudgetHistoryHandler(SqlAlchemyRepository()).handle(user_id, periods)
     if rows is None:
         return unauthorized()
     return ok({"rows": rows})

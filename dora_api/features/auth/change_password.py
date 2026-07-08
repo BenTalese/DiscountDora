@@ -31,8 +31,9 @@ from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import validate_password
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.email_sender import render_template, send_email
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class ChangePasswordRequest(BaseModel):
@@ -50,8 +51,8 @@ class ChangePasswordResponse:
 
 
 class ChangePasswordHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: ChangePasswordRequest, user_id: UUID) -> ChangePasswordResponse:
         _User: User | None = self.repository.get(User).by_id(user_id)
@@ -90,7 +91,7 @@ def change_password():
             type="https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
         ))
 
-    _Response = get_container().inject(ChangePasswordHandler).handle(_Request, _UserId)
+    _Response = ChangePasswordHandler(SqlAlchemyRepository()).handle(_Request, _UserId)
 
     if _Response.user_not_found:
         session.clear()

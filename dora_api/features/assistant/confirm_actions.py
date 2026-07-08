@@ -179,7 +179,7 @@ def propose_update_stock_level(args: dict) -> dict[str, Any]:
 
 
 def commit_update_stock_level(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = UpdateStockItemHandler()
+    handler = UpdateStockItemHandler(SqlAlchemyRepository())
     response = handler.handle(
         UpdateStockItemRequest(stock_level_id=UUID(payload["new_level_id"])),
         stock_item_id=UUID(payload["stock_item_id"]),
@@ -226,7 +226,7 @@ def propose_mark_opened(args: dict) -> dict[str, Any]:
 
 
 def commit_mark_opened(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = UpdateStockItemHandler()
+    handler = UpdateStockItemHandler(SqlAlchemyRepository())
     response = handler.handle(
         UpdateStockItemRequest(is_open=bool(payload["is_open"])),
         stock_item_id=UUID(payload["stock_item_id"]),
@@ -278,7 +278,7 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
 
 
 def commit_push_expiry(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = UpdateStockItemHandler()
+    handler = UpdateStockItemHandler(SqlAlchemyRepository())
     response = handler.handle(
         UpdateStockItemRequest(expiry_date=date.fromisoformat(payload["new_expiry"])),
         stock_item_id=UUID(payload["stock_item_id"]),
@@ -376,7 +376,7 @@ def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
 
 
 def commit_tick_shopping_line(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = UpdateLineHandler()
+    handler = UpdateLineHandler(SqlAlchemyRepository())
     response = handler.handle(
         UpdateLineRequest(is_ticked=bool(payload["is_ticked"])),
         shopping_list_id=UUID(payload["shopping_list_id"]),
@@ -445,7 +445,7 @@ def propose_move_item(args: dict) -> dict[str, Any]:
 
 
 def commit_move_item(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = MoveStockItemHandler()
+    handler = MoveStockItemHandler(SqlAlchemyRepository())
     response = handler.handle(
         MoveStockItemRequest(destination_location_id=UUID(payload["destination_location_id"])),
         stock_item_id=UUID(payload["stock_item_id"]),
@@ -571,7 +571,7 @@ def commit_plan_meal_for_date(payload: dict[str, Any]) -> dict[str, Any]:
         servings=int(payload["servings"]),
         slot=payload["slot"],
     ))
-    handler = UpdateMealPlanHandler()
+    handler = UpdateMealPlanHandler(SqlAlchemyRepository())
     response = handler.handle(UpdateMealPlanRequest(entries=existing), meal_plan_id=plan_id)
     if response.meal_plan_not_found:
         return {"ok": False, "message": "That meal plan vanished mid-request."}
@@ -671,7 +671,7 @@ def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
 
 
 def commit_add_recipe_to_list(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = AddLineHandler()
+    handler = AddLineHandler(SqlAlchemyRepository())
     list_id = UUID(payload["shopping_list_id"])
     added = 0
     already = 0
@@ -755,7 +755,7 @@ def propose_cook_recipe(args: dict) -> dict[str, Any]:
 def commit_cook_recipe(payload: dict[str, Any]) -> dict[str, Any]:
     from dora_api.features.recipes.cook_recipe import (CookRecipeHandler,
                                                        CookRecipeRequest)
-    handler = CookRecipeHandler()
+    handler = CookRecipeHandler(SqlAlchemyRepository())
     response = handler.handle(
         CookRecipeRequest(meals_cooked=int(payload["meals_cooked"])),
         recipe_id=UUID(payload["recipe_id"]),
@@ -829,7 +829,7 @@ def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
 def commit_adjust_recipe_meals(payload: dict[str, Any]) -> dict[str, Any]:
     from dora_api.features.recipes.adjust_recipe_meals import (
         AdjustRecipeMealsHandler, AdjustRecipeMealsRequest)
-    handler = AdjustRecipeMealsHandler()
+    handler = AdjustRecipeMealsHandler(SqlAlchemyRepository())
     response = handler.handle(
         AdjustRecipeMealsRequest(delta=int(payload["delta"])),
         recipe_id=UUID(payload["recipe_id"]),
@@ -875,7 +875,7 @@ def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
             "summary": "I can't see who's asking — try refreshing.",
             "candidates": [],
         }
-    handler = TrimToBudgetHandler()
+    handler = TrimToBudgetHandler(SqlAlchemyRepository())
     preview = handler.handle(
         primary.id, TrimToBudgetRequest(mode="preview"), user_id,
     )
@@ -945,7 +945,7 @@ def commit_trim_list_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
     if user_id is None:
         return {"ok": False, "message": "I couldn't confirm who's asking."}
     list_id = UUID(payload["shopping_list_id"])
-    result = TrimToBudgetHandler().handle(
+    result = TrimToBudgetHandler(SqlAlchemyRepository()).handle(
         list_id, TrimToBudgetRequest(mode="apply"), user_id,
     )
     if result is None or not result.applied or not result.trimmed:

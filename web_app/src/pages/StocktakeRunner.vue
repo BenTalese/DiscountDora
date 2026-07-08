@@ -92,6 +92,7 @@
                         :loading="busy"
                         @click="onStillCorrect"
                     />
+                    <!-- carve-out — raw q-btn: labeled dynamic-color button with custom stacked children, not an icon-variant fit -->
                     <q-btn
                         unelevated
                         no-caps

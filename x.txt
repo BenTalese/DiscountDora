@@ -1,0 +1,28 @@
+lets do FU-513
+
+
+Ran 2 commands, read 2 files
+Clear-cut. Let me check the scheduler pattern.
+
+
+Ran 2 commands, read 2 files
+Good template. Let me plan and execute.
+
+
+Used 6 tools
+Let me check the entity shape first, then build.
+
+
+Ran 3 commands, read a file, created a file, edited 2 files, used 6 tools
+Now the tests. Let me look at how existing suggestions tests are shaped.
+
+
+Ran 3 commands, read 2 files
+Now the test file:
+
+Created
+test_suggestions_snooze_prune.py
++154
+-0
+Server is temporarily limiting requests
+Too many requests right now — try again in a moment.

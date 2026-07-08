@@ -36,7 +36,6 @@ export type ConfirmAction = {
         | 'push_expiry'
         | 'tick_shopping_line'
         | 'move_item'
-        | 'set_primary_list'
         | 'plan_meal_for_date'
         | 'add_recipe_to_list';
     status: ConfirmActionStatus;

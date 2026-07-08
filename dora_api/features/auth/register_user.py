@@ -128,6 +128,10 @@ class AuthenticatedUserDto:
     llm_base_url: str | None
     llm_model: str | None
     has_llm_api_key: bool
+    # FU-360.6 — whether to mount the Dora helper bubble at all. Default
+    # True; distinct from `llm_enabled` (AI mode). When False the SPA hides
+    # the launcher entirely.
+    show_assistant: bool
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -178,6 +182,7 @@ class AuthenticatedUserDto:
             llm_base_url=user.llm_base_url,
             llm_model=user.llm_model,
             has_llm_api_key=user.llm_api_key_encrypted is not None,
+            show_assistant=bool(user.show_assistant),
         )
 
 

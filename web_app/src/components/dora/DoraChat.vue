@@ -8,7 +8,6 @@
                 </q-tooltip>
                 <q-chip
                     v-if="aiActive !== null"
-                    dense
                     size="sm"
                     class="q-ml-sm dora-mode-chip"
                     :class="{ 'dora-bg-sunken dora-text-secondary': !aiActive }"
@@ -423,6 +422,7 @@
     } from 'src/services/doraContextualActions';
     import {
         detectIntent,
+        extractAddToListItems,
         labelFor,
         runIntent,
         type DoraContext,
@@ -1224,6 +1224,13 @@
     // is the original user phrasing so intent handlers can extract targets
     // (e.g. "where is the cheese" → "cheese").
     async function dispatch(intent: DoraIntentId, rawText?: string) {
+        // FU-429 — Basic mode's one action verb. Resolving pantry names +
+        // performing the add needs the composables in this scope, so it's
+        // handled here rather than in the pure runIntent handler.
+        if (intent === 'add_to_list') {
+            await onAddToListByText(rawText ?? '');
+            return;
+        }
         thinking.value = true;
         await scrollToBottom();
         try {
@@ -1406,6 +1413,92 @@
         }
     }
 
+    // FU-429 — add-to-list by typed text, Basic mode's one action verb.
+    // Parses the item name(s) (pure, in doraIntents), resolves each against
+    // the pantry, and adds the unambiguous matches via the same composable
+    // the contextual "Add to list" chip uses — so notifications stay
+    // consistent. Ambiguous / not-found terms are surfaced, never guessed.
+    function oxfordJoin(names: string[]): string {
+        if (names.length <= 1) return names[0] ?? '';
+        if (names.length === 2) return `${names[0]} and ${names[1]}`;
+        return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+    }
+
+    async function onAddToListByText(text: string) {
+        thinking.value = true;
+        await scrollToBottom();
+        try {
+            await Promise.all([
+                stockItemStore.ensureLoadedAsync(),
+                shoppingListStore.ensureLoadedAsync(),
+            ]);
+            const queries = extractAddToListItems(text);
+            if (queries.length === 0) {
+                pushDoraMessage({
+                    text: "Sure — what should I add? Try \"add milk\" or \"add eggs and bread\".",
+                    mood: 'searching',
+                });
+                return;
+            }
+            const primary = shoppingListStore.quickAddTargetListId;
+            if (!primary) {
+                pushDoraMessage({
+                    text: "You don't have a primary shopping list set yet — pick one and I'll drop items straight onto it.",
+                    mood: 'sad',
+                    navigateTo: { path: '/shopping-lists', label: 'Open shopping lists' },
+                });
+                return;
+            }
+            const items = stockItems.value;
+            const matched: { id: string; name: string }[] = [];
+            const ambiguous: string[] = [];
+            const notFound: string[] = [];
+            for (const q of queries) {
+                const ql = q.toLowerCase();
+                const exact = items.filter((i) => i.name.toLowerCase() === ql);
+                const hits = exact.length
+                    ? exact
+                    : items.filter((i) => i.name.toLowerCase().includes(ql));
+                if (hits.length === 1) matched.push({ id: hits[0]!.stock_item_id, name: hits[0]!.name });
+                else if (hits.length > 1) ambiguous.push(q);
+                else notFound.push(q);
+            }
+            if (matched.length > 0) {
+                await addItems(primary, matched.map((m) => ({ stock_item_id: m.id })));
+            }
+            const parts: string[] = [];
+            if (matched.length) {
+                parts.push(`Added ${oxfordJoin(matched.map((m) => m.name))} to your list. 🛒`);
+            }
+            if (ambiguous.length) {
+                parts.push(
+                    `"${ambiguous.join('", "')}" matched more than one pantry item, so I didn't want to guess — open Stock and add the exact one.`,
+                );
+            }
+            if (notFound.length) {
+                const it = notFound.length === 1 ? 'it' : 'them';
+                parts.push(
+                    `I couldn't find ${oxfordJoin(notFound)} among your pantry items. Add ${it} on the Stock page first and I'll be able to list ${it}.`,
+                );
+            }
+            pushDoraMessage({
+                text: parts.join('\n\n'),
+                mood: matched.length ? 'excited' : (ambiguous.length ? 'searching' : 'sad'),
+                ...(matched.length
+                    ? { navigateTo: { path: '/shopping-lists', label: 'Open shopping lists' } }
+                    : {}),
+            });
+        } catch (err) {
+            pushDoraMessage({
+                text: `I couldn't update the list — ${describeApiError(err)}`,
+                mood: 'sad',
+            });
+        } finally {
+            thinking.value = false;
+            await scrollToBottom();
+        }
+    }
+
     // Free-form text goes to the SLM assistant first. The backend tells us
     // when it can't help — model unreachable (`available: false`) or the
     // message wasn't a data question (`defer_to_local: true`) — and in both
@@ -1566,6 +1659,19 @@
     .dora-bot-name {
         font-weight: 700;
         color: var(--text-primary);
+    }
+    /* FU-360.2 — the AI/Basic mode chip read as squished + too small. Give it
+       breathing room and a rem-based font so it stays legible and follows the
+       user's text-size preference (rather than the fixed dense size). */
+    .dora-mode-chip {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        padding: 2px 10px;
+        letter-spacing: 0.02em;
+    }
+    .dora-mode-chip :deep(.q-chip__icon) {
+        font-size: 1.05em;
+        margin-right: 3px;
     }
     .body--dark .dora-bot-name {
         color: var(--q-accent);

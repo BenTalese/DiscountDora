@@ -239,6 +239,12 @@ def commit_mark_opened(payload: dict[str, Any]) -> dict[str, Any]:
 
 # ── push_expiry ────────────────────────────────────────────────────────
 
+# FU-515 B.3 — sane bound on an LLM-supplied expiry shift (~10 years). The
+# mutation gate already shows the resulting date on the confirm card, but a
+# boundary cap rejects nonsense before it ever renders.
+_MAX_EXPIRY_PUSH_DAYS = 3650
+
+
 def propose_push_expiry(args: dict) -> dict[str, Any]:
     item_resolved = _resolve_single_item(str(args.get("item_name") or "").strip())
     if isinstance(item_resolved, dict):
@@ -256,6 +262,18 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
         return {
             "type": "push_expiry", "status": "invalid",
             "summary": "Zero days isn't really pushing anything, mate.",
+            "candidates": [],
+        }
+    # FU-515 B.3 — bound the LLM-supplied magnitude at the tool boundary. A
+    # ~10-year shift is already absurd for a pantry item; reject anything
+    # larger so a mis-parsed / injected number can't propose a nonsense date.
+    if abs(days) > _MAX_EXPIRY_PUSH_DAYS:
+        return {
+            "type": "push_expiry", "status": "invalid",
+            "summary": (
+                f"That's more than {_MAX_EXPIRY_PUSH_DAYS // 365} years — "
+                f"give me a sensible number of days."
+            ),
             "candidates": [],
         }
     # R-021 — fallback base for the expiry push is household-tz today.
@@ -791,6 +809,8 @@ def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
     if not name:
         return {"type": "adjust_recipe_meals", "status": "invalid",
                 "summary": "Which recipe's meal count should I adjust?", "candidates": []}
+    # FU-515 B.3 — `_coerce_signed_int` already clamps delta to ±_MAX_DELTA
+    # (±999) at the boundary, so a nonsense magnitude can't reach the pool.
     delta = _coerce_signed_int(args.get("delta"))
     if delta is None or delta == 0:
         return {"type": "adjust_recipe_meals", "status": "invalid",

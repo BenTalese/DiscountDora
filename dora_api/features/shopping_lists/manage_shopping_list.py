@@ -421,7 +421,6 @@ class CopyShoppingListHandler:
             created_at = now,
         )
         self.repository.add(target)
-        self.repository.save_changes()
 
         for sl in source_lines:
             self.repository.add(ShoppingListLine(
@@ -432,6 +431,7 @@ class CopyShoppingListHandler:
                 selected_product_id = sl.selected_product_id,
                 sequence = sl.sequence,
             ))
+        # FU-512 unit-of-work: one commit at the end.
         self.repository.save_changes()
         return CopyShoppingListResponse(new_shopping_list_id=target.id)
 

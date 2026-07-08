@@ -699,24 +699,6 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "set_primary_list",
-            "description": (
-                "Make a named shopping list the primary one (the default target "
-                "for new additions). Use for 'make Groceries the primary list', "
-                "'switch primary to the weekend run'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                },
-                "required": ["name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "plan_meal_for_date",
             "description": (
                 "Add a meal to the meal plan for a specific date and slot. "
@@ -948,7 +930,10 @@ _ACTION_TOOLS = frozenset({
     "push_expiry",
     "tick_shopping_line",
     "move_item",
-    "set_primary_list",
+    # NOTE: `set_primary_list` was retired (see confirm_actions.py — "primary"
+    # is inferred from DRAFT status now). Its schema + this entry were left
+    # behind, so the model could still call a tool with no proposer and get a
+    # silent no-op. Removed under FU-390 (surfaced by the tool-registry eval).
     "plan_meal_for_date",
     "add_recipe_to_list",
     "cook_recipe",

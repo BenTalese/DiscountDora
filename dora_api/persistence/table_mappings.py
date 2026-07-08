@@ -966,6 +966,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("llm_base_url", String(500), nullable=True),
         Column("llm_model", String(255), nullable=True),
         Column("llm_api_key_encrypted", LargeBinary, nullable=True),
+        # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Default
+        # True; when False the SPA never mounts the assistant launcher.
+        Column("show_assistant", Boolean, nullable=False, server_default=true()),
     )
 
     # admin-minted bearer credential for `POST /api/ingest`. The

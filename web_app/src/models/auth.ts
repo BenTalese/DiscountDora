@@ -140,5 +140,8 @@ export type AuthenticatedUser = {
     llm_base_url: string | null;
     llm_model: string | null;
     has_llm_api_key: boolean;
+    // FU-360.6 — whether the Dora helper bubble is mounted at all. Default
+    // true; distinct from `llm_enabled` (that switches AI mode only).
+    show_assistant: boolean;
 };
 export type LlmProvider = NonNullable<AuthenticatedUser['llm_provider']>;

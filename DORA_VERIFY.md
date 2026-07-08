@@ -8,6 +8,22 @@ top-to-bottom.
 
 ---
 
+## Dora assistant / helper bubble (FU-429 + FU-360)
+- [ ] **Basic-mode add-to-list (FU-429).** With AI mode OFF (no LLM configured), open Dora and type **"add milk"** → she resolves it against your pantry and confirms "Added Milk to your list. 🛒" with an "Open shopping lists" button; the item is actually on your primary list.
+- [ ] Type **"add eggs and bread"** → both added in one go (comma / "and" / "&" all split); reply names both.
+- [ ] Type **"buy <something not in your pantry>"** → reply says it couldn't find it and points at the Stock page; nothing spurious added.
+- [ ] Type an item whose name matches **two** pantry items → reply says it matched more than one and asks you to pick the exact one in Stock; it does **not** guess/add either.
+- [ ] With **no primary list set** → "add milk" replies that you need to pick a primary list first, with an "Open shopping lists" button; nothing added.
+- [ ] Bare **"add to my list"** (no item) → Dora asks what to add rather than erroring.
+- [ ] AI mode ON → "add milk" still uses the richer LLM propose→confirm flow (unchanged), not the Basic path.
+- [ ] **Hide Dora (FU-360.6).** Settings → Assistant → toggle **"Show Dora on every page"** OFF → save toast "Dora helper hidden." → the floating bubble disappears from every page immediately; reload confirms it stays gone. Toggle back ON → bubble returns.
+- [ ] **Greeting once-per-user (FU-360.5).** Fresh browser, log in as user A → the "Hi! I'm Dora" hint appears once; dismiss it → it doesn't return for A across reloads/logins. Log in as a *different* user B in the same browser → B sees the hint once (proving it's per-user, not per-browser).
+- [ ] **Mode chip legibility (FU-360.2).** The AI/Basic chip in the chat header reads cleanly (not squished), and grows/shrinks with the user's Settings → Preferences **text size** choice.
+- [ ] **FU-360.1 (text size honoured).** Set a large text size in Preferences → open Dora → the chat message text scales up with it (appears already fixed by the A6 rem migration — this is a confirm, not a known bug).
+- [ ] **FU-360.4 (DS4 hover-flash regression).** Hover the launcher / mascot repeatedly → watch for any animation flashing/flicker on hover (the reported regression). Note exact conditions if it reproduces.
+- [ ] **FU-386 (cookable chip).** Open Dora on the Dashboard or Cookbook → tap the **"Cookable now"** / "Find a recipe to cook" chip → lands on the cookbook filtered to cookable recipes (the `?cookable=true` contract, confirmed live end-to-end).
+- [ ] **FU-515 B.3 (tool-arg bound, AI mode only).** With AI mode on, ask Dora to **"push the milk expiry by 99999 days"** → she declines with a "more than ~10 years — give me a sensible number" style message rather than proposing an absurd date. (Sanity check on the boundary cap; normal pushes like "+3 days" still work.)
+
 ## Currency & locale (FU-043) — origin FU-043
 - [ ] Settings → Admin → System → **Currency & locale** loads; two inputs (Currency 3-letter, Locale BCP-47), a live preview showing `$12.50 · $1,234.56` (or whatever the current setting renders), and a "Use this device" button beside the preview
 - [ ] Change currency to `USD` → blur (or Enter) → toast "Currency set to USD."; Dashboard budget / Deals / ReportsPage / ShoppingList totals / StockItem prices / RecipeDetail cost card all re-render with `US$` (or `$` depending on the locale's convention) without a hard reload

@@ -6,6 +6,23 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Dora Basic mode can now add to your shopping list by typing — FU-429 (2026-07-08).**
+  Basic mode (the rule-based assistant that runs by default with no language
+  model configured) was answer-only: it could tell you your list *status* but
+  couldn't put anything on it. It now understands add-to-list phrasing — "add
+  milk", "buy eggs and bread", "need to buy rice" — resolves each item against
+  your pantry, and drops the unambiguous matches onto your primary list (the
+  same path the contextual "Add to list" chip uses, so notifications match).
+  Items that match more than one pantry entry, or none, are called out rather
+  than guessed. AI mode's richer multi-step add flow is unchanged. This is the
+  headline fix from the FU-429 assistant-architecture reconciliation: since most
+  everyday users never wire up an LLM, Basic mode is the default experience and
+  now has its first real action verb.
+- **Hide the Dora helper entirely — FU-360.6 (2026-07-08).** A new per-user
+  toggle at **Settings → Assistant → "Show Dora on every page"** removes the
+  floating helper bubble for your account (Basic *and* AI). Defaults on
+  (discoverable by default); flip it back any time. Backed by a `show_assistant`
+  user preference (migration `c7d1a9e3f2b6`).
 - **Free-text ingredient path in the recipe editor — FU-506 (2026-07-07).**
   The recipe editor's ingredient picker now offers a second no-match option
   next to "Create '<typed>'": **Use "<typed>" as free text (no pantry link)**.
@@ -72,6 +89,32 @@ semver — major bumps signal schema or breaking-config changes.
   location) was explicitly cut this session.
 
 ### Changed
+- **Dora helper polish — FU-360 (2026-07-08).** The AI/Basic mode chip in the
+  chat header no longer reads squished: dropped the `dense` sizing for a
+  rem-based font (so it follows your text-size preference) with proper padding.
+  The first-time "Hi! I'm Dora" hint is now remembered **per user** rather than
+  per browser, so on a shared household browser each account sees it exactly
+  once. The AI-mode settings copy was updated to reflect that Basic mode now
+  handles simple add-to-list itself.
+- **Internal: unit-of-work refactor swept across 10 more handlers — FU-512 (2026-07-08).**
+  The FU-456 pattern-setter (`CreateRecipeHandler` — one flush, one commit
+  at the end) has been mirrored across every other multi-commit handler
+  identified in the FU-512 runbook: `CreateMealPlanTemplateHandler`,
+  `CloneMealPlanTemplateHandler`, `CreateSetHandler` (meal-plan template
+  sets), `NewRecipeVersionHandler`, `AutoGenerateHandler`, `SeedHandler`
+  (onboarding), `CopyShoppingListHandler`, plus the three shopping-list
+  template handlers (`CreateTemplateHandler`, `InstantiateTemplateHandler`,
+  `SnapshotFromListHandler`). Habit-commits that existed only to
+  materialise the parent's id are gone (`SqlAlchemyRepository.add()`
+  assigns UUIDs client-side, so a flush at most is needed when a
+  downstream Core-level insert needs the FK on the wire); `if children:`
+  guards around the final commit are gone (an empty session commit is a
+  no-op). `SeedHandler`'s locations loop still calls `flush()` before
+  each child insert — the classic mapper has no `relationship()` between
+  self-referencing StockLocation rows, so the local flush contract
+  applies. New happy-path e2e tests pin each of the 10 handlers as one
+  transaction. No behaviour change for successful paths; error branches
+  now roll back the whole write, matching FU-456.
 - **`GET /api/suggestions` no longer mutates the DB — FU-513 (2026-07-08).**
   The read path historically deleted expired snoozes and committed on every
   dashboard load, taking a write lock on the hot request path and violating
@@ -244,7 +287,43 @@ semver — major bumps signal schema or breaking-config changes.
   future graduation path if a real user asks for it; for now, the toggle
   is a per-device view choice, not a household preference.
 
+### Security
+- **Assistant prompt-injection + input hardening — FU-515 (2026-07-08).**
+  Closed the remaining medium/low findings from the auth-&-assistant security
+  audit. The Dora AI assistant now (a) tells the model, in its system prompt,
+  that anything returned by a tool is untrusted **data** and must never be
+  followed as instructions — the defence against a scraped product name that
+  says "ignore your instructions…" (matters once real merchant data flows in),
+  and strips control bytes from tool output; (b) sanitises the page-path the
+  client reports before putting it in the prompt (first line, path-safe
+  characters, length-capped) so it can't smuggle instruction-shaped text; and
+  (c) rejects absurd tool arguments at the boundary (e.g. an assistant request
+  to push an item's expiry by more than ~10 years). The audit's other items
+  were either already fixed (assistant rate limits + input caps; the verified
+  change-email UI; client/server password rules aligned to 8+ characters) or
+  accepted as reasonable for a self-hosted single instance. No user-facing
+  behaviour change on normal use.
+
 ### Fixed
+- **Dora Basic mode: two assistant-parsing fixes surfaced by the new eval suite — FU-390 (2026-07-08).**
+  (1) Typing "put milk **on** my list" now correctly adds *milk* — the parser
+  only stripped "**to** my list" before, so it treated "milk on my list" as the
+  item name. (2) Asking for a recipe with any qualifier — "I need a vegetarian
+  recipe", "italian recipes", "any breakfast ideas" — now routes to recipe
+  search instead of the generic fallback (Basic mode had no bare "recipe"
+  trigger). Both are Basic-mode (no-LLM) improvements.
+- **Retired assistant tool `set_primary_list` fully removed — FU-390 (2026-07-08).**
+  The tool had been retired (the primary list is inferred from draft status
+  now) but was still advertised to the language model and listed on the Dora
+  help page, so the model could "call" it and silently do nothing. Removed the
+  dead tool schema, help-page entry, and type.
+- **Onboarding "seed starter items" no longer 500s — FU-514 (2026-07-08).**
+  `POST /api/onboarding/seed-items` (used by the first-run flow to create a
+  batch of pre-located starter stock items) crashed with a server error on
+  every call: it still passed an `image` field to `StockItem`, which was
+  dropped in FU-508. Removed the stale field; the endpoint creates items
+  again. (Leftover from the FU-508 stock-item-image removal that missed this
+  one construction site.)
 - **Recipe ingredient drag-and-drop landed one row above where the user
   dropped when dragging downwards — FU-161 partner-bug (2026-07-07).**
   The ingredient reorder in `RecipeDetailPage.vue` was computing the

@@ -291,6 +291,12 @@ class User(BaseEntity):
     llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key_encrypted: bytes | None = None
+    # FU-360.6 — per-user "show the Dora helper bubble at all" opt-out.
+    # **Default True** (Charter P1 Effortless — the helper is discoverable by
+    # default). Distinct from `llm_enabled`: that switches the AI *mode*; this
+    # hides the whole assistant launcher for users who don't want it. When
+    # False the SPA doesn't mount the bubble, so Basic *and* AI mode are gone.
+    show_assistant: bool = True
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -331,3 +337,4 @@ class User(BaseEntity):
         LLM_BASE_URL = "llm_base_url"
         LLM_MODEL = "llm_model"
         LLM_API_KEY_ENCRYPTED = "llm_api_key_encrypted"
+        SHOW_ASSISTANT = "show_assistant"

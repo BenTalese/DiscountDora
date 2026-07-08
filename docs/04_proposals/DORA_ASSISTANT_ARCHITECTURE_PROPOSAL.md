@@ -1,8 +1,79 @@
 # Dora Assistant Architecture Proposal
 
-**Status:** Draft for discussion
-**Date:** 2026-06-04
+**Status:** ➗ Reconciled 2026-07-08 (FU-429) — most of the diagnosis was
+resolved by other work; the one live structural idea (§2.2) was **deliberately
+not built** in favour of a cheaper, more on-target fix. See the reconciliation
+section immediately below before reading the original proposal. The body from §1
+onward is the **original 2026-06-04 draft, preserved as the design record** — read
+it through the lens of the reconciliation.
+**Date (original):** 2026-06-04
 **Scope:** Untangle the three overlapping "what should Dora do?" systems into one coherent model, and resolve the capability cliff between AI and Basic modes. Companion to `STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` (the duplication here is a special case of that thesis).
+
+---
+
+## 0. Reconciliation — 2026-07-08 (FU-429)
+
+This proposal was drafted 2026-06-04 while the local-SLM assistant was still
+in-flight, and FU-429 flagged it as "never built + collides with the SLM work."
+By 2026-07-08 **the SLM has landed and is the default AI path** (see
+`ask_assistant.py` — native Ollama function-calling, graceful `available:false`
+fallback), so the collision is resolved and the pieces can be adjudicated.
+Reading the code against the proposal, most of the diagnosis is already closed:
+
+| Proposal item | 2026-07-08 state | Verdict |
+| --- | --- | --- |
+| §1 — `DoraChat.vue` recomputes "missing ingredients" (Type-A dup, "a *fourth* copy") | **Already fixed** by the state-ownership refactor. `is_missing` is now a server-owned per-ingredient DTO flag; `DoraChat.missingIdsForRecipe` only *reads* it (presentation-only iteration). No client recompute remains. | ✅ done elsewhere |
+| §2.1 — one server-side capability registry | **Already true.** `tools.py` is the single source: 41 tool schemas / 30 data tools (`_TOOLS`) + 11 action tools (`_ACTION_TOOLS`), with `is_data_tool` / `is_action_tool` / `run_tool` dispatch. It's a procedural dispatch, not a formal `CapabilityRegistry` class — and that's fine; the abstraction was never the point. | ✅ already the shape |
+| §2.2 — make the Basic-mode rule engine a thin **router over the same server registry** so Basic reaches full parity with AI | **Deliberately NOT built.** See the decision below. | 🔵 superseded-in-approach |
+| §2.2.1 — rules-router tokenise→slot-extract→filter | The FU-150 *minimal* fix shipped (broadened `find_recipe`); the full structural redesign is subsumed by the decision below. | ➗ partial, rest dropped |
+| Mutation gate ("actions propose, never auto-execute") | **Kept.** `ask_assistant.py` still short-circuits action tool-calls into a `pending_action` proposal; `confirm_actions` re-validates at commit. | ✅ preserved |
+| Assistant abuse controls (rate/token caps) | Per-user rate limits shipped (`_ASK_PER_MINUTE=20`, act/confirm=60). Input-size / cumulative-token caps still open — tracked under **FU-515 B.2**, not here. | ➗ partial |
+
+### The §2.2 decision — make Basic mode *useful*, don't build the registry abstraction
+
+The proposal's headline idea was a shared capability registry with two routers
+(LLM + rules) so Basic mode could invoke every capability AI mode can. The 2026-07-08
+call (with the product owner) is to **not build that abstraction**, but to honour the
+*goal behind it* directly:
+
+- **Why the goal matters more now, not less.** Most everyday users will never wire
+  up a language model, so **Basic mode is the default experience for the majority of
+  installs** — it has to be genuinely useful on its own, not a deliberately-dumb
+  fallback. That reframes §2.2: the point was never "architectural parity," it was
+  "Basic mode shouldn't feel broken."
+- **Why not the full abstraction.** Rebuilding `doraIntents.ts` (~1300 LOC) as a thin
+  router over a formalised server `CapabilityRegistry` is a large, speculative refactor
+  that touches the whole assistant surface for mostly-internal tidiness. Charter tie-break
+  (Effortless + Anti-creep) says: buy the user-visible outcome cheaply, skip the
+  machinery. `tools.py` is *already* the single server registry (§2.1), so the "no domain
+  constant lives in two languages" spirit is satisfied where it counts.
+- **What we did instead (this session).** Closed the single highest-value capability
+  cliff by hand: Basic mode had **27 answer/navigate intents and zero action verbs** — it
+  could report your shopping-list *status* but couldn't add to it by typing. Added an
+  `add_to_list` intent to `doraIntents.ts` ("add milk", "buy eggs and bread", "need to
+  buy rice") that parses the item(s) (pure `extractAddToListItems`), resolves them against
+  the pantry in `DoraChat`, and adds the unambiguous matches through the **same
+  shopping-list composable the contextual chip uses** (consistent notifications; ambiguous
+  / not-found terms surfaced, never guessed). No new backend, no abstraction — the rule
+  engine keeps its existing shape and gains the one verb that most changes how useful it
+  feels.
+- **The client rule engine survives** as the always-on Basic-mode brain (and the offline
+  fallback when Ollama is unreachable). It is no longer framed as "impoverished" — it's the
+  default, and we invest in it directly when a gap actually bites.
+
+### Follow-ups spun out of this reconciliation
+
+- **FU-429 → closed** by this reconciliation + the `add_to_list` capability.
+- **FU-386** (dangling `?cookable=true` client handle) — **already honoured**: the
+  server `?cookable=`/`?max_missing=` filter shipped in `get_recipes.py`
+  (state-ownership §3.3 + recipe-importer Chunk 4). Closed.
+- **FU-390** (P5-05 assistant eval suite) — **unblocked** now the SLM is the acceptance
+  target; still its own build. Re-scoped, not built here.
+- **FU-360** (A-3 Dora-bot polish, 6 items) — clean subset shipped this session
+  (per-user greeting acknowledge, "hide Dora entirely" setting, AI/Basic chip sizing);
+  the taste-heavy chip→slider restyle + two browser-repro bugs (text-size, DS4 hover
+  flash) moved to `DORA_VERIFY.md`.
+- **FU-515 B.2** (assistant input-size / token caps) — the remaining abuse-control gap.
 
 ---
 

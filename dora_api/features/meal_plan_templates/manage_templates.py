@@ -206,7 +206,6 @@ class CreateMealPlanTemplateHandler:
             updated_at = now,
         )
         self.repository.add(template)
-        self.repository.save_changes()
 
         for entry, offset in snapshot:
             self.repository.add(MealPlanTemplateEntry(
@@ -218,6 +217,9 @@ class CreateMealPlanTemplateHandler:
                 slot = entry.slot,
                 servings = entry.servings,
             ))
+        # FU-512 unit-of-work: one commit at the end. `add()` assigns
+        # `template.id` client-side so the child FKs above don't need a
+        # flush; a validation error would return before any add.
         self.repository.save_changes()
         return CreateMealPlanTemplateResponse(template_id=template.id)
 
@@ -339,7 +341,6 @@ class CloneMealPlanTemplateHandler:
             updated_at = now,
         )
         self.repository.add(clone)
-        self.repository.save_changes()
         for e in entries:
             self.repository.add(MealPlanTemplateEntry(
                 template_id = clone.id,
@@ -348,8 +349,9 @@ class CloneMealPlanTemplateHandler:
                 slot = e.slot,
                 servings = e.servings,
             ))
-        if entries:
-            self.repository.save_changes()
+        # FU-512 unit-of-work: single commit. Empty-entries case still
+        # commits (a no-op save on just the template row).
+        self.repository.save_changes()
         return CloneMealPlanTemplateResponse(template_id=clone.id)
 
 

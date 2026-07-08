@@ -69,21 +69,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** late-game / pre-commercialization hardening. Not urgent while the app is still gaining new surfaces; do it when the feature surface has stabilised so a lib swap doesn't collide with in-flight redesigns. Doing it earlier risks churning code that's about to be reshaped anyway.
 - **Recommended resolution:** **late-game / Phase 4 kick-off.** Pair with the pre-commercialization hardening pass ([[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta) — same window, same "batten down the hatches before we ask anyone to trust this" mindset. Cross-check every existing `[Removed]` and `[Kept-because…]` verdict against ENGINEERING_STANDARDS on the way out so the assessment doc becomes source-of-truth for "here's why we didn't take the lib."
 
-## [OPEN] FU-512 — Sweep other multi-commit handlers to the FU-456 unit-of-work pattern
-- **Raised:** 2026-07-08 (FU-456 close-out — spun off the "sweep other handlers" half).
-- **Analysis complete:** 2026-07-08. See [`docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md`](docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md) — per-handler refactor plan, batching recommendation, deliverable checklist. **The next session can execute mechanically against that runbook.**
-- **Type:** deferred job / architecture.
-- **What (corrected after analysis):** The original inventory of "~20 multi-commit handlers" over-counted. After per-class reading, **only 10 handlers genuinely multi-commit** and need the FU-456 pattern applied; **9 handlers are already fine** (mutually-exclusive branches — one commit per request; or the raw line ref pointed at a sibling route handler, not the named class). Full split in the runbook.
-- **Actually refactoring** (10): `CreateMealPlanTemplateHandler`, `CloneMealPlanTemplateHandler`, `CreateSetHandler` (meal_plan_template_sets), `SeedHandler` (onboarding — the only handler with a genuine parent/child flush point), `NewRecipeVersionHandler`, `AutoGenerateHandler` (has one CRITICAL watch-out — see runbook), `CopyShoppingListHandler`, `CreateTemplateHandler` + `InstantiateTemplateHandler` + `SnapshotFromListHandler` (shopping-list templates).
-- **Already fine, no refactor needed** (9): `AlertInteractionHandler`, `PushSubscriptionHandler`, `PreferredBuyHandler`, `PriceObservationHandler`, `MoveStockItemHandler`, `CreateProductHandler`, `GetOnboardingStateHandler` route bodies, `GetSuggestionsHandler`, `LogWasteEventHandler` — all one-commit-per-request (details in runbook).
-- **Batching (from runbook):**
-  - **Batch 1** — 7 trivial pattern-mirrors, ship in one PR.
-  - **Batch 2** — 1 handler (`NewRecipeVersionHandler`), same shape as CreateRecipe.
-  - **Batch 3** — 2 moderate (`AutoGenerateHandler`, `SeedHandler`), ship in a second PR.
-- **Why deferred (still):** even at 10 handlers, this is ~150-300 LOC + 10 new e2e test files. Focused sweep, not folded work.
-- **Recommended resolution:** dedicated session (or two — one per batch). Runbook is the source of truth; the FU-456 diff in [`create_recipe.py`](dora_api/features/recipes/create_recipe.py) + [`test_create_recipe_unit_of_work.py`](tests/e2e/dora_api/test_create_recipe_unit_of_work.py) is the reference implementation.
-- **Cross-ref:** [[FU-456]] resolved 2026-07-08 — pattern-setter. [[FU-513]] opened 2026-07-08 — surprise finding surfaced by this analysis (GET /api/suggestions performs writes).
-
 ## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) — DESIGN LOCKED, impl deferred
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
 - **Type:** deferred job (design locked 2026-07-07; awaiting chunked impl-plan).
@@ -99,18 +84,6 @@ long session summary. Distinct from the other logs:
 - **What (original):** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history + a `good_deal` alert. **Superseded framing:** P8-05 Buy Verdict shipped 2026-07-02. **Missing pieces still valuable and now designed:** (a) `fake_markdown` flag, (b) `good_deal` alert type.
 - **Why deferred:** implementation is 3 chunks inside the FU-451 impl-plan — same session, same tests.
 - **Recommended resolution:** ships as chunks 1-3 of the FU-451 impl-plan. Can land independently before chunks 4-6 (FU-451 core) if wanted.
-
-## [OPEN] FU-447 — Security: AUTH_ASSISTANT findings (HIGH CSRF + MEDIUM email-change) still unfixed
-- **Raised:** 2026-07-02 (surfaced by the full doc-register audit).
-- **Type:** finding (security).
-- **What:** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` (dated
-  2026-06-04, "Draft for discussion") records a **HIGH-severity CSRF** flaw and a
-  **MEDIUM email-change** flaw. No fix is logged in CHANGELOG/worklog; the report
-  is still `[OPEN]` with the findings standing.
-- **Why deferred:** The report was written but never actioned; it's orphaned from
-  the "needs attention" view, so it silently aged.
-- **Recommended resolution:** now — review the two findings and decide fix-vs-accept
-  before more Phase-3 champion work. Now surfaced at the top of `PROJECT_STATE.md`.
 
 ## [OPEN] FU-445 — Stale "no code yet" status headers on ~15 shipped docs
 - **Raised:** 2026-07-02 (doc-register audit).
@@ -152,13 +125,6 @@ long session summary. Distinct from the other logs:
   - Product-surface browser verify (My Products page, Price History page, stock-item Products tab) — waits on a running app.
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
-
-## [OPEN] FU-429 — DORA_ASSISTANT_ARCHITECTURE_PROPOSAL: not built + collision with in-flight SLM work
-- **Raised:** 2026-07-01 (audit follow-up — file was missed on first pass because it lacks the `PROPOSAL_` prefix).
-- **Type:** deferred job (design reconciliation + build).
-- **What:** `docs/04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` proposes **one capability registry + two renderers** to collapse the three overlapping decision systems ([tools.py](dora_api/features/assistant/tools.py) server-side, [doraIntents.ts](web_app/src/services/doraIntents.ts) client rule engine, [doraContextualActions.ts](web_app/src/services/doraContextualActions.ts) client contextual chips) — none of which agree on what Dora can do. Proposal has been *augmented* multiple times (§2.2.1 mutation-confirmation model, §7 LLM-provider/connectivity) but **the structural refactor was never built** — all three systems still exist, no `CapabilityRegistry` exists anywhere, and `DoraChat.vue`'s missing-ingredients recompute (the Type-A duplication called out in §1) hasn't been deleted. **Collides with the in-flight SLM replacement** (memory `project_dora_slm_assistant`): the SLM direction may supersede parts of this proposal (rule-engine deletion becomes trivial once the SLM is always available), keep others (the capability registry is still the right shape for the SLM to call), or invalidate the whole thing. Nobody has reconciled the two directions.
-- **Why deferred:** the SLM work was in-flight when the proposal was drafted; sequencing was never firmed up.
-- **Recommended resolution:** **discussion first, not build** — a short session to reconcile: (a) which parts of the proposal survive the SLM pivot, (b) whether the capability registry lands before/after the SLM, (c) fate of the client-side rule engine (`doraIntents.ts`) once the SLM is the default. Outcome should either be a refreshed proposal or an explicit "superseded by SLM work, close" call. Tightly coupled to [[FU-390]] (P5-05 eval suite — tests whichever architecture wins) and [[FU-386]] (dangling client-only `doraContextualActions.ts` handle from the state-ownership plan).
 
 ## [OPEN] FU-422 — Search: display which products already link to a stock item
 - **Raised:** 2026-07-01 (original-spec sweep).
@@ -314,13 +280,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** waiting on the alerts/dashboard-card model to firm up. *(2026-07-07: [[FU-352]] resolved with "keep Attention + Kitchen Health coexisting", so the launchpad-alerts fold-in path for these nudges is gone; they need their own venue.)*
 - **Recommended resolution:** treat as a small standalone brief when picked up — likely a nudges list on the Attention card *or* first-week-only overlay chips, not a Score-card row. Deliberately not folded into any existing dashboard card; keep the first-week experience honest as a first-week experience, not a permanent gauge.
 
-## [OPEN] FU-390 — P5-05 Dora AI reliability + eval suite
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job.
-- **What:** P5-05 — reliability tests + evaluation suite for the assistant. Assistant is currently being replaced by a local SLM (per memory `project_dora_slm_assistant`). Eval suite needs to be built against the SLM rather than the rule-based intent path.
-- **Why deferred:** SLM work in-flight; eval-first would test the wrong subject.
-- **Recommended resolution:** as the SLM lands — the eval suite is the acceptance gate. Reference the SLM work when picked up.
-
 ## [OPEN] FU-389 — P5-04 Mobile / PWA field test
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
 - **Type:** deferred job.
@@ -341,13 +300,6 @@ long session summary. Distinct from the other logs:
 - **What:** P5-01 — comprehensive security/privacy hardening sweep. Auth findings (CSRF, register-first-admin, email-change) resolved per resolved-FUs. The full P5-01 bundle (security headers, rate-limits, secrets management, dependency audit) not executed as a single sweep.
 - **Why deferred:** slices landed opportunistically.
 - **Recommended resolution:** pre-Phase-4 gate — one dedicated sweep before any public deploy. Overlaps with [[FU-409]] auth findings re-audit + [[FU-424]] senior-review Tier-2.
-
-## [OPEN] FU-386 — IMPL_PLAN_STATE_OWNERSHIP: dangling client-only `doraContextualActions.ts`
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** finding.
-- **What:** `IMPL_PLAN_STATE_OWNERSHIP.md:25` flags a client-side `doraContextualActions.ts` handle whose server-side counterpart was **not implemented** — a dangling contract. Either build the server side or delete the client handle.
-- **Why deferred:** noted in the plan doc, never actioned.
-- **Recommended resolution:** when the assistant/SLM work next touches contextual actions — decide direction + close.
 
 ## [OPEN] FU-385 — Dashboard: DashboardCard extraction + "new low" signal
 - **Raised:** 2026-07-01 (proposals audit).
@@ -511,18 +463,19 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** content task typically deferred to post-launch.
 - **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. The overlay-shell counterpart (FU-367) was retired in favour of the shipped `(?)` help chips, so this content work no longer has an overlay to render into — it lives on HelpPage / DoraBot.
 
-## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish
+## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish — mostly shipped, 1 sub-item + 2 verifies remain
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (bundle — 6 sub-items).
-- **What:** `COVERAGE_GAPS.md` A-3 open bullets:
-  1. Text size not honouring user settings (bug).
-  2. Basic/AI chip squished/small.
-  3. Make basic/AI chip a toggle slider (slanted thick, glow on slide).
-  4. DS4 animation flashing on hover — regression to investigate.
-  5. Don't show "Hi I'm Dora, click me…" every login (once-per-user acknowledge).
-  6. Turn the bot off completely in settings.
-- **Why deferred:** scattered across owners; no bundle owner.
-- **Recommended resolution:** fold into the DORA_ASSISTANT_ARCHITECTURE polish appendix or a small Wave-C brief. Bug items (1, 4) are triage-first — can fix inline.
+- **Type:** deferred job (bundle — was 6 sub-items; 3 shipped 2026-07-08 in the FU-429 turn).
+- **Shipped 2026-07-08:**
+  - **#5 greeting once-per-user** — the "Hi! I'm Dora" hint key in `DoraBubble.vue` is now keyed by user id (`dora.helpHintDismissed.<userId>`) instead of one browser-wide key, so each household account gets exactly one acknowledge.
+  - **#6 turn the bot off** — new per-user `show_assistant` preference (User column + migration `c7d1a9e3f2b6` + `PATCH /auth/me` + DTO). Toggle at Settings → Assistant ("Show Dora on every page"); `MainLayout` gates the bubble on it. e2e round-trip test added.
+  - **#2 chip squished/small** — dropped `dense`, added a `.dora-mode-chip` style (rem-based font so it follows the text-size pref, padding, icon spacing).
+- **Still open:**
+  - **#3 make the Basic/AI chip a toggle *slider*** ("slanted thick, glow on slide") — a genuine visual-design task (not a bug); needs a running browser to iterate on the styling. Left for a polish pass, not folded into the reconciliation turn.
+  - **#1 text size not honouring settings** & **#4 DS4 animation flashing on hover** — both moved to `DORA_VERIFY.md` (Dashboard/Cross-cutting → Dora bot). #1 *appears already fixed* by the A6 rem migration (`:root` font-size drives `--dora-base-font-size`; DoraChat uses rem/em), so it's a confirm-in-browser, not a code change; #4 is a hover-animation regression that can only be reproduced/fixed with the app running.
+- **Recommended resolution:** knock out #1/#4 during the next browser-verify session; pick up #3 (slider) as a small standalone styling task when someone's iterating on the chat header live. When #3 lands and #1/#4 are confirmed, close this FU.
+
+
 
 ## [OPEN] FU-359 — A-2 DATA page redesign
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).

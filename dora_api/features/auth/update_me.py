@@ -118,6 +118,9 @@ class UpdateMeRequest(BaseModel):
     llm_model: str | None = Field(default=None, max_length=255)
     llm_api_key: str | None = Field(default=None, max_length=512)
     clear_llm_api_key: bool = False
+    # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Plain bool;
+    # null is ignored (leave untouched). Independent of `llm_enabled`.
+    show_assistant: bool | None = None
 
 
 class UpdateMeHandler:
@@ -293,6 +296,10 @@ class UpdateMeHandler:
         # ciphertext is what lands on the column. `clear_llm_api_key`
         # is a separate flag (same shape as clear_image) so the SPA
         # can wipe the key without round-tripping the value.
+        # FU-360.6 — show/hide the Dora helper bubble. Plain bool; null ignored.
+        if "show_assistant" in _SetFields and request.show_assistant is not None:
+            _User.show_assistant = request.show_assistant
+
         if "llm_enabled" in _SetFields and request.llm_enabled is not None:
             _User.llm_enabled = request.llm_enabled
         if "llm_provider" in _SetFields:

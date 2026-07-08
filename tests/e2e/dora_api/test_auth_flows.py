@@ -168,6 +168,26 @@ def test__update_me__rejects_email_field(api):
     assert response.status_code == 400, response.text
 
 
+def test__update_me__show_assistant_round_trips(api):
+    """FU-360.6 — the per-user 'show the Dora helper' toggle persists via
+    PATCH /auth/me and reads back on /me. Default is True."""
+    import requests
+    # Default on a fresh session.
+    before = requests.get(f"{BASE}/me").json()
+    assert before["show_assistant"] is True, before
+
+    # Turn it off; the DTO reflects the change and /me confirms it persisted.
+    patched = requests.patch(f"{BASE}/me", json={"show_assistant": False})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["show_assistant"] is False, patched.text
+    assert requests.get(f"{BASE}/me").json()["show_assistant"] is False
+
+    # Restore so the shared bootstrap user doesn't leak state into other tests.
+    restore = requests.patch(f"{BASE}/me", json={"show_assistant": True})
+    assert restore.status_code == 200, restore.text
+    assert requests.get(f"{BASE}/me").json()["show_assistant"] is True
+
+
 def test__request_email_change__current_password_gates_the_call(api):
     """FU-197 — `current_password` is a required field (model-level 400
     when missing) AND the value must match (business-rule 422 when

@@ -188,13 +188,13 @@ class CreateSetHandler:
             updated_at = now,
         )
         self.repository.add(s)
-        self.repository.save_changes()
         for position, template_id in enumerate(request.template_ids):
             self.repository.add(MealPlanTemplateSetItem(
                 set_id = s.id, template_id = template_id, position = position,
             ))
-        if request.template_ids:
-            self.repository.save_changes()
+        # FU-512 unit-of-work: one commit at the end. `missing_template_ids`
+        # returns before any add, so the error path never commits.
+        self.repository.save_changes()
         return CreateSetResponse(set_id=s.id)
 
 

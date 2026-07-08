@@ -31,14 +31,35 @@
         </q-banner>
 
         <SettingsSection>
+            <template #title>Show the Dora helper</template>
+            <template #description>
+                The floating Dora bubble sits in the corner of every page and
+                answers questions, points you around, and takes quick actions.
+                Turn it off to hide it completely for your account — you can
+                switch it back on here any time.
+            </template>
+
+            <SettingsRow label="Show Dora on every page">
+                <q-toggle
+                    :model-value="currentUser.show_assistant !== false"
+                    :disable="saving"
+                    @update:model-value="onShowAssistantChange"
+                />
+            </SettingsRow>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
             <template #title>Enable AI mode</template>
             <template #description>
-                Off keeps every chat reply rule-based. On routes
-                <em>tool-able requests</em> through your configured provider —
-                requests that need real actions on your data (for example
-                "add milk to my list" or "what's expiring?"), which the
-                assistant handles by calling app tools. Basic mode only
-                handles chat; AI mode unlocks these action requests.
+                Basic mode (the default, no setup needed) answers questions
+                about your pantry, meals, and lists — and can add items to your
+                list when you type things like "add milk". AI mode routes
+                <em>tool-able requests</em> through your configured provider for
+                richer, multi-step help (disambiguating items, expiry rescue,
+                price stats). Most people are fine on Basic mode; AI mode is the
+                power-up if you run a language model.
             </template>
 
             <SettingsRow label="Use AI mode for this account">
@@ -398,6 +419,13 @@
         await update(
             value ? 'AI mode turned on.' : 'AI mode turned off.',
             () => authStore.updateMeAsync({ llm_enabled: value }),
+        );
+    }
+
+    async function onShowAssistantChange(value: boolean) {
+        await update(
+            value ? 'Dora helper shown.' : 'Dora helper hidden.',
+            () => authStore.updateMeAsync({ show_assistant: value }),
         );
     }
 

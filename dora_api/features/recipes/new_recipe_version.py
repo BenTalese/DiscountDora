@@ -126,9 +126,15 @@ class NewRecipeVersionHandler:
             created_at=datetime.now(timezone.utc),
         )
         self.repository.add(new_recipe)
-        self.repository.save_changes()
+        # FU-512 unit-of-work: same shape as CreateRecipe (FU-456). Access
+        # helpers below use `db.session.execute(insert(...))` at Core level,
+        # so the new-recipe FK must be visible before their inserts — flush,
+        # don't commit. `replace_steps_for_recipe` can raise ValueError on a
+        # bad parent chain; because we clone from a valid source that path is
+        # empirically unreachable, but the shape stays uniform.
+        self.repository.flush()
 
-        # Tags + tools — separate access helpers; safe to call after save.
+        # Tags + tools — separate access helpers; safe to call after flush.
         tag_ids = get_tag_ids_for_recipe(source_id)
         if tag_ids:
             set_tag_ids_for_recipe(new_recipe.id, tag_ids)
@@ -183,6 +189,7 @@ class NewRecipeVersionHandler:
             if image_writes:
                 replace_step_images_for_recipe(new_recipe.id, image_writes)
 
+        # Single commit at the end — everything or nothing.
         self.repository.save_changes()
         return NewRecipeVersionResponse(new_recipe_id=new_recipe.id)
 

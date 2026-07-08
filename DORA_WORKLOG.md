@@ -9,6 +9,212 @@ next.
 
 ---
 
+## 2026-07-08 — FU-515 done: AUTH_ASSISTANT security findings fully triaged (3 shipped, 3 already-fixed, 3 accepted)
+
+**Why:** FU-515 held the 8 medium/low findings left in `AUTH_ASSISTANT_SECURITY_FINDINGS.md` after FU-447 closed A.1/A.2. Verified each against current code before touching anything — several had been silently fixed by later work.
+
+### Triage outcome
+- **Shipped this session:**
+  - **B.1 tool-result prompt injection** — `ask_assistant._SYSTEM_PROMPT` gains a SECURITY block instructing the model that tool-result content is untrusted DATA, never instructions (primary defence for the scraped-merchant-data seam); `_sanitize_tool_output` strips C0/C7F control bytes from the serialised rows. Deeper per-field escaping deferred to Phase-2 (when real scraped strings actually flow); mutation gate (B.0) already caps blast radius to a user-approved proposal.
+  - **B.3 tool-arg bounds** — `propose_push_expiry` rejects `days` magnitude > `_MAX_EXPIRY_PUSH_DAYS` (3650). Audited others: `adjust_recipe_meals.delta` + `cook_recipe` count were already clamped by `_coerce_signed_int` / `_MAX_COOK`, so no change (removed a redundant check I'd first added).
+  - **B.4 `current_path` seam** — `_safe_current_path` (first line, path-safe chars `[A-Za-z0-9/_\-?=&.]`, 200-cap) before prompt embedding + `max_length=200` on `AskAssistantRequest.current_path`.
+  - Tests: new `tests/e2e/dora_api/test_assistant_hardening.py` (8 — pins both sanitisers incl. the newline-injection + control-byte cases).
+- **Already fixed (verified, no code):** **B.2** (per-user rate limits + `message` max_length=1000 + `_MAX_TOOL_ROUNDS`), **A.3** (FU-197 verified change-email UI on AccountSettings), **A.4** (FU-442 aligned client+server to min-8 — the audit's ≥4/≥10 was stale).
+- **Accepted with rationale:** **A.5** (admin plaintext reset = deliberate self-host fallback when SMTP absent; LOW), **A.6** (in-memory rate-limit correct single-instance; Phase-4 scaling item, cross-ref MULTI_USER_READINESS + FU-045), **A.7** (tokens-in-URL mitigated by single-use + expiry + hash-at-rest).
+
+### Doc + verification
+- `AUTH_ASSISTANT_SECURITY_FINDINGS.md` — header flipped to "✅ Fully triaged", per-finding stamps added, §C priority table rebuilt with all 11 rows + status. It's the standing register (rows marked, never deleted).
+- `pytest test_assistant_hardening.py test_assistant_tool_registry.py test_auth_flows.py` → 37 passed. B.3's push_expiry bound is code + a DORA_VERIFY check (needs a running assistant to exercise the proposal).
+
+### Engineering-standards close-gate
+No new rule/ADR. Security hardening applied at the trust boundary (prompt assembly + tool-arg intake) — the right layer. Notable: three of the eight findings were already fixed by unrelated later work (FU-197/FU-442/rate-limit FU), which is why *verify-before-fixing* matters on an aging audit doc — don't re-fix what's done, and don't leave a doc claiming a gap that's closed.
+
+### Bookkeeping
+- **[[FU-515]]** → RESOLVED. **[[FU-447]]** chain fully closed now (A.1/A.2 + the rest).
+- **CHANGELOG** — new `[Unreleased] > Security` entry.
+- **PROJECT_STATE** — recently-shipped bullet + regenerated line.
+- **DORA_VERIFY** — one AI-path check added (push-expiry-by-absurd-number rejected) under the Dora assistant section.
+
+### Next up
+User's pick. The assistant cluster is now thoroughly done (FU-429/386/390/515 + FU-360 subset + FU-514). Open assistant-adjacent: FU-360 #3 (chip→slider) + browser verifies. Phase-4 security items (A.6 shared rate-limit store, the FU-409 delta re-audit, FU-424 Tier-2) remain parked for the pre-commercialization pass.
+
+---
+
+## 2026-07-08 — FU-390 done: assistant eval suite (Basic-mode + AI-path); caught 3 real bugs
+
+**Why:** P5-05 reliability/eval suite for the assistant, unblocked now the SLM has landed as the default AI path. Built both halves; the suite immediately earned its keep by surfacing three latent bugs.
+
+### Basic-mode eval (frontend — new vitest harness)
+- **Stood up vitest** in `web_app` (was a no-op `test` script): `vitest@^3` devDep, `web_app/vitest.config.ts` (node env, no jsdom, `src` alias mirroring `.quasar/tsconfig.json`), `test` = `vitest run` + `test:watch`.
+- **`web_app/test/unit/doraIntents.spec.ts`** — 53-case eval corpus over the two pure Basic-mode functions:
+  - `detectIntent` — prompt→intent routing, with the order-sensitive boundaries pinned explicitly (convert/substitute/add_to_list must beat find_recipe; "i need a recipe" ≠ add_to_list; empty input → greet; unknown → fallback).
+  - `extractAddToListItems` — phrase→item parsing (single, multi via and/comma/&, filler stripping, trailing "to/on my list" stripping, bare command → []).
+- **Bugs caught + fixed in `doraIntents.ts`:**
+  1. `extractAddToListItems` stripped only trailing "**to** my list", not "**on** my list" → "put milk on my list" parsed as `["milk on my list"]`. Broadened the regex to `(to|on|onto)`.
+  2. `find_recipe` had no bare `recipe`/`recipes` match, so "i need a vegetarian recipe", "italian recipes", meal-time "ideas" fell through to fallback (the FU-150 comment over-claimed this). Added bare `recipe`/`recipes` + `breakfast idea`/`lunch idea`/etc. Safe given INTENTS ordering (convert/substitute/add_to_list/where_is sit earlier).
+
+### AI-path reliability (backend — pytest, no live model)
+- **`tests/e2e/dora_api/test_assistant_tool_registry.py`** — 9 tests over the deterministic guarantees a model can't be trusted with:
+  - **Registry integrity:** every `TOOL_SCHEMAS` name is exactly one of data/action; names unique; `_TOOLS`/`_ACTION_TOOLS` disjoint; no orphan dispatch targets.
+  - **Mutation gate (the safety property):** every action tool is `is_action_tool` + never `is_data_tool`; `run_tool` refuses action tools (KeyError — can't execute a mutation via the read-only executor); every action tool has a proposer (`ADD_TO_SHOPPING_LIST` bespoke flow or `confirm_actions.is_confirm_action`); no nav hint on action tools.
+  - **Graceful degradation:** `/assistant/ask` with no model configured → `available=false` + `defer_to_local=true`, never a 500.
+- **Bug caught + fixed:** `set_primary_list` was retired as a confirm-action (`confirm_actions.py:460`) but its `TOOL_SCHEMAS` entry + `_ACTION_TOOLS` membership survived — the model could call a tool with no proposer and hit the fail-soft no-op. Removed the orphan schema + set entry, plus two stale client refs (the `DoraHelpPage.vue` capability card that advertised it to users, and the `assistantApiService.ts` union member).
+
+### Scope note
+The deterministic AI-path contract (gate + registry + degradation) is covered. A *model-quality* eval — drive a stubbed/recorded Ollama over a prompt corpus and grade tool selection — is deliberately NOT built (needs a response-fixture harness; flaky/low-ROI vs the contract tests). Noted in the resolved FU as a future focused FU if needed.
+
+### Verification
+- `web_app`: `npx vitest run` → 53 passed; `vue-tsc` → no new errors.
+- backend: `test_assistant_tool_registry.py` 9 passed; `test_auth_flows.py` 20 passed (29 combined).
+
+### Engineering-standards close-gate
+No new rule/ADR. Notable: the two Basic-mode fixes + the orphan-tool removal are the eval suite doing its job — reliability regressions caught the moment coverage existed. Lesson worth a mention (not a rule): when a tool/capability is retired, sweep **all four** surfaces — server schema, dispatch/proposer set, the client help-page catalogue, and the client type union — not just the proposer; three of four had drifted for `set_primary_list`.
+
+### Bookkeeping
+- **[[FU-390]]** → RESOLVED (moved to `DORA_FOLLOWUPS_RESOLVED.md`).
+- **CHANGELOG** — `[Unreleased] > Fixed`: the two Basic-mode parsing fixes + the `set_primary_list` removal.
+- **PROJECT_STATE** — recently-shipped bullet + regenerated line.
+- No DORA_VERIFY additions — everything here is pinned by automated tests.
+
+### Next up
+User's pick. Remaining assistant polish: FU-360 #3 (chip→slider) + the two DORA_VERIFY bot checks (browser). Or the deferred model-quality eval harness if that becomes a need.
+
+---
+
+## 2026-07-08 — FU-514 fixed: onboarding seed-items 500 (stale StockItem image kwarg)
+
+**Why:** Flagged as a finding during the FU-512 regression check and confirmed pre-existing at HEAD. `SeedItemsHandler.handle` passed `image=None` to `StockItem(...)`, but FU-508 (2026-07-07, migration `a4c9e1f2b3d5`) dropped the `StockItem.image` column — so every `POST /api/onboarding/seed-items` 500'd with `TypeError: unexpected keyword argument 'image'`.
+
+**Fix:** removed the `image=None` line from the one construction site (`dora_api/features/onboarding/onboarding.py`, `SeedItemsHandler.handle`). Verified it's the only remaining `image`-bearing `StockItem(...)` in the codebase — FU-508's sweep missed exactly this spot.
+
+**Verification:** `pytest tests/e2e/dora_api/test_onboarding_flags.py` → 7 passed (was 6 pass + 1 fail).
+
+**Engineering-standards close-gate:** no new rule/ADR — a one-line leftover cleanup. Lesson (not worth codifying as a rule): a column-drop sweep should grep every constructor call site, not just the obvious CRUD handler; FU-508 caught the CRUD path but missed the onboarding seeder.
+
+**Bookkeeping:** [[FU-514]] → RESOLVED; CHANGELOG `[Unreleased] > Fixed`; PROJECT_STATE recently-shipped bullet. No DORA_VERIFY needed (pinned by the now-green e2e test).
+
+**Next up:** user's pick — FU-360 #3 (chip→slider) + the DORA_VERIFY bot checks, or FU-390 (assistant eval suite).
+
+---
+
+## 2026-07-08 — FU-429 assistant-architecture reconciliation + Basic mode gains an action verb (FU-360 subset, FU-386/FU-390 dispositioned)
+
+**Why:** User asked to "do FU-429 and all related assistant work (follow-ups + feedback actions)." FU-429 flagged the 2026-06-04 `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` as never-built + colliding with in-flight SLM work.
+
+**Reconciliation (the SLM has landed → decision unblocked).** A survey agent read the whole assistant surface against the proposal. Findings: the SLM is now the **default AI path** (`ask_assistant.py`), so the collision is moot. Most of the proposal's diagnosis was already closed by other work — §1 Type-A "missing-ingredients 4th copy" is gone (state-ownership made `is_missing` server-owned; `DoraChat` only reads it), §2.1 single server registry is already true (`tools.py`), the mutation gate is preserved, per-user rate limits shipped. The one genuinely-unbuilt piece was §2.2 ("make the Basic-mode rule engine a thin router over a shared capability registry for full AI-parity").
+
+**Key product steer from the user:** *most everyday users won't configure an LLM, so Basic mode is the default experience and must actually be useful.* That reframed §2.2 — the goal (useful Basic mode) matters, but the mechanism (a ~1300-LOC speculative registry refactor) is over-engineering under Effortless + Anti-creep. **Decision: don't build the abstraction; close the highest-value capability cliff directly.**
+
+### What shipped (2–3 chunks, as agreed)
+
+**Chunk 2 — Basic mode's first action verb (the meat).** Basic mode had 27 answer/navigate intents and *zero* action verbs — it could report shopping-list status but not add to it by typing.
+- `web_app/src/services/doraIntents.ts` — new `add_to_list` intent (id + INTENTS entry, placed after `substitute`; matches explicit list phrasings + a start-anchored `^(add|buy) <word>` extraMatch) + a pure exported `extractAddToListItems(text)` (strips the trigger, splits on `and`/`,`/`&`/`plus`, cleans fillers). Added to `QUICK_ACTIONS` + a safety-net `runIntent` case.
+- `web_app/src/components/dora/DoraChat.vue` — `dispatch()` intercepts `add_to_list` → new `onAddToListByText()`: loads stock + lists, resolves each parsed term against the pantry (exact then substring), adds unambiguous matches via the existing `addItems(primary, …)` composable (same path as the contextual chip → consistent notifications), and surfaces ambiguous / not-found terms instead of guessing. Reuses `oxfordJoin` for the reply. AI-mode add flow untouched (this is only reached when the SLM defers/unavailable).
+
+**Chunk 3 — FU-360 clean subset.**
+- **#6 hide Dora entirely** — new per-user `show_assistant` preference, full stack: `User` entity + `Fields` + `table_mappings` column (`server_default true()`) + migration `c7d1a9e3f2b6` (revises `b8f2c1d4e6a9`) + `UpdateMeRequest`/handler branch + `AuthenticatedUserDto` field + TS `AuthenticatedUser` + `UpdateMeCommand` + a "Show Dora on every page" toggle in `AssistantSettings.vue` + `MainLayout` gates `<DoraBubble v-if="currentUser && currentUser.show_assistant !== false">`. New e2e test pins the PATCH round-trip.
+- **#5 greeting once-per-user** — `DoraBubble.vue` hint key is now `dora.helpHintDismissed.<userId>` (was one browser-wide key), so shared-household browsers give each account one acknowledge.
+- **#2 chip sizing** — dropped `dense`, added `.dora-mode-chip` rem-based style (follows text-size pref) + icon spacing. Also refreshed the AI-mode settings copy to say Basic mode now handles simple add-to-list.
+
+**Chunk 1 — proposal doc.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` gained a §0 reconciliation section: per-item disposition table + the §2.2 decision + the follow-up spin-outs. Status stamped ➗ Reconciled; original body preserved as the design record.
+
+### Dispositions
+- **[[FU-429]]** → RESOLVED (reconciled + add_to_list shipped).
+- **[[FU-386]]** → RESOLVED (already-honoured — the `?cookable=true` server filter shipped in `get_recipes.py` state-ownership §3.3; verified by reading `get_recipes.py:370-433` + `RecipesOverview.vue:1363`).
+- **[[FU-390]]** (assistant eval suite) → **unblocked** (SLM is the stable target), re-scoped in place with a build plan (stand up vitest → pure-fn eval for `detectIntent`/`extractAddToListItems` → AI-path eval). Own session.
+- **[[FU-360]]** → slimmed: #2/#5/#6 shipped; #3 (chip→slider restyle, a design task) stays open; #1 (text-size — appears already fixed by A6 rem migration) + #4 (DS4 hover-flash regression) moved to `DORA_VERIFY.md`.
+- **[[FU-515]]** B.2 already carries the remaining assistant input-size/token-cap gap (untouched).
+
+### Verification
+- `npx vue-tsc --noEmit` → no new errors (only the pre-existing capacitor-module + DashboardPage `draft_shop` ones).
+- `pytest tests/e2e/dora_api/test_auth_flows.py` → 20 passed (was 19 + the new `show_assistant` round-trip).
+- No frontend test runner exists (`web_app` `test` is a no-op) → Basic-mode add-to-list + all SPA behaviour pinned in `DORA_VERIFY.md` (new "Dora assistant / helper bubble" section, 12 checks). Building vitest is folded into FU-390.
+
+### Engineering-standards close-gate
+No new rule/ADR. Checked against the standing rules: R-003 single-source (add_to_list reuses the server add-line path; name→id matching is UX search, not a duplicated domain rule); state-ownership (no domain constant duplicated — `is_missing`/`cookable` stay server-owned); portable data access (migration uses `batch_alter_table` + `sa.true()` server_default, SQLite+Postgres-safe); R-010 (n/a — `show_assistant` is a plain bool); anti-creep (explicitly declined the ~1300-LOC registry refactor). The "Basic mode is the default experience → must be useful" steer is a **product principle**, saved to memory, not an engineering rule.
+
+### Next up
+User's pick. Natural follow-ons: FU-360 #3 (chip→slider) + the two DORA_VERIFY bot checks in a browser session; or FU-390 (assistant eval suite) as its own build.
+
+---
+
+## 2026-07-08 — FU-447 closed as already-satisfied; remaining findings tracked as FU-515
+
+**Why:** [[FU-447]] flagged the AUTH_ASSISTANT_SECURITY_FINDINGS doc as "still open" with A.1 CSRF (HIGH) and A.2 email-change-without-password-proof (MEDIUM) unfixed. Read the actual code before assuming — turned out both were fixed under [[FU-197]] on 2026-06-30, three weeks *before* the doc-register audit that raised FU-447. The audit-follow-up was orphaned by a stale header on the findings doc, not by a real gap.
+
+### Verification (no new code)
+
+- [`dora_api/infrastructure/csrf.py`](dora_api/infrastructure/csrf.py) — double-submit-cookie defence exists; `csrf.py:73` `csrf_check_passed()` constant-time-compares cookie + header via `hmac.compare_digest`.
+- [`dora_api/infrastructure/middleware.py`](dora_api/infrastructure/middleware.py) — `PUBLIC_ENDPOINTS` + `CSRF_EXEMPT_ENDPOINTS` gate the check; every non-public non-bearer mutation must carry `X-CSRF-Token`; 403s on miss.
+- [`dora_api/features/auth/email_flows.py:261-350`](dora_api/features/auth/email_flows.py) — `ChangeEmailRequest.current_password` is required; handler verifies via `check_password_hash`; `email_change_notice.html` alert fires to the **old** address before the confirmation to the new; audit emits `auth.email_change.requested` / `auth.email_change.password_failed`.
+- [`dora_api/features/auth/update_me.py`](dora_api/features/auth/update_me.py) — `email` field is absent from `UpdateMeRequest` with `extra="forbid"`, so `PATCH /auth/me {"email": ...}` 400s (closing the overlapping unverified-write path FU-197 also noticed).
+- `pytest tests/e2e/dora_api/test_auth_flows.py -k "csrf or email_change"` → 2 passed.
+
+### Doc + ledger updates
+
+- **`docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md`** — status stamp flipped from "Draft for discussion" → "➗ Partially actioned"; the A.1 + A.2 rows now open with a bold "✅ RESOLVED (2026-06-30, FU-197)" block that summarises the fix and points to the code + tests. Original write-ups preserved beneath as blockquote for the audit trail (don't delete resolved rows — mark them). Priority table gained a Status column; A.1/A.2 marked done, the other 8 marked "🟡 Open".
+- **[[FU-447]]** moved from `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md` with a full state note (the "already-satisfied by FU-197" story + the lesson that the 2026-07-02 audit should have cross-checked CHANGELOG/worklog before assuming the doc header was truth).
+- **[[FU-515]]** opened to carry the 8 remaining findings forward (B.1 scraped-data injection, B.2 assistant rate-limit, A.3 email-change UI half-shipped, A.4 password-rule drift, A.5 admin plaintext reset, A.6 in-memory rate limit, A.7 tokens-in-URL, B.3 tool-arg bounds, B.4 current_path in prompt) so they can't silently age like FU-447 did. Recommendation: **B.1 + B.2 next** — B.1 becomes reachable once merchant ingestion goes live in Phase 2, so it's worth closing before then.
+- **`CHANGELOG.md`** — no `[Unreleased]` entry needed; no product change shipped. FU-197's original CHANGELOG entry (dated 2026-06-30) is the code-change of record; this session is doc-hygiene only.
+- **`PROJECT_STATE.md`** — Regenerated line updated; Recently-shipped gains one bullet noting the audit reconciliation + FU-515 spin-off.
+
+### Engineering-standards close-gate
+
+No new rule / ADR — this was a documentation-hygiene close-out, not a code change. Existing rules honoured (no drift introduced). One lesson worth noting but not worth codifying: **investigation docs with a "Draft for discussion" header need explicit status-flip when their findings are fixed elsewhere** — otherwise the doc lingers as a false open signal. The remedy is per-finding status stamps (as applied here), not a new global rule.
+
+### Next up
+
+User's pick. If picking up FU-515: start with **B.1** (delimit/escape untrusted tool-result fields; instruct the model that `tool` content is data not instructions; strip control chars from scraped fields at ingest) — the only genuinely-external injection seam.
+
+---
+
+## 2026-07-08 — FU-512 closed: unit-of-work sweep applied to 10 more handlers
+
+**Why:** [[FU-512]] was the "sweep the other multi-commit handlers to the FU-456 pattern" follow-up. The runbook (`docs/05_investigations/FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK.md`, 2026-07-08) narrowed the raw 19-handler inventory to 10 handlers genuinely needing refactor (the other 9 were mutually-exclusive branches / sibling route handlers misread as multi-commit). Shipped all three batches in one session.
+
+### What shipped
+
+**Batch 1 — 7 trivial pattern-mirrors** (delete habit-commit after parent `add()`, drop `if children:` guards on the final commit):
+- `CreateMealPlanTemplateHandler` — `meal_plan_templates/manage_templates.py`
+- `CloneMealPlanTemplateHandler` — same file
+- `CreateSetHandler` — `meal_plan_template_sets/manage_sets.py`
+- `CopyShoppingListHandler` — `shopping_lists/manage_shopping_list.py`
+- `CreateTemplateHandler` (shopping-list templates) — `shopping_list_templates/manage_templates.py`
+- `InstantiateTemplateHandler` — same file
+- `SnapshotFromListHandler` — same file
+
+**Batch 2 — same shape as CreateRecipe:**
+- `NewRecipeVersionHandler` — `recipes/new_recipe_version.py`. Habit-commit converted to `flush()` (access helpers use Core-level `db.session.execute(insert(...))`, so the new-recipe FK must be visible; commit only at the end).
+
+**Batch 3 — moderate:**
+- `AutoGenerateHandler` — `shopping_lists/auto_generate.py`. Habit-commit inside `_create_list()` deleted. The immediate downstream `.all()` on `ShoppingListLine` auto-flushes the pending `ShoppingList` (SQLAlchemy default autoflush on query emit), so FK visibility for the new lines is preserved without a manual flush. The `.all()` returns `[]` for the just-created list (no pending lines yet), so `next_sequence` starts at 0 — correct. Existing FU-351 empty-list guard on L215-220 still prevents phantom-empty lists.
+- `SeedHandler` (onboarding) — `onboarding/onboarding.py`. Groups-block habit-commit deleted. Inside the locations loop, the per-zone `save_changes()` was replaced with `flush()` (the child location inserts read `parent_id = zone_entity.id` client-side, but SQLite's `PRAGMA foreign_keys=ON` still requires the parent row to be visible to the DB; the classic mapper has no `relationship()` linking self-referential StockLocation rows, so the local `flush()` contract in `sqlalchemy_repository.py:57-67` applies). Single final commit at the end of the handler covers both groups + locations blocks.
+
+**10 new happy-path e2e tests** — one per refactored handler, named `test_<name>_unit_of_work.py`. Following the runbook's guidance, no rollback tests were added: none of the 10 has a reachable failure surface between the former two commits (validation errors return pre-add; the `NewRecipeVersionHandler` `replace_steps_for_recipe` ValueError is empirically unreachable because we clone from a valid source). Test totals: 13 test cases across 10 files, all green.
+
+### Verification
+
+- New tests: `pytest tests/e2e/dora_api/test_{create_meal_plan_template,clone_meal_plan_template,create_meal_plan_template_set,copy_shopping_list,create_shopping_list_template,instantiate_shopping_list_template,snapshot_shopping_list_template,new_recipe_version,auto_generate,seed_onboarding}_unit_of_work.py` → 13 passed.
+- Regression: adjacent suites (`test_create_recipe_unit_of_work.py`, `test_meal_plan_template_router.py`, `test_meal_plan_template_set_router.py`, `test_onboarding_flags.py`) still pass — with one exception that predates this work (`test__onboarding_seed_items__creates_prelocated_and_dedupes` fails at HEAD due to a `StockItem(image=...)` kwarg mismatch in `SeedItemsHandler`, `onboarding.py:514`, entirely separate handler — logged as a new FU-514).
+
+### Engineering-standards close-gate
+
+No new rule / ADR. This session was pure application of an already-established pattern (FU-456 → R‑nothing-new-yet; the "one flush, one commit" shape is the local UoW contract for handlers built on `SqlAlchemyRepository`). Existing rules honoured throughout: R-003 (single-source-of-truth for the write path), portable data access (all handlers still work identically on SQLite + Postgres — the `flush()` contract is DB-agnostic), no premature abstraction (didn't invent a decorator/context manager for the pattern — every handler still owns its own commit sequence, just now with one call at the end).
+
+### Bookkeeping
+
+- **[[FU-512]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **[[FU-514]]** opened — pre-existing `SeedItemsHandler` `StockItem(image=...)` bug at `onboarding.py:514`. Not caused by this session (reproduced at HEAD before my changes via `git stash`). Logged as a finding for a dedicated fix.
+- **`CHANGELOG.md`** — `[Unreleased] > Changed` entry summarising the 10-handler sweep.
+- **`PROJECT_STATE.md`** — refreshed dashboard row for the FU ledger + Recently-shipped bullet. Document register untouched (no doc added/superseded).
+- **`DORA_VERIFY.md`** — no entry needed; invariants pinned by e2e tests.
+
+### Next up
+
+User's pick. The FU-512 runbook's "optional Batch 4" (docstring-note the 9 no-refactor handlers to defuse the next drive-by grep) was skipped to keep the diff tight — could be picked up opportunistically if the pattern gets a second sweep.
+
+---
+
 ## 2026-07-08 — FU-513 closed: snooze pruning moved off the GET read path
 
 **Why:** [[FU-513]] was the surprise finding surfaced during the FU-512 handler analysis — `GetSuggestionsHandler` deleted expired snoozes and committed on every dashboard load, taking a write lock on the hot read path and violating the "GETs don't mutate" contract. The FU's own recommendation was option (d): filter at read time (already the correctness path) + a rare housekeeping job. Shipped that.

@@ -112,7 +112,10 @@
         <!-- Dora help assistant. Lives inside the authenticated layout so
              the login page stays clean; bubble + chat are always present
              across every authenticated route. -->
-        <DoraBubble v-if="currentUser" />
+        <!-- FU-360.6 — a user can hide the helper entirely via Settings →
+             Assistant. `show_assistant` defaults true; `!== false` keeps the
+             bubble for older sessions whose user object predates the field. -->
+        <DoraBubble v-if="currentUser && currentUser.show_assistant !== false" />
 
         <!-- Global quick-add sheet. Mounted once; any screen pops it via
              useQuickAdd().openQuickAdd(). -->

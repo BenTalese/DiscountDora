@@ -97,10 +97,19 @@
     import { useSuggestionStore } from 'src/stores/suggestionStore';
     import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-    const LOCAL_STORAGE_HINT_KEY = 'dora.helpHintDismissed';
-
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+
+    // FU-360.5 — the first-time "Hi! I'm Dora" hint shows once *per user*,
+    // not once per browser. The household model shares one browser across
+    // people, so a browser-wide key meant only the first person ever saw it
+    // (or a returning user kept seeing it after another cleared it). Keying by
+    // user id gives each account exactly one acknowledge. Falls back to a
+    // shared key while the user id isn't known yet (pre-hydration).
+    const hintDismissedKey = () => {
+        const id = currentUser.value?.user_id;
+        return id ? `dora.helpHintDismissed.${id}` : 'dora.helpHintDismissed';
+    };
     const helpApi = new HelpApiService();
     // suggestion count drives the badge on the launcher and
     // gives DoraChat the data when it opens. Refreshed on mount and
@@ -183,7 +192,7 @@
     function dismissHint() {
         showFirstTimeHint.value = false;
         try {
-            localStorage.setItem(LOCAL_STORAGE_HINT_KEY, '1');
+            localStorage.setItem(hintDismissedKey(), '1');
         } catch {
             // Storage can be disabled (private mode). Not a problem — we'll
             // just show the hint again next session, which is fine for a
@@ -261,7 +270,7 @@
         // Surface the first-time hint once per browser. Skip on the login
         // page (the bubble itself only renders behind auth via MainLayout).
         try {
-            if (!localStorage.getItem(LOCAL_STORAGE_HINT_KEY)) {
+            if (!localStorage.getItem(hintDismissedKey())) {
                 // Tiny delay so the hint doesn't fight with the initial page
                 // load animation.
                 setTimeout(() => {

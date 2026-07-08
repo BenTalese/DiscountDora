@@ -39,6 +39,7 @@ export type DoraIntentId =
     | 'find_recipe'
     | 'whats_for_dinner'
     | 'shopping_list_status'
+    | 'add_to_list'
     | 'weeks_meals'
     | 'convert'
     | 'substitute'
@@ -602,6 +603,46 @@ function trySubstitute(query: string): string | null {
     return `For ${canonical}, you could use: ${subs.map(s => `• ${s}`).join('\n')}`;
 }
 
+// ── Add-to-list parsing (FU-429 — Basic-mode action verb) ──────────────
+// Basic mode was answer-only: it could report shopping-list *status* but
+// couldn't put anything on the list by typed text (only the LLM path or the
+// contextual chip could). Since most everyday users never wire up an LLM,
+// Basic mode is the default experience — so it gets the single highest-value
+// action verb here: "add milk", "buy eggs and bread", "need to buy rice".
+// The verb is parsed here (pure); DoraChat resolves the names against the
+// pantry and performs the add via the same composable the contextual chip
+// uses, so notifications + gating stay consistent.
+//
+// Longest triggers first so a bare "add to my list" (no item) strips clean
+// to nothing and the handler prompts for an item, while "add milk" keeps the
+// noun.
+const ADD_TO_LIST_TRIGGERS = [
+    'add to my shopping list', 'add to the shopping list', 'add to my list',
+    'add to the list', 'add to list', 'put on my list', 'put it on my list',
+    'put on the list', 'i need to buy', 'need to buy', 'i need to get',
+    'need to get', 'gotta buy', 'have to buy', 'add', 'buy', 'put',
+];
+// Starts with "add <word>" / "buy <word>" — the common bare form. Anchored at
+// the start so mid-sentence "adding"/"about" don't false-fire.
+const ADD_TO_LIST_LEADING_REGEX = /^\s*(add|buy)\s+[a-z0-9]/i;
+
+export function extractAddToListItems(text: string): string[] {
+    let s = text.toLowerCase().trim().replace(/[?!.]+$/g, '');
+    for (const t of ADD_TO_LIST_TRIGGERS) {
+        if (s === t) { s = ''; break; }
+        if (s.startsWith(t + ' ')) { s = s.slice(t.length).trim(); break; }
+    }
+    // Trailing "… to/on/onto my/the (shopping) list" is noise once the verb is
+    // gone ("add milk to my list" and "put milk on my list" both → "milk").
+    s = s.replace(/\s+(to|on|onto)\s+(my|the)\s+(shopping\s+)?list$/, '').trim();
+    s = s.replace(/\s+to my shopping$/, '').trim();
+    if (!s) return [];
+    return s
+        .split(/\s*(?:,|&|\band\b|\bplus\b)\s*/)
+        .map((item) => item.replace(/^(some|a|an|the|my|more)\s+/, '').trim())
+        .filter((item) => item.length > 0);
+}
+
 // ── Intent registry ────────────────────────────────────────────────────
 // ORDER MATTERS. Narrower / data-driven intents first; broad keyword
 // catches (greet, fallback) last.
@@ -641,6 +682,22 @@ export const INTENTS: ReadonlyArray<{
                   'no milk', 'ran out of'],
     },
     {
+        // FU-429 — the one action verb Basic mode gains. Explicit list
+        // phrasings + bare "add X" / "buy X" (via extraMatch, start-anchored
+        // so it doesn't eat "adding"/"about"). Placed after substitute so
+        // its "no milk" / "ran out of" triggers keep the substitute intent.
+        id: 'add_to_list',
+        label: 'Add to my list',
+        matches: [
+            'add to my shopping list', 'add to the shopping list',
+            'add to my list', 'add to the list', 'add to list',
+            'put on my list', 'put it on my list', 'put on the list',
+            'need to buy', 'i need to buy', 'need to get', 'i need to get',
+            'gotta buy', 'have to buy',
+        ],
+        extraMatch: (text) => ADD_TO_LIST_LEADING_REGEX.test(text),
+    },
+    {
         id: 'where_is',
         label: 'Where is...?',
         matches: ['where is', "where's", 'where do i keep', 'where are my',
@@ -666,6 +723,16 @@ export const INTENTS: ReadonlyArray<{
             'i need a recipe', 'i want a recipe', 'i need recipes',
             'show me recipes', 'show me a recipe', 'recipe ideas',
             'meal idea',
+            // Bare 'recipe'/'recipes' so adjective forms route here
+            // ("i need a vegetarian recipe", "italian recipes"). Safe:
+            // convert / substitute / add_to_list / where_is all sit earlier
+            // in INTENTS and win when they legitimately mention a recipe.
+            'recipe', 'recipes',
+            // Meal-time "ideas" phrasings (FU-150 intent). Singular substrings
+            // match the plural too ("any breakfast ideas" includes
+            // "breakfast idea").
+            'breakfast idea', 'lunch idea', 'brunch idea',
+            'snack idea', 'dessert idea',
         ],
     },
     {
@@ -825,6 +892,7 @@ export const QUICK_ACTIONS: DoraIntentId[] = [
     'low_stock',
     'expiring',
     'shopping_list_status',
+    'add_to_list',
     'page_help',
     'whats_new',
     'joke',
@@ -1235,6 +1303,19 @@ export async function runIntent(
                 mood: total === 0 ? 'cute' : 'searching',
                 navigateTo: { path: '/shopping-lists', label: 'Open Shopping Lists' },
                 suggestions: ['low_stock', 'expiring'],
+            };
+        }
+
+        case 'add_to_list': {
+            // Safety net only — DoraChat intercepts this intent before
+            // runIntent so it can resolve names against the pantry and
+            // perform the add through the shopping-list composable (the
+            // mutation can't live in this pure handler). If we're reached,
+            // the message carried no parseable item.
+            return {
+                text: "Sure — what should I add? Try \"add milk\" or \"add eggs and bread\".",
+                mood: 'searching',
+                suggestions: ['shopping_list_status', 'low_stock'],
             };
         }
 

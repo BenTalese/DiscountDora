@@ -107,6 +107,8 @@ export type UpdateMeCommand = {
     llm_model?: string | null;
     llm_api_key?: string | null;
     clear_llm_api_key?: boolean;
+    /** FU-360.6 — show/hide the Dora helper bubble for this account. */
+    show_assistant?: boolean;
 };
 export type ChangePasswordCommand = {
     current_password: string;

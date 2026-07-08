@@ -189,7 +189,6 @@ class CreateTemplateHandler:
             updated_at = now,
         )
         self.repository.add(template)
-        self.repository.save_changes()
 
         # Lines added in submission order — sequence reflects that order so
         # downstream rendering and instantiation preserve intent.
@@ -200,8 +199,8 @@ class CreateTemplateHandler:
                 quantity = line.quantity,
                 sequence = idx,
             ))
-        if request.lines:
-            self.repository.save_changes()
+        # FU-512 unit-of-work: one commit at the end.
+        self.repository.save_changes()
         return CreateTemplateResponse(template_id=template.id)
 
 
@@ -481,7 +480,6 @@ class InstantiateTemplateHandler:
 
         new_list = ShoppingList(name=name, created_at=now)
         self.repository.add(new_list)
-        self.repository.save_changes()
 
         template_lines: List[ShoppingListTemplateLine] = self.repository.get(ShoppingListTemplateLine).all(
             EntityField(ShoppingListTemplateLine, "template_id").eq(template_id)
@@ -507,8 +505,9 @@ class InstantiateTemplateHandler:
                 sequence = idx,
             ))
             added += 1
-        if added:
-            self.repository.save_changes()
+        # FU-512 unit-of-work: single commit. `new_list` still persists even
+        # when every template line points at a deleted stock item (added==0).
+        self.repository.save_changes()
         return InstantiateTemplateResponse(
             new_shopping_list_id=new_list.id, line_count=added,
         )
@@ -566,7 +565,6 @@ class SnapshotFromListHandler:
             updated_at = now,
         )
         self.repository.add(template)
-        self.repository.save_changes()
 
         source_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, "shopping_list_id").eq(source_list_id)
@@ -584,8 +582,8 @@ class SnapshotFromListHandler:
                 sequence = idx,
             ))
             added += 1
-        if added:
-            self.repository.save_changes()
+        # FU-512 unit-of-work: single commit.
+        self.repository.save_changes()
         return SnapshotResponse(template_id=template.id, line_count=added)
 
 

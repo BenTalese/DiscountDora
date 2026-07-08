@@ -220,7 +220,10 @@ class SeedHandler:
                 self.repository.add(StockGroup(name=name))
                 existing.add(name.lower())
                 groups_created += 1
-            self.repository.save_changes()
+            # FU-512 unit-of-work: no habit-commit between groups + locations.
+            # Locations may reference already-persisted rows via
+            # `_find_existing`, which does a full `.all()` scan — SQLAlchemy
+            # autoflush surfaces pending StockGroups on that read.
 
         if request.locations:
             seed_locations = _load_seed("default_locations.json")
@@ -280,7 +283,17 @@ class SeedHandler:
                         name=z_name, kind=z_kind, parent_id=None, sequence=0
                     )
                     self.repository.add(zone_entity)
-                    self.repository.save_changes()
+                    # FU-512 unit-of-work: child StockLocation rows below
+                    # set `parent_id = zone_entity.id`. `add()` assigns the
+                    # UUID client-side, but the child insert is a Core-level
+                    # `db.session.execute(...)` in nothing else in this loop —
+                    # the classic mapper has no `relationship()` between
+                    # StockLocation self-refs, so SQLite `PRAGMA
+                    # foreign_keys=ON` can fire on the child before the
+                    # parent hits the wire. Flush the parent, don't commit
+                    # (see the local contract in
+                    # `sqlalchemy_repository.py:57-67`).
+                    self.repository.flush()
                     existing_pairs.add(key)
                     locations_created += 1
 
@@ -301,7 +314,9 @@ class SeedHandler:
                     ))
                     existing_pairs.add(pair)
                     locations_created += 1
-            self.repository.save_changes()
+
+        # FU-512 unit-of-work: single final commit across groups + locations.
+        self.repository.save_changes()
 
         return SeedResultDto(
             groups_created=groups_created,
@@ -512,7 +527,6 @@ class SeedItemsHandler:
                 if entry.location_name else None
             )
             self.repository.add(StockItem(
-                image=None,
                 name=name,
                 notes=None,
                 stock_group=group,

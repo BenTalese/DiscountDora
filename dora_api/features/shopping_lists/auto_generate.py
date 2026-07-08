@@ -280,7 +280,15 @@ class AutoGenerateHandler:
 
         target = ShoppingList(name=list_name, created_at=now)
         self.repository.add(target)
-        self.repository.save_changes()
+        # FU-512 unit-of-work: no habit-commit here. `target.id` is
+        # assigned client-side by `add()` (uuid4). The immediate downstream
+        # `repository.get(ShoppingListLine).all(...).eq(target.id)` runs a
+        # SELECT via SQLAlchemy, which autoflushes the pending
+        # ShoppingList row before executing — so FK visibility is
+        # guaranteed for the ShoppingListLine inserts that follow.
+        # The single commit at the end of `handle()` persists the whole
+        # unit; FU-351's empty-list guard (see L210-220) already prevents
+        # a phantom-empty-list.
         return target
 
     def _next_auto_index(self) -> int:

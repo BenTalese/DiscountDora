@@ -72,6 +72,21 @@ semver — major bumps signal schema or breaking-config changes.
   location) was explicitly cut this session.
 
 ### Changed
+- **`GET /api/suggestions` no longer mutates the DB — FU-513 (2026-07-08).**
+  The read path historically deleted expired snoozes and committed on every
+  dashboard load, taking a write lock on the hot request path and violating
+  the "GETs don't mutate" contract downstream tooling (browser back-cache,
+  HTTP proxies, retry-on-failure logic) relies on. The inline
+  delete-and-commit is gone; correctness is unchanged because
+  `_is_suppressed_now` already filters expired snoozes out of the returned
+  set. Table hygiene moved to a new daily APScheduler job
+  `prune_expired_snoozes` (03:30 UTC) in
+  `dora_api/features/suggestions/prune_expired_snoozes.py`. Also fixed a
+  latent tz-mismatch in the read filter: SQLite returns
+  `DateTime(timezone=True)` columns as naive on read, so `_is_suppressed_now`
+  now treats a naive `snoozed_until` as UTC before comparing against a
+  tz-aware `now` (same pattern as `get_alerts.py`). Regression-pinned by
+  `tests/e2e/dora_api/test_suggestions_snooze_prune.py` (4 tests).
 - **Dependency injection walk-back: constructor injection via Protocols; no DI container — R-031 / ADR-027 (2026-07-08).**
   The `dependency_injector`-based `DependencyContainer` (~215 LOC) plus
   its reflection-based `service_wiring.py` were deleted. Handlers now

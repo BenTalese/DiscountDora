@@ -84,14 +84,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** dedicated session (or two — one per batch). Runbook is the source of truth; the FU-456 diff in [`create_recipe.py`](dora_api/features/recipes/create_recipe.py) + [`test_create_recipe_unit_of_work.py`](tests/e2e/dora_api/test_create_recipe_unit_of_work.py) is the reference implementation.
 - **Cross-ref:** [[FU-456]] resolved 2026-07-08 — pattern-setter. [[FU-513]] opened 2026-07-08 — surprise finding surfaced by this analysis (GET /api/suggestions performs writes).
 
-## [OPEN] FU-513 — GET /api/suggestions performs writes on every dashboard load
-- **Raised:** 2026-07-08 (surprise finding from the FU-512 handler analysis).
-- **Type:** finding / architecture smell.
-- **What:** [`GetSuggestionsHandler`](dora_api/features/suggestions/suggestions.py) at L109-110 removes expired snoozes and commits, **on every GET /api/suggestions request**. Every dashboard load takes a write lock. Under any real DB contention this will start failing (SQLite `database is locked`; Postgres serialisation retries). It's also violates the standard "GETs don't mutate" contract downstream tooling relies on (browser back-cache, HTTP cache proxies, retry-on-network-failure logic).
-- **Why deferred:** not FU-512's scope (FU-512 is the multi-commit-handler shape sweep). This is a separate design decision: where should opportunistic snooze-cleanup run? Options: (a) background scheduler tick (APScheduler is already wired), (b) at write time when a new snooze is created (piggyback on existing commits), (c) at read time but on a separate `/api/suggestions/prune` POST that the frontend calls opportunistically, (d) leave expired snoozes forever and just filter them out at read time (cheap; the table stays lean via a rare housekeeping job).
-- **Recommended resolution:** discuss options → most likely (d) with an occasional APScheduler cleanup, since expired-snooze rows are tiny and read-time filtering costs nothing. Ship as a small dedicated FU after FU-512 lands (so the write-in-GET isn't the only outlier).
-- **Cross-ref:** surfaced during [[FU-512]] analysis 2026-07-08.
-
 ## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) — DESIGN LOCKED, impl deferred
 - **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
 - **Type:** deferred job (design locked 2026-07-07; awaiting chunked impl-plan).
@@ -363,13 +355,6 @@ long session summary. Distinct from the other logs:
 - **What:** `IMPL_PLAN_DASHBOARD_REBUILD.md:263` — DashboardCard extraction was **not** done; zones ship via CSS instead of a shared card component. `:320` — the "new low" server-side signal was **not built** (needed for the dashboard's "just went low" surface).
 - **Why deferred:** dashboard rebuild landed without them; not blocking.
 - **Recommended resolution:** when Dashboard next opens for change — extract the shared card component (R-002 componentisation) and add the server-side new-low signal. *(2026-07-07: dropped the "feeds into FU-352 Dora Score" line — FU-352 closed with a keep-coexisting decision, so this work is scoped to the shared card component itself, not a new Score-card row.)*
-
-## [OPEN] FU-384 — StockOverview collapse/expand button (deferred from C-cross)
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `IMPL_PLAN_CONFIG_AND_OPTINS.md:320` — the StockOverview collapse/expand button was explicitly **NOT built** in C-cross; row-geometry deferred to the next C-1 chunk which never happened.
-- **Why deferred:** owned by C-1 not C-cross; C-1 didn't include it.
-- **Recommended resolution:** next C-1 (Stock Overview) touch — decide keep/cut; if keep, build inline with any other row-geometry change.
 
 ## [OPEN] FU-383 — Onboarding: "preferred stores/merchants" step not built
 - **Raised:** 2026-07-01 (proposals audit).

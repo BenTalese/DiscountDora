@@ -59,7 +59,15 @@ def _is_suppressed_now(suppression: DoraSuggestionSuppression, now: datetime) ->
     if suppression.decision == SUPPRESSION_DECISION_DISMISSED:
         return True
     if suppression.decision == SUPPRESSION_DECISION_SNOOZED:
-        return suppression.snoozed_until is None or suppression.snoozed_until > now
+        until = suppression.snoozed_until
+        if until is None:
+            return True
+        # SQLite drops tzinfo on read even when the column is
+        # DateTime(timezone=True); treat naive values as UTC so the
+        # comparison against tz-aware `now` doesn't raise.
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return until > now
     return False
 
 

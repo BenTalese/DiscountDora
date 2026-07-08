@@ -9,6 +9,43 @@ next.
 
 ---
 
+## 2026-07-08 — FU-513 closed: snooze pruning moved off the GET read path
+
+**Why:** [[FU-513]] was the surprise finding surfaced during the FU-512 handler analysis — `GetSuggestionsHandler` deleted expired snoozes and committed on every dashboard load, taking a write lock on the hot read path and violating the "GETs don't mutate" contract. The FU's own recommendation was option (d): filter at read time (already the correctness path) + a rare housekeeping job. Shipped that.
+
+### What shipped
+
+- **`dora_api/features/suggestions/suggestions.py`** — inline `for s in suppressions: if elapsed: self.repository.remove(s); save_changes()` block deleted from `GetSuggestionsHandler.handle`. Read path is now write-free. Replacement comment cites FU-513 and points at the new scheduler job.
+- **`dora_api/features/suggestions/prune_expired_snoozes.py`** (new) — `prune_expired_snoozes()` runs a single `DELETE ... WHERE decision=SNOOZED AND snoozed_until IS NOT NULL AND snoozed_until <= NOW()`, wrapped in `app.app_context()` (APScheduler threads run outside a request context), returns the row count, logs, and swallows exceptions so a prune failure never takes the API down.
+- **`dora_api/startup.py`** — new APScheduler job `suggestions_snooze_cleanup` at 03:30 UTC (staggers off the 03:00 audit sweep and the 07:00 alerts digest).
+- **Latent tz bug fixed in `_is_suppressed_now`.** The new e2e test exposed it: SQLite drops tzinfo on read even for `DateTime(timezone=True)` columns, so `suppression.snoozed_until > now` was raising `TypeError: can't compare offset-naive and offset-aware datetimes` whenever a real snooze row hit the read path. The filter now normalises a naive `snoozed_until` to UTC before comparing — same pattern as `get_alerts.py:147`. This bug pre-dated FU-513 but was invisible because no test ever exercised the expired-snooze branch on SQLite.
+- **`tests/e2e/dora_api/test_suggestions_snooze_prune.py`** (new, 4 tests, all green):
+  - `test__get_suggestions__does_not_mutate_the_db_even_with_expired_snoozes` — the FU-513 invariant. Two GETs across an expired-snoozed row leave the table row-count unchanged. Would have failed pre-fix.
+  - `test__prune_expired_snoozes__removes_only_elapsed_snoozed_rows` — dismissed rows are permanent, unexpired snoozes are kept, only elapsed snoozed rows are deleted.
+  - `test__prune_expired_snoozes__is_noop_when_nothing_expired` — empty-table + all-unexpired branches.
+  - `test__prune_expired_snoozes__leaves_snoozed_rows_with_null_snoozed_until_alone` — defensive: SNOOZED + `snoozed_until IS NULL` (data-integrity oddity) is never pruned.
+
+### Verification
+
+`pytest tests/e2e/dora_api/test_suggestions_snooze_prune.py` → 4 passed.
+
+### Engineering-standards close-gate
+
+No new rule / ADR. Straightforward mis-shape fix (write-in-GET) with a locality-of-truth follow-through (schedule the sweep; don't piggyback on the read); doesn't rise to a recurring pattern worth codifying. Existing rules honoured: read/write separation, portable data access (job uses `sqlalchemy.delete()` over the metadata table so Postgres works identically), no premature abstraction.
+
+### Bookkeeping
+
+- **[[FU-513]]** moved from `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`.
+- **`CHANGELOG.md`** — new `### Changed` entry under `[Unreleased]`.
+- **`PROJECT_STATE.md`** — not touched; this closes an out-of-band finding, doesn't shift any workstream state.
+- **`DORA_VERIFY.md`** — no entry needed; invariant is pinned by an e2e test.
+
+### Next up
+
+User's pick. Related open near this surface: [[FU-512]] unit-of-work sweep runbook is ready for a dedicated batch-1 session.
+
+---
+
 ## 2026-07-08 — DI container removed; constructor injection via Protocols (R-031 / ADR-027; FU-457 dissolved)
 
 **Why:** User asked whether the app benefits from DI. Static audit: 175/179 handlers just constructed `SqlAlchemyRepository()` in `__init__`; the `DependencyContainer` was being used as a service locator (`get_container().inject(X)`); zero tests exercised it; the whole shape (`I`-prefix generic interfaces, `SqlAlchemyGateway[T]`, reflection-based wiring) was a .NET convention ported into a Python codebase. User's follow-up question — "would industry-standard include DI, or is the code just not written well enough?" — resolved as: **constructor injection yes, DI container no**. Ripped out the container, introduced Protocol-based ctor injection.

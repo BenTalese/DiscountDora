@@ -16,8 +16,6 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import generate_password_hash
-
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.user import User
 from dora_api.domain.types import EMPTY_UUID
@@ -27,7 +25,9 @@ from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   ProblemDetails,
                                                   unprocessable_entity)
 from dora_api.infrastructure.audit import emit as audit_emit
-from dora_api.infrastructure.auth_helpers import is_valid_email, normalise_email
+from dora_api.infrastructure.auth_helpers import (hash_password,
+                                                  is_valid_email,
+                                                  normalise_email)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
@@ -79,7 +79,7 @@ class AdminCreateUserHandler:
         now = datetime.now(timezone.utc)
         new_user = User(
             email=email_norm,
-            password_hash=generate_password_hash(one_time_password),
+            password_hash=hash_password(one_time_password),
             send_deals_on_day=0,
             username=request.username,
             is_admin=request.is_admin,

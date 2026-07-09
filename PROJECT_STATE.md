@@ -1,15 +1,41 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-09** — hand-edited row refresh after **FU-450 + FU-451 shipped
-end-to-end (6 chunks): the deal-quality signal (band enum + `fake_markdown` demotes a
-price-driven Buy Verdict `buy`→`wait`; new money-gated `good_deal` alert + per-user
-threshold, migration `d2f8a1c4b7e9`) and budget-defense **recipe** swaps (over-budget
-week → ranked cheaper-recipe suggestions, preview→apply→undo via `MealPlanSwapLedger`,
-migration `e3a9c7b1f2d8`; Suggestions panel + Dashboard signpost). **Product/brand swaps
-CUT** — they needed per-item "usual product" upkeep the owner rejected. Recipe-cost
-pricing extracted to a shared `recipe_cost` module (R-003). 30 new tests; full suite
-886 pass / 9 pre-existing-unrelated fail. New open FU-516 (good_deal throttle is
-stateless-freshness, not a stateful counter)**. Also **FU-432 resolved** — recipe
+**Regenerated: 2026-07-09** — hand-edited row refresh after **FU-387 P5-01
+security & privacy hardening bundle sweep landed end-to-end** (two-session split
+— session 1 audited the six P5-01 buckets and produced a greenlit slate,
+session 2 executed it). Shipped: prod-default `SESSION_COOKIE_SECURE=True`
+(env stays as explicit opt-out), pinned scrypt password hashing via a new
+`hash_password()` helper routed through all eight call-sites, backup
+credential-exclusion widened (User `llm_api_key_encrypted` + AppSetting
+`smtp_password_encrypted` + `vapid_private_key_encrypted`), full Python dep
+bump clearing 16 CVEs (`flask-cors 4.0→6.0`, `flask 3.0.2→3.1.3`, `jinja2
+3.1.2→3.1.6`, `requests 2.32.4→2.33.0`, `pytest 8.3.4→9.0.3` + compat pins),
+`npm audit fix` resolving 3 of 5 frontend vulns (form-data/vite/js-yaml; 2
+low-severity dev-only Windows-only esbuild transients accepted pending
+upstream Quasar), new [SECURITY.md](SECURITY.md) at repo root, new
+[docs/security/SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md) as the
+standing per-bucket audit doc, new [scripts/security-audit.sh](scripts/security-audit.sh)
+on-demand runner. `pip-audit -r requirements.txt --strict` clean. Slate items
+dropped by user during execution: P3 per-account lockout, P5 user-isolation
+suite (correctly — single-household model has no user-vs-user boundary inside
+a household). [[FU-387]] → RESOLVED; [[FU-405]] gained a "promote
+security-audit.sh to CI at Phase 4" note.** Earlier same day: **`good_deal`
+alert type ripped end-to-end (product-owner call): the alert kind, per-user threshold
+column, Preferences → Notifications control, AlertsPage mapping, and migration
+`d2f8a1c4b7e9` all removed; `--alert-kind-good-deal` renamed to `--savings-accent`
+(still used by the swap-suggestions panel + dashboard savings signpost). Reason:
+proactive "product is cheap right now" nudges read like the app pushing users to
+buy from stores, which isn't Dora's posture. `DealQuality` compute + its use by
+Buy Verdict (fake-markdown demotion) + the FU-451 swap-ranker fake-markdown
+filter all unchanged. FU-516 (throttle deviation) deleted — the feature it
+described no longer exists. `e3a9c7b1f2d8` rewired to `c7d1a9e3f2b6` as its
+down_revision.** Earlier same day: **FU-450 + FU-451 shipped end-to-end (6 chunks):
+the deal-quality signal (band enum + `fake_markdown` demotes a price-driven Buy
+Verdict `buy`→`wait`) and budget-defense **recipe** swaps (over-budget week →
+ranked cheaper-recipe suggestions, preview→apply→undo via `MealPlanSwapLedger`,
+migration `e3a9c7b1f2d8`; Suggestions panel + Dashboard signpost). **Product/brand
+swaps CUT** — they needed per-item "usual product" upkeep the owner rejected.
+Recipe-cost pricing extracted to a shared `recipe_cost` module (R-003)**. Also **FU-432 resolved** — recipe
 personal notes shipped (RD-29, migration `f4b2d8e6a1c3`, shown in cook mode under the
 steps); RD-11 per-ingredient notes dropped (anti-creep), RD-3/RD-33 verified
 already-done, RD-18 dup of FU-407. Earlier: **FU-515 assistant security triage (B.1 prompt-injection defence + B.3 tool-arg bounds + B.4 current_path sanitisation shipped; B.2/A.3/A.4 verified already-fixed; A.5/A.6/A.7 accepted; audit doc "✅ Fully triaged")**. Earlier same day: **FU-390 assistant eval suite (vitest stood up in web_app; 53-case Basic-mode corpus + 9 AI-path reliability tests; caught+fixed 3 real bugs incl. an orphaned `set_primary_list` tool) and FU-514 (onboarding seed-items 500 fix)**. Earlier same day: **FU-429 assistant-architecture reconciliation (SLM has landed → the big "capability registry + two routers" refactor deliberately NOT built per Effortless+Anti-creep; instead closed the highest-value gap by giving Basic mode its first action verb — typed "add milk"/"buy eggs and bread" now resolves against the pantry and adds to the primary list; §1 dup + §2.1 registry + mutation gate already satisfied. Related: FU-386 closed already-honoured, FU-390 eval suite unblocked+re-scoped, FU-360 subset shipped — hide-Dora setting, per-user greeting, chip sizing)**. Earlier same day: **FU-447 close-out (already-satisfied by [[FU-197]] 2026-06-30 — A.1 CSRF + A.2 email-change password-proof both fixed and pinned by tests; AUTH_ASSISTANT_SECURITY_FINDINGS.md doc header + priority table stamped with per-finding status; remaining 8 medium/low items carried forward as new FU-515)**. Earlier same day: **FU-512 close-out (unit-of-work sweep applied to 10 more handlers — `CreateMealPlanTemplate`, `CloneMealPlanTemplate`, `CreateSet`, `NewRecipeVersion`, `AutoGenerate`, `Seed` onboarding, `CopyShoppingList`, plus 3 shopping-list-template handlers; habit-commits deleted, `flush()` used where child inserts need FK visibility; 10 new happy-path e2e tests, all green; surprise pre-existing bug found in `SeedItemsHandler` logged as FU-514)** and **FU-513 close-out (GET /api/suggestions writes eliminated; snooze pruning moved to a daily APScheduler job)**. Earlier same day: **DI walk-back (R-031 / ADR-027 — `DependencyContainer` deleted; 175 handlers rewritten to constructor injection typed against a `Repository` Protocol; ~200 `get_container().inject(X)` callsites rewritten; `dependency_injector` dropped; FU-457 dissolved by construction; 828 pass / 2 pre-existing fail — 0 regressions)**, **FU-456 (`create_recipe` unit-of-work refactor — 5 commits → 1, 3 new e2e tests, FU-512 opened for the sweep of remaining multi-commit handlers — now closed)**, **FU-500 (R-029 hide-don't-nag sweep — Product Search nav flipped to hide, MenuButtonProps shed disabled fields, 17 R-014 comment refs audited)**, and **FU-504 (base-component sweep — 40 raw `<q-btn>` migrated, `BaseButton` gains `filled-icon` variant + `color` prop)**. Prior refresh: **2026-07-06** — hand-edited row refresh after **FU-333 close-out (env-var sprawl finished; Buckets C + D + fallback drop)**, **FU-502 (locale/currency backend coverage tests)**, **FU-503 / FU-044 (help chips shipped)**, and **FU-043 (Locale
@@ -86,8 +112,8 @@ list-state clear.
 
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
-| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-359/360/361/362/363/431/432); FU-421 + FU-430 closed to `_RESOLVED`. |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~90% | **Stocktake mode redesign shipped end-to-end** (Chunks 1–3 + housekeeping); SK-1..11 resolved. **FU-449 closed** — P6-07 cook→consume `ConsumptionEvent` persists. **FU-351 shipped** — P6-10 "Draft my shop" one-click dashboard card on top of the existing `/auto-generate` engine (2026-07-07). **FU-352 closed** — P6-12 briefing / P8-08 Score coexistence decided (2026-07-07: keep both cards, no fold). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` + `good_deal` alert; **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping. |
+| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-360/361/363/431/432); FU-359 + FU-421 + FU-430 closed to `_RESOLVED`. |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~90% | **Stocktake mode redesign shipped end-to-end** (Chunks 1–3 + housekeeping); SK-1..11 resolved. **FU-449 closed** — P6-07 cook→consume `ConsumptionEvent` persists. **FU-351 shipped** — P6-10 "Draft my shop" one-click dashboard card on top of the existing `/auto-generate` engine (2026-07-07). **FU-352 closed** — P6-12 briefing / P8-08 Score coexistence decided (2026-07-07: keep both cards, no fold). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` (shipped; `good_deal` alert cut same day); **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping. |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
 | **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence P8-01..P8-10 complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and P8-10 Native mobile app all BUILT (Capacitor 8 wraps the SPA; Android scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode). P8-01/02/05/06 shipped earlier. P8-03 + P8-04 formally cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
 | **4 — Commercialize** | Tenancy, Stripe/billing, compliance, launch readiness (Postgres already done) | ⚪ ~0% | Not started (FU-387..406); zero billing/tenancy code. **Postgres is done + the default datastore** (FU-045 closed). Distribution-posture checklist gates daily work. Rate-limit primitives extended for per-user bucketing (FU-458 — one Phase-4 hardening item pulled forward this session). |
@@ -143,6 +169,7 @@ first.
 
 ## Recently shipped (newest first)
 
+- **FU-359 done — Import + Backup-&-restore data pages UI revamp (2026-07-09).** The two admin data screens were still wearing an ad-hoc `q-card` stack; both rebuilt onto the shared Settings design language (`SettingsPageHeader` + `SettingsSection` + `SettingsRow` + `.settings-divider`). New shared **`SettingsFileDrop.vue`** drag-and-drop upload zone (idle/filled/busy + progress) replaces the raw `q-file` on both. Import: template download moved to the header, responsive column-mapping grid, cleaner preview, toggle-row options. Backup & restore: tidy library rows with inline actions, self-contained restore-preview panel, Library-settings + Image-compression converted to `SettingsSection`s (+ a flagged `q-btn color="grey"` fixed to `variant=secondary`, R-002). Presentation-only — upload/inspect/restore scripts untouched; `vue-tsc` clean. Sub-items #2 (export formats) + #7 (Export & Print) flagged as separate feature scope, not blocking. Browser verify owed.
 - **FU-515 done — assistant security findings fully triaged (2026-07-08).** Worked the 8 medium/low items left in the AUTH_ASSISTANT audit. **Shipped:** prompt-injection defence (system-prompt "tool data ≠ instructions" rule + control-byte stripping — B.1), tool-arg bounds (reject absurd expiry pushes — B.3), and `current_path` prompt sanitisation (B.4), with 8 new tests. **Verified already-fixed:** assistant rate/input caps (B.2), verified change-email UI (A.3, FU-197), password-rule alignment (A.4, FU-442). **Accepted with rationale:** admin plaintext reset (self-host fallback), in-memory rate-limit (Phase-4 scaling), tokens-in-URL (mitigated). `AUTH_ASSISTANT_SECURITY_FINDINGS.md` now "✅ Fully triaged". 37 assistant+auth tests green.
 - **FU-390 done — assistant eval suite, both paths (2026-07-08).** Stood up **vitest** in `web_app` (was a no-op test script) with a 53-case Basic-mode eval corpus over `detectIntent` + `extractAddToListItems`, plus 9 backend reliability tests pinning the AI-path mutation gate + tool-registry integrity + graceful no-model degradation. The suite immediately caught **3 real bugs**, all fixed: "put milk **on** my list" mis-parsed the item; "\<adjective\> recipe" phrasings fell through to fallback (no bare `recipe` trigger); and the retired `set_primary_list` tool was still advertised to the model (+ on the help page) with no proposer → silent no-op, now fully removed. `vitest` 53/53, backend assistant+auth 29/29, `vue-tsc` clean.
 - **FU-514 fixed — onboarding seed-items no longer 500s (2026-07-08).** `POST /api/onboarding/seed-items` crashed on every call because `SeedItemsHandler` still passed a dropped `image` field to `StockItem` (leftover from FU-508's stock-item-image removal). One-line fix; `test_onboarding_flags.py` now 7/7.

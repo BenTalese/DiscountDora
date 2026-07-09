@@ -86,8 +86,21 @@ else:
 app.config['SESSION_COOKIE_NAME'] = 'dora_session'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# Secure cookies require HTTPS — toggle on for production via env.
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('DORA_SECURE_COOKIES', '').lower() in ('1', 'true', 'yes')
+# Secure cookies require HTTPS. Default is fail-closed in production
+# (`DORA_ENV=production` ⇒ Secure=True) so a prod deploy that forgets to
+# set the env var doesn't silently ship the session cookie over plain
+# HTTP. Explicit `DORA_SECURE_COOKIES=false` opts back out for internal-
+# LAN / VPN / home-lab installs that deliberately serve HTTP; the
+# `warn_if_insecure_cookies_in_production()` boot check surfaces the
+# choice once so the operator sees it and picks intentionally.
+from dora_api.infrastructure.profile import is_production
+_SecureCookiesEnv = os.environ.get('DORA_SECURE_COOKIES', '').strip().lower()
+if _SecureCookiesEnv in ('1', 'true', 'yes', 'on'):
+    app.config['SESSION_COOKIE_SECURE'] = True
+elif _SecureCookiesEnv in ('0', 'false', 'no', 'off'):
+    app.config['SESSION_COOKIE_SECURE'] = False
+else:
+    app.config['SESSION_COOKIE_SECURE'] = is_production()
 
 db = SQLAlchemy(metadata=MetaData(naming_convention=NAMING_CONVENTION))
 config_manager.get_data_dir().mkdir(parents=True, exist_ok=True)

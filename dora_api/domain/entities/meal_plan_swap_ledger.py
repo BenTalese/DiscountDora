@@ -14,7 +14,7 @@ class MealPlanSwapLedger(BaseEntity):
 
     ``payload_json`` freezes the pre-apply state — enough to rebuild the row
     that changed. Recipe swap: ``{"entry_id", "from_recipe_id", "from_servings"}``.
-    (Product swap deferred — see FU-516.)
+    (Product swap CUT per PROPOSAL_BUDGET_DEFENSE_SWAPS.md scope note.)
     """
     meal_plan_id: UUID
     applied_by_user_id: UUID | None

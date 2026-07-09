@@ -53,30 +53,6 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-516 — good_deal alert throttle is freshness-based, not a true per-(product,band) 14-day counter
-- **Raised:** 2026-07-09 (FU-450 impl).
-- **Type:** finding / design deviation.
-- **What:** The locked brief (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md` §4b) specified the
-  `good_deal` alert throttle as "once per (product, band) per 14 days" — a
-  *stateful* fire counter. It's implemented instead as a **stateless freshness
-  window**: a deal only nudges while its current offer's `offered_on` is within
-  `GOOD_DEAL_FRESHNESS_DAYS` (14) — see `get_alerts.py::_good_deal_alerts`.
-- **Why deviated:** a true fire-counter needs either a write on `GET /alerts`
-  (FU-513 deliberately eliminated GET-path writes) or a new fire-log table + a
-  background job to populate it. Both fight two standing invariants: the alerts
-  endpoint's "conditions are derived every request, never stored" design, and the
-  no-writes-on-GET rule. Freshness-gating honours the *intent* ("a persistent
-  deal stops nagging") statelessly. **Trade-off:** a genuinely-new deal can
-  re-surface daily for up to 14 days unless the user snoozes/dismisses it
-  (AlertInteraction suppresses sooner).
-- **Recommended resolution:** opportunistic / when a running-app walk shows the
-  daily re-surface is actually annoying. The proper fix — a small
-  `GoodDealAlertFire(user, product, band, fired_at)` table written by a scheduled
-  alert-materialisation job (moving alert generation off the GET path) — is a
-  bigger architectural change; only worth it if the freshness heuristic proves
-  too noisy in practice.
-
-
 ## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
 - **Raised:** 2026-07-07 (user request).
 - **Type:** deferred job (audit-first, then refactor).
@@ -163,6 +139,7 @@ long session summary. Distinct from the other logs:
 - **What:** P7-09 — production ops. CI is deliberately disabled in this repo (`.github/workflows/*.yml` commented out to preserve GH free-tier — see memory `feedback_ci_disabled_policy`). Observability, staging, backups all unplanned. **Do not silently re-enable CI as part of this** — separate call.
 - **Why deferred:** Phase 4 + CI-cost policy.
 - **Recommended resolution:** Phase 4 — pair with billing (P7-06) so ops cost lands with revenue.
+- **Note (2026-07-09, FU-387 audit):** when CI is re-enabled at Phase 4, wire in dependency scanning as part of this FU — a scheduled `pip-audit -r requirements.txt` + `npm audit --prefix web_app` job that opens an issue on new advisories. FU-387 shipped a manual `scripts/security-audit.sh` runner as the interim; promoting it to CI belongs here, not in a fresh FU. See [SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md) §6 for the current baseline the CI job should measure against.
 
 ## [OPEN] FU-404 — P7-08 Compliance (privacy policy, DSAR, deletion, security headers)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -268,20 +245,6 @@ long session summary. Distinct from the other logs:
 - **What:** P5-03 — comprehensive perf sweep (query N+1s, bundle size, load-tests). Only `STOCK_OVERVIEW_PERF` investigation touched a slice. No app-wide pass.
 - **Why deferred:** hasn't been forced by user pain.
 - **Recommended resolution:** pre-Phase-4 gate — do one comprehensive pass with real seed data at pantry size 500+ items, catch N+1s + big-query issues before they hit paying users.
-
-## [OPEN] FU-387 — P5-01 Security & privacy hardening bundle sweep
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job.
-- **What:** P5-01 — comprehensive security/privacy hardening sweep. Auth findings (CSRF, register-first-admin, email-change) resolved per resolved-FUs. The full P5-01 bundle (security headers, rate-limits, secrets management, dependency audit) not executed as a single sweep.
-- **Why deferred:** slices landed opportunistically.
-- **Recommended resolution:** pre-Phase-4 gate — one dedicated sweep before any public deploy. Overlaps with [[FU-409]] auth findings re-audit + [[FU-424]] senior-review Tier-2.
-
-## [OPEN] FU-383 — Onboarding: "preferred stores/merchants" step not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_ONBOARDING.md:268` — the preferred-merchants step was **not built** ("same uncertain bucket as preferred-*product* removal, FU-180"). Onboarding currently skips it.
-- **Why deferred:** merchants layer is companion-scope and its onboarding value was unclear.
-- **Recommended resolution:** discussion — decide whether the everyday user needs a "preferred store" concept for `usual_store_id` (which does exist server-side). If yes, small onboarding step + settings mirror; if no, close as decided.
 
 ## [OPEN] FU-382 — PROPOSAL_SHOPPING_LIST_UX_V2 §11 open questions
 - **Raised:** 2026-07-01 (proposals audit).
@@ -431,26 +394,20 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** content task typically deferred to post-launch.
 - **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. The overlay-shell counterpart (FU-367) was retired in favour of the shipped `(?)` help chips, so this content work no longer has an overlay to render into — it lives on HelpPage / DoraBot.
 
-## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish — mostly shipped, 1 sub-item + 2 verifies remain
+## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish — code-complete, 2 browser verifies remain
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (bundle — was 6 sub-items; 3 shipped 2026-07-08 in the FU-429 turn).
+- **Type:** deferred job (bundle — was 6 sub-items; all code work now landed).
 - **Shipped 2026-07-08:**
   - **#5 greeting once-per-user** — the "Hi! I'm Dora" hint key in `DoraBubble.vue` is now keyed by user id (`dora.helpHintDismissed.<userId>`) instead of one browser-wide key, so each household account gets exactly one acknowledge.
   - **#6 turn the bot off** — new per-user `show_assistant` preference (User column + migration `c7d1a9e3f2b6` + `PATCH /auth/me` + DTO). Toggle at Settings → Assistant ("Show Dora on every page"); `MainLayout` gates the bubble on it. e2e round-trip test added.
-  - **#2 chip squished/small** — dropped `dense`, added a `.dora-mode-chip` style (rem-based font so it follows the text-size pref, padding, icon spacing).
-- **Still open:**
-  - **#3 make the Basic/AI chip a toggle *slider*** ("slanted thick, glow on slide") — a genuine visual-design task (not a bug); needs a running browser to iterate on the styling. Left for a polish pass, not folded into the reconciliation turn.
-  - **#1 text size not honouring settings** & **#4 DS4 animation flashing on hover** — both moved to `DORA_VERIFY.md` (Dashboard/Cross-cutting → Dora bot). #1 *appears already fixed* by the A6 rem migration (`:root` font-size drives `--dora-base-font-size`; DoraChat uses rem/em), so it's a confirm-in-browser, not a code change; #4 is a hover-animation regression that can only be reproduced/fixed with the app running.
-- **Recommended resolution:** knock out #1/#4 during the next browser-verify session; pick up #3 (slider) as a small standalone styling task when someone's iterating on the chat header live. When #3 lands and #1/#4 are confirmed, close this FU.
+  - **#2 chip squished/small** — dropped `dense`, added a `.dora-mode-chip` style (rem-based font so it follows the text-size pref, padding, icon spacing). Superseded 2026-07-09 by #3's slider replacement.
+- **Shipped 2026-07-09:**
+  - **#3 Basic/AI chip → toggle slider** — new `DoraModeSlider.vue` (two-position pill, skewed thick knob that slides between Basic/AI with a brand-primary glow on the AI side). Replaces the read-only `q-chip` in the chat header. Slider represents the user's `llm_enabled` preference (source of truth); tapping it flips the preference via `authStore.updateMeAsync` and re-probes `/assistant/status`. Disabled state (with tooltip explaining why) when: install-wide `master_llm_enabled=false`, or the user hasn't finished configuring a provider (mirrors AssistantSettings `canEnable` guard). AI-unavailable banner logic untouched (still driven by `aiActive` from the status probe, so a "preference on but currently unreachable" state still surfaces the banner).
+- **Still open (browser verify only, in DORA_VERIFY.md):**
+  - **#1 text size not honouring settings** & **#4 DS4 animation flashing on hover** — both live in `DORA_VERIFY.md` (Dashboard/Cross-cutting → Dora bot). #1 *appears already fixed* by the A6 rem migration; #4 is a hover-animation regression that can only be reproduced/fixed with the app running.
+- **Recommended resolution:** confirm the new slider behaves as intended in-browser (Basic ↔ AI flip + PATCH round-trip + disabled state when unconfigured), then walk #1/#4 during the next browser-verify session. Close this FU once all three verifies pass.
 
 
-
-## [OPEN] FU-359 — A-2 DATA page redesign
-- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (bundle — 7 sub-items).
-- **What:** `COVERAGE_GAPS.md` A-2 open bullets. No dedicated brief. Items: (1) move under Settings → "My Data" (not top-level); (2) multiple export formats (json, csv, …); (3) page formatting overhaul — margins, alignment, headings, font/type; (4) card + checkbox layout; (5) drop the breadcrumb fluff; (6) schema-driven import templates (partially addressed by FU-343/344 but still open); (7) Export & Print tab utility — drop or rework; plus decide whether the optional/collapsed section should be the main view. Barcode-tab items are already covered.
-- **Why deferred:** no owner brief.
-- **Recommended resolution:** new Wave-C brief `C-DATA — Data Management redesign`. Sequence early if Settings shell ([[FU-366]]) is also opened, since #1 depends on it.
 
 ## [OPEN] FU-348 — Import templates: registry has no "every importable section has a template" symmetry check
 - **Raised:** 2026-07-01 (post-FU-343 self-review).

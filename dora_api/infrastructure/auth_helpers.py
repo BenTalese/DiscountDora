@@ -33,6 +33,7 @@ from uuid import UUID, uuid4
 
 from flask import request
 from sqlalchemy import select
+from werkzeug.security import generate_password_hash
 
 from dora_api.app import db
 from dora_api.domain.entities.auth_token import (
@@ -92,6 +93,26 @@ PASSWORD_RULES_DOC = (
     "Longer is safer — a memorable passphrase of a few words is fine. "
     "Avoid common passwords like ‘password123’ or ‘qwerty’."
 )
+
+
+# Password hashing method. Pinned explicitly so an upstream werkzeug bump
+# can't silently change the KDF (werkzeug's `generate_password_hash`
+# default has moved between pbkdf2 and scrypt across versions). scrypt
+# is memory-hard, which is what we want against GPU-parallel attackers;
+# 32768/8/1 are the parameters werkzeug uses in current releases and
+# match OWASP's minimum recommendation for scrypt at time of writing.
+# `check_password_hash` auto-detects the method embedded in the stored
+# hash string, so pinning here doesn't force a migration of existing
+# hashes — a user's next successful login can be used to lazily upgrade
+# their hash if we ever want to (not doing that yet).
+PASSWORD_HASH_METHOD = "scrypt:32768:8:1"
+
+
+def hash_password(value: str) -> str:
+    """Single-source password hash. All auth flows (register, admin-create,
+    reset) MUST call this — never `werkzeug.security.generate_password_hash`
+    directly — so the KDF choice stays in one place (R-003)."""
+    return generate_password_hash(value, method=PASSWORD_HASH_METHOD)
 
 
 def validate_password(value: str) -> str | None:
@@ -349,6 +370,7 @@ def try_send(send_fn, *args, **kwargs) -> None:
 # Re-export so callers don't have to know the underlying entity layout.
 __all__ = [
     "MIN_PASSWORD_LENGTH", "PASSWORD_RULES_DOC", "validate_password",
+    "PASSWORD_HASH_METHOD", "hash_password",
     "is_valid_email", "normalise_email",
     "VERIFY_EMAIL_TTL", "RESET_PASSWORD_TTL", "CHANGE_EMAIL_TTL",
     "PURPOSE_VERIFY_EMAIL", "PURPOSE_RESET_PASSWORD",

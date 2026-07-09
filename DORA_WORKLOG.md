@@ -9,6 +9,176 @@ next.
 
 ---
 
+## 2026-07-09 — FU-359: Import + Backup-&-restore data pages UI revamp; FU-359 → RESOLVED
+
+**Why:** User: "FU-359 i think was already done? but to resolve this i think its worth doing a UI revamp of the screen. it looks ugly as heck at the moment. improve it. same with the import screen." The A-2 bundle's blocker was the two admin data pages still wearing an ad-hoc `q-card` stack while the rest of Settings had moved to the shared design language. Revamp both, presentation-only.
+
+### Shipped
+
+- **New `web_app/src/components/settings/SettingsFileDrop.vue`** — shared drag-and-drop upload zone. Props `modelValue/accept/label/hint/loading/loadingText/progress/disabled`; emits `update:modelValue/pick/clear`. Three visual states (idle prompt, filled file-chip with clear ✕, busy spinner + progress bar). Hidden native `<input type=file>` triggered by click; drag/drop + keyboard (Enter/Space) handlers.
+- **`AdminDataImport.vue`** — template stack → `SettingsPageHeader` + `SettingsSection`s with `.settings-divider`s. "Download template" moved to the header `#actions` slot (`variant=secondary`). Upload via `SettingsFileDrop`. Column mapping is now a responsive `.mapping-grid` (`repeat(auto-fill, minmax(220px,1fr))`); preview in a scoped `.preview-table`; options as `SettingsRow` toggles; Import/Cancel in `.settings-actions`. **Script unchanged.**
+- **`AdminDataBackupRestore.vue`** — header gets a **New backup** action; backup library `q-list`/`q-item` → custom `.backup-row` cards (icon + title/meta + Download/Restore/Delete icon actions), plus `.backup-state`/`.backup-empty` states; kept the Sensitive chip/tooltip. Restore section → `SettingsFileDrop` + a self-contained `.restore-preview` panel (header/toolbar/tree/actions). "Library settings" + "Image compression" `q-card`s → `SettingsSection` + `SettingsRow`. Fixed a flagged raw `q-btn color="grey"` → `variant="secondary"` (R-002). Added the `<style scoped>` block (page had none). **Script unchanged.**
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-359 moved to `DORA_FOLLOWUPS_RESOLVED.md`. Resolution note records the UI-facing sub-items landed (#3 formatting, #4 card/checkbox layout, #5 breadcrumb, #1 already done) and flags #2 (multiple export formats) + #7 (Export & Print rework) as genuinely-separate feature scope not blocking this close; #6 stays under [[FU-348]].
+- `DORA_VERIFY.md`: new "Data pages UI revamp" block under **Settings** — Import page, Backup & restore page, restore-from-file, library/image settings.
+- `CHANGELOG.md`: `[Unreleased]` **Changed** entry.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation-first)** improved — the two pages now share `SettingsFileDrop` instead of each carrying a bespoke `q-file`, and both sit on the same `SettingsSection`/`SettingsRow`/`.settings-divider` scaffolding as the rest of Settings.
+- **R-002 (theme tokens only)** — all new CSS uses `var(--surface-*)`, `var(--text-*)`, `var(--border-*)`, `var(--brand-primary)`, `var(--radius-*)`, `var(--space-*)`. `color-mix()` used for the hover tint + divider (same idiom as the existing settings pages). Fixed the pre-existing `q-btn color="grey"` literal while here. Clean.
+- **R-003 (state ownership)** — presentation-only; no domain logic moved. Upload/inspect/restore/commit scripts untouched. Clean.
+- No new rule/ADR needed.
+
+### Verification
+
+- `vue-tsc --noEmit`: clean for all touched files (had to swap `SettingsFileDrop`'s optional `progress` prop to a `computed(() => props.progress ?? 0)` to satisfy the in-template narrowing). The only remaining errors are the pre-existing `DashboardPage.vue` `"draft_shop"`/`CardId` ones — unrelated.
+- No test suite / browser pass this session (user runs). Browser verifies logged in `DORA_VERIFY.md`.
+
+### Next up
+
+User's pick. FU-359 closes on the browser pass; if the dropped sub-items (#2 export formats, #7 Export & Print) are wanted, they need their own small follow-up.
+
+---
+
+## 2026-07-09 — FU-360 #3: Basic/AI chip → toggle slider on the chat header; FU-383 closed as won't-do
+
+**Why:** User asked whether FU-360 was still outstanding given the recent chatbot commits, and asked to knock out the remaining #3 (chip → slider). Also decided FU-383 (preferred-stores onboarding step) as won't-do since the existing `usual_store_id` server-side concept is sufficient.
+
+### Shipped
+
+- **New `web_app/src/components/dora/DoraModeSlider.vue`** — two-position pill (Basic | AI), skewed thick knob (`transform: skewX(-12deg)`) that slides across on toggle with a brand-primary glow on the AI side. Basic side gets a muted knob (still visible, no glow). Rem-based font size so it grows with the text-size preference. Accessible: `role="switch"`, `aria-checked`, keyboard toggle (Space/Enter), focus ring.
+- **`DoraChat.vue` header** — replaced the read-only `q-chip` with `<DoraModeSlider>`. Slider represents the user's `llm_enabled` preference (source of truth). Tap → `authStore.updateMeAsync({ llm_enabled: next })` → `refreshAiStatus()` re-probes so `aiActive` / the "AI unavailable" banner update. Guarded by a new `canToggleMode` computed that mirrors `AssistantSettings.canEnable` (install master on + user has provider + model + base_url|api_key). Disabled state gets a specific tooltip explaining what to save next in Settings → Assistant, or that the install master is off.
+- **Install master flag fetch** — new `installAiEnabled` ref sourced from `AppSettingsApiService.getAsync()` on mount. Failure defaults to `true` so the slider still tries; the PATCH will surface the real reason.
+- **Dead CSS removed** — the old `.dora-mode-chip` block was retired with the chip.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-360 now marked "code-complete, 2 browser verifies remain" (#1 text-size + #4 hover-flash still in `DORA_VERIFY.md`); FU-383 moved to `DORA_FOLLOWUPS_RESOLVED.md` as won't-do.
+- `DORA_VERIFY.md`: two new checks under "Dora assistant / helper bubble" — mode slider happy path + disabled states (no LLM configured, install master off).
+- `CHANGELOG.md` — `[Unreleased]` **Changed** entry.
+
+### Engineering-standards close-gate
+
+- **R-002 (theme tokens only)** — the slider uses `var(--brand-primary)`, `var(--brand-accent)`, `var(--text-secondary)`, `var(--text-on-primary)`, `var(--surface-sunken)`, `var(--surface-component)`, `var(--font-size-sm)`. No hex/rgb literals outside the box-shadow fallback rgba (a rendering fallback for the shadow depth, not a colour token). Clean.
+- **R-003 (state ownership)** — the toggle writes to the server (`llm_enabled`) as the source of truth; the slider reads directly from `props.currentUser` (no local shadow-copy). Clean.
+- **R-005 (distribution posture)** — unaffected (self-host / single-tenant / SaaS all behave the same; the master flag layering is pre-existing).
+- No new rule/ADR needed.
+
+### Verification
+
+- `vue-tsc --noEmit`: my changes typecheck clean. Three pre-existing errors in `DashboardPage.vue` around `CardId` / `"draft_shop"` are unrelated (surface my work didn't touch).
+- No test suite run this session (user runs). New browser verifies logged in `DORA_VERIFY.md`.
+
+### Next up
+
+User's pick. Remaining FU-360 tail is #1 (text-size honoured) + #4 (DS4 hover-flash regression), both eyes-on-the-running-thing checks.
+
+---
+
+## 2026-07-09 — FU-387 session 2: P5-01 hardening slate landed; FU-387 → RESOLVED
+
+**Why:** Session 1 audited P5-01 across the six buckets and produced a greenlit slate. This session executed it, then closed the FU.
+
+### Shipped (all greenlit items from session 1)
+
+- **P1 — Prod-default `SESSION_COOKIE_SECURE=True`** ([app.py](dora_api/app.py) + [profile.py](dora_api/infrastructure/profile.py) + [.env.example](.env.example)). Profile-driven: `DORA_ENV=production` ⇒ True. Explicit `DORA_SECURE_COOKIES=false` still opts out for LAN-behind-VPN. `warn_if_insecure_cookies_in_production()` inverted to warn on the deliberate opt-out (previously warned on unset).
+- **P2 — Pinned scrypt password hashing** ([auth_helpers.py](dora_api/infrastructure/auth_helpers.py)). New `hash_password()` helper: `generate_password_hash(value, method="scrypt:32768:8:1")`. All eight call-sites routed through it — [register_user.py](dora_api/features/auth/register_user.py), [bootstrap_admin.py](dora_api/features/auth/bootstrap_admin.py), [change_password.py](dora_api/features/auth/change_password.py), [email_flows.py](dora_api/features/auth/email_flows.py) (reset via token), [create_user_as_admin.py](dora_api/features/users/create_user_as_admin.py), [reset_user_password.py](dora_api/features/users/reset_user_password.py), [seed.py](dora_api/persistence/seed.py). No direct `werkzeug.security.generate_password_hash` imports left in the app. `check_password_hash` auto-detects the method so existing hashes verify unchanged.
+- **P6 — Backup credential exclusion widened** ([restore_shared.py](dora_api/features/data/restore_shared.py)). User section: `password_hash` + `llm_api_key_encrypted`. AppSetting section: `smtp_password_encrypted` + `vapid_private_key_encrypted`. Both sections opt-in / off by default; Fernet-wrapped ciphertext, but defence-in-depth against backup-plus-key exposure.
+- **P7 — Python dep bumps** ([requirements.txt](requirements.txt)). `flask-cors 4.0.0 → 6.0.0` (7 CVEs — verified our `resources={r'/api/*': {…}}` shape unchanged + behaviour smoke-tested: unlisted origin still gets no ACAO header), `flask 3.0.2 → 3.1.3`, `jinja2 3.1.2 → 3.1.6` (5 CVEs), `requests 2.32.4 → 2.33.0`, `pytest 8.3.4 → 9.0.3` (+ `pytest-asyncio 1.4.0` + `typing_extensions 4.16.0` for pytest-9/qrcode/pydantic compat). `pip-audit -r requirements.txt --strict` → **No known vulnerabilities found**.
+- **P8 — `npm audit fix`** (`web_app/package-lock.json` only, no `package.json` change). Fixed: `form-data` (high, CRLF), `vite` (high, Windows-only), `js-yaml` (moderate). **Accepted (upstream lag):** `esbuild` low + transitive `@quasar/app-vite` low — both dev-only, Windows-only; documented in SECURITY_REVIEW §6.
+- **[scripts/security-audit.sh](scripts/security-audit.sh)** — on-demand runner (pip-audit + npm audit). Exits non-zero if either finds anything so a future CI job can gate on it. FU-405 note (session 1) says "promote to CI at Phase 4".
+- **P10 — [SECURITY.md](SECURITY.md)** at repo root — private disclosure address (Ben.Talese@CompanionSystems.com.au + GH Security Advisories), 5-day ack SLA, 14-day first-assessment SLA, 90-day disclosure window, in-/out-of-scope. GitHub Security tab picks it up.
+- **P9 — [docs/security/SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md)** — the artefact P5-01 requires. Nine sections: overview, six buckets, follow-up register, release-checklist runbook, history. Baselined 2026-07-09.
+
+### Dropped from the slate (with reasons)
+
+- **P3 per-account login lockout** — dropped by user (correctly for current tenancy posture; per-IP 5/min + breach-list password reject is enough).
+- **P4 in-mem rate-limit note** — already accepted in `AUTH_ASSISTANT_SECURITY_FINDINGS.md` A.6, no need to duplicate.
+- **P5 user-isolation e2e suite** — user pushed back mid-session with the right point: the app is single-household by design, so there's no user-vs-user boundary inside a household to test. The tiny per-user overlay surfaces (AlertInteraction / AlertPreference / PushSubscription / AuthToken / a few `User` fields) all filter by `user_id` consistently; framing is documented in SECURITY_REVIEW §2 instead.
+
+### Engineering-standards close-gate
+
+- **R-003 (state ownership)** actively improved — `hash_password()` centralises the KDF choice at a single site; nine call-sites now share it. Removed nine direct `werkzeug.security.generate_password_hash` imports across the app.
+- **R-005 (distribution posture)** unaffected — every change respects self-host + managed-single-tenant + future-multi-tenant simultaneously (no hard prod-only assumptions; opt-out env vars preserved).
+- No new rule/ADR needed.
+
+### Verification
+
+- Static AST parse across all touched Python modules: clean.
+- `pip-audit -r requirements.txt --strict`: clean.
+- flask-cors 6.0 API compat smoke-test (allowed vs denied origin): unchanged behaviour.
+- No full test-suite run this session (per user's preferred workflow; user runs).
+
+### Bookkeeping
+
+- [[FU-387]] → RESOLVED (moved to `DORA_FOLLOWUPS_RESOLVED.md` top with a full state note). No new FUs. FU-405 already has the "promote security-audit.sh to CI at Phase 4" note appended by session 1.
+- Two DORA_VERIFY items to consider on next running-app walk: (1) confirm session cookie carries `Secure` when the app is booted with `DORA_ENV=production`; (2) confirm `warn_if_insecure_cookies_in_production` fires correctly when `DORA_ENV=production` + `DORA_SECURE_COOKIES=false` are set together. Not opening those as FUs — they're operational smoke-checks.
+
+### Next up
+
+User's pick. Standing register for what's still open in this space: [[FU-409]] (auth findings delta re-audit — separate methodical walk), [[FU-510]] (hand-rolled vs library sweep including security-adjacent bits), [[FU-401]] / [[FU-404]] (P5-02 privacy + P7-08 compliance / DSAR).
+
+---
+
+## 2026-07-09 — FU-387 session 1: P5-01 security sweep audited; session-2 slate greenlit
+
+**Why:** User asked to do FU-387. Task is genuinely a full sweep (6 audit buckets + build items) with recommendation "one dedicated sweep before any public deploy". User split it: session 1 audits + proposes; session 2 executes greenlit slate.
+
+**Audit findings (all 6 P5-01 buckets walked against current code):**
+- **B1 Auth & sessions:** healthy overall. CSRF/rate-limits/breach-list rules/password_changed_at invalidation all in place. Gaps: `SESSION_COOKIE_SECURE` is opt-in via env (soft-warn only in prod); `generate_password_hash` follows werkzeug's version-default rather than a pinned method.
+- **B2 Authorization:** single-tenant by design. Admin gate single-source (FU-341). User-scoped tables filter by user_id consistently. No user-isolation regression test suite exists.
+- **B3 Secrets:** `.env` gitignored (verified); `.env.example` complete (FU-333); prod hard-requires SECRET_KEY/CORS/bootstrap email; Fernet at-rest for LLM key + SMTP password + VAPID private. **Clean.**
+- **B4 Data privacy:** audit `scrub()` covers passwords/tokens/api keys. Backup excludes `User.password_hash` only — does **not** exclude `User.llm_api_key_encrypted`, `AppSetting.smtp_password_encrypted`, `AppSetting.vapid_private_key_encrypted` (all Fernet-wrapped, but defence-in-depth gap).
+- **B5 Uploads:** `data/uploads.py` admin-gated everywhere, UUID-validated upload_id (no traversal), 2 GB cap with overflow truncation, mode 0o600, TTL sweep. Images are base64-in-DB (no file-on-disk path). **Clean.**
+- **B6 Dependencies:** real vulns.
+  - Python: **16 CVEs across 5 packages** (`flask-cors 4.0.0 → 6.0.0` [7 CVEs], `flask 3.0.2 → 3.1.3`, `jinja2 3.1.2 → 3.1.6` [5 CVEs], `requests 2.32.4 → 2.33.0`, `pytest 8.3.4 → 9.0.3`).
+  - Frontend: **5 vulns** — `form-data` (high, CRLF), `vite` (high, Windows-only), `@quasar/app-vite` (pulls vite), `js-yaml` (moderate DoS).
+
+**Session-2 slate (greenlit by user):**
+- **P1** Prod-default `SESSION_COOKIE_SECURE=True` when `DORA_ENV=production`; env stays as explicit opt-out.
+- **P2** Pin `method="scrypt:32768:8:1"` at all three `generate_password_hash` sites ([auth/bootstrap_admin.py:176](dora_api/features/auth/bootstrap_admin.py:176), [users/create_user_as_admin.py:82](dora_api/features/users/create_user_as_admin.py:82), [users/reset_user_password.py:45](dora_api/features/users/reset_user_password.py:45)).
+- **P5** New `tests/e2e/dora_api/test_user_isolation.py` — user A vs B on AlertInteraction / AlertPreference / PushSubscription; parametrised non-admin-hits-admin-route check.
+- **P6** Extend [restore_shared.py:117](dora_api/features/data/restore_shared.py:117) `excluded_columns` on User (+`llm_api_key_encrypted`) and on the AppSetting section (+`smtp_password_encrypted`, +`vapid_private_key_encrypted`).
+- **P7** Bump `requirements.txt`: flask-cors→6.0.0 (verify `resources=` shape unchanged), flask→3.1.3, jinja2→3.1.6, requests→2.33.0, pytest→9.0.3.
+- **P8** `cd web_app && npm audit fix` — verify Quasar CLI post-bump.
+- **P9** New `docs/security/SECURITY_REVIEW.md` — the artefact P5-01 asks for; one section per bucket + baseline dep-audit output + status per finding + cross-refs to remediation.
+- **P10** New `SECURITY.md` at repo root — vuln-reporting guidance, private disclosure address (leave placeholder), expected response window, scope.
+- **P12** Close [[FU-387]] → RESOLVED with SECURITY_REVIEW.md as the artefact. FU-409 (auth delta re-audit) + FU-510 (library sweep) stay open — separate methodical walks.
+
+**Dropped by user:** P3 (per-account login lockout), P4 (in-mem rate-limit note — already accepted in AUTH_ASSISTANT_SECURITY_FINDINGS A.6).
+**Rehomed:** P11 (dep-scanning as an on-demand `scripts/security-audit.sh` — the script itself still lands in session 2; the "promote to CI at Phase 4" reminder was appended to [[FU-405]] this session).
+
+**Engineering-standards close-gate:** no code touched this session; nothing to check. Session 2's close-gate applies to the greenlit set.
+
+### Next up
+Session 2 executes P1/P2/P5/P6/P7/P8/P9/P10 + the `scripts/security-audit.sh` runner, then closes FU-387 (P12). No new FUs unless session 2 uncovers something new.
+
+---
+
+## 2026-07-09 — `good_deal` alert type ripped end-to-end (product-owner call)
+
+**Why:** User's review of the FU-450/451 commit — proactive "this product is cheap right now" nudges read as the app pushing users to buy from stores. Wrong posture for Dora (react to *your* list/pantry/plan, don't advertise). Deal-quality's other two consumers — Buy Verdict fake-markdown demotion and the FU-451 swap ranker filter — stay in full because they never push anything at the user.
+
+**Scope (kept tight — same commit had a lot of other work):**
+- **Backend removed:** `good_deal` kind from `alert_kinds.py`, whole `_good_deal_alerts` method + call site + `GOOD_DEAL_FRESHNESS_DAYS` from `get_alerts.py`, `User.good_deal_alert_threshold` field + `GOOD_DEAL_THRESHOLD_*` constants, `table_mappings.py` column, `register_user.py` DTO field, `update_me.py` validation branch, migration `d2f8a1c4b7e9` (deleted; `e3a9c7b1f2d8`'s `down_revision` rewired from `d2f8...` → `c7d1a9e3f2b6`), `tests/e2e/dora_api/test_good_deal_alert.py`.
+- **Frontend removed:** `'good_deal'` from `AlertKind`, its `iconFor`/`colorForKind`/`kindTheme`/`actionsFor` arms, `AlertsPage.vue` deep-link branch, whole "Deal alerts" section + `GoodDealThreshold` state in `NotificationsSettings.vue`, `useMoneyEnabled` import (no longer used), `authApiService.ts` + `models/auth.ts` field.
+- **Token renamed, not deleted:** `--alert-kind-good-deal` → `--savings-accent` (still used by `SwapSuggestionsPanel.vue` avatar + Dashboard swap bullet — legitimate savings-green, no alert coupling). Utility classes `.bg-savings-accent` / `.text-savings-accent` added alongside.
+- **Kept:** whole of `features/deals/deal_quality.py` + `test_deal_quality.py` (Buy Verdict + swap ranker consume it), `MealPlanSwapLedger` + `Recipe.notes` + `SwapSuggestionsPanel.vue` + buy-verdict work — all unrelated.
+
+**Docs:** `PROPOSAL_BUDGET_DEFENSE_SWAPS.md` gains a top scope-update note flagging §4b/§6c/§10-chunk-3 as CUT (same shape as the earlier product-swap CUT note). `PROJECT_STATE.md` + `CHANGELOG.md` refreshed.
+
+**Bookkeeping:** [[FU-516]] deleted outright (not archived — it was a trade-off inside the feature that no longer exists, not "resolved"). Related DORA_VERIFY items for the alert should be walked next session and removed if the corresponding surface is gone (deferred — not touched here).
+
+**Verification:** static-clean-up only — no `good_deal` / `good-deal` / `GoodDeal` / `GOOD_DEAL` refs remain across `dora_api/`, `web_app/`, `tests/`. No suite run this session; user runs.
+
+### Next up
+User's pick. Related DORA_VERIFY items (good_deal walk-through) can be pruned when the user next opens that file.
+
+---
+
 ## 2026-07-09 — FU-385 closed as stale duplicate: DashboardCard + new-low signal both already shipped
 
 **Why:** User asked to do FU-385. Verified against current code first (lesson from the FU-407/408 walk).

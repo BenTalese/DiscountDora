@@ -1,7 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
 
-from werkzeug.security import generate_password_hash
-
 from dora_api.app import db
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
@@ -35,6 +33,7 @@ from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
     StockLocation)
 from dora_api.domain.entities.user import User
+from dora_api.infrastructure.auth_helpers import hash_password
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -157,7 +156,7 @@ def seed_dev_data():
     # Default dev user. Username `dora`, password `dora`.
     repo.add(User(
         email="ben.talese@gmail.com",
-        password_hash=generate_password_hash("dora"),
+        password_hash=hash_password("dora"),
         send_deals_on_day=6,
         username="dora",
         is_admin=True,

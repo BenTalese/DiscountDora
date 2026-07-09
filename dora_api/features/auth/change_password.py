@@ -15,7 +15,7 @@ from uuid import UUID
 
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.user import User
@@ -28,7 +28,7 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   unauthorized,
                                                   unprocessable_entity)
 from dora_api.infrastructure.audit import emit as audit_emit
-from dora_api.infrastructure.auth_helpers import validate_password
+from dora_api.infrastructure.auth_helpers import hash_password, validate_password
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.email_sender import render_template, send_email
 from dora_api.infrastructure.utils import get_request_body
@@ -62,7 +62,7 @@ class ChangePasswordHandler:
             return ChangePasswordResponse(current_password_wrong=True)
 
         now = datetime.now(timezone.utc)
-        _User.password_hash = generate_password_hash(request.new_password)
+        _User.password_hash = hash_password(request.new_password)
         _User.password_changed_at = now
         self.repository.save_changes()
         return ChangePasswordResponse(new_password_changed_at=now)

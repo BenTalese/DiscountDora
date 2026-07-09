@@ -6,22 +6,13 @@
                 <q-tooltip anchor="bottom middle" self="top middle">
                     Delicious Organised Restock Assistant
                 </q-tooltip>
-                <q-chip
-                    v-if="aiActive !== null"
-                    size="sm"
-                    class="q-ml-sm dora-mode-chip"
-                    :class="{ 'dora-bg-sunken dora-text-secondary': !aiActive }"
-                    :icon="aiActive ? 'auto_awesome' : 'chat_bubble_outline'"
-                    :color="aiActive ? 'primary' : undefined"
-                    :text-color="aiActive ? 'white' : undefined"
-                >
-                    {{ aiActive ? 'AI' : 'Basic' }}
-                    <q-tooltip>
-                        {{ aiActive
-                            ? 'AI mode: powered by your connected language model.'
-                            : 'Basic mode: built-in rule-based replies. An admin can enable AI in Settings → System.' }}
-                    </q-tooltip>
-                </q-chip>
+                <DoraModeSlider
+                    class="q-ml-sm"
+                    :model-value="modeSliderValue"
+                    :disabled="!canToggleMode || togglingMode"
+                    :disabled-reason="modeSliderDisabledReason"
+                    @update:model-value="onModeSliderToggle"
+                />
                 <q-space />
                 <!-- speak Dora's replies. Hidden when the browser
                      has no SpeechSynthesis support. The toggle persists
@@ -401,6 +392,8 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import DoraModeSlider from 'src/components/dora/DoraModeSlider.vue';
+    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { DoraMood } from 'src/components/dora/doraTypes';
@@ -863,6 +856,75 @@
     // hasn't configured an LLM at all would see the sad-error mascot, which
     // is wrong (Basic mode is the intended baseline, not a failure).
     let aiEverAvailable = false;
+
+    // FU-360 #3 — Basic/AI slider toggle. The slider tracks the user's
+    // `llm_enabled` preference (source of truth); flipping it PATCHes /auth/me
+    // and re-probes assistant status. Disabled when the install-wide master
+    // is off, when the user hasn't finished configuring a provider, or during
+    // the in-flight PATCH. Mirrors the guard logic in AssistantSettings.vue.
+    const appSettingsApi = new AppSettingsApiService();
+    const installAiEnabled = ref<boolean | null>(null);
+    const togglingMode = ref(false);
+
+    const modeSliderValue = computed(() => !!props.currentUser?.llm_enabled);
+
+    const canConfigureAi = computed(() => {
+        const u = props.currentUser;
+        if (!u) return false;
+        if (u.llm_enabled) return true;
+        if (!u.llm_provider) return false;
+        if (!u.llm_model) return false;
+        if (u.llm_provider === 'ollama') return !!u.llm_base_url;
+        return u.has_llm_api_key;
+    });
+
+    const canToggleMode = computed(() => {
+        if (!props.currentUser) return false;
+        if (installAiEnabled.value === false) return false;
+        return canConfigureAi.value;
+    });
+
+    const modeSliderDisabledReason = computed(() => {
+        if (installAiEnabled.value === false) {
+            return 'AI mode is disabled install-wide. An admin can turn it on at System → AI assistant.';
+        }
+        const u = props.currentUser;
+        if (!u) return '';
+        if (!u.llm_provider) return 'Pick a provider in Settings → Assistant first.';
+        if (!u.llm_model) return 'Save a model name in Settings → Assistant first.';
+        if (u.llm_provider === 'ollama' && !u.llm_base_url) {
+            return 'Save a base URL in Settings → Assistant first.';
+        }
+        if (u.llm_provider !== 'ollama' && !u.has_llm_api_key) {
+            return 'Save an API key in Settings → Assistant first.';
+        }
+        return '';
+    });
+
+    async function refreshInstallAiEnabled() {
+        try {
+            const s = await appSettingsApi.getAsync();
+            installAiEnabled.value = s.master_llm_enabled;
+        } catch {
+            // Non-blocking — the slider stays enabled per user config; a
+            // failed PATCH later will surface the actual reason.
+            installAiEnabled.value = true;
+        }
+    }
+
+    async function onModeSliderToggle(next: boolean) {
+        if (togglingMode.value) return;
+        togglingMode.value = true;
+        try {
+            await authStore.updateMeAsync({ llm_enabled: next });
+            await refreshAiStatus();
+        } catch {
+            // Leave the slider position mirroring currentUser — the PATCH
+            // failure will surface via the auth-store's own error handling.
+        } finally {
+            togglingMode.value = false;
+        }
+    }
 
     async function refreshAiStatus() {
         aiProbing.value = true;
@@ -1567,6 +1629,8 @@
         void dispatch('greet');
         // Show the AI/Basic badge from the start, before the first message.
         void refreshAiStatus();
+        // Master flag drives the slider's disabled state.
+        void refreshInstallAiEnabled();
     });
 
     onBeforeUnmount(() => {
@@ -1659,19 +1723,6 @@
     .dora-bot-name {
         font-weight: 700;
         color: var(--text-primary);
-    }
-    /* FU-360.2 — the AI/Basic mode chip read as squished + too small. Give it
-       breathing room and a rem-based font so it stays legible and follows the
-       user's text-size preference (rather than the fixed dense size). */
-    .dora-mode-chip {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 600;
-        padding: 2px 10px;
-        letter-spacing: 0.02em;
-    }
-    .dora-mode-chip :deep(.q-chip__icon) {
-        font-size: 1.05em;
-        margin-right: 3px;
     }
     .body--dark .dora-bot-name {
         color: var(--q-accent);

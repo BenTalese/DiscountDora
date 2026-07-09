@@ -52,7 +52,7 @@
         <q-list v-if="suggestions.candidates.length" separator>
             <q-item v-for="c in suggestions.candidates" :key="c.entry_id + c.to_recipe_id">
                 <q-item-section avatar>
-                    <q-icon :name="ICONS.restaurant" color="alert-kind-good-deal" />
+                    <q-icon :name="ICONS.restaurant" color="savings-accent" />
                 </q-item-section>
                 <q-item-section>
                     <q-item-label caption class="dora-text-muted">
@@ -256,14 +256,14 @@
     .swap-panel__amount { font-weight: 600; font-size: 1.05rem; }
     .swap-panel__lede { font-size: 0.9rem; }
     .swap-panel__undo {
-        background: color-mix(in srgb, var(--alert-kind-good-deal) 12%, transparent);
+        background: color-mix(in srgb, var(--savings-accent) 12%, transparent);
     }
     .swap-panel__zero { font-size: 0.9rem; }
     .swap-row__names { font-weight: 500; }
-    .swap-row__chip { color: var(--alert-kind-good-deal); }
+    .swap-row__chip { color: var(--savings-accent); }
     .swap-row__saved {
         font-weight: 700;
-        color: var(--alert-kind-good-deal);
+        color: var(--savings-accent);
         text-align: right;
         margin-bottom: 6px;
     }

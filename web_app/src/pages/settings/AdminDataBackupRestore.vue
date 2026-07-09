@@ -1,25 +1,11 @@
 <template>
-    <div class="settings-page q-gutter-md">
+    <div class="settings-page">
         <SettingsPageHeader
             title="Backup & restore"
-            description="Snapshot your install to JSON — stock, lists, recipes, meal plans and saved products by default; optional sections (system settings, user accounts, historic offers) can be ticked on per-backup. Passwords are never included. Restore an existing backup on the right."
+            description="Snapshot your install to JSON — stock, lists, recipes, meal plans and saved products by default; optional sections (system settings, user accounts, historic offers) can be ticked on per-backup. Passwords are never included."
             :icon="ICONS.cloud_download"
-        />
-
-        <!-- Backup library. One row per persisted backup;
-             retention (default 5) prunes the oldest above the cap on every
-             new create. Rows carry Download / Restore / Delete actions;
-             external-file restore lives in the sibling card. -->
-        <q-card flat bordered>
-            <q-card-section class="row items-center q-gutter-md">
-                <q-icon :name="ICONS.cloud_download" size="32px" class="text-primary" />
-                <div>
-                    <div class="text-h6">Backup library</div>
-                    <div class="text-caption dora-text-muted">
-                        Keeps the most recent {{ retentionCount }}; older backups drop off on the next create.
-                    </div>
-                </div>
-                <q-space />
+        >
+            <template #actions>
                 <BaseButton
                     variant="primary"
                     :icon="ICONS.add"
@@ -27,22 +13,36 @@
                     :loading="generating"
                     @click="openCreateDialog"
                 />
-            </q-card-section>
-            <q-separator />
-            <q-card-section v-if="libraryLoading" class="row items-center q-gutter-sm dora-text-muted">
+            </template>
+        </SettingsPageHeader>
+
+        <!-- Backup library. One row per persisted backup; retention (default 5)
+             prunes the oldest above the cap on every new create. Rows carry
+             Download / Restore / Delete actions; external-file restore is the
+             section below. -->
+        <SettingsSection>
+            <template #title>Backup library</template>
+            <template #description>
+                Snapshots stored on the server. Keeps the most recent
+                {{ retentionCount }}; older backups drop off on the next create.
+            </template>
+
+            <div v-if="libraryLoading" class="backup-state">
                 <q-spinner size="18px" />
-                <div class="text-caption">Loading backups…</div>
-            </q-card-section>
-            <q-card-section
-                v-else-if="library.length === 0"
-                class="dora-text-secondary text-center q-py-lg"
-            >
-                No backups yet. Click <strong>New backup</strong> to create your first snapshot.
-            </q-card-section>
-            <q-list v-else separator>
-                <q-item v-for="row in library" :key="row.backup_id">
-                    <q-item-section>
-                        <q-item-label>
+                <span>Loading backups…</span>
+            </div>
+            <div v-else-if="library.length === 0" class="backup-empty">
+                <q-icon :name="ICONS.cloud_download" size="34px" class="backup-empty__icon" />
+                <div>No backups yet.</div>
+                <div class="backup-empty__hint">
+                    Click <strong>New backup</strong> to create your first snapshot.
+                </div>
+            </div>
+            <div v-else class="backup-list">
+                <div v-for="row in library" :key="row.backup_id" class="backup-row">
+                    <q-icon :name="ICONS.cloud_download" size="22px" class="backup-row__icon" />
+                    <div class="backup-row__main">
+                        <div class="backup-row__title">
                             {{ formatBackupTimestamp(row.created_at) }}
                             <q-chip
                                 v-if="rowIncludesSensitive(row)"
@@ -50,51 +50,48 @@
                                 size="sm"
                                 color="warning"
                                 text-color="dark"
-                                class="q-ml-sm"
                                 icon="warning"
                             >
-                                Includes sensitive data
+                                Sensitive
                                 <q-tooltip max-width="300px">
                                     This backup contains {{ sensitiveSectionsLabel(row) }} — handle the file accordingly.
                                 </q-tooltip>
                             </q-chip>
-                        </q-item-label>
-                        <q-item-label caption>
+                        </div>
+                        <div class="backup-row__meta">
                             {{ formatSize(row.size_bytes) }}
                             · {{ row.sections.length }} section{{ row.sections.length === 1 ? '' : 's' }}
                             <span v-if="row.created_by_username">
                                 · by {{ row.created_by_username }}
                             </span>
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <div class="row q-gutter-xs">
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.download"
-                                @click="onDownloadRow(row)"
-                            >
-                                <q-tooltip>Download</q-tooltip>
-                            </BaseButton>
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.cloud_upload"
-                                @click="onRestoreRow(row)"
-                            >
-                                <q-tooltip>Restore this backup</q-tooltip>
-                            </BaseButton>
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.delete"
-                                @click="onDeleteRow(row)"
-                            >
-                                <q-tooltip>Delete</q-tooltip>
-                            </BaseButton>
                         </div>
-                    </q-item-section>
-                </q-item>
-            </q-list>
-        </q-card>
+                    </div>
+                    <div class="backup-row__actions">
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.download"
+                            @click="onDownloadRow(row)"
+                        >
+                            <q-tooltip>Download</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.cloud_upload"
+                            @click="onRestoreRow(row)"
+                        >
+                            <q-tooltip>Restore this backup</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.delete"
+                            @click="onDeleteRow(row)"
+                        >
+                            <q-tooltip>Delete</q-tooltip>
+                        </BaseButton>
+                    </div>
+                </div>
+            </div>
+        </SettingsSection>
 
         <!-- New-backup dialog — section picker with sensitive-data warning. -->
         <BaseDialog v-model="createDialogOpen" card-style="min-width: 480px; max-width: 640px">
@@ -165,89 +162,47 @@
             </template>
         </BaseDialog>
 
-        <div class="row q-col-gutter-md">
-            <!-- ── Restore ─────────────────────────────────────────── -->
-            <div class="col-12 col-md-6">
-                <q-card flat bordered>
-                    <q-card-section class="row items-center q-gutter-md">
-                        <q-icon :name="ICONS.cloud_upload" size="32px" class="text-primary" />
-                        <div>
-                            <div class="text-h6">Restore from backup</div>
-                            <div class="text-caption dora-text-muted">
-                                Inspect a backup, then choose what to import.
-                            </div>
-                        </div>
-                    </q-card-section>
-                    <q-separator />
-                    <q-card-section>
-                        <q-file
-                            v-model="pickedFile"
-                            accept=".json,application/json"
-                            outlined
-                            dense
-                            label="Choose a backup file"
-                            :loading="inspecting"
-                            @update:model-value="onFilePicked"
-                        >
-                            <template #prepend>
-                                <q-icon :name="ICONS.attach_file" />
-                            </template>
-                            <template #append>
-                                <BaseButton
-                                    v-if="pickedFile"
-                                    variant="icon"
-                                    :icon="ICONS.close"
-                                    @click.stop="onClearPick"
-                                />
-                            </template>
-                        </q-file>
-                        <div
-                            v-if="inspecting && uploadProgressValue > 0 && uploadProgressValue < 1"
-                            class="q-mt-sm"
-                        >
-                            <q-linear-progress
-                                :value="uploadProgressValue"
-                                rounded
-                                size="6px"
-                                color="primary"
-                            />
-                            <div class="text-caption dora-text-muted-7 q-mt-xs">
-                                Uploading {{ Math.round(uploadProgressValue * 100) }}%
-                            </div>
-                        </div>
-                        <div
-                            v-else-if="inspecting && uploadProgressValue >= 1"
-                            class="text-caption dora-text-muted-7 q-mt-sm"
-                        >
-                            Inspecting backup…
-                        </div>
-                    </q-card-section>
-                </q-card>
-            </div>
-        </div>
+        <hr class="settings-divider" />
 
-        <!-- ── Preview tree (shows once /inspect returns) ─────────────────── -->
-        <q-card v-if="preview" flat bordered>
-            <q-card-section class="row items-center justify-between">
-                <div>
-                    <div class="text-subtitle1">Backup preview</div>
-                    <div class="text-caption dora-text-muted">
-                        Exported {{ formatDate(preview.exported_at) }} by
-                        <strong>{{ preview.exported_by }}</strong>
+        <!-- ── Restore from a file ───────────────────────────────────── -->
+        <SettingsSection>
+            <template #title>Restore from a file</template>
+            <template #description>
+                Import an external backup. Inspect it first, then choose
+                exactly what to bring in.
+            </template>
+
+            <SettingsFileDrop
+                v-model="pickedFile"
+                accept=".json,application/json"
+                label="Choose a backup file"
+                hint="Drag a .json backup here, or click to browse"
+                :loading="inspecting"
+                loading-text="Inspecting backup…"
+                :progress="uploadProgressValue"
+                @pick="onFilePicked"
+                @clear="onClearPick"
+            />
+
+            <!-- Preview panel (shows once /inspect returns) -->
+            <div v-if="preview" class="restore-preview">
+                <div class="restore-preview__header">
+                    <div>
+                        <div class="restore-preview__title">Backup preview</div>
+                        <div class="restore-preview__sub">
+                            Exported {{ formatDate(preview.exported_at) }} by
+                            <strong>{{ preview.exported_by }}</strong>
+                        </div>
+                    </div>
+                    <div class="restore-preview__count">
+                        <strong>{{ selectedCount }}</strong> of <strong>{{ selectableTotal }}</strong> selected
+                        <span v-if="duplicateCount">
+                            · <strong>{{ duplicateCount }}</strong> duplicate{{ duplicateCount === 1 ? '' : 's' }} skipped
+                        </span>
                     </div>
                 </div>
-                <div class="text-caption dora-text-muted">
-                    <strong>{{ selectedCount }}</strong> of <strong>{{ selectableTotal }}</strong> items selected
-                    <span v-if="duplicateCount">
-                        · <strong>{{ duplicateCount }}</strong> duplicate{{ duplicateCount === 1 ? '' : 's' }} skipped
-                    </span>
-                </div>
-            </q-card-section>
 
-            <q-separator />
-
-            <q-card-section class="q-pt-none">
-                <div class="row q-gutter-sm q-mb-sm">
+                <div class="restore-preview__toolbar">
                     <BaseButton variant="ghost" class="text-primary" label="Select all" @click="onSelectAll" />
                     <BaseButton variant="ghost" label="Clear selection" @click="onClearSelection" />
                 </div>
@@ -284,30 +239,28 @@
                         </div>
                     </template>
                 </q-tree>
-            </q-card-section>
 
-            <q-separator />
-
-            <q-card-actions align="right">
-                <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
-                <!-- ambiguous — color="grey"; no BaseButton variant maps to greyscale. Left as raw q-btn for review. -->
-                <q-btn
-                    color="grey"
-                    :icon="ICONS.done_all"
-                    label="Restore all (skip duplicates)"
-                    :loading="restoring"
-                    :disable="restoring"
-                    @click="onRestoreAll"
-                />
-                <BaseButton
-                    :icon="ICONS.check"
-                    label="Restore selection"
-                    :loading="restoring"
-                    :disable="restoring || selectedCount === 0"
-                    @click="onRestoreSelection"
-                />
-            </q-card-actions>
-        </q-card>
+                <div class="settings-actions">
+                    <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
+                    <BaseButton
+                        variant="secondary"
+                        :icon="ICONS.done_all"
+                        label="Restore all (skip duplicates)"
+                        :loading="restoring"
+                        :disable="restoring"
+                        @click="onRestoreAll"
+                    />
+                    <BaseButton
+                        variant="primary"
+                        :icon="ICONS.check"
+                        label="Restore selection"
+                        :loading="restoring"
+                        :disable="restoring || selectedCount === 0"
+                        @click="onRestoreSelection"
+                    />
+                </div>
+            </div>
+        </SettingsSection>
 
         <!-- ── Restore report (shown after a commit) ─────────────────── -->
         <BaseDialog v-model="reportOpen" card-style="min-width: 360px; max-width: 600px">
@@ -366,46 +319,45 @@
                 </template>
         </BaseDialog>
 
+        <hr class="settings-divider" />
+
         <!-- library retention + storage-path admin settings. Sits
-             at the bottom of the page because it's operator-configuration,
+             near the bottom of the page because it's operator-configuration,
              not day-to-day workflow. -->
-        <q-card flat bordered>
-            <q-card-section class="row items-center q-gutter-md">
-                <q-icon :name="ICONS.tune" size="24px" class="text-primary" />
-                <div>
-                    <div class="text-subtitle1">Library settings</div>
-                    <div class="text-caption dora-text-muted">
-                        Where backups land on disk, and how many to keep.
-                    </div>
-                </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section class="row q-col-gutter-md">
-                <div class="col-12 col-md-4">
-                    <q-input
-                        v-model.number="retentionInput"
-                        type="number"
-                        outlined
-                        dense
-                        min="1"
-                        max="100"
-                        label="Retention count"
-                        hint="Oldest above this cap auto-drop on each new backup."
-                    />
-                </div>
-                <div class="col-12 col-md-8">
-                    <q-input
-                        v-model="storagePathInput"
-                        outlined
-                        dense
-                        clearable
-                        label="Storage path"
-                        placeholder="(default: DORA_DATA_DIR/backups)"
-                        hint="Absolute path on the server. Blank ⇒ default. External mount / NAS OK — must be writeable."
-                    />
-                </div>
-            </q-card-section>
-            <q-card-actions align="right">
+        <SettingsSection>
+            <template #title>Library settings</template>
+            <template #description>
+                Where backups land on disk, and how many to keep.
+            </template>
+
+            <SettingsRow
+                label="Retention count"
+                help="Oldest above this cap auto-drop on each new backup."
+            >
+                <q-input
+                    v-model.number="retentionInput"
+                    type="number"
+                    outlined
+                    dense
+                    min="1"
+                    max="100"
+                    style="max-width: 120px"
+                />
+            </SettingsRow>
+            <SettingsRow
+                label="Storage path"
+                help="Absolute path on the server. Blank ⇒ default (DORA_DATA_DIR/backups). External mount / NAS OK — must be writeable."
+            >
+                <q-input
+                    v-model="storagePathInput"
+                    outlined
+                    dense
+                    clearable
+                    placeholder="(default: DORA_DATA_DIR/backups)"
+                    style="min-width: 280px"
+                />
+            </SettingsRow>
+            <div class="settings-actions">
                 <BaseButton
                     variant="ghost"
                     label="Discard"
@@ -420,59 +372,53 @@
                     :disable="!librarySettingsDirty || savingSettings"
                     @click="onSaveLibrarySettings"
                 />
-            </q-card-actions>
-        </q-card>
+            </div>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
 
         <!-- install-wide image compression. Applied at upload
              time via the shared `processImageFile` helper; every surface
              (stock items, recipes, products, avatars, receipts, store
              logos) picks these up automatically. Forward-only — existing
              images are not re-encoded. -->
-        <q-card flat bordered>
-            <q-card-section class="row items-center q-gutter-md">
-                <q-icon :name="ICONS.image" size="24px" class="text-primary" />
-                <div>
-                    <div class="text-subtitle1">Image compression</div>
-                    <div class="text-caption dora-text-muted">
-                        Applied when new images are uploaded — existing images are unchanged. Lower quality + smaller dimensions ⇒ less disk over time.
-                    </div>
-                </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-                <SettingsRow
-                    label="JPEG/WebP quality"
-                    help="30 = strong compression (visible loss); 85 (default) is visually indistinguishable from the original; 100 = no compression, large files."
-                >
-                    <div class="row items-center q-gutter-sm" style="min-width: 260px">
-                        <q-slider
-                            v-model="imageQualityInput"
-                            :min="30"
-                            :max="100"
-                            :step="1"
-                            label
-                            label-always
-                            color="primary"
-                            style="flex: 1"
-                        />
-                    </div>
-                </SettingsRow>
-                <SettingsRow
-                    label="Longest edge (px)"
-                    help="Photos larger than this on their longest side are scaled down before encode. 1920 (default) is Full-HD; 1280 is a disk-conscious floor."
-                >
-                    <q-input
-                        v-model.number="imageMaxDimensionInput"
-                        type="number"
-                        outlined
-                        dense
-                        :min="512"
-                        :max="8192"
-                        style="max-width: 140px"
-                    />
-                </SettingsRow>
-            </q-card-section>
-            <q-card-actions align="right">
+        <SettingsSection>
+            <template #title>Image compression</template>
+            <template #description>
+                Applied when new images are uploaded — existing images are
+                unchanged. Lower quality + smaller dimensions ⇒ less disk over time.
+            </template>
+
+            <SettingsRow
+                label="JPEG/WebP quality"
+                help="30 = strong compression (visible loss); 85 (default) is visually indistinguishable from the original; 100 = no compression, large files."
+            >
+                <q-slider
+                    v-model="imageQualityInput"
+                    :min="30"
+                    :max="100"
+                    :step="1"
+                    label
+                    label-always
+                    color="primary"
+                    style="min-width: 220px"
+                />
+            </SettingsRow>
+            <SettingsRow
+                label="Longest edge (px)"
+                help="Photos larger than this on their longest side are scaled down before encode. 1920 (default) is Full-HD; 1280 is a disk-conscious floor."
+            >
+                <q-input
+                    v-model.number="imageMaxDimensionInput"
+                    type="number"
+                    outlined
+                    dense
+                    :min="512"
+                    :max="8192"
+                    style="max-width: 140px"
+                />
+            </SettingsRow>
+            <div class="settings-actions">
                 <BaseButton
                     variant="ghost"
                     label="Discard"
@@ -487,8 +433,8 @@
                     :disable="!imageSettingsDirty || savingImageSettings"
                     @click="onSaveImageSettings"
                 />
-            </q-card-actions>
-        </q-card>
+            </div>
+        </SettingsSection>
     </div>
 </template>
 
@@ -496,7 +442,9 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsFileDrop from 'src/components/settings/SettingsFileDrop.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';
@@ -1381,3 +1329,137 @@
         }
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page {
+        display: flex;
+        flex-direction: column;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 0;
+    }
+    .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-2);
+        margin-top: var(--space-3);
+    }
+
+    // ── Backup library states ─────────────────────────────────────────
+    .backup-state {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    .backup-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-6) var(--space-4);
+        border: 1.5px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+        background: var(--surface-elevated);
+        color: var(--text-secondary);
+        text-align: center;
+    }
+    .backup-empty__icon {
+        color: var(--brand-primary);
+        margin-bottom: var(--space-1);
+    }
+    .backup-empty__hint {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    // ── Backup library rows ───────────────────────────────────────────
+    .backup-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+    .backup-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        transition: border-color 160ms ease, background 160ms ease;
+    }
+    .backup-row:hover {
+        border-color: var(--brand-primary);
+        background: color-mix(in srgb, var(--brand-primary) 4%, var(--surface-component));
+    }
+    .backup-row__icon {
+        color: var(--brand-primary);
+        flex: 0 0 auto;
+    }
+    .backup-row__main {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .backup-row__title {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .backup-row__meta {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+    .backup-row__actions {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    // ── Restore preview panel ─────────────────────────────────────────
+    .restore-preview {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+    }
+    .restore-preview__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+    }
+    .restore-preview__title {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .restore-preview__sub {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+    .restore-preview__count {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+    }
+    .restore-preview__toolbar {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+</style>

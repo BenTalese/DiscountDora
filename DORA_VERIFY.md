@@ -18,7 +18,8 @@ top-to-bottom.
 - [ ] AI mode ON → "add milk" still uses the richer LLM propose→confirm flow (unchanged), not the Basic path.
 - [ ] **Hide Dora (FU-360.6).** Settings → Assistant → toggle **"Show Dora on every page"** OFF → save toast "Dora helper hidden." → the floating bubble disappears from every page immediately; reload confirms it stays gone. Toggle back ON → bubble returns.
 - [ ] **Greeting once-per-user (FU-360.5).** Fresh browser, log in as user A → the "Hi! I'm Dora" hint appears once; dismiss it → it doesn't return for A across reloads/logins. Log in as a *different* user B in the same browser → B sees the hint once (proving it's per-user, not per-browser).
-- [ ] **Mode chip legibility (FU-360.2).** The AI/Basic chip in the chat header reads cleanly (not squished), and grows/shrinks with the user's Settings → Preferences **text size** choice.
+- [ ] **Mode slider (FU-360.3).** With AI mode configured (Settings → Assistant: provider + model + base URL/api key saved, install master ON), open Dora → the chat header shows a two-position pill "Basic | AI" with a skewed thick knob glowing on the active side. Tap the inactive side → knob slides across with the glow, PATCH `/auth/me` fires, and `/assistant/status` re-probes; the "AI mode unavailable" banner appears if the LLM isn't currently reachable. Tap back → returns to Basic. Slider grows with the text-size preference (rem-based).
+- [ ] **Mode slider — disabled states (FU-360.3).** With **no LLM configured** (fresh user) → slider renders dimmed, cursor `not-allowed`, tooltip explains what to save in Settings → Assistant first; tapping does nothing. With **install master OFF** (Admin → System → AI assistant) → slider dimmed with tooltip "AI mode is disabled install-wide…"; tapping does nothing.
 - [ ] **FU-360.1 (text size honoured).** Set a large text size in Preferences → open Dora → the chat message text scales up with it (appears already fixed by the A6 rem migration — this is a confirm, not a known bug).
 - [ ] **FU-360.4 (DS4 hover-flash regression).** Hover the launcher / mascot repeatedly → watch for any animation flashing/flicker on hover (the reported regression). Note exact conditions if it reproduces.
 - [ ] **FU-386 (cookable chip).** Open Dora on the Dashboard or Cookbook → tap the **"Cookable now"** / "Find a recipe to cook" chip → lands on the cookbook filtered to cookable recipes (the `?cookable=true` contract, confirmed live end-to-end).
@@ -1049,6 +1050,13 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 ---
 
 ## Settings
+
+### Data pages UI revamp — Import + Backup & restore — origin FU-359 (2026-07-09)
+*Requires admin login. Presentation-only rebuild onto the Settings design language — verify nothing wired regressed.*
+- [ ] **Import page** — Settings → Admin → Data → **Import**. Page now uses the standard `SettingsPageHeader` with the **Download template** button in the top-right header (not a body card). Upload area is a drag-and-drop zone: drag an `.xlsx`/`.csv` onto it (or click to browse) → shows filename + size with a clear (✕) button; during upload a spinner + progress bar shows; multi-sheet workbook surfaces a sheet picker; column mapping reflows as a responsive grid; preview table scrolls horizontally; options render as labelled toggle rows; Import + Cancel bottom-right. Run a real import end-to-end → rows land, result dialog reports per-row status.
+- [ ] **Backup & restore page** — Settings → Admin → Data → **Backup & restore**. **New backup** button sits in the header; clicking opens the section-picker dialog and Generate still creates a snapshot. Backup library renders as tidy rows (icon + timestamp + size/sections/author + Download/Restore/Delete icon actions); a backup containing users/settings/historic-offers shows the amber **Sensitive** chip. Empty state shows a dashed placeholder. Download / Restore / Delete each still work.
+- [ ] **Restore-from-file** — drag a `.json` backup onto the drop zone → inspect spinner → the preview panel appears (backup metadata, selected/duplicate count, Select-all / Clear toolbar, the tick tree). "Restore selection" and "Restore all (skip duplicates)" both still commit and show the restore report dialog.
+- [ ] **Library settings + Image compression** — both now render as `SettingsSection` blocks with `SettingsRow` fields (retention + storage path; quality slider + longest-edge input). Discard/Save enable only when dirty and still persist via `PATCH /app-settings`.
 
 ### FU-333 close-out — Buckets C + D + strict AppSetting (2026-07-06) — origin FU-333
 *Requires admin login. Supersedes the earlier Bucket-B block below — env fallbacks are gone.*

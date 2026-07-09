@@ -129,19 +129,6 @@ ALERTS_EMAIL_CADENCE_VALUES = (
     ALERTS_EMAIL_CADENCE_WEEKLY,
 )
 
-# FU-450 — per-user threshold for the `good_deal` alert. `good` (default)
-# nudges on both the `good` and `great` deal bands; `great` restricts to
-# only the top band. There is deliberately no `fair`/`poor` option — the
-# whole point is proactive nudges for *real* deals, not noise (proposal
-# §4b). Closed-set sentinel, validated at the update_me boundary (R-010
-# carve-out, same shape as alerts_email_cadence / nutrition_mode).
-GOOD_DEAL_THRESHOLD_GOOD = "good"
-GOOD_DEAL_THRESHOLD_GREAT = "great"
-GOOD_DEAL_THRESHOLD_VALUES = (
-    GOOD_DEAL_THRESHOLD_GOOD,
-    GOOD_DEAL_THRESHOLD_GREAT,
-)
-
 # per-user LLM provider. Closed set validated at the
 # update_me boundary (R-010 carve-out, same shape as nutrition_mode /
 # alerts_email_cadence). Ollama is the local/free path; OpenAI /
@@ -310,11 +297,6 @@ class User(BaseEntity):
     # hides the whole assistant launcher for users who don't want it. When
     # False the SPA doesn't mount the bubble, so Basic *and* AI mode are gone.
     show_assistant: bool = True
-    # FU-450 — threshold gating the proactive `good_deal` alert. `good`
-    # (default) fires on the `good` + `great` bands; `great` restricts to
-    # the top band only. Consulted only when money features are on
-    # (install-wide `money_enabled` AND per-user `money_features_enabled`).
-    good_deal_alert_threshold: str = GOOD_DEAL_THRESHOLD_GOOD
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -356,4 +338,3 @@ class User(BaseEntity):
         LLM_MODEL = "llm_model"
         LLM_API_KEY_ENCRYPTED = "llm_api_key_encrypted"
         SHOW_ASSISTANT = "show_assistant"
-        GOOD_DEAL_ALERT_THRESHOLD = "good_deal_alert_threshold"

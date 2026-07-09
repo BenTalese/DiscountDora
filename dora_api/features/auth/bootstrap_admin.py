@@ -23,8 +23,6 @@ from http.client import GONE
 
 from flask import jsonify, session
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import generate_password_hash
-
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT, SEVERITY_WARN
 from dora_api.domain.entities.user import User
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
@@ -34,7 +32,8 @@ from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import (ProblemDetails, ok,
                                                   unprocessable_entity)
 from dora_api.infrastructure.audit import emit as audit_emit
-from dora_api.infrastructure.auth_helpers import (is_valid_email,
+from dora_api.infrastructure.auth_helpers import (hash_password,
+                                                  is_valid_email,
                                                   normalise_email,
                                                   rate_limit,
                                                   rate_limit_remaining_seconds,
@@ -173,7 +172,7 @@ def bootstrap_admin():
     now = datetime.now(timezone.utc)
     new_user = User(
         email=email_norm,
-        password_hash=generate_password_hash(request_body.password),
+        password_hash=hash_password(request_body.password),
         send_deals_on_day=0,
         username=request_body.username,
         is_admin=True,

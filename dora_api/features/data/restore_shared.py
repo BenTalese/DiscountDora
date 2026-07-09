@@ -107,6 +107,17 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "app_settings", "AppSetting", "System settings", "Optional", False,
         _singleton_key,
+        # FU-387 — never ship Fernet-wrapped operational secrets in a
+        # backup. They're encrypted with the install's
+        # `DORA_LLM_KEY_ENCRYPTION_KEY`, so ciphertext alone isn't
+        # compromise, but backup-plus-key is. Defence-in-depth: an
+        # admin can't accidentally email a backup that contains their
+        # own SMTP + push credentials. Restoring an install re-enters
+        # these in Settings.
+        excluded_columns=frozenset({
+            "smtp_password_encrypted",
+            "vapid_private_key_encrypted",
+        }),
     ),
     Section(
         "users", "User", "User accounts (no passwords)", "Optional", False,
@@ -114,7 +125,12 @@ SECTIONS: tuple[Section, ...] = (
         # Never ship credentials. Restoring users without hashes means they
         # can't log in until an admin resets them — that's the explicit
         # trade-off for being able to back up account preferences.
-        excluded_columns=frozenset({"password_hash"}),
+        # `llm_api_key_encrypted` excluded on the same defence-in-depth
+        # rationale as the AppSetting secrets above (FU-387).
+        excluded_columns=frozenset({
+            "password_hash",
+            "llm_api_key_encrypted",
+        }),
     ),
     Section(
         "product_historic_offers", "ProductHistoricOffer", "Historic product offers", "Optional", False,

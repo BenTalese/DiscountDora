@@ -112,36 +112,6 @@
 
         <hr class="settings-divider" />
 
-        <!-- FU-450 — deal alerts. Money-features-gated (R-029 hide-don't-nag:
-             the whole section is absent when money features are off, no
-             disabled hint). -->
-        <SettingsSection v-if="moneyEnabled">
-            <template #title>Deal alerts</template>
-            <template #description>
-                Nudge me when something I track hits a genuinely good price.
-                Dora checks your own price history so it never celebrates a
-                fake "special".
-            </template>
-
-            <SettingsRow label="Alert me on">
-                <DoraSegmented
-                    :model-value="goodDealThresholdDraft"
-                    :options="goodDealThresholdOptions"
-                    @update:model-value="onGoodDealThresholdChange"
-                />
-            </SettingsRow>
-            <div class="settings-page__note dora-text-muted">
-                <template v-if="goodDealThresholdDraft === 'great'">
-                    Only the very best prices — the lowest Dora has seen in months.
-                </template>
-                <template v-else>
-                    Good and great prices both. More nudges, more savings.
-                </template>
-            </div>
-        </SettingsSection>
-
-        <hr v-if="moneyEnabled" class="settings-divider" />
-
         <!-- Push notifications. VAPID-gated. R-029 carve-out — same
              pattern as the email row above. -->
         <SettingsSection>
@@ -200,7 +170,6 @@
     import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
-    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { usePushSubscription } from 'src/composables/usePushSubscription';
     import { computed, ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -214,13 +183,7 @@
     const { currentUser } = storeToRefs(authStore);
 
     const { emailSmtpConfigured, pushVapidConfigured } = useFeatureFlags();
-    const { moneyEnabled } = useMoneyEnabled();
     type AlertsCadence = 'daily' | 'weekly';
-    type GoodDealThreshold = 'good' | 'great';
-    const goodDealThresholdOptions: DoraSegmentedOption<GoodDealThreshold>[] = [
-        { label: 'Good & great', value: 'good' },
-        { label: 'Great only', value: 'great' },
-    ];
     const alertsCadenceOptions: DoraSegmentedOption<AlertsCadence>[] = [
         { label: 'Daily', value: 'daily' },
         { label: 'Weekly', value: 'weekly' },
@@ -251,9 +214,6 @@
         (currentUser.value?.alerts_email_cadence === 'weekly') ? 'weekly' : 'daily'
     );
     const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
-    const goodDealThresholdDraft = ref<GoodDealThreshold>(
-        currentUser.value?.good_deal_alert_threshold === 'great' ? 'great' : 'good'
-    );
 
     const saving = ref(false);
 
@@ -262,7 +222,6 @@
         sendDealsOnDay.value = u.send_deals_on_day ?? 0;
         alertsEmailCadenceDraft.value = u.alerts_email_cadence === 'weekly' ? 'weekly' : 'daily';
         alertsEmailDayDraft.value = u.alerts_email_day ?? 0;
-        goodDealThresholdDraft.value = u.good_deal_alert_threshold === 'great' ? 'great' : 'good';
     });
 
     function notifySuccess(message: string) {
@@ -343,15 +302,6 @@
             authStore.updateMeAsync({ alerts_email_day: value })
         );
         if (result === null) alertsEmailDayDraft.value = previous;
-    }
-
-    async function onGoodDealThresholdChange(value: GoodDealThreshold) {
-        const previous = goodDealThresholdDraft.value;
-        goodDealThresholdDraft.value = value;
-        const result = await update('Deal alert threshold updated.', () =>
-            authStore.updateMeAsync({ good_deal_alert_threshold: value })
-        );
-        if (result === null) goodDealThresholdDraft.value = previous;
     }
 
     async function onPushToggle(value: boolean) {

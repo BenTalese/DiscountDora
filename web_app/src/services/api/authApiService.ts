@@ -109,8 +109,6 @@ export type UpdateMeCommand = {
     clear_llm_api_key?: boolean;
     /** FU-360.6 — show/hide the Dora helper bubble for this account. */
     show_assistant?: boolean;
-    /** FU-450 — good_deal alert threshold ('good' | 'great'). */
-    good_deal_alert_threshold?: 'good' | 'great';
 };
 export type ChangePasswordCommand = {
     current_password: string;

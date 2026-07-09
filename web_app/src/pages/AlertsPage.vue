@@ -317,10 +317,7 @@
         if (
             alert.kind === 'no_planned_meals'
             || alert.kind === 'shopping_day'
-            || alert.kind === 'good_deal'
         ) {
-            // good_deal deep-links to the tracked stock item (linkFor default),
-            // where the add-to-list affordance lives — not the attention view.
             if (link) void router.push(link);
             return;
         }

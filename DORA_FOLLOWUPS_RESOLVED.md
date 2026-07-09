@@ -10,6 +10,40 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-359 — A-2 DATA page redesign
+- **Resolved:** 2026-07-09 — the outstanding blocker was the ugly, inconsistent UI on the two data pages; both now revamped to the established Settings design language (`SettingsPageHeader` + `SettingsSection` + `SettingsRow` + `.settings-divider`), so the bundle's UI-facing sub-items land. Shipped this pass:
+  - **New shared `SettingsFileDrop.vue`** — drag-and-drop upload zone (idle / filled / busy states, progress bar) replacing the raw `q-file` on both pages.
+  - **Import page (`AdminDataImport.vue`)** — `q-gutter-md` card stack → `SettingsSection` blocks with dividers; "Download template" moved into the header `#actions` slot; column mapping now a responsive `.mapping-grid`; preview in a scoped `.preview-table`; options as `SettingsRow` toggles.
+  - **Backup & restore page (`AdminDataBackupRestore.vue`)** — backup library `q-list`/`q-item` → custom `.backup-row` cards; restore section uses `SettingsFileDrop` + a `.restore-preview` panel; "Library settings" and "Image compression" `q-card`s → `SettingsSection` + `SettingsRow`; flagged raw `q-btn color="grey"` fixed to `variant="secondary"` (R-002). Scripts left 100% unchanged — upload/inspect/restore logic untouched.
+  - Sub-items covered by the revamp: #3 page formatting overhaul, #4 card + checkbox layout, #5 breadcrumb fluff (settings shell already dropped it). #1 (under Settings) was already done (routing split). Typecheck clean on both pages (pre-existing `DashboardPage.vue` `draft_shop` errors are unrelated).
+- **Not addressed (genuinely separate, not blocking this FU's close):** #2 multiple export formats (csv/…) and #7 Export & Print tab rework — these are feature-scope, not UI-polish, and were never the user's ask here. If wanted, they warrant their own small follow-up rather than living under this redesign bundle. #6 schema-driven import templates stays tracked under [[FU-348]].
+- **Browser verify owed:** both revamped screens added to `DORA_VERIFY.md` (Settings surface) for an eyes-on pass.
+
+## [RESOLVED] FU-387 — P5-01 Security & privacy hardening bundle sweep
+- **Resolved:** 2026-07-09 — full P5-01 sweep executed across two sessions (audit → greenlight → code). Deliverable is [docs/security/SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md) — the standing per-bucket audit doc P5-01 asks for. Shipped this pass:
+  - **Prod-secure cookies by default** — `SESSION_COOKIE_SECURE` now follows the profile (`DORA_ENV=production` ⇒ True) so a prod deploy that forgets `DORA_SECURE_COOKIES=1` no longer silently ships cookies over HTTP. Explicit `DORA_SECURE_COOKIES=false` stays as an opt-out for LAN-behind-VPN installs; `warn_if_insecure_cookies_in_production()` inverted to warn on the deliberate opt-out.
+  - **Pinned scrypt password hashing** — new `hash_password()` helper in `dora_api/infrastructure/auth_helpers.py` with `method="scrypt:32768:8:1"` explicit. All eight `generate_password_hash` call-sites (register / bootstrap-admin / change-password / email-flows reset / admin-create / admin-reset / seed) routed through it (R-003). Werkzeug version-drift can't silently change the KDF now.
+  - **Backup credential exclusion widened** — `restore_shared.py` `SECTIONS` now excludes `User.llm_api_key_encrypted`, `AppSetting.smtp_password_encrypted`, `AppSetting.vapid_private_key_encrypted` in addition to the existing `User.password_hash`. Fernet-wrapped ciphertext, but defence-in-depth against backup-plus-key exposure.
+  - **Python dep bumps** — `flask-cors 4.0.0 → 6.0.0` (7 CVEs), `flask 3.0.2 → 3.1.3`, `jinja2 3.1.2 → 3.1.6` (5 CVEs), `requests 2.32.4 → 2.33.0`, `pytest 8.3.4 → 9.0.3` + `pytest-asyncio 0.25.3 → 1.4.0` + `typing_extensions 4.9.0 → 4.16.0` for compat. `pip-audit -r requirements.txt --strict` → clean.
+  - **Frontend dep bumps** — `npm audit fix` lock-file-only: `form-data` high (CRLF), `vite` high (Windows-only), `js-yaml` moderate all resolved. Two low-severity dev-only Windows-only items (`esbuild` + transitive `@quasar/app-vite`) accepted — no upstream Quasar release with the fix yet.
+  - **SECURITY.md** at repo root — private disclosure address, response SLA, in-/out-of-scope. GitHub Security tab picks it up.
+  - **`scripts/security-audit.sh`** — manual on-demand runner (`pip-audit` + `npm audit`). Promoted-to-CI reminder added to [[FU-405]] instead of a new FU.
+- **Dropped from the audit slate (with reasons):**
+  - **P3 per-account login lockout** — dropped by user; the per-IP 5/min rate limit + breach-list password reject is enough at current tenancy posture.
+  - **P4 in-mem rate-limit note** — already accepted with rationale in `AUTH_ASSISTANT_SECURITY_FINDINGS.md` A.6.
+  - **P5 user-isolation e2e suite** — dropped by user (correctly). The app is single-household by design; there's no user-vs-user data boundary inside a household to test. The tiny per-user overlays (AlertInteraction / AlertPreference / PushSubscription / AuthToken / a few User fields) all filter by `user_id` consistently and the pattern would show up in normal code review if it drifted.
+- **Overlaps still open:** [[FU-409]] auth-findings delta re-audit (distinct methodical walk, not folded in), [[FU-510]] hand-rolled-vs-library sweep (includes security-adjacent items — CSRF/Talisman/etc), [[FU-401]] + [[FU-404]] P5-02 privacy + P7-08 compliance (own DSAR/export/delete).
+- **Raised:** 2026-07-01 (legacy prompt-plan audit).
+- **Type:** deferred job.
+
+## [RESOLVED] FU-383 — Onboarding: "preferred stores/merchants" step not built
+- **Resolved:** 2026-07-09 — user decision: **no dedicated onboarding step**. The existing `usual_store_id` server-side concept is sufficient; no extra onboarding UI or settings mirror needed. Closed as decided (won't-do).
+- **Raised:** 2026-07-01 (proposals audit).
+- **Type:** deferred job.
+- **What:** `PROPOSAL_ONBOARDING.md:268` — the preferred-merchants step was **not built** ("same uncertain bucket as preferred-*product* removal, FU-180"). Onboarding currently skips it.
+- **Why deferred:** merchants layer is companion-scope and its onboarding value was unclear.
+- **Recommended resolution:** discussion — decide whether the everyday user needs a "preferred store" concept for `usual_store_id` (which does exist server-side). If yes, small onboarding step + settings mirror; if no, close as decided.
+
 ## [RESOLVED] FU-385 — Dashboard: DashboardCard extraction + "new low" signal (already-shipped duplicate)
 - **Resolved:** 2026-07-09 — verified against current code: **both halves already shipped**; FU-385 was a stale ledger entry that the 2026-07-01 audit missed when the underlying items closed. No code needed.
   - **DashboardCard extraction** → shipped via **[[FU-293]]** (2026-06-24). `web_app/src/components/dashboard/DashboardCard.vue` exists as the shared shell (router-link/article + `icon`/`title`/`#action`/body slots); all 15 card instances converted; shell SCSS moved into the component.

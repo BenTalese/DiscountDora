@@ -12,24 +12,25 @@ pywebview==5.4
 # the main requirements (vs a separate `requirements-dev.txt`) so
 # the GitHub Actions matrix doesn't have to install it separately.
 pyinstaller==6.10.0
-Flask_Cors==4.0.0
+Flask_Cors==6.0.0
 Flask_Migrate==4.0.5
 flask_sqlalchemy==3.1.1
-Flask[Async]==3.0.2
+Flask[Async]==3.1.3
 # FU-196 (d2) — rapidfuzz replaces the unmaintained fuzzywuzzy. Same
 # `process` + `fuzz` surface, MIT-licensed (fuzzywuzzy is GPL), actively
 # maintained, no python-Levenshtein warning noise.
 rapidfuzz==3.9.6
 ijson==3.2.3
-Jinja2==3.1.2
+Jinja2==3.1.6
 openpyxl==3.1.2
 qrcode[pil]==7.4.2
 pydantic==2.6.0
-pytest-asyncio==0.25.3
-pytest==8.3.4
+pytest-asyncio==1.4.0
+pytest==9.0.3
 requests_cache==1.1.1
 # FU-196 (d1) — CVE-2024-35195 fix requires ≥2.32.4.
-Requests==2.32.4
+# FU-387 — CVE-2026-25645 fix requires ≥2.33.0.
+Requests==2.33.0
 rich==13.7.0
 SQLAlchemy_Utils==0.41.1
 SQLAlchemy==2.0.25
@@ -39,7 +40,7 @@ SQLAlchemy==2.0.25
 # psycopg v3 (`psycopg[binary]`) ships a self-contained driver — no system
 # libpq required.
 psycopg[binary]==3.2.3
-typing_extensions==4.9.0
+typing_extensions==4.16.0
 # zoneinfo named-zone data. The stdlib `zoneinfo` falls back to the OS tz
 # database, which Windows (incl. the bundled desktop build) doesn't ship —
 # needed for the household-timezone "today" boundary (AppSetting.timezone).

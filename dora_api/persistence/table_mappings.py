@@ -986,9 +986,6 @@ def configure_mappings(db: SQLAlchemy):
         # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Default
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
-        # FU-450 — per-user `good_deal` alert threshold ("good" | "great").
-        # Default "good" (both good + great bands nudge). Closed-set sentinel.
-        Column("good_deal_alert_threshold", String(16), nullable=False, server_default="good"),
     )
 
     # admin-minted bearer credential for `POST /api/ingest`. The

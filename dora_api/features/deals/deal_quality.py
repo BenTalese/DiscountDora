@@ -5,7 +5,6 @@ real paid-price history, producing a small ``DealQuality`` verdict. It
 runs on any surface that already has a ``Product``:
 
 * the Buy Verdict card (a `fake_markdown` demotes a `buy` → `wait`),
-* the ``good_deal`` alert type,
 * the budget-defense swap ranker (fake markdowns are filtered out).
 
 Design lock: `docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md` §4a.

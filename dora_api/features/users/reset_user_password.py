@@ -11,12 +11,11 @@ import string
 from dataclasses import dataclass
 from uuid import UUID
 
-from werkzeug.security import generate_password_hash
-
 from dora_api.domain.entities.user import User
 from dora_api.features.routers import USER_ROUTER
 from dora_api.features.users.update_user_as_admin import _require_admin
 from dora_api.infrastructure.api_response import not_found, ok
+from dora_api.infrastructure.auth_helpers import hash_password
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
@@ -42,7 +41,7 @@ class ResetUserPasswordHandler:
             return ResetPasswordResponse(user_not_found=True)
 
         new_password = "".join(secrets.choice(_RESET_ALPHABET) for _ in range(12))
-        _Target.password_hash = generate_password_hash(new_password)
+        _Target.password_hash = hash_password(new_password)
         self.repository.save_changes()
         return ResetPasswordResponse(new_password=new_password)
 

@@ -5,7 +5,76 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Security
+- **P5-01 security & privacy hardening sweep — FU-387 (2026-07-09).** Full
+  pre-Phase-4 pass across the six P5-01 buckets (auth & sessions, authorization,
+  secrets, data privacy, uploads, dependencies). The artefact is the standing
+  [SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md); a new
+  [SECURITY.md](SECURITY.md) at the repo root documents how to report
+  vulnerabilities; a new [scripts/security-audit.sh](scripts/security-audit.sh)
+  runs `pip-audit` + `npm audit` on demand. Behaviour changes shipped in the
+  same pass:
+  - `SESSION_COOKIE_SECURE` **defaults to True when `DORA_ENV=production`** so a
+    prod deploy that forgets `DORA_SECURE_COOKIES=1` no longer silently ships
+    the session cookie over plain HTTP. `DORA_SECURE_COOKIES=false` stays as an
+    opt-out for LAN-behind-VPN installs, and the boot-time warning now surfaces
+    the deliberate opt-out (previously it only warned on unset).
+  - New `hash_password()` helper pins the password KDF at `scrypt:32768:8:1`;
+    every register / reset / change / seed call-site routes through it so an
+    upstream Werkzeug version bump can't silently change the KDF. Existing
+    hashes still verify (`check_password_hash` auto-detects the method).
+  - Backups no longer round-trip the three Fernet-encrypted operational secrets
+    — `User.llm_api_key_encrypted`, `AppSetting.smtp_password_encrypted`,
+    `AppSetting.vapid_private_key_encrypted`. Ciphertext-only isn't compromise,
+    but a leaked backup plus a leaked encryption key would be; defence-in-depth
+    against accidentally-shared backups.
+  - Python dependency bumps: `flask-cors 4.0.0 → 6.0.0` (7 CVEs),
+    `flask 3.0.2 → 3.1.3`, `jinja2 3.1.2 → 3.1.6` (5 CVEs),
+    `requests 2.32.4 → 2.33.0`, `pytest 8.3.4 → 9.0.3` +
+    `pytest-asyncio 1.4.0` + `typing_extensions 4.16.0` for compatibility.
+    `pip-audit -r requirements.txt --strict` → clean.
+  - Frontend dependency bumps via `npm audit fix` (lock-file only): `form-data`
+    (high, CRLF injection), `vite` (high, Windows-only), `js-yaml` (moderate)
+    resolved. Two low-severity dev-only Windows-only items (`esbuild` + the
+    transitive `@quasar/app-vite`) remain accepted pending an upstream Quasar
+    release.
+
+### Removed
+- **Proactive "good deal" alerts cut before release (2026-07-09).** The
+  `good_deal` alert type shipped in the FU-450 commit earlier the same day was
+  pulled back out end-to-end: alert kind, per-user `good_deal_alert_threshold`
+  User column + migration `d2f8a1c4b7e9`, Preferences → Notifications control,
+  AlertsPage mapping, `--alert-kind-good-deal` token (renamed to
+  `--savings-accent` — still needed by the swap-suggestions panel + dashboard
+  savings signpost). Reason: proactive "this product is cheap right now"
+  nudges read like the app pushing users to buy from stores, which isn't
+  Dora's posture. The **fake-markdown demotion in the Buy Verdict card**
+  (FU-450's other half) stays — it *stops* users being tricked by an
+  inflated "special", it doesn't push them at anything. The `DealQuality`
+  compute + its use by the FU-451 recipe-swap ranker are unchanged.
+
 ### Changed
+- **Data pages (Import + Backup & restore) UI revamp — FU-359 (2026-07-09).**
+  Both admin data screens were rebuilt onto the shared Settings design language
+  (`SettingsPageHeader` + `SettingsSection` + `SettingsRow` + `.settings-divider`)
+  so they match the rest of Settings instead of the old ad-hoc card stack. New
+  shared `SettingsFileDrop.vue` gives a proper drag-and-drop upload zone (idle /
+  filled / busy + progress) on both pages. Import: template download moved into
+  the header, responsive column-mapping grid, cleaner preview table, options as
+  labelled toggle rows. Backup & restore: backup library rendered as tidy rows
+  with inline actions, restore preview in a self-contained panel, and the
+  Library-settings / Image-compression blocks converted to `SettingsSection`s.
+  Upload/inspect/restore logic is unchanged — presentation only.
+- **Dora chat header: Basic/AI mode is now a toggle slider — FU-360 #3 (2026-07-09).**
+  The read-only Basic/AI chip in the assistant chat header is replaced with a
+  two-position slider (`DoraModeSlider.vue`) — skewed thick knob that slides
+  between "Basic" and "AI" with a brand-primary glow on the active side. Tapping
+  flips the user's `llm_enabled` preference via `PATCH /auth/me` and re-probes
+  `/assistant/status`. Disabled state with an explanatory tooltip when the
+  install-wide master flag is off or the user hasn't finished configuring a
+  provider (mirrors the AssistantSettings `canEnable` guard). The "AI mode
+  unavailable" banner logic is unchanged, so a "preference on but currently
+  unreachable" state still surfaces the banner.
 - **Substitute-swap on shopping lists only offers when there's a substitute —
   FU-407 / RD-18 (2026-07-09).** The per-line "Swap with substitute" button used
   to be a dead-end for items with no recorded substitute (tap → "No substitutes
@@ -38,21 +107,17 @@ semver — major bumps signal schema or breaking-config changes.
   product" upkeep that isn't in the product direction; recipe swaps are the whole
   lever. Recipe cost estimation was extracted to a shared `recipe_cost` module
   (R-003) so the ranker and the recipe-detail card price recipes identically.
-- **Deal-quality signal + proactive "good deal" alerts — FU-450 (2026-07-09).**
+- **Deal-quality signal + honest-markdown Buy Verdict — FU-450 (2026-07-09).**
   Dora now judges how good a product's current price really is, using the
   product's own offer history *and* your household's real paid prices as ground
-  truth. Two user-visible results (money features only): (1) the **Buy Verdict**
-  card now flags an inflated "special" — if a merchant claims a saving but you've
-  paid less recently, a `buy` is demoted to `wait` with *"Markdown looks
-  inflated — you've paid less than this 'special' recently"*; (2) a new
-  **good-deal alert** nudges you when something you track hits a genuinely good
-  price ("Peanut butter — Homebrand is at its lowest price in months · $2.50 ·
-  usually $4.50"), tap-through to the item to add it to a list. A new
-  **Settings → Notifications → Deal alerts** control chooses the threshold
-  ("Good & great" vs "Great only"; migration `d2f8a1c4b7e9`, default good). The
-  whole surface is hidden when money features are off. Fake markdowns can never
-  qualify as a good deal. This is the upstream half (P6-03 survivors) of the
-  budget-defense-swaps design (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md`).
+  truth. The **Buy Verdict** card flags an inflated "special" — if a merchant
+  claims a saving but you've paid less recently, a `buy` is demoted to `wait`
+  with *"Markdown looks inflated — you've paid less than this 'special'
+  recently"*. Money-features only. Fake markdowns are also filtered out of the
+  FU-451 swap ranker. (The originally-shipped `good_deal` proactive alert was
+  cut same day — see the Removed section above.) This is the upstream half
+  (P6-03 survivors) of the budget-defense-swaps design
+  (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md`).
 - **Dora Basic mode can now add to your shopping list by typing — FU-429 (2026-07-08).**
   Basic mode (the rule-based assistant that runs by default with no language
   model configured) was answer-only: it could tell you your list *status* but

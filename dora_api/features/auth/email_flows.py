@@ -17,7 +17,7 @@ from uuid import UUID
 
 from flask import jsonify, session
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT, SEVERITY_WARN
 from dora_api.domain.entities.auth_token import (
@@ -36,7 +36,7 @@ from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (
     CHANGE_EMAIL_TTL, RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL,
     build_reset_url, build_verify_url, consume_token, find_active_token,
-    is_valid_email, issue_token, normalise_email, rate_limit,
+    hash_password, is_valid_email, issue_token, normalise_email, rate_limit,
     rate_limit_remaining_seconds, revoke_tokens_for_user, try_send,
     validate_password,
 )
@@ -219,7 +219,7 @@ def reset_password():
     if user is None:
         return bad_request("This reset link is invalid or expired.")
 
-    user.password_hash = generate_password_hash(body.new_password)
+    user.password_hash = hash_password(body.new_password)
     user.password_changed_at = datetime.now(timezone.utc)
     repo.save_changes()
     consume_token(token_row.id)

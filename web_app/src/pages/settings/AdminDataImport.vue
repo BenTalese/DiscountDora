@@ -1,125 +1,91 @@
 <template>
-    <div class="settings-page q-gutter-md">
+    <div class="settings-page">
         <SettingsPageHeader
             title="Import"
-            description="Bring stock items in from a spreadsheet. Upload an .xlsx or .csv, map columns to Dora's fields, preview, then commit. Errors are reported row-by-row. Start from a template (top-right) if you don't have a file yet."
+            description="Bring stock items in from a spreadsheet. Upload an .xlsx or .csv, map columns to Dora's fields, preview, then commit. Errors are reported row-by-row."
             :icon="ICONS.file_upload"
-        />
+        >
+            <template v-if="templates.length" #actions>
+                <!-- per-section CSV template. "Download a blank one" is a peer
+                     choice to "upload one you already have", so it sits in the
+                     page-header action slot. Single-section installs get one
+                     button; the menu appears when more sections land. -->
+                <BaseButton
+                    v-if="templates.length === 1"
+                    variant="secondary"
+                    :icon="ICONS.file_download"
+                    label="Download template"
+                    :loading="templatesLoading"
+                    @click="onDownloadTemplate(templates[0]!)"
+                >
+                    <q-tooltip>{{ templates[0]!.caption }}</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    v-else
+                    variant="secondary"
+                    :icon="ICONS.file_download"
+                    label="Download template"
+                >
+                    <q-menu auto-close>
+                        <q-list dense style="min-width: 220px">
+                            <q-item
+                                v-for="template in templates"
+                                :key="template.section"
+                                clickable
+                                @click="onDownloadTemplate(template)"
+                            >
+                                <q-item-section>
+                                    <q-item-label>{{ template.label }}</q-item-label>
+                                    <q-item-label caption>{{ template.caption }}</q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-menu>
+                </BaseButton>
+            </template>
+        </SettingsPageHeader>
 
-        <!-- ── File picker ────────────────────────────────────────── -->
-        <q-card flat bordered>
-            <q-card-section class="row items-center q-gutter-md">
-                <q-icon :name="ICONS.upload_file" size="32px" class="text-primary" />
-                <div class="col">
-                    <div class="text-h6">Spreadsheet import</div>
-                    <div class="text-caption dora-text-muted">
-                        Required column: <strong>name</strong>. Optional:
-                        level, location, group, expiry, is&nbsp;essential.
-                    </div>
-                </div>
-                <!-- per-section CSV template. Sits on the same
-                     header row as the file picker below because "download a
-                     blank one" is a peer choice to "upload one you already
-                     have". Single-section installs (today: stock_items) get
-                     one entry; the menu becomes a picker when more sections
-                     land. -->
-                <div v-if="templates.length" class="col-auto">
-                    <BaseButton
-                        v-if="templates.length === 1"
-                        variant="ghost"
-                        :icon="ICONS.file_download"
-                        label="Download template"
-                        :loading="templatesLoading"
-                        @click="onDownloadTemplate(templates[0]!)"
-                    >
-                        <q-tooltip>{{ templates[0]!.caption }}</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-else
-                        variant="ghost"
-                        :icon="ICONS.file_download"
-                        label="Download template"
-                    >
-                        <q-menu auto-close>
-                            <q-list dense style="min-width: 220px">
-                                <q-item
-                                    v-for="template in templates"
-                                    :key="template.section"
-                                    clickable
-                                    @click="onDownloadTemplate(template)"
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ template.label }}</q-item-label>
-                                        <q-item-label caption>{{ template.caption }}</q-item-label>
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
-                        </q-menu>
-                    </BaseButton>
-                </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-                <q-file
-                    v-model="pickedFile"
-                    accept=".xlsx,.csv"
-                    outlined
-                    dense
-                    label="Choose a .xlsx or .csv file"
-                    :loading="uploading || inspecting"
-                    @update:model-value="onFilePicked"
-                >
-                    <template #prepend>
-                        <q-icon :name="ICONS.attach_file" />
-                    </template>
-                    <template #append>
-                        <BaseButton
-                            v-if="pickedFile"
-                            variant="icon"
-                            :icon="ICONS.close"
-                            @click.stop="onClearPick"
-                        />
-                    </template>
-                </q-file>
-                <div
-                    v-if="uploading && progress > 0 && progress < 1"
-                    class="q-mt-sm"
-                >
-                    <q-linear-progress
-                        :value="progress"
-                        rounded
-                        size="6px"
-                        color="primary"
-                    />
-                    <div class="text-caption dora-text-muted-7 q-mt-xs">
-                        Uploading {{ Math.round(progress * 100) }}%
-                    </div>
-                </div>
-                <div
-                    v-else-if="inspecting"
-                    class="text-caption dora-text-muted-7 q-mt-sm"
-                >
-                    Reading spreadsheet…
-                </div>
-            </q-card-section>
-        </q-card>
+        <!-- ── Upload ────────────────────────────────────────────────── -->
+        <SettingsSection>
+            <template #title>Upload a spreadsheet</template>
+            <template #description>
+                Required column: <strong>name</strong>. Optional: level,
+                location, group, expiry, is&nbsp;essential.
+            </template>
 
-        <!-- ── Sheet selector + warnings (when more than one sheet) ── -->
-        <q-card v-if="inspect && inspect.sheets.length > 1" flat bordered>
-            <q-card-section>
-                <div class="text-subtitle2 q-mb-sm">Pick a sheet</div>
+            <SettingsFileDrop
+                v-model="pickedFile"
+                accept=".xlsx,.csv"
+                label="Choose a spreadsheet"
+                hint="Drag an .xlsx or .csv here, or click to browse"
+                :loading="uploading || inspecting"
+                :loading-text="uploading ? 'Uploading…' : 'Reading spreadsheet…'"
+                :progress="progress"
+                @pick="onFilePicked"
+                @clear="onClearPick"
+            />
+        </SettingsSection>
+
+        <!-- ── Sheet selector (when more than one sheet) ─────────────── -->
+        <template v-if="inspect && inspect.sheets.length > 1">
+            <hr class="settings-divider" />
+            <SettingsSection>
+                <template #title>Pick a sheet</template>
+                <template #description>
+                    This workbook has more than one sheet — choose which to import.
+                </template>
                 <q-option-group
                     v-model="selectedSheet"
                     :options="sheetOptions"
                     color="primary"
                     inline
                 />
-            </q-card-section>
-        </q-card>
+            </SettingsSection>
+        </template>
+
         <q-banner
             v-if="inspect && inspect.warnings.length"
-            class="dora-bg-warning-soft text-warning"
-            dense
+            class="dora-bg-warning-soft text-warning import-warnings"
             rounded
         >
             <template #avatar>
@@ -130,79 +96,87 @@
             </ul>
         </q-banner>
 
-        <!-- ── Column mapping + preview ──────────────────────────────── -->
-        <q-card v-if="inspect && selectedSheet" flat bordered>
-            <q-card-section>
-                <div class="text-subtitle1">Map columns</div>
-                <div class="text-caption dora-text-muted-7 q-mb-sm">
-                    Pick a spreadsheet column for each Dora field. Auto-picks
-                    obvious matches based on column name.
-                </div>
-                <div class="row q-col-gutter-md">
-                    <div
+        <!-- ── Column mapping ────────────────────────────────────────── -->
+        <template v-if="inspect && selectedSheet">
+            <hr class="settings-divider" />
+            <SettingsSection>
+                <template #title>Map columns</template>
+                <template #description>
+                    Pick a spreadsheet column for each Dora field. Obvious
+                    matches are auto-selected from the column names.
+                </template>
+                <div class="mapping-grid">
+                    <q-select
                         v-for="target in targetFields"
                         :key="target"
-                        class="col-12 col-sm-6 col-md-4"
+                        v-model="columnMap[target]"
+                        :options="columnOptions"
+                        :label="targetLabel(target)"
+                        outlined
+                        dense
+                        clearable
+                        emit-value
+                        map-options
                     >
-                        <q-select
-                            v-model="columnMap[target]"
-                            :options="columnOptions"
-                            :label="targetLabel(target)"
-                            outlined
-                            dense
-                            clearable
-                            emit-value
-                            map-options
-                        >
-                            <template #after>
-                                <q-icon
-                                    v-if="target === 'name' && !columnMap[target]"
-                                    name="warning"
-                                    color="negative"
-                                    size="20px"
-                                >
-                                    <q-tooltip>Required</q-tooltip>
-                                </q-icon>
-                            </template>
-                        </q-select>
-                    </div>
+                        <template #after>
+                            <q-icon
+                                v-if="target === 'name' && !columnMap[target]"
+                                name="warning"
+                                color="negative"
+                                size="20px"
+                            >
+                                <q-tooltip>Required</q-tooltip>
+                            </q-icon>
+                        </template>
+                    </q-select>
                 </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section v-if="previewRows.length">
-                <div class="text-subtitle2 q-mb-sm">Preview ({{ previewRows.length }} row{{ previewRows.length === 1 ? '' : 's' }})</div>
-                <q-markup-table dense flat bordered>
-                    <thead>
-                        <tr>
-                            <th
-                                v-for="target in targetFields"
-                                :key="target"
-                                class="text-left"
-                            >
-                                {{ targetLabel(target) }}
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(row, idx) in resolvedPreview" :key="idx">
-                            <td
-                                v-for="target in targetFields"
-                                :key="target"
-                                :class="row[target] === null ? 'dora-text-muted' : ''"
-                            >
-                                {{ row[target] ?? '—' }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </q-markup-table>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-                <div class="text-subtitle2 q-mb-sm">Options</div>
-                <!-- SettingsRow puts the description on the left
-                     and the toggle on the right; consistent with every
-                     other Settings page and fixes the previous
-                     stacked-checkbox misalignment. -->
+            </SettingsSection>
+
+            <!-- ── Preview ───────────────────────────────────────────── -->
+            <template v-if="previewRows.length">
+                <hr class="settings-divider" />
+                <SettingsSection>
+                    <template #title>Preview</template>
+                    <template #description>
+                        First {{ previewRows.length }} row{{ previewRows.length === 1 ? '' : 's' }},
+                        shown exactly as they'll map into Dora.
+                    </template>
+                    <div class="preview-scroll">
+                        <q-markup-table dense flat class="preview-table">
+                            <thead>
+                                <tr>
+                                    <th
+                                        v-for="target in targetFields"
+                                        :key="target"
+                                        class="text-left"
+                                    >
+                                        {{ targetLabel(target) }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, idx) in resolvedPreview" :key="idx">
+                                    <td
+                                        v-for="target in targetFields"
+                                        :key="target"
+                                        :class="row[target] === null ? 'dora-text-muted' : ''"
+                                    >
+                                        {{ row[target] ?? '—' }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </q-markup-table>
+                    </div>
+                </SettingsSection>
+            </template>
+
+            <!-- ── Options ───────────────────────────────────────────── -->
+            <hr class="settings-divider" />
+            <SettingsSection>
+                <template #title>Options</template>
+                <template #description>
+                    How Dora handles duplicates and missing references while importing.
+                </template>
                 <SettingsRow
                     label="Skip duplicates"
                     help="Rows whose name already exists locally are left alone."
@@ -227,20 +201,19 @@
                 >
                     <q-toggle v-model="options.halt_on_error" />
                 </SettingsRow>
-            </q-card-section>
-            <q-separator />
-            <q-card-actions align="right">
-                <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
-                <BaseButton
-                    variant="primary"
-                    :icon="ICONS.check"
-                    label="Import"
-                    :loading="committing"
-                    :disable="committing || !columnMap.name"
-                    @click="onCommit"
-                />
-            </q-card-actions>
-        </q-card>
+                <div class="settings-actions">
+                    <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
+                    <BaseButton
+                        variant="primary"
+                        :icon="ICONS.check"
+                        label="Import"
+                        :loading="committing"
+                        :disable="committing || !columnMap.name"
+                        @click="onCommit"
+                    />
+                </div>
+            </SettingsSection>
+        </template>
 
         <!-- ── Result dialog ─────────────────────────────────────────── -->
         <BaseDialog v-model="resultOpen" card-style="min-width: 420px; max-width: 720px">
@@ -312,7 +285,9 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsFileDrop from 'src/components/settings/SettingsFileDrop.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -696,3 +671,46 @@
         URL.revokeObjectURL(url);
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page {
+        display: flex;
+        flex-direction: column;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 0;
+    }
+    .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-2);
+        margin-top: var(--space-3);
+    }
+    .import-warnings {
+        margin-bottom: var(--space-4);
+    }
+    // Responsive field grid for the column mapping — auto-fills as many
+    // columns as fit at a comfortable min width, so it reflows cleanly
+    // instead of the old fixed 3-up q-col-gutter layout.
+    .mapping-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--space-3);
+    }
+    .preview-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+    }
+    .preview-table {
+        background: var(--surface-component);
+        :deep(thead th) {
+            font-weight: 700;
+            color: var(--text-secondary);
+            background: var(--surface-sunken);
+        }
+    }
+</style>

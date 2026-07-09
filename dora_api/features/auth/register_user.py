@@ -22,7 +22,6 @@ from uuid import UUID
 
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import generate_password_hash
 
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.auth_token import PURPOSE_VERIFY_EMAIL
@@ -34,9 +33,9 @@ from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   ProblemDetails)
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (
-    VERIFY_EMAIL_TTL, build_verify_url, is_valid_email, issue_token,
-    normalise_email, rate_limit, rate_limit_remaining_seconds, try_send,
-    validate_password,
+    VERIFY_EMAIL_TTL, build_verify_url, hash_password, is_valid_email,
+    issue_token, normalise_email, rate_limit, rate_limit_remaining_seconds,
+    try_send, validate_password,
 )
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.email_sender import render_template, send_email
@@ -132,9 +131,6 @@ class AuthenticatedUserDto:
     # True; distinct from `llm_enabled` (AI mode). When False the SPA hides
     # the launcher entirely.
     show_assistant: bool
-    # FU-450 — `good_deal` alert threshold ("good" | "great"). Drives the
-    # Preferences → Notifications toggle; consulted only for money-features users.
-    good_deal_alert_threshold: str
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -186,7 +182,6 @@ class AuthenticatedUserDto:
             llm_model=user.llm_model,
             has_llm_api_key=user.llm_api_key_encrypted is not None,
             show_assistant=bool(user.show_assistant),
-            good_deal_alert_threshold=user.good_deal_alert_threshold,
         )
 
 
@@ -238,7 +233,7 @@ class RegisterUserHandler:
         now = datetime.now(timezone.utc)
         new_user = User(
             email=email_norm,
-            password_hash=generate_password_hash(request.password),
+            password_hash=hash_password(request.password),
             send_deals_on_day=0,
             username=request.username,
             # /register never grants admin. The bootstrap endpoint

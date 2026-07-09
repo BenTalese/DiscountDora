@@ -1,5 +1,19 @@
 # Proposal — Budget-defense swaps + deal-quality signal (FU-451 + FU-450)
 
+> **SCOPE UPDATE (2026-07-09, post-implementation).** The `good_deal` **alert
+> type** (§4b, §6c, verifications tied to it in §11, everything downstream in
+> chunk 3 of §10) is **CUT**. Proactive "this thing is cheap right now" nudges
+> read as the app pushing users to buy from stores — the wrong posture for
+> Dora (react to *your* list/pantry/plan, don't advertise). The
+> `fake_markdown` detection (§4a) and the pure `DealQuality` compute stay in
+> full: they're consumed by Buy Verdict (demote a fake special from buy → wait)
+> and by the FU-451 swap ranker (filter fake markdowns), neither of which
+> pushes anything at the user. Everything below about the `good_deal` alert
+> kind, the `good_deal_alert_threshold` User column, the Preferences →
+> Notifications toggle, the AlertsPage mapping, and the `--alert-kind-good-deal`
+> token is **superseded** by this note. Related FU-516 (throttle deviation) is
+> dropped with the feature.
+
 > **SCOPE UPDATE (2026-07-09, at implementation).** **Product swaps (Pass B)
 > are CUT, not deferred.** They structurally depend on a per-stock-item
 > "usual/preferred product" (with price) to swap *down from* — the recipe-cost

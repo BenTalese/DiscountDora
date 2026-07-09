@@ -6,7 +6,7 @@ apply; `undone`/`undone_at` flip when reversed. `payload_json` freezes the
 pre-apply state (recipe swap: entry_id + from_recipe_id + from_servings).
 
 Revision ID: e3a9c7b1f2d8
-Revises: d2f8a1c4b7e9
+Revises: c7d1a9e3f2b6
 Create Date: 2026-07-09 00:00:00.000000
 """
 import sqlalchemy as sa
@@ -15,7 +15,7 @@ from sqlalchemy_utils import UUIDType
 
 
 revision = 'e3a9c7b1f2d8'
-down_revision = 'd2f8a1c4b7e9'
+down_revision = 'c7d1a9e3f2b6'
 branch_labels = None
 depends_on = None
 

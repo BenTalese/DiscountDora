@@ -2475,7 +2475,7 @@
     .dora-swap-bullet {
         font-size: 0.85rem;
         cursor: pointer;
-        color: var(--alert-kind-good-deal);
+        color: var(--savings-accent);
         display: flex;
         align-items: center;
         flex-wrap: wrap;

@@ -392,3 +392,42 @@ def test__wait_hint__not_wait__is_none():
     # waste history) — the important assertion is `wait_hint is None`.
     assert v.verdict != "wait"
     assert v.wait_hint is None
+
+
+# ── FU-450 — fake-markdown demotion ───────────────────────────────────
+
+def test__fake_markdown__demotes_price_driven_buy_to_wait():
+    """Low stock + cheapest_3mo normally → buy/high. A fake markdown on a
+    linked product demotes it to `wait` and surfaces the honesty reason —
+    Dora won't celebrate an inflated 'special'."""
+    inputs = _rich_history_inputs(
+        stock_level_band="low",
+        fake_markdown=True,
+        price_samples=[
+            (3.10, _dt(6)),
+            (3.90, _dt(20)),
+            (3.85, _dt(34)),
+            (3.80, _dt(48)),
+            (3.90, _dt(62)),
+        ],
+    )
+    verdict = compose_verdict(inputs)
+    assert verdict.verdict == "wait"
+    assert any(r.signal == "fake_markdown" for r in verdict.reasons)
+
+
+def test__fake_markdown__never_overrides_out_of_stock_need():
+    """You're out — you need it, real special or not. The verdict stays
+    `buy`, but the inflated-markdown reason still surfaces (honesty)."""
+    inputs = _rich_history_inputs(
+        stock_level_band="out",
+        fake_markdown=True,
+    )
+    verdict = compose_verdict(inputs)
+    assert verdict.verdict == "buy"
+    assert any(r.signal == "fake_markdown" for r in verdict.reasons)
+
+
+def test__no_fake_markdown__reason_absent():
+    verdict = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    assert not any(r.signal == "fake_markdown" for r in verdict.reasons)

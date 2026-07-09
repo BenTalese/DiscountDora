@@ -453,6 +453,19 @@
                         >
                             +{{ formatMoney(budgetStatus.projected_active) }} in active lists
                         </div>
+                        <!-- FU-451 — budget-defense swaps signpost. Deep-links to
+                             the planner where the Suggestions panel lives. -->
+                        <div
+                            v-if="swapSummary"
+                            class="dora-swap-bullet q-mt-sm"
+                            @click.stop="router.push('/meal-plans')"
+                        >
+                            <q-icon :name="ICONS.savings" size="16px" class="q-mr-xs" />
+                            <strong>Save {{ formatMoney(swapSummary.saved) }} this week</strong>
+                            — {{ swapSummary.count }}
+                            {{ swapSummary.count === 1 ? 'swap' : 'swaps' }} ready ·
+                            <span class="dora-swap-bullet__cta">See suggestions →</span>
+                        </div>
                     </div>
                     <div v-else class="dora-empty">
                         {{ formatMoney(budgetStatus.spent) }} spent so far. Set a target
@@ -1131,6 +1144,7 @@
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
+    import MealPlanApiService from 'src/services/api/mealPlanApiService';
     import { useSuggestionStore } from 'src/stores/suggestionStore';
     import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
@@ -1357,6 +1371,11 @@
     // card is hidden when the loader errors so we never block dashboard
     // render on this slot.
     const budgetStatus = ref<BudgetStatus | null>(null);
+    // FU-451 — budget-defense swap summary for the current week (bullet + deep
+    // link on the budget card). Null when money's off, no current-week plan, or
+    // the week isn't projected over budget.
+    const mealPlanApi = new MealPlanApiService();
+    const swapSummary = ref<{ saved: number; count: number } | null>(null);
     // Phase 4 — Money zone widgets, each backed by an existing reports endpoint.
     // Only loaded when money is enabled (the cards are gated on it anyway). The
     // savings widget carries its own range toggle; spend/pantry use a sensible
@@ -1930,6 +1949,34 @@
         }
     }
 
+    async function loadSwapSummary() {
+        if (!moneyEnabled.value) { swapSummary.value = null; return; }
+        try {
+            const [today, page] = await Promise.all([
+                mealPlanApi.getTodayAsync(),
+                mealPlanApi.getAllAsync(),
+            ]);
+            const todayMs = Date.parse(`${today}T00:00:00`);
+            const weekMs = 7 * 24 * 60 * 60 * 1000;
+            const plan = page.items.find((p) => {
+                const startMs = Date.parse(`${p.start_date}T00:00:00`);
+                return startMs <= todayMs && todayMs < startMs + weekMs;
+            });
+            if (!plan) { swapSummary.value = null; return; }
+            const s = await mealPlanApi.getSwapSuggestionsAsync(plan.meal_plan_id);
+            if (s.projected_over && s.candidates.length > 0) {
+                swapSummary.value = {
+                    saved: Math.max(0, s.cost_per_week - s.projected_after_applying_all),
+                    count: s.candidates.length,
+                };
+            } else {
+                swapSummary.value = null;
+            }
+        } catch {
+            swapSummary.value = null;
+        }
+    }
+
     // ── Money zone loaders (Phase 4) ─────────────────────────────────────
     // Guarded on `moneyEnabled` — the cards are gated on it, so there's no point
     // fetching dollar reports when money is off. Each is non-fatal (the card
@@ -2124,6 +2171,7 @@
             loadAlerts(),
             loadBestDeals(),
             loadBudget(),
+            loadSwapSummary(),
             loadSavings(),
             loadSpendByStore(),
             loadPantryValue(),
@@ -2423,6 +2471,19 @@
        remainder chip on the right. */
     .dora-budget-body {
         padding: 4px 4px 8px;
+    }
+    .dora-swap-bullet {
+        font-size: 0.85rem;
+        cursor: pointer;
+        color: var(--alert-kind-good-deal);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+    .dora-swap-bullet__cta {
+        text-decoration: underline;
+        margin-left: 2px;
     }
     .dora-budget-headline {
         display: flex;

@@ -142,6 +142,21 @@ def no_content() -> Response:
     return response
 
 
+def conflict(detail: str) -> Response:
+    """409 — the request conflicts with current server state (e.g. a stale
+    optimistic action). FU-451 uses it for a swap card that drifted since it
+    was fetched."""
+    response = jsonify(ProblemDetails(
+        detail = detail,
+        errors = _lift_errors({"": [detail]}),
+        status = 409,
+        title = "Conflict.",
+        type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10"))
+    response.content_type = 'application/problem+json'
+    response.status_code = 409
+    return response
+
+
 def unauthorized(detail: str = "Authentication required.") -> Response:
     response = jsonify(ProblemDetails(
         detail = detail,

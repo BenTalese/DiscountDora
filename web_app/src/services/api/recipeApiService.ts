@@ -81,6 +81,8 @@ export type CreateRecipeCommand = {
     cuisine_id: string | null;
     difficulty: string | null;
     instructions: string | null;
+    /** RD-29 — free-text personal notes about the recipe. */
+    notes?: string | null;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;
     servings: number | null;
@@ -116,6 +118,8 @@ export type UpdateRecipeCommand = {
     cuisine_id?: string | null;
     difficulty?: string | null;
     instructions?: string | null;
+    /** RD-29 — free-text personal notes. Explicit null clears. */
+    notes?: string | null;
     is_favourite?: boolean;
     prep_time_minutes?: number | null;
     recipe_collection_id?: string | null;

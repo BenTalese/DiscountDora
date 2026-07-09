@@ -223,6 +223,23 @@
                 />
             </div>
 
+            <!-- RD-29 — the cook's own personal notes, surfaced under the
+                 steps where they're handy mid-cook. Only shown when set. -->
+            <q-card
+                v-if="recipe.notes && recipe.notes.trim()"
+                flat
+                bordered
+                class="recipe-notes q-mb-md"
+            >
+                <q-card-section>
+                    <div class="row items-center q-gutter-xs q-mb-xs">
+                        <q-icon :name="ICONS.notes" size="18px" color="primary" />
+                        <span class="text-subtitle2">Your notes</span>
+                    </div>
+                    <div class="recipe-notes__body">{{ recipe.notes }}</div>
+                </q-card-section>
+            </q-card>
+
             <!-- ingredients grouped by base stock location.
                  Stock-level chips intentionally removed mid-cook: the
                  decision to cook this recipe is already made; visual noise
@@ -1467,6 +1484,11 @@
     }
     .step-hint {
         line-height: 1.4;
+    }
+    // RD-29 — personal notes; preserve the user's line breaks.
+    .recipe-notes__body {
+        white-space: pre-wrap;
+        line-height: 1.5;
     }
     // headcount input.
     .cook-header {

@@ -10,6 +10,42 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-385 — Dashboard: DashboardCard extraction + "new low" signal (already-shipped duplicate)
+- **Resolved:** 2026-07-09 — verified against current code: **both halves already shipped**; FU-385 was a stale ledger entry that the 2026-07-01 audit missed when the underlying items closed. No code needed.
+  - **DashboardCard extraction** → shipped via **[[FU-293]]** (2026-06-24). `web_app/src/components/dashboard/DashboardCard.vue` exists as the shared shell (router-link/article + `icon`/`title`/`#action`/body slots); all 15 card instances converted; shell SCSS moved into the component.
+  - **Server-side "new low" signal** → shipped via **[[FU-296]]** (2026-07-03). `PriceDropsHandler` in `dora_api/features/reports/reports.py:877` + `GET /api/reports/price-drops?limit=N` compute a strictly-below-all-historic-`price_now` drop from `ProductHistoricOffer`, honesty-guarded (products with no history skip; a first-ever price isn't a drop). Client widget `price_drops` in `DashboardPage.vue` (zone `money`, gated on product data-presence).
+- **Cross-ref:** [[FU-293]] (card extraction), [[FU-296]] (price-drops widget).
+
+## [RESOLVED] FU-407 — INV-8 substitute swap rework (re-scope for merged Shop Mode) + RD-18
+- **Resolved:** 2026-07-09 — user chose "small polish + close". Reality had overtaken the 2026-07-01 note: the swap is no longer a "buried line-menu action" — it's a visible per-line icon button (`ShoppingListDetail.vue:901`, `onSwapSubstitute`), and the two-"Substitute" collision was already gone (the merchant surface is labelled "store offers", the swap "Swap with substitute"). Remaining work done:
+  - **RD-18 — `has_substitutes` on the line DTO.** `get_shopping_list_detail` now bulk-derives (one query over the undirected `StockItemSubstitute` table) whether each line's stock item has any substitute; the SPA disables the swap button up front when false instead of the tap→"no substitutes" dead-end. Test: `tests/e2e/dora_api/test_line_has_substitutes.py`.
+  - **Naming disambiguation** — swap tooltip relabelled "Swap for a substitute item" / "No substitutes recorded for this item", clearly distinct from the "store offers" picker.
+  - The INV-8 "→ Shop Mode" framing is formally obsolete (Shop Mode merged into ShoppingListDetail, UX v2); recorded in the IMPL doc (FU-408).
+- **Not done (deliberately):** no auto-surface-on-out-of-stock rework, no cut — the affordance works and is charter-kept.
+
+## [RESOLVED] FU-408 — INV-8 substitute-swap cross-ref inside stock-item detail is stale
+- **Resolved:** 2026-07-09 — corrected the three stale cross-refs in `IMPL_PLAN_STOCK_ITEM_DETAIL.md` (§ dependency list line ~11, C-1b.4 line ~83, §2 close-gate line ~106) that said the swap was "not built here — Shop Mode (INV-8)". Shop Mode was merged into ShoppingListDetail (UX v2) and the swap ships there (FU-407). Doc-only; no code. (Was nominally "blocked by FU-407" but the correction stood on its own; closed same session as FU-407.)
+
+## [RESOLVED] FU-432 — Recipe Detail residual polish (RD-11/RD-18/RD-3/RD-29/RD-33)
+- **Resolved:** 2026-07-09 — walked the audit's Recipe Detail NO_HOME/PROPOSED rows and closed each:
+  - **RD-11 (per-ingredient notes) → DROPPED** (won't-build). User anti-creep call: marginal value, and a per-item note field/surface is exactly the upkeep to avoid. The reasonable version is a single recipe-level note (RD-29), which shipped.
+  - **RD-18 (substitutes-available status) → duplicate** of [[FU-407]]; tracked there.
+  - **RD-3 (filterable stock-item picker) → already satisfied** — the FU-506 free-text rebuild gave the recipe-editor picker `use-input` + `@filter` + create/free-text. No change.
+  - **RD-33 ("Log cook" button placement) → already satisfied** — feedback L315 wanted it "part of the toolbar with the other buttons"; the Chunk-4 sticky toolbar already places "Log cook…" alongside Mark cooked / Cook mode / Print. No change.
+  - **RD-29 (personal notes in cook mode) → SHIPPED.** New `Recipe.notes` free-text field end-to-end (entity + mapping + migration `f4b2d8e6a1c3` + DTO + create/update/new-version handlers + editor textarea on the detail page); surfaced in cook mode under the steps (feedback L311). Tests: `tests/e2e/dora_api/test_recipe_notes.py` (2). Recipe-cost `from_entity` reads `notes` via `getattr` (duck-typed test fixtures).
+- **Cross-ref:** [[FU-407]] (RD-18), FU-506 (RD-3 substrate).
+
+## [RESOLVED] FU-451 — P6-09 budget-defense swaps (the "negotiator" half)
+- **Resolved:** 2026-07-09 — built end-to-end as **recipe swaps only** (product swaps CUT — see below). When a meal-plan week is projected over budget (`period_spent + cost_per_week > budget_amount`), `GET /api/meal-plans/<id>/swap-suggestions` returns the best cheaper recipe alternative per uncooked entry, ranked by saving, capped at 5, with a frozen reason-chip vocab (cookable / similar / household-fav). `POST apply-swap` mutates the entry's recipe + records a `MealPlanSwapLedger` row (migration `e3a9c7b1f2d8`); `POST undo-swap` reverses it. SPA: `SwapSuggestionsPanel.vue` on the planner (banner + candidate rows + preview→confirm dialog + session undo banner + zero-state), Dashboard budget-card "Save $X this week" signpost. Money-features-gated throughout.
+- **Scope cut (product swaps):** Pass B was CUT, not deferred — it needs a per-stock-item "usual/preferred product" (with price) to swap down from, and that per-product upkeep was deliberately rejected by the product owner (`PreferredBuy` is free-text, no price). `PROPOSAL_BUDGET_DEFENSE_SWAPS.md` carries a scope-update note; the `ProductSwapCandidate` DTO / product chips / product mockup row are superseded.
+- **Tests:** `tests/test_swap_suggestions.py` (9 pure-ranker) + `tests/e2e/dora_api/test_swap_suggestions.py` (4 endpoint: shape+money-gate, apply/undo round-trip, stale-409, money-off-reject). Recipe cost extracted to shared `recipe_cost.py` (R-003), consumed by both the ranker and the detail card.
+- **Cross-ref:** [[FU-450]] (deal-quality, shipped same session).
+
+## [RESOLVED] FU-450 — P6-03 deal-quality (fake_markdown + good_deal alert)
+- **Resolved:** 2026-07-09 — shipped the two surviving P6-03 pieces. `DealQuality` pure function (`features/deals/deal_quality.py`) over offer-history + household paid-price history: band-only enum (poor/fair/good/great, no 0-100 UI), `fake_markdown` = merchant claims a saving AND current unit price ≥ household median paid. Wired into Buy Verdict (a fake markdown demotes a price-driven `buy` → `wait` + "Markdown looks inflated" reason; never overrides a genuine out-of-stock need). New `good_deal` alert kind (money-features-gated, FYI tier, per-user `good_deal_alert_threshold` column + migration `d2f8a1c4b7e9`, Preferences→Notifications toggle, AlertsPage mapping + green token). **Throttle deviation:** implemented as a stateless offer-freshness window rather than a stateful per-(product,band) 14-day counter — see open [[FU-516]] for the rationale + trade-off.
+- **Tests:** `tests/test_deal_quality.py` (10 pure), 3 buy-verdict demotion tests, `tests/e2e/dora_api/test_good_deal_alert.py` (4).
+- **Cross-ref:** [[FU-451]] (originally the ranker's fake-markdown filter consumed this; product swaps cut, but the signal stands on its own for Buy Verdict + good_deal alerts).
+
 ## [RESOLVED] FU-515 — Security: remaining AUTH_ASSISTANT findings (B.1/B.2/A.3/A.4/A.5/A.6/A.7/B.3/B.4)
 - **Resolved:** 2026-07-08 — triaged all 8 remaining findings against current code; shipped the genuinely-open ones, confirmed three already-fixed, accepted three with rationale. `AUTH_ASSISTANT_SECURITY_FINDINGS.md` header is now "✅ Fully triaged" with per-finding stamps + a status column.
   - **Shipped (FU-515):**

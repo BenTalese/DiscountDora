@@ -44,8 +44,10 @@ from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.user import (GOOD_DEAL_THRESHOLD_GREAT, User)
 from dora_api.domain.stock_status import (effective_expiring_soon_window,
                                           is_low_stock, is_out_of_stock)
+from dora_api.features.deals.deal_quality import get_deal_quality
 from dora_api.features.alerts.alert_key import (list_alert_key, meal_alert_key,
                                                 stock_alert_key)
 from dora_api.features.alerts.alert_kinds import (TIER_ACTIONABLE,
@@ -72,6 +74,19 @@ _SEVERITY_ORDER = {SEVERITY_HIGH: 0, SEVERITY_MEDIUM: 1, SEVERITY_LOW: 2}
 # constant default (not yet admin-tunable — these are FYI nudges, and per-user
 # on/off already covers "I don't want this"); one source here (R-003).
 SHOPPING_DAY_WINDOW_DAYS = 3
+
+# FU-450 — `good_deal` throttle window. A deal only nudges while its offer is
+# *fresh* (offered within this many days). This is a deliberately stateless
+# stand-in for a stateful "once per (product, band) per 14 days" counter: the
+# alerts endpoint recomputes conditions every request and never writes on a
+# GET (FU-513), and this module's whole design is "conditions are derived, not
+# stored" (see the module docstring). Freshness-gating means a deal that has
+# sat at the top of the window for weeks stops nudging (its offer ages out),
+# while the user's own snooze/dismiss (AlertInteraction) suppresses it sooner.
+# Trade-off logged as a follow-up: a genuinely-new deal can re-surface daily
+# for up to 14 days unless dismissed. Doubling as a performance bound — deal
+# quality is only computed for the small set of freshly-offered products.
+GOOD_DEAL_FRESHNESS_DAYS = 14
 
 
 def _iso_week_label(day: date) -> str:
@@ -281,6 +296,16 @@ class GetAlertsHandler:
         raw.extend(self._no_planned_meals_alerts(today))
         raw.extend(self._shopping_day_alerts(today))
 
+        # ── FU-450 — proactive deal nudges (money-features only) ────────
+        # Gated on BOTH the install-wide `money_enabled` and the requesting
+        # user's `money_features_enabled` (the same double gate every dollar
+        # surface uses — ADR-005). No money features ⇒ no deal nudges at all.
+        money_enabled = bool(settings[0].money_enabled) if settings else False
+        if money_enabled and user_id is not None:
+            user = self.repository.get(User).by_id(user_id)
+            if user is not None and user.money_features_enabled:
+                raw.extend(self._good_deal_alerts(user, items, now))
+
         # ── Per-user overlay (C-9.1 interactions + C-9.2 preferences) ───
         # One bounded fetch each of this user's interactions + preferences,
         # then a Python-side filter — same shape as the suggestions flow.
@@ -433,6 +458,94 @@ class GetAlertsHandler:
                 detail = detail,
                 target_id = str(lst.id),
                 related_date = lst.planned_shop_date.isoformat(),
+            ))
+        return out
+
+    def _good_deal_alerts(
+        self, user: User, items: List[StockItem], now: datetime,
+    ) -> List[AlertDto]:
+        """FU-450 — one nudge per (product, band) where a product linked to a
+        tracked stock item hits the user's deal-quality threshold on a *fresh*
+        offer. Threshold `good` fires on `good` + `great`; `great` only on the
+        top band. Fake markdowns can never qualify — the `DealQuality` band
+        clamps them to `poor` (proposal §4a), so no extra filter is needed.
+
+        The candidate set is bounded to products whose current offer was made
+        within `GOOD_DEAL_FRESHNESS_DAYS` (the stateless throttle), so deal
+        quality is only computed for a handful of products per request."""
+        from sqlalchemy import select
+        from dora_api.app import db
+
+        qualifying_bands = (
+            {"great"}
+            if user.good_deal_alert_threshold == GOOD_DEAL_THRESHOLD_GREAT
+            else {"good", "great"}
+        )
+
+        name_by_item = {item.id: item.name for item in items}
+        tracked_ids = list(name_by_item.keys())
+        if not tracked_ids:
+            return []
+
+        link_table = db.metadata.tables["StockItemProduct"]
+        product_table = db.metadata.tables["Product"]
+        offer_table = db.metadata.tables["ProductOffer"]
+
+        # Active linked products + their current offer (offered_on, prices).
+        # Freshness is filtered in Python so a naive-vs-aware datetime on
+        # SQLite can't silently drop rows at the SQL layer.
+        rows = db.session.execute(
+            select(
+                link_table.c.stock_item_id,
+                link_table.c.product_id,
+                product_table.c.name,
+                product_table.c.brand,
+                offer_table.c.offered_on,
+            )
+            .select_from(
+                link_table
+                .join(product_table, product_table.c.id == link_table.c.product_id)
+                .join(offer_table, offer_table.c.product_id == product_table.c.id)
+            )
+            .where(
+                product_table.c.is_active.is_(True),
+                link_table.c.stock_item_id.in_(tracked_ids),
+                offer_table.c.offered_on.isnot(None),
+            )
+        ).all()
+
+        horizon = now - timedelta(days=GOOD_DEAL_FRESHNESS_DAYS)
+        out: List[AlertDto] = []
+        for stock_item_id, product_id, product_name, brand, offered_on in rows:
+            offered = offered_on
+            if offered is not None and offered.tzinfo is None:
+                offered = offered.replace(tzinfo=timezone.utc)
+            if offered is None or offered < horizon:
+                continue  # stale offer — throttled out
+            dq = get_deal_quality(product_id, self.repository)
+            if dq is None or dq.band not in qualifying_bands:
+                continue
+            item_name = name_by_item.get(stock_item_id) or "an item you track"
+            label = f"{brand} {product_name}".strip() if brand else product_name
+            band_phrase = (
+                "at its lowest price in months"
+                if dq.is_lowest_in_window
+                else "at a genuinely good price"
+            )
+            out.append(AlertDto(
+                # (product, band) in the discriminator so a good→great move
+                # re-fires and the user's snooze/dismiss stays band-specific.
+                alert_id = stock_alert_key(
+                    stock_item_id, f"good_deal:{product_id}:{dq.band}"
+                ),
+                kind = "good_deal",
+                severity = SEVERITY_HIGH if dq.band == "great" else SEVERITY_MEDIUM,
+                stock_item_id = stock_item_id,
+                stock_item_name = item_name,
+                message = f"{item_name} — {label} is {band_phrase}",
+                detail = f"${dq.current_price:.2f} · usually ${dq.median_price:.2f}",
+                target_id = str(product_id),
+                related_date = None,
             ))
         return out
 

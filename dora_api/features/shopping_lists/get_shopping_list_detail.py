@@ -94,6 +94,11 @@ class ShoppingListLineDto:
     # frozen at trim time.
     deferred_by_budget: bool = False
     deferred_reason: str | None = None
+    # RD-18 (FU-407) — whether the anchoring stock item has any recorded
+    # substitutes. Lets the SPA disable the "Swap with substitute" affordance
+    # up front instead of surfacing it as a dead-end that toasts "no
+    # substitutes recorded" only after a tap. False for product-only lines.
+    has_substitutes: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +253,29 @@ class GetShoppingListDetailHandler:
                 EntityField(PreferredBuy, "stock_item_id").in_(_StockItemIds)
             ):
                 _PreferredBuysByItem.setdefault(pb.stock_item_id, []).append(pb)
+
+        # RD-18 — bulk-derive which of the lines' stock items have any
+        # recorded substitute. StockItemSubstitute is undirected (canonical
+        # a_id < b_id), so an item counts if it appears on either side.
+        _ItemsWithSubs: set[UUID] = set()
+        if _StockItemIds:
+            from sqlalchemy import or_, select
+            from dora_api.app import db
+            _sub = db.metadata.tables["StockItemSubstitute"]
+            _rows = db.session.execute(
+                select(_sub.c.stock_item_a_id, _sub.c.stock_item_b_id).where(
+                    or_(
+                        _sub.c.stock_item_a_id.in_(_StockItemIds),
+                        _sub.c.stock_item_b_id.in_(_StockItemIds),
+                    )
+                )
+            ).all()
+            _WantedKeys = {str(i) for i in _StockItemIds}
+            for _a, _b in _rows:
+                for _side in (_a, _b):
+                    _key = str(UUID(bytes=_side)) if isinstance(_side, bytes) else str(_side)
+                    if _key in _WantedKeys:
+                        _ItemsWithSubs.add(_key)
 
         # bulk-load product names for product-only lines
         # so the DTO can fall back to the product name when there's
@@ -419,6 +447,10 @@ class GetShoppingListDetailHandler:
                         for pb in _PreferredBuysByItem.get(line.stock_item_id, [])
                     ),
                     key=lambda d: d.label.lower(),
+                ),
+                has_substitutes = (
+                    str(line.stock_item_id) in _ItemsWithSubs
+                    if line.stock_item_id else False
                 ),
             ))
 

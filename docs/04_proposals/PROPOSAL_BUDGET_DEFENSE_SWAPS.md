@@ -1,5 +1,19 @@
 # Proposal — Budget-defense swaps + deal-quality signal (FU-451 + FU-450)
 
+> **SCOPE UPDATE (2026-07-09, at implementation).** **Product swaps (Pass B)
+> are CUT, not deferred.** They structurally depend on a per-stock-item
+> "usual/preferred product" (with price) to swap *down from* — the recipe-cost
+> estimate already uses the cheapest linked product, so "buy the cheaper brand"
+> has no baseline without tracking which brand the household actually buys. That
+> per-product upkeep was **deliberately rejected** by the product owner (nobody
+> wants that maintenance burden in the app). `PreferredBuy` is free-text only
+> (no price), so it can't back it either. FU-451 therefore ships **recipe swaps
+> only** (Pass A). Everything below about product-swap candidates, the
+> `ProductSwapCandidate` DTO, the product-swap reason chips, and the
+> product-swap row in the mockup is **superseded** by this note. FU-450's
+> deal-quality signal still ships in full — it stands on its own value (Buy
+> Verdict honesty + `good_deal` alerts), independent of the cut product swaps.
+
 Wave-C design brief. Covers the "negotiator" half of P6-09 (over-budget
 meal-plan weeks emit ranked recipe/product swap suggestions) plus the two
 surviving pieces of P6-03 (`fake_markdown` detection + a `good_deal` alert

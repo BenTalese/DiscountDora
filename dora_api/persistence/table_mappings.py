@@ -15,6 +15,7 @@ from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_plan_swap_ledger import MealPlanSwapLedger
 from dora_api.domain.entities.meal_plan_template import (MealPlanTemplate,
                                                          MealPlanTemplateEntry,
                                                          MealPlanTemplateSet,
@@ -718,6 +719,9 @@ def configure_mappings(db: SQLAlchemy):
         # write time; historical rows were backfilled from last_made_on
         # (else now()) by migration f9d3a7c2b5e8.
         Column("created_at", DateTime(timezone=True), nullable=False),
+        # RD-29 — free-text personal notes (the cook's own commentary, shown
+        # in cook mode under the steps). Distinct from `instructions`.
+        Column("notes", Text, nullable=True),
     )
 
     # recipe → dietary-tag association. The tag vocabulary is
@@ -836,6 +840,19 @@ def configure_mappings(db: SQLAlchemy):
         Column("source_template_id", UUIDType, nullable=True),
         Column("source_template_set_id", UUIDType, nullable=True),
         Column("rotation_index", Integer, nullable=True),
+    )
+
+    # FU-451 — append-only ledger of applied budget-defense swaps (undo trail).
+    meal_plan_swap_ledger_table = Table(
+        "MealPlanSwapLedger", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("meal_plan_id", UUIDType, ForeignKey("MealPlan.id", ondelete="CASCADE"), nullable=False),
+        Column("applied_by_user_id", UUIDType, ForeignKey("User.id", ondelete="SET NULL"), nullable=True),
+        Column("applied_at", DateTime(timezone=True), nullable=False),
+        Column("kind", String(16), nullable=False),
+        Column("payload_json", Text, nullable=False),
+        Column("undone", Boolean, nullable=False, server_default=false()),
+        Column("undone_at", DateTime(timezone=True), nullable=True),
     )
 
     meal_plan_entry_table = Table(
@@ -969,6 +986,9 @@ def configure_mappings(db: SQLAlchemy):
         # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Default
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
+        # FU-450 — per-user `good_deal` alert threshold ("good" | "great").
+        # Default "good" (both good + great bands nudge). Closed-set sentinel.
+        Column("good_deal_alert_threshold", String(16), nullable=False, server_default="good"),
     )
 
     # admin-minted bearer credential for `POST /api/ingest`. The
@@ -1347,6 +1367,11 @@ def configure_mappings(db: SQLAlchemy):
         "_meal_plan_id": meal_plan_entry_table.c.meal_plan_id,
         "id": meal_plan_entry_table.c.id,
         "recipe": relationship(Recipe, lazy="noload"),
+    })
+
+    _mapper_registry.map_imperatively(MealPlanSwapLedger, meal_plan_swap_ledger_table, properties={
+        "_id_col": meal_plan_swap_ledger_table.c.id,
+        "id": meal_plan_swap_ledger_table.c.id,
     })
 
     _mapper_registry.map_imperatively(MealPlan, meal_plan_table, properties={

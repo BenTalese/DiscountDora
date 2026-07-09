@@ -75,6 +75,10 @@ export type Recipe = {
     cook_time_minutes: number | null;
     difficulty: string | null;
     instructions: string | null;
+    /** RD-29 — free-text personal notes about the recipe (the cook's own
+     *  commentary). Distinct from `instructions` (the method); surfaced in
+     *  cook mode under the steps. Null when unset. */
+    notes: string | null;
     is_favourite: boolean;
     last_made_on: string | null;
     /** FU-082 — when the recipe was added to this household. Drives the

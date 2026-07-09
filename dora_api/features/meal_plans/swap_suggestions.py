@@ -1,0 +1,499 @@
+"""FU-451 — budget-defense swaps (recipe swaps only).
+
+When a meal-plan week is *projected* to blow the grocery budget, Dora suggests
+cheaper **recipe** swaps to bring it back under — a non-destructive alternative
+to trimming the shopping list. Preview → confirm → apply, with a deterministic
+undo backed by `MealPlanSwapLedger`.
+
+  GET  /api/meal-plans/<id>/swap-suggestions  — ranked candidates + week cost
+  POST /api/meal-plans/<id>/apply-swap        — apply one swap (records ledger)
+  POST /api/meal-plans/<id>/undo-swap         — reverse a ledger entry
+
+**Scope (locked 2026-07-09):** recipe swaps only. Product/brand swaps were CUT —
+they need a per-item "usual product" concept (with price) that the product owner
+deliberately rejected as too much upkeep. See PROPOSAL_BUDGET_DEFENSE_SWAPS.md
+scope-update note. FU-450's deal-quality signal ships independently.
+
+Design lock: PROPOSAL_BUDGET_DEFENSE_SWAPS.md §4c / §5 / §7.
+
+Structure mirrors `get_buy_verdict.py`: a pure ranker (`rank_recipe_swaps`,
+driven by fixture data in the unit tests) + a thin repo-touching orchestrator.
+"""
+import json
+import logging
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from typing import List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.meal_plan import MealPlan
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_plan_swap_ledger import MealPlanSwapLedger
+from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.user import User
+from dora_api.features.app_settings.clock import household_today
+from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
+from dora_api.features.budget.budget import period_bounds, period_spent
+from dora_api.features.meal_plans.get_meal_plans import GetMealPlansHandler
+from dora_api.features.recipes.get_recipes import GetRecipesHandler
+from dora_api.features.recipes.recipe_cost import CostEstimate, estimate_costs_for
+from dora_api.features.routers import MEAL_PLAN_ROUTER
+from dora_api.infrastructure.api_response import (bad_request,
+                                                  business_rule_violation,
+                                                  conflict, not_found, ok,
+                                                  unauthorized)
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.query_options import QueryOptions
+from dora_api.infrastructure.utils import get_request_body
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+from flask import session
+
+_LOGGER = logging.getLogger(__name__)
+
+WEEK_LENGTH_DAYS = 7
+# Top-N across the week — more than a handful is overwhelm, not choice
+# (proposal §4c). One suggestion per meal, best-saving first.
+MAX_CANDIDATES = 5
+
+# Frozen reason-chip vocabulary (proposal §5). The chip is decided at rank
+# time and frozen on the DTO — the SPA never re-derives it.
+CHIP_COOKABLE = "cheaper_recipe_cookable"        # "Cheaper — uses stock you have"
+CHIP_SIMILAR = "cheaper_recipe_similar"          # "Cheaper — same style meal"
+CHIP_HOUSEHOLD_FAV = "cheaper_recipe_household_fav"  # "Cheaper — you've cooked it before"
+
+# Tier ranking for the chips (higher = preferred when savings tie).
+_CHIP_TIER = {CHIP_COOKABLE: 3, CHIP_SIMILAR: 2, CHIP_HOUSEHOLD_FAV: 1}
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeSwapCandidate:
+    entry_id: UUID
+    entry_scheduled_for: date
+    entry_slot: str
+    from_recipe_id: UUID
+    from_recipe_name: str
+    to_recipe_id: UUID
+    to_recipe_name: str
+    saved: float
+    reason_chip: str
+    missing_ingredient_names: List[str]
+    kind: str = "recipe"
+
+
+@dataclass(frozen=True, slots=True)
+class SwapSuggestionsResponse:
+    projected_over: bool
+    cost_per_week: float
+    cost_per_week_priced_ratio: dict     # {"priced", "total", "unpriced_recipe_ids"}
+    budget_amount: Optional[float]
+    overshoot: float
+    projected_after_applying_all: float
+    candidates: List[RecipeSwapCandidate]
+
+
+# ── Pure ranker (no repo — driven by fixtures in the unit tests) ───────
+
+
+def _entry_cost(recipe, cost: Optional[CostEstimate], servings: int) -> Optional[float]:
+    """Cost of cooking `recipe` for `servings` people. Scales the recipe's
+    estimated cost by servings ÷ the recipe's own default servings so a swap
+    is compared at the *entry's* headcount. Falls back to the raw estimate
+    when the recipe has no serving count. None ⇒ unpriced."""
+    if cost is None or cost.estimated_cost is None:
+        return None
+    base = cost.estimated_cost
+    recipe_servings = getattr(recipe, "servings", None)
+    if recipe_servings and recipe_servings > 0:
+        return base * (servings / recipe_servings)
+    return base
+
+
+def _chip_for(from_recipe, candidate) -> Optional[str]:
+    """Which reason chip a candidate earns, or None if it's a "stranger"
+    (not cookable-now, not tag-similar, never cooked) — those are filtered
+    out so Dora never pushes an unfamiliar recipe as the cheaper answer
+    (proposal §4c household-affinity rule)."""
+    if candidate.cookable is True:
+        return CHIP_COOKABLE
+    same_cuisine = (
+        candidate.cuisine_id is not None
+        and candidate.cuisine_id == from_recipe.cuisine_id
+    )
+    same_category = (
+        candidate.category_id is not None
+        and candidate.category_id == from_recipe.category_id
+    )
+    if same_cuisine or same_category:
+        return CHIP_SIMILAR
+    if getattr(candidate, "last_made_on", None) is not None:
+        return CHIP_HOUSEHOLD_FAV
+    return None
+
+
+def rank_recipe_swaps(
+    week_entries: list,
+    recipes_by_id: dict,
+    cost_by_id: dict,
+    planned_recipe_ids: set,
+) -> List[RecipeSwapCandidate]:
+    """Pure two-pass-A ranker. For each uncooked week entry, find the single
+    best cheaper recipe swap; rank the winners across the week by saving.
+
+    * `week_entries` — entry objects with `.meal_plan_entry_id`, `.recipe_id`,
+      `.recipe_name`, `.scheduled_for`, `.slot`, `.servings`, `.consumed_at`.
+    * `recipes_by_id` — `recipe_id → RecipeDto` (cookable, tags, servings,
+      last_made_on, missing_stock_item_names).
+    * `cost_by_id` — `recipe_id → CostEstimate`.
+    * `planned_recipe_ids` — recipes already on the plan; never suggested
+      (avoids "cook this Tuesday AND Thursday").
+    """
+    winners: List[RecipeSwapCandidate] = []
+
+    for entry in week_entries:
+        if entry.consumed_at is not None:
+            continue  # ate it, can't swap it
+        from_recipe = recipes_by_id.get(entry.recipe_id)
+        if from_recipe is None:
+            continue
+        from_cost = _entry_cost(from_recipe, cost_by_id.get(entry.recipe_id), entry.servings)
+        if from_cost is None:
+            continue  # no baseline → can't rank a saving honestly
+
+        best: Optional[RecipeSwapCandidate] = None
+        best_tier = -1
+        for rid, candidate in recipes_by_id.items():
+            if rid == entry.recipe_id or rid in planned_recipe_ids:
+                continue
+            cand_cost = _entry_cost(candidate, cost_by_id.get(rid), entry.servings)
+            if cand_cost is None or cand_cost >= from_cost:
+                continue
+            chip = _chip_for(from_recipe, candidate)
+            if chip is None:
+                continue
+            saved = round(from_cost - cand_cost, 2)
+            if saved <= 0:
+                continue
+            tier = _CHIP_TIER[chip]
+            # Best per entry: most saved, then best chip tier.
+            if best is None or (saved, tier) > (best.saved, best_tier):
+                best = RecipeSwapCandidate(
+                    entry_id=entry.meal_plan_entry_id,
+                    entry_scheduled_for=entry.scheduled_for,
+                    entry_slot=entry.slot,
+                    from_recipe_id=entry.recipe_id,
+                    from_recipe_name=entry.recipe_name,
+                    to_recipe_id=rid,
+                    to_recipe_name=candidate.name,
+                    saved=saved,
+                    reason_chip=chip,
+                    missing_ingredient_names=list(
+                        getattr(candidate, "missing_stock_item_names", []) or []
+                    ),
+                )
+                best_tier = tier
+        if best is not None:
+            winners.append(best)
+
+    # Rank across the week: biggest saving first, then chip tier.
+    winners.sort(
+        key=lambda c: (c.saved, _CHIP_TIER[c.reason_chip]), reverse=True,
+    )
+    return winners[:MAX_CANDIDATES]
+
+
+# ── Repo-touching orchestration ────────────────────────────────────────
+
+
+def _current_user_id() -> Optional[UUID]:
+    raw = session.get(SESSION_USER_ID_KEY)
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _money_features_on(repository: SqlAlchemyRepository, user: Optional[User]) -> bool:
+    if user is None or not user.money_features_enabled:
+        return False
+    settings = repository.get(AppSetting).all()
+    return bool(settings[0].money_enabled) if settings else False
+
+
+def _week_entries(plan_dto, start: date):
+    end = date.fromordinal(start.toordinal() + WEEK_LENGTH_DAYS)
+    return [
+        e for e in plan_dto.entries
+        if start <= e.scheduled_for < end and e.consumed_at is None
+    ]
+
+
+def _all_recipe_dtos(repository: SqlAlchemyRepository) -> list:
+    # Large single page — the household cookbook is bounded (tens–hundreds).
+    return list(
+        GetRecipesHandler(repository)
+        .handle(QueryOptions(page=1, limit=10_000))
+        .items
+    )
+
+
+def compute_suggestions(
+    repository: SqlAlchemyRepository, meal_plan_id: UUID, user: Optional[User],
+) -> Optional[SwapSuggestionsResponse]:
+    """Returns None when the plan doesn't exist. Returns a zeroed response
+    (projected_over False, no candidates) when money features are off — the
+    surface is hidden client-side, this is the defensive server mirror."""
+    plan_dto = GetMealPlansHandler(repository).handle_by_id(meal_plan_id)
+    if plan_dto is None:
+        return None
+
+    if not _money_features_on(repository, user):
+        return SwapSuggestionsResponse(
+            projected_over=False, cost_per_week=0.0,
+            cost_per_week_priced_ratio={"priced": 0, "total": 0, "unpriced_recipe_ids": []},
+            budget_amount=None, overshoot=0.0,
+            projected_after_applying_all=0.0, candidates=[],
+        )
+
+    recipes = _all_recipe_dtos(repository)
+    recipes_by_id = {r.recipe_id: r for r in recipes}
+    cost_by_id = estimate_costs_for(repository, recipes)
+
+    week_entries = _week_entries(plan_dto, plan_dto.start_date)
+    priced = 0
+    unpriced_recipe_ids: list = []
+    cost_per_week = 0.0
+    for e in week_entries:
+        recipe = recipes_by_id.get(e.recipe_id)
+        ecost = _entry_cost(recipe, cost_by_id.get(e.recipe_id), e.servings) if recipe else None
+        if ecost is None:
+            unpriced_recipe_ids.append(str(e.recipe_id))
+        else:
+            cost_per_week += ecost
+            priced += 1
+    cost_per_week = round(cost_per_week, 2)
+
+    today = household_today(repository)
+    budget_amount = float(user.budget_amount) if user.budget_amount is not None else None
+    spent = 0.0
+    if budget_amount is not None:
+        p_start, p_end = period_bounds(today, user.budget_period)
+        spent = period_spent(user, p_start, p_end, repository)
+    projected_over = (
+        budget_amount is not None and (spent + cost_per_week) > budget_amount
+    )
+    overshoot = round(max(0.0, (spent + cost_per_week) - budget_amount), 2) if budget_amount is not None else 0.0
+
+    candidates: List[RecipeSwapCandidate] = []
+    if projected_over:
+        planned_recipe_ids = {e.recipe_id for e in plan_dto.entries}
+        candidates = rank_recipe_swaps(
+            week_entries, recipes_by_id, cost_by_id, planned_recipe_ids,
+        )
+    total_saved = round(sum(c.saved for c in candidates), 2)
+
+    return SwapSuggestionsResponse(
+        projected_over=projected_over,
+        cost_per_week=cost_per_week,
+        cost_per_week_priced_ratio={
+            "priced": priced,
+            "total": len(week_entries),
+            "unpriced_recipe_ids": unpriced_recipe_ids,
+        },
+        budget_amount=budget_amount,
+        overshoot=overshoot,
+        projected_after_applying_all=round(cost_per_week - total_saved, 2),
+        candidates=candidates,
+    )
+
+
+def _candidate_payload(c: RecipeSwapCandidate) -> dict:
+    return {
+        "kind": c.kind,
+        "entry_id": str(c.entry_id),
+        "entry_scheduled_for": c.entry_scheduled_for.isoformat(),
+        "entry_slot": c.entry_slot,
+        "from_recipe_id": str(c.from_recipe_id),
+        "from_recipe_name": c.from_recipe_name,
+        "to_recipe_id": str(c.to_recipe_id),
+        "to_recipe_name": c.to_recipe_name,
+        "saved": c.saved,
+        "reason_chip": c.reason_chip,
+        "missing_ingredient_names": c.missing_ingredient_names,
+    }
+
+
+def _suggestions_payload(r: SwapSuggestionsResponse) -> dict:
+    return {
+        "projected_over": r.projected_over,
+        "cost_per_week": r.cost_per_week,
+        "cost_per_week_priced_ratio": r.cost_per_week_priced_ratio,
+        "budget_amount": r.budget_amount,
+        "overshoot": r.overshoot,
+        "projected_after_applying_all": r.projected_after_applying_all,
+        "candidates": [_candidate_payload(c) for c in r.candidates],
+    }
+
+
+# ── Apply / undo ───────────────────────────────────────────────────────
+
+
+class ApplySwapRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = "recipe"
+    entry_id: UUID
+    to_recipe_id: UUID
+    # Optional stale-guard: the recipe the client believed the entry held. When
+    # present and it no longer matches, the apply 409s so a stale card can't
+    # silently swap the wrong meal (proposal §11 verify).
+    expected_from_recipe_id: UUID | None = None
+
+
+class UndoSwapRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    swap_ledger_id: UUID
+
+
+def _load_plan_with_entries(repository: SqlAlchemyRepository, meal_plan_id: UUID):
+    from dora_api.domain.entities.recipe import Recipe as _Recipe
+    return (
+        repository.get(MealPlan)
+        .include(MealPlan.Fields.ENTRIES)
+        .then_include(MealPlanEntry.Fields.RECIPE)
+        .by_id(meal_plan_id)
+    )
+
+
+def _recompute_after(repository, meal_plan_id, user) -> tuple[float, bool]:
+    resp = compute_suggestions(repository, meal_plan_id, user)
+    if resp is None:
+        return 0.0, False
+    return resp.cost_per_week, resp.projected_over
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────
+
+
+@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/swap-suggestions", methods=["GET"])
+def get_swap_suggestions(meal_plan_id: UUID):
+    repo = SqlAlchemyRepository()
+    user_id = _current_user_id()
+    user = repo.get(User).by_id(user_id) if user_id else None
+    result = compute_suggestions(repo, meal_plan_id, user)
+    if result is None:
+        return not_found(MealPlan.__name__, meal_plan_id)
+    return ok(_suggestions_payload(result))
+
+
+@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/apply-swap", methods=["POST"])
+@has_request_body(ApplySwapRequest)
+def apply_swap(meal_plan_id: UUID):
+    repo = SqlAlchemyRepository()
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized()
+    user = repo.get(User).by_id(user_id)
+    if not _money_features_on(repo, user):
+        return business_rule_violation("Money features are off; swaps are unavailable.")
+
+    request: ApplySwapRequest = get_request_body()
+    if request.kind != "recipe":
+        return bad_request("Only recipe swaps are supported.")
+
+    plan = _load_plan_with_entries(repo, meal_plan_id)
+    if plan is None:
+        return not_found(MealPlan.__name__, meal_plan_id)
+    entry = next(
+        (e for e in (plan.entries or []) if e.id == request.entry_id), None
+    )
+    if entry is None:
+        return not_found(MealPlanEntry.__name__, request.entry_id)
+    if entry.consumed_at is not None:
+        return business_rule_violation("That meal has already been cooked — it can't be swapped.")
+
+    from_recipe_id = entry.recipe.id if entry.recipe else None
+    if (
+        request.expected_from_recipe_id is not None
+        and from_recipe_id != request.expected_from_recipe_id
+    ):
+        # Stale card — the week drifted since the suggestion was fetched.
+        return conflict("This suggestion is out of date — refresh and try again.")
+
+    to_recipe = repo.get(Recipe).by_id(request.to_recipe_id)
+    if to_recipe is None:
+        return not_found(Recipe.__name__, request.to_recipe_id)
+
+    entry.recipe = to_recipe
+    ledger = MealPlanSwapLedger(
+        meal_plan_id=meal_plan_id if isinstance(meal_plan_id, UUID) else UUID(str(meal_plan_id)),
+        applied_by_user_id=user_id,
+        applied_at=datetime.now(timezone.utc),
+        kind="recipe",
+        payload_json=json.dumps({
+            "entry_id": str(entry.id),
+            "from_recipe_id": str(from_recipe_id) if from_recipe_id else None,
+            "from_servings": entry.servings,
+        }),
+    )
+    repo.add(ledger)
+    repo.save_changes()
+
+    new_cost, new_over = _recompute_after(repo, meal_plan_id, user)
+    return ok({
+        "swap_ledger_id": str(ledger.id),
+        "new_cost_per_week": new_cost,
+        "new_projected_over": new_over,
+    })
+
+
+@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/undo-swap", methods=["POST"])
+@has_request_body(UndoSwapRequest)
+def undo_swap(meal_plan_id: UUID):
+    repo = SqlAlchemyRepository()
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized()
+    user = repo.get(User).by_id(user_id)
+
+    request: UndoSwapRequest = get_request_body()
+    ledger = repo.get(MealPlanSwapLedger).by_id(request.swap_ledger_id)
+    if ledger is None:
+        return not_found(MealPlanSwapLedger.__name__, request.swap_ledger_id)
+    if ledger.undone:
+        return business_rule_violation("That swap has already been undone.")
+
+    payload = json.loads(ledger.payload_json)
+    from_recipe_id = payload.get("from_recipe_id")
+    entry_id = payload.get("entry_id")
+    if not from_recipe_id or not entry_id:
+        return business_rule_violation("This swap can't be undone (missing prior state).")
+
+    plan = _load_plan_with_entries(repo, meal_plan_id)
+    if plan is None:
+        return not_found(MealPlan.__name__, meal_plan_id)
+    entry = next(
+        (e for e in (plan.entries or []) if str(e.id) == entry_id), None
+    )
+    if entry is None:
+        return not_found(MealPlanEntry.__name__, UUID(entry_id))
+
+    from_recipe = repo.get(Recipe).by_id(UUID(from_recipe_id))
+    if from_recipe is None:
+        return business_rule_violation("The original recipe no longer exists.")
+
+    entry.recipe = from_recipe
+    ledger.undone = True
+    ledger.undone_at = datetime.now(timezone.utc)
+    repo.save_changes()
+
+    new_cost, new_over = _recompute_after(repo, meal_plan_id, user)
+    return ok({
+        "new_cost_per_week": new_cost,
+        "new_projected_over": new_over,
+    })

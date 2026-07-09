@@ -107,6 +107,10 @@ export type ShoppingListLine = {
     /** Chip label frozen at trim time (one of the seven strings in brief §5).
      *  Null on non-deferred lines. */
     deferred_reason: string | null;
+    /** RD-18 (FU-407) — whether the anchoring stock item has any recorded
+     *  substitute. Gates the "Swap with substitute" affordance so it isn't a
+     *  dead-end. False for product-only lines. */
+    has_substitutes: boolean;
 };
 
 /** Server-owned list-level money/count aggregates (state-ownership Type B).

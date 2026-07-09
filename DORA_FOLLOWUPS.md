@@ -53,6 +53,30 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-516 — good_deal alert throttle is freshness-based, not a true per-(product,band) 14-day counter
+- **Raised:** 2026-07-09 (FU-450 impl).
+- **Type:** finding / design deviation.
+- **What:** The locked brief (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md` §4b) specified the
+  `good_deal` alert throttle as "once per (product, band) per 14 days" — a
+  *stateful* fire counter. It's implemented instead as a **stateless freshness
+  window**: a deal only nudges while its current offer's `offered_on` is within
+  `GOOD_DEAL_FRESHNESS_DAYS` (14) — see `get_alerts.py::_good_deal_alerts`.
+- **Why deviated:** a true fire-counter needs either a write on `GET /alerts`
+  (FU-513 deliberately eliminated GET-path writes) or a new fire-log table + a
+  background job to populate it. Both fight two standing invariants: the alerts
+  endpoint's "conditions are derived every request, never stored" design, and the
+  no-writes-on-GET rule. Freshness-gating honours the *intent* ("a persistent
+  deal stops nagging") statelessly. **Trade-off:** a genuinely-new deal can
+  re-surface daily for up to 14 days unless the user snoozes/dismisses it
+  (AlertInteraction suppresses sooner).
+- **Recommended resolution:** opportunistic / when a running-app walk shows the
+  daily re-surface is actually annoying. The proper fix — a small
+  `GoodDealAlertFire(user, product, band, fired_at)` table written by a scheduled
+  alert-materialisation job (moving alert generation off the GET path) — is a
+  bigger architectural change; only worth it if the freshness heuristic proves
+  too noisy in practice.
+
+
 ## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
 - **Raised:** 2026-07-07 (user request).
 - **Type:** deferred job (audit-first, then refactor).
@@ -69,42 +93,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** late-game / pre-commercialization hardening. Not urgent while the app is still gaining new surfaces; do it when the feature surface has stabilised so a lib swap doesn't collide with in-flight redesigns. Doing it earlier risks churning code that's about to be reshaped anyway.
 - **Recommended resolution:** **late-game / Phase 4 kick-off.** Pair with the pre-commercialization hardening pass ([[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta) — same window, same "batten down the hatches before we ask anyone to trust this" mindset. Cross-check every existing `[Removed]` and `[Kept-because…]` verdict against ENGINEERING_STANDARDS on the way out so the assessment doc becomes source-of-truth for "here's why we didn't take the lib."
 
-## [OPEN] FU-451 — P6-09 budget-defense swaps (the "negotiator" half) — DESIGN LOCKED, impl deferred
-- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** deferred job (design locked 2026-07-07; awaiting chunked impl-plan).
-- **Design brief:** [`docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md`](docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md) (2026-07-07). Covers this FU + [[FU-450]] in one plan. Locked decisions: brief-first-then-chunks; both FUs ship together; UI on meal-plan week + Dashboard budget card summary bullet; preview→confirm apply with a MealPlanSwapLedger row for undo; `cost_per_week` computed server-side on-the-fly (no new column); ranker filters out `fake_markdown=true` candidates; two-pass generator (recipe swaps + product swaps) with a closed reason-chip vocab.
-- **What (original):** `PROMPT_PLAN_PART_6_POLISH.md:594` had two halves. **Shipped:** per-recipe cost estimate (Cookbook Chunk 9, uses `paid_price` via FU-216). **Missing:** the headline "negotiator" — `cost_per_week` on meal-plan weeks, and the budget-defense loop that, when a week is over budget, emits ranked swap suggestions with concrete dollar savings and one-tap apply — (a) PRODUCT swap (reuse `compare_prices`), (b) RECIPE swap. Must NOT use a stock-item substitute graph (that surface is retired). Depends on P6-03 deal-quality signal (see [[FU-450]]).
-- **Why deferred:** design brief written; implementation is ~6 chunks (~1200-1500 LOC + one migration + one User column) and warrants a proper chunked impl-plan session rather than being folded into an unrelated turn.
-- **Recommended resolution:** next Phase-1-mop-up session picks up chunks 1-6 in order (see brief §10). Chunks 1-3 (FU-450 upstream) can land independently; chunks 4-6 (FU-451 core + UI) depend on 1-3.
-
-## [OPEN] FU-450 — P6-03 deal-quality (fake_markdown + good_deal alert) — DESIGN LOCKED, impl deferred
-- **Raised:** 2026-07-02 (P6 legacy-plan cross-check).
-- **Type:** deferred job (design locked 2026-07-07 as part of [[FU-451]]'s brief; awaiting impl).
-- **Design brief:** [`docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md`](docs/04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md) §4a-b + §10 chunks 1-3. Locked decisions: `DealQuality` is a pure function over offer-history + household paid-price history (FU-216); band-only enum (`poor/fair/good/great`), no 0-100 numeric score exposed; `fake_markdown` compares merchant claim against household median paid-price; `good_deal` alert throttled to 1 per (product, band) per 14 days, per-user threshold `good_deal_alert_threshold ∈ {"great", "good"}`; the surviving surface feeds the Buy Verdict card (existing P8-05, not a new UI) — no 0-100 score UI, no new PriceHistoryPage overlay.
-- **What (original):** `PROMPT_PLAN_PART_6_POLISH.md:233` specified a pure-function scorer over per-product offer history + a `good_deal` alert. **Superseded framing:** P8-05 Buy Verdict shipped 2026-07-02. **Missing pieces still valuable and now designed:** (a) `fake_markdown` flag, (b) `good_deal` alert type.
-- **Why deferred:** implementation is 3 chunks inside the FU-451 impl-plan — same session, same tests.
-- **Recommended resolution:** ships as chunks 1-3 of the FU-451 impl-plan. Can land independently before chunks 4-6 (FU-451 core) if wanted.
-
-## [OPEN] FU-445 — Stale "no code yet" status headers on ~15 shipped docs
-- **Raised:** 2026-07-02 (doc-register audit).
-- **Type:** finding.
-- **What:** ~13 `IMPL_PLAN_*` (Alerts, Cart, Cookbook, Cook-Mode, Dashboard,
-  Error-Handling, Ingestion, Meal-Plans, State-Ownership, Stock-Item-Detail,
-  Stock-Overview, Waste) + 2 proposals (Auth-Shell, Buy-Verdict-Oracle) still carry
-  a top "Status: … no code yet / Implementing" line despite the feature having fully
-  shipped. Doc *bodies* are accurate design records — only the header lies. Full list
-  in the `PROJECT_STATE.md` document register (marked "stale header").
-- **Why deferred:** Purely cosmetic per-file edit; batch it rather than interleave.
-- **Recommended resolution:** opportunistic — batch-flip each header to a
-  done/record status (e.g. "✅ Shipped — see CHANGELOG"). The `PROJECT_STATE.md`
-  register already carries the truth, so this is de-risked, not urgent.
-
-## [OPEN] FU-432 — Recipe Detail residual polish: uncovered NO_HOME bullets
-- **Raised:** 2026-07-01 (12-June feedback-audit delta).
-- **Type:** deferred job (small residual cluster).
-- **What:** Recipe Detail feedback had 33 bullets; Cookbook C-4 Chunks 1–10 shipped 17 and PROPOSED 11; **5 remain NO_HOME**. Named: **RD-11 ingredient-notes value** (open design question — do per-ingredient notes surface in cook mode / shopping list / just detail?); RD-18 substitutes-available status (already tracked by [[FU-407]]); plus ~3 other minor items (walk the audit doc for the current list).
-- **Why deferred:** small enough that each didn't earn its own home; Cookbook C-4 finished without picking them up.
-- **Recommended resolution:** next Cookbook touch — walk the audit's Recipe Detail table for `NO_HOME` rows, close each with a one-line call (kept / dropped / build). RD-11 is the only real design question; the rest are one-shot polish.
 
 ## [OPEN] FU-431 — Product History: deeper redesign brief (feature discoverability + desktop drawer pattern)
 - **Raised:** 2026-07-01 (12-June feedback-audit delta).
@@ -161,19 +149,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** the delta itself is the work.
 - **Recommended resolution:** before any public deployment — walk every finding, tick "fixed" or reopen. Overlaps with [[FU-424]] (senior-review credibility gaps).
 
-## [OPEN] FU-408 — INV-8 substitute swap: cross-ref inside stock-item detail is stale
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** finding.
-- **What:** `IMPL_PLAN_STOCK_ITEM_DETAIL.md` line ~83 cross-refs INV-8's swap rework as "not built here." INV-8's target surface (Shop Mode) no longer exists as a separate page — merged into ShoppingListDetail per UX v2. The cross-ref is stale until [[FU-407]] re-scopes the rework.
-- **Why deferred:** blocked by [[FU-407]].
-- **Recommended resolution:** update the cross-ref when [[FU-407]] resolves; same session.
-
-## [OPEN] FU-407 — INV-8 substitute swap rework: re-scope for merged Shop Mode
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** finding (design call).
-- **What:** `docs/05_investigations/SUBSTITUTE_SWAP_ASSESSMENT.md` recommended surfacing the stock-item substitute swap **inside Shop Mode + disambiguating the two "Substitute" labels** (line stock-item swap vs merchant-offer swap). Shop Mode has since been merged into ShoppingListDetail (UX v2); the recommendation is stale as written. Currently the only surface is a buried "Swap … with" line-menu action at [ShoppingListDetail.vue:1890](web_app/src/pages/ShoppingListDetail.vue:1890).
-- **Why deferred:** the target surface changed mid-flight; nobody re-scoped the fix.
-- **Recommended resolution:** short design brief — decide (a) do the rework against the merged surface (a shopping-mode-active affordance surfaced when a line is marked out-of-stock), or (b) cut the list-level swap outright and rely on cook-mode swaps + manual edit. Address the two-"Substitute" collision either way.
 
 ## [OPEN] FU-406 — P7-10 Launch readiness
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -300,13 +275,6 @@ long session summary. Distinct from the other logs:
 - **What:** P5-01 — comprehensive security/privacy hardening sweep. Auth findings (CSRF, register-first-admin, email-change) resolved per resolved-FUs. The full P5-01 bundle (security headers, rate-limits, secrets management, dependency audit) not executed as a single sweep.
 - **Why deferred:** slices landed opportunistically.
 - **Recommended resolution:** pre-Phase-4 gate — one dedicated sweep before any public deploy. Overlaps with [[FU-409]] auth findings re-audit + [[FU-424]] senior-review Tier-2.
-
-## [OPEN] FU-385 — Dashboard: DashboardCard extraction + "new low" signal
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `IMPL_PLAN_DASHBOARD_REBUILD.md:263` — DashboardCard extraction was **not** done; zones ship via CSS instead of a shared card component. `:320` — the "new low" server-side signal was **not built** (needed for the dashboard's "just went low" surface).
-- **Why deferred:** dashboard rebuild landed without them; not blocking.
-- **Recommended resolution:** when Dashboard next opens for change — extract the shared card component (R-002 componentisation) and add the server-side new-low signal. *(2026-07-07: dropped the "feeds into FU-352 Dora Score" line — FU-352 closed with a keep-coexisting decision, so this work is scoped to the shared card component itself, not a new Score-card row.)*
 
 ## [OPEN] FU-383 — Onboarding: "preferred stores/merchants" step not built
 - **Raised:** 2026-07-01 (proposals audit).

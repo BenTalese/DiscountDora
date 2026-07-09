@@ -11,6 +11,7 @@ from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
                                            ALLOWED_LLM_PROVIDERS,
                                            ALLOWED_THEMES,
                                            ALLOWED_VOICE_ENGINES,
+                                           GOOD_DEAL_THRESHOLD_VALUES,
                                            LLM_PROVIDERS_REQUIRING_API_KEY,
                                            NUTRITION_MODE_COMPLEX,
                                            NUTRITION_MODE_VALUES, User)
@@ -121,6 +122,9 @@ class UpdateMeRequest(BaseModel):
     # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Plain bool;
     # null is ignored (leave untouched). Independent of `llm_enabled`.
     show_assistant: bool | None = None
+    # FU-450 — `good_deal` alert threshold ("good" | "great"). Closed-set
+    # sentinel, validated below. Null ignored (leave untouched).
+    good_deal_alert_threshold: str | None = Field(default=None, max_length=16)
 
 
 class UpdateMeHandler:
@@ -299,6 +303,13 @@ class UpdateMeHandler:
         # FU-360.6 — show/hide the Dora helper bubble. Plain bool; null ignored.
         if "show_assistant" in _SetFields and request.show_assistant is not None:
             _User.show_assistant = request.show_assistant
+
+        # FU-450 — good_deal alert threshold. Closed-set sentinel.
+        if "good_deal_alert_threshold" in _SetFields and request.good_deal_alert_threshold is not None:
+            threshold = request.good_deal_alert_threshold
+            if threshold not in GOOD_DEAL_THRESHOLD_VALUES:
+                return None, f"Invalid good-deal alert threshold '{threshold}'."
+            _User.good_deal_alert_threshold = threshold
 
         if "llm_enabled" in _SetFields and request.llm_enabled is not None:
             _User.llm_enabled = request.llm_enabled

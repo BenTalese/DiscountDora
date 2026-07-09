@@ -9,6 +9,78 @@ next.
 
 ---
 
+## 2026-07-09 — FU-385 closed as stale duplicate: DashboardCard + new-low signal both already shipped
+
+**Why:** User asked to do FU-385. Verified against current code first (lesson from the FU-407/408 walk).
+
+- **DashboardCard extraction** → already done by **FU-293** (2026-06-24). `web_app/src/components/dashboard/DashboardCard.vue` exists, all 15 card instances converted, shell SCSS moved in.
+- **Server "new low" signal** → already done by **FU-296** (2026-07-03). `PriceDropsHandler` in `reports.py:877` + `GET /api/reports/price-drops` computes strictly-below-all-historic-`price_now`; client `price_drops` widget on the dashboard.
+- **Action:** none needed. FU-385 was a stale audit entry that missed the close-outs. Moved to resolved archive with cross-refs to both source FUs.
+
+**Cost:** ~5 min verifying + bookkeeping. This is the third stale-audit find in a row (FU-407 already-visible, FU-408 doc-only, FU-385 already-shipped) — reinforces the "verify before implementing" habit.
+
+---
+
+## 2026-07-09 — FU-407 + FU-408 resolved: substitute-swap gating (RD-18) + stale-doc fix
+
+**Why:** User asked if 407/408 were still relevant. Verified against live code first — the 2026-07-01 notes were stale.
+
+- **FU-407 (design call → "small polish + close"):** the swap is already a visible per-line icon button (`ShoppingListDetail.vue:901`), not the "buried menu action" the note claimed, and the two-"Substitute" collision was already gone ("store offers" vs "Swap with substitute"). So no rework/cut — just:
+  - **RD-18 `has_substitutes`** on the line DTO (`get_shopping_list_detail` bulk-queries the undirected `StockItemSubstitute` table once; sets the flag per line). SPA disables the swap button when false with a clear tooltip — kills the tap→"no substitutes recorded" dead-end. Test: `test_line_has_substitutes.py`.
+  - Relabelled the swap tooltip ("Swap for a substitute item" / "No substitutes recorded…") to keep it distinct from the store-offers picker.
+- **FU-408 (doc-only):** corrected 3 stale "not built here — Shop Mode (INV-8)" cross-refs in `IMPL_PLAN_STOCK_ITEM_DETAIL.md` (Shop Mode merged into ShoppingListDetail; the swap ships there). Wasn't really blocked by FU-407 — the correction stood alone.
+
+**Verification:** full suite **889 pass / 9 pre-existing-unrelated fail**; `vue-tsc` clean (only pre-existing `draft_shop`). **Close-gate:** `has_substitutes` follows the same server-owned-line-flag pattern as `deferred_by_budget` (R-003); one bulk query, no N+1; no new rule.
+
+**Bookkeeping:** [[FU-407]] + [[FU-408]] → RESOLVED (archive). CHANGELOG `Changed`. DORA_VERIFY swap-gating block (Shopping lists).
+
+---
+
+## 2026-07-09 — FU-432 resolved: recipe personal notes shipped (RD-29); other RD items already-done/dropped
+
+**Why:** User asked what FU-432 needed. Walked the Recipe-Detail audit rows; only one design call remained.
+
+- **RD-11 (per-ingredient notes) → DROPPED** by the user (anti-creep). The reasonable version is a single recipe-level note → RD-29.
+- **RD-3 (filterable ingredient picker) → already satisfied** (FU-506 rebuild wired `use-input`/`@filter`/create+free-text). **RD-33 (Log-cook placement) → already satisfied** (Chunk-4 toolbar already groups it). **RD-18 → dup of [[FU-407]]**. Verified all three against current code before claiming done (the audit was stale).
+- **RD-29 (personal notes) → SHIPPED end-to-end:** new `Recipe.notes` free-text (entity + `table_mappings` + migration `f4b2d8e6a1c3` + `RecipeDto`/from_entity via `getattr` + create/update/new-version handlers + editor textarea on the detail page) surfaced in cook mode under the steps. `from_entity` reads `notes` defensively because cookability unit tests pass `SimpleNamespace` fixtures without the attr — caught by the suite, fixed with `getattr`.
+
+**Verification:** full backend suite **886 pass / 9 pre-existing-unrelated fail** (unchanged baseline); new `test_recipe_notes.py` (2) green; `vue-tsc` clean (only the 3 pre-existing `draft_shop` errors). **Engineering close-gate:** notes reuses the generic nullable-attr update path + shared cost module; no new rule/ADR.
+
+**Bookkeeping:** [[FU-432]] → RESOLVED (archive). CHANGELOG `Added`. DORA_VERIFY cook-mode notes block. Migration head now `f4b2d8e6a1c3` (3 new this session: `d2f8`→`e3a9`→`f4b2`).
+
+---
+
+## 2026-07-09 — FU-450 + FU-451 done: deal-quality signal + budget-defense recipe swaps (6 chunks, end-to-end)
+
+**Why:** Both design-locked in `PROPOSAL_BUDGET_DEFENSE_SWAPS.md`; picked up as the next Phase-1 loop-progression item. Built all 6 chunks in one session (user chose "continue now, all chunks" after a mid-session scope decision — see below).
+
+### FU-450 — deal-quality (chunks 1-3)
+- **`features/deals/deal_quality.py`** — pure `compute_deal_quality` (band-only enum poor/fair/good/great from a "cheapness percentile"; `fake_markdown` = merchant claims a saving AND current unit price ≥ household median paid) + repo-backed `get_deal_quality`. 10 unit tests.
+- **Buy Verdict** — a linked product's fake markdown demotes a *price-driven* `buy` → `wait` with "Markdown looks inflated"; **never** overrides out-of-stock (need wins). 3 composer tests.
+- **`good_deal` alert** — new kind (FYI tier, money-gated), per-user `good_deal_alert_threshold` column (migration `d2f8a1c4b7e9`) + update_me validation + auth DTO + client type + Preferences→Notifications segmented control + AlertsPage mapping + green `--alert-kind-good-deal` token. 4 e2e tests.
+
+### FU-451 — budget-defense swaps, RECIPE SWAPS ONLY (chunks 4-6)
+- **Scope cut mid-session:** user flagged that **product swaps** depend on per-item "usual product" upkeep he deliberately ditched. Confirmed via `AskUserQuestion` → **recipe swaps only**; product-swap half CUT (not deferred). Recorded in the brief's scope-update note; `ProductSwapCandidate`/product chips/product mockup row superseded. FU-450's deal-quality still ships (stands alone for Buy Verdict + good_deal).
+- **`features/meal_plans/swap_suggestions.py`** — pure `rank_recipe_swaps` (best cheaper alternative per uncooked week entry: cookable > tag-similar > household-fav; strangers filtered; servings-scaled; cap 5) + orchestrator computing `cost_per_week`/`projected_over` from `period_spent + week cost > budget`. 3 endpoints (swap-suggestions / apply-swap / undo-swap). `MealPlanSwapLedger` table (migration `e3a9c7b1f2d8`) for deterministic undo. 9 ranker + 4 endpoint tests. New `conflict()` (409) helper in api_response for stale-card guard.
+- **R-003 refactor:** extracted recipe-cost pricing ladder from `get_recipes._compute_estimated_cost` into shared `features/recipes/recipe_cost.py` (batch: 2 queries for N recipes); the detail card + the ranker now price identically. Deleted the old inline body.
+- **SPA:** `SwapSuggestionsPanel.vue` (banner + candidate rows + preview→confirm dialog + session undo banner + zero-state) mounted on the planner; Dashboard budget-card "Save $X this week" signpost. Money-gated throughout.
+
+### Verification
+- Backend: full suite **886 passed**, 9 failed — all 9 pre-existing & unrelated (8× `test_onboarding_seed_filter` fail on a `_FakeRepo.flush` harness gap in `onboarding.py:296`; 1× `test_data_router` CSV-hash). 30 new tests added this session, all green. `vue-tsc` — no new errors (only the 3 pre-existing `draft_shop`/CardId ones in DashboardPage). `vitest` 53/53.
+
+### Engineering-standards close-gate
+- **R-003 (state ownership)** actively *improved* — recipe cost is now single-source. No violations introduced. Deal-quality/budget math all server-side.
+- **New rule/ADR:** none strictly required. Candidate lesson (not promoted): a locked design brief can assume schema that doesn't exist (product swaps' "preferred product") — verify substrate before committing a chunk. The good_deal **throttle** deviates from the brief (stateless freshness vs stateful counter) to preserve the alerts-endpoint "no stored conditions / no GET writes" invariant — logged as **[[FU-516]]**, not a silent drift.
+
+### Bookkeeping
+- **[[FU-450]]** + **[[FU-451]]** → RESOLVED (moved to `DORA_FOLLOWUPS_RESOLVED.md`). New open **[[FU-516]]** (good_deal throttle trade-off).
+- CHANGELOG — two `[Unreleased] > Added` entries. DORA_VERIFY — swap-panel block (Meal plans) + good_deal/fake-markdown block (Alerts). Brief updated with the product-swap cut.
+
+### Next up
+User's pick. FU-516 only matters if the good_deal daily-resurface proves noisy in a browser walk. Otherwise the DORA_VERIFY blocks for FU-450/451 want a running-app pass. Phase-1 loop items remaining: FU-452/351/352.
+
+---
+
 ## 2026-07-08 — FU-515 done: AUTH_ASSISTANT security findings fully triaged (3 shipped, 3 already-fixed, 3 accepted)
 
 **Why:** FU-515 held the 8 medium/low findings left in `AUTH_ASSISTANT_SECURITY_FINDINGS.md` after FU-447 closed A.1/A.2. Verified each against current code before touching anything — several had been silently fixed by later work.

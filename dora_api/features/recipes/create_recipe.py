@@ -121,6 +121,9 @@ class CreateRecipeRequest(BaseModel):
     cuisine_id: UUID | None = None
     difficulty: str | None = Field(default = None, max_length = 50)
     instructions: str | None = None
+    # RD-29 — free-text personal notes (cook's own commentary). Cap generous
+    # for a paragraph or two; distinct from `instructions` (the method).
+    notes: str | None = Field(default = None, max_length = 5000)
     prep_time_minutes: int | None = Field(default = None, ge = 0)
     recipe_collection_id: UUID | None = None
     servings: int | None = Field(default = None, ge = 1)
@@ -288,6 +291,7 @@ class CreateRecipeHandler:
             # stamp at write time so the cookbook "Recently
             # added" sort axis has a stable, recipe-owned timestamp.
             created_at = datetime.now(timezone.utc),
+            notes = request.notes,
         )
 
         self.repository.add(_NewRecipe)

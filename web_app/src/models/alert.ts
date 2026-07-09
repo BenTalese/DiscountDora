@@ -16,7 +16,10 @@ export type AlertKind =
     | 'essential_low'
     // forward-looking nudges (no stock item).
     | 'no_planned_meals'
-    | 'shopping_day';
+    | 'shopping_day'
+    // FU-450 — proactive deal nudge (money-features only). Stock-scoped:
+    // carries the tracked item + the on-special product (target_id).
+    | 'good_deal';
 
 export type Alert = {
     // Stable scoped key `<scope>:<id>:<kind>` — opaque to the client; posted
@@ -137,6 +140,8 @@ export function iconFor(kind: AlertKind): string {
             return ICONS.restaurant;
         case 'shopping_day':
             return ICONS.shopping_cart;
+        case 'good_deal':
+            return ICONS.local_offer;
     }
 }
 
@@ -174,6 +179,8 @@ export function colorForKind(kind: AlertKind): string {
             return 'alert-kind-no-planned-meals';
         case 'shopping_day':
             return 'alert-kind-shopping-day';
+        case 'good_deal':
+            return 'alert-kind-good-deal';
     }
 }
 
@@ -196,6 +203,8 @@ export function kindTheme(kind: AlertKind): string {
             return 'meals to plan';
         case 'shopping_day':
             return 'shopping day';
+        case 'good_deal':
+            return 'good deals';
     }
 }
 
@@ -227,8 +236,10 @@ export function actionsFor(kind: AlertKind): { action: AlertAction; label: strin
             ];
         case 'no_planned_meals':
         case 'shopping_day':
+        case 'good_deal':
             // Navigation-only nudges — acting on them means opening the linked
-            // surface (linkFor), not a server-side state change.
+            // surface (linkFor), not a server-side state change. For good_deal
+            // the linked surface is the stock item, where add-to-list lives.
             return [];
     }
 }

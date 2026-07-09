@@ -28,6 +28,11 @@ DEFAULT_TIER_BY_KIND: dict[str, str] = {
     # forward-looking nudges (no stock item): planner + shopping-day.
     "no_planned_meals": TIER_FYI,
     "shopping_day": TIER_FYI,
+    # FU-450 — proactive deal nudge. FYI by default: it's opportunistic
+    # ("this thing you buy is cheap right now"), not something that *needs*
+    # action, so it shouldn't inflate the bell badge (same posture as
+    # shopping_day despite a medium/high severity). Per-user overridable.
+    "good_deal": TIER_FYI,
 }
 KNOWN_KINDS = frozenset(DEFAULT_TIER_BY_KIND)
 

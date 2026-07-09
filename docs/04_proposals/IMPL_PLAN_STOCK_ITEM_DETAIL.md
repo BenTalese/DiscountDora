@@ -8,7 +8,9 @@
 - **C-5 onboarding (designed)** — adds the `products_enabled` flag this page *consumes* (§2.5).
 - **FU-182** — implements the app-wide Products-off gating; C-1b designs this surface's on/off.
 - **C-7 cart button (done)** — `AddToListButton` + per-product add reused, not re-implemented.
-- **INV-7** (History rework spec), **INV-8** (substitute-swap → Shop Mode), **INV-1** (orphaned
+- **INV-7** (History rework spec), **INV-8** (substitute-swap — its "→ Shop Mode" target is
+  obsolete; Shop Mode merged into ShoppingListDetail and the swap ships there, FU-407/FU-408),
+  **INV-1** (orphaned
   fields), **B8** (recipe-tab dead actions = its residue), **FU-180** (preferred product removed).
 **Phase:** Master plan **Phase 1 polish** — the loop's per-item surface; mostly frontend +
 read-only DTO threading, no schema change.
@@ -80,7 +82,10 @@ splitter config). *Acceptance:* peek opens at 50%; can't drag either pane to an 
 - **Recipes:** listen to `RecipeCard`'s `@toggle-favourite` + `@add-all-to-list` (dropped today);
   confirm row nav. **Shopping-Lists tab:** clickable list rows → the list, "primary" as a styled
   badge, drop the dead arrow. **Substitutes:** chip = level indicator + substitute outline only
-  (L137); the *swap* stays a cross-ref to Shop Mode (INV-8), **not built here**.
+  (L137); the *swap* lives on the shopping list, not here. **[Updated 2026-07-09, FU-408:**
+  Shop Mode was merged into `ShoppingListDetail` (UX v2), and the substitute swap **is** built
+  there — a per-line "Swap for a substitute item" action, gated on `has_substitutes` (FU-407/RD-18).
+  The original "cross-ref to Shop Mode (INV-8), not built here" wording is obsolete.**]**
 - **Risk:** Low. **Close-gate:** R-001 (reuse list/badge components), R-008. *Acceptance:* favourite
   toggle + add-all work; list rows navigate; substitute chips show level + outline.
 
@@ -98,7 +103,8 @@ splitter config). *Acceptance:* peek opens at 50%; can't drag either pane to an 
 ## 2. Sequencing & cross-cutting close-gate
 Order = §1 (C-1b.1 → .5); .1 is the marquee tidy, .5 the meatiest backend-touch. Cross-cutting:
 A1 tokens (R-002); reuse over duplication (R-001); server owns writes/aggregates (R-003); scope
-discipline — **Products-off app-wide sweep is FU-182, substitute-swap is INV-8/Shop Mode** (R-007);
+discipline — **Products-off app-wide sweep is FU-182, substitute-swap ships on the shopping list**
+(no longer "Shop Mode"; FU-407/FU-408) (R-007);
 no dead code (R-008); CHANGELOG + worklog + follow-ups per chunk; e2e + vue-tsc + eslint green.
 Most "✅ already fixed" rows in the proxy table are **confirm-in-browser** items — verify, don't
 re-fix.

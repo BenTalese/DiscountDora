@@ -1,0 +1,141 @@
+"""FU-451 — budget-defense swap endpoints (end-to-end).
+
+Covers the money-features gate, the swap-suggestions shape, and the
+apply → undo round-trip through the real endpoints. The ranker's candidate
+logic is pinned separately in `tests/test_swap_suggestions.py`; here we drive
+apply/undo with an explicit `to_recipe_id` so the round-trip doesn't depend on
+the ranker producing a candidate.
+"""
+import uuid
+from datetime import date
+
+import requests
+
+BASE = "http://localhost:5170/api"
+MEAL_PLANS = f"{BASE}/meal-plans"
+
+
+def _set_money(install_on: bool, user_on: bool) -> None:
+    requests.patch(f"{BASE}/app-settings", json={"money_enabled": install_on})
+    requests.patch(f"{BASE}/auth/me", json={"money_features_enabled": user_on})
+
+
+def _two_recipe_ids() -> tuple[str, str]:
+    items = requests.get(f"{BASE}/recipes?limit=5").json()["items"]
+    assert len(items) >= 2, "seed data should have >= 2 recipes"
+    return items[0]["recipe_id"], items[1]["recipe_id"]
+
+
+def _today() -> date:
+    return date.fromisoformat(requests.get(f"{MEAL_PLANS}/today").json()["today"])
+
+
+def _plan_entries(plan_id: str) -> list:
+    plans = requests.get(f"{MEAL_PLANS}?limit=100").json()["items"]
+    plan = next((p for p in plans if p["meal_plan_id"] == plan_id), None)
+    assert plan is not None, "created plan should be listed"
+    return plan["entries"]
+
+
+def _make_plan_with_entry(recipe_id: str) -> tuple[str, str]:
+    today = _today()
+    created = requests.post(MEAL_PLANS, json={
+        "start_date": today.isoformat(),
+        "entries": [{
+            "recipe_id": recipe_id,
+            "scheduled_for": today.isoformat(),
+            "servings": 2,
+            "slot": "Dinner",
+        }],
+    })
+    assert created.status_code in (200, 201), created.text
+    plan_id = created.json()["meal_plan_id"]
+    entry_id = _plan_entries(plan_id)[0]["meal_plan_entry_id"]
+    return plan_id, entry_id
+
+
+def test__swap_suggestions__shape_and_money_gate(api):
+    recipe_a, _ = _two_recipe_ids()
+    _set_money(install_on=True, user_on=True)
+    # Tiny budget so any priced week is projected over.
+    requests.patch(f"{BASE}/auth/me", json={"budget_amount": 1.0, "budget_period": "weekly"})
+    plan_id, _ = _make_plan_with_entry(recipe_a)
+    try:
+        resp = requests.get(f"{MEAL_PLANS}/{plan_id}/swap-suggestions")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        for key in (
+            "projected_over", "cost_per_week", "cost_per_week_priced_ratio",
+            "budget_amount", "overshoot", "projected_after_applying_all", "candidates",
+        ):
+            assert key in body, f"missing {key}"
+        assert isinstance(body["candidates"], list)
+
+        # Money off → the whole surface zeroes out defensively.
+        _set_money(install_on=True, user_on=False)
+        off = requests.get(f"{MEAL_PLANS}/{plan_id}/swap-suggestions").json()
+        assert off["projected_over"] is False
+        assert off["candidates"] == []
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+        _set_money(install_on=True, user_on=True)
+
+
+def test__apply_and_undo_swap__round_trips_the_entry_recipe(api):
+    recipe_a, recipe_b = _two_recipe_ids()
+    _set_money(install_on=True, user_on=True)
+    plan_id, entry_id = _make_plan_with_entry(recipe_a)
+    try:
+        applied = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
+            "kind": "recipe", "entry_id": entry_id, "to_recipe_id": recipe_b,
+        })
+        assert applied.status_code == 200, applied.text
+        ledger_id = applied.json()["swap_ledger_id"]
+
+        after = _plan_entries(plan_id)
+        assert after[0]["recipe_id"] == recipe_b, "entry should now hold the swapped recipe"
+
+        undone = requests.post(f"{MEAL_PLANS}/{plan_id}/undo-swap", json={
+            "swap_ledger_id": ledger_id,
+        })
+        assert undone.status_code == 200, undone.text
+
+        restored = _plan_entries(plan_id)
+        assert restored[0]["recipe_id"] == recipe_a, "undo should restore the original recipe"
+
+        # Second undo of the same ledger row is rejected.
+        again = requests.post(f"{MEAL_PLANS}/{plan_id}/undo-swap", json={
+            "swap_ledger_id": ledger_id,
+        })
+        assert again.status_code == 422, again.text
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
+def test__apply_swap__stale_expected_from_recipe__conflicts(api):
+    recipe_a, recipe_b = _two_recipe_ids()
+    _set_money(install_on=True, user_on=True)
+    plan_id, entry_id = _make_plan_with_entry(recipe_a)
+    try:
+        resp = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
+            "kind": "recipe", "entry_id": entry_id, "to_recipe_id": recipe_b,
+            "expected_from_recipe_id": str(uuid.uuid4()),  # not the real current recipe
+        })
+        assert resp.status_code == 409, resp.text
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
+def test__apply_swap__money_off__rejected(api):
+    recipe_a, recipe_b = _two_recipe_ids()
+    _set_money(install_on=True, user_on=True)
+    plan_id, entry_id = _make_plan_with_entry(recipe_a)
+    _set_money(install_on=True, user_on=False)
+    try:
+        resp = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
+            "kind": "recipe", "entry_id": entry_id, "to_recipe_id": recipe_b,
+        })
+        assert resp.status_code == 422, resp.text
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+        _set_money(install_on=True, user_on=True)

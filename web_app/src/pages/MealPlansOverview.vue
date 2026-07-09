@@ -191,6 +191,13 @@
                             <q-tooltip>Next week</q-tooltip>
                         </BaseButton>
                     </div>
+
+                    <!-- FU-451 — budget-defense swaps (renders itself only when
+                         money features are on AND the week is over budget). -->
+                    <SwapSuggestionsPanel
+                        :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
+                        @changed="onSwapApplied"
+                    />
                 </div>
 
                 <!-- ── Right: calendar + shopping summary ─────────────────── -->
@@ -346,7 +353,9 @@
     import MealPlanWeekDayCard from 'src/components/MealPlanWeekDayCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import SequentialBuilderDialog from 'components/SequentialBuilderDialog.vue';
+    import SwapSuggestionsPanel from 'src/components/SwapSuggestionsPanel.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
     // target-count sourced from the user's `meals_per_week` pref
     // via this composable (fallback 7 when unset).
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
@@ -356,7 +365,16 @@
 
     const planner = useMealPlanner();
     const { mealsPerWeek } = useMealsPerWeek();
+    const mealPlanStore = useMealPlanStore();
     const $q = useQuasar();
+
+    // FU-451 — a budget-defense swap mutates a meal-plan entry's recipe via a
+    // dedicated endpoint, so reload the plans (week grid) + ingredient demand
+    // to reflect it.
+    async function onSwapApplied() {
+        await mealPlanStore.getMealPlansAsync();
+        await planner.loadIngredients();
+    }
 
     // FU-304 closed 2026-07-07 — Direction A wins. The A/B view helper
     // (`useMealPlannerView`), the desktop `BaseSegmented` toggle, and the

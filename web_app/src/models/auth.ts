@@ -143,5 +143,8 @@ export type AuthenticatedUser = {
     // FU-360.6 — whether the Dora helper bubble is mounted at all. Default
     // true; distinct from `llm_enabled` (that switches AI mode only).
     show_assistant: boolean;
+    // FU-450 — good_deal alert threshold. 'good' nudges on good + great
+    // bands; 'great' only on the top band. Money-features surface only.
+    good_deal_alert_threshold: 'good' | 'great';
 };
 export type LlmProvider = NonNullable<AuthenticatedUser['llm_provider']>;

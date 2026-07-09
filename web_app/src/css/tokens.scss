@@ -163,6 +163,7 @@
     --alert-kind-stocktake-overdue:  light-dark(hsl(200 18% 40%), hsl(200 18% 62%));  /* was blue-grey-6 */
     --alert-kind-no-planned-meals:   light-dark(hsl(174 100% 27%), hsl(174 55% 58%)); /* was teal-6 */
     --alert-kind-shopping-day:       light-dark(hsl(231 48% 48%),  hsl(231 55% 70%)); /* was indigo-5 */
+    --alert-kind-good-deal:          light-dark(hsl(142 60% 32%),  hsl(142 45% 55%)); /* FU-450 — savings green */
 
     /* Alert-history chip states — snoozed reuses severity-medium (still
        active), read is a distinct muted blue-grey. */

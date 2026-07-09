@@ -280,6 +280,12 @@ top-to-bottom.
 
 ## Cook mode
 
+### Recipe personal notes in cook mode — origin FU-432 (RD-29)
+- [ ] Edit a recipe on the detail page → the new **Personal notes** field (below Source URL) saves and round-trips (reload shows it); distinct from the instructions/steps field.
+- [ ] Enter cook mode for that recipe → a **"Your notes"** card renders under the step navigation (above the ingredients panel), preserving line breaks.
+- [ ] A recipe with **no** note → no notes card in cook mode (not an empty box).
+- [ ] Make a **new version** of a recipe that has a note → the note carries onto the new version.
+
 ### Cook Mode Chunks 1–3 — origin FU-096
 - [ ] Chunk 3 ingredient grouping: open cook mode for a recipe with ingredients across several locations → one card per *base* location (sub-areas collapse); no-location ingredients land in "No location" group
 - [ ] No mid-cook stock-level chips: StockItemChip gone from the row; substitute chips + undo still render
@@ -321,6 +327,16 @@ top-to-bottom.
 ---
 
 ## Meal plans
+
+### Budget-defense recipe swaps (Suggestions panel) — origin FU-451
+- [ ] With **money features on** and a **budget set**, build a meal-plan week that's projected over budget (priced recipes summing past the budget). A **Suggestions** panel renders below the week grid: "Over budget by $X", Est. week cost + Budget figures, "N swaps could bring it back to $Y".
+- [ ] Each candidate row reads "Recipe swap · <Day> <Slot>", shows the from→to recipe names, a reason chip (uses-stock / same-style / cooked-before), and a **−$saved** figure. **Preview** opens a dialog with the after-cost, the saving, and any missing ingredients.
+- [ ] **Apply swap** → the week grid updates to the swapped recipe, a "Swap applied · Undo" banner appears. **Undo** restores the original recipe.
+- [ ] The Dashboard **budget card** shows a "Save $X this week — N swaps ready · See suggestions →" bullet with the same total; clicking it lands on the planner.
+- [ ] A meal already marked **cooked/consumed** never appears as a swap candidate.
+- [ ] **Money features off** → no Suggestions panel, no dashboard bullet at all.
+- [ ] Zero-state: contrive a week that's over budget but where no alternative is cheaper → panel shows "No swap saves you money this week" + an **Open shopping lists** link.
+- [ ] Apply a swap, then (in another tab / after editing the week) apply the *same stale* card → server returns a 409 "out of date" and the toast surfaces it; refreshing re-fetches.
 
 ### Unlinked-ingredient warning after meal-plan → shopping list — origin FU-505
 - [ ] Build a meal plan for the week where at least one planned recipe has an ingredient with **no linked stock item** (either a paste-imported recipe that never got linked, or one you added a "Use as free text" ingredient to per FU-506)
@@ -401,6 +417,12 @@ top-to-bottom.
 ---
 
 ## Shopping lists
+
+### Substitute-swap gating on a line — origin FU-407 (RD-18)
+- [ ] A shopping-list line whose stock item **has** a recorded substitute → the swap (⇄) icon is enabled; tooltip "Swap for a substitute item"; tapping opens the substitute chooser.
+- [ ] A line whose item has **no** substitute → the swap icon is **disabled**; tooltip "No substitutes recorded for this item" (no dead-end tap→toast).
+- [ ] The swap affordance reads as distinct from the "store offers" picker on the same line (no "two Substitute labels" confusion).
+- [ ] Product-only line (no stock item) → swap disabled.
 
 ### Put-away dialog on a finished list — origin FU-452
 - [ ] Finish a list with a mix of ticked lines whose stock items live in different locations (Fridge, Pantry, Freezer) plus at least one item with no location set → list transitions to `done` → toolbar shows a primary **Put away** button next to *Copy to new list*.
@@ -994,6 +1016,12 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] **C-9.4 forward-looking nudges:** with next week's plan empty, `no_planned_meals` FYI row shows and deep-links to `/meal-plans`; planning a meal clears it. `shopping_day` FYI row shows for a list with `planned_shop_date` within 3 days, deep-links; marking list done clears it. Both render through shared `AlertRow` (icon/colour/theme), no stock name, snooze/dismiss work
 - [ ] **C-9.5 subscriptions / price-watch tier:** money flag ON + armed price alert → Price watch region lists it (product · merchant · "notify below $X" · last-alerted); View opens price-history explorer with that product; Remove deletes (row gone + toast); empty-state clean; hidden when money flag OFF
 - [ ] **C-9.6 Upcoming fortnight timeline (Phase A):** Upcoming mini-calendar renders on hub; days with events show correct per-category dots (warning expiry, primary shopping, positive meal); out-of-window dimmed, today ringed; clicking a day expands its detail list + links navigate (expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`); refresh works; empty-state clean; dark-mode clean (token dots survive theme switch)
+
+### good_deal alerts + fake-markdown buy verdict — origin FU-450
+- [ ] **Money features on.** For a product linked to a tracked stock item, add a *fresh* offer that's the lowest it's been (great band) → an alert appears in AlertsPage: "«item» — «brand product» is at its lowest price in months · $X · usually $Y", green tag icon, FYI tier (doesn't inflate the bell badge). Tapping it opens the stock item (where add-to-list lives).
+- [ ] **Threshold.** Settings → Notifications → **Deal alerts** shows a "Good & great" / "Great only" segmented control (only when money features are on). Set "Great only" → a merely-`good`-band product stops alerting; a `great` one still does.
+- [ ] **fake markdown.** For a product where the merchant claims a "special" (was > now) but you've logged paying *less* recently (price observations below the special) → the item's **Buy Verdict** card shows "Markdown looks inflated — you've paid less than this 'special' recently" and a price-driven `buy` reads as **wait**. An out-of-stock item stays **buy** (need wins) but still shows the inflated-markdown reason.
+- [ ] **Money off** → no Deal-alerts settings section, no `good_deal` alerts, no fake-markdown demotion.
 
 ### C-9.7 alerts email digest — origin FU-205
 - [ ] Settings → Preferences shows new "Alerts email digest" card after Weekly deals; heading + caption read across all themes

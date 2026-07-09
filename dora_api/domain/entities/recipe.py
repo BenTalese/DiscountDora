@@ -72,6 +72,12 @@ class Recipe(BaseEntity):
     # cookbook "Recently added" sort axis. Stamped by the create handlers
     # at write time.
     created_at: datetime
+    # RD-29 — free-text personal notes about the recipe ("I halve the
+    # chilli", "kids' favourite"). Distinct from `instructions` (the method):
+    # this is the cook's own commentary, surfaced in cook mode under the
+    # steps. NULL when unset. Default keeps every existing `Recipe(...)`
+    # construction working without passing it.
+    notes: str | None = None
 
     class Fields(BaseEntity.Fields):
         AVAILABLE_MEALS = "available_meals"
@@ -94,6 +100,7 @@ class Recipe(BaseEntity):
         KCAL = "kcal"
         STEPS_MODE = "steps_mode"
         CREATED_AT = "created_at"
+        NOTES = "notes"
 
 
 ALLOWED_STEPS_MODES = ("structured", "freeform", "image")

@@ -114,6 +114,8 @@ class UpdateRecipeRequest(BaseModel):
     cuisine_id: UUID | None = None
     difficulty: str | None = None
     instructions: str | None = None
+    # RD-29 — free-text personal notes. Explicit null clears.
+    notes: str | None = Field(default = None, max_length = 5000)
     is_favourite: bool | None = None
     prep_time_minutes: int | None = None
     recipe_collection_id: UUID | None = None
@@ -171,7 +173,7 @@ class UpdateRecipeResponse:
 # are FK relationships resolved separately below.
 _NULLABLE_PLAIN_ATTRS = (
     "cook_time_minutes", "difficulty",
-    "instructions", "prep_time_minutes",
+    "instructions", "notes", "prep_time_minutes",
     "servings", "source", "time_of_day", "kcal",
 )
 

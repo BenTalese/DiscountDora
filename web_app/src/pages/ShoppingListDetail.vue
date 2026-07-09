@@ -897,10 +897,14 @@
                                                 variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.swap_horiz"
-                                                :disable="detail.status === 'done' || !line.stock_item_id"
+                                                :disable="detail.status === 'done' || !line.stock_item_id || !line.has_substitutes"
                                                 @click="onSwapSubstitute(line)"
                                             >
-                                                <q-tooltip>Swap with substitute</q-tooltip>
+                                                <q-tooltip>
+                                                    {{ line.has_substitutes
+                                                        ? 'Swap for a substitute item'
+                                                        : 'No substitutes recorded for this item' }}
+                                                </q-tooltip>
                                             </BaseButton>
                                             <BaseButton
                                                 variant="danger-icon"

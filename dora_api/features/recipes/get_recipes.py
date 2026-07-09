@@ -15,9 +15,7 @@ from dora_api.domain.recipe_cookability import (cookability_state,
                                                  missing_count_for,
                                                  missing_stock_item_names_for,
                                                  unlinked_count_for)
-from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
-from dora_api.domain.stock_status import (get_stock_item_unit_cost_at, is_low_stock,
-                                          is_missing)
+from dora_api.domain.stock_status import (is_low_stock, is_missing)
 from dora_api.features.recipes.recipe_tag_access import (
     find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
     get_tag_ids_for_recipes,
@@ -226,6 +224,9 @@ class RecipeDto:
     # whether the recipe has an image (the bytes are served via
     # GET /recipes/<id>/image, never inlined in list/detail JSON).
     has_image: bool
+    # RD-29 — free-text personal notes about the recipe (cook's own
+    # commentary). Surfaced in cook mode under the steps; NULL when unset.
+    notes: str | None = None
     # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of REQUIRED ingredients
     # whose ``stock_item_id`` is null. Drives the recipe-detail
     # "N ingredients need linking" prompt and the shopping-list
@@ -334,6 +335,7 @@ class RecipeDto:
             has_image = False,
             dietary_tag_ids = dietary_tag_ids or [],
             steps_mode = recipe.steps_mode or "freeform",
+            notes = getattr(recipe, "notes", None),
         )
 
 
@@ -663,104 +665,21 @@ class GetRecipesHandler:
         regardless of whether the ingredients had priced products.
         """
         import dataclasses
-        from sqlalchemy import func, select
-        from dora_api.app import db
+        from dora_api.features.recipes.recipe_cost import \
+            estimate_cost_for_ingredients
 
         if not dto.ingredients:
             return dto
 
-        # One query: pull each ingredient's stock-item id paired with the
-        # most plausible current-offer price + product size_value (the
-        # denominator for "price per unit"). Join chain:
-        #   RecipeIngredient → StockItemProduct → Product → ProductOffer
-        # If a stock item links to >1 product, pick the cheapest current
-        # offer (simple heuristic; the user can override via favourite
-        # products in a later pass — out of scope for Chunk 9).
-        link_table = db.metadata.tables["StockItemProduct"]
-        product_table = db.metadata.tables["Product"]
-        offer_table = db.metadata.tables["ProductOffer"]
-
-        stock_item_ids = [i.stock_item_id for i in dto.ingredients]
-        stmt = (
-            select(
-                link_table.c.stock_item_id,
-                product_table.c.size_value,
-                func.min(offer_table.c.price_now).label("price_now"),
-            )
-            .select_from(
-                link_table
-                .join(product_table, product_table.c.id == link_table.c.product_id)
-                .join(offer_table, offer_table.c.product_id == product_table.c.id)
-            )
-            .where(
-                link_table.c.stock_item_id.in_(stock_item_ids),
-                product_table.c.is_active.is_(True),
-                offer_table.c.price_now.isnot(None),
-            )
-            .group_by(link_table.c.stock_item_id, product_table.c.size_value)
-        )
-        rows = db.session.execute(stmt).all()
-
-        def _key(v) -> str:
-            if isinstance(v, UUID):
-                return str(v)
-            if isinstance(v, bytes):
-                return str(UUID(bytes=v))
-            return str(v)
-        price_by_stock_item: dict[str, tuple[float, float | None]] = {}
-        for sid, size_value, price in rows:
-            if price is None:
-                continue
-            # If multiple products link to the same stock item we'll see
-            # multiple rows here (different size_values); keep the
-            # cheapest unit-price one as a rough heuristic.
-            unit_price = float(price) / float(size_value) if size_value else float(price)
-            prev = price_by_stock_item.get(_key(sid))
-            if prev is None or unit_price < prev[0]:
-                price_by_stock_item[_key(sid)] = (unit_price, float(size_value or 0) or None)
-
-        # observation fallback: for ingredients whose stock item has
-        # no linked-product price, use the everyday price substrate's unit cost
-        # (PROPOSAL §3.2). Derived via the server helper (R-003).
-        obs_cost_by_item: dict[str, float] = {}
-        _ObsByItem: dict[str, list] = {}
-        for _Obs in self.repository.get(StockItemPriceObservation).all(
-            EntityField(StockItemPriceObservation, "stock_item_id").in_(
-                [i.stock_item_id for i in dto.ingredients]
-            )
-        ):
-            _ObsByItem.setdefault(_key(_Obs.stock_item_id), []).append(_Obs)
-        for _SidKey, _ObsList in _ObsByItem.items():
-            _Cost = get_stock_item_unit_cost_at(_ObsList)
-            if _Cost is not None:
-                obs_cost_by_item[_SidKey] = _Cost
-
-        total = 0.0
-        priced = 0
-        for ing in dto.ingredients:
-            sid = str(ing.stock_item_id)
-            entry = price_by_stock_item.get(sid)
-            if entry is not None:
-                unit_price = entry[0]
-            else:
-                # fall back to the stock item's price observations
-                # when no linked-product offer prices this ingredient.
-                unit_price = obs_cost_by_item.get(sid)
-                if unit_price is None:
-                    continue
-            qty = float(ing.quantity) if ing.quantity is not None else 1.0
-            # Ingredient unit vs product unit reconciliation is hand-wavy
-            # — pass-through math is the documented rough heuristic from
-            # the IMPL plan. Users see this clearly labelled as an
-            # *estimate*.
-            total += qty * unit_price
-            priced += 1
-
+        # R-003 — pricing ladder lives in one place (recipe_cost.py), shared
+        # with the FU-451 swap ranker. This method now just adapts the result
+        # onto the DTO.
+        est = estimate_cost_for_ingredients(self.repository, dto.ingredients)
         return dataclasses.replace(
             dto,
-            estimated_cost=round(total, 2) if priced > 0 else None,
-            estimated_cost_priced_count=priced,
-            estimated_cost_total_count=len(dto.ingredients),
+            estimated_cost=est.estimated_cost,
+            estimated_cost_priced_count=est.priced_count,
+            estimated_cost_total_count=est.total_count,
         )
 
     def _hydrate_has_image(self, dtos: list[RecipeDto]) -> list[RecipeDto]:

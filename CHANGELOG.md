@@ -5,7 +5,54 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Substitute-swap on shopping lists only offers when there's a substitute —
+  FU-407 / RD-18 (2026-07-09).** The per-line "Swap with substitute" button used
+  to be a dead-end for items with no recorded substitute (tap → "No substitutes
+  recorded" toast). Lines now carry a server-derived `has_substitutes` flag, so
+  the action is disabled up front with a clear tooltip ("No substitutes recorded
+  for this item" vs "Swap for a substitute item"). The relabel also
+  disambiguates it from the "store offers" picker on the same line.
+
 ### Added
+- **Personal notes on a recipe — RD-29 / FU-432 (2026-07-09).** A recipe now has
+  an optional free-text **Personal notes** field (distinct from the method /
+  instructions) — "I halve the chilli", "kids' favourite", "serve with rice". Edit
+  it on the recipe detail page; it shows in **cook mode under the steps** where
+  it's handy mid-cook. Notes carry across recipe versions. Migration
+  `f4b2d8e6a1c3`. (Closes FU-432: RD-11 per-ingredient notes was dropped as creep;
+  RD-3 filterable ingredient picker + RD-33 "Log cook" toolbar placement were
+  already satisfied by earlier work.)
+- **Budget-defense recipe swaps — FU-451 (2026-07-09).** When a meal-plan week
+  is *projected* to blow your grocery budget, the planner now shows a
+  **Suggestions** panel offering cheaper **recipe swaps** to bring it back under —
+  a non-destructive alternative to cutting the shopping list. Each suggestion is
+  the best cheaper alternative for a given meal ("Thursday dinner: Beef stroganoff
+  → Chicken tray-bake, −$4.10 · uses stock you have"), ranked by saving, capped at
+  five. Preview → confirm → apply, with a session Undo (a fresh reverse action,
+  backed by a `MealPlanSwapLedger` audit row; migration `e3a9c7b1f2d8`). The
+  Dashboard budget card gains a "Save $X this week — N swaps ready" signpost that
+  deep-links to the planner. Money-features-gated; hidden entirely when off.
+  Endpoints: `GET/POST /api/meal-plans/<id>/{swap-suggestions,apply-swap,undo-swap}`.
+  **Product/brand swaps were cut** (not built) — they'd require per-item "usual
+  product" upkeep that isn't in the product direction; recipe swaps are the whole
+  lever. Recipe cost estimation was extracted to a shared `recipe_cost` module
+  (R-003) so the ranker and the recipe-detail card price recipes identically.
+- **Deal-quality signal + proactive "good deal" alerts — FU-450 (2026-07-09).**
+  Dora now judges how good a product's current price really is, using the
+  product's own offer history *and* your household's real paid prices as ground
+  truth. Two user-visible results (money features only): (1) the **Buy Verdict**
+  card now flags an inflated "special" — if a merchant claims a saving but you've
+  paid less recently, a `buy` is demoted to `wait` with *"Markdown looks
+  inflated — you've paid less than this 'special' recently"*; (2) a new
+  **good-deal alert** nudges you when something you track hits a genuinely good
+  price ("Peanut butter — Homebrand is at its lowest price in months · $2.50 ·
+  usually $4.50"), tap-through to the item to add it to a list. A new
+  **Settings → Notifications → Deal alerts** control chooses the threshold
+  ("Good & great" vs "Great only"; migration `d2f8a1c4b7e9`, default good). The
+  whole surface is hidden when money features are off. Fake markdowns can never
+  qualify as a good deal. This is the upstream half (P6-03 survivors) of the
+  budget-defense-swaps design (`PROPOSAL_BUDGET_DEFENSE_SWAPS.md`).
 - **Dora Basic mode can now add to your shopping list by typing — FU-429 (2026-07-08).**
   Basic mode (the rule-based assistant that runs by default with no language
   model configured) was answer-only: it could tell you your list *status* but

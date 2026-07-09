@@ -66,4 +66,66 @@ export default class MealPlanApiService {
         await this.httpClient.post<MealPlanIngredient[], { recipes: { recipe_id: string; servings: number }[] }>(
             '/meal-plans/preview-ingredients', { recipes },
         );
+
+    // ── FU-451 — budget-defense recipe swaps ──────────────────────────
+
+    getSwapSuggestionsAsync = async (mealPlanId: string): Promise<SwapSuggestions> =>
+        await this.httpClient.get<SwapSuggestions>(`/meal-plans/${mealPlanId}/swap-suggestions`);
+
+    applySwapAsync = async (
+        mealPlanId: string, command: ApplySwapCommand,
+    ): Promise<ApplySwapResult> =>
+        await this.httpClient.post<ApplySwapResult, ApplySwapCommand>(
+            `/meal-plans/${mealPlanId}/apply-swap`, command,
+        );
+
+    undoSwapAsync = async (
+        mealPlanId: string, swapLedgerId: string,
+    ): Promise<UndoSwapResult> =>
+        await this.httpClient.post<UndoSwapResult, { swap_ledger_id: string }>(
+            `/meal-plans/${mealPlanId}/undo-swap`, { swap_ledger_id: swapLedgerId },
+        );
 }
+
+/** Mirrors RecipeSwapCandidate from dora_api swap_suggestions.py. */
+export type RecipeSwapCandidate = {
+    kind: 'recipe';
+    entry_id: string;
+    entry_scheduled_for: string;
+    entry_slot: string;
+    from_recipe_id: string;
+    from_recipe_name: string;
+    to_recipe_id: string;
+    to_recipe_name: string;
+    saved: number;
+    reason_chip: 'cheaper_recipe_cookable' | 'cheaper_recipe_similar' | 'cheaper_recipe_household_fav';
+    missing_ingredient_names: string[];
+};
+
+export type SwapSuggestions = {
+    projected_over: boolean;
+    cost_per_week: number;
+    cost_per_week_priced_ratio: { priced: number; total: number; unpriced_recipe_ids: string[] };
+    budget_amount: number | null;
+    overshoot: number;
+    projected_after_applying_all: number;
+    candidates: RecipeSwapCandidate[];
+};
+
+export type ApplySwapCommand = {
+    kind: 'recipe';
+    entry_id: string;
+    to_recipe_id: string;
+    expected_from_recipe_id?: string;
+};
+
+export type ApplySwapResult = {
+    swap_ledger_id: string;
+    new_cost_per_week: number;
+    new_projected_over: boolean;
+};
+
+export type UndoSwapResult = {
+    new_cost_per_week: number;
+    new_projected_over: boolean;
+};

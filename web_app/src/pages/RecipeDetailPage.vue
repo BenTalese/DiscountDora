@@ -717,6 +717,22 @@
                         </q-card-section>
                     </q-card>
 
+                    <!-- ── RD-29 — Personal notes (optional) ──────────────── -->
+                    <q-card flat bordered class="q-mb-md">
+                        <q-card-section>
+                            <q-input
+                                v-model="form.notes"
+                                outlined
+                                dense
+                                autogrow
+                                type="textarea"
+                                label="Personal notes (optional)"
+                                placeholder="Your own notes — tweaks you make, who liked it, what to serve it with. Shown in cook mode under the steps."
+                                @update:model-value="markDirty"
+                            />
+                        </q-card-section>
+                    </q-card>
+
                     <!-- freeform Nutrition field deliberately
                          no longer rendered/edited. The simple-mode kcal
                          input lives next to servings/prep/cook above. The
@@ -1200,6 +1216,8 @@
         cuisine_id: string | null;
         difficulty: string | null;
         instructions: string | null;
+        // RD-29 — free-text personal notes about the recipe.
+        notes: string | null;
         prep_time_minutes: number | null;
         recipe_collection_id: string | null;
         servings: number | null;
@@ -1268,6 +1286,7 @@
         cuisine_id: null,
         difficulty: null,
         instructions: null,
+        notes: null,
         prep_time_minutes: null,
         recipe_collection_id: null,
         servings: null,
@@ -1328,6 +1347,7 @@
             cuisine_id: source.cuisine_id,
             difficulty: source.difficulty,
             instructions: source.instructions,
+            notes: source.notes,
             prep_time_minutes: source.prep_time_minutes,
             recipe_collection_id: source.recipe_collection_id,
             servings: source.servings,
@@ -1798,6 +1818,7 @@
             if (form.cook_time_minutes !== src.cook_time_minutes) command.cook_time_minutes = toIntOrNull(form.cook_time_minutes);
             if (form.difficulty !== src.difficulty) command.difficulty = form.difficulty;
             if (form.instructions !== src.instructions) command.instructions = form.instructions;
+            if (form.notes !== src.notes) command.notes = form.notes;
             // always send `steps` so the server knows whether
             // this save replaces the structured set or clears it (freeform
             // mode sends []). Map the editor's EditableStep shape into the

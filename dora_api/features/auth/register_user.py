@@ -132,6 +132,9 @@ class AuthenticatedUserDto:
     # True; distinct from `llm_enabled` (AI mode). When False the SPA hides
     # the launcher entirely.
     show_assistant: bool
+    # FU-450 — `good_deal` alert threshold ("good" | "great"). Drives the
+    # Preferences → Notifications toggle; consulted only for money-features users.
+    good_deal_alert_threshold: str
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -183,6 +186,7 @@ class AuthenticatedUserDto:
             llm_model=user.llm_model,
             has_llm_api_key=user.llm_api_key_encrypted is not None,
             show_assistant=bool(user.show_assistant),
+            good_deal_alert_threshold=user.good_deal_alert_threshold,
         )
 
 

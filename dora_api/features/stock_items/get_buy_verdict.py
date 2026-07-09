@@ -161,6 +161,11 @@ class _AxisInputs:
     stock_level_band: str = "unknown"        # "out" | "low" | "stocked" | "unknown"
     is_on_open_list: bool = False            # drives one_tap_action for "skip"
     today: date = field(default_factory=date.today)
+    # FU-450 — at least one product linked to this item is currently
+    # running an inflated "special" (claims a saving, but the household has
+    # paid less recently). Demotes a price-driven `buy` to `wait` and
+    # surfaces the honesty reason. See `deals/deal_quality.py`.
+    fake_markdown: bool = False
 
 
 # ── Per-axis composers — pure, testable ───────────────────────────────
@@ -427,6 +432,23 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     if thin:
         confidence = _step_down(confidence)
 
+    # FU-450 — an inflated markdown on a linked product is an honesty
+    # signal, not a need signal. It demotes a *price-driven* `buy` to
+    # `wait` (don't celebrate a fake special) but never overrides a genuine
+    # `out_of_stock` need — you're out, you need it regardless of whether
+    # this particular "special" is real. Either way the reason surfaces so
+    # the card is honest (Charter P8). Skipped on the thin-data early return
+    # above — no verdict there to demote.
+    if inputs.fake_markdown:
+        reasons.insert(0, VerdictReasonDto(
+            axis="price",
+            signal="fake_markdown",
+            label="Markdown looks inflated",
+            detail="You've paid less than this \"special\" recently.",
+        ))
+        if verdict == "buy" and need_signal != "out_of_stock":
+            verdict, confidence = "wait", "medium"
+
     one_tap = _pick_action(verdict, inputs)
     # attach the time-boxed hint only when the verdict actually
     # landed on `wait`. The helper self-guards on thin/unstable/overdue
@@ -573,7 +595,33 @@ def _gather_inputs(
         stock_level_band=_stock_level_band(item),
         is_on_open_list=is_on_open_list,
         today=today,
+        fake_markdown=_item_has_fake_markdown(repository, item.id),
     )
+
+
+def _item_has_fake_markdown(
+    repository: SqlAlchemyRepository, stock_item_id: UUID,
+) -> bool:
+    """FU-450 — True when any product linked to this stock item is running
+    an inflated markdown right now. Delegates the per-product judgement to
+    the shared `deal_quality` signal (R-003 — one definition of "fake")."""
+    from sqlalchemy import select
+    from dora_api.app import db
+    from dora_api.features.deals.deal_quality import get_deal_quality
+
+    link_table = db.metadata.tables["StockItemProduct"]
+    product_ids = [
+        r[0] for r in db.session.execute(
+            select(link_table.c.product_id).where(
+                link_table.c.stock_item_id == stock_item_id
+            )
+        ).all()
+    ]
+    for pid in product_ids:
+        dq = get_deal_quality(pid, repository)
+        if dq is not None and dq.fake_markdown:
+            return True
+    return False
 
 
 # ── Endpoint ───────────────────────────────────────────────────────────

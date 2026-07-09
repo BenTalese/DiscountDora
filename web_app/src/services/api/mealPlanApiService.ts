@@ -85,6 +85,27 @@ export default class MealPlanApiService {
         await this.httpClient.post<UndoSwapResult, { swap_ledger_id: string }>(
             `/meal-plans/${mealPlanId}/undo-swap`, { swap_ledger_id: swapLedgerId },
         );
+
+    // ── FU-317 — meal-plan reconcile ──────────────────────────────────
+
+    getReconcileQueueAsync = async (
+        params: { cursor?: string; limit?: number } = {},
+    ): Promise<ReconcileQueue> => {
+        const query = new URLSearchParams();
+        if (params.cursor) query.set('cursor', params.cursor);
+        if (params.limit != null) query.set('limit', String(params.limit));
+        const qs = query.toString();
+        return await this.httpClient.get<ReconcileQueue>(
+            `/meal-plans/reconcile-queue${qs ? `?${qs}` : ''}`,
+        );
+    };
+
+    submitReconcileVerbAsync = async (
+        entryId: string, command: ReconcileVerbCommand,
+    ): Promise<ReconcileVerbResult> =>
+        await this.httpClient.post<ReconcileVerbResult, ReconcileVerbCommand>(
+            `/meal-plans/reconcile/${entryId}`, command,
+        );
 }
 
 /** Mirrors RecipeSwapCandidate from dora_api swap_suggestions.py. */
@@ -128,4 +149,72 @@ export type ApplySwapResult = {
 export type UndoSwapResult = {
     new_cost_per_week: number;
     new_projected_over: boolean;
+};
+
+// ── FU-317 — meal-plan reconcile ────────────────────────────────────────
+
+/** Verb vocabulary — must stay in sync with
+ *  `dora_api/features/meal_plans/reconcile.py`'s `_ALLOWED_VERBS`. */
+export type ReconcileVerb =
+    | 'cooked'
+    | 'cooked_adjusted'
+    | 'cooked_later'
+    | 'not_cooked'
+    | 'skip';
+
+/** Receipt state — mirror of
+ *  `dora_api/domain/entities/meal_plan_reconcile_receipt.py`. */
+export type ReconcileState =
+    | 'unresolved_auto'
+    | 'unresolved_manual'
+    | 'resolved_confirmed'
+    | 'resolved_adjusted'
+    | 'resolved_not_cooked'
+    | 'resolved_deferred';
+
+export type ReconcileEntry = {
+    entry_id: string;
+    scheduled_for: string;   // ISO date
+    slot: string;
+    planned_servings: number;
+    recipe: { id: string; name: string };
+    receipt: {
+        state: ReconcileState;
+        original_servings: number;
+        actual_servings: number | null;
+        cooked_on: string | null;
+        created_at: string;
+    };
+};
+
+export type ReconcileQueue = {
+    entries: ReconcileEntry[];
+    next_cursor: string | null;
+    total: number;
+};
+
+export type ReconcileVerbCommand = {
+    verb: ReconcileVerb;
+    /** Required when `verb === 'cooked_adjusted'`. */
+    actual_servings?: number;
+    /** Required when `verb === 'cooked_later'`. ISO date. */
+    cooked_on?: string;
+    /** Free-form user note; persisted on the receipt (surfaced in the
+     *  history view Chunk 5 doesn't ship). */
+    note?: string;
+};
+
+export type ReconcileVerbResult = {
+    entry_id: string;
+    new_pool: number;
+    /** True when the verb didn't change anything (same latest-receipt
+     *  state + fields as the incoming call). */
+    idempotent: boolean;
+    receipt: {
+        state: ReconcileState;
+        original_servings: number;
+        actual_servings: number | null;
+        cooked_on: string | null;
+        created_at: string;
+    };
 };

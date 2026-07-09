@@ -666,6 +666,19 @@
                 <DoraScoreCard />
             </div>
 
+            <!-- ───── FU-317 — reconcile past meals ─────────────────────
+                 Chip-shaped, not a full card. Hide-when-empty is done
+                 inside the component itself; the wrapper still renders
+                 an empty div when isCardVisible is true, so we double-
+                 guard on the composable's `total` for the wrapper too. -->
+            <div
+                v-if="isCardVisible('reconcile_pending') && reconcileTotal > 0"
+                class="col-12 col-sm-6 col-lg-4"
+                :style="{ order: cardCssOrder('reconcile_pending') }"
+            >
+                <ReconcilePastMealsChip />
+            </div>
+
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div
                 v-if="isCardVisible('stock_items')"
@@ -1119,6 +1132,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
+    import ReconcilePastMealsChip from 'src/components/dashboard/ReconcilePastMealsChip.vue';
     import DraftShopCard from 'src/components/dashboard/DraftShopCard.vue';
     import { storeToRefs } from 'pinia';
     import {
@@ -1170,6 +1184,7 @@
     } from 'src/helpers/stockStatus';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useReconcileQueue } from 'src/composables/useReconcileQueue';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useLogPrice } from 'src/composables/useLogPrice';
@@ -1202,7 +1217,10 @@
         // Phase 6 — unified fortnight calendar (D7).
         | 'calendar'
         // kitchen-health score (top of Your kitchen zone).
-        | 'dora_score';
+        | 'dora_score'
+        // FU-317 Chunk 5 — reconcile past meals nudge. Hide-when-empty
+        // (R-029): the component renders nothing when the queue is empty.
+        | 'reconcile_pending';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
     // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
@@ -1269,6 +1287,10 @@
         // detail underneath. `favorite` icon (♥) reads as "health" and
         // isn't already used on the dashboard.
         { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite, zone: 'kitchen' },
+        // FU-317 Chunk 5 — dashboard nudge for the meal-plan reconcile
+        // queue. Card renders nothing when the queue is empty (R-029),
+        // so no `defaultHidden` — the component itself is the gate.
+        { id: 'reconcile_pending', label: 'Reconcile past meals', icon: ICONS.event_note, zone: 'kitchen' },
         { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
     ];
 
@@ -1282,6 +1304,9 @@
     // product data-presence flag (§2.4). Read by `cardAvailable`.
     const { moneyEnabled } = useMoneyEnabled();
     const { products: productsEnabled } = useFeatureFlags();
+    // FU-317 Chunk 5 — reconcile queue count (drives the dashboard chip's
+    // visibility + the meal-plans header nudge). Server-owned total.
+    const { total: reconcileTotal } = useReconcileQueue();
     // Phase 5 — quick actions reuse the shared cross-feature actions so add-to-
     // list / create behave identically to the rest of the app (R-011).
     const { addToList } = useStockItemActions();

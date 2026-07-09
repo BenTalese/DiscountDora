@@ -830,8 +830,12 @@ def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
             "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
     recipe = recipes[0]
+    # FU-317 Chunk 2 — preview shares the same floor rule as the write
+    # (features/recipes/pool.py). Keep them wired to one authority so
+    # a future rule change doesn't drift preview vs commit.
+    from dora_api.features.recipes.pool import preview_pool_after
     current = recipe.available_meals or 0
-    projected = max(0, current + delta)
+    projected = preview_pool_after(current, delta)
     sign = "+" if delta > 0 else ""
     return {
         "type": "adjust_recipe_meals",

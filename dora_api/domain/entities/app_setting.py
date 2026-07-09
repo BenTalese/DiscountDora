@@ -115,6 +115,16 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
+    # FU-317 (D5 install-wide, FU-517) — household-shared posture for the
+    # daily meal-plan reconcile sweep. TRUE (default) keeps today's silent
+    # `reconcile_consumed_meals` drain plus a new receipt the user can
+    # dispute on `/meal-plans/reconcile`. FALSE flips the sweep to write
+    # `unresolved_manual` receipts and leave `MealPlanEntry.consumed_at` +
+    # `Recipe.available_meals` untouched — the reconcile page becomes the
+    # mutation surface. Install-wide (not per-user) because `MealPlan` has
+    # no user_id / household_id — the plan is household-shared, so the
+    # posture must be too. See PROPOSAL_MEAL_RECONCILE.md §2 + §11 D5.
+    auto_drain_past_meals: bool = True
     # FU-511 — install-wide auto-add mode. Replaces the per-item
     # `StockItem.auto_add_when_low` boolean with one setting shared by
     # every item. Values:
@@ -189,6 +199,7 @@ class AppSetting(BaseEntity):
         IMAGE_MAX_DIMENSION = "image_max_dimension"
         STOCKTAKE_DEFAULT_CADENCE_BAND = "stocktake_default_cadence_band"
         STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"
+        AUTO_DRAIN_PAST_MEALS = "auto_drain_past_meals"
         AUTO_ADD_MODE = "auto_add_mode"
         SMTP_HOST = "smtp_host"
         SMTP_PORT = "smtp_port"

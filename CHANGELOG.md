@@ -5,6 +5,91 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Reconcile past meals — the page + dashboard chip + meal-plans header nudge — FU-317 Chunk 5 (2026-07-09).**
+  Dora now surfaces past-day meal-plan entries she assumed you cooked and lets
+  you confirm, adjust, or dispute them one at a time. First user-visible piece
+  of the FU-317 stack (Chunks 1-4 built the receipt table, sweep, pool helper,
+  queue endpoints, alert, and suggestion behind the scenes). New surfaces:
+  - **`/meal-plans/reconcile`** — single-runner page (same shape as
+    Stocktake). Five verbs per entry: **Cooked**, **Different portions**
+    (records actual servings), **Cooked later** (records the actual date),
+    **Didn't cook** (undoes any drain), **Skip for now** (defers). Empty
+    state is a state of the runner; five-counter recap on completion.
+  - **Dashboard "Reconcile N past meals" chip** in the *Your kitchen* zone
+    (hide-when-empty, R-029) — the FU-317 alert and suggestion also
+    surface via the existing bell + suggestions surfaces.
+  - **Meal Plans header nudge** — a small "N past-day meals need
+    confirming →" link above the planner when the queue is non-empty
+    (hide-when-empty).
+  - New `useReconcileQueue` composable — one server-owned queue count
+    powers every surface, so a verb submitted on the page invalidates
+    the chip + header nudge in the same tick.
+- **`meal_reconcile_overdue` alert + `reconcile_meals_pending` suggestion — FU-317 Chunk 4 (2026-07-09).**
+  Backend-only. Two new backward-looking nudges fire off one shared signal
+  (`features/meal_plans/reconcile.py:reconcile_overdue_signal`, R-003) when the
+  reconcile queue has ≥3 unresolved past-day entries stretching ≥4 days back
+  (D1 threshold, locked by impl-plan). The alert lives in `alert_kinds.py` as
+  a `fyi` tier (matches `no_planned_meals` / `shopping_day` — never inflates
+  the badge), keyed `meal:meal_reconcile_overdue:<head_iso>` so a user
+  snooze/dismiss persists while the head-of-queue entry stays there and
+  rolls to a fresh key once cleared. The suggestion generator produces a
+  card that deep-links to `/meal-plans/reconcile` (Chunk 5 registers the
+  page); dedup keyed on the same head-of-queue ISO date. Both surfaces
+  clear the moment the last unresolved entry is resolved.
+- **Meal-plan reconcile queue + verb endpoints (backend only) — FU-317 Chunk 3 (2026-07-09).**
+  Backend-only; no user-visible surface yet (that's Chunk 5). Two new endpoints on the meal-plan router:
+  - `GET /api/meal-plans/reconcile-queue?cursor=<opaque>&limit=<int>` — cursor-paged
+    list of past-day entries whose latest `MealPlanReconcileReceipt` is unresolved
+    (or `resolved_deferred` — the "Skip" verb keeps them in the queue). Includes
+    a `total` count for Chunk 5's dashboard chip. `include_resolved=true` is
+    accepted but returns empty in MVP (history view is Chunk 5).
+  - `POST /api/meal-plans/reconcile/<entry_id>` — five verbs (`cooked` /
+    `cooked_adjusted` / `cooked_later` / `not_cooked` / `skip`) each writing a
+    new append-only receipt against the entry (never mutating past receipts —
+    same `MealPlanSwapLedger`-style shape as FU-451). Pool math goes through
+    Chunk 2's `bump_pool`; `consumed_at` is stamped or cleared to match the
+    target state. Idempotent — a same-verb replay returns `idempotent: true`
+    with no new receipt. A different verb writes a corrective receipt AND
+    applies whatever pool / consumed_at delta lands the entry in the new
+    state (e.g. `cooked` → `not_cooked` restores the drain). Rate-limited
+    60/min per authenticated user via the FU-458 shared `subject` bucket.
+- **`Recipe.available_meals` mutation collapsed to one authority — FU-317 Chunk 2 (2026-07-09).**
+  Backend-only refactor. New shared helper `dora_api/features/recipes/pool.py`
+  with `bump_pool(recipe_id, delta, connection=None) -> int` (atomic
+  `UPDATE ... RETURNING`, floors at zero, works both on the ORM session and on
+  a decoupled `sqlalchemy.engine.Connection`) plus a pure `preview_pool_after`
+  used by preview surfaces. Rewired the three writers — the reconcile sweep,
+  `cook_recipe`, and `adjust_recipe_meals` — through the helper; the assistant
+  confirm-action preview through the pure projection. The floor-at-zero rule
+  no longer lives in two Python handlers plus one SQL CASE WHEN — one place
+  now, `grep -rE '\.available_meals\s*=[^=]' dora_api/` returns only creation /
+  seed sites. Closes the R-003 drift flagged in `PROPOSAL_MEAL_RECONCILE.md`
+  §5.1.
+- **Meal-plan reconcile receipts (backend only) — FU-317 Chunk 1 (2026-07-09).**
+  The daily past-day meal-plan sweep (`reconcile_consumed_meals`) now writes an
+  append-only `MealPlanReconcileReceipt` per drained entry, so the previously
+  silent "we assumed you cooked this" mutation carries an audit trail that
+  Chunks 3-6 will surface via a `/meal-plans/reconcile` page. Chunk 1 is
+  backend-only — **no user-visible change yet**; the receipt table is being
+  populated in the background, ready for the surface work.
+
+  A new install-wide `AppSetting.auto_drain_past_meals` (default TRUE, matches
+  today's behaviour) decides the sweep's branch. TRUE keeps the historic
+  auto-drain (`consumed_at` stamped, `available_meals` decremented) plus writes
+  an `unresolved_auto` receipt. FALSE switches to a "receipt-only" branch — the
+  sweep leaves entries and pool untouched and writes `unresolved_manual`
+  receipts, so nothing consumes silently and the reconcile page (Chunk 5) will
+  own the mutation. Setting is install-wide, not per-user, because `MealPlan` is
+  household-shared (D5 / FU-517). Editable via `PATCH /api/app-settings`;
+  admin-only.
+
+  Migration `a1b7f3e9c2d4` (chains from `f4b2d8e6a1c3`) adds the column +
+  `MealPlanReconcileReceipt` table (FK cascade to `MealPlanEntry`, composite
+  index on `(state, created_at)`). Forward-only, additive, no backfill. Both
+  sweep branches are idempotent across repeat invocations (auto-drain: the
+  `WHERE consumed_at IS NULL` guard; manual: a `NOT EXISTS` receipt-check).
+
 ### Security
 - **P5-01 security & privacy hardening sweep — FU-387 (2026-07-09).** Full
   pre-Phase-4 pass across the six P5-01 buckets (auth & sessions, authorization,

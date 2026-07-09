@@ -54,6 +54,11 @@ class AppSettingsDto:
     stocktake_auto_tuning_enabled: bool
     # FU-511 — install-wide auto-add mode. 'off' | 'essential_only' | 'all'.
     auto_add_mode: str
+    # FU-317 — install-wide meal-plan reconcile posture (D5 install-wide,
+    # FU-517). True keeps today's silent auto-drain; False flips the daily
+    # sweep to write `unresolved_manual` receipts and leave the pool +
+    # entries untouched (see reconcile_consumed_meals.py).
+    auto_drain_past_meals: bool
     # operational config (was `DORA_*` env vars).
     # Bucket-C secrets (SMTP password, VAPID private key) are stored
     # encrypted-at-rest on the row; the DTO exposes a `<field>_configured`
@@ -104,6 +109,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
             getattr(setting, "stocktake_auto_tuning_enabled", True)
         ),
         auto_add_mode=(getattr(setting, "auto_add_mode", None) or "essential_only"),
+        auto_drain_past_meals=bool(getattr(setting, "auto_drain_past_meals", True)),
         smtp_host=getattr(setting, "smtp_host", None) or "",
         smtp_port=int(getattr(setting, "smtp_port", 587) or 587),
         smtp_username=getattr(setting, "smtp_username", None) or "",

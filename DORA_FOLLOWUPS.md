@@ -512,9 +512,11 @@ long session summary. Distinct from the other logs:
   resolved.** The related set is:
   - [[FU-315]] auto-add toast/chip verify
   - [[FU-316]] remembered-list toast + "always ask" setting
-  - [[FU-317]] manual meal-plan reconcile proposal **and** its
-    implementation chunks (the F5 area is the one where the help
-    copy would change most after the new feature lands)
+  - ~~[[FU-317]] manual meal-plan reconcile proposal~~ (proposal
+    done 2026-07-09 → `PROPOSAL_MEAL_RECONCILE.md`) **and its
+    implementation chunks** (the F5 area is the one where the help
+    copy would change most after the new feature lands; impl-plan
+    still pending)
   - [[FU-318]] cheapest-pick chip
   - [[FU-319]] inline-create pantry toast
   Starting this work earlier than that means the help copy goes
@@ -546,43 +548,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fold into the next
   shopping-list-detail polish pass. ~10 LOC.
 - **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F7.
-
-## [OPEN] FU-317 — Proposal: manual meal-plan reconcile feature ("stocktake-mode for meals") + opt-in for auto-drain (F5)
-- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F5 — plan-first).
-- **Type:** proposal / design (no code yet).
-- **What:** `reconcile_consumed_meals` is currently the heaviest implicit
-  behaviour in the app — every dashboard / meal-plan / recipe read
-  silently marks past-day plan entries as consumed and decrements the
-  `Recipe.available_meals` pool. No receipt, no undo, no "did you
-  actually cook this?" check.
-  User wants this thought through before any code touches the
-  reconcile path. The desired shape:
-  1. **Per-user setting**, default **on**, for "auto-drain past-day
-     plans". When off, past-day entries stay unconsumed until the user
-     explicitly confirms them.
-  2. **A new manual-reconcile feature** modelled on stocktake mode —
-     its own page, its own surfacing (alert / dashboard chip), and a
-     UX that **shows the user what *should* have been consumed** since
-     they last reconciled, so they can confirm / amend per-entry
-     before the pool decrements.
-  3. Decide what happens to existing alerts (`no_planned_meals`, etc.)
-     when manual-reconcile is overdue — does an "unreconciled meals"
-     alert fire? At what severity?
-  4. Decide whether auto-drain and manual-reconcile coexist (auto-drain
-     decrements; manual-reconcile lets the user dispute / amend after
-     the fact) or are mutually exclusive (off-by-default users never
-     auto-drain; on-by-default users never reconcile).
-- **Where to write:** new `docs/04_proposals/PROPOSAL_MEAL_RECONCILE.md`.
-  Cross-cut feedback table at the end per the CLAUDE.md mandate.
-- **Why deferred:** Charter-level UX call; needs a designed surface
-  (page + alert + dashboard chip) before the implementation chunks make
-  sense. The audit itself is FU-092's scope; the *feature* is not.
-- **Recommended resolution:** focused design session — own its own
-  prompt under `docs/03_prompts/`. Before any code touches
-  `reconcile_consumed_meals.py` or the `before_request` hook in
-  `startup.py:150`.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F5 (+
-  F6, which rides this decision).
 
 ## [OPEN] FU-357 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).

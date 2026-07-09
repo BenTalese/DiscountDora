@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.app_settings.clock import household_today
+from dora_api.features.recipes.pool import bump_pool
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
@@ -54,7 +55,11 @@ class CookRecipeHandler:
         _Recipe = self.repository.get(Recipe).by_id(recipe_id)
         if not _Recipe:
             return CookRecipeResponse(recipe_not_found = True)
-        _Recipe.available_meals = (_Recipe.available_meals or 0) + request.meals_cooked
+        # FU-317 Chunk 2 — one authority for pool math (features/recipes/pool.py).
+        # `bump_pool` runs on the ORM session; the returned value is
+        # authoritative because `_Recipe.available_meals` is now stale in the
+        # Python identity map.
+        _NewPool = bump_pool(_Recipe.id, request.meals_cooked)
         # R-021 — last_made_on is now a Date stamp (which household day).
         _Recipe.last_made_on = household_today(self.repository)
         # History-tab feed — persist the cook as a discrete event so the
@@ -70,7 +75,7 @@ class CookRecipeHandler:
                 occurred_at = datetime.now(timezone.utc),
             ))
         self.repository.save_changes()
-        return CookRecipeResponse(available_meals = _Recipe.available_meals)
+        return CookRecipeResponse(available_meals = _NewPool)
 
 
 @RECIPE_ROUTER.route("<recipe_id>/cook", methods=["POST"])

@@ -1,0 +1,617 @@
+"""FU-317 Chunk 3 — reconcile queue + per-entry verb endpoints.
+
+Two endpoints on `MEAL_PLAN_ROUTER`:
+
+    GET  /api/meal-plans/reconcile-queue
+    POST /api/meal-plans/reconcile/<entry_id>
+
+The queue lists past-day `MealPlanEntry`s whose *latest*
+`MealPlanReconcileReceipt` state is `unresolved_*`. Cursor-paged,
+oldest-first, no client-side derivation. Every mutation goes through
+this handler — the Chunk-1 sweep only wrote initial receipts; user
+resolutions (Cooked / Cooked adjusted / Cooked later / Didn't cook)
+are Chunk 3's job.
+
+State model (proposal §3.2 + §7.1):
+
+- **Initial state** — set by the daily sweep (`reconcile_consumed_meals`):
+  `unresolved_auto` (auto-drain ON; consumed_at already stamped + pool
+  already decremented) or `unresolved_manual` (auto-drain OFF; entry +
+  pool untouched).
+- **Resolution verbs** (this file):
+  - `cooked`             → resolved_confirmed
+  - `cooked_adjusted`    → resolved_adjusted (actual_servings != planned)
+  - `cooked_later`       → resolved_confirmed (cooked_on stamped)
+  - `not_cooked`         → resolved_not_cooked
+  - `skip`               → resolved_deferred (session hint; small side
+                          effect, keeps the entry in the queue on next
+                          visit — no consumed_at / pool change).
+
+**Idempotence.** A repeat call with the same verb + same fields returns
+200 without adding a receipt. A different verb writes a new corrective
+receipt AND applies whatever pool / consumed_at delta lands the entry
+in the new target state (matches `MealPlanSwapLedger` — never mutate
+past history; write forward).
+
+**Pool math.** Uses `features/recipes/pool.py:bump_pool` (Chunk 2's
+one authority). No inline arithmetic; the floor-at-zero rule lives in
+one SQL CASE WHEN.
+
+Rate-limited 60/min per authenticated user via the shared `subject`
+bucket introduced by FU-458 (matches `/assistant/act`). The queue GET
+is unlimited — reads don't mutate.
+"""
+from __future__ import annotations
+
+import base64
+import logging
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from typing import Optional
+from uuid import UUID
+
+from flask import session
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
+
+from dora_api.app import db
+from dora_api.domain.entities.meal_plan_reconcile_receipt import (
+    STATE_RESOLVED_ADJUSTED, STATE_RESOLVED_CONFIRMED, STATE_RESOLVED_DEFERRED,
+    STATE_RESOLVED_NOT_COOKED, STATE_UNRESOLVED_AUTO, STATE_UNRESOLVED_MANUAL)
+from dora_api.features.app_settings.clock import household_today
+from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
+from dora_api.features.recipes.pool import bump_pool
+from dora_api.features.routers import MEAL_PLAN_ROUTER
+from dora_api.infrastructure.api_response import (bad_request, not_found, ok,
+                                                  unauthorized)
+from dora_api.infrastructure.auth_helpers import (rate_limit,
+                                                  rate_limit_remaining_seconds)
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_request_body
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+_LOGGER = logging.getLogger(__name__)
+
+# ── Rate-limit config (proposal §11 / impl-plan Chunk 3) ────────────────
+
+_RECONCILE_PER_MINUTE = 60
+_RATE_SCOPE_RECONCILE = "meal_plans.reconcile"
+
+# ── Verb vocabulary ─────────────────────────────────────────────────────
+
+VERB_COOKED = "cooked"
+VERB_COOKED_ADJUSTED = "cooked_adjusted"
+VERB_COOKED_LATER = "cooked_later"
+VERB_NOT_COOKED = "not_cooked"
+VERB_SKIP = "skip"
+_ALLOWED_VERBS = frozenset({
+    VERB_COOKED, VERB_COOKED_ADJUSTED, VERB_COOKED_LATER,
+    VERB_NOT_COOKED, VERB_SKIP,
+})
+
+# Verb → target receipt state.
+_VERB_TO_STATE = {
+    VERB_COOKED: STATE_RESOLVED_CONFIRMED,
+    VERB_COOKED_ADJUSTED: STATE_RESOLVED_ADJUSTED,
+    VERB_COOKED_LATER: STATE_RESOLVED_CONFIRMED,
+    VERB_NOT_COOKED: STATE_RESOLVED_NOT_COOKED,
+    VERB_SKIP: STATE_RESOLVED_DEFERRED,
+}
+
+# Which verbs count as "cooked" for pool + consumed_at purposes.
+_COOKED_VERBS = frozenset({VERB_COOKED, VERB_COOKED_ADJUSTED, VERB_COOKED_LATER})
+
+# Which verbs should keep the entry in the queue on the next visit.
+_DEFERRING_VERBS = frozenset({VERB_SKIP})
+
+# States that count as "unresolved" for the queue filter.
+_UNRESOLVED_STATES = (STATE_UNRESOLVED_AUTO, STATE_UNRESOLVED_MANUAL,
+                      STATE_RESOLVED_DEFERRED)
+
+
+# ── Session helpers ─────────────────────────────────────────────────────
+
+def _current_user_id() -> Optional[UUID]:
+    raw = session.get(SESSION_USER_ID_KEY)
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def _rate_limit_subject() -> Optional[str]:
+    uid = _current_user_id()
+    return str(uid) if uid is not None else None
+
+
+def _too_many_requests(retry_after: int):
+    """RFC 6585 §4 shaped 429 — same shape as the assistant endpoints."""
+    from http.client import TOO_MANY_REQUESTS
+    from flask import jsonify
+
+    from dora_api.infrastructure.api_response import ProblemDetails
+    response = jsonify(ProblemDetails(
+        detail=f"Too many requests. Try again in {retry_after}s.",
+        errors={}, status=TOO_MANY_REQUESTS, title="Rate limit exceeded.",
+        type="https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+    ))
+    response.content_type = "application/problem+json"
+    response.status_code = TOO_MANY_REQUESTS
+    response.headers["Retry-After"] = str(max(retry_after, 1))
+    return response
+
+
+# ── Queue endpoint ──────────────────────────────────────────────────────
+#
+# The JSON shape returned is:
+#   {
+#     "entries": [
+#       {
+#         "entry_id": "<uuid>",
+#         "scheduled_for": "YYYY-MM-DD",
+#         "slot": "Dinner",
+#         "planned_servings": 2,
+#         "recipe": { "id": "<uuid>", "name": "..." },
+#         "receipt": {
+#           "state": "unresolved_auto" | "unresolved_manual" | "resolved_deferred",
+#           "original_servings": 2,
+#           "actual_servings": null,
+#           "cooked_on": null,
+#           "created_at": "<iso>"
+#         }
+#       },
+#       ...
+#     ],
+#     "next_cursor": null | "<opaque>",
+#     "total": <int>          # exact count across all pages
+#   }
+#
+
+
+_DEFAULT_LIMIT = 30
+_MAX_LIMIT = 100
+
+# ── Overdue-signal thresholds (proposal §11 D1) ─────────────────────────
+# Both the `meal_reconcile_overdue` alert kind AND the
+# `reconcile_meals_pending` suggestion kind (Chunk 4) fire off this same
+# signal — one authority for "the reconcile queue has been unattended
+# long enough to nudge". Threshold locked by the impl-plan.
+RECONCILE_OVERDUE_MIN_COUNT = 3
+RECONCILE_OVERDUE_MIN_DAYS_BACK = 4
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileOverdueSignal:
+    fires: bool
+    unresolved_count: int
+    oldest_days_back: int  # 0 if queue empty
+
+
+def reconcile_overdue_signal(today: date) -> ReconcileOverdueSignal:
+    """One authority for the overdue-nudge decision. Reads current queue
+    state (unresolved-latest-receipt past-day entries) and returns
+    (fires, count, oldest_days_back). Fires iff
+    `unresolved_count ≥ RECONCILE_OVERDUE_MIN_COUNT` AND
+    `oldest_days_back ≥ RECONCILE_OVERDUE_MIN_DAYS_BACK`.
+
+    R-003: alert + suggestion both call this; they never re-derive the
+    threshold. Change the constants above and both surfaces move
+    together.
+    """
+    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    row = db.session.execute(
+        text(
+            'SELECT COUNT(*) AS n, MIN(mpe.scheduled_for) AS oldest '
+            'FROM "MealPlanEntry" mpe '
+            'JOIN "MealPlanReconcileReceipt" r ON r.meal_plan_entry_id = mpe.id '
+            f'WHERE r.state IN ({states_in}) '
+            '  AND NOT EXISTS ('
+            '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
+            '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+            '  ) '
+            '  AND mpe.scheduled_for < :today'
+        ),
+        {"today": today},
+    ).first()
+    if row is None:
+        return ReconcileOverdueSignal(fires=False, unresolved_count=0, oldest_days_back=0)
+    count = int(row[0] or 0)
+    oldest = row[1]
+    if count == 0 or oldest is None:
+        return ReconcileOverdueSignal(fires=False, unresolved_count=0, oldest_days_back=0)
+    if isinstance(oldest, str):
+        oldest = date.fromisoformat(oldest)
+    days_back = (today - oldest).days
+    fires = (
+        count >= RECONCILE_OVERDUE_MIN_COUNT
+        and days_back >= RECONCILE_OVERDUE_MIN_DAYS_BACK
+    )
+    return ReconcileOverdueSignal(
+        fires=fires, unresolved_count=count, oldest_days_back=days_back,
+    )
+
+
+def _encode_cursor(scheduled_for: date) -> str:
+    """Cursor is just the last page's max `scheduled_for` — the next page
+    filters `scheduled_for > cursor`. Same-day ties (30+ past-day entries
+    on a single calendar day for one household) are the only edge that
+    could skip — negligible at household scale, documented rather than
+    engineered around."""
+    return base64.urlsafe_b64encode(scheduled_for.isoformat().encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> Optional[date]:
+    try:
+        return date.fromisoformat(
+            base64.urlsafe_b64decode(cursor.encode()).decode()
+        )
+    except (ValueError, TypeError):
+        return None
+
+
+def _stringify_entry_id(row_id) -> str:
+    """SQLite returns UUIDs as bytes for BINARY(16); Postgres returns UUIDs.
+    Normalise both to canonical hyphenated hex for the DTO."""
+    if isinstance(row_id, bytes):
+        return str(UUID(bytes=row_id))
+    return str(row_id)
+
+
+def _fetch_queue(today: date, cursor: Optional[str], limit: int) -> tuple[list[dict], Optional[str]]:
+    """Cursor-paged fetch of unresolved-latest-receipt past-day entries.
+    The latest-per-entry filter is a `NOT EXISTS` subquery keyed on
+    `created_at`, which sidesteps SQLite's older-version lack of window
+    functions (Postgres accepts the same shape). One row per entry.
+    """
+    params: dict = {"today": today, "limit": limit + 1}
+    cursor_clause = ""
+    if cursor:
+        cursor_date = _decode_cursor(cursor)
+        if cursor_date is not None:
+            params["cursor_date"] = cursor_date
+            cursor_clause = "AND mpe.scheduled_for > :cursor_date "
+
+    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    query = text(
+        'SELECT mpe.id AS entry_id, mpe.scheduled_for, mpe.slot, mpe.servings, '
+        '       mpe.recipe_id, rec.name AS recipe_name, '
+        '       r.state, r.original_servings, r.actual_servings, r.cooked_on, '
+        '       r.created_at '
+        'FROM "MealPlanEntry" mpe '
+        'JOIN "MealPlanReconcileReceipt" r ON r.meal_plan_entry_id = mpe.id '
+        'JOIN "Recipe" rec ON rec.id = mpe.recipe_id '
+        f'WHERE r.state IN ({states_in}) '
+        '  AND NOT EXISTS ('
+        '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
+        '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+        '  ) '
+        '  AND mpe.scheduled_for < :today '
+        f'  {cursor_clause}'
+        'ORDER BY mpe.scheduled_for ASC, mpe.id ASC '
+        'LIMIT :limit'
+    )
+
+    rows = db.session.execute(query, params).mappings().all()
+
+    rows_list = list(rows)
+    next_cursor: Optional[str] = None
+    if len(rows_list) > limit:
+        last = rows_list[limit - 1]
+        next_cursor = _encode_cursor(last["scheduled_for"])
+        rows_list = rows_list[:limit]
+    return rows_list, next_cursor
+
+
+def _count_queue(today: date) -> int:
+    """Exact count of unresolved-latest-receipt past-day entries.
+    Cheaper than a page walk for the dashboard chip + meal-plans header
+    nudge (Chunk 5) — one aggregate query hits the same JOIN + NOT EXISTS
+    the paged query does."""
+    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    query = text(
+        'SELECT COUNT(*) '
+        'FROM "MealPlanEntry" mpe '
+        'JOIN "MealPlanReconcileReceipt" r ON r.meal_plan_entry_id = mpe.id '
+        f'WHERE r.state IN ({states_in}) '
+        '  AND NOT EXISTS ('
+        '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
+        '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+        '  ) '
+        '  AND mpe.scheduled_for < :today'
+    )
+    return int(db.session.execute(query, {"today": today}).scalar_one())
+
+
+def _row_to_dict(row) -> dict:
+    scheduled = row["scheduled_for"]
+    cooked_on = row["cooked_on"]
+    created_at = row["created_at"]
+    return {
+        "entry_id": _stringify_entry_id(row["entry_id"]),
+        "scheduled_for": scheduled.isoformat() if isinstance(scheduled, date) else str(scheduled),
+        "slot": row["slot"],
+        "planned_servings": int(row["servings"] or 0),
+        "recipe": {
+            "id": _stringify_entry_id(row["recipe_id"]),
+            "name": row["recipe_name"],
+        },
+        "receipt": {
+            "state": row["state"],
+            "original_servings": int(row["original_servings"]),
+            "actual_servings": (int(row["actual_servings"]) if row["actual_servings"] is not None else None),
+            "cooked_on": (cooked_on.isoformat() if isinstance(cooked_on, date) else (str(cooked_on) if cooked_on else None)),
+            "created_at": (created_at.isoformat() if isinstance(created_at, datetime) else str(created_at)),
+        },
+    }
+
+
+@MEAL_PLAN_ROUTER.route("/reconcile-queue", methods=["GET"])
+def get_reconcile_queue():
+    from flask import request as _flask_request
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized()
+
+    include_resolved = _flask_request.args.get("include_resolved") == "true"
+    if include_resolved:
+        # Impl-plan Chunk 3: "add the param but return empty until Chunk 5
+        # wires it." No history view in MVP.
+        return ok({"entries": [], "next_cursor": None, "total": 0})
+
+    try:
+        limit = int(_flask_request.args.get("limit", _DEFAULT_LIMIT))
+    except ValueError:
+        return bad_request("`limit` must be an integer.")
+    limit = max(1, min(limit, _MAX_LIMIT))
+    cursor = _flask_request.args.get("cursor")
+
+    today = household_today(SqlAlchemyRepository())
+    rows, next_cursor = _fetch_queue(today, cursor, limit)
+    total = _count_queue(today)
+
+    return ok({
+        "entries": [_row_to_dict(r) for r in rows],
+        "next_cursor": next_cursor,
+        "total": total,
+    })
+
+
+# ── Verb endpoint ───────────────────────────────────────────────────────
+
+class ReconcileVerbRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    verb: str
+    # Required for `cooked_adjusted`; ignored otherwise. Bounded to catch
+    # fat-finger input (same pattern as `AdjustRecipeMealsRequest.delta`).
+    actual_servings: int | None = Field(default=None, ge=0, le=999)
+    # Required for `cooked_later`; ignored otherwise. ISO date on the wire.
+    cooked_on: date | None = None
+    # Optional user note (persisted on the receipt for the history view).
+    note: str | None = Field(default=None, max_length=500)
+
+
+def _latest_receipt(entry_id) -> Optional[dict]:
+    row = db.session.execute(
+        text(
+            'SELECT state, original_servings, actual_servings, cooked_on, created_at '
+            'FROM "MealPlanReconcileReceipt" '
+            'WHERE meal_plan_entry_id = :eid '
+            'ORDER BY created_at DESC LIMIT 1'
+        ),
+        {"eid": entry_id},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def _load_entry(entry_id: UUID) -> Optional[dict]:
+    """Return the entry + its recipe id in one round-trip."""
+    row = db.session.execute(
+        text(
+            'SELECT id, recipe_id, servings, consumed_at '
+            'FROM "MealPlanEntry" WHERE id = :eid'
+        ),
+        {"eid": str(entry_id)},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def _effective_drained(latest: Optional[dict], entry_planned_servings: int,
+                       entry_consumed_at) -> int:
+    """How many servings the recipe pool currently reflects as drained
+    for this entry. Determined by the latest receipt's state (if any)
+    or by `consumed_at` for entries that predate any receipt (edge case
+    — the sweep should have written one)."""
+    if latest is None:
+        return entry_planned_servings if entry_consumed_at is not None else 0
+    state = latest["state"]
+    if state in (STATE_RESOLVED_CONFIRMED,):
+        return entry_planned_servings
+    if state == STATE_RESOLVED_ADJUSTED:
+        return int(latest["actual_servings"] or 0)
+    if state in (STATE_RESOLVED_NOT_COOKED, STATE_RESOLVED_DEFERRED):
+        return 0
+    if state == STATE_UNRESOLVED_AUTO:
+        # Sweep drained on auto-drain-ON.
+        return entry_planned_servings
+    # STATE_UNRESOLVED_MANUAL — sweep left everything untouched.
+    return 0
+
+
+def _target_drained(verb: str, entry_planned_servings: int,
+                    actual_servings: Optional[int]) -> int:
+    if verb == VERB_COOKED or verb == VERB_COOKED_LATER:
+        return entry_planned_servings
+    if verb == VERB_COOKED_ADJUSTED:
+        return int(actual_servings or 0)
+    # not_cooked / skip → no drain
+    return 0
+
+
+def _is_idempotent(latest: Optional[dict], target_state: str,
+                   actual_servings: Optional[int],
+                   cooked_on: Optional[date]) -> bool:
+    """A verb is a no-op iff the latest receipt already reflects the
+    same target state + the same key fields (actual_servings for
+    adjusted, cooked_on for later)."""
+    if latest is None or latest["state"] != target_state:
+        return False
+    if target_state == STATE_RESOLVED_ADJUSTED:
+        return int(latest["actual_servings"] or 0) == int(actual_servings or 0)
+    # For confirmed/deferred/not_cooked, cooked_on is the only extra field
+    # that can differ. `cooked_later` writes STATE_RESOLVED_CONFIRMED with
+    # a cooked_on; `cooked` writes it without. Both idempotent iff cooked_on
+    # matches.
+    left = latest["cooked_on"]
+    left_iso = left.isoformat() if isinstance(left, date) else (str(left) if left else None)
+    right_iso = cooked_on.isoformat() if cooked_on else None
+    return left_iso == right_iso
+
+
+@MEAL_PLAN_ROUTER.route("/reconcile/<uuid:entry_id>", methods=["POST"])
+@has_request_body(ReconcileVerbRequest)
+def submit_verb(entry_id: UUID):
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized()
+
+    subject = _rate_limit_subject()
+    if not rate_limit(_RATE_SCOPE_RECONCILE, _RECONCILE_PER_MINUTE, subject=subject):
+        return _too_many_requests(rate_limit_remaining_seconds(
+            _RATE_SCOPE_RECONCILE, _RECONCILE_PER_MINUTE, subject=subject,
+        ))
+
+    req: ReconcileVerbRequest = get_request_body()
+    verb = req.verb
+    if verb not in _ALLOWED_VERBS:
+        return bad_request(
+            f"Unknown verb '{verb}'. Allowed: {sorted(_ALLOWED_VERBS)}.",
+        )
+    if verb == VERB_COOKED_ADJUSTED and req.actual_servings is None:
+        return bad_request("`actual_servings` is required for `cooked_adjusted`.")
+    if verb == VERB_COOKED_LATER and req.cooked_on is None:
+        return bad_request("`cooked_on` is required for `cooked_later`.")
+
+    now = datetime.now(UTC)
+
+    # Everything below runs on the ORM session so `db.session.commit()` at
+    # the end commits pool math + receipt insert + consumed_at flip
+    # atomically.
+    entry = _load_entry(entry_id)
+    if entry is None:
+        return not_found("MealPlanEntry", entry_id)
+
+    latest = _latest_receipt(entry["id"])
+    target_state = _VERB_TO_STATE[verb]
+
+    # Idempotence — same-verb replay is a 200 no-op.
+    if _is_idempotent(latest, target_state, req.actual_servings, req.cooked_on):
+        current_pool = _read_pool(entry["recipe_id"])
+        return ok(_verb_payload(
+            entry_id=entry["id"],
+            receipt=latest,
+            new_pool=current_pool,
+            idempotent=True,
+        ))
+
+    # Compute pool delta.
+    current_drained = _effective_drained(
+        latest, int(entry["servings"] or 0), entry["consumed_at"],
+    )
+    target_drained = _target_drained(verb, int(entry["servings"] or 0), req.actual_servings)
+    pool_delta = current_drained - target_drained  # positive = pool goes UP
+
+    if pool_delta != 0:
+        new_pool = bump_pool(entry["recipe_id"], pool_delta)
+    else:
+        new_pool = _read_pool(entry["recipe_id"])
+
+    # Sync consumed_at: cooked verbs stamp now (if not already); non-cooked
+    # verbs (not_cooked / skip) clear it.
+    if verb in _COOKED_VERBS and entry["consumed_at"] is None:
+        db.session.execute(
+            text('UPDATE "MealPlanEntry" SET consumed_at = :now WHERE id = :eid'),
+            {"now": now, "eid": entry["id"]},
+        )
+    elif verb in (VERB_NOT_COOKED, VERB_SKIP) and entry["consumed_at"] is not None:
+        db.session.execute(
+            text('UPDATE "MealPlanEntry" SET consumed_at = NULL WHERE id = :eid'),
+            {"eid": entry["id"]},
+        )
+
+    # Write the corrective receipt (append-only — never mutates the past).
+    new_receipt_id = str(uuid.uuid4())
+    actual_for_row = (
+        req.actual_servings if verb == VERB_COOKED_ADJUSTED else None
+    )
+    cooked_on_for_row = req.cooked_on if verb == VERB_COOKED_LATER else None
+    db.session.execute(
+        text(
+            'INSERT INTO "MealPlanReconcileReceipt" '
+            '(id, meal_plan_entry_id, state, original_servings, actual_servings, '
+            ' cooked_on, resolved_by_user_id, resolved_at, note, created_at) '
+            'VALUES (:id, :eid, :state, :orig, :actual, :cooked_on, :uid, :now, :note, :now)'
+        ),
+        {
+            "id": new_receipt_id,
+            "eid": entry["id"],
+            "state": target_state,
+            "orig": int(entry["servings"] or 0),
+            "actual": actual_for_row,
+            "cooked_on": cooked_on_for_row,
+            "uid": str(user_id),
+            "now": now,
+            "note": req.note,
+        },
+    )
+
+    db.session.commit()
+
+    new_receipt = {
+        "state": target_state,
+        "original_servings": int(entry["servings"] or 0),
+        "actual_servings": actual_for_row,
+        "cooked_on": cooked_on_for_row,
+        "created_at": now,
+    }
+    _LOGGER.info(
+        "Reconciled entry %s → %s (pool delta %+d, new pool %d)",
+        entry_id, target_state, pool_delta, new_pool,
+    )
+    return ok(_verb_payload(
+        entry_id=entry["id"],
+        receipt=new_receipt,
+        new_pool=new_pool,
+        idempotent=False,
+    ))
+
+
+def _read_pool(recipe_id) -> int:
+    row = db.session.execute(
+        text('SELECT available_meals FROM "Recipe" WHERE id = :rid'),
+        {"rid": recipe_id if isinstance(recipe_id, bytes) else str(recipe_id)},
+    ).first()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def _verb_payload(*, entry_id, receipt, new_pool: int, idempotent: bool) -> dict:
+    r_state = receipt["state"]
+    r_orig = int(receipt["original_servings"])
+    r_actual = receipt.get("actual_servings")
+    r_cooked_on = receipt.get("cooked_on")
+    r_created = receipt.get("created_at")
+    return {
+        "entry_id": _stringify_entry_id(entry_id),
+        "new_pool": new_pool,
+        "idempotent": idempotent,
+        "receipt": {
+            "state": r_state,
+            "original_servings": r_orig,
+            "actual_servings": (int(r_actual) if r_actual is not None else None),
+            "cooked_on": (r_cooked_on.isoformat() if isinstance(r_cooked_on, date) else r_cooked_on),
+            "created_at": (r_created.isoformat() if isinstance(r_created, datetime) else r_created),
+        },
+    }

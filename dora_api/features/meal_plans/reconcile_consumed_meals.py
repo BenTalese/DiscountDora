@@ -1,65 +1,139 @@
+import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import text
 
 from dora_api.app import db
+from dora_api.domain.entities.meal_plan_reconcile_receipt import (
+    STATE_UNRESOLVED_AUTO, STATE_UNRESOLVED_MANUAL)
 from dora_api.features.app_settings.clock import today_in_timezone
+from dora_api.features.recipes.pool import bump_pool
 
 
 def reconcile_consumed_meals() -> None:
-    """Mark past-day meal-plan entries as consumed and decrement the
-    Recipe pool counts they drew from.
+    """FU-317 Chunk 1 — daily meal-plan reconcile sweep.
 
     Runs in its own connection-level transaction, deliberately decoupled
-    from the per-request ORM session. The reconciliation result is
-    independently correct — a handler rolling back its work shouldn't
-    also undo the day's consumption sweep, and a slow request shouldn't
-    hold the reconciliation open inside the same transaction.
+    from the per-request ORM session. A handler rolling back its work
+    shouldn't also undo the day's consumption sweep; a slow request
+    shouldn't hold the reconciliation open inside the same transaction.
 
-    Idempotent via the conditional UPDATE ... RETURNING: any concurrent
-    caller racing on the same entry will get zero rows and skip the
-    decrement. Floors `available_meals` at zero — a slot that's planned
-    without anything in the pool just locks read-only.
+    Two branches, driven by the install-wide `AppSetting.auto_drain_past_meals`
+    posture (D5 install-wide — FU-517 resolved 2026-07-09).
+
+    - **auto-drain ON (default).** Today's behaviour: past-day entries
+      with `consumed_at IS NULL` stamp `consumed_at = now()` and the
+      `Recipe.available_meals` pool is decremented (floored at 0).
+      **New:** every drained entry gets an `unresolved_auto`
+      `MealPlanReconcileReceipt`, so the user can walk `/meal-plans/
+      reconcile` and dispute per-entry. Idempotence via the conditional
+      UPDATE ... RETURNING: a concurrent caller racing on the same entry
+      gets zero rows and skips the decrement + receipt.
+
+    - **auto-drain OFF.** The sweep **does not** touch `MealPlanEntry.
+      consumed_at` or `Recipe.available_meals` — the reconcile page
+      becomes the mutation surface. For each past-day, unconsumed entry
+      that doesn't already have an unresolved receipt, an
+      `unresolved_manual` receipt is written. `NOT EXISTS` de-dupes so
+      the sweep is idempotent across days.
     """
     _Now = datetime.now(UTC)
 
     with db.engine.begin() as _Conn:
-        # Evaluate the "past day" boundary in the household timezone (C-2.K),
-        # not server-local — read it on this same connection to stay decoupled
-        # from the per-request ORM session. No row yet ⇒ UTC default.
-        _TzRow = _Conn.execute(text('SELECT timezone FROM "AppSetting" LIMIT 1')).first()
-        _Today = today_in_timezone(_TzRow[0] if _TzRow else None)
-        _Consumed = _Conn.execute(
-            text(
-                'UPDATE "MealPlanEntry" '
-                "SET consumed_at = :now "
-                "WHERE scheduled_for < :today AND consumed_at IS NULL "
-                "RETURNING recipe_id, servings"
-            ),
-            {"now": _Now, "today": _Today},
-        ).all()
+        # Read the two install-wide knobs on this same connection — one
+        # round-trip. Timezone drives the "today" boundary; auto_drain_past_meals
+        # drives which branch runs. Absent row ⇒ defaults (UTC + drain on).
+        _SettingRow = _Conn.execute(
+            text('SELECT timezone, auto_drain_past_meals FROM "AppSetting" LIMIT 1')
+        ).first()
+        _Tz = _SettingRow[0] if _SettingRow else None
+        # SQLite stores booleans as 0/1; both branches truthy-check safely.
+        _AutoDrain = bool(_SettingRow[1]) if _SettingRow else True
+        _Today = today_in_timezone(_Tz)
 
-        if not _Consumed:
-            return
+        if _AutoDrain:
+            _sweep_auto_drain(_Conn, _Now, _Today)
+        else:
+            _sweep_manual_confirm(_Conn, _Now, _Today)
 
-        _Totals: dict = {}
-        for _RecipeId, _Servings in _Consumed:
-            _Totals[_RecipeId] = _Totals.get(_RecipeId, 0) + (_Servings or 0)
 
-        for _RecipeId, _ToDecrement in _Totals.items():
-            # _RecipeId may be bytes (UUIDType stored as 16-byte BLOB in
-            # SQLite); the column is binary, so feed it back as bytes
-            # when we got bytes, otherwise as a UUID string. Both work;
-            # passing a raw uuid.UUID does not.
-            _Bind = _RecipeId if isinstance(_RecipeId, bytes) else str(_RecipeId)
-            _Conn.execute(
-                text(
-                    'UPDATE "Recipe" '
-                    "SET available_meals = CASE "
-                    "  WHEN available_meals - :n < 0 THEN 0 "
-                    "  ELSE available_meals - :n "
-                    "END "
-                    "WHERE id = :rid"
-                ),
-                {"n": _ToDecrement, "rid": _Bind},
-            )
+def _sweep_auto_drain(_Conn, _Now: datetime, _Today) -> None:
+    """auto-drain ON branch — the historic behaviour + a receipt per drain."""
+    _Consumed = _Conn.execute(
+        text(
+            'UPDATE "MealPlanEntry" '
+            "SET consumed_at = :now "
+            "WHERE scheduled_for < :today AND consumed_at IS NULL "
+            "RETURNING id, recipe_id, servings"
+        ),
+        {"now": _Now, "today": _Today},
+    ).all()
+
+    if not _Consumed:
+        return
+
+    for _EntryId, _RecipeId, _Servings in _Consumed:
+        _insert_receipt(
+            _Conn, _EntryId, STATE_UNRESOLVED_AUTO,
+            original_servings=int(_Servings or 0), created_at=_Now,
+        )
+
+    _Totals: dict = {}
+    for _EntryId, _RecipeId, _Servings in _Consumed:
+        _Totals[_RecipeId] = _Totals.get(_RecipeId, 0) + int(_Servings or 0)
+
+    for _RecipeId, _ToDecrement in _Totals.items():
+        # FU-317 Chunk 2 — one authority for pool math (see recipes/pool.py).
+        # Passing the sweep's own `_Conn` keeps the decrement in this
+        # decoupled connection-level transaction, not the per-request
+        # ORM session.
+        bump_pool(_RecipeId, -_ToDecrement, connection=_Conn)
+
+
+def _sweep_manual_confirm(_Conn, _Now: datetime, _Today) -> None:
+    """auto-drain OFF branch — write `unresolved_manual` receipts only.
+
+    Past-day entries with `consumed_at IS NULL` that don't already have
+    a receipt get one. `MealPlanEntry.consumed_at` and
+    `Recipe.available_meals` are deliberately untouched — the reconcile
+    page owns those mutations now.
+    """
+    _Pending = _Conn.execute(
+        text(
+            'SELECT id, servings FROM "MealPlanEntry" mpe '
+            'WHERE mpe.scheduled_for < :today '
+            '  AND mpe.consumed_at IS NULL '
+            '  AND NOT EXISTS ('
+            '    SELECT 1 FROM "MealPlanReconcileReceipt" r '
+            '    WHERE r.meal_plan_entry_id = mpe.id'
+            '  )'
+        ),
+        {"today": _Today},
+    ).all()
+
+    for _EntryId, _Servings in _Pending:
+        _insert_receipt(
+            _Conn, _EntryId, STATE_UNRESOLVED_MANUAL,
+            original_servings=int(_Servings or 0), created_at=_Now,
+        )
+
+
+def _insert_receipt(_Conn, _EntryId, _State: str, *,
+                    original_servings: int, created_at: datetime) -> None:
+    # `_EntryId` may arrive as bytes (SQLite BINARY(16)) or str/UUID; feed it
+    # back in the same shape (same pattern as the Recipe.id bind above).
+    _EntryBind = _EntryId if isinstance(_EntryId, bytes) else str(_EntryId)
+    _Conn.execute(
+        text(
+            'INSERT INTO "MealPlanReconcileReceipt" '
+            '(id, meal_plan_entry_id, state, original_servings, created_at) '
+            'VALUES (:id, :entry_id, :state, :servings, :created_at)'
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "entry_id": _EntryBind,
+            "state": _State,
+            "servings": original_servings,
+            "created_at": created_at,
+        },
+    )

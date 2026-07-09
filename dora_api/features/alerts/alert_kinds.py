@@ -28,6 +28,10 @@ DEFAULT_TIER_BY_KIND: dict[str, str] = {
     # forward-looking nudges (no stock item): planner + shopping-day.
     "no_planned_meals": TIER_FYI,
     "shopping_day": TIER_FYI,
+    # FU-317 Chunk 4 — meal-plan reconcile overdue (proposal §6.2 / §11 D1).
+    # Fires when the reconcile queue has stretched long enough to nudge;
+    # backward-looking, so FYI-tier by default (doesn't inflate the badge).
+    "meal_reconcile_overdue": TIER_FYI,
 }
 KNOWN_KINDS = frozenset(DEFAULT_TIER_BY_KIND)
 

@@ -15,6 +15,8 @@ from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_plan_reconcile_receipt import \
+    MealPlanReconcileReceipt
 from dora_api.domain.entities.meal_plan_swap_ledger import MealPlanSwapLedger
 from dora_api.domain.entities.meal_plan_template import (MealPlanTemplate,
                                                          MealPlanTemplateEntry,
@@ -136,6 +138,11 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
+        # FU-317 — install-wide meal-plan reconcile posture (D5 install-wide,
+        # FU-517 resolved 2026-07-09). Default TRUE keeps today's silent
+        # auto-drain; FALSE flips the sweep to write receipts but leave
+        # the pool + entries untouched (see reconcile_consumed_meals.py).
+        Column("auto_drain_past_meals", Boolean, nullable=False, server_default=true()),
         # FU-511 — install-wide auto-add mode ('off' | 'essential_only' | 'all').
         # Replaces the per-item StockItem.auto_add_when_low column.
         Column("auto_add_mode", String(16), nullable=False, server_default="essential_only"),
@@ -855,6 +862,33 @@ def configure_mappings(db: SQLAlchemy):
         Column("undone_at", DateTime(timezone=True), nullable=True),
     )
 
+    # FU-317 Chunk 1 — append-only reconcile-receipt table. One row per
+    # reconcile event per MealPlanEntry; states in
+    # `domain.entities.meal_plan_reconcile_receipt.RECONCILE_STATE_VALUES`.
+    # Never mutated in place; corrective decisions write a new row against
+    # the same entry (same idiom as MealPlanSwapLedger above).
+    meal_plan_reconcile_receipt_table = Table(
+        "MealPlanReconcileReceipt", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column(
+            "meal_plan_entry_id", UUIDType,
+            ForeignKey("MealPlanEntry.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column("state", String(32), nullable=False),
+        Column("original_servings", Integer, nullable=False),
+        Column("actual_servings", Integer, nullable=True),
+        Column("cooked_on", Date, nullable=True),
+        Column(
+            "resolved_by_user_id", UUIDType,
+            ForeignKey("User.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        Column("resolved_at", DateTime(timezone=True), nullable=True),
+        Column("note", Text, nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
     meal_plan_entry_table = Table(
         "MealPlanEntry", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -1370,6 +1404,13 @@ def configure_mappings(db: SQLAlchemy):
         "_id_col": meal_plan_swap_ledger_table.c.id,
         "id": meal_plan_swap_ledger_table.c.id,
     })
+
+    _mapper_registry.map_imperatively(
+        MealPlanReconcileReceipt, meal_plan_reconcile_receipt_table, properties={
+            "_id_col": meal_plan_reconcile_receipt_table.c.id,
+            "id": meal_plan_reconcile_receipt_table.c.id,
+        },
+    )
 
     _mapper_registry.map_imperatively(MealPlan, meal_plan_table, properties={
         "_id_col": meal_plan_table.c.id,

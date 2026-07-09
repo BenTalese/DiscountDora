@@ -117,6 +117,10 @@ const routes: RouteRecordRaw[] = [
             // sets only; per-template CRUD moved to the planner's drawer.
             // Route path kept for existing deep-links / bookmarks.
             { path: 'meal-plans/templates', component: () => import('pages/MealPlanTemplatesPage.vue'), meta: { title: 'Rotating template sets' } },
+            // FU-317 Chunk 5 — reconcile page (single-runner-style, one
+            // entry at a time, five verbs). Empty state is handled by the
+            // runner itself; no separate landing.
+            { path: 'meal-plans/reconcile', component: () => import('pages/MealReconcilePage.vue'), meta: { title: 'Reconcile past meals' } },
             {
                 path: 'shopping-lists',
                 component: () => import('pages/ShoppingListsOverview.vue'),

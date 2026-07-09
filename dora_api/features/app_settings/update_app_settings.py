@@ -83,6 +83,9 @@ class UpdateAppSettingsRequest(BaseModel):
     # `_VALID_AUTO_ADD_MODES` in the handler so a typo can't silently
     # degrade behaviour to the seeded default.
     auto_add_mode: str | None = Field(default=None, max_length=16)
+    # FU-317 — install-wide meal-plan reconcile posture. Plain bool;
+    # the sweep reads it and picks a branch (see reconcile_consumed_meals).
+    auto_drain_past_meals: bool | None = None
     # operational config previously carried as
     # `DORA_*` env vars. Bucket-C secrets (SMTP password, VAPID private
     # key) accept plaintext on the wire and are Fernet-encrypted before
@@ -262,6 +265,16 @@ class UpdateAppSettingsHandler:
             and request.stocktake_auto_tuning_enabled is not None
         ):
             setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
+
+        # FU-317 — meal-plan reconcile posture. Plain bool; no validation
+        # beyond pydantic. Flip takes effect on the next
+        # `reconcile_consumed_meals` invocation (i.e. the next request to
+        # a dashboard / meal-plan / recipe endpoint).
+        if (
+            "auto_drain_past_meals" in set_fields
+            and request.auto_drain_past_meals is not None
+        ):
+            setting.auto_drain_past_meals = request.auto_drain_past_meals
 
         # FU-511 — auto-add mode. Enum-validated so a typo can't silently
         # degrade to the seeded default.

@@ -50,6 +50,7 @@ KIND_OVER_BUDGET = "over_budget"
 KIND_LIKELY_DUE = "likely_due"
 KIND_FREQUENT_WASTER = "frequent_waster"
 KIND_PANTRY_CHECK = "pantry_check"
+KIND_RECONCILE_MEALS_PENDING = "reconcile_meals_pending"
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,6 +419,46 @@ def generate_pantry_check(
     return out
 
 
+# ── 6. Reconcile meals pending ──────────────────────────────────────────
+# FU-317 Chunk 4 — nudge card that deep-links to `/meal-plans/reconcile`
+# when the queue has stretched long enough. Fires off the same signal
+# the `meal_reconcile_overdue` alert kind uses (R-003 — one authority
+# for the threshold in `features/meal_plans/reconcile.py`). Dedup keyed
+# on the oldest unresolved entry's ISO date so a user snooze persists
+# as long as that head-of-queue entry sits there.
+
+def generate_reconcile_meals_pending(
+    repository: SqlAlchemyRepository, user_id: UUID | None
+) -> list[Suggestion]:
+    # Local import avoids a circular chain (reconcile.py → alerts/get_alerts
+    # → suggestions/generators would loop if we imported at module top).
+    from dora_api.features.meal_plans.reconcile import \
+        reconcile_overdue_signal
+    today = household_today(repository)
+    signal = reconcile_overdue_signal(today)
+    if not signal.fires:
+        return []
+    head_iso = (today - timedelta(days=signal.oldest_days_back)).isoformat()
+    return [Suggestion(
+        kind=KIND_RECONCILE_MEALS_PENDING,
+        dedup_key=head_iso,
+        severity=SEVERITY_LOW,
+        title=f"{signal.unresolved_count} past meals need confirming",
+        body=(
+            f"Oldest is {signal.oldest_days_back} day(s) back. "
+            "A quick pass keeps your pool honest — no rush."
+        ),
+        reason=(
+            f"You have {signal.unresolved_count} past-day meal-plan entries "
+            "that haven't been confirmed yet. Confirming them keeps the "
+            "recipe pool counts and the cooked-history report accurate."
+        ),
+        primary_action={"path": "/meal-plans/reconcile", "label": "Reconcile now"},
+        payload={"unresolved_count": signal.unresolved_count,
+                 "oldest_days_back": signal.oldest_days_back},
+    )]
+
+
 # ── Orchestrator ────────────────────────────────────────────────────────
 
 def generate_all(repository: SqlAlchemyRepository, user_id: UUID | None) -> list[Suggestion]:
@@ -427,4 +468,5 @@ def generate_all(repository: SqlAlchemyRepository, user_id: UUID | None) -> list
     out.extend(generate_likely_due(repository))
     out.extend(generate_frequent_waster(repository))
     out.extend(generate_pantry_check(repository, user_id))
+    out.extend(generate_reconcile_meals_pending(repository, user_id))
     return out

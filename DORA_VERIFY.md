@@ -329,6 +329,21 @@ top-to-bottom.
 
 ## Meal plans
 
+### Meal reconcile — page + dashboard chip + header nudge — origin FU-317 Chunk 5 (2026-07-09)
+- [ ] With `AppSetting.auto_drain_past_meals` on the default (TRUE) and a fresh install, create a meal plan for **today - 2 days** with one entry, then hit `GET /api/meal-plans/today` (or open the dashboard) to fire the sweep. Confirm the dashboard now shows a **Reconcile 1 past meal** chip in the *Your kitchen* zone; the meal-plans page shows a **1 past-day meal needs confirming →** link above the planner.
+- [ ] Tap the dashboard chip → lands on `/meal-plans/reconcile`. Runner shows the entry: recipe name, scheduled date + slot, planned servings. Five verb buttons: **Cooked** (big primary), **Different portions** + **Cooked later** (secondary pair), **Didn't cook** (danger-ghost), **Skip for now** (small ghost).
+- [ ] Tap **Cooked** → the recap card appears with 1 cooked / 0 others; **Done** returns to `/dashboard`. Both the chip and the header link have disappeared (queue empty). Recipe pool unchanged from what the sweep already decremented.
+- [ ] Under auto-drain OFF (`PATCH /api/app-settings {auto_drain_past_meals: false}` first), repeat: sweep leaves the pool untouched → Cooked verb applies the drain now. Recipe pool drops by the entry's servings.
+- [ ] Try **Different portions** → dialog asks for actual servings; picking 5 for a 2-planned entry drops the pool by an extra 3.
+- [ ] Try **Cooked later** → dialog picks a date; the receipt shows a `cooked_on` value (verifiable via DevTools `GET /api/meal-plans/reconcile-queue?include_resolved=true` — currently returns empty in MVP, so a direct DB peek is fine).
+- [ ] Try **Didn't cook** on an entry that was already drained → the pool goes back up by the entry's servings; the entry drops out of the queue.
+- [ ] Try **Skip for now** → the entry stays in the queue on refresh (drops to a `resolved_deferred` receipt state).
+- [ ] Threshold check — build **3 unresolved entries** stretching **5 days back**, trigger the sweep, then check `/alerts` for the `meal_reconcile_overdue` alert kind (message like "3 past meals need confirming") + `/api/suggestions` for the `reconcile_meals_pending` suggestion.
+- [ ] `/meal-plans/reconcile` empty state — with zero unresolved entries, the runner renders "Nothing to reconcile" + a Back-to-Meal-plans button. No chip, no header link.
+- [ ] Text-size preference (Preferences → Display): flip to XL — the runner card, buttons, and help dialog all scale.
+- [ ] Themes: check the runner on Pesto light + Pesto dark + one other family — no hardcoded colours.
+- [ ] `(?)` help icon in the top-right of the runner opens the "How reconcile works" dialog listing every verb.
+
 ### Budget-defense recipe swaps (Suggestions panel) — origin FU-451
 - [ ] With **money features on** and a **budget set**, build a meal-plan week that's projected over budget (priced recipes summing past the budget). A **Suggestions** panel renders below the week grid: "Over budget by $X", Est. week cost + Budget figures, "N swaps could bring it back to $Y".
 - [ ] Each candidate row reads "Recipe swap · <Day> <Slot>", shows the from→to recipe names, a reason chip (uses-stock / same-style / cooked-before), and a **−$saved** figure. **Preview** opens a dialog with the after-cost, the saving, and any missing ingredients.

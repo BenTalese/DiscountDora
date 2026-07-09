@@ -13,6 +13,17 @@
         <MealPlanFirstRun v-else-if="!planner.recipes.value.length" />
 
         <template v-else>
+            <!-- FU-317 Chunk 5 — reconcile nudge line above the planner
+                 when past-day meals need confirming. Hide-when-empty
+                 (R-029); the server owns the count via `useReconcileQueue`. -->
+            <router-link
+                v-if="reconcileTotal > 0"
+                to="/meal-plans/reconcile"
+                class="meal-plans-reconcile-nudge q-mb-sm"
+            >
+                {{ reconcileTotal }} past-day meal{{ reconcileTotal === 1 ? '' : 's' }} need{{ reconcileTotal === 1 ? 's' : '' }} confirming →
+            </router-link>
+
             <!-- R-Phase 4 — shared mobile single-day focus (§8.2). Both A
                 and B render the same mobile view; the A/B toggle is desktop-
                 only because the carousel-vs-grid experiment doesn't apply
@@ -356,6 +367,8 @@
     import SwapSuggestionsPanel from 'src/components/SwapSuggestionsPanel.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    // FU-317 Chunk 5 — reconcile nudge line count.
+    import { useReconcileQueue } from 'src/composables/useReconcileQueue';
     // target-count sourced from the user's `meals_per_week` pref
     // via this composable (fallback 7 when unset).
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
@@ -365,6 +378,7 @@
 
     const planner = useMealPlanner();
     const { mealsPerWeek } = useMealsPerWeek();
+    const { total: reconcileTotal } = useReconcileQueue();
     const mealPlanStore = useMealPlanStore();
     const $q = useQuasar();
 
@@ -513,5 +527,23 @@
 
     .empty-week-banner {
         background: var(--surface-sunken);
+    }
+
+    /* FU-317 Chunk 5 — reconcile nudge above the planner. Text-link
+       shape, no card chrome; hover tints via color-mix (matches the
+       dashboard chip). */
+    .meal-plans-reconcile-nudge {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        color: var(--brand-primary);
+        text-decoration: none;
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        border-radius: var(--radius-sm);
+        transition: background 120ms ease;
+    }
+    .meal-plans-reconcile-nudge:hover,
+    .meal-plans-reconcile-nudge:focus-visible {
+        background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
     }
 </style>

@@ -10,6 +10,22 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-517 — D5 decision: `auto_drain_past_meals` install-wide vs per-user
+- **Resolved:** 2026-07-09 — user picked the recommendation: install-wide `AppSetting.auto_drain_past_meals`. FU-317 impl-plan Chunk 1 unblocked. Proposal + impl-plan already carried the install-wide shape; the hold-banner is removed and Chunk 1 execution starts this session.
+
+## [RESOLVED] FU-317 — Proposal: manual meal-plan reconcile feature ("stocktake-mode for meals") + opt-in for auto-drain (F5)
+- **Resolved:** 2026-07-09 — proposal doc written to [docs/04_proposals/PROPOSAL_MEAL_RECONCILE.md](docs/04_proposals/PROPOSAL_MEAL_RECONCILE.md), following the same shape as `PROPOSAL_STOCKTAKE_MODE.md` (the audit's suggested precedent). All four framing questions the FU flagged are resolved from principle:
+  1. **Per-user setting `User.auto_drain_past_meals`** — default `TRUE`, `PATCH /auth/me` writes it, one row in Preferences → Meal planning ("Assume I cooked past-day meals").
+  2. **New reconcile surface** at `/meal-plans/reconcile` — server-owned queue (past-day + unresolved), one-at-a-time verbs (Cooked / Cooked (different portions) / Didn't cook / Cooked later / Skip), five-counter completion recap. Modelled on `StocktakeRunner.vue`.
+  3. **New alert kind `meal_reconcile_overdue`** — plugs into the existing `AlertPreference` shape, integrates with email digest + push channels for free. Suggested threshold ≥3 unresolved entries stretching ≥4 days back (D1 open decision to tune). `no_planned_meals` alert unchanged (forward-looking).
+  4. **The auto-drain / manual-reconcile coexistence "false choice" is refused.** They share the same page and verbs; the setting only decides the *initial state* of a past-day entry (already-consumed-disputable vs unconfirmed-must-confirm). Everything downstream is identical.
+- **Data model:** new `MealPlanReconcileReceipt` table — append-only audit trail (`unresolved_auto` / `unresolved_manual` / `resolved_confirmed` / `resolved_adjusted` / `resolved_not_cooked` / `resolved_deferred`), one row per reconcile event per entry, corrective decisions write new receipts against the same entry rather than mutating existing ones (matches the `MealPlanSwapLedger` shape from FU-451). Migration is additive; no backfill.
+- **R-003 payoff:** `Recipe.available_meals` mutation collapses to one server-side helper across `cook_recipe`, the sweep, and the new reconcile verbs — removing today's two-authorities-for-pool-count drift where the sweep's raw `UPDATE "Recipe" SET available_meals = …` in `reconcile_consumed_meals.py:56-65` runs alongside the `cook_recipe` handler's own arithmetic.
+- **Charter check clean** — P1 Effortless (default posture unchanged, hide-when-empty surfacing), P3 Honest (every past-day state change either explicitly the user's or lives behind a walkable receipt), P4 Preservation of trust (receipts append-only), anti-creep tiebreak (one setting, one page, one alert, one suggestion — nothing bolted on).
+- **Feedback coverage table** at §12 — MR-1 (L89 going-to-cook vs already-cooked) + MR-5 (L369 past-week read-only) + MR-7 (L371 batch-vs-fresh) are directly resolved; MR-2/3/4/6/8 explicitly out-of-scope with the correct home named.
+- **Four open decisions** left for the user before impl-plan (§11): D1 alert threshold, D2 whether auto-drain-off gates manual pool bumps too (recommend no), D3 receipt retention (recommend keep forever), D4 setting copy.
+- **Next step (not part of this FU):** impl-plan under `03_prompts/` before any code touches `reconcile_consumed_meals.py` or the `startup.py:150` hook. Related open work: [[FU-432]] (Recipes-Overview presentation — MR-2/3 home).
+
 ## [RESOLVED] FU-359 — A-2 DATA page redesign
 - **Resolved:** 2026-07-09 — the outstanding blocker was the ugly, inconsistent UI on the two data pages; both now revamped to the established Settings design language (`SettingsPageHeader` + `SettingsSection` + `SettingsRow` + `.settings-divider`), so the bundle's UI-facing sub-items land. Shipped this pass:
   - **New shared `SettingsFileDrop.vue`** — drag-and-drop upload zone (idle / filled / busy states, progress bar) replacing the raw `q-file` on both pages.

@@ -279,6 +279,8 @@ class GetAlertsHandler:
         # the household-tz boundary built once at the top of `handle()`.
         raw.extend(self._no_planned_meals_alerts(today))
         raw.extend(self._shopping_day_alerts(today))
+        # ── FU-317 Chunk 4 — meal-plan reconcile overdue ───────────────
+        raw.extend(self._meal_reconcile_overdue_alerts(today))
 
         # ── Per-user overlay (C-9.1 interactions + C-9.2 preferences) ───
         # One bounded fetch each of this user's interactions + preferences,
@@ -383,6 +385,33 @@ class GetAlertsHandler:
                 f"{next_sunday.strftime('%a %d %b')}) has nothing on the plan yet."
             ),
             related_date = next_monday.isoformat(),
+        )]
+
+    def _meal_reconcile_overdue_alerts(self, today: date) -> List[AlertDto]:
+        """FU-317 Chunk 4 — one FYI nudge when the meal-plan reconcile
+        queue has grown long enough that it's worth reminding the user
+        to walk it. Signal owned by `features/meal_plans/reconcile.py`
+        (R-003 — same threshold the suggestion generator uses). The
+        alert key is discriminated by the oldest unresolved entry's
+        ISO date so a user snooze/dismiss decision persists as long as
+        that entry sits at the head of the queue, and rolls to a fresh
+        key once the queue is cleared or the head moves forward."""
+        from dora_api.features.meal_plans.reconcile import \
+            reconcile_overdue_signal
+        signal = reconcile_overdue_signal(today)
+        if not signal.fires:
+            return []
+        head_iso = (today - timedelta(days=signal.oldest_days_back)).isoformat()
+        return [AlertDto(
+            alert_id = meal_alert_key(f"meal_reconcile_overdue:{head_iso}"),
+            kind = "meal_reconcile_overdue",
+            severity = SEVERITY_LOW,
+            message = f"{signal.unresolved_count} past meals need confirming",
+            detail = (
+                f"Oldest is {signal.oldest_days_back} day(s) back — "
+                f"a quick pass keeps your pool honest."
+            ),
+            related_date = head_iso,
         )]
 
     def _shopping_day_alerts(self, today: date) -> List[AlertDto]:

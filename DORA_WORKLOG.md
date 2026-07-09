@@ -9,6 +9,369 @@ next.
 
 ---
 
+## 2026-07-09 — FU-317 Chunk 5: reconcile page + dashboard chip + meal-plans header nudge (first user-visible surface)
+
+**Why:** User said "continue" after Chunk 4. Chunk 5 is the biggest remaining chunk and the first user-visible surface — the page + entry points that make Chunks 1-4 mean anything to the user.
+
+### Shipped
+
+- **API-service extension** [`mealPlanApiService.ts`](web_app/src/services/api/mealPlanApiService.ts) — two new methods `getReconcileQueueAsync({cursor?, limit?})` + `submitReconcileVerbAsync(entryId, command)`; six new exported types (`ReconcileVerb`, `ReconcileState`, `ReconcileEntry`, `ReconcileQueue`, `ReconcileVerbCommand`, `ReconcileVerbResult`) mirroring the backend DTOs from Chunk 3.
+- **New composable** [`useReconcileQueue.ts`](web_app/src/composables/useReconcileQueue.ts) — one shared cache serving the reconcile page + dashboard chip + meal-plans header nudge, so a verb submitted on the page invalidates the count everywhere in the same tick (matches `useDoraScore`'s shape). Module-level `entries`, `total`, `nextCursor`, `loading`, `error` refs; `STALE_AFTER_MS = 60s`; `submitVerb` locally removes the resolved entry from the queue on non-skip / non-idempotent results (server truth rehydrates on next `reload()`).
+- **New reconcile page** [`MealReconcilePage.vue`](web_app/src/pages/MealReconcilePage.vue) — same runner-shell shape as `StocktakeRunner.vue`. Empty state is a state of the runner. Five verb buttons matching proposal §3.2: **Cooked** (big primary), **Different portions** + **Cooked later** (secondary pair with dialogs for `actual_servings` + `cooked_on`), **Didn't cook** (danger-ghost), **Skip for now** (small ghost). Five-counter completion recap. `(?)` help dialog explaining every verb + linking to the setting.
+- **Route registration** [`router/routes.ts`](web_app/src/router/routes.ts) — new `path: 'meal-plans/reconcile'` mounted to the page.
+- **Dashboard chip** [`ReconcilePastMealsChip.vue`](web_app/src/components/dashboard/ReconcilePastMealsChip.vue) — compact card in the *Your kitchen* zone (`CardId = 'reconcile_pending'` added to the CARD_DEFS registry). Hide-when-empty **twice** — the component's `v-if="total > 0"` guards + the dashboard wrapper also guards on `reconcileTotal > 0` so an empty queue doesn't render an empty grid column.
+- **Meal Plans header nudge** [`MealPlansOverview.vue`](web_app/src/pages/MealPlansOverview.vue) — inline `<router-link>` above the planner, `v-if="reconcileTotal > 0"`, small brand-primary text-link with a hover tint.
+
+### Not shipped this pass
+
+- Chunk 6 — settings row + full UX-copy polish. That's the remaining chunk.
+- The `include_resolved=true` history view — Chunk 5's page uses the queue-only surface as the impl-plan pinned; the history section stays on the shelf until a user actually asks.
+- Idempotent replay UI toast — a repeat call for the same verb returns `idempotent: true` but the page doesn't currently surface that to the user (the second click just no-ops silently). Fine for MVP; if a user hits it accidentally, a small "already recorded" toast could be added in Chunk 6 or as an FU.
+
+### Ledger updates
+
+- `CHANGELOG.md`: `[Unreleased] > Added` Chunk 5 entry.
+- `DORA_VERIFY.md`: new block "Meal reconcile — page + dashboard chip + header nudge" under **Meal plans** — 12 checks (threshold + every verb + empty state + text-size + themes + (?) help).
+- `PROJECT_STATE.md`: doc-register row bumped; recently-shipped bullet.
+
+### Engineering-standards close-gate
+
+- **R-002 (theme tokens only)** — every colour in the new components goes through `var(--brand-primary)` / `var(--text-on-primary)` / `var(--surface-*)` / `var(--text-*)` / `var(--border-subtle)` / `var(--radius-*)` etc. The one hover tint uses `color-mix(in srgb, var(--brand-primary) …%, …)` — same idiom as the settings pages. Clean.
+- **R-003 (state-ownership)** — every count / order / filter comes from the server. `useReconcileQueue.total` is `page.total` verbatim; the page's `initialCount` is snapshotted from the loaded entries; the client never re-derives "how many are overdue" or "which entries are still open" (that filter is inside the queue endpoint, Chunk 3). Clean.
+- **R-005 (distribution posture)** unaffected.
+- **R-029 (hide-when-empty)** — dashboard chip + meal-plans header nudge both `v-if="reconcileTotal > 0"`, no zero-state chips. Clean.
+- **R-031 (constructor DI)** — Vue side; N/A.
+- **R-001 (componentisation-first)** — `ReconcilePastMealsChip` is a first-class dashboard component in the same folder as `DoraScoreCard`, not inlined into `DashboardPage.vue`. Clean.
+- No new rule / ADR needed. The **single-runner-shell** pattern is now used by both StocktakeRunner and MealReconcilePage — if a third runner appears, promote to a `RunnerShell.vue` wrapper.
+
+### Verification
+
+- **`vue-tsc --noEmit`** clean for my changes. Three pre-existing `DashboardPage.vue` errors about `'draft_shop'` / `CardId` are unchanged and unrelated.
+- **AST parse** N/A for Vue files; TS ones covered by vue-tsc.
+- **No test-suite run** — user runs. E2E test files from Chunks 1 + 3 + 4 cover the entire backend surface these pages call.
+- **No browser walk** here — DORA_VERIFY entry logs the checks for the user to walk on a running app.
+
+### Next up
+
+Chunk 6 — settings row + UX-copy polish. Small: add a **Meal reconciliation** section to Settings → Admin → System with the auto-drain toggle + explainer + deep-link chip, then walk the copy across the page verbs + alert message + suggestion body + chip caption for a final pass. `COVERAGE_GAPS.md` flip for MR-1 / MR-5 / MR-7 is part of this pass.
+
+---
+
+## 2026-07-09 — FU-317 Chunk 4: `meal_reconcile_overdue` alert + `reconcile_meals_pending` suggestion
+
+**Why:** User said "continue" after Chunk 3. Chunk 4 lands the two backward-looking nudge signals — no user-visible surface until Chunk 5 (the reconcile page), but the alerts + suggestions APIs now include the new kind, so a running app is one migration + this code away from surfacing them via the existing bell + suggestions card.
+
+### Shipped
+
+- **One authority for the overdue-signal decision** in [`meal_plans/reconcile.py`](dora_api/features/meal_plans/reconcile.py):
+  - New `reconcile_overdue_signal(today) -> ReconcileOverdueSignal(fires, unresolved_count, oldest_days_back)` — a single SQL query joins queue entries + their latest receipts (same `NOT EXISTS` on `created_at` pattern as the queue paged fetch), returns COUNT + MIN(scheduled_for), and applies the D1 threshold locally.
+  - Threshold constants `RECONCILE_OVERDUE_MIN_COUNT = 3`, `RECONCILE_OVERDUE_MIN_DAYS_BACK = 4` — one location; alert + suggestion both call the helper (R-003). Change the constants → both surfaces move together.
+- **`meal_reconcile_overdue` alert kind** — added to [`alert_kinds.py`](dora_api/features/alerts/alert_kinds.py) `DEFAULT_TIER_BY_KIND` as `TIER_FYI` (same shape as `no_planned_meals` / `shopping_day` — backward-looking nudge, never inflates the badge). New `GetAlertsHandler._meal_reconcile_overdue_alerts` method in [`get_alerts.py`](dora_api/features/alerts/get_alerts.py) reads the signal + emits one AlertDto keyed `meal:meal_reconcile_overdue:<head_iso>` where `head_iso` is the oldest unresolved entry's date. That key structure means a snooze/dismiss decision persists while the head-of-queue entry stays there, and rolls to a fresh key once cleared (matches `no_planned_meals:2026-W25` idiom).
+- **`reconcile_meals_pending` suggestion kind** — added to [`generators.py`](dora_api/features/suggestions/generators.py) with a new `KIND_RECONCILE_MEALS_PENDING` constant, a new `generate_reconcile_meals_pending` generator, and a wire into `generate_all`. Deep-links to `/meal-plans/reconcile` via the `primary_action.path`. Dedup keyed on `head_iso` (same as the alert), payload carries `unresolved_count` + `oldest_days_back` so the SPA can render the count inline.
+- **Circular-import guard** — both consumers of `reconcile_overdue_signal` (alerts + suggestions) import it *inside* the emit function, not at module top. `reconcile.py` imports `MEAL_PLAN_ROUTER` (via `dora_api.features.routers`) + `bump_pool` (via `dora_api.features.recipes.pool`) + the receipt entity — the alerts + suggestions modules are downstream of those, so a module-top import would loop.
+- **5 e2e tests** in [`tests/e2e/dora_api/test_reconcile_signal.py`](tests/e2e/dora_api/test_reconcile_signal.py) — below-count-threshold (2 entries), above-count-but-all-recent (4 entries at 2 days back), at-threshold (both surfaces fire with matching payload), alert-prefs default (kind is listed as `fyi`), firing → clearing round-trip (resolve every entry → both surfaces clear).
+
+### Not shipped this pass
+
+- Chunks 5 + 6 unchanged from the impl-plan.
+- **Test-only DB reset helper** — `_clear_test_receipts_and_plans()` in the new test file uses raw SQL `DELETE FROM MealPlanReconcileReceipt` to clear residue from previous tests. Belt-and-braces since the e2e suite doesn't have a per-test rollback fixture on this table. If e2e adopts one (FU-183 tail), the helper can be dropped.
+
+### Verification
+
+- **AST parse** clean on all 5 touched files.
+- **Manual reasoning** on the SQL: single JOIN + `NOT EXISTS` scan on the reconcile-receipt PK+created_at index (added in Chunk 1's migration). At household scale (dozens of entries max), well within one-query budget for the alerts feed hot path.
+- **No test-suite run this session** — user runs.
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** actively improved — the threshold and the "is the queue overdue?" decision live in one function called by two surfaces. The alert emitter and the suggestion generator both defer to `reconcile_overdue_signal`; neither reproduces the query or the constants. Clean.
+- **R-005 (distribution posture)** — repository-portable SQL, `COUNT(*)` + `MIN(scheduled_for)` supported everywhere. No `tenant_id`. Clean.
+- **R-006 (clean migrations)** — no migration this chunk. Unaffected.
+- **R-010 (closed-set validation)** — alert kind added to the canonical `DEFAULT_TIER_BY_KIND` registry so `AlertPreference` overrides validate against it consistently with the other kinds. Clean.
+- No new rule / ADR needed. The **module-top-import-vs-local-import for circular chains** pattern is worth watching if it appears in a third feature; not there yet.
+
+### Next up
+
+Chunk 5 — SPA reconcile page (`/meal-plans/reconcile`), dashboard chip (`ReconcilePastMealsChip.vue`), meal-plans header nudge, `useReconcileQueue.ts` composable. First user-visible surface for FU-317. Chunk 6 is settings row + full copy polish.
+
+---
+
+## 2026-07-09 — FU-317 Chunk 3: reconcile queue + per-entry verb endpoints
+
+**Why:** User said "continue" after Chunk 2. Chunk 3 lands the REST surface Chunks 5-6 will call — still backend-only, no UX yet.
+
+### Shipped
+
+- **New endpoint file** [`dora_api/features/meal_plans/reconcile.py`](dora_api/features/meal_plans/reconcile.py) — two routes on `MEAL_PLAN_ROUTER`:
+  - **`GET /api/meal-plans/reconcile-queue`** — cursor-paged list of past-day entries whose *latest* receipt is unresolved (or `resolved_deferred`, which the Skip verb produces to keep an entry in the queue on the next visit). One SQL query with a `NOT EXISTS` sub-select on `created_at` picks the latest-per-entry receipt without needing window functions (SQLite-portable). Returns entries + `next_cursor` + exact `total` for Chunk 5's dashboard chip. `include_resolved=true` accepted but returns empty in MVP (history view is Chunk 5).
+  - **`POST /api/meal-plans/reconcile/<entry_id>`** — five verbs (`cooked` / `cooked_adjusted` / `cooked_later` / `not_cooked` / `skip`) → six append-only receipt states (`resolved_confirmed` / `_adjusted` / `_not_cooked` / `_deferred`, plus the two `unresolved_*` sweep states). Each verb dispatches through the same handler:
+    1. Load entry + latest receipt.
+    2. **Idempotence check** — same verb + same fields as latest receipt → return `idempotent: true`, 200, no receipt written.
+    3. Compute `current_drained` from the latest receipt's state (or the initial `consumed_at`), `target_drained` from the incoming verb, and the delta = `current - target`.
+    4. If nonzero, `bump_pool(recipe_id, pool_delta)` (Chunk 2's authority).
+    5. Sync `consumed_at`: cooked verbs stamp now if NULL; not-cooked / skip clear it if set.
+    6. INSERT a new receipt row (never mutates past ones — same `MealPlanSwapLedger`-style shape from FU-451).
+    7. `db.session.commit()` (pool math + consumed_at flip + receipt insert atomic).
+- **Rate-limit** — 60/min per authenticated user via the FU-458 `subject` bucket. Scope `meal_plans.reconcile`. Local `_too_many_requests` mirrors the assistant module's RFC-6585 429 shape.
+- **Cursor** — simple: base64'd ISO `scheduled_for` date. Same-day ties are documented as a "30+ past-day entries on one calendar day" edge case not worth engineering around at household scale.
+- **9 e2e tests** in [`tests/e2e/dora_api/test_reconcile_verbs.py`](tests/e2e/dora_api/test_reconcile_verbs.py) — queue-includes/excludes, `include_resolved` MVP stub, `cooked` on auto-drain-ON (no delta) + auto-drain-OFF (drain applied), `not_cooked` reversing an ON drain, `cooked_adjusted` reflowing the pool delta + required-fields validation, `cooked_later` recording `cooked_on`, `skip` keeping the entry in the queue, idempotence, change-of-mind (cooked → not_cooked → correct pool + audit trail), unknown-verb 400, unknown-entry 404.
+
+### Not shipped this pass
+
+- Chunks 4-6 unchanged from the impl-plan.
+- The verb handler uses raw `db.session.execute(text(...))` for the MealPlanEntry consumed_at flip + receipt insert rather than routing through the `SqlAlchemyRepository` ORM. Same rationale as the swap-ledger writer and the sweep: the receipt table is classic-mapper-registered but its child-of-MealPlanEntry relationship isn't a SQLAlchemy `relationship()`, so ORM autoflush wouldn't sequence the insert correctly against the same-transaction consumed_at UPDATE. If a third caller with this shape appears, promote to a small helper — for now, two callers × explicit comments is enough.
+
+### Verification
+
+- **AST parse** — clean on the new endpoint file + the new test file.
+- **Router auto-discovery** — the module's `MEAL_PLAN_ROUTER.route(...)` decorators register both new routes when `_iter_submodules` walks `dora_api/features/meal_plans` at boot (existing pattern; nothing else to wire).
+- **No test-suite run this session** — user runs.
+- **No `vue-tsc`** — backend-only.
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** — pool math routes through Chunk 2's `bump_pool`; the "how many servings are currently drained for this entry" derivation lives in one function (`_effective_drained`) that maps receipt-state → drain amount. Verb → target-state → drain amount is a table constant (`_VERB_TO_STATE`, `_target_drained`), not inline branching per verb. Clean.
+- **R-005 (distribution posture)** — repository-portable SQL (SQLite + Postgres both accept the `NOT EXISTS` shape + `INSERT` with named params). No `tenant_id` speculative column; user_id resolved from session for the receipt's `resolved_by_user_id`. Clean.
+- **R-006 (clean migrations)** — no migration this chunk. Unaffected.
+- **R-010 (closed-set validation)** — verb vocabulary validated at the handler boundary against `_ALLOWED_VERBS` (a `frozenset`). Verb → state mapping is a module-level dict, not scattered branches. Clean.
+- **R-031 (constructor DI)** — the endpoint is a plain Flask function, not a DI-injected handler class. Rationale: it doesn't own any state beyond the request-scoped ORM session. If future work adds structured business logic that wants unit-testing without the ORM, extract a handler class then. For now, the SPA (Chunk 5) is the only other caller and it goes through the HTTP surface. Called out in the module docstring implicitly.
+- No new rule/ADR needed. The **latest-per-entity via NOT EXISTS on created_at** pattern is worth watching — if it appears in a third feature, an ADR for "prefer NOT EXISTS over window functions for SQLite portability" would be justified.
+
+### Next up
+
+Chunk 4 — new `meal_reconcile_overdue` alert kind + `reconcile_meals_pending` suggestion kind. Both are small: plug into the existing `PROPOSAL_ALERTS.md` / `ALERT_ROUTER` pattern; threshold from D1 (≥3 unresolved entries ≥4 days back).
+
+---
+
+## 2026-07-09 — FU-317 Chunk 2: `Recipe.available_meals` mutation collapsed to one authority (`recipes/pool.py`)
+
+**Why:** User said "continue" after Chunk 1. Chunk 2 executes the R-003 payoff the proposal §5.1 promised — the two-authority drift (raw SQL CASE-WHEN in the sweep + inline `_Recipe.available_meals = …` in each handler) collapses to a single primitive.
+
+### Shipped
+
+- **New module** [`dora_api/features/recipes/pool.py`](dora_api/features/recipes/pool.py) — one authority for pool mutation:
+  - **`bump_pool(recipe_id, delta, *, connection=None) -> int`** — atomic `UPDATE ... RETURNING available_meals` with the floor-at-zero rule expressed once (SQL CASE WHEN). Runs on either the ORM session (`connection=None`, used by handlers) or a passed connection (used by the sweep's decoupled transaction). Handles the SQLite-BINARY(16) vs UUID-string bind gotcha identically to the swap-ledger writer.
+  - **`preview_pool_after(current, delta) -> int`** — pure projection function for preview surfaces (Python-side floor rule). Byte-for-byte matches what `bump_pool` will do, so preview labels and commits stay wired.
+- **Three write-site rewires:**
+  - [`cook_recipe.py`](dora_api/features/recipes/cook_recipe.py) — `_Recipe.available_meals = (…) + request.meals_cooked` replaced with `_NewPool = bump_pool(_Recipe.id, request.meals_cooked)`; response returns `_NewPool` (ORM cache is now stale for that attribute, called out in a comment).
+  - [`adjust_recipe_meals.py`](dora_api/features/recipes/adjust_recipe_meals.py) — inline `max(_New, 0)` gone; single `bump_pool(_Recipe.id, request.delta)` call.
+  - [`reconcile_consumed_meals.py`](dora_api/features/meal_plans/reconcile_consumed_meals.py) — the sweep's inline CASE-WHEN UPDATE gone; single `bump_pool(_RecipeId, -_ToDecrement, connection=_Conn)` call routes through the same helper but stays on the sweep's own connection-level transaction (as required by `db.engine.begin()`).
+- **One preview-site rewire:** [`confirm_actions.py:833`](dora_api/features/assistant/confirm_actions.py) — the assistant's "Adjust {recipe} by {delta}? (Pool: X → Y)" preview now calls `preview_pool_after` instead of expressing `max(0, current + delta)` inline. A comment ties both surfaces to the shared authority so a future rule change (e.g. an upper cap) doesn't drift preview vs commit.
+- **New unit tests** [`tests/test_recipe_pool.py`](tests/test_recipe_pool.py) — 7 pure-function pins on `preview_pool_after` (zero delta / positive / negative-within / negative-clamps / delta-makes-zero / None-current / large-positive). DB-bound `bump_pool` is covered end-to-end by `test_reconcile_receipts.py` + the existing cook/adjust router tests.
+
+### Verification
+
+- `grep -rE '\.available_meals\s*=[^=]' dora_api/` now returns **only creation/seed sites** ([`create_recipe.py:270`](dora_api/features/recipes/create_recipe.py) `available_meals = 0` at Recipe insert, and 3 dev-seed rows in [`seed.py:563-565`](dora_api/persistence/seed.py)). Zero remaining post-creation mutations outside `pool.py`.
+- `grep -rE 'SET available_meals' dora_api/` returns **only pool.py:59**.
+- AST parse clean on all 6 touched files.
+
+### Not shipped this pass
+
+- Chunks 3-6 unchanged from the impl-plan.
+- Postgres migration of the `text() + str(uuid)` bind pattern — pool.py inherits the existing bytes-vs-str dance from the sweep + swap-ledger writer. When Postgres becomes the default (already done, FU-045), this dance is a candidate for a targeted sweep across the raw-SQL sites; not this chunk's job.
+
+### Ledger updates
+
+- `CHANGELOG.md`: `[Unreleased] > Added` gained the Chunk 2 entry above the Chunk 1 one.
+- `PROJECT_STATE.md`: Recently-shipped bullet; doc-register row notes Chunk 2 shipped alongside Chunk 1.
+- No new FUs. No `DORA_VERIFY.md` entry (backend-only refactor; behaviour is byte-identical for the existing routes — the sweep, cook, adjust, and the assistant adjust-preview all produce the same numbers as before, just from a single authority now).
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** actively improved — the whole point of this chunk. From three sites × two expressions of the floor rule → one site, one expression (the SQL CASE WHEN) + one pure preview mirror.
+- **R-005 (distribution posture)** — pool.py is DB-portable (SQLite ≥ 3.35 and Postgres both accept `UPDATE ... RETURNING`; the `db.session` vs `connection` dual-mode lets the same code serve the per-request ORM path and the decoupled connection-level sweep). Clean.
+- **R-006 (clean migrations)** — no migration this chunk. Unaffected.
+- **R-031 (constructor DI)** — pool.py is a plain module-level helper, not a class; not a DI seam. Handlers still keep their ctor-injected repository. Clean.
+- No new rule/ADR needed. The **stale-ORM-attribute-after-raw-SQL** pattern (handlers reading the return of `bump_pool` rather than the ORM attribute) is worth watching — if we grow a third caller with the same shape, an ADR would be justified. For now, two callers × explicit comments is enough.
+
+### Next up
+
+Chunk 3 — reconcile queue + per-entry verb endpoints (`GET /api/meal-plans/reconcile-queue` + `POST /api/meal-plans/reconcile/<entry_id>`, plus `auto_drain_past_meals` already exposed on `PATCH /api/app-settings`). Handlers use `bump_pool` for the "Cooked" / "Cooked adjusted" / "Cooked later" / "Didn't cook" verbs' pool arithmetic. Backend-only through Chunk 4; UX lights up at Chunk 5.
+
+---
+
+## 2026-07-09 — FU-317 Chunk 1: `MealPlanReconcileReceipt` + `AppSetting.auto_drain_past_meals` landed; sweep rewritten
+
+**Why:** User picked the D5 recommendation (install-wide `AppSetting`, FU-517 → RESOLVED); Chunk 1 unblocked. Backend-only chunk, no user-visible change yet — the receipt table starts populating in the background so Chunks 3–6 have something real to surface.
+
+### Shipped
+
+- **Migration** [`a1b7f3e9c2d4_20260709_meal_reconcile_receipts.py`](dora_api/persistence/migrations/versions/a1b7f3e9c2d4_20260709_meal_reconcile_receipts.py), forward-only + additive, chains from `f4b2d8e6a1c3`:
+  - Adds `AppSetting.auto_drain_past_meals BOOLEAN NOT NULL DEFAULT TRUE` (`batch_alter_table` for SQLite-friendly ALTER).
+  - Creates `MealPlanReconcileReceipt` table — `id`, `meal_plan_entry_id` (FK cascade), `state` (String(32)), `original_servings`, `actual_servings`, `cooked_on`, `resolved_by_user_id` (FK set-null), `resolved_at`, `note`, `created_at`. Composite index `(state, created_at)` for the queue query Chunk 3 will run.
+- **New entity** [`meal_plan_reconcile_receipt.py`](dora_api/domain/entities/meal_plan_reconcile_receipt.py) — dataclass + six-value state module constants (`STATE_UNRESOLVED_AUTO` / `_MANUAL` / `RESOLVED_CONFIRMED` / `_ADJUSTED` / `_NOT_COOKED` / `_DEFERRED`) exported for use across the reconcile stack.
+- **Table mapping** — new `meal_plan_reconcile_receipt_table` block + classic-mapper wiring, immediately after the FU-451 `MealPlanSwapLedger` (same idiom).
+- **`AppSetting` entity + table + DTO + PATCH** all extended with `auto_drain_past_meals`. Admin-only `PATCH /api/app-settings` now accepts the field (plain bool, no validation beyond pydantic). `GET /api/app-settings` exposes it.
+- **Sweep rewritten** — [`reconcile_consumed_meals.py`](dora_api/features/meal_plans/reconcile_consumed_meals.py) reads both `timezone` + `auto_drain_past_meals` in a single `SELECT` on the same connection, then picks a branch:
+  - **`_sweep_auto_drain`** (TRUE, default): identical historic behaviour (`UPDATE ... RETURNING` stamps `consumed_at`, then pool decrement) + one `unresolved_auto` receipt insert per drained entry.
+  - **`_sweep_manual_confirm`** (FALSE): `SELECT ... WHERE consumed_at IS NULL AND NOT EXISTS (receipt)` finds pending entries; writes `unresolved_manual` receipts only. `MealPlanEntry.consumed_at` + `Recipe.available_meals` deliberately untouched.
+  - Shared `_insert_receipt` helper handles UUID-vs-bytes id binding the same way the existing pool-decrement UPDATE does (SQLite `UUIDType` stores as BINARY(16), so raw text() binds pass bytes back verbatim).
+- **E2E test file** [`tests/e2e/dora_api/test_reconcile_receipts.py`](tests/e2e/dora_api/test_reconcile_receipts.py) — 4 tests covering the four impl-plan Chunk 1 acceptance points:
+  1. Auto-drain ON → receipt + pool decrement + `consumed_at` stamped.
+  2. Auto-drain OFF → receipt only; pool + entry untouched.
+  3. Idempotence across repeat sweeps (both branches).
+  4. Cascade delete (deleting an entry removes its receipts via `ON DELETE CASCADE`).
+
+  Reads receipt state via direct `db.engine.connect()` + `text()` since the read endpoint is Chunk 3's job. Triggers the sweep with a cheap `GET /api/meal-plans/today` on the same routers where the `before_request` hook is attached.
+
+### Not shipped this pass (still Chunks 2-6)
+
+- Chunk 2: shared `Recipe.available_meals` mutation helper — the two-authorities drift still exists; the receipt-writer is decoupled from the pool math so Chunk 2 is a clean follow-on.
+- Chunks 3-6 unchanged from the impl-plan.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-517 removed (D5 → install-wide confirmed).
+- `DORA_FOLLOWUPS_RESOLVED.md`: FU-517 landed at the top with the one-line resolution.
+- `PROJECT_STATE.md`: `IMPL_PLAN_MEAL_RECONCILE` doc-register row flipped from 🔴 blocked back to 🟡 in-progress (Chunk 1 shipped, Chunks 2-6 pending); FU-517 row removed from Needs-your-attention; recently-shipped bullet added.
+- `IMPL_PLAN_MEAL_RECONCILE.md`: D5 hold-banner replaced with a "D5 resolved" one-liner; Chunk 1 migration + sweep-gate text updated to match what actually shipped.
+- `CHANGELOG.md`: `[Unreleased] > Added` entry.
+- `DORA_VERIFY.md`: **no entry** — Chunk 1 is backend-only, no user-visible surface to walk. Verify begins at Chunk 5.
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** — receipt states are a closed enum owned by the entity module (`RECONCILE_STATE_VALUES`); no client-side duplication. The pool-decrement authority split is still open (Chunk 2's job); flagged in the sweep's docstring as "the shared helper lands in Chunk 2".
+- **R-005 (distribution posture)** — repository-routed everywhere except inside the sweep (which uses raw `text()` on a connection-level transaction — pre-existing pattern justified in the module docstring). Migration additive; portable to Postgres + SQLite; no `tenant_id` speculative column. Setting on `AppSetting` (household voice), not `User`. Clean.
+- **R-006 (clean migrations)** — forward-only, additive, no backfill; existing rows get the `server_default=true()`. `batch_alter_table` is used for the ADD COLUMN so SQLite ALTER limitations don't bite. Clean.
+- **R-010 (closed-set validation)** — `state` is a `String(32)` at the DB level (matches the existing `MealPlanSwapLedger.kind` pattern); the enum lives in the entity module's `RECONCILE_STATE_VALUES` tuple. Any Chunk 3 write-site will validate against that tuple at the API boundary. Called out in the entity docstring.
+- **R-031 (constructor DI)** — `UpdateAppSettingsHandler` already followed R-031; my edit only added one field. Sweep is not DI-injected (pre-existing shape — it's a connection-level function, not a handler). No new DI seam needed.
+- No new rule/ADR needed. The append-only receipt shape is now used by two features (`MealPlanSwapLedger` from FU-451 + this one) — noting as the ADR precedent for a *third* case if one appears.
+
+### Verification
+
+- **AST parse** of all 8 touched files — clean.
+- **Entity import + default check** — `AppSetting().auto_drain_past_meals` == `True` (matches the migration's `server_default=true()`).
+- **No test-suite run** — user runs. E2E tests will need a live app boot (`tests/e2e/dora_api/` harness).
+- **No `vue-tsc`** — backend-only chunk.
+
+### Next up
+
+Chunk 2 — the shared `Recipe.available_meals` mutation helper (R-003 collapse). Small pure-code refactor: extract `bump_pool(recipe_id, delta, conn=None) -> int` into `dora_api/features/recipes/pool.py`, route the sweep's raw `UPDATE "Recipe" SET available_meals = …` AND `cook_recipe.py`'s inline arithmetic through it. `grep -r "available_meals" dora_api/` should end with exactly one write-site.
+
+---
+
+## 2026-07-09 — FU-317 Chunk 1 pre-flight → D5 discovery (setting must be install-wide, not per-user); Chunk 1 HELD pending user sign-off
+
+**Why:** User said "continue" after the proposal + impl-plan landed. Natural next was Chunk 1 (schema + receipt writer). Started the pre-flight against the codebase to confirm the migration shape.
+
+### Discovery
+
+The proposal (and FU-317's own body) called for **`User.auto_drain_past_meals`** — a per-user setting. Pre-flight found:
+
+- **`MealPlan` has no `user_id` and no `household_id` FK.** Meal plans are implicitly household-shared — a single-household app. Verified: `table_mappings.py:833-843` has only `id / name / start_date / source_template_id / source_template_set_id / rotation_index`. No user edge.
+- **`reconcile_consumed_meals` runs as a `before_request` hook** on `DASHBOARD_ROUTER / MEAL_PLAN_ROUTER / RECIPE_ROUTER` (`startup.py:167-169`). It fires on the first authenticated request per navigation and mutates in its own connection-level transaction.
+- **Coherence problem:** with a per-user setting over a household-shared plan, whichever user opens the app first silently decides for everyone. That's *worse* than today's shape — today it's honest that reconcile is a household-wide fact; a per-user setting would make it look like personal control while actually being first-user-wins.
+
+### Recommendation: flip to install-wide
+
+Proposal §2 + §7.1 + §8 + §11 updated (D5 added) to move the setting to **`AppSetting.auto_drain_past_meals`** (install-wide). Same behaviour semantics; matches the shared-plan data model; anti-creep tiebreak (one authority per household, not N). Impl-plan Chunk 1 + Chunk 3 (endpoint moves from `PATCH /auth/me` to `PATCH /admin/settings`) + Chunk 6 (settings row moves from Preferences to Admin → System) all updated in-place. All other chunks unaffected.
+
+Alternatives considered and rejected (documented in §11 D5):
+- (a) per-user + first-user-wins → silent, worse than the audit finding it's trying to fix
+- (b) per-user + skip-if-any-user-off → adds a user-scan on every request; still weird when postures diverge across the household
+
+### Held code
+
+**No Chunk 1 code written this session.** The impl-plan now carries a red-banner *"Chunk 1 is HELD pending D5 confirmation"* at the top. The migration and receipt-writer are one line apart from either shape — but they're the *wrong* line if we picked the wrong shape, so I stopped before writing anything.
+
+### Ledger updates
+
+- `PROPOSAL_MEAL_RECONCILE.md`: §2 discovery blockquote, §2 "not per-recipe or per-plan" bullet reframed as "install-wide, not per-user or per-recipe", §7.1 schema column moves to `AppSetting`, §7.3 R-005 text updated, §8 settings block moves from Preferences to Admin → System, §9 R-005 row updated, §11 D5 added.
+- `IMPL_PLAN_MEAL_RECONCILE.md`: hold-banner at the top, Chunk 1 migration + sweep-gate updated, Chunk 3 endpoint moves to `PATCH /admin/settings`, Chunk 6 settings section moves to Admin → System, cross-cutting rules "AppSetting column only" reflects D5, "no feature flag" rule reframed (the setting itself is the kill-switch).
+- `DORA_FOLLOWUPS.md`: new **FU-517** OPEN — D5 decision needed before Chunk 1 (short body pointing at the impl-plan hold-banner).
+- `PROJECT_STATE.md`: doc-register row for `IMPL_PLAN_MEAL_RECONCILE` gets a *"Chunk 1 HELD"* note; Recently-shipped bullet gains a trailing sentence documenting the D5 discovery.
+- No `CHANGELOG.md` (nothing shipped); no `DORA_VERIFY.md` (nothing to walk).
+
+### Engineering-standards close-gate
+
+- No code touched → no rule check needed. The design shift *strengthens* R-003 compliance (one authority per household instead of N per-user authorities racing on the same shared plan).
+- No new rule/ADR needed.
+
+### Verification
+
+- No tests run — no code changed.
+- Codebase check: confirmed `MealPlan` schema against `table_mappings.py:833` and against `startup.py:150-170` and `reconcile_consumed_meals.py`.
+
+### Next up
+
+**User's call on D5** (FU-517). Two lines to flip in the impl-plan (setting home + endpoint target) and Chunk 1 becomes writable. If the user disagrees and wants per-user (option (a) or (b) above), the impl-plan needs a bigger rework to the sweep's user-picking logic.
+
+---
+
+## 2026-07-09 — PROJECT_STATE tidy (finishing FU-359's cut-short close-gate) + FU-317 proposal + impl-plan
+
+**Why:** User: "the previous task was completely done but the doc tidy up wasnt finished (ran out of tokens). after that, lets build FU-317." Previous unit (FU-359 UI revamp) shipped its code + ledger updates in a full session but ran out of tokens before the PROJECT_STATE.md refresh close-gate. FU-317 is a design-only proposal (no code) per its `Recommended resolution` block.
+
+### Shipped
+
+**Part 1 — PROJECT_STATE.md tidy (previous session's cut-short close-gate).**
+- Regen note (top of file) refreshed to lead with today's two later polish units — **FU-359 A-2 data-pages UI revamp** + **FU-360 #3 mode-slider** — instead of the stale "FU-387 P5-01 was the tail" claim. Also added the previously-omitted FU-407 / RD-18 substitute-swap ship (same date).
+- **"Full backlog is 128 open items"** → **"~60 open items"** (line 154). Actual count: 61 `## [OPEN]` headings. Two-day close-out streak stripped ~15 items from the ledger without any hand-edit picking them up.
+- **"the full 152-item open backlog"** → **"~60-item open backlog"** (line 241, "Where the detail lives").
+- **Recently shipped** gained bullets for **FU-360 #3 mode-slider** and **FU-407 / RD-18** (both 2026-07-09, both missed in prior write-ups).
+
+**Part 2 — FU-317 proposal (this session's real ask).**
+- Wrote [docs/04_proposals/PROPOSAL_MEAL_RECONCILE.md](docs/04_proposals/PROPOSAL_MEAL_RECONCILE.md) — modelled section-for-section on `PROPOSAL_STOCKTAKE_MODE.md` (the audit's suggested precedent). §1 problem framing, §2 the two postures, §3 the reconcile page + verbs, §4 surfacing, §5 integration with `available_meals` / `ConsumptionEvent` / spend roll-ups / the F6 `before_request` hook, §6 alert + suggestion interactions + setting-flip transitions, §7 schema + endpoints, §8 settings block, §9 charter check, §10 original-spec pass, §11 four residual decisions, §12 feedback coverage table, §13 anti-drift checklist.
+- **Decisions locked from principle:**
+  - Per-user `User.auto_drain_past_meals` setting (default TRUE); `PATCH /auth/me` writes it.
+  - New `/meal-plans/reconcile` surface — server-owned queue (past-day + unresolved), five verbs (Cooked / Cooked-different-portions / Didn't cook / Cooked later / Skip), five-counter completion recap.
+  - New `MealPlanReconcileReceipt` **append-only** audit table (`unresolved_auto` / `unresolved_manual` / `resolved_confirmed` / `resolved_adjusted` / `resolved_not_cooked` / `resolved_deferred`). Corrective decisions write new receipts against the same entry — never mutate the old one. Matches `MealPlanSwapLedger`'s shape.
+  - New `meal_reconcile_overdue` alert kind alongside the existing `no_planned_meals` (they don't collide — one is forward-looking, one is backward-looking).
+  - The FU's question 4 ("auto-drain and manual-reconcile mutually exclusive?") is **refused as a false choice** — they share the same surface; the setting only decides an entry's *initial* rollover state.
+- **Four residuals** left for the user's short round before impl-plan (§11): D1 alert threshold, D2 `cook_recipe`/pool coupling, D3 receipt retention, D4 setting-copy final wording.
+- **R-003 payoff** flagged: `Recipe.available_meals` mutation collapses to one shared server helper across `cook_recipe` + the sweep + the new reconcile verbs (removes today's two-authorities-for-pool-count drift with the raw `UPDATE "Recipe" SET available_meals = …` in `reconcile_consumed_meals.py:56-65`).
+- **Feedback coverage table §12** — MR-1 (L89 going-to-cook vs already-cooked) + MR-5 (L369 past-week read-only) + MR-7 (L371 batch-vs-fresh) anchored to this design; MR-2/3/4/6/8 explicitly out-of-scope with the correct home named. `COVERAGE_GAPS.md` had no rows to flip.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-317 removed (was the sole "F5/F6 magic-audit resolution needed proposal" item).
+- `DORA_FOLLOWUPS_RESOLVED.md`: FU-317 landed at the top with full state note + link to the new proposal + explicit "next step: impl-plan under 03_prompts/" pointer.
+- `PROJECT_STATE.md`: Recently-shipped bullet added for FU-317; Document register gained a `PROPOSAL_MEAL_RECONCILE` row under `04_proposals`.
+- `CHANGELOG.md`: **no entry.** Product/code changes only per CLAUDE.md — a proposal doc doesn't ship anything user-visible.
+- `DORA_VERIFY.md`: **no entry.** No running-app surface to walk yet.
+
+### Engineering-standards close-gate
+
+- **R-001 (componentisation-first)** — proposal doc; no code. §3 borrows the `StocktakeRunner`-style single-queue-one-at-a-time shape so a future impl plan naturally lands under one component root, not scattered per-verb dialogs. Clean.
+- **R-003 (state-ownership)** — the proposal *explicitly targets* an R-003 drift (two authorities for `Recipe.available_meals` mutation) and calls for its collapse to one server helper. §5.1 + §5.2 pin the ownership. Clean.
+- **R-005 (distribution posture)** — §7.3 walks the checklist: repository-routed mutations, portable SQL, per-user setting on `User` (no `AppSetting`, no `tenant_id`). Clean.
+- **R-006 (clean migrations)** — §7.1 explicit: forward-only migration, additive column, no backfill. Clean.
+- **R-029 (hide-don't-nag)** — §4 makes the dashboard chip + meal-plan header nudge both hide-when-empty. Clean.
+- No new rule/ADR needed — this proposal doesn't introduce a recurring decision worth promoting; the receipt-append-only shape is a duplicate of the existing `MealPlanSwapLedger` (FU-451) idiom that would itself deserve an ADR if it stretched to a third case.
+
+### Verification
+
+- No tests run — proposal is design-only.
+- No `vue-tsc` / `pytest` — no code touched.
+- Cross-checked the proposal's F5/F6 claims against live code: [reconcile_consumed_meals.py](dora_api/features/meal_plans/reconcile_consumed_meals.py) and [startup.py:150](dora_api/startup.py) match the described behaviour byte-for-byte.
+
+**Part 3 — Impl-plan (user said "continue" after part 2).**
+- Wrote [docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md](docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md), six chunks: (1) migration + receipt-writer plumbed into the existing sweep, backend-only, no UX; (2) shared `Recipe.available_meals` mutation helper (R-003 collapse — the two authorities become one); (3) queue + per-entry verb endpoints; (4) new `meal_reconcile_overdue` alert + `reconcile_meals_pending` suggestion kinds; (5) new `/meal-plans/reconcile` page + dashboard chip + meal-plans header nudge; (6) settings row + full copy polish + `COVERAGE_GAPS.md` flip.
+- **Locked the four proposal-§11 residuals from principle** (per auto-mode's "make the reasonable call and keep going" — they're recoverable if the user disagrees):
+  - **D1** threshold: ≥3 unresolved entries stretching ≥4 days back (half-week-of-dinners vocabulary).
+  - **D2**: `cook_recipe` and reconcile stay independent — the "finished cooking" button freely bumps the pool; reconcile is only for planned-but-unconfirmed entries. Anti-creep — no coupling that a default-posture user has to reason about.
+  - **D3**: receipts kept forever (~1 row per planned meal ever; enables a future "meals I cooked, historical" report).
+  - **D4**: setting copy pinned as *"Assume I cooked past-day meals"* + a two-sentence explainer; UX-copy skill can polish at Chunk 6.
+- **Sequencing discipline** — Chunks 1-4 are backend-only (no user-visible change through Chunk 4); Chunk 5 lights up the UX; Chunk 6 is the settings + copy tail. The plan explicitly rules out starting with the UX chunks.
+- **Anti-drift required-reading list** at the top of the plan covers proposal + charter + engineering-standards + `PROPOSAL_STOCKTAKE_MODE.md` (runner shape) + `MealPlanSwapLedger` (append-only shape) + MAGIC_BEHAVIOUR_AUDIT F5/F6 (origin) — so a future session opening this plan cold has the exact reading list.
+
+### Ledger updates (final)
+
+- `PROJECT_STATE.md`: doc-register row updated for `PROPOSAL_MEAL_RECONCILE` (residuals no longer "flagged for user round" — answered in impl-plan) + new row for `IMPL_PLAN_MEAL_RECONCILE`. Recently-shipped bullet rewritten to describe both artefacts.
+- `DORA_FOLLOWUPS_RESOLVED.md`: FU-317 entry stays (proposal was the FU's resolution deliverable) — the impl-plan is a *next-step* artefact, not a re-open. No FU exists for "run the impl-plan" — that's just the plan itself.
+- No `CHANGELOG.md` / `DORA_VERIFY.md` — design docs, no user-visible ship.
+
+### Engineering-standards close-gate (final)
+
+- Rules re-checked against the impl-plan's own "cross-cutting rules for every chunk" block — R-003 / R-005 / R-006 / R-029 / R-031 all explicitly enforced per chunk. Clean.
+- No new rule / ADR needed. The `MealPlanSwapLedger`-style append-only receipt pattern is now used by two features (FU-451 swaps + FU-317 reconcile); if a third case appears, promote to a rule.
+
+### Next up
+
+User's pick. Natural next unit: a fresh session opens `IMPL_PLAN_MEAL_RECONCILE.md`, satisfies the anti-drift required-reading list, and picks up Chunk 1 (schema + receipt writer, backend-only, no user-visible change). Chunks 1-4 can plausibly land in a single long session; Chunk 5 alone is a half-day of SPA work; Chunk 6 is a tidy pass.
+
+---
+
 ## 2026-07-09 — FU-359: Import + Backup-&-restore data pages UI revamp; FU-359 → RESOLVED
 
 **Why:** User: "FU-359 i think was already done? but to resolve this i think its worth doing a UI revamp of the screen. it looks ugly as heck at the moment. improve it. same with the import screen." The A-2 bundle's blocker was the two admin data pages still wearing an ad-hoc `q-card` stack while the rest of Settings had moved to the shared design language. Revamp both, presentation-only.

@@ -27,6 +27,12 @@ qrcode[pil]==7.4.2
 pydantic==2.6.0
 pytest-asyncio==1.4.0
 pytest==9.0.3
+# FU-169 Phase 1 tail — coverage report on `pytest` runs, no threshold
+# gate. Slows the suite ~10-20%; opt-out with `--no-cov` if that hurts a
+# tight inner-loop. Wired via pytest.ini's addopts + [coverage:*]
+# sections in .coveragerc so `pytest` alone produces a term-missing
+# report without any per-command flags.
+pytest-cov==5.0.0
 requests_cache==1.1.1
 # FU-196 (d1) — CVE-2024-35195 fix requires ≥2.32.4.
 # FU-387 — CVE-2026-25645 fix requires ≥2.33.0.

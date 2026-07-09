@@ -121,6 +121,13 @@ def test__create_stock_item__CreatingStockItemWithOnlyRequiredAttributes__StockI
 
 
 def test__create_stock_item__StockItemAlreadyExists__IsBusinessRuleViolation(api, stock_level_id, stock_location_id):
+    # FU-169 Phase 2 — self-contained after per-test DB rollback: seed the
+    # duplicate before testing the duplicate-detection response.
+    requests.post(base_route, json=CreateStockItemRequest(
+        name='Peters Neopolitan Ice Cream',
+        stock_level_id=stock_level_id,
+        stock_location_id=stock_location_id,
+    ).model_dump(mode='json'))
     _StockItemRequest = CreateStockItemRequest(
         name = 'PeTers NeoPOLitan IcE CrEam',
         stock_level_id = stock_level_id,
@@ -386,8 +393,17 @@ def test__get_stock_items__GettingSecondPage__GetsSecondPageOfStockItems(api):
     assert _Page2[0]['name'] >= _Page1[-1]['name']
 
 
-def test__get_stock_items__PageValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=true&limit=2')
+# FU-169 Phase 2 — parametrized pagination-validation matrix.
+@pytest.mark.parametrize(
+    "query,invalid_field",
+    [
+        ("page=true&limit=2", "page"),
+        ("page=1&limit=true", "limit"),
+    ],
+    ids=["page-is-not-integer", "limit-is-not-integer"],
+)
+def test__get_stock_items__pagination_value_is_not_integer__IsBadRequest(api, query, invalid_field):
+    _Response = requests.get(f'{base_route}?{query}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
@@ -395,21 +411,7 @@ def test__get_stock_items__PageValueIsNotInteger__IsBadRequest(api):
         'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': "'page' must be an integer.",
-        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
-    }
-
-
-def test__get_stock_items__LimitValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=1&limit=true')
-
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        'detail': 'See errors property for more details.',
-        'errors': {},
-        'status': 400,
-        'title': "'limit' must be an integer.",
+        'title': f"'{invalid_field}' must be an integer.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 

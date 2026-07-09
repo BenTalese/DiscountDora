@@ -53,6 +53,43 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-520 — Test-suite improvements Phase 4: frontend Vitest + Hypothesis + Postgres CI + scraper/emailer fixture tests
+- **Raised:** 2026-07-09 (split from FU-169 close-out).
+- **Type:** deferred job (large — should be its own multi-session unit).
+- **What:** the Phase-4 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.E-F P2. Four independent workstreams:
+  1. **Frontend Vitest + Vue Test Utils.** Start with composables (`useMealPlanExport`, `useUndo`, `useShortcut`, cart/quantity helpers). Then key components (`StockLevelDot`, `AddToListButton`, shopping rail). Wire `npm run test:unit` into any future CI.
+  2. **`merchant_api` scraper tests** against saved HTML fixtures — the [[FU-161]] Aldi-scraper work finally gets a net.
+  3. **`emailer` template-render + send-path tests** with a fake transport.
+  4. **Hypothesis property tests** for the rich-logic domain modules (`recipe_cookability`, `stock_status`, `product_offer` — e.g. *cookable ⇒ every ingredient in stock*).
+  5. **Postgres-backed CI test runs** once FU-045's Postgres migration lands (already resolved) and CI is un-commented ([[FU-405]] / `.github/workflows/ci.yml`).
+- **Why deferred:** each of the four workstreams is a real chunk of work. Sequencing them under one FU would obscure progress; sequencing them independently would obscure the shared "trust the frontend + property invariants + CI" motivation.
+- **Recommended resolution:** pick a workstream when the surface it touches gets a real change (e.g. Vitest when adding a new composable; scraper tests when [[FU-358]] Aldi upgrade lands). **Recommended resolution point:** opportunistic per workstream.
+- **Cross-ref:** [[FU-519]] Phase 3 (untested API surfaces) — separate; Phases 3 + 4 are proposal-parallel, not sequential.
+
+## [OPEN] FU-519 — Test-suite improvements Phase 3: close coverage gaps
+- **Raised:** 2026-07-09 (split from FU-169 close-out).
+- **Type:** deferred job (large — should be its own multi-session unit).
+- **What:** the Phase-3 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.D. Three layers:
+  1. **Domain-logic unit tests** for the untested `domain/` modules (`recipe_tags`, `generics`, `types`).
+  2. **API e2e for the ⚠️ untested surfaces** — proposal §4 lists ~24 endpoints without dedicated e2e coverage. Priorities: `recipes` (CRUD + filters + cookability surfacing), `meal_plans` (CRUD + entries + reconciliation), `dashboard`, `search`. Then the long tail.
+  3. **Persistence / repository tests** for the shared query machinery (`SqlAlchemyRepository.paginate`, filter operators, `field_map`, NOCASE sort). Currently exercised indirectly by every list test; a focused suite would let router tests stop re-proving operator semantics.
+  4. **Contract / snapshot tests** for DTO shapes — one test per endpoint snapshotting response keys, catches DTO drift (the shape FU-166 spent days fixing).
+- **Why deferred:** substantial (24+ new e2e files + a repository test module + ~15 domain-unit tests). Should be sequenced by which surface gets touched next, not done as a monolithic sweep.
+- **Recommended resolution:** whenever a chunk touches a currently-untested surface, add its e2e file at the same time (per-touch policy, matches R-023's per-edit spirit for `assert_problem`). **Recommended resolution point:** opportunistic per surface.
+- **Cross-ref:** [[FU-520]] Phase 4 (frontend / Hypothesis / scraper / Postgres CI) — separate.
+
+
+## [OPEN] FU-518 — Digest dedup test assumes 1 item = 1 dedup key; a fresh item generates two alerts, breaking the assumption
+- **Raised:** 2026-07-09 (FU-169 Phase 2 pass surfaced it; debugged same day).
+- **Type:** finding (test-design flaw + a possible alerts-model refactor).
+- **What:** `tests/e2e/dora_api/test_alerts_digest.py::test__digest__dedups_until_alert_clears_and_refires` passes pre-FU-169 (state polluted from prior tests happened to satisfy the dedup) and fails post-rollback (deterministic clean slate). Marked `@pytest.mark.xfail(strict=False)`.
+- **Root cause (from a targeted debug pass 2026-07-09):** a newly-created stock item with `expiry_date="2020-01-01"` generates **two alerts** — `stock:{id}:expired` **AND** `stock:{id}:low_stock` (the default `stock_level` for a POSTed item is Low, and Low fires its own alert kind). Call 1 sends on the expired key + writes an `AlertInteraction` row keyed by `stock:{id}:expired`. Call 2's alerts include the same item's `stock:{id}:low_stock` alert — a **different `alert_id`**, so the interaction-based dedup at `_process_user` misses it, the email is re-sent, and it contains `name`. The test's assumption "one item = one dedup key" is what's wrong; the alerts model produces multiple keys per item.
+- **Why not a Phase 2 architecture issue:** the rollback is doing exactly what Phase 2 says it should — starting each test from the seed baseline. It just made a pre-existing intermittent flake deterministic.
+- **Also noted during debug:** `GetAlertsHandler.handle()` doesn't take a `now` parameter — it uses wall-clock. Doesn't cause this specific failure but it's a testability issue that will bite the next alerts-digest test author. Worth an inline fix while touching this file.
+- **Recommended resolution:** fix the test — assert dedup on the *specific* `stock:{id}:expired` key (via a helper that pulls the alert_id from a first-call inspection), not on `name in html_body`. Alternatively, extend the alerts model to unify per-item alerts into one canonical dedup key (bigger scope; product decision). While there, thread `now` through `GetAlertsHandler.handle()` — the digest already takes a `now`.
+- **Cross-ref:** FU-169 close-note.
+
+
 ## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
 - **Raised:** 2026-07-07 (user request).
 - **Type:** deferred job (audit-first, then refactor).
@@ -394,21 +431,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** content task typically deferred to post-launch.
 - **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. The overlay-shell counterpart (FU-367) was retired in favour of the shipped `(?)` help chips, so this content work no longer has an overlay to render into — it lives on HelpPage / DoraBot.
 
-## [OPEN] FU-360 — A-3 DORA BOT (assistant chat) polish — code-complete, 2 browser verifies remain
-- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (bundle — was 6 sub-items; all code work now landed).
-- **Shipped 2026-07-08:**
-  - **#5 greeting once-per-user** — the "Hi! I'm Dora" hint key in `DoraBubble.vue` is now keyed by user id (`dora.helpHintDismissed.<userId>`) instead of one browser-wide key, so each household account gets exactly one acknowledge.
-  - **#6 turn the bot off** — new per-user `show_assistant` preference (User column + migration `c7d1a9e3f2b6` + `PATCH /auth/me` + DTO). Toggle at Settings → Assistant ("Show Dora on every page"); `MainLayout` gates the bubble on it. e2e round-trip test added.
-  - **#2 chip squished/small** — dropped `dense`, added a `.dora-mode-chip` style (rem-based font so it follows the text-size pref, padding, icon spacing). Superseded 2026-07-09 by #3's slider replacement.
-- **Shipped 2026-07-09:**
-  - **#3 Basic/AI chip → toggle slider** — new `DoraModeSlider.vue` (two-position pill, skewed thick knob that slides between Basic/AI with a brand-primary glow on the AI side). Replaces the read-only `q-chip` in the chat header. Slider represents the user's `llm_enabled` preference (source of truth); tapping it flips the preference via `authStore.updateMeAsync` and re-probes `/assistant/status`. Disabled state (with tooltip explaining why) when: install-wide `master_llm_enabled=false`, or the user hasn't finished configuring a provider (mirrors AssistantSettings `canEnable` guard). AI-unavailable banner logic untouched (still driven by `aiActive` from the status probe, so a "preference on but currently unreachable" state still surfaces the banner).
-- **Still open (browser verify only, in DORA_VERIFY.md):**
-  - **#1 text size not honouring settings** & **#4 DS4 animation flashing on hover** — both live in `DORA_VERIFY.md` (Dashboard/Cross-cutting → Dora bot). #1 *appears already fixed* by the A6 rem migration; #4 is a hover-animation regression that can only be reproduced/fixed with the app running.
-- **Recommended resolution:** confirm the new slider behaves as intended in-browser (Basic ↔ AI flip + PATCH round-trip + disabled state when unconfigured), then walk #1/#4 during the next browser-verify session. Close this FU once all three verifies pass.
-
-
-
 ## [OPEN] FU-348 — Import templates: registry has no "every importable section has a template" symmetry check
 - **Raised:** 2026-07-01 (post-FU-343 self-review).
 - **Type:** finding (latent bug when a second importable section lands).
@@ -512,11 +534,9 @@ long session summary. Distinct from the other logs:
   resolved.** The related set is:
   - [[FU-315]] auto-add toast/chip verify
   - [[FU-316]] remembered-list toast + "always ask" setting
-  - ~~[[FU-317]] manual meal-plan reconcile proposal~~ (proposal
-    done 2026-07-09 → `PROPOSAL_MEAL_RECONCILE.md`) **and its
-    implementation chunks** (the F5 area is the one where the help
-    copy would change most after the new feature lands; impl-plan
-    still pending)
+  - ~~[[FU-317]] manual meal-plan reconcile — proposal + impl~~
+    (proposal + impl-plan Chunks 1-6 all done 2026-07-09; F5 help
+    copy is safe to write against the shipped surface)
   - [[FU-318]] cheapest-pick chip
   - [[FU-319]] inline-create pantry toast
   Starting this work earlier than that means the help copy goes
@@ -578,62 +598,6 @@ long session summary. Distinct from the other logs:
   explicitly called it out as a separate task to think about.
 - **Recommended resolution:** opportunistic — fold in next time a theming/styling pass
   comes around, or after FU-046 (theme-token compliance) gets another round.
-
-## [OPEN] FU-169 — Implement the test-suite improvements proposal
-- **Raised:** 2026-06-13 (post-FU-166 proposal)
-- **Type:** deferred job
-- **⚠️ CI policy (2026-06-30):** the entire contents of
-  `.github/workflows/ci.yml` and `release.yml` are intentionally
-  commented out to preserve the user's GitHub Actions free-tier
-  allowance during rapid Claude-driven development. **They must stay
-  disabled while that cadence continues.** Do not un-comment them as
-  part of any other prompt without an explicit user decision; the cost
-  is per-push minutes on a free-tier account. When the user is ready
-  to spend the minutes, this FU is the natural home for the revival —
-  see also [[FU-327]] which depends on CI for its Windows/macOS matrix.
-- **What:** `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` — phased
-  plan to make the suite a trustworthy net: **Phase 1 (P0)** CI runs all tests
-  (not just `tests/e2e/dora_api`) + pytest config (`xfail_strict`,
-  `filterwarnings`, markers) + `pytest-cov` + shared `assert_problem`/
-  `assert_envelope` matchers + one naming convention; **Phase 2** per-test DB
-  rollback (isolation → kills order coupling, enables `xdist`) + data
-  factories + parametrize; **Phase 3** close the 24 untested API surfaces +
-  domain/repository/contract tests; **Phase 4** frontend Vitest +
-  `merchant_api`/`emailer` fixture tests + Hypothesis + Postgres CI.
-- **Why deferred:** sizeable; needs user prioritisation. Each phase ships
-  independently green.
-- **Recommended resolution:** start **Phase 1** opportunistically (half-day,
-  no-regret); sequence the rest per the proposal. Relates to FU-045 (Postgres
-  CI, Phase 4) and FU-161 (Aldi scraper — Phase 4 gives it a net).
-- **Update 2026-06-29 — Phase 1 partially landed (no-deps slice).** Done in
-  this session:
-  - **`pytest.ini`** at repo root: `testpaths = tests` (so bare `pytest`
-    collects unit + e2e), `xfail_strict = true`, `addopts = -ra`, the
-    `unit`/`e2e`/`slow`/`scraper` marker registry, and `filterwarnings`
-    silencing the fuzzywuzzy and pytest-asyncio noise the proposal §3.9
-    flagged.
-  - **Shared response matchers in `tests/support.py`** — `assert_problem(resp,
-    status, *, field=None, detail=None, title=None)` and
-    `assert_envelope(resp, *, expect_total=None)`. Returns the parsed body /
-    items so callers can drill deeper without re-parsing.
-  - **Naming convention codified** as R-023 + ADR-019 in ENGINEERING_STANDARDS:
-    `test__<unit>__<condition>__<result>`, per-edit migration policy (don't
-    open a rename-all PR).
-  - Suite still 538/541 green (3 failures are FU-328 pre-existing; the
-    flaky 4th from earlier passed under this run's ordering).
-- **Still owed for Phase 1** (each needs a user decision):
-  1. **`pytest-cov` reporting** — adds a pip dep and slows runs ~10-20%;
-     proposal says "no gate yet" so it's report-only. Want me to add it?
-  2. **Un-comment `.github/workflows/ci.yml`** — the entire workflow has
-     been commented out since `20176e8` ("Comment out github workflows
-     temporarily") and CI hasn't run since. Phase 1's "CI runs the whole
-     suite" can't land without first un-commenting, then changing
-     `pytest tests/e2e/dora_api` → `pytest`. This is the bigger ask.
-  3. **Retrofit ~40 inline problem-detail assertions** to use
-     `assert_problem` — R-023 explicitly says "per-edit migration, don't
-     open a rename-all PR", so this is intentionally not done as a sweep.
-     The matchers are available for any new test or any old one that gets
-     touched.
 
 ## [OPEN] FU-358 — Check / upgrade the Aldi scraper (site appears updated)
 - **Raised:** 2026-06-12 (user note during Phase 1 wrap-up)

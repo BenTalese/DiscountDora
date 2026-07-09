@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -9,17 +10,21 @@ from urllib.parse import urlsplit
 # friendly SQLite shortcut — plain filesystem path; the config layer
 # builds the URL. Set before importing `dora_api.app` so the env is in
 # place when `DoraConfig.get_db_connection_string()` runs at import.
+#
+# NOTE — always `os.environ[...] = ...` (not setdefault) so a `.env`
+# `DORA_DB_PATH=./data/dora.dev.db` doesn't leak into the test suite
+# and clobber the developer's actual dev DB. Confirmed hazard as of
+# 2026-07-09.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 (_REPO_ROOT / "data").mkdir(parents=True, exist_ok=True)
-os.environ.setdefault(
-    "DORA_DB_PATH",
-    str(_REPO_ROOT / "data" / "dora.test.db"),
-)
+_TEST_DB_PATH = _REPO_ROOT / "data" / "dora.test.db"
+_SNAPSHOT_DB_PATH = _REPO_ROOT / "data" / "dora.test.snapshot.db"
+os.environ["DORA_DB_PATH"] = str(_TEST_DB_PATH)
 
 import pytest
 import requests
 
-from dora_api.app import app
+from dora_api.app import app, db
 from dora_api.startup import startup
 
 
@@ -34,6 +39,16 @@ def api():
     # fresh anonymous jar); we rebind both to thin adapters over
     # `app.test_client()`. No socket, no network stack.
     startup(is_test_env=True)
+
+    # FU-169 Phase 2 — snapshot the freshly seeded SQLite DB so the
+    # per-test rollback fixture below can restore it byte-for-byte in
+    # ~milliseconds. Closing the engine pool first ensures every buffered
+    # page is flushed to disk before the copy. `db.engine` is a Flask-
+    # SQLAlchemy property tied to `current_app`, so we need the app
+    # context around the dispose call.
+    with app.app_context():
+        db.engine.dispose()
+    shutil.copyfile(_TEST_DB_PATH, _SNAPSHOT_DB_PATH)
 
     # Authenticated client backing the module-level `requests.*` helpers.
     # The test client keeps its own cookie jar, so every subsequent call
@@ -70,6 +85,36 @@ def api():
         for name, fn in _Originals.items():
             setattr(requests, name, fn)
         requests.Session = _OriginalSession
+
+
+@pytest.fixture(autouse=True)
+def _db_rollback():
+    """FU-169 Phase 2 — per-test DB rollback via SQLite file snapshot.
+
+    Kills the order-coupling the FU-166 hand-patches worked around: each
+    test now starts from the freshly seeded baseline, no test can see
+    another's writes. The reconcile sweep's `db.engine.begin()` (the one
+    place in the codebase that opens its own connection outside `db.session`)
+    is included in the isolation because we're restoring the whole file,
+    not fighting individual transactions.
+
+    Shape:
+      1. Test runs against the live DB.
+      2. Teardown: rollback+close the ORM session (any pending writes
+         drop cleanly), dispose the engine pool (release file handles),
+         copy the seeded snapshot over the live DB.
+      3. The next test-client call opens fresh connections against the
+         restored file.
+
+    Cost: SQLite file copy is ~1-3 ms for the seed DB. Cheap enough that
+    even 900+ tests only add a few seconds.
+    """
+    yield
+    with app.app_context():
+        db.session.rollback()
+        db.session.remove()
+        db.engine.dispose()
+    shutil.copyfile(_SNAPSHOT_DB_PATH, _TEST_DB_PATH)
 
 
 def _to_path(url: str) -> str:

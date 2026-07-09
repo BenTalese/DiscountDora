@@ -15,15 +15,41 @@ base_route = 'http://localhost:5170/api/products'
 _STORE_ROUTE = 'http://localhost:5170/api/stores'
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _seed_stores(api):
-    # `/api/products` no longer auto-creates stores on an unknown
-    # name. The legacy tests POST products against fixed names ("Woolworths"
-    # + "ReuseMerchant"); seed those once so the strict no-auto-create
-    # contract is exercised without each test having to set up the store
-    # itself. Idempotent because the test DB is dropped at session startup.
+@pytest.fixture(autouse=True)
+def _seed_stores_and_product(request):
+    """FU-169 Phase 2 — shared preconditions this file's non-create tests
+    assume. Was module-scoped; became function-scoped once the per-test
+    DB rollback landed. Two independent bits:
+
+    * Stores `Woolworths` + `ReuseMerchant` — the products API refuses
+      unknown store names, so tests that POST products against fixed
+      names need these rows to exist.
+    * The `Banana Mangoes` (stockcode `50332BA`) product — the GET /
+      UPDATE tests query for it by stockcode / merchant.
+
+    Skip the product-seed via `@pytest.mark.no_seed_product` on the
+    single create test whose *act* is to create that same product.
+    Store rows are always seeded — the create tests need them.
+    """
     for _Name in ("Woolworths", "ReuseMerchant"):
         requests.post(_STORE_ROUTE, json={"name": _Name})
+    if request.node.get_closest_marker("no_seed_product"):
+        return
+    requests.post(base_route, json=CreateProductRequest(
+        brand="Test",
+        image=None,
+        is_active=True,
+        is_available=True,
+        store_name="Woolworths",
+        merchant_stockcode="50332BA",
+        name="Banana Mangoes",
+        price_now=4.5,
+        price_was=10.5,
+        size="500g",
+        size_unit="g",
+        size_value=5.0,
+        web_url="www",
+    ).model_dump())
 
 #endregion setup
 
@@ -31,6 +57,7 @@ def _seed_stores(api):
 
 
 # TODO: Write test for optional fields (brand, stockcode, etc)
+@pytest.mark.no_seed_product
 def test__create_product__CreatingProductWithAllAttributes__ProductCreated(api):
     _ProductRequest = CreateProductRequest(
         brand = "Test",

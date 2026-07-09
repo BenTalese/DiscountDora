@@ -343,6 +343,8 @@ top-to-bottom.
 - [ ] Text-size preference (Preferences → Display): flip to XL — the runner card, buttons, and help dialog all scale.
 - [ ] Themes: check the runner on Pesto light + Pesto dark + one other family — no hardcoded colours.
 - [ ] `(?)` help icon in the top-right of the runner opens the "How reconcile works" dialog listing every verb.
+- [ ] **Settings → Admin → System → Meal reconciliation** (FU-317 Chunk 6): the page renders with an *Assume past-day meals were cooked* toggle and a *Go to reconcile* deep-link button. Flipping the toggle fires a success toast and persists across reload. As a non-admin user, the page shows the "You don't have admin permissions" banner instead.
+- [ ] Settings left nav shows a **Meal reconciliation** row under **System** with the event-note icon (admins only).
 
 ### Budget-defense recipe swaps (Suggestions panel) — origin FU-451
 - [ ] With **money features on** and a **budget set**, build a meal-plan week that's projected over budget (priced recipes summing past the budget). A **Suggestions** panel renders below the week grid: "Over budget by $X", Est. week cost + Budget figures, "N swaps could bring it back to $Y".

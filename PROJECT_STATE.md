@@ -1,6 +1,48 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-09** — hand-edited row refresh after two more polish
+**Regenerated: 2026-07-09** — hand-edited row refresh after **FU-169 CLOSED
+end-to-end (2026-07-09)**: the earlier Phase-1-tail + Phase-2 land got a
+close-out pass — FU-518 root-caused (not fixture-ordering; a freshly-POSTed
+expired item generates *both* `stock:{id}:expired` + `stock:{id}:low_stock`
+alerts, so dedup misses the second key — test-design flaw, not a Phase 2
+architecture issue; xfail marker updated with the finding); parametrize
+sweep collapsed the `PageValueIsNotInteger`/`LimitValueIsNotInteger` pair
+in five router files into a single `@pytest.mark.parametrize`d test each
+(10 → 5 test functions, no coverage loss); Phase 3 (coverage gaps / untested
+API surfaces / repository + contract tests) spun off as **[[FU-519]]** and
+Phase 4 (frontend Vitest / Hypothesis / scraper + emailer fixtures /
+Postgres CI) spun off as **[[FU-520]]** so each can be sequenced
+independently. FU-169 itself archived to `DORA_FOLLOWUPS_RESOLVED.md`
+with a one-line close note. Prior refresh: a substantial
+**FU-169 Phase 1 tail + Phase 2 close-out (2026-07-09)**: `pytest-cov` wired
+(report-only, no gate); **per-test DB rollback via SQLite file snapshot**
+(the session-scoped `api` fixture snapshots the seeded DB, autouse teardown
+rolls back the ORM session + disposes the engine + restores the snapshot
+in ~1-3 ms); `tests/factories.py` with `make_stock_location` /
+`make_product` / `make_stock_item`; new `uuid_bind` helper in
+`tests/support.py`. The pass surfaced + fixed **two real bugs from earlier
+today's FU-317 chunks**: (a) `bump_pool`'s `str(uuid)` bind blew up on
+SQLite's BINARY(16) UUIDType columns on the ORM caller path (`cook_recipe`)
+— fixed via a shared `_id_bytes` normaliser; (b) `_sweep_auto_drain`
+lacked the `NOT EXISTS` receipt-guard the manual branch has, so a
+`Didn't cook` verb that cleared `consumed_at` triggered the next sweep to
+re-drain the entry over the user's decision — guard added. Also hardened
+a pre-existing safety hazard (`os.environ.setdefault("DORA_DB_PATH", ...)`
+was silently letting `.env` route tests at the dev DB → clobbering it).
+Suite state at close: **921 passed / 1 xfailed ([[FU-518]] — new: flaky
+digest dedup test only fails during whole-file collection) / 1 failed
+(FU-328 pre-existing CSV template hint-row shape, out of scope)**, ~22 s
+full runtime. FU-169 remaining tail (parametrize sweep, CI un-comment,
+`assert_problem` retrofit, Phase 3/4) stays deferred with a clear
+recommended-resolution note. Prior refresh: hand-edited row refresh after **FU-317 Chunk 6
+close-out (2026-07-09)**: new **Settings → Admin → System → Meal reconciliation**
+page (single install-wide *auto-drain past-day meals* toggle wired to the existing
+`AppSetting.auto_drain_past_meals` column + a deep-link chip to the reconcile page
+for everyone); Settings left-nav row added; frontend `AppSettings` type extended
+to expose the field. That closes the FU-317 impl stack end-to-end — Chunks 1-6
+all shipped in a single day. `vue-tsc` clean for touched files (the three
+pre-existing DashboardPage `'draft_shop'`/`CardId` errors are unchanged and
+unrelated). Prior refresh: hand-edited row refresh after two more polish
 units later the same day: **FU-359 A-2 data-pages UI revamp** (Import + Backup
 & restore rebuilt onto the shared Settings design language via a new shared
 `SettingsFileDrop.vue`; presentation-only, `vue-tsc` clean; FU-359 →

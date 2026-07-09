@@ -55,15 +55,22 @@ def bump_pool(recipe_id: UUID | bytes | str, delta: int,
     a valid no-op that returns the current value.
 
     - `recipe_id` may be a `UUID`, a `str`, or the raw `bytes` shape
-      SQLite stores for `UUIDType` columns. We forward the argument
-      verbatim when it's already `bytes` (SQLite BINARY(16)) and
-      stringify anything else — same idiom as the existing sweep and
-      the swap-ledger writer.
+      SQLite stores for `UUIDType` columns. On SQLite the column is
+      BINARY(16), so raw-text() binds have to be `bytes` (a str form
+      won't match); on Postgres native `uuid` accepts either. We forward
+      `bytes` verbatim, take `UUID.bytes` off a UUID object, and parse
+      the string form into `UUID(...).bytes` — one path that binds
+      correctly on both backends.
     - `connection` is a SQLAlchemy `Connection` object; when omitted the
       update runs on `db.session` and is committed by the caller's
       `save_changes()`.
     """
-    _Bind = recipe_id if isinstance(recipe_id, bytes) else str(recipe_id)
+    if isinstance(recipe_id, bytes):
+        _Bind: bytes = recipe_id
+    elif isinstance(recipe_id, UUID):
+        _Bind = recipe_id.bytes
+    else:
+        _Bind = UUID(str(recipe_id)).bytes
     stmt = text(
         'UPDATE "Recipe" '
         "SET available_meals = CASE "

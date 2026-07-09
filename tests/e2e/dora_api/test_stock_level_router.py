@@ -1,5 +1,6 @@
 import uuid
 
+import pytest
 import requests
 
 from tests.support import is_valid_uuid
@@ -140,8 +141,17 @@ def test__get_stock_levels__GettingSecondPage__GetsSecondPageOfStockLevels(api):
     assert len(_Response.json()['items']) == 1
 
 
-def test__get_stock_levels__PageValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=true&limit=2')
+# FU-169 Phase 2 — parametrized pagination-validation matrix.
+@pytest.mark.parametrize(
+    "query,invalid_field",
+    [
+        ("page=true&limit=2", "page"),
+        ("page=1&limit=true", "limit"),
+    ],
+    ids=["page-is-not-integer", "limit-is-not-integer"],
+)
+def test__get_stock_levels__pagination_value_is_not_integer__IsBadRequest(api, query, invalid_field):
+    _Response = requests.get(f'{base_route}?{query}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
@@ -149,21 +159,7 @@ def test__get_stock_levels__PageValueIsNotInteger__IsBadRequest(api):
         'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': "'page' must be an integer.",
-        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
-    }
-
-
-def test__get_stock_levels__LimitValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=1&limit=true')
-
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        'detail': 'See errors property for more details.',
-        'errors': {},
-        'status': 400,
-        'title': "'limit' must be an integer.",
+        'title': f"'{invalid_field}' must be an integer.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 

@@ -5,7 +5,60 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Two real reconcile bugs surfaced by the FU-169 Phase 2 pass (2026-07-09).**
+  1. `bump_pool` (FU-317 Chunk 2) was binding `str(uuid)` against SQLite's
+     BINARY(16) UUIDType column, so the ORM caller path (`cook_recipe`)
+     blew up with `NoResultFound`. Fixed via a shared `_id_bytes` helper
+     that normalises `UUID | bytes | str → bytes`; applied to
+     `bump_pool`, `_read_pool`, `_load_entry`, `_latest_receipt`, and
+     the receipt INSERT binds inside `reconcile.py`.
+  2. `_sweep_auto_drain` (FU-317 Chunk 1) had no `NOT EXISTS` guard
+     against existing receipts, so after a `Didn't cook` verb cleared
+     `consumed_at`, the next sweep re-consumed the entry and wrote a
+     stale `unresolved_auto` receipt over the user's `resolved_not_cooked`
+     decision. Guard added — mirrors the manual branch.
+
 ### Added
+- **Test-suite Phase 1 tail + Phase 2 (per-test DB isolation) — FU-169 (2026-07-09).**
+  Bare `pytest` now runs the whole tree (unit + e2e), prints a term-missing
+  coverage report (report-only, no fail-under gate), and starts every test
+  from the freshly seeded DB baseline.
+  - **`pytest-cov==5.0.0`** pinned + `.coveragerc` scoped to `dora_api/`
+    (migrations + seed omitted); pytest.ini's addopts wire `--cov` on by
+    default. Opt out with `pytest --no-cov` for a fast inner-loop run.
+  - **Per-test DB rollback via SQLite file snapshot.** The session-scoped
+    `api` fixture snapshots the seeded DB after `startup(is_test_env=True)`;
+    an autouse function-scoped teardown rolls back the ORM session, disposes
+    the engine pool, and restores the snapshot. ~1-3 ms overhead per test;
+    replaces the FU-166 hand-patches for case-insensitive / filter-to-known-row
+    workarounds. Kills cross-test order coupling; unblocks `pytest-xdist`.
+    The one `db.engine.begin()` in the codebase (the reconcile sweep) is
+    included in the isolation because we're restoring the whole file, not
+    fighting individual transactions.
+  - **`tests/factories.py`** — hand-rolled builders (`make_stock_location`,
+    `make_product`, `make_stock_item`) so tests declare only the fields they
+    care about instead of spelling 13 attributes per create. Docstrings
+    document the design (hand-rolled over factory_boy, HTTP-only, defaults
+    on happy-path).
+  - **`uuid_bind` helper in `tests/support.py`** — normalises UUID-like
+    values to the `bytes` shape SQLite's BINARY(16) UUIDType needs for
+    raw-`text()` binds. Documented at the callsite so future tests that
+    reach under the ORM stop rediscovering the trap.
+  - 3 order-coupled test files refactored to be self-contained: per-file
+    autouse fixtures with opt-out markers (`no_seed_cellar`, `no_seed_product`)
+    where a create-then-assert pattern was implicit; explicit setup for
+    duplicate-error assertions.
+
+- **Meal reconciliation admin setting — FU-317 Chunk 6 (2026-07-09).**
+  New **Settings → Admin → System → Meal reconciliation** page exposes the
+  install-wide *auto-drain past-day meals* toggle. When on (default), the
+  daily sweep silently drains the recipe pool as days roll past. When off,
+  the sweep writes `unresolved_manual` receipts and every past-day entry
+  waits on the reconcile page. Also carries a deep-link chip that
+  everyone (not just admins) can use to open the reconcile page. Closes
+  the FU-317 stack — Chunks 1-5 built the backend + surfaces, Chunk 6
+  puts the last visible dial in the admin's hand.
 - **Reconcile past meals — the page + dashboard chip + meal-plans header nudge — FU-317 Chunk 5 (2026-07-09).**
   Dora now surfaces past-day meal-plan entries she assumed you cooked and lets
   you confirm, adjust, or dispute them one at a time. First user-visible piece

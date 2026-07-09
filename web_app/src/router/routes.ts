@@ -430,6 +430,13 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemStockSettings.vue'),
                         meta: { title: 'System: Stock' }
                     },
+                    // FU-317 Chunk 6 — install-wide meal-plan reconcile
+                    // posture (auto-drain vs hold-for-confirm).
+                    {
+                        path: 'admin/system/meal-reconcile',
+                        component: () => import('pages/settings/AdminSystemMealReconcileSettings.vue'),
+                        meta: { title: 'System: Meal reconciliation' }
+                    },
                     {
                         // Old single System page → first of the four.
                         path: 'admin/system',

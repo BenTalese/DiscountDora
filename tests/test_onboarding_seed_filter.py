@@ -65,6 +65,12 @@ class _FakeRepo:
         # No-op — the tests inspect `self.added` directly.
         pass
 
+    def flush(self):
+        # No-op — the real handler calls `flush()` between parent + child
+        # inserts so FKs resolve; the fake keeps parents visible via the
+        # per-type bucket, so a flush here is unnecessary.
+        pass
+
 
 def _run(request: SeedRequest, *, groups=None, locations=None) -> tuple[list, list, object]:
     """Drive the handler + return (added StockGroups, added StockLocations, result)."""

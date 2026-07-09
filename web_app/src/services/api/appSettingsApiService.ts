@@ -48,6 +48,12 @@ export type AppSettings = {
      *    'all'            — always on a Stocked → Low/Out transition.
      *  Server owns the branching in `update_stock_item._try_auto_add`. */
     auto_add_mode: AutoAddMode;
+    // FU-317 — install-wide meal-plan reconcile posture. True = today's
+    // silent auto-drain (past-day entries are assumed cooked, pool drains
+    // as the day rolls). False = the sweep writes `unresolved_manual`
+    // receipts and leaves the pool + entries untouched, forcing every
+    // past meal through the reconcile page. Owned by admin.
+    auto_drain_past_meals: boolean;
     // operational config promoted from DORA_* env vars.
     // Bucket-C secrets (SMTP password, VAPID private key) live encrypted-at-
     // rest on the AppSetting row; the read DTO surfaces a `_configured` bool

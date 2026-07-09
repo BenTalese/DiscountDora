@@ -1,0 +1,29 @@
+# Coverage config — FU-169 Phase 1 tail. Report-only; no gate.
+# Wired via pytest.ini's addopts (`--cov=dora_api --cov-report=term-missing`)
+# so bare `pytest` produces the report without any per-command flags.
+# Opt out with `pytest --no-cov` for a fast inner-loop run.
+
+[run]
+source = dora_api
+branch = false
+omit =
+    dora_api/persistence/migrations/*
+    dora_api/persistence/seed.py
+    */__init__.py
+    */__pycache__/*
+
+[report]
+# Show lines that aren't hit next to each file — the "term-missing" default.
+# Skip anything at 100% to keep the tail short and signal-rich.
+skip_covered = true
+skip_empty = true
+# Standard noise-suppression: pragmas + trivial branches.
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
+    \.\.\.
+
+[html]
+directory = .coverage-html

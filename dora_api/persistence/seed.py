@@ -221,15 +221,22 @@ def seed_dev_data():
         repo.add(item)
         return item
 
+    # Stocktake demo — a handful of alerts-enabled items are seeded with
+    # a backdated `stock_level_last_updated` so the post-rework overdue
+    # baseline (COALESCE(last_checked_at, stock_level_last_updated)) lands
+    # past the fortnightly band and the runner has something to show
+    # immediately. Days chosen to exercise every state: mildly overdue,
+    # very overdue, and an essential (flagged) item on the weekly band.
     mangoes = make_item(name="Kensington Pride Mangoes", group=g_fruit, level=stocked,
-                        location=crisper, expiry=today + timedelta(days=4), stocktake_days=3)
+                        location=crisper, expiry=today + timedelta(days=4))
     pizza = make_item(name="Super Awesome Pizza", group=g_frozen, level=stocked, location=freezer)
     chips = make_item(name="Hot Crispy Chippies", group=g_snacks, level=low, location=None,
-                      stocktake_alerts=True, stocktake_days=5)
+                      stocktake_alerts=True, updated_days_ago=20)  # ~6 days overdue @ fortnightly
     brazil = make_item(name="Brazil Nuts", group=g_snacks, level=low, location=middle_left,
-                       flagged=True, stocktake_alerts=True)
+                       flagged=True, stocktake_alerts=True, updated_days_ago=15)  # essential → weekly, ~8 overdue
     icecream = make_item(name="Vanilla Ice Cream", group=g_frozen, level=low, location=freezer,
-                         stocktake_alerts=True, expiry=today - timedelta(days=3))
+                         stocktake_alerts=True, expiry=today - timedelta(days=3),
+                         updated_days_ago=32)  # very overdue @ fortnightly
     pasta = make_item(name="Barilla Pasta", group=g_pantry, level=stocked, location=top_shelf,
                       products=[pasta_barilla])
     milk = make_item(name="Full Cream Milk", group=g_dairy, level=low, location=fridge,
@@ -252,7 +259,8 @@ def seed_dev_data():
     rice = make_item(name="Jasmine Rice", group=g_pantry, level=stocked, location=middle_right)
     soy = make_item(name="Soy Sauce", group=g_pantry, level=stocked, location=middle_left)
     broccoli = make_item(name="Broccoli", group=g_fruit, level=low, location=crisper,
-                         expiry=today + timedelta(days=1), stocktake_alerts=True)
+                         expiry=today + timedelta(days=1), stocktake_alerts=True,
+                         updated_days_ago=18)  # ~4 days overdue @ fortnightly
     bread = make_item(name="Sourdough Bread", group=g_pantry, level=out, location=None,
                       flagged=True)
     coffee = make_item(name="Coffee Beans", group=g_pantry, level=stocked, location=top_shelf,

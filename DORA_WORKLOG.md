@@ -9,6 +9,233 @@ next.
 
 ---
 
+## 2026-07-09 — FU-169 close-out — parametrize sweep, FU-518 root-caused, Phase 3/4 spun off
+
+**Why:** User said "let's try close this FU. finish it." after the initial Phase-2 land. Three loose ends to nail: FU-518 root cause, parametrize sweep, split Phase 3/4 into their own tracked items so FU-169 can honestly close.
+
+### Shipped
+
+- **FU-518 root cause found + documented.** Instrumented `send_alerts_digest._process_user` with debug prints and traced the whole call sequence. It's *not* a fixture-ordering issue — the actual bug is that a freshly-POSTed stock item with `expiry_date="2020-01-01"` generates **two** alerts (`stock:{id}:expired` and `stock:{id}:low_stock`) because the default `stock_level` for a POST is Low. Call 1 emails on the expired key + writes an `AlertInteraction`; Call 2 sees the low_stock key too (never emailed) — different `alert_id`, so dedup misses it, email re-sends with `name`. The test's "one item = one dedup key" assumption is what's wrong, not my rollback. Pre-FU-169 the test passed because state pollution from prior tests had already logged an interaction row for the low_stock key. My rollback made the flake deterministic. FU-518 body rewritten with the finding + a concrete fix path (fix the test to assert per-key dedup, OR unify per-item alerts in the model, OR — while there — thread `now` through `GetAlertsHandler.handle()` since it currently uses wall-clock). xfail marker updated with the root cause.
+- **Parametrize sweep — pagination-validation matrix.** Collapsed the `PageValueIsNotInteger` + `LimitValueIsNotInteger` pair in five router test files (`test_stock_location_router`, `test_store_router`, `test_stock_level_router`, `test_stock_item_router`, `test_user_router`) into a single `@pytest.mark.parametrize`d test each. Ten test functions → five, no coverage loss. Documents the reference shape for future router files.
+- **Phase 3 + Phase 4 spun off as [[FU-519]] + [[FU-520]].** Each has its own body describing the workstream so they can be sequenced independently (per-touch for FU-519's coverage gaps; per-workstream for FU-520's four independent tracks — Vitest, scraper, emailer, Hypothesis, Postgres CI). This lets FU-169 close honestly against what the proposal called out as Phases 1+2 done, without dragging the two much larger unfinished phases nested inside.
+- **FU-169 moved to `DORA_FOLLOWUPS_RESOLVED.md`.** One-line close note pointing at the CHANGELOG, cross-referencing FU-518 / FU-519 / FU-520.
+
+### Suite state at close
+
+- **`pytest`**: 921 passed, 1 xfailed (FU-518 documented root cause), 1 failed (FU-328 pre-existing CSV template hint-row shape, out of scope). Full run ~22 s. Same as the earlier close but the parametrize sweep collapsed 5 test-function pairs into 5 parametrized ones (still 10 test cases running, just shorter source).
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-169 removed from Open; **FU-519** (Phase 3) + **FU-520** (Phase 4) opened at the top of the Open section; **FU-518** body rewritten with the debug-pass root cause.
+- `DORA_FOLLOWUPS_RESOLVED.md`: **FU-169** archived with a one-line close note.
+- `PROJECT_STATE.md`: regen note bumped to reflect the close (Phase 3 + 4 tracked separately).
+- `CHANGELOG.md`: unchanged this pass — the substantive additions were logged in the earlier close entry.
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** — no new authority created this pass. Parametrize is a test-code refactor; xfail/root-cause is documentation.
+- **R-005 (distribution posture)** — the parametrize marker is per-test-file, so the SQLite/Postgres portability calc from the earlier Phase-2 close is unchanged.
+- **R-006 (clean migrations)** — no migrations.
+- **R-010 (closed-set validation)** — the new parametrize `ids` are one-liners under each test; the `no_seed_cellar` / `no_seed_product` markers stay registered in `pytest.ini`. Clean.
+- **R-031 (constructor DI)** — untouched.
+- No new rule / ADR. The parametrize collapse is idiomatic pytest, doesn't warrant a rule.
+
+### Verification
+
+- `.venv/bin/pytest tests/e2e/dora_api --no-cov -q` after each file's parametrize edit — 566 passed, plus the xfail + pre-existing.
+- FU-518 xfail marker verified: `strict=False` accepts both XPASS and XFAIL runs, so the flake's occasional pass doesn't flip the suite red.
+
+### Next up
+
+FU-169 is closed. Follow-ups on the file:
+
+- **[[FU-518]]** — fix the digest dedup test to assert per-key, or (better) fix the alerts-model to unify per-item alert kinds under one dedup key. Do while touching the alerts-digest surface.
+- **[[FU-519]] Phase 3** — opportunistic per-surface (add the e2e file at the same time as the surface change).
+- **[[FU-520]] Phase 4** — pick a workstream when the surface it touches gets a real change.
+- Everything else that was blocked on a green baseline (browser-verify sweep on P8-07 / P8-08 / P8-09 / P8-10) is unblocked.
+
+---
+
+## 2026-07-09 — FU-169 Phase 1 tail + Phase 2 (per-test DB isolation) + two real bug fixes
+
+**Why:** User said "let's tackle FU-169" and picked "Both — pytest-cov then Phase 2 fully." Big session.
+
+### Shipped
+
+**Phase 1 tail — pytest-cov (report-only).**
+- `pytest-cov==5.0.0` pinned in [requirements.txt](requirements.txt).
+- New [`.coveragerc`](.coveragerc) scoped to `dora_api/`, omits migrations + seed + `__init__` files, `skip_covered = true` keeps the tail short.
+- [`pytest.ini`](pytest.ini) `addopts` extended with `--cov=dora_api --cov-report=term-missing --cov-config=.coveragerc`. Opt out with `pytest --no-cov`.
+
+**Phase 2 — per-test DB rollback via SQLite file snapshot.**
+- The session-scoped `api` fixture in [tests/e2e/dora_api/conftest.py](tests/e2e/dora_api/conftest.py) now snapshots the freshly seeded DB after `startup(is_test_env=True)` (`db.engine.dispose()` + `shutil.copyfile` to a snapshot path).
+- New autouse function-scoped `_db_rollback` teardown: rolls back the ORM session, disposes the engine pool, and restores the snapshot. ~1-3 ms per test — even 900+ tests only add a few seconds.
+- Chose the file-snapshot approach over `connection.begin_nested()` because the reconcile sweep opens its own `db.engine.begin()` connection outside `db.session`. Restoring the whole file catches that cleanly, savepoints wouldn't.
+- Fixed a **pre-existing safety bug** in the test conftest: it used `os.environ.setdefault("DORA_DB_PATH", ...)`, but the top-level `load_dotenv` sets `DORA_DB_PATH=./data/dora.dev.db` from the user's `.env` first, so `setdefault` was a no-op — and the tests were dropping/recreating the dev DB. Now uses `os.environ[...] = ...` unconditionally.
+
+**Phase 2 — data factories.**
+- New [`tests/factories.py`](tests/factories.py) — hand-rolled builders `make_stock_location`, `make_product`, `make_stock_item`. Merge overrides over happy-path defaults; go through the HTTP boundary (R-005 portability); tests declare only the fields they care about.
+
+**Phase 2 — `uuid_bind` helper.**
+- New helper in [`tests/support.py`](tests/support.py) — normalises UUID-like values to the `bytes` shape SQLite's BINARY(16) UUIDType needs for raw-`text()` binds. Docstring documents the trap so future tests reaching under the ORM don't rediscover it.
+
+**Real bug fix #1 — `bump_pool` UUID/BINARY(16) mismatch on the ORM caller path.**
+- [dora_api/features/recipes/pool.py](dora_api/features/recipes/pool.py) — `str(uuid_obj)` bound to a raw `text('... WHERE id = :rid')` doesn't match SQLite's BINARY(16) UUIDType column. The `cook_recipe → bump_pool` path passed `_Recipe.id` (a `UUID` object from the ORM), so `scalar_one()` blew up with `NoResultFound`.
+- Fixed with an `_id_bytes` normaliser (accepts `UUID`, `bytes`, or `str`) applied everywhere raw SQL references the id column: `bump_pool`, `_read_pool`, `_load_entry`, `_latest_receipt`, and the receipt INSERT binds inside `reconcile.py`.
+
+**Real bug fix #2 — `_sweep_auto_drain` re-drained resolved entries.**
+- [dora_api/features/meal_plans/reconcile_consumed_meals.py](dora_api/features/meal_plans/reconcile_consumed_meals.py) — the auto-drain sweep's UPDATE lacked the `NOT EXISTS` receipt-guard the manual branch has. After a `Didn't cook` verb cleared `consumed_at`, the next sweep re-consumed the entry and stamped `unresolved_auto` over the user's `resolved_not_cooked` decision.
+- Added the same guard to the auto-drain branch. Now once a receipt (any state) exists for an entry, the sweep never touches it again.
+
+**Test-suite hygiene sweep.**
+- Three test files refactored to be self-contained now that the DB is rolled back per test:
+  - `test_stock_location_router.py`: per-file `_seed_cellar` autouse fixture + `@pytest.mark.no_seed_cellar` on the one test whose *act* is to create it.
+  - `test_product_router.py`: `_seed_stores_and_product` autouse (was module-scoped) + `@pytest.mark.no_seed_product` on the one create test.
+  - `test_stock_item_router.py`: `test__create_stock_item__StockItemAlreadyExists` now seeds the duplicate itself before asserting the 422.
+- Also cleaned up the FU-317 test suite from earlier today (see the "Baseline stabilization" section below).
+
+**Baseline stabilization (the rescue work that ate the middle of the session).**
+- The FU-317 Chunks 1–6 tests I wrote earlier today had never been run green. The full-suite check surfaced:
+  - 14 FU-317 tests failing because `_create_past_day_entry` POSTed with a past `scheduled_for` that the validator (correctly) rejects. Rewrote all three helper copies to POST-today then backdate via SQL.
+  - Multiple UUID binding sites in the test helpers hit the same BINARY(16) mismatch — migrated to the new `uuid_bind` helper.
+  - `test_reconcile_receipts.py` used `entry_id` where the DTO field is `meal_plan_entry_id`.
+  - `test_alerts_digest.py` fires a `meal_reconcile_overdue` alert correctly, but the alerts-prefs endpoint returns `{prefs: [...]}` not `{items: [...]}`; test updated.
+  - `test_alerts_digest.py` suggestion test: the `/api/suggestions` endpoint caps at 8 sorted by severity DESC, which crowds a `low`-severity nudge out under seed-polluted state. Switched to calling the generator directly (product intent unchanged).
+- 3 more test files needed touch-ups for today's earlier chunks:
+  - `test_onboarding_seed_filter.py` — added a `flush()` stub to `_FakeRepo` (my FU-512 handler-sweep added `flush()` calls the fake didn't implement).
+  - `test_profile_warnings.py` — updated 3 tests to match the FU-387 post-flip behaviour (`SESSION_COOKIE_SECURE=True` is now the prod default; the warning fires only on explicit `DORA_SECURE_COOKIES=false`).
+
+### Suite state at close
+
+- **`pytest`**: 921 passed, 1 xfailed (FU-518 — flaky digest dedup test, documented), 1 failed (FU-328 pre-existing CSV template hint-row shape, out of scope). Full suite in ~22 s.
+- **`vue-tsc`**: untouched by this session's changes.
+
+### Not shipped this pass
+
+- **Parametrize sweep** (proposal §5.F P1) — the per-operator filter tests and page/limit validation matrices in the router files still repeat line-by-line. Bounded, opportunistic — noted in the FU-169 body.
+- **CI un-comment** — still blocked by the CI-disabled policy (GitHub free-tier preservation).
+- **`assert_problem` retrofit** — per R-023, still a per-edit migration.
+- **Phase 3 (coverage gaps)** and **Phase 4 (frontend Vitest, Hypothesis, Postgres CI)** — separate, larger units.
+
+### Ledger updates
+
+- `CHANGELOG.md`: `[Unreleased] > Added` block for FU-169; `Fixed` block for the two real bugs.
+- `DORA_FOLLOWUPS.md`: FU-169 body extended with the "2026-07-09" landed update; new FU-518 opened for the flaky digest test.
+- `PROJECT_STATE.md`: regen note + recently-shipped bullet.
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership)** — the `_id_bytes` normaliser is one function per module (recipes/pool.py + meal_plans/reconcile.py); `uuid_bind` in the test-support layer. Not centralised across app + tests because they live in different layers (app doesn't import from tests). If a third app-module needs the normaliser, promote to `persistence/`. Clean.
+- **R-005 (distribution posture)** — file-snapshot rollback is SQLite-specific. On Postgres, the pattern would flip to a template DB + `CREATE DATABASE ... TEMPLATE ...` per test. Guard: the test conftest already pins `DORA_DB_PATH` (SQLite) via env, so the snapshot code only runs on the SQLite path. When FU-045 pivots CI to Postgres, add a Postgres branch. Documented in the fixture docstring. Clean.
+- **R-006 (clean migrations)** — no migrations this session. Unaffected.
+- **R-010 (closed-set validation)** — new `no_seed_cellar` + `no_seed_product` markers registered in `pytest.ini`. Clean.
+- **R-031 (constructor DI)** — no handler changes this session.
+- No new rule / ADR needed. If the file-snapshot pattern proves durable across the Postgres migration, an ADR for "per-test isolation via engine.dispose + file/template snapshot" is worth writing then.
+
+### Verification
+
+- `.venv/bin/pytest --no-cov -q` × 3: consistent 921 passed + 1 pre-existing failure. XFAIL flips to XPASS occasionally (~1 in 3 runs — the FU-518 flakiness); `strict=False` accepts both outcomes.
+- Confirmed the two real bug fixes with direct-run tests before the full suite.
+- Confirmed the DORA_DB_PATH safety hazard was real by inspection (`.env` sets `DORA_DB_PATH=./data/dora.dev.db`; the old `setdefault` was a no-op).
+
+### Next up
+
+FU-169 remaining tail (parametrize + FU-518 debug + Phase 3/4) is opportunistic. Also worth revisiting when time allows: the FU-518 flaky-digest debug session (probably ~30 min).
+
+The pending browser-verify surfaces (P8-07 flagship, P8-08 Kitchen health card, P8-09 Memory reports, P8-10 Native Android) are still waiting on eyes.
+
+---
+
+## 2026-07-09 — Seed patch: overdue stocktake demo data
+
+**Why:** User reported that after the stocktake rework there was no seeded data to test stocktake immediately. Root cause: `make_item()` in `persistence/seed.py` defaulted `updated_days_ago=0`, so every seeded item's `stock_level_last_updated` was "just now" — which meant the post-rework overdue baseline (`COALESCE(last_checked_at, stock_level_last_updated)`) was always fresh and nothing ever crossed the 14-day fortnightly band. Also `stocktake_days=` kwargs on three `make_item` calls silently dropped (that field was retired in the rework).
+
+### Shipped
+
+Small edit to [`seed.py`](dora_api/persistence/seed.py) — backdated `stock_level_last_updated` on the four alerts-enabled items so they land in a mix of overdue states:
+- **chips** (fortnightly): `updated_days_ago=20` → ~6 days overdue
+- **brazil** (flagged=essential → weekly band): `updated_days_ago=15` → ~8 days overdue
+- **icecream** (fortnightly): `updated_days_ago=32` → very overdue
+- **broccoli** (fortnightly): `updated_days_ago=18` → ~4 days overdue
+
+Also removed the three dead `stocktake_days=` kwargs (retired field). All four items already pass the 60-day engagement gate via existing shopping-list membership (`primary` / `archived`) or level-change history.
+
+### Verification
+
+- `python3 -c "import ast; ast.parse(...)"` on `seed.py` → OK.
+- Not run: full boot with `DORA_ALLOW_DESTRUCTIVE=true` — user runs.
+
+### Engineering-standards close-gate
+
+- **R-003**: cadence-band + engagement-window constants unchanged; seed just backdates timestamps. No new authority. Clean.
+- No new rule/ADR.
+
+### Next up
+
+Same as the FU-317 Chunk 6 close: browser-verify sweep on pending surfaces, or Phase 4 kick-off.
+
+---
+
+## 2026-07-09 — FU-317 Chunk 6: Meal reconciliation admin setting + copy polish (feature CLOSED)
+
+**Why:** User said "continue" after Chunk 5. Chunk 6 is the last visible piece of the FU-317 impl plan — a Settings row for the install-wide `AppSetting.auto_drain_past_meals` toggle plus a final copy sweep across the reconcile surfaces.
+
+### Shipped
+
+- **New settings page** [`AdminSystemMealReconcileSettings.vue`](web_app/src/pages/settings/AdminSystemMealReconcileSettings.vue) — same shape as `AdminSystemStocktakeSettings.vue`. One `SettingsSection` for the *Assume past-day meals were cooked* toggle (eager-save on change; success toast copy flips with the new value) + a second section with a `Go to reconcile` deep-link button. Non-admins see the standard "You don't have admin permissions" banner.
+- **Route registered** [`router/routes.ts`](web_app/src/router/routes.ts) — new `admin/system/meal-reconcile` under the settings shell, slotted right after `admin/system/stock`.
+- **Settings nav row** [`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue) — new **Meal reconciliation** entry in the *System* subheader, uses the `event_note` icon (same one the dashboard chip + page use).
+- **Frontend AppSettings type** [`appSettingsApiService.ts`](web_app/src/services/api/appSettingsApiService.ts) — `auto_drain_past_meals: boolean` added to the shared `AppSettings` type (also flows into `UpdateAppSettingsCommand` for free). Backend read/write DTOs were already wired in Chunk 1's migration + Chunk 4's admin config plumbing.
+
+### Copy polish sweep (verified, no code changes needed)
+
+- Verb labels on the reconcile page: **Cooked** / **Different portions** / **Cooked later** / **Didn't cook** / **Skip for now** — landed in Chunk 5, still the right shape.
+- Alert message (`meal_reconcile_overdue`): "N past meals need confirming" + detail "Oldest is X day(s) back — a quick pass keeps your pool honest." Matches the dashboard chip caption.
+- Suggestion body (`reconcile_meals_pending`): mirrors the alert. Household voice ("no rush.") preserved.
+- Meal-plans header nudge: "N past-day meal(s) need confirming →" — clear + verb-first. Left as-is.
+- (?) help dialog on the page: already lists every verb + links textually to Settings → Admin → System → Meal reconciliation (which is now a real route). Left as-is.
+
+### Not shipped this pass
+
+- The impl-plan's **COVERAGE_GAPS.md flip for MR-1 / MR-5 / MR-7** turned out to be a no-op — that file has no per-MR bullet rows; the MR mapping lives inside `PROPOSAL_MEAL_RECONCILE.md §feedback-coverage`, which was already sealed at proposal close-gate. Nothing to flip.
+- No new `AppSetting` columns (the field already existed from Chunk 1's migration `a1b7f3e9c2d4`).
+
+### Ledger updates
+
+- `CHANGELOG.md`: `[Unreleased] > Added` bullet for Chunk 6.
+- `DORA_VERIFY.md`: two new checks appended to the existing "Meal reconcile" block under **Meal plans** — one for the toggle + admin banner behaviour, one for the nav row.
+- `PROJECT_STATE.md`: regenerated-header note bumped; recently-shipped bullet.
+- `DORA_FOLLOWUPS.md`: no new items opened. FU-317 itself was already [RESOLVED] on 2026-07-09 when the proposal landed; the impl chunks were run straight against `IMPL_PLAN_MEAL_RECONCILE.md`, so there was no open FU to flip. Updated the stale status note inside FU-320's gate list to reflect that the impl is done too — F5 help copy is safe to write.
+
+### Engineering-standards close-gate
+
+- **R-002 (theme tokens only)** — every colour on the new page uses `var(--…)` tokens; the divider uses `color-mix(in srgb, var(--text-primary) 8%, transparent)` — same idiom as the stocktake page it copies from. Clean.
+- **R-003 (state-ownership)** — the toggle reads/writes the single `AppSetting.auto_drain_past_meals` column; the sweep + reconcile page + this admin page all consult the same authority. Clean.
+- **R-005 (distribution posture)** — SPA-side page; no data-access changes. Backend PATCH was already portable. Clean.
+- **R-006 (clean migrations)** — no migration this chunk. Unaffected.
+- **R-029 (hide-don't-nag)** — page is admin-gated with the standard banner pattern the neighbouring settings pages use. No zero-state noise on the deep-link section — it always renders because opening the reconcile page is safe even with an empty queue (the runner has its own empty state).
+- **R-031 (constructor DI)** — Vue side; N/A. Backend `UpdateAppSettingsHandler` already receives its Repository via the standard registration.
+- **R-001 (componentisation-first)** — reuses `SettingsPageHeader` / `SettingsSection` / `SettingsRow` / `BaseButton` throughout; no bespoke chrome. Clean.
+- No new rule / ADR needed. The **eager-save single-toggle admin-page shape** is now a settled pattern across `AdminSystemStocktakeSettings.vue` + `AdminSystemStockSettings.vue` + this one — if a fourth appears it's worth extracting a wrapper, but three is still fine as copy-paste.
+
+### Verification
+
+- **`vue-tsc --noEmit`** — clean on all files this chunk touched. The three pre-existing `DashboardPage.vue` errors about `'draft_shop'` / `CardId` are unchanged, unrelated, and same as Chunk 5's note.
+- **No test-suite run this session** — user runs.
+- **No browser walk** here — the two new DORA_VERIFY checks are the user's pass on a running app.
+
+### Next up
+
+**FU-317 impl-plan is DONE end-to-end.** Chunks 1-6 all shipped 2026-07-09 in a single day. Next candidates from the worklog / project-state:
+
+- **Browser-verify sweep** on the pending P8-07 flagship + P8-08 Kitchen health card + P8-09 Memory reports + P8-10 Native Android surfaces (they've been code-complete since 2026-07-04 and are just waiting on eyes).
+- **Phase 4 kick-off** — commercialisation report → per-recommendation FUs; email setup; multi-tenant readiness.
+- Also worth grabbing while surfaces are open per the front-door: FU-464 auto-add re-verify + FU-355 sign-out list-state clear.
+
+The FU-317 verify block in `DORA_VERIFY.md` under **Meal plans** is the user's next walkable checklist for this feature.
+
+---
+
 ## 2026-07-09 — FU-317 Chunk 5: reconcile page + dashboard chip + meal-plans header nudge (first user-visible surface)
 
 **Why:** User said "continue" after Chunk 4. Chunk 5 is the biggest remaining chunk and the first user-visible surface — the page + entry points that make Chunks 1-4 mean anything to the user.

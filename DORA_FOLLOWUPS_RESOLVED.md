@@ -10,6 +10,12 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-169 — Implement the test-suite improvements proposal (Phases 1 + 2)
+- **Resolved:** 2026-07-09 — closed after landing the Phase 1 tail (`pytest-cov` report-only) and the whole of Phase 2 (per-test DB rollback via SQLite file snapshot, hand-rolled factories, `uuid_bind` helper, parametrized pagination-validation matrix across 5 router files). The pass also surfaced + fixed two real bugs (`bump_pool` UUID/BINARY(16) mismatch on the ORM caller path; `_sweep_auto_drain` missing `NOT EXISTS` receipt-guard that re-drained resolved entries). Order-coupled tests refactored to be self-contained. Suite state at close: **921 passed / 1 xfailed ([[FU-518]] documented) / 1 failed (FU-328 pre-existing CSV template hint-row shape, out of scope)**, ~22 s full runtime. **Phases 3 + 4 spun off into their own FUs** rather than kept nested here — [[FU-519]] (coverage gaps / untested API surfaces / repository + contract tests) and [[FU-520]] (frontend Vitest / Hypothesis / scraper + emailer fixtures / Postgres CI). The other three original tail items — CI un-comment, `assert_problem` retrofit sweep — stay deferred by design (CI-disabled policy; R-023 per-edit migration). Governing doc: `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`. Cross-refs: [[FU-518]] (flake surfaced by the pass), [[FU-045]] (Postgres — already resolved), [[FU-161]] (Aldi scraper gains a net once FU-520 lands).
+
+## [RESOLVED] FU-360 — A-3 DORA BOT (assistant chat) polish
+- **Resolved:** 2026-07-09 — all six sub-items are either code-shipped (2026-07-08 landed #5 greeting once-per-user, #6 show-Dora toggle, #2 chip resize; 2026-07-09 landed #3 mode slider replacing the chip) or reduced to pure browser-verify (#1 text size honouring settings — appears already fixed by the A6 rem migration; #4 DS4 hover-flash regression — reproducible only in-browser). Both remaining verifies live in `DORA_VERIFY.md` (Dora assistant / helper bubble section, FU-360.1 / FU-360.4). Per the close-when-only-verify-left rule this FU closes now.
+
 ## [RESOLVED] FU-517 — D5 decision: `auto_drain_past_meals` install-wide vs per-user
 - **Resolved:** 2026-07-09 — user picked the recommendation: install-wide `AppSetting.auto_drain_past_meals`. FU-317 impl-plan Chunk 1 unblocked. Proposal + impl-plan already carried the install-wide shape; the hold-banner is removed and Chunk 1 execution starts this session.
 

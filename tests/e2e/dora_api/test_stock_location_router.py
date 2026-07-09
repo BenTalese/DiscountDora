@@ -18,11 +18,29 @@ from tests.support import is_valid_uuid
 
 base_route = 'http://localhost:5170/api/stock-locations'
 
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _seed_cellar(request):
+    """FU-169 Phase 2 — a `Cellar` location is the shared precondition every
+    non-create test in this file assumes (it lives outside the seeded
+    8-node tree, so 'get all' expects 9, 'duplicate create' expects 422).
+    Rebuilt per test now that the DB rollback fixture clears it between
+    tests. Skip via `@pytest.mark.no_seed_cellar` on tests whose *act* is
+    to create it themselves."""
+    if request.node.get_closest_marker("no_seed_cellar"):
+        return
+    requests.post(base_route, json={'name': 'Cellar'})
+
+
 #endregion setup
 
 #region ---------------- create_stock_location tests ----------------
 
 
+@pytest.mark.no_seed_cellar
 def test__create_stock_location__CreatingStockLocationWithAllAttributes__StockLocationCreated(api):
     _Request = CreateStockLocationRequest(name = 'Cellar')
 
@@ -189,8 +207,22 @@ def test__get_stock_locations__GettingSecondPage__GetsSecondPageOfStockLocations
     assert len(_Response.json()['items']) == 1
 
 
-def test__get_stock_locations__PageValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=true&limit=2')
+# FU-169 Phase 2 — parametrized pagination-validation matrix (was two
+# near-identical tests differing only by which query-string field carried
+# `true` in place of an integer). Collapsed here as the reference shape
+# for future router files that repeat the same matrix.
+@pytest.mark.parametrize(
+    "query,invalid_field",
+    [
+        ("page=true&limit=2", "page"),
+        ("page=1&limit=true", "limit"),
+    ],
+    ids=["page-is-not-integer", "limit-is-not-integer"],
+)
+def test__get_stock_locations__pagination_value_is_not_integer__IsBadRequest(
+    api, query, invalid_field,
+):
+    _Response = requests.get(f'{base_route}?{query}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
@@ -198,21 +230,7 @@ def test__get_stock_locations__PageValueIsNotInteger__IsBadRequest(api):
         'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': "'page' must be an integer.",
-        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
-    }
-
-
-def test__get_stock_locations__LimitValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}?page=1&limit=true')
-
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        'detail': 'See errors property for more details.',
-        'errors': {},
-        'status': 400,
-        'title': "'limit' must be an integer.",
+        'title': f"'{invalid_field}' must be an integer.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 

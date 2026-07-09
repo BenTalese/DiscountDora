@@ -115,3 +115,26 @@ def is_valid_float(value):
         return True
     except ValueError:
         return False
+
+
+def uuid_bind(value) -> bytes:
+    """Normalise a UUID (in any shape) to the `bytes` form raw `text()`
+    queries need to match SQLite's BINARY(16) UUIDType columns.
+
+    Background: `sqlalchemy_utils.UUIDType` stores UUIDs as BINARY(16) on
+    SQLite; a raw `text('... WHERE id = :id')` bind bypasses SA's type
+    layer, so binding a `str(uuid)` compares string against BLOB and
+    silently returns zero rows. Tests reaching under the ORM (direct SQL
+    for state assertions or targeted state setup) go through this helper
+    so they don't re-discover the same trap.
+
+    Accepts `bytes` (returned verbatim), `UUID` (`.bytes`), or `str`
+    (parsed via `UUID(...).bytes`). On Postgres both forms are legal;
+    keeping the helper is still worth it because it keeps the tests
+    portable between backends.
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, UUID):
+        return value.bytes
+    return UUID(str(value)).bytes

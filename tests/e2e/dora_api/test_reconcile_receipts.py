@@ -25,7 +25,8 @@ from datetime import date, timedelta
 import requests
 from sqlalchemy import text
 
-from dora_api.app import db
+from dora_api.app import app, db
+from tests.support import uuid_bind
 
 BASE = "http://localhost:5170/api"
 MEAL_PLANS = f"{BASE}/meal-plans"
@@ -78,16 +79,21 @@ def _bump_pool(recipe_id: str, target: int) -> None:
 
 
 def _create_past_day_entry(recipe_id: str, days_ago: int, servings: int) -> tuple[str, str]:
-    """Create a meal plan with one entry scheduled `days_ago` in the past.
-    Returns (plan_id, entry_id)."""
-    scheduled = _household_today() - timedelta(days=days_ago)
-    # `start_date` is the week bucket. Post-day entries are legal; the
-    # planner accepts them (see meal_plan create handler validation).
+    """Create a meal plan with one entry then backdate `scheduled_for` via SQL.
+
+    The create endpoint refuses past `scheduled_for` values (correct — the
+    surface is future planning). To seed something the sweep will pick
+    up we post today, then move `scheduled_for` back with a direct
+    UPDATE. `start_date` is moved too so any downstream range checks
+    stay consistent.
+    """
+    today = _household_today()
+    past = today - timedelta(days=days_ago)
     created = requests.post(MEAL_PLANS, json={
-        "start_date": scheduled.isoformat(),
+        "start_date": today.isoformat(),
         "entries": [{
             "recipe_id": recipe_id,
-            "scheduled_for": scheduled.isoformat(),
+            "scheduled_for": today.isoformat(),
             "servings": servings,
             "slot": "Dinner",
         }],
@@ -95,7 +101,16 @@ def _create_past_day_entry(recipe_id: str, days_ago: int, servings: int) -> tupl
     assert created.status_code in (200, 201), created.text
     body = created.json()
     plan_id = body["meal_plan_id"]
-    entry_id = body["entries"][0]["entry_id"]
+    entry_id = body["entries"][0]["meal_plan_entry_id"]
+    with app.app_context(), db.engine.begin() as conn:
+        conn.execute(
+            text('UPDATE "MealPlanEntry" SET scheduled_for = :past WHERE id = :eid'),
+            {"past": past.isoformat(), "eid": uuid_bind(entry_id)},
+        )
+        conn.execute(
+            text('UPDATE "MealPlan" SET start_date = :past WHERE id = :pid'),
+            {"past": past.isoformat(), "pid": uuid_bind(plan_id)},
+        )
     return plan_id, entry_id
 
 
@@ -103,7 +118,7 @@ def _receipts_for(entry_id: str) -> list[dict]:
     """Direct-DB read (no read endpoint yet — that's Chunk 3). Returns
     a list of {state, original_servings, actual_servings} dicts, oldest
     first."""
-    with db.engine.connect() as conn:
+    with app.app_context(), db.engine.connect() as conn:
         rows = conn.execute(
             text(
                 'SELECT state, original_servings, actual_servings '
@@ -111,7 +126,7 @@ def _receipts_for(entry_id: str) -> list[dict]:
                 'WHERE meal_plan_entry_id = :eid '
                 'ORDER BY created_at ASC'
             ),
-            {"eid": entry_id},
+            {"eid": uuid_bind(entry_id)},
         ).all()
     return [
         {"state": r[0], "original_servings": r[1], "actual_servings": r[2]}
@@ -120,12 +135,12 @@ def _receipts_for(entry_id: str) -> list[dict]:
 
 
 def _entry_consumed_at(entry_id: str) -> str | None:
-    with db.engine.connect() as conn:
+    with app.app_context(), db.engine.connect() as conn:
         row = conn.execute(
             text(
                 'SELECT consumed_at FROM "MealPlanEntry" WHERE id = :eid'
             ),
-            {"eid": entry_id},
+            {"eid": uuid_bind(entry_id)},
         ).first()
     return None if row is None or row[0] is None else str(row[0])
 

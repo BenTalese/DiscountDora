@@ -394,6 +394,18 @@ class ReconcileVerbRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+def _id_bytes(value) -> bytes:
+    """Normalise a UUID (in any shape) to `bytes` for raw-`text()` binds
+    against SQLite's BINARY(16) UUIDType columns. See `recipes/pool.py:
+    bump_pool` for the same normalisation applied there; both live in
+    raw-SQL corners of the reconcile feature."""
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, UUID):
+        return value.bytes
+    return UUID(str(value)).bytes
+
+
 def _latest_receipt(entry_id) -> Optional[dict]:
     row = db.session.execute(
         text(
@@ -402,7 +414,7 @@ def _latest_receipt(entry_id) -> Optional[dict]:
             'WHERE meal_plan_entry_id = :eid '
             'ORDER BY created_at DESC LIMIT 1'
         ),
-        {"eid": entry_id},
+        {"eid": _id_bytes(entry_id)},
     ).mappings().first()
     return dict(row) if row else None
 
@@ -414,7 +426,7 @@ def _load_entry(entry_id: UUID) -> Optional[dict]:
             'SELECT id, recipe_id, servings, consumed_at '
             'FROM "MealPlanEntry" WHERE id = :eid'
         ),
-        {"eid": str(entry_id)},
+        {"eid": _id_bytes(entry_id)},
     ).mappings().first()
     return dict(row) if row else None
 
@@ -534,16 +546,16 @@ def submit_verb(entry_id: UUID):
     if verb in _COOKED_VERBS and entry["consumed_at"] is None:
         db.session.execute(
             text('UPDATE "MealPlanEntry" SET consumed_at = :now WHERE id = :eid'),
-            {"now": now, "eid": entry["id"]},
+            {"now": now, "eid": _id_bytes(entry["id"])},
         )
     elif verb in (VERB_NOT_COOKED, VERB_SKIP) and entry["consumed_at"] is not None:
         db.session.execute(
             text('UPDATE "MealPlanEntry" SET consumed_at = NULL WHERE id = :eid'),
-            {"eid": entry["id"]},
+            {"eid": _id_bytes(entry["id"])},
         )
 
     # Write the corrective receipt (append-only — never mutates the past).
-    new_receipt_id = str(uuid.uuid4())
+    new_receipt_id = uuid.uuid4()
     actual_for_row = (
         req.actual_servings if verb == VERB_COOKED_ADJUSTED else None
     )
@@ -556,13 +568,13 @@ def submit_verb(entry_id: UUID):
             'VALUES (:id, :eid, :state, :orig, :actual, :cooked_on, :uid, :now, :note, :now)'
         ),
         {
-            "id": new_receipt_id,
-            "eid": entry["id"],
+            "id": _id_bytes(new_receipt_id),
+            "eid": _id_bytes(entry["id"]),
             "state": target_state,
             "orig": int(entry["servings"] or 0),
             "actual": actual_for_row,
             "cooked_on": cooked_on_for_row,
-            "uid": str(user_id),
+            "uid": _id_bytes(user_id),
             "now": now,
             "note": req.note,
         },
@@ -592,7 +604,7 @@ def submit_verb(entry_id: UUID):
 def _read_pool(recipe_id) -> int:
     row = db.session.execute(
         text('SELECT available_meals FROM "Recipe" WHERE id = :rid'),
-        {"rid": recipe_id if isinstance(recipe_id, bytes) else str(recipe_id)},
+        {"rid": _id_bytes(recipe_id)},
     ).first()
     return int(row[0]) if row and row[0] is not None else 0
 

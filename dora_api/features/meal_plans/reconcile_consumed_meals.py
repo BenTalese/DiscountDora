@@ -58,12 +58,28 @@ def reconcile_consumed_meals() -> None:
 
 
 def _sweep_auto_drain(_Conn, _Now: datetime, _Today) -> None:
-    """auto-drain ON branch — the historic behaviour + a receipt per drain."""
+    """auto-drain ON branch — the historic behaviour + a receipt per drain.
+
+    The `NOT EXISTS` guard mirrors the manual branch: once a user has made
+    a decision via the reconcile page (any receipt, resolved or not), the
+    sweep must not re-touch the entry. Without this, a `Didn't cook` verb
+    that clears `consumed_at` would trigger the next sweep to re-drain
+    the pool + write a fresh `unresolved_auto` receipt on top of the
+    user's `resolved_not_cooked` decision.
+    """
     _Consumed = _Conn.execute(
         text(
             'UPDATE "MealPlanEntry" '
             "SET consumed_at = :now "
-            "WHERE scheduled_for < :today AND consumed_at IS NULL "
+            "WHERE id IN ("
+            '  SELECT mpe.id FROM "MealPlanEntry" mpe '
+            "  WHERE mpe.scheduled_for < :today "
+            "    AND mpe.consumed_at IS NULL "
+            "    AND NOT EXISTS ("
+            '      SELECT 1 FROM "MealPlanReconcileReceipt" r '
+            "      WHERE r.meal_plan_entry_id = mpe.id"
+            "    )"
+            ") "
             "RETURNING id, recipe_id, servings"
         ),
         {"now": _Now, "today": _Today},

@@ -1,0 +1,417 @@
+{
+  "alerts": {
+    "keys": [
+      "actionable_count",
+      "fyi_count",
+      "high_count",
+      "items",
+      "low_count",
+      "medium_count",
+      "snoozed",
+      "snoozed_count"
+    ]
+  },
+  "app_settings": {
+    "keys": [
+      "audit_retention_days",
+      "auto_add_mode",
+      "auto_drain_past_meals",
+      "backup_retention_count",
+      "backup_storage_path",
+      "buy_verdict_enabled",
+      "companion_ingestion_enabled",
+      "currency",
+      "deals_email_enabled",
+      "email_enabled",
+      "expiring_soon_window_days",
+      "image_max_dimension",
+      "image_quality",
+      "locale",
+      "master_llm_enabled",
+      "meal_planning_enabled",
+      "money_enabled",
+      "nutrition_db_source",
+      "nutrition_enabled",
+      "piper_bin",
+      "piper_bundled_voice_dir",
+      "piper_voice",
+      "product_search_url",
+      "public_url",
+      "scanning_enabled",
+      "smtp_from",
+      "smtp_host",
+      "smtp_password_configured",
+      "smtp_port",
+      "smtp_use_tls",
+      "smtp_username",
+      "stocktake_auto_tuning_enabled",
+      "stocktake_default_cadence_band",
+      "timezone",
+      "unit_pricing_locale",
+      "vapid_private_key_configured",
+      "vapid_public_key",
+      "vapid_subject"
+    ]
+  },
+  "auth_me": {
+    "keys": [
+      "alerts_email_cadence",
+      "alerts_email_day",
+      "alerts_email_enabled",
+      "always_ask_which_shopping_list",
+      "batch_features_enabled",
+      "budget_amount",
+      "budget_period",
+      "dashboard_layout",
+      "deals_email_compact",
+      "deals_email_enabled",
+      "email",
+      "email_verified",
+      "font_family",
+      "font_size",
+      "has_image",
+      "has_llm_api_key",
+      "household_headcount",
+      "inferred_pantry_enabled",
+      "is_admin",
+      "llm_base_url",
+      "llm_enabled",
+      "llm_model",
+      "llm_provider",
+      "meals_per_week",
+      "money_features_enabled",
+      "nutrition_mode",
+      "onboarding_completed_at",
+      "send_deals_on_day",
+      "show_assistant",
+      "show_recipe_images",
+      "theme",
+      "user_id",
+      "username",
+      "voice_engine",
+      "voice_id",
+      "voice_input_enabled",
+      "voice_output_enabled"
+    ]
+  },
+  "categories": {
+    "list_item_keys": [
+      "category_id",
+      "name",
+      "recipe_count",
+      "sequence"
+    ]
+  },
+  "cuisines": {
+    "list_item_keys": [
+      "cuisine_id",
+      "name",
+      "recipe_count",
+      "sequence"
+    ]
+  },
+  "dashboard_dora_score": {
+    "keys": [
+      "components",
+      "composite",
+      "trend_delta",
+      "trend_direction",
+      "window_days"
+    ]
+  },
+  "dashboard_summary": {
+    "keys": [
+      "meal_plan",
+      "meals",
+      "products",
+      "recipes",
+      "shopping_lists",
+      "stock_items"
+    ]
+  },
+  "dietary_tags": {
+    "list_item_keys": [
+      "category",
+      "dietary_tag_id",
+      "name",
+      "recipe_count",
+      "sequence"
+    ]
+  },
+  "health": {
+    "keys": [
+      "features",
+      "image_policy",
+      "locale_policy",
+      "ok",
+      "profile",
+      "schema_version",
+      "version"
+    ]
+  },
+  "meal_plan_templates": {
+    "list_item_keys": [
+      "created_at",
+      "description",
+      "entry_count",
+      "meal_plan_template_id",
+      "name",
+      "updated_at"
+    ]
+  },
+  "meal_plans": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "entries",
+      "meal_plan_id",
+      "name",
+      "start_date"
+    ]
+  },
+  "meal_slots": {
+    "list_item_keys": [
+      "meal_slot_id",
+      "name",
+      "sequence",
+      "usage_count"
+    ]
+  },
+  "onboarding_state": {
+    "keys": [
+      "completed",
+      "completed_at",
+      "first_user",
+      "store_status"
+    ]
+  },
+  "products": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "brand",
+      "has_image",
+      "is_active",
+      "is_available",
+      "linked_stock_item_id",
+      "linked_stock_item_name",
+      "merchant_stockcode",
+      "name",
+      "price_now",
+      "price_was",
+      "product_id",
+      "size",
+      "size_unit",
+      "size_value",
+      "store_id",
+      "store_name",
+      "web_url"
+    ]
+  },
+  "recipe_collections": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "name",
+      "recipe_collection_id"
+    ]
+  },
+  "recipes": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "available_meals",
+      "category_id",
+      "category_name",
+      "committed_meals",
+      "cook_time_minutes",
+      "cookable",
+      "created_at",
+      "cuisine_id",
+      "cuisine_name",
+      "dietary_tag_ids",
+      "difficulty",
+      "estimated_cost",
+      "estimated_cost_priced_count",
+      "estimated_cost_total_count",
+      "expiring_ingredient_count",
+      "has_image",
+      "has_step_images",
+      "has_structured_steps",
+      "ingredients",
+      "instructions",
+      "is_favourite",
+      "is_planned",
+      "kcal",
+      "last_made_on",
+      "missing_count",
+      "missing_stock_item_names",
+      "name",
+      "not_made_recently",
+      "notes",
+      "plan_count",
+      "prep_time_minutes",
+      "recipe_collection_id",
+      "recipe_id",
+      "section_count",
+      "sections",
+      "servings",
+      "source",
+      "step_images",
+      "steps",
+      "steps_mode",
+      "time_of_day",
+      "tool_ids",
+      "unallocated_meals",
+      "unlinked_ingredient_count",
+      "version_group_id",
+      "version_siblings"
+    ]
+  },
+  "search": {
+    "keys": [
+      "results"
+    ]
+  },
+  "shopping_lists": {
+    "list_item_keys": [
+      "completed_at",
+      "created_at",
+      "display_name",
+      "effective_date",
+      "is_next_up",
+      "line_count",
+      "name",
+      "planned_shop_date",
+      "shopping_list_id",
+      "status",
+      "ticked_count"
+    ]
+  },
+  "stock_groups": {
+    "list_item_keys": [
+      "item_count",
+      "name",
+      "stock_group_id"
+    ]
+  },
+  "stock_items": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "expiry_date",
+      "is_flagged",
+      "is_low_stock",
+      "is_open",
+      "is_out_of_stock",
+      "last_checked_at",
+      "linked_product_count",
+      "name",
+      "needs_restock",
+      "opened_on",
+      "stock_group_id",
+      "stock_item_id",
+      "stock_level_id",
+      "stock_level_last_updated",
+      "stock_level_name",
+      "stock_level_sequence",
+      "stock_location_id"
+    ]
+  },
+  "stock_levels": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "name",
+      "sequence",
+      "stock_level_id"
+    ]
+  },
+  "stock_locations": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "name",
+      "stock_location_id"
+    ]
+  },
+  "stores": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "has_image",
+      "name",
+      "store_id"
+    ]
+  },
+  "suggestions": {
+    "keys": [
+      "count",
+      "suggestions"
+    ]
+  },
+  "tools": {
+    "list_item_keys": [
+      "name",
+      "recipe_count",
+      "sequence",
+      "tool_id"
+    ]
+  },
+  "users": {
+    "envelope": [
+      "items",
+      "limit",
+      "page",
+      "total"
+    ],
+    "item_keys": [
+      "deals_email_enabled",
+      "email",
+      "has_image",
+      "is_admin",
+      "send_deals_on_day",
+      "user_id",
+      "username"
+    ]
+  },
+  "waste_rescue": {
+    "keys": [
+      "horizon_days",
+      "items",
+      "recipes"
+    ]
+  }
+}

@@ -53,11 +53,17 @@
 #             - name: Typecheck
 #               run: npx vue-tsc --noEmit
 
+#             - name: Unit tests (vitest)
+#               run: npm test
+
 #             - name: Build
 #               run: npm run build
 
 #     # ─────────────────────────────────────────────────────────────────
-#     # Dora API — pytest against the e2e suite
+#     # Dora API — the full pytest suite (domain units + e2e; testpaths
+#     # in pytest.ini). Bare `pytest` closes the PROPOSAL_TEST_SUITE_
+#     # IMPROVEMENTS §3.1 scope gap where CI ran only tests/e2e/dora_api
+#     # and the domain unit layer never gated merges.
 #     # ─────────────────────────────────────────────────────────────────
 #     dora-api:
 #         name: Dora API (pytest)
@@ -82,7 +88,7 @@
 #                   pip install -r requirements.txt
 
 #             - name: Run pytest
-#               run: pytest tests/e2e/dora_api -v
+#               run: pytest
 
 #     # Phase D / FU-186: the `merchant_api` + `emailer` byte-compile
 #     # smoke job retired with the directories — the companion lives in

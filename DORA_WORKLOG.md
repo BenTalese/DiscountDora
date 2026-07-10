@@ -9,6 +9,84 @@ next.
 
 ---
 
+## 2026-07-10 (later) — Test sweep pass 2: search e2e + DTO snapshots + 10 long-tail surfaces + first component tests; 4 more findings logged
+
+**Why:** User said "continue upgrading the test suite to be as solid as possible in chunks" after the earlier sweep. Executed the remaining FU-519 slices + the FU-520 component layer, in verified chunks.
+
+### Suite state at close
+- **Backend `pytest`: 1238 passed / 1 failed (pre-existing FU-328 only) / 5 xfailed (all deliberate `strict=True` FU pins), ~45 s.** Was 1096 at the earlier close, 920 this morning.
+- **Frontend `npx vitest run`: 203 passed (11 files), ~1.5 s.**
+
+### Shipped (chunk by chunk, each verified before the next)
+1. **Search e2e** — `test_search_router.py` (12): result shape, scoring order, breadcrumb/status/cuisine subtitles, types filter (+ invalid-types→all-types fallback pinned as contract), per-type limit clamp. Note: nested locations must be created via `POST /api/locations` (zone→area→section kinds); the flat `/api/stock-locations` create is name-only.
+2. **DTO contract snapshots** — `test_dto_contracts.py` + committed `dto_snapshots.json` (27 endpoints, self-seeding incl. a template-from-plan-with-entries chain). Refresh = `DORA_UPDATE_DTO_SNAPSHOTS=1` + commit the diff. FU-519 item 4 done.
+3. **Long-tail e2e (subagent)** — 103 tests / 2 strict xfails across waste, budget, reports (all 10 endpoints), stocktake lifecycle, and 6 taxonomy routers (shared `_taxonomy_crud.py` + `_spend_seeding.py` helpers). FU-519 item 2 now effectively done; only minor surfaces left (locations tree, client_logs, help, substitutes/suggestions detail, deals) as per-touch.
+4. **Component Vitest** — `stockLevelDot.spec.ts` (11) over both StockLevelDot components. **Infrastructure unlocked:** `@vitejs/plugin-vue` in vitest.config, `quasar` aliased to `quasar/dist/quasar.client.js` (vitest resolves the SSR bundle otherwise, whose plugin install throws), real Quasar components registered per-mount, per-file jsdom pragma. AddToListButton et al. stay on FU-520 but are unblocked.
+
+### Findings logged (not fixed — explain-or-flag)
+- **[[FU-526]]** stocktake queue 500 + broken alerts bell while any snooze is active on SQLite (naive/aware compare, stocktake.py:318). The serious one — recommend fixing next.
+- **[[FU-527]]** two more noload-reads-as-empty count bugs (reports keeps-running-out fallback; stock-group item_count). **Third incident of the noload family today — ADR candidacy flagged in the FU.**
+- **[[FU-528]]** str/UUID dict-key mismatches (tool + dietary-tag delete `recipes_affected` always 0).
+- **[[FU-529]]** transient reconcile idempotence flake (3 consecutive failures in a ~10-min window, then 5/5 green + full suite green; debug receipt dump was well-formed). Root suspicion: `_latest_receipt` orders purely by wall-clock `created_at` with no tie-break — clock step (Windows time sync) or timestamp tie flips "latest". Logged per the reported-defect rule; treat a solitary future failure of `test__same_verb_replay_is_idempotent` as this FU.
+
+### Ledger updates
+- `DORA_FOLLOWUPS.md`: FU-526/527/528/529 opened; FU-519 items 2+4 marked done (item 2 keeps a minor-surface tail note); FU-520 item 1 marked shipped-incl-components with the mount pattern documented.
+- `CHANGELOG.md`: pass-2 block added under Added.
+- No DORA_VERIFY additions (no user-visible behaviour changed this pass; FU-526's browser walk belongs to its fix).
+
+### Engineering-standards close-gate
+- **R-005** — new e2e goes through HTTP; the two SQL-backdating sites use the sanctioned `uuid_bind` pattern; snapshot file is plain JSON.
+- **R-007 (scope)** — zero production code touched this pass; all six bug finds logged as FUs instead.
+- **R-001** — taxonomy suites share `_taxonomy_crud.py` instead of 6× copy-paste; contract snapshots share one parametrized test.
+- **New-rule evaluation:** noload family hit its third incident — ADR candidacy recorded in FU-527 rather than promoted unilaterally (product owner should confirm the rule wording).
+
+### Next up
+- Fix [[FU-526]] (stocktake snooze 500) — highest-value single fix on the board.
+- FU-520 leftovers per-touch: AddToListButton spec, scraper tests (companion repo), Postgres CI with FU-405.
+
+---
+
+## 2026-07-10 — FU-519/FU-520 targeted test sweep: +176 backend / +139 frontend tests, recipe-filter production bug found+fixed, FU-518 closed
+
+**Why:** User asked for a strong test suite ("find valuable unit, integration, and e2e tests" + frontend), then mid-session scaled the ask to *targeted sweep matched to the app's scale, not Google-scale; note the rest for future agents*. Executed the highest-value slices of FU-519 (Phase 3) + FU-520 (Phase 4) via parallel subagents, then verified/repaired inline after three agents were cut off by a usage-limit reset (their files all landed; only their verification passes were lost).
+
+### Suite state at close
+- **Backend `pytest`: 1096 passed / 1 failed (pre-existing FU-328 CSV hint-row, out of scope) / 3 xfailed (all deliberate `strict=True` pins of newly-found bugs), ~41 s.** Was 920/1/1-xfail at session start.
+- **Frontend `npx vitest run`: 192 passed (10 files), ~1 s.** Was 53 (1 file).
+- The FU-518 xfail is gone — its test now passes deterministically.
+
+### Shipped
+- **E2e for 3 of 4 ⚠️ priority surfaces (FU-519.2):** `test_recipe_router.py` (26: CRUD, list filters, cookability surfacing, error paths, pagination parametrize), `test_meal_plan_router.py`, `test_dashboard_router.py`. **`search` did NOT ship** — that agent was cut off before writing it; it stays top of FU-519.
+- **Real production bug found + fixed — cookbook filters were no-ops.** `_restrict_query` in [get_recipes.py](dora_api/features/recipes/get_recipes.py) ran the plain id-universe `.all()` before `load_recipe_cookability` / `count_expiring_ingredients_per_recipe`; identity-map reuse left `ingredients` noload-empty inside those maps, so every recipe read (0,0,0) → `?cookable=true` kept all, `?cookable=false` kept none, `?max_missing` no-oped, `?expiring_within_days` returned empty. Fixed by building relationship-dependent maps first (comment in place explains the trap). Four e2e tests pin it; DORA_VERIFY has a browser walk. `test_recipes_query_count.py` still green (no N+1 regression).
+- **Repository suite (FU-519.3):** `tests/test_sqlalchemy_repository.py` on a standalone SQLite fixture — paginate math, operator matrix, field_map, NOCASE sort, UUID round-trips. Found **FU-523** (Contains/StartsWith invert `case_sensitive` on the value side + SQLite LIKE can't do case-sensitive anyway) — pinned by 2 strict xfails.
+- **Emailer suite (FU-520.3):** `test_email_templates.py` (13) + `test_email_sender.py` (16) — pure-Jinja render of all 5 templates + layout, fake-SMTP wire choreography, dry-run degradation, error propagation. Found **FU-522** (change-email plain-text body links `/verify-email` instead of `/confirm-email-change` — likely real bug for text-only clients).
+- **Hypothesis suite (FU-520.4):** `test_domain_properties.py` (26) — invariants over recipe_cookability / stock_status / product_offer / units. Found **FU-524** (`normalise_unit` not idempotent; strips before `°` removal). `hypothesis==6.156.4` pinned. `recipe_tags`/`generics`/`types` honestly skipped (constants/TypeVars — nothing behavioural).
+- **Frontend Vitest (FU-520.1, composable/util layer):** 9 spec files / 139 tests (formatQuantity, scaleQuantity, queryStringBuilder, relativeTime, weekDates, shoppingList, stockStatus, useListState, useStockFilters); `@vue/test-utils` + `jsdom` devDeps installed. Component layer (StockLevelDot, AddToListButton) NOT built — stays on FU-520.
+- **FU-518 closed:** dedup test rewritten to per-alert-key assertions via the `AlertInteraction` ledger; `GetAlertsHandler.handle(now=…)` seam added and digest passes its tick through (recommended-resolution items both done). Archived to `_RESOLVED`.
+- **Timezone flake fixed:** `test_buy_verdict.py` mixed UTC-derived sample dates with local `date.today()` — failed every AEST morning (incl. this session's baseline). Samples now anchor to local-today noon-UTC. Production-side version of the mix logged as **FU-525**.
+- **CI (still commented out per FU-405):** commented commands fixed to bare `pytest` (full suite — closes proposal §3.1 scope gap on re-enable) + `npm test` in the frontend job.
+
+### Notes for the next session
+- Local venv on this machine was missing `pytest-cov` (requirements pin it; the FU-169 work ran elsewhere) — installed here along with `hypothesis`.
+- Another session worked this repo earlier today (FU-357/FU-521); ledger edits were merged around it — no conflicts.
+- **Future test work is all parameterised in the two open FUs:** FU-519 (search e2e first, then ~20-surface long tail + contract/snapshot tests) and FU-520 (component-level Vitest, scraper tests in the companion repo, Postgres CI with FU-405). Per user direction these are *deliberately deferred* — pick them up per-touch, not as a monolith.
+
+### Ledger updates
+- `DORA_FOLLOWUPS.md`: **FU-522 / FU-523 / FU-524 / FU-525** opened (all `finding`s from the new suites); **FU-519 / FU-520** bodies rewritten with shipped-vs-remaining status; **FU-518** removed (→ `_RESOLVED`).
+- `DORA_VERIFY.md`: Cookbook section gained the cookability/expiring-filter browser walk (origin: the identity-map fix).
+- `CHANGELOG.md`: filter-fix + digest-seam + flake-fix under Fixed; the whole sweep under Added.
+
+### Engineering-standards close-gate
+- **R-003** — the filter fix *strengthens* single-source cookability (the maps stay the one authority; only load order changed). No new client-side domain logic in the frontend tests (they test existing pure utils/composables).
+- **R-005** — repository tests run on their own SQLite file and also document the SQLite/Postgres LIKE divergence (FU-523). No portability regressions.
+- **R-007 (scope)** — one production bug fixed beyond test-writing (the filter no-op); justified as directly pinned by the new suite and user-visible. Other found bugs deliberately NOT fixed — logged as FU-522/523/524/525 per the explain-or-flag rule.
+- **New-rule evaluation:** the session re-proved two standing traps rather than new ones (identity-map/noload poisoning ≈ the FU-463 UUID-bind family; wall-clock/tz mixing). Candidate for a future ADR if a third identity-map incident appears: "never run a plain entity load before an eager-load of the same entity within one request". Not promoted now.
+
+### Verification
+- `pytest --no-cov -q` full: 1096/1/3-xfail. `npx vitest run`: 192/192. Targeted reruns per fix during the session.
+
+---
+
 ## 2026-07-10 — FU-357 closed + alerts-bell crash fixed + Dashboard toast parity + FU-521 opened
 
 **Why:** User asked to give FU-357 ("cross-app undo off after dashboard push expiry", feedback L480) a real repro walk. Halfway through, they hit a genuine `ErrorBoundary` crash on the alerts bell (`TypeError: all is undefined` at `AlertRow.vue:114`) plus noticed the Dashboard was silently swallowing the push-expiry action while the bell toasted "Done." Investigate + fix + close.

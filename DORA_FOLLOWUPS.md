@@ -53,6 +53,59 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-526 — Stocktake queue 500s (and alerts bell breaks) while any item snooze is active, on SQLite
+- **Raised:** 2026-07-10 (found by the new `test_stocktake_router.py` suite; pinned by strict xfail).
+- **Type:** finding (real user-visible bug — the worst of the sweep's finds).
+- **What:** [dora_api/features/stocktake/stocktake.py:318](dora_api/features/stocktake/stocktake.py) compares `item.snoozed_until > now_` — SQLite loads the column tz-naive while `now_` is tz-aware, so the compare raises `TypeError`. `GET /api/stocktake/queue` returns 500 for as long as any snooze is active, and the alerts feed shares `resolve_overdue_map`, so the alerts bell breaks too. Postgres unaffected (tz-aware round-trip).
+- **Recommended resolution:** **now / next stocktake touch** — normalise on load (or compare via a shared naive-UTC helper), flip the strict xfail green, and browser-verify snooze → queue → bell on a SQLite install. Same clock-mix family as [[FU-525]].
+
+## [OPEN] FU-527 — noload relationships silently read as empty in two more count paths (reports fallback, stock-group item_count)
+- **Raised:** 2026-07-10 (found by the new reports + stock-group e2e suites).
+- **Type:** finding (real bugs, quiet wrong numbers; third incident of the noload family — ADR candidate, see below).
+- **What:** two independent sites read a `lazy="noload"` relationship without `.include(...)`, so it's silently `None`/empty:
+  1. [dora_api/features/reports/reports.py:588](dora_api/features/reports/reports.py) — the keeps-running-out fallback fetches items without `.include("stock_level")`, so items with no `StockLevelChange` history read `stock_level=None` and are dropped from the tally (pinned by strict xfail).
+  2. [dora_api/features/stock_groups/manage_stock_groups.py:57](dora_api/features/stock_groups/manage_stock_groups.py) — the list's `item_count` buckets via the noload `item.stock_group`, so it's always 0 (delete's SQL-counted `items_affected` is correct; pinned with a comment).
+- **ADR candidate:** this is the third noload-reads-as-empty incident in one day (the cookbook-filter identity-map bug fixed 2026-07-10 is the same family). If one more appears, promote a standing rule (e.g. "every read of a noload relationship must sit behind an `.include` on the same query, and relationship-dependent maps load before any plain entity load in the same request").
+- **Recommended resolution:** opportunistic per surface — add the missing `.include`s, flip the xfail, delete the pinning comments.
+
+## [OPEN] FU-528 — str/UUID dict-key mismatch: tool + dietary-tag delete responses always report 0 recipes affected
+- **Raised:** 2026-07-10 (found by the new taxonomy-router e2e suites; pinned with comments).
+- **Type:** finding (real bugs, cosmetic blast radius — the delete itself works, the count in the response is wrong).
+- **What:** [dora_api/features/tools/manage_tools.py:178](dora_api/features/tools/manage_tools.py) and [dora_api/features/dietary_tags/manage_dietary_tags.py:192](dora_api/features/dietary_tags/manage_dietary_tags.py) do `counts.get(id, 0)` where the dict is keyed by `UUID` but the Flask path param is `str` — always 0. Same family as the FU-463 UUID-bind sweep.
+- **Recommended resolution:** opportunistic — coerce the path param to `UUID` at both sites and strengthen the pinned assertions to the real counts.
+
+## [OPEN] FU-529 — Reconcile "latest receipt" ordering has no deterministic tie-break; transient idempotence flake observed
+- **Raised:** 2026-07-10 (observed live: `test__same_verb_replay_is_idempotent` failed in three consecutive runs in a ~10-minute window, then stopped reproducing — 5/5 green after, incl. the full suite).
+- **Type:** finding (didn't re-reproduce; logged per the reported-defect rule rather than dropped).
+- **What:** `_latest_receipt` in [dora_api/features/meal_plans/reconcile.py:409](dora_api/features/meal_plans/reconcile.py) (and the queue's correlated `r2.created_at > r.created_at` subqueries) order receipts purely by wall-clock `created_at`. A same-timestamp tie or a clock step backwards (Windows time sync is the prime suspect for the observed window) makes "latest" ambiguous — the sweep's `unresolved_auto` receipt can read as newer than the user's verb receipt, so a same-verb replay returns `idempotent: false` and writes a duplicate receipt. Debug dump during the window confirmed receipts + timestamps were well-formed 11 ms apart once the window passed.
+- **Recommended resolution:** next reconcile touch — give receipts a deterministic order (monotonic sequence column, or at minimum a stable secondary sort key that works on both SQLite and Postgres per R-005), then re-run the file in a loop to confirm. Until then, treat a solitary failure of this test as this FU, not a regression.
+
+## [OPEN] FU-522 — Change-email plain-text body links the wrong route (`/verify-email` instead of `/confirm-email-change`)
+- **Raised:** 2026-07-10 (found by the FU-520 emailer test pass; static read, not yet reproduced live).
+- **Type:** finding (likely real bug).
+- **What:** in `request_email_change` ([dora_api/features/auth/email_flows.py:346](dora_api/features/auth/email_flows.py)) the HTML body rewrites the confirmation link to `/confirm-email-change` (line ~344), but the **plain-text** body uses the un-rewritten `build_verify_url(raw_token)` pointing at `/verify-email` — a change-email-purpose token delivered to the wrong route for text-only mail clients. The token purpose likely fails validation on that route, dead-ending the flow.
+- **Also, while there (minor R-001):** [dora_api/features/users/change_password.py:111-126](dora_api/features/users/change_password.py) hand-rolls its own try/except-log around `send_email` instead of reusing `auth_helpers.try_send`.
+- **Recommended resolution:** now-ish / next auth-surface touch — build the text link from the same rewritten URL as the HTML body, add a regression test beside the new `tests/test_email_sender.py` suite, then confirm the change-email flow end-to-end in browser.
+
+## [OPEN] FU-523 — `Contains`/`StartsWith` invert `case_sensitive` on the value side; case-sensitive LIKE impossible on SQLite
+- **Raised:** 2026-07-10 (found + pinned by the new `tests/test_sqlalchemy_repository.py` suite).
+- **Type:** finding (real bug in shared query machinery, low blast radius today).
+- **What:** [dora_api/persistence/bool_operation.py:143,155](dora_api/persistence/bool_operation.py) lower-case the search **value** when `case_sensitive=True` (compare `BoolOperation._resolve` line 19, which lowers when NOT case-sensitive — the flag is inverted on the value side). Independently, SQLite's `LIKE` is ASCII-case-insensitive regardless, so `case_sensitive=True` substring matching can't work on SQLite at all and is doubly broken (value pre-lowered) on Postgres. Pinned by two `@pytest.mark.xfail(strict=True)` tests — flipping them green is the done-signal.
+- **Impact today:** no production callsite appears to pass `case_sensitive=True` to Contains/StartsWith, so this is latent — but it's exactly the kind of trap the R-005 SQLite/Postgres portability posture says to fix or document.
+- **Recommended resolution:** opportunistic, next time `bool_operation.py` is touched — fix the inversion, and either implement case-sensitive LIKE portably (SQLite `GLOB`/`BINARY` collation vs Postgres `LIKE`) or drop the flag from the two operators and document them as always-insensitive.
+
+## [OPEN] FU-524 — `normalise_unit` is not idempotent (`strip()` runs before the `°` removal)
+- **Raised:** 2026-07-10 (found by the new Hypothesis property suite `tests/test_domain_properties.py`).
+- **Type:** finding (real but minor).
+- **What:** [dora_api/domain/units.py:338-341](dora_api/domain/units.py) does `strip().lower().replace("°", "")` — removing the degree mark can re-expose end whitespace, so `normalise_unit("gas °")` → `"gas "` (≠ `normalise_unit(normalise_unit(...))`). Impact: inputs like `"gas °"` / `"° C"` miss their `UNIT_TABLE`/gas-mark alias lookups and return None. Pinned by a deterministic `xfail(strict=True)`; the property-test strategy excludes `°` with a loud comment until fixed.
+- **Recommended resolution:** opportunistic one-liner next time `units.py` is touched — strip **after** the replace, delete the xfail + strategy carve-out.
+
+## [OPEN] FU-525 — Buy-verdict wait-hint mixes UTC sample dates with household-local `today` (possible one-day drift)
+- **Raised:** 2026-07-10 (surfaced while fixing the same mix in `tests/test_buy_verdict.py`, which flaked every AEST morning).
+- **Type:** finding (production nuance, unconfirmed impact).
+- **What:** `_wait_hint` / `_price_axis` in [dora_api/features/stock_items/get_buy_verdict.py](dora_api/features/stock_items/get_buy_verdict.py) derive low-dates via `ts.date()` on **UTC** observation timestamps while `inputs.today` is the household-local calendar day (R-021). For UTC+10 households, any observation recorded before 10am local lands on the previous UTC calendar day, which can shift the predicted "next low" date by a day (cosmetic — the hint is "~every N days") and, at the edge, flip the `next_low <= today` staleness check. The test-side fix (2026-07-10) anchors test samples to local-noon; the production data path still mixes the two clocks.
+- **Recommended resolution:** discussion / next buy-verdict touch — either convert observation timestamps to household-tz before `.date()` (R-021-consistent) or accept the ±1-day fuzz with a comment. Not worth its own unit; the hint is deliberately approximate.
+
 ## [OPEN] FU-521 — Alert-action toast + kind exhaustiveness sit in three copies (R-003 drift, senior-review track)
 - **Raised:** 2026-07-10 (surfaced during FU-357 close-out — user hit the divergent-toast + missing-kind bug live).
 - **Type:** finding (state-ownership drift).
@@ -65,38 +118,25 @@ long session summary. Distinct from the other logs:
 ## [OPEN] FU-520 — Test-suite improvements Phase 4: frontend Vitest + Hypothesis + Postgres CI + scraper/emailer fixture tests
 - **Raised:** 2026-07-09 (split from FU-169 close-out).
 - **Type:** deferred job (large — should be its own multi-session unit).
-- **What:** the Phase-4 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.E-F P2. Four independent workstreams:
-  1. **Frontend Vitest + Vue Test Utils.** Start with composables (`useMealPlanExport`, `useUndo`, `useShortcut`, cart/quantity helpers). Then key components (`StockLevelDot`, `AddToListButton`, shopping rail). Wire `npm run test:unit` into any future CI.
-  2. **`merchant_api` scraper tests** against saved HTML fixtures — the [[FU-161]] Aldi-scraper work finally gets a net.
-  3. **`emailer` template-render + send-path tests** with a fake transport.
-  4. **Hypothesis property tests** for the rich-logic domain modules (`recipe_cookability`, `stock_status`, `product_offer` — e.g. *cookable ⇒ every ingredient in stock*).
-  5. **Postgres-backed CI test runs** once FU-045's Postgres migration lands (already resolved) and CI is un-commented ([[FU-405]] / `.github/workflows/ci.yml`).
-- **Why deferred:** each of the four workstreams is a real chunk of work. Sequencing them under one FU would obscure progress; sequencing them independently would obscure the shared "trust the frontend + property invariants + CI" motivation.
-- **Recommended resolution:** pick a workstream when the surface it touches gets a real change (e.g. Vitest when adding a new composable; scraper tests when [[FU-358]] Aldi upgrade lands). **Recommended resolution point:** opportunistic per workstream.
+- **What:** the Phase-4 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.E-F P2. Status after the 2026-07-10 targeted sweep:
+  1. **Frontend Vitest + Vue Test Utils — SHIPPED incl. first component tests (2026-07-10, two passes).** 9 util/composable spec files (139 tests) + `stockLevelDot.spec.ts` (11 component tests over both StockLevelDot components) → 203 total, ~1.5s. The Quasar component-mount pattern is now established in `vitest.config.ts` + that spec: `@vitejs/plugin-vue` wired, `quasar` aliased to its client bundle (the SSR bundle throws under vitest), real Quasar components registered per-mount, per-file `// @vitest-environment jsdom` pragma. **Remaining:** `AddToListButton` (601 lines, API-coupled — needs service mocking) + shopping rail + lifecycle-coupled composables (`useMealPlanExport`, `useOfflineQueue`); all unblocked by the established pattern.
+  2. **`merchant_api` scraper tests** against saved HTML fixtures — **still open**; the scraper lives in the sibling `dora-companion` repo, so this belongs there ([[FU-161]] Aldi net).
+  3. **`emailer` tests — SHIPPED 2026-07-10.** `tests/test_email_templates.py` (13) + `tests/test_email_sender.py` (16): all 5 content templates + layout + autoescape, MIME assembly, SMTP wire choreography via fake transport, dry-run degradation, error propagation. Found [[FU-522]].
+  4. **Hypothesis property tests — SHIPPED 2026-07-10.** `tests/test_domain_properties.py` (26): invariants over `recipe_cookability` (incl. the canonical *cookable ⇒ nothing required missing*), `stock_status`, `product_offer`, `units`. Found [[FU-524]]. `hypothesis` pinned in requirements.txt.
+  5. **Postgres-backed CI test runs** once CI is un-commented ([[FU-405]] / `.github/workflows/ci.yml`) — **still open**. Note the commented workflow was fixed 2026-07-10 to run bare `pytest` (full suite) + `npm test`, so un-commenting inherits the right scope.
+- **Recommended resolution (remaining):** component-level Vitest when a component surface next changes; scraper tests in the companion repo; Postgres CI with [[FU-405]]. **Recommended resolution point:** opportunistic per workstream.
 - **Cross-ref:** [[FU-519]] Phase 3 (untested API surfaces) — separate; Phases 3 + 4 are proposal-parallel, not sequential.
 
 ## [OPEN] FU-519 — Test-suite improvements Phase 3: close coverage gaps
 - **Raised:** 2026-07-09 (split from FU-169 close-out).
 - **Type:** deferred job (large — should be its own multi-session unit).
-- **What:** the Phase-3 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.D. Three layers:
-  1. **Domain-logic unit tests** for the untested `domain/` modules (`recipe_tags`, `generics`, `types`).
-  2. **API e2e for the ⚠️ untested surfaces** — proposal §4 lists ~24 endpoints without dedicated e2e coverage. Priorities: `recipes` (CRUD + filters + cookability surfacing), `meal_plans` (CRUD + entries + reconciliation), `dashboard`, `search`. Then the long tail.
-  3. **Persistence / repository tests** for the shared query machinery (`SqlAlchemyRepository.paginate`, filter operators, `field_map`, NOCASE sort). Currently exercised indirectly by every list test; a focused suite would let router tests stop re-proving operator semantics.
-  4. **Contract / snapshot tests** for DTO shapes — one test per endpoint snapshotting response keys, catches DTO drift (the shape FU-166 spent days fixing).
-- **Why deferred:** substantial (24+ new e2e files + a repository test module + ~15 domain-unit tests). Should be sequenced by which surface gets touched next, not done as a monolithic sweep.
-- **Recommended resolution:** whenever a chunk touches a currently-untested surface, add its e2e file at the same time (per-touch policy, matches R-023's per-edit spirit for `assert_problem`). **Recommended resolution point:** opportunistic per surface.
+- **What:** the Phase-3 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.D. Status after the 2026-07-10 targeted sweep:
+  1. **Domain-logic unit tests — CLOSED 2026-07-10 (honestly skipped).** `recipe_tags` / `generics` / `types` turned out to be a string constant, three TypeVars, and `EMPTY_UUID` — nothing behavioural to test; writing filler would violate the "green means correct" principle.
+  2. **API e2e — effectively DONE 2026-07-10 (two passes).** Pass 1: `test_recipe_router.py` (found + fixed the identity-map filter bug), `test_meal_plan_router.py`, `test_dashboard_router.py`. Pass 2 (same day): `test_search_router.py` (12 — scoring order, per-type subtitles, types filter, per-type limit clamp), `test_waste_router.py` (13), `test_budget_router.py` (11), `test_reports_router.py` (15 — all 10 report endpoints), `test_stocktake_router.py` (16 — found [[FU-526]]), and the six taxonomy routers (cuisines/categories/dietary-tags/tools/stock-groups/recipe-collections, ~49 via shared `_taxonomy_crud.py`). Found [[FU-527]] + [[FU-528]]. **Remaining minor surfaces (opportunistic per-touch only):** locations tree router, client_logs, help, substitutes detail (metadata partially covered), suggestions detail, deals.
+  3. **Persistence / repository tests — SHIPPED 2026-07-10.** `tests/test_sqlalchemy_repository.py`: paginate math, full operator matrix, field_map resolution, NOCASE sort, UUID round-trip, against a standalone SQLite fixture. Found [[FU-523]].
+  4. **Contract / snapshot tests — SHIPPED 2026-07-10.** `tests/e2e/dora_api/test_dto_contracts.py`: 27 endpoints' response-key shapes pinned against `dto_snapshots.json` (self-seeding; refresh with `DORA_UPDATE_DTO_SNAPSHOTS=1` and commit the JSON diff — the diff is the reviewable contract change).
+- **Recommended resolution (remaining):** the minor-surface tail per-touch as those surfaces change (matches R-023's per-edit spirit); add a `dto_snapshots.json` row whenever a new endpoint lands. **Recommended resolution point:** opportunistic per surface.
 - **Cross-ref:** [[FU-520]] Phase 4 (frontend / Hypothesis / scraper / Postgres CI) — separate.
-
-
-## [OPEN] FU-518 — Digest dedup test assumes 1 item = 1 dedup key; a fresh item generates two alerts, breaking the assumption
-- **Raised:** 2026-07-09 (FU-169 Phase 2 pass surfaced it; debugged same day).
-- **Type:** finding (test-design flaw + a possible alerts-model refactor).
-- **What:** `tests/e2e/dora_api/test_alerts_digest.py::test__digest__dedups_until_alert_clears_and_refires` passes pre-FU-169 (state polluted from prior tests happened to satisfy the dedup) and fails post-rollback (deterministic clean slate). Marked `@pytest.mark.xfail(strict=False)`.
-- **Root cause (from a targeted debug pass 2026-07-09):** a newly-created stock item with `expiry_date="2020-01-01"` generates **two alerts** — `stock:{id}:expired` **AND** `stock:{id}:low_stock` (the default `stock_level` for a POSTed item is Low, and Low fires its own alert kind). Call 1 sends on the expired key + writes an `AlertInteraction` row keyed by `stock:{id}:expired`. Call 2's alerts include the same item's `stock:{id}:low_stock` alert — a **different `alert_id`**, so the interaction-based dedup at `_process_user` misses it, the email is re-sent, and it contains `name`. The test's assumption "one item = one dedup key" is what's wrong; the alerts model produces multiple keys per item.
-- **Why not a Phase 2 architecture issue:** the rollback is doing exactly what Phase 2 says it should — starting each test from the seed baseline. It just made a pre-existing intermittent flake deterministic.
-- **Also noted during debug:** `GetAlertsHandler.handle()` doesn't take a `now` parameter — it uses wall-clock. Doesn't cause this specific failure but it's a testability issue that will bite the next alerts-digest test author. Worth an inline fix while touching this file.
-- **Recommended resolution:** fix the test — assert dedup on the *specific* `stock:{id}:expired` key (via a helper that pulls the alert_id from a first-call inspection), not on `name in html_body`. Alternatively, extend the alerts model to unify per-item alerts into one canonical dedup key (bigger scope; product decision). While there, thread `now` through `GetAlertsHandler.handle()` — the digest already takes a `now`.
-- **Cross-ref:** FU-169 close-note.
 
 
 ## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library

@@ -13,6 +13,9 @@ semver — major bumps signal schema or breaking-config changes.
 - **Filter bars on Cookbook, Stock, and My Products reordered by usage frequency — FU-108 (2026-07-10).** Pure template moves; no state or logic changed. Cookbook: Sort moved from the tail to just after the quick chips; single-selects (Cuisine · Category · Time of day · Difficulty) precede the ingredients tri-state; numeric bounds and Dietary/Tools cluster before Collection (set-and-forget). Stock: "Needs attention" chip leads the cluster; Sort moved ahead of Location/Group. My Products: "Show inactive" moved to the tail as housekeeping.
 
 ### Fixed
+- **Cookbook cookability + expiring filters were silent no-ops — found and fixed by the new recipe-router e2e suite (2026-07-10).** `GetRecipesHandler._restrict_query` loaded the plain "all recipe ids" universe *before* building the cookability / expiring maps. SQLAlchemy's identity map then handed those already-loaded (noload → empty `ingredients`) instances back to the maps' eager queries, so every recipe counted `(0 missing, 0 ingredients, 0 unlinked)`: `?cookable=true` kept **everything**, `?cookable=false` returned an **empty page**, `?max_missing=N` never excluded anything, and `?expiring_within_days=N` returned nothing. Unfiltered lists and the recipe detail were unaffected (they never ran the plain load first), which is why the DTO's cookability badge looked right while the filters lied. Fixed by building the relationship-dependent maps before the id-universe load; pinned by four filter tests in the new `tests/e2e/dora_api/test_recipe_router.py`. Browser check queued in DORA_VERIFY.
+- **Buy-verdict unit tests no longer flake on UTC+n mornings (2026-07-10).** `tests/test_buy_verdict.py` derived price-sample dates from `datetime.now(timezone.utc)` but expectations from local `date.today()` — on any AEST morning the UTC calendar day is one behind, shifting every derived low-date and breaking the wait-hint prediction. Test helper now anchors samples to local-today at noon UTC. The production-side version of the same clock mix (cosmetic ±1-day drift in the wait hint) is logged as FU-525.
+- **Alerts digest evaluates one run at one instant (FU-518 close, 2026-07-10).** `GetAlertsHandler.handle()` gained a `now` test seam and `send_alerts_digest` passes its tick time through; the digest dedup test was rewritten to assert per-alert-key dedup via the `AlertInteraction` ledger and now passes deterministically (the old per-item assertion conflated a fresh expired item's two legitimate alert keys).
 - **Alerts bell no longer crashes the app when a `meal_reconcile_overdue` alert exists — FU-357 close-out (2026-07-10).** Regression from FU-317 Chunk 4 (2026-07-09): the backend gained a new `meal_reconcile_overdue` alert kind, but the SPA's `AlertKind` union in [alert.ts](web_app/src/models/alert.ts) never got it, so TS couldn't warn about the missing case in the five kind-switches (`iconFor`, `colorForKind`, `kindTheme`, `actionsFor`, `linkFor`) — all fell through and returned `undefined`. When the bell tried to render such an alert, `AlertRow.vue:114`'s `.slice()` on `undefined` threw and blew up the whole panel with an ErrorBoundary "something went wrong" screen. Fixed by adding `meal_reconcile_overdue` to the union + all five switches (icon `playlist_add_check`, theme "meals to reconcile", link to `/meal-plans/reconcile`, nav-only nudge like the other backward-looking kinds). Also added a defensive `?? []` in `AlertRow` so the next backend-only alert-kind rollout degrades to a nav-only row instead of crashing.
 - **Dashboard alert-action now shows a success/error toast (2026-07-10).** `DashboardPage.applyAlertAction` was firing the API call and refreshing state but never calling `$q.notify` — silent success and silent failure. `AlertsBell` and `AlertsPage` both toast "Done." / "Could not apply." Fixed by adding the same toast pair to Dashboard so all three surfaces behave identically. (The state-ownership drift where three surfaces hand-roll the same action wrapper is logged as FU-521 for the finalisation-plan senior review.)
 - **PageErrorState "Go to dashboard" is a live button when the error is on the dashboard (2026-07-10).** The button was a `router-link to="/"`, which no-ops when the current route already matches — so if the render-error boundary caught a crash on the dashboard itself, the dashboard button did nothing. Now, if `route.path === '/'`, clicking it reloads the page (matching the other escape hatch); otherwise it still navigates to `/`.
@@ -31,6 +34,54 @@ semver — major bumps signal schema or breaking-config changes.
      decision. Guard added — mirrors the manual branch.
 
 ### Added
+- **Test-suite Phases 3 + 4, second pass — FU-519 essentially closed (2026-07-10, later).**
+  Backend 1096 → **1238 passing** (~45 s); frontend 192 → **203** Vitest tests. New:
+  - **Search e2e** (`test_search_router.py`, 12): scoring order (exact > prefix >
+    contains > fuzzy), per-type subtitles (location breadcrumbs, list status,
+    recipe cuisine), types filter incl. the invalid-types→all fallback, and the
+    per-*type* limit clamp semantics.
+  - **DTO contract snapshots** (`test_dto_contracts.py`, 27 endpoints): response-key
+    shapes pinned against a committed `dto_snapshots.json`; intentional contract
+    changes refresh via `DORA_UPDATE_DTO_SNAPSHOTS=1` and review as a JSON diff.
+  - **Long-tail e2e** (10 surfaces, 103 tests): waste rescue feed + insights,
+    budget status/history windows, all 10 report endpoints, stocktake queue/
+    check/snooze/review lifecycle, and the six taxonomy routers via a shared
+    `_taxonomy_crud.py` helper.
+  - **First component-level Vitest** (`stockLevelDot.spec.ts`, 11): both
+    StockLevelDot components rendered with the real Quasar plugin — the mount
+    pattern (client-bundle alias + `@vitejs/plugin-vue` + per-file jsdom) is
+    now established for future component specs.
+  - The pass surfaced **four more logged findings**: a stocktake-queue 500 (and
+    broken alerts bell) while a snooze is active on SQLite (FU-526, strict-xfail
+    pinned), two noload-relationship count bugs (FU-527), str/UUID key mismatches
+    in tool/dietary-tag delete counts (FU-528), and a transient reconcile
+    idempotence flake pointing at non-deterministic receipt ordering (FU-529).
+
+- **Test-suite Phases 3 + 4 targeted sweep — FU-519 / FU-520 (2026-07-10).** Backend
+  920 → 1096 passing (~41 s); frontend 53 → 192 Vitest tests (~1 s). New suites:
+  - **API e2e** for three of the four ⚠️ priority surfaces: `test_recipe_router.py`
+    (CRUD, filters, cookability surfacing — found the filter bug above),
+    `test_meal_plan_router.py`, `test_dashboard_router.py`. `search` still open on FU-519.
+  - **Repository/persistence** (`test_sqlalchemy_repository.py`): paginate math, the
+    full filter-operator matrix, field_map resolution, NOCASE sort, UUID round-trips,
+    on a standalone SQLite fixture. Found the Contains/StartsWith `case_sensitive`
+    inversion (FU-523, pinned by strict xfails).
+  - **Emailer** (`test_email_templates.py` + `test_email_sender.py`, 29 tests): all five
+    content templates + layout render with call-site-shaped context; SMTP wire
+    choreography, MIME assembly, dry-run degradation and error paths via a fake
+    transport. Found the change-email plain-text wrong-link bug (FU-522).
+  - **Hypothesis property tests** (`test_domain_properties.py`, 26 tests): invariants
+    over recipe_cookability (cookable ⇒ nothing required missing), stock_status band
+    coherence/monotonicity, product_offer discount bounds, units round-trips.
+    Found `normalise_unit` non-idempotence (FU-524). `hypothesis` pinned in requirements.
+  - **Frontend Vitest** (9 new spec files): formatQuantity, scaleQuantity,
+    queryStringBuilder, relativeTime, weekDates, shoppingList, stockStatus,
+    useListState, useStockFilters. `@vue/test-utils` + `jsdom` devDeps in place for the
+    component layer (still open on FU-520).
+  - The commented-out CI workflow now runs bare `pytest` (full suite, closing the §3.1
+    e2e-only scope gap) and `npm test`, so un-commenting it (FU-405) inherits the
+    right scope.
+
 - **Test-suite Phase 1 tail + Phase 2 (per-test DB isolation) — FU-169 (2026-07-09).**
   Bare `pytest` now runs the whole tree (unit + e2e), prints a term-missing
   coverage report (report-only, no fail-under gate), and starts every test

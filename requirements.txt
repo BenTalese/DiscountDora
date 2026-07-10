@@ -33,6 +33,9 @@ pytest==9.0.3
 # sections in .coveragerc so `pytest` alone produces a term-missing
 # report without any per-command flags.
 pytest-cov==5.0.0
+# FU-520 item 4 (§5.F) — property-based invariant tests over the pure domain
+# modules (tests/test_domain_properties.py). Test-only dependency.
+hypothesis==6.156.4
 requests_cache==1.1.1
 # FU-196 (d1) — CVE-2024-35195 fix requires ≥2.32.4.
 # FU-387 — CVE-2026-25645 fix requires ≥2.33.0.

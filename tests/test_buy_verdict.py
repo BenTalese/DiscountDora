@@ -5,19 +5,28 @@ DB, no HTTP, so the composition rules can be pinned in isolation. The
 data-gathering layer (`_gather_inputs`) is a thin repo walk; browser-
 verify covers it end-to-end.
 """
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from dora_api.features.stock_items.get_buy_verdict import (
     _AxisInputs, compose_verdict,
 )
 
 
-def _dt(days_ago: int) -> datetime:
-    return datetime.now(timezone.utc) - timedelta(days=days_ago)
-
-
 def _today() -> date:
     return date.today()
+
+
+def _dt(days_ago: int) -> datetime:
+    # Aware (the composer compares against an aware horizon), but anchored
+    # to local-today's calendar date at noon so `ts.date()` inside the
+    # composer always equals `_today() - days_ago`. The previous
+    # `datetime.now(timezone.utc) - timedelta(...)` was a flake: on any
+    # UTC+n morning the UTC calendar day is one behind the local
+    # `date.today()`, shifting every derived low-date by a day and breaking
+    # the wait-hint expectation (seen 2026-07-10, AEST before 10am).
+    return datetime.combine(
+        _today() - timedelta(days=days_ago), time(12, 0), tzinfo=timezone.utc
+    )
 
 
 def _rich_history_inputs(**overrides) -> _AxisInputs:

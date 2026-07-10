@@ -151,7 +151,15 @@ class GetAlertsHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, user_id: UUID | None = None) -> AlertsDto:
+    def handle(
+        self,
+        user_id: UUID | None = None,
+        now: datetime | None = None,
+    ) -> AlertsDto:
+        # `now` is a test seam (FU-518): snooze-expiry and overdue checks
+        # compare against it, and callers that already carry a tick time
+        # (the alerts digest) pass theirs through so one run evaluates at
+        # one instant. Default preserves the wall-clock behaviour.
         items: List[StockItem] = (
             self.repository.get(StockItem)
             .include(StockItem.Fields.STOCK_LEVEL)
@@ -159,7 +167,7 @@ class GetAlertsHandler:
         )
         # R-021 — calendar boundaries evaluate in the household timezone.
         today = household_today(self.repository)
-        now = datetime.now(timezone.utc)
+        now = now or datetime.now(timezone.utc)
 
         # Household-wide threshold (C-9.2): the expiring-soon window resolves
         # from AppSetting, falling back to the seeded default — one source

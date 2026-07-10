@@ -96,6 +96,14 @@ top-to-bottom.
 
 ## Cookbook & recipes
 
+### Cookbook cookability + expiring filters actually filter (identity-map bug fixed 2026-07-10)
+- [ ] Have at least one recipe whose every required ingredient is stocked, one with a required ingredient out of stock, and one with a free-text (unlinked) ingredient
+- [ ] Apply the **Cookable** filter → only the fully-stocked recipe shows (before the fix this kept *everything*)
+- [ ] Apply the **Not cookable** filter → only the out-of-stock recipe shows; the unlinked one appears in neither (before the fix this returned an *empty* page)
+- [ ] Apply a max-missing / "almost cookable" filter if the UI exposes one → recipes over the threshold drop out
+- [ ] With a stocked ingredient expiring within a few days, apply the **Uses expiring ingredients** filter → only recipes using that item show, with the expiring count badge
+- [ ] While filtered, spot-check a recipe card: its ingredients list and cookability badge render correctly (the fix also touched what filtered pages eager-load)
+
 ### Free-text ingredient path in the recipe editor — origin FU-506
 - [ ] Open any recipe → **Add ingredient** → in the picker, type a name that matches nothing (e.g. "star anise" on a fresh install)
 - [ ] Two options appear under the option list: **Create "star anise"** and **Use "star anise" as free text (no pantry link)** (the second option, secondary-coloured with a pencil icon)

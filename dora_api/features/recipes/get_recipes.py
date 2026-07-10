@@ -596,6 +596,34 @@ class GetRecipesHandler:
         if filters.is_empty:
             return query, False
 
+        # Relationship-dependent maps are built FIRST. SQLAlchemy's
+        # identity map hands already-loaded instances back to later
+        # queries in the same session, so if the plain id-universe load
+        # below ran first, its noload-empty `ingredients` collections
+        # would poison these eager loads: every recipe would count
+        # (0, 0, 0), silently turning `?cookable=true` into "keep all",
+        # `?cookable=false` into "keep none", and the expiring filter
+        # into an empty page (bug found by test_recipe_router.py,
+        # 2026-07-10).
+        cookability: dict[UUID, tuple[int, int, int]] | None = None
+        if filters.needs_cookability:
+            # `?cookable` matches the DTO `cookable` field exactly (missing == 0
+            # AND every required ingredient linked, so an empty recipe is
+            # cookable); `?max_missing=N` keeps recipes with at most N missing
+            # ingredients; both exclude tri-state None (unlinked) per
+            # ``matches_cookability``. One shared query (R-003).
+            cookability = load_recipe_cookability(self.repository)
+        expiring_counts: dict[UUID, int] | None = None
+        if filters.expiring_within_days is not None:
+            # C-waste W4 — narrow to recipes that use ≥1 in-stock ingredient
+            # expiring within the horizon. Same predicate the rescue feed
+            # uses (R-003); count cached on the handler so the hydration
+            # step below doesn't recompute it.
+            _, expiring_counts = count_expiring_ingredients_per_recipe(
+                self.repository, filters.expiring_within_days,
+            )
+            self._expiring_counts = expiring_counts
+
         # Start with "every recipe id" as the candidate set, then narrow.
         # Loading every id is cheap enough to be honest at our scale.
         all_recipes = self.repository.get(Recipe).all()
@@ -612,13 +640,7 @@ class GetRecipesHandler:
         if filters.ingredient_exclude:
             allowed -= self._ingredient_excluded_recipe_ids(filters.ingredient_exclude)
 
-        if filters.needs_cookability and allowed:
-            # `?cookable` matches the DTO `cookable` field exactly (missing == 0
-            # AND every required ingredient linked, so an empty recipe is
-            # cookable); `?max_missing=N` keeps recipes with at most N missing
-            # ingredients; both exclude tri-state None (unlinked) per
-            # ``matches_cookability``. One shared query (R-003).
-            cookability = load_recipe_cookability(self.repository)
+        if cookability is not None and allowed:
             _kept: set[UUID] = set()
             for rid in allowed:
                 missing, _ingr_count, unlinked = cookability.get(rid, (0, 0, 0))
@@ -626,15 +648,7 @@ class GetRecipesHandler:
                     _kept.add(rid)
             allowed = _kept
 
-        if filters.expiring_within_days is not None and allowed:
-            # C-waste W4 — narrow to recipes that use ≥1 in-stock ingredient
-            # expiring within the horizon. Same predicate the rescue feed
-            # uses (R-003); count cached on the handler so the hydration
-            # step below doesn't recompute it.
-            _, expiring_counts = count_expiring_ingredients_per_recipe(
-                self.repository, filters.expiring_within_days,
-            )
-            self._expiring_counts = expiring_counts
+        if expiring_counts is not None and allowed:
             allowed &= set(expiring_counts.keys())
 
         if not allowed:

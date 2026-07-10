@@ -153,59 +153,77 @@ def test__digest__sends_to_opted_in_user_with_actionable_alert(api):
     assert any(k.endswith(":expired") for k in emailed)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "FU-518: pre-existing product-behavior bug the FU-169 Phase 2 "
-        "rollback pass made deterministic. Root cause (debugged 2026-07-09): "
-        "a newly-created expired stock item generates BOTH "
-        "`stock:{id}:expired` AND `stock:{id}:low_stock` alerts (default "
-        "stock_level for a freshly-POSTed item is Low). Call 1 emails on "
-        "the expired key + writes an interaction. Call 2 sees the low_stock "
-        "key too (never emailed) — its alert_id differs from the expired "
-        "key, so the interaction-based dedup misses it, and the email is "
-        "re-sent containing `name`. The test's assumption that a single "
-        "item produces a single dedupable alert is what's wrong; the "
-        "fix belongs in the test (assert per-key dedup, not per-item) or "
-        "in the alerts model (unify per-item alerts into one dedup key). "
-        "Not a Phase 2 architecture issue — the rollback just uncovered "
-        "pre-existing intermittent behavior."
-    ),
-    strict=False,
-)
 def test__digest__dedups_until_alert_clears_and_refires(api):
+    # FU-518 — dedup is PER ALERT KEY, not per item. A freshly-POSTed
+    # expired item legitimately carries two keys (`stock:{id}:expired`
+    # and, because a new item defaults to a Low stock level,
+    # `stock:{id}:low_stock`), and each key earns exactly one email per
+    # active cycle. The original version of this test asserted "the item
+    # name never reappears", which conflated the two keys and flaked.
+    # This version asserts the actual contract via the AlertInteraction
+    # ledger: a stamped key is never re-stamped while its alert stays
+    # active, clears when the alert clears, and re-fires fresh.
     name = f"digest-dedup-{uuid.uuid4().hex[:8]}"
     item_id = _create_expired_item(name)
+    expired_key = f"stock:{item_id}:expired"
     user_id = _opt_in(email="digest-dedup@example.com")
 
     calls, sender = _captured_sender()
     send_alerts_digest(now=_MONDAY, _send_email=sender)
-    first_calls = len(calls)
-    assert first_calls >= 1
+    assert len(calls) == 1
+    assert expired_key in _emailed_keys_for(user_id), (
+        "first digest should stamp the expired key"
+    )
+    first_stamps = {
+        row.alert_key: row.last_emailed_at
+        for row in _interactions_for(user_id)
+        if row.last_emailed_at is not None
+    }
 
-    # Second pass while the alert is still active → no resend for the
-    # same key (the body of any new send won't include this item).
-    send_alerts_digest(now=_MONDAY, _send_email=sender)
-    second_calls = len(calls)
-    # Either no new email, or a new email that no longer mentions this name.
-    if second_calls > first_calls:
-        for c in calls[first_calls:]:
-            assert name not in c["html_body"], (
-                "deduped alert should not re-appear in subsequent digests"
-            )
+    # Second pass (next day) while the alerts are still active → every
+    # already-stamped key keeps its original timestamp: no key is emailed
+    # twice within one active cycle. (Keys first surfaced on this pass —
+    # the documented two-keys-per-item behaviour — may legitimately gain
+    # a fresh stamp; they must then hold on the third pass.)
+    send_alerts_digest(now=_TUESDAY, _send_email=sender)
+    second_stamps = {
+        row.alert_key: row.last_emailed_at
+        for row in _interactions_for(user_id)
+        if row.last_emailed_at is not None
+    }
+    for key, stamped_at in first_stamps.items():
+        assert second_stamps[key] == stamped_at, (
+            f"key {key} was re-emailed while its alert was still active"
+        )
 
-    # Clearing the alert (delete the item) drops it from the actionable
-    # set → the stale-flag cleanup pass clears `last_emailed_at` for that
-    # key. Re-firing the condition (new expired item with the same name)
-    # produces a fresh key (different stock-item id) so the new key has
-    # no prior interaction → fresh email.
+    # Third pass — by now every key the user has is stamped, so the
+    # digest has nothing left to send: no new email, no stamp moves.
+    pre = len(calls)
+    send_alerts_digest(now=_TUESDAY + timedelta(days=1), _send_email=sender)
+    assert len(calls) == pre, "fully-stamped alert set must not re-email"
+    assert {
+        row.alert_key: row.last_emailed_at
+        for row in _interactions_for(user_id)
+        if row.last_emailed_at is not None
+    } == second_stamps
+
+    # Clearing the alerts (delete the item) drops the keys from the
+    # user's set → the stale-flag cleanup pass clears `last_emailed_at`.
     _delete_item(item_id)
-    send_alerts_digest(now=_MONDAY, _send_email=sender)  # no actionable items now
+    send_alerts_digest(now=_TUESDAY + timedelta(days=2), _send_email=sender)
+    assert not any(
+        key.startswith(f"stock:{item_id}:")
+        for key in _emailed_keys_for(user_id)
+    ), "cleared alerts should have their email stamps reset"
 
+    # Re-firing the condition (new expired item, same name, new id → new
+    # keys with no prior interaction) produces a fresh email.
     new_item = _create_expired_item(name)
     pre = len(calls)
-    send_alerts_digest(now=_MONDAY, _send_email=sender)
+    send_alerts_digest(now=_TUESDAY + timedelta(days=3), _send_email=sender)
     assert len(calls) == pre + 1, "re-fired condition should email fresh"
     assert name in calls[-1]["html_body"]
+    assert f"stock:{new_item}:expired" in _emailed_keys_for(user_id)
     _delete_item(new_item)
 
 

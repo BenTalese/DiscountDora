@@ -53,6 +53,15 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-521 — Alert-action toast + kind exhaustiveness sit in three copies (R-003 drift, senior-review track)
+- **Raised:** 2026-07-10 (surfaced during FU-357 close-out — user hit the divergent-toast + missing-kind bug live).
+- **Type:** finding (state-ownership drift).
+- **What:** the same "user taps an inline alert action" mutation is wired three separate times in the SPA — [`DashboardPage.vue:1833`](web_app/src/pages/DashboardPage.vue) `applyAlertAction`, [`AlertsBell.vue:175`](web_app/src/components/AlertsBell.vue) `apply`, [`AlertsPage.vue:328`](web_app/src/pages/AlertsPage.vue) `onAction`. Same API call, three hand-rolled toast pairs, three refresh recipes. The bug that exposed this (Dashboard silently swallowed both success and error toasts) was fixed inline but the shape stays — the next surface added will re-invent it a fourth time. Also: the `AlertKind` union + its five switch sites (`iconFor` / `colorForKind` / `kindTheme` / `actionsFor` / `linkFor` in [`alert.ts`](web_app/src/models/alert.ts)) are three separate lists that must agree, but nothing enforces it — that's exactly how the 2026-07-10 crash happened (`meal_reconcile_overdue` added on the backend by FU-317 Chunk 4 without extending the union, so TS couldn't warn about the five missing cases). Fixed inline with a defensive `?? []` in `AlertRow`, but the pattern is fragile.
+- **Why deferred:** two clean options — (a) extract a `useAlertActions()` composable that owns the applyAction + refresh + toast triad, then have all three surfaces call it (mirrors `useStockItemActions` / `useShoppingListActions`); (b) collapse the five per-kind switches in `alert.ts` into a single `ALERT_KIND_META: Record<AlertKind, {icon, color, theme, actions, link}>` so a new kind lands as one row instead of five cases. Both are Effortless + Anti-creep-safe R-003 wins and both are exactly the shape the finalisation-plan senior-review track (§3.3) is designed to consolidate. Doing them right now is scope-creep on a bug fix.
+- **Recommended resolution:** **fold into [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Chunk 9 (Alerts + Suggestions)** — the senior-review section for that chunk names both refactors, verdicts them, and either ships or logs. If either is `keep`, note why.
+- **Cross-ref:** [[FU-510]] (hand-rolled vs library — same discipline, different surface), FU-357 close-out (state note lives in `_RESOLVED`).
+
+
 ## [OPEN] FU-520 — Test-suite improvements Phase 4: frontend Vitest + Hypothesis + Postgres CI + scraper/emailer fixture tests
 - **Raised:** 2026-07-09 (split from FU-169 close-out).
 - **Type:** deferred job (large — should be its own multi-session unit).
@@ -104,7 +113,7 @@ long session summary. Distinct from the other logs:
   1. **Phase 1 — assessment only.** Produce `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md` listing each hand-rolled site: what it is, what library would replace it, honest verdict `keep` / `replace` / `wrap-thin-adapter`, and rough effort/risk. **No code touched.** Verdict has to weigh Charter tie-breaks (Effortless + Anti-creep): sometimes the hand-rolled thing is right because it's smaller, has no supply-chain risk, and stays coupled to our domain. Do NOT default to "always prefer library."
   2. **Phase 2 — action.** For each `replace` verdict, open a per-item FU (or an implementation plan when the surface is broad, e.g. auth stack replacement). Sequence by risk + blast radius; ship one at a time with browser-verify per swap.
 - **Why deferred:** late-game / pre-commercialization hardening. Not urgent while the app is still gaining new surfaces; do it when the feature surface has stabilised so a lib swap doesn't collide with in-flight redesigns. Doing it earlier risks churning code that's about to be reshaped anyway.
-- **Recommended resolution:** **late-game / Phase 4 kick-off.** Pair with the pre-commercialization hardening pass ([[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta) — same window, same "batten down the hatches before we ask anyone to trust this" mindset. Cross-check every existing `[Removed]` and `[Kept-because…]` verdict against ENGINEERING_STANDARDS on the way out so the assessment doc becomes source-of-truth for "here's why we didn't take the lib."
+- **Recommended resolution:** **Phase 1 (assessment) rolled into [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Track 3 as a per-chunk bucket** (§3.3 "Hand-rolled-vs-library verdicts"). Each chunk's senior-review section captures the `keep` / `replace` / `wrap-thin-adapter` verdict for the hand-rolled surfaces it walks past, using the shape this FU specified. The plan's close-out consolidates them into `HANDROLLED_VS_LIBRARIES.md`. **Phase 2 (per-swap actions) stays open on this FU** — each `replace` verdict spawns its own per-swap FU at plan close, sequenced by risk + blast radius. Pair the Phase-2 sequencing with [[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta.
 
 
 ## [OPEN] FU-431 — Product History: deeper redesign brief (feature discoverability + desktop drawer pattern)
@@ -168,7 +177,7 @@ long session summary. Distinct from the other logs:
 - **Type:** deferred job (Phase 4 gate).
 - **What:** `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_7_COMMERCIALIZATION.md §P7-10` — final launch-readiness checklist (marketing, legal, incident channels, escalation, on-call). Nothing done.
 - **Why deferred:** last-mile.
-- **Recommended resolution:** at Phase 4 finish.
+- **Recommended resolution:** at Phase 4 finish. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the FST document + release-gate checklist (Track 1) fulfil the *QA half* of P7-10 (the "have we actually verified this is ready?" tollgate). **Not covered** by the plan: marketing, legal, incident channels, escalation, on-call. Those remain in this FU's scope and want their own work-unit.
 
 ## [OPEN] FU-405 — P7-09 Ops (observability, CI/CD deploy, staging, backups)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -183,7 +192,7 @@ long session summary. Distinct from the other logs:
 - **Type:** deferred job (Phase 4).
 - **What:** P7-08 — full compliance surface. Partial: some security-headers work has landed; the privacy-policy hooks + full data-export/deletion (DSAR) contract not confirmed. Overlaps with [[FU-401]] (P5-02 Privacy).
 - **Why deferred:** Phase 4.
-- **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit.
+- **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the multi-user + admin FST persona flows (Track 1) will *exercise* the DSAR export, delete-account, and privacy-policy surfaces end-to-end, and the senior-review pass on the auth + backup chunks will catch drift on security headers + credential exclusion. **Not covered:** the legal drafting itself + the compliance contract wording. Those remain in this FU.
 
 ## [OPEN] FU-403 — P7-07 Plan gating + usage limits
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -233,13 +242,6 @@ long session summary. Distinct from the other logs:
 - **What:** P7-04 — replace dev server with gunicorn/uwsgi, split web vs worker. Env-driven per §7.5 discipline #3.
 - **Why deferred:** Phase 4.
 - **Recommended resolution:** paired with [[FU-398]] Redis + [[FU-405]] Ops as the production-stack work-unit.
-
-## [OPEN] FU-395 — P5-11 Production readiness review
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4 gate).
-- **What:** P5-11 — comprehensive pre-launch review sweep.
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** at Phase 4 near-completion, before [[FU-406]] launch readiness.
 
 ## [OPEN] FU-394 — P5-10 Merchant data quality & support bundle: confirm companion-scope only
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -424,13 +426,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Settings shell is a deferred surface ([[FU-366]]).
 - **Recommended resolution:** fold into any Settings polish pass — small self-contained change; can precede the full Settings shell redesign.
 
-## [OPEN] FU-361 — A-4 Help content overhaul
-- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (content task).
-- **What:** `COVERAGE_GAPS.md` A-4 — 5 feedback bullets all about **content**: detailed per-feature help, guides, FAQ, easy navigability, UI screenshots / diagrams. No brief.
-- **Why deferred:** content task typically deferred to post-launch.
-- **Recommended resolution:** discussion — decide whether it lives as a dedicated `HELP_CONTENT_PLAN.md` proposal or folds into the existing HelpPage work. The overlay-shell counterpart (FU-367) was retired in favour of the shipped `(?)` help chips, so this content work no longer has an overlay to render into — it lives on HelpPage / DoraBot.
-
 ## [OPEN] FU-348 — Import templates: registry has no "every importable section has a template" symmetry check
 - **Raised:** 2026-07-01 (post-FU-343 self-review).
 - **Type:** finding (latent bug when a second importable section lands).
@@ -452,30 +447,6 @@ long session summary. Distinct from the other logs:
   falls out naturally when the second section is designed; don't
   pre-design it. **Recommended resolution point:** when the second
   importable section is designed.
-
-## [OPEN] FU-346 — Admin settings feel hidden — pick a better host / entry point
-- **Raised:** 2026-07-01 (settings-scroll fix session).
-- **Type:** design decision.
-- **What:** User noted the Admin · global group inside `/settings/*`
-  "feels a little hidden". The settings shell (see
-  [`SettingsShell.vue`](web_app/src/pages/SettingsShell.vue)) puts it
-  as the third sidebar group under Account + Kitchen setup, admin-
-  gated. User floated "maybe as a separate option in the profile
-  dropdown" but the header dropdown was retired 2026-07-01 (the
-  avatar now goes straight to `/settings/account`), so there's no
-  obvious host.
-- **Why deferred:** Ambiguous design call — could stay put (with a
-  visibility polish, e.g. a divider or shield-badge affordance),
-  become a peer header icon for admins only (like the retired Help
-  button pattern), get its own top-level `/admin` route, or land in
-  a small avatar-tooltip menu. Each has trade-offs against the
-  charter's Effortless + Anti-creep tiebreak and against the recent
-  header-simplification work. Needs a user call, not a silent
-  reshuffle.
-- **Recommended resolution:** now — user asked the question; needs a
-  short back-and-forth on direction before any code moves.
-
----
 
 ## [OPEN] FU-336 — PWA build mode never actually selected — Workbox/manifest config emits nothing
 - **Raised:** 2026-06-30 (FU-327 audit — `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`).
@@ -510,78 +481,7 @@ long session summary. Distinct from the other logs:
   next platform-targeted session.
 
 ---
-## [OPEN] FU-320 — Document every auto-behaviour in the in-app help and point at the setting that controls it
-- **Raised:** 2026-06-28 (FU-092 magic-behaviour audit close-out).
-- **Type:** documentation / discoverability.
-- **What:** For every auto-behaviour catalogued in
-  `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md`, write a plain-
-  English entry in the relevant in-app help section (Settings help,
-  feature-specific help cards, onboarding tooltips — whichever
-  surface owns the feature). Each entry:
-  1. Names the behaviour ("When you mark an item Low, Dora may add
-     it to your shopping list automatically").
-  2. States the trigger and what changes ("…when you turn on
-     *Auto-add when low* on the item, and you have exactly one
-     draft list").
-  3. **Links to the setting / toggle that controls it** so the user
-     can turn it off, switch it, or read more — never just "the app
-     does this" with no escape hatch.
-  All 18 findings get coverage (including the (a)-keep-silent ones —
-  the doc is the receipt that proves they're not hidden, even if no
-  per-event surface fires). Audit table → help-section map should be
-  spelled out in this FU's eventual implementation chunk.
-- **Gate (HARD):** **do NOT start until all related FUs are
-  resolved.** The related set is:
-  - [[FU-315]] auto-add toast/chip verify
-  - [[FU-316]] remembered-list toast + "always ask" setting
-  - ~~[[FU-317]] manual meal-plan reconcile — proposal + impl~~
-    (proposal + impl-plan Chunks 1-6 all done 2026-07-09; F5 help
-    copy is safe to write against the shipped surface)
-  - [[FU-318]] cheapest-pick chip
-  - [[FU-319]] inline-create pantry toast
-  Starting this work earlier than that means the help copy goes
-  stale the moment one of those follow-ups lands (new toast wording,
-  new setting toggle, new manual-reconcile surface to point at).
-- **Why deferred:** documentation that describes a moving target is
-  worse than no documentation. Wait for the surface decisions to
-  settle.
-- **Recommended resolution:** focused doc-writing pass once the gate
-  clears — own its own prompt under `docs/03_prompts/`.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` (the
-  source-of-truth catalogue this FU documents into help).
 
-## [OPEN] FU-318 — "Cheapest" chip on shopping-list lines using the auto-picked offer (F7)
-- **Raised:** 2026-06-28 (FU-092 magic-audit verdict on F7 — (b)).
-- **Type:** UX / cleanup.
-- **What:** When a line has no `selected_product_id`, the displayed
-  price / store comes from `chosenOfferFor(line)` falling back to
-  `offers[0]` (server pre-sorted cheapest-first). Render a small
-  `cheapest` chip on those lines so the user can see *why* the price is
-  what it is — removes the only "did I really pick that store?" surprise
-  on the list. Don't render the chip when `selected_product_id` is set
-  (user picked) or when the user has typed an `actual_unit_price`
-  override (the price-source label takes precedence).
-- **Where:** `web_app/src/pages/ShoppingListDetail.vue` line render +
-  `web_app/src/models/shoppingList.ts:172` (`chosenOfferFor`); confirm
-  the same fallback shape at
-  `dora_api/features/shopping_lists/get_shopping_list_detail.py:108-110`.
-- **Recommended resolution:** opportunistic — fold into the next
-  shopping-list-detail polish pass. ~10 LOC.
-- **Cross-ref:** `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` F7.
-
-## [OPEN] FU-357 — Cross-app undo off after dashboard "push expiry"
-- **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
-- **Type:** finding.
-- **What:** feedback L480 — "Undo cross-app seems off, e.g. dashboard push
-  expiry, then go to stock item and clear its expiry." An undo/toast initiated
-  on the dashboard alert action doesn't behave correctly once you navigate to
-  the stock item and mutate the same field. Marked **out-of-scope** in
-  `IMPL_PLAN_DASHBOARD_REBUILD.md` §5 — it's an undo/toast-ownership defect, not
-  a dashboard-design item.
-- **Why deferred:** belongs to whoever owns the cross-app undo/toast mechanism,
-  not the dashboard rebuild scope (R-007).
-- **Recommended resolution:** confirm in browser, then route to the undo/toast
-  owner (likely the global notify/undo layer).
 
 ## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
 - **Raised:** 2026-06-18 (Stock-pages feedback pass)
@@ -597,7 +497,7 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** intentionally out of scope for the feedback pass (R-007). The user
   explicitly called it out as a separate task to think about.
 - **Recommended resolution:** opportunistic — fold in next time a theming/styling pass
-  comes around, or after FU-046 (theme-token compliance) gets another round.
+  comes around, or after FU-046 (theme-token compliance) gets another round. **Ride-along with [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Track 3** — every chunk's senior-review pass logs any `color="secondary" | info | accent"` sites worth reconsidering against this FU, so by plan close the shortlist is already assembled. Actual resolution still needs eyes-on-the-app judgement, not a code walk — so this FU stays open past plan close.
 
 ## [OPEN] FU-358 — Check / upgrade the Aldi scraper (site appears updated)
 - **Raised:** 2026-06-12 (user note during Phase 1 wrap-up)
@@ -626,56 +526,6 @@ long session summary. Distinct from the other logs:
   next needs Aldi pricing data, or as a focused session in the
   companion repo.
 
-## [OPEN] FU-108 — Reorder Cookbook overview filters by usefulness
-- **Raised:** 2026-06-10 (FU-083 follow-up; user, after the bug pass)
-- **Type:** finding / UX polish
-- **What:** The filter bar in `RecipesOverview.vue` lays controls out
-  in the order they were added, not in the order users reach for
-  them. The chip cluster (Favourites / Cookable now / Have meals in
-  pool / Planned), the numeric inputs, the single-select dropdowns
-  (Collection / Cuisine / Category), and the multi-select pickers
-  (Uses ingredients / Doesn't use / Dietary / Tools) should be
-  ordered by how often users actually flip them — most-used first,
-  long-tail later. Pure template reorder, no logic changes.
-- **What "useful" means here (open):** the user reads this. A
-  reasonable starting cut: **(1) Favourites, Cookable now,
-  Planned, Have meals in pool** (the quick-pick chips stay first
-  because they're zero-effort); **(2) Cuisine, Category** (single-
-  select, common during "what should I cook tonight?"); **(3) Uses
-  ingredients / Doesn't use** (when fridge-clearing); **(4) Dietary
-  + Tools** (occasional); **(5) Meals ≥ / Missing ingredients ≤**
-  (numeric refinement); **(6) Collection** (visual grouping, almost
-  set-and-forget). Confirm before moving — the actual answer is the
-  user's, not the data's.
-- **Recommended resolution:** opportunistic — fold into the next
-  pass that touches this template. 10-minute job.
-
-## [OPEN] FU-025 — A6 text scale: many surfaces still don't respond (likely needs its own sweep)
-- **Raised:** 2026-06-05 (A6); user-verified gap 2026-06-12
-- **Type:** finding (real, app-wide)
-- **What:** Initial A6 in-browser check (2026-06-12) confirmed the scale
-  steps themselves are working at the page level, BUT user observed that
-  **a lot of secondary text still doesn't change size** when the scale is
-  changed — e.g. **button labels, input text, toggle labels**, and likely
-  other component-internal text. These almost certainly use Quasar's
-  component CSS (`font-size` declared inside `.q-btn__content`,
-  `.q-field__native`, `.q-toggle__label`, etc.) which doesn't inherit from
-  the page-level rem-scaling tokens A6 set up. Fixing this is broader than
-  any single page — likely a Wave-A-style "global pass" prompt that
-  overrides the component-internal font-sizes to track the text-scale
-  variable (or replaces hard-coded px with the same `rem`/var the body
-  text already uses).
-- **Why deferred:** out of FU-025's verify scope; needs its own sweep.
-- **Recommended resolution:** now-ish — promote into a small Wave-A-shaped
-  prompt ("A6b: text-scale follow-through into component-internal text").
-  Audit method: grep `font-size` in `web_app/src/css/quasar.variables.scss`
-  / overrides, plus a runtime walk through Stock Overview + a form-heavy
-  page (Recipe edit, Stock-item detail) at Small vs Extra-large; list each
-  surface that doesn't visibly change and convert its `px` to the same
-  text-scale var. Deliberately-fixed-px carve-outs (ScanOverlay camera UI,
-  PriceHistoryChart SVG labels, Dashboard 3px/7.5px micro-gauge) stay.
-
-
 ## [OPEN] FU-010 — Late-game holistic theme / colour / overall-look review
 - **Raised:** 2026-06-05 (user request)
 - **Type:** finding / deferred job
@@ -698,5 +548,5 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later — a dedicated pass during **Phase 3 (champion
   polish)** or just before **Phase 4 (commercialize)**, once the app is feature-
   complete enough to eyeball holistically. Requires the app actually running
-  (deps installed) and ideally a side-by-side across all themes.
+  (deps installed) and ideally a side-by-side across all themes. **Ride-along with [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Track 3** — every chunk's senior-review pass logs theme/colour anomalies against this FU so the eventual holistic pass starts with a triaged shortlist instead of a blank slate. Doesn't replace the eyes-on-app judgement pass; complements it.
 

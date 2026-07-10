@@ -9,6 +9,243 @@ next.
 
 ---
 
+## 2026-07-10 — FU-357 closed + alerts-bell crash fixed + Dashboard toast parity + FU-521 opened
+
+**Why:** User asked to give FU-357 ("cross-app undo off after dashboard push expiry", feedback L480) a real repro walk. Halfway through, they hit a genuine `ErrorBoundary` crash on the alerts bell (`TypeError: all is undefined` at `AlertRow.vue:114`) plus noticed the Dashboard was silently swallowing the push-expiry action while the bell toasted "Done." Investigate + fix + close.
+
+### Root causes found
+
+- **The reported "undo cross-app seems off" is not an undo defect.** Grepped every `label: 'Undo'` and `caption: 'Undo'` site in the SPA — the only undo affordances are `StockItemRow`/`StockOverview` waste-log (5s revert of a `StockItemWasteEvent`) and `AlertsPage` snooze/dismiss. **None touch expiry.** The user's browser walk confirmed no Undo appears on the push-expiry path from Dashboard, Bell, or `/alerts` page. What the feedback L480 report was actually picking up on turned out to be the second finding below.
+- **Dashboard's `applyAlertAction` was silently succeeding and silently failing** — no `$q.notify` call at all. AlertsBell.apply + AlertsPage.onAction both toast "Done." / "Could not apply." The Dashboard variant just refreshed state. Same API, three hand-rolled call sites, three different UX.
+- **The bell crash was a regression from FU-317 Chunk 4 (2026-07-09).** That chunk added the `meal_reconcile_overdue` alert kind on the backend but never extended the SPA's `AlertKind` union in `web_app/src/models/alert.ts`. Since the union didn't include the new kind, TS couldn't warn about the missing case in the five `switch(kind)` sites (`iconFor` / `colorForKind` / `kindTheme` / `actionsFor` / `linkFor`). All five fell through and returned `undefined`. When the bell tried to render such an alert, `AlertRow.vue:114`'s `actionsFor(kind).slice(0, 1)` on `undefined` threw — the whole panel died with the ErrorBoundary "something went wrong" screen. Same failure mode on `/alerts` page since it renders through the same `AlertRow` component.
+
+### Shipped
+
+- **`alert.ts` extended.** Added `meal_reconcile_overdue` to the `AlertKind` union + a case in all five kind-switches: icon `playlist_add_check`, theme "meals to reconcile", colour reuse of `severity-low` (FYI-tier convention; new categorical token deferred to look-and-feel), no inline actions (nav-only nudge — matches `no_planned_meals` / `shopping_day`), `linkFor` returns `/meal-plans/reconcile` (matches FU-317 Chunk 5's route).
+- **Defensive `?? []` at [`AlertRow.vue:112-118`](web_app/src/components/AlertRow.vue).** So the next backend-only alert-kind rollout can't crash the bell — degrades to a nav-only row.
+- **Dashboard toast parity restored at [`DashboardPage.vue:1833-1845`](web_app/src/pages/DashboardPage.vue).** `applyAlertAction` now calls `$q.notify` on both success and failure, matching AlertsBell/AlertsPage byte-for-byte. Import of `toastCaption` from the shared `apiErrorHandler` module added.
+- `vue-tsc --noEmit` clean on all three touched files (only the pre-existing `draft_shop` / `CardId` errors remain, unrelated and pre-documented).
+
+### FU disposition
+
+- **FU-357 CLOSED** and archived to `DORA_FOLLOWUPS_RESOLVED.md` with a state note capturing all three findings.
+- **New [[FU-521]] opened** at the top of the Open ledger — captures the R-003 state-ownership drift the audit surfaced: three hand-rolled alert-action wrappers (Dashboard / Bell / AlertsPage), and five parallel per-kind switch lists in `alert.ts` that nothing enforces agreement between. Two clean consolidations proposed (extract `useAlertActions()` composable; collapse switches into an `ALERT_KIND_META` record). Folds into [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Chunk 9 (Alerts + Suggestions) senior review.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-357 removed from Open; new FU-521 at the top of Open.
+- `DORA_FOLLOWUPS_RESOLVED.md`: new `[RESOLVED] FU-357` at the top with the full close note.
+- `CHANGELOG.md` [Unreleased] → Fixed: two new bullets (bell crash fix + Dashboard toast parity).
+- `PROJECT_STATE.md`: regen note bumped with the FU-357 close narrative; new "Recently shipped" bullet at the top.
+- `DORA_VERIFY.md`: existing FU-357 verify block rewritten to reflect the 2026-07-10 fixes — three checkboxes (Dashboard toast parity across surfaces; `meal_reconcile_overdue` renders cleanly; belt-and-braces cross-navigation walk).
+
+### Engineering-standards close-gate
+
+- **R-003 (state-ownership).** The fix restored parity between three surfaces that should behave identically. The deeper drift (three copies + five parallel switches) is explicitly logged as FU-521 rather than fixed inline — the fix would be feature-adjacent scope creep on a bug fix, and the finalisation-plan senior-review track is the right home. Rule cited in the FU body.
+- **R-007 (scope discipline).** Deliberately did NOT extract the `useAlertActions()` composable in this session — user's rule is "don't add feature-adjacent work in a bug fix". Logged as FU-521 for the right pass.
+- **R-010 (closed-set validation).** The bug is a textbook example — TS union missing one value → exhaustiveness silently broken across five switch sites. Defensive `?? []` added at the render site is the safety net; the real fix (single-source-of-truth `ALERT_KIND_META` record) lives in FU-521.
+
+### Next up
+
+- User re-walks the updated DORA_VERIFY block on the running app to confirm the three fixes hold.
+- Everything the top of `PROJECT_STATE.md § Needs your attention now` calls out still stands (unchanged this session).
+
+---
+
+## 2026-07-10 — FU-346 closed: Settings/Admin mode toggle in the shell (admins only); Admin is a peer mode, not a buried third group
+
+**Why:** User asked to attempt FU-346 — the "Admin · global feels a bit hidden" design call from the 2026-07-01 settings-scroll session. Presented four options (A peer header icon, B sidebar polish only, C top-level /admin route, D reintroduce header dropdown). User picked a **variant of B**: turn the "Settings" h1 in `SettingsShell.vue` into a click-to-toggle button that flips between "normal settings" and "admin settings" views. Only shows the toggle when the user is an admin.
+
+### Shipped
+
+- **[SettingsShell.vue](web_app/src/pages/SettingsShell.vue)** — replaced the plain `<h1>Settings</h1>` header with:
+  - For admins: a **two-pill segmented control** (Settings / Admin), tokenised via `--brand-primary` / `--text-inverse` / `--surface-sunken` for the pill states, `--focus-ring` for keyboard focus, shield icon on the Admin pill. Font metrics preserved (1.15rem / 700 / -0.01em letter-spacing / rem-based so R-025 text-scale works).
+  - For non-admins: unchanged plain h1.
+- **URL-derived mode.** Added `mode = computed(() => route.path.startsWith('/settings/admin') ? 'admin' : 'settings')` so refresh / back-button / deep-link all preserve the mode without a stored flag. Clicking a mode calls `router.push('/settings/account')` or `router.push('/settings/admin/users')` — the first item of that mode's sidebar so the destination matches the reshaped sidebar.
+- **Sidebar filtering.** `navGroups` now returns just Account + Kitchen setup in Settings mode, or just Admin · global in Admin mode. Since both the desktop `SettingsNavGroup` sidebar and the `SettingsMobileNav` top-tab strip both consume the same `navGroups` (R-003 — single source of truth), mobile picks up the reshape automatically.
+- **No route changes.** Every `/settings/admin/*` URL still resolves the same way; no top-level `/admin` route created; no deep-link caller broken. The header dropdown stays retired.
+- `vue-tsc --noEmit` clean on `SettingsShell.vue` (only pre-existing DashboardPage errors remain).
+
+### FU disposition
+
+- **CLOSED — FU-346** archived to `DORA_FOLLOWUPS_RESOLVED.md` with the design decision + mechanism captured.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-346 block removed.
+- `DORA_FOLLOWUPS_RESOLVED.md`: new `[RESOLVED] FU-346` entry at the top.
+- `CHANGELOG.md`: `[Unreleased] > Changed` entry added.
+- `DORA_VERIFY.md`: unchanged. Behaviour is trivial to eyeball on the page; if the user wants a checklist entry, easy to fold in next.
+- `PROJECT_STATE.md`: unchanged (no workstream row moves).
+
+### Engineering-standards close-gate
+
+- **R-002 (no theme literals):** clean. All colours reference existing tokens (`--brand-primary`, `--text-inverse`, `--surface-sunken`, `--focus-ring`, `--border-default`, `--text-primary`, `--overlay-hover`). One fallback literal for `--overlay-hover` (`rgba(0,0,0,0.05)`) inside the CSS `var()` fallback — matches existing pattern in the file already; not a new theme hardcode.
+- **R-003 (state ownership):** clean. Mode is derived from the URL, not stored twice. Both nav surfaces consume the same `navGroups` computed.
+- **R-004 (framework discipline):** stays on Vue Router + Quasar.
+- **R-005 (portable data access):** not touched.
+- **R-025 (text-scale):** followed — font-sizes on the toggle in rem so the fix from earlier today keeps working.
+- No new rule / ADR needed. The "URL-derived-mode + filtered nav" pattern is a one-shell affordance, not a project-wide pattern to promote.
+
+### Next up
+
+Back to whatever the user redirects to. Runtime walk of the new toggle is optional; no verify block was needed for the low-behaviour static change, though I can fold one into `DORA_VERIFY.md` if the user wants coverage.
+
+---
+
+## 2026-07-10 — FU-025 closed: text-scale pref now travels into component-internal text (Quasar SCSS overrides + rescues)
+
+**Why:** User asked to attempt FU-025 — the residual A6 gap where changing Settings → Appearance → Text size scaled *page-level* text but left button labels, input text, toggle labels, and other component-internal text pinned at Quasar's compile-time 14px/12px defaults. Static audit + fix.
+
+### Root cause (static audit)
+
+- **`:root { font-size: var(--dora-base-font-size, 16px) }`** in `web_app/src/css/app.scss` correctly anchors rem to the user's pref, and `web_app/src/css/tokens.scss` defines `--font-size-xs..3xl` as unitless ratios usable as `calc(var(--font-size-sm) * 1rem)`.
+- **Quasar's own SASS (`node_modules/quasar/src/css/core/typography.sass`) emits `body { font-size: $body-font-size }` with `$body-font-size: 14px !default`** — which clobbered scaling for everything that inherited body.
+- Plus ~30 Quasar component vars (`$button-font-size`, `$input-font-size`, `$chip-font-size`, `$field-*`, `$table-*`, `$stepper-*`, `$time-*`, `$date-*`, `$knob-font-size`, `$toolbar-title-font-size`, `$slider-text-font-size`, `$uploader-*`, `$timeline-subtitle-font-size`, `$bar-*`, etc.) were px-hardcoded, so component-internal selectors carried px too.
+- A handful of in-repo `.vue` files (`DoraScoreCard`, `BuyVerdictCard`, `BuyVerdictBadge`) had hardcoded px on real content text.
+- The FU's other in-repo px sites (`ScanOverlay`, `PriceHistoryChart`, `DashboardPage` micro-gauge, `DoraTabs` icon, `OnboardingLoop` icon, `OnboardingStory` decorative glyphs) were correctly flagged as carve-outs.
+
+### Shipped
+
+- **[web_app/src/css/quasar.variables.scss](web_app/src/css/quasar.variables.scss)** — overrode 30+ Quasar SCSS font-size vars to their rem equivalents (14px → 0.875rem, 12px → 0.75rem, 16px → 1rem, 20px → 1.25rem, 24px → 1.5rem, 28px → 1.75rem, 48px → 3rem, etc.). Quasar CLI auto-imports this file before framework SASS, and the framework's own vars are `!default`, so ours win at compile time. Every emitted `.q-btn`, `.q-field`, `.q-chip`, `.q-toolbar__title`, `.q-table__*`, `.q-stepper__*`, `.q-time__*`, `.q-date__*`, `.q-uploader__*`, `.q-slider__*`, `.q-timeline__subtitle`, `.q-knob` etc. now emits rem, tracking `--dora-base-font-size`.
+- **[web_app/src/css/app.scss](web_app/src/css/app.scss)** — first attempt broke the build: Quasar's `variables.sass` computes `$bar-dense-height = $bar-dense-font-size + 10px` and two `$field-*-with-bottom-padding-bottom` via similar arithmetic. `rem + px` is invalid SCSS. Reverted three vars (`$bar-dense-font-size`, `$field-bottom-font-size`, `$field-dense-bottom-font-size`) to their original px so the layout math still resolves; then added targeted CSS overrides for the visible text of those components in `app.scss` (`.q-field__bottom`, `.q-field--dense .q-field__bottom`, `.q-bar--dense`). Height math still consumes the original px value; users see scaled text.
+- **In-repo px content-text**: `DoraScoreCard.vue` hero number (40px → 2.5rem), trend badge (12px → 0.75rem), component-foot caption (12px → 0.75rem); `BuyVerdictCard.vue` headline (16px → 1rem); `BuyVerdictBadge.vue` badge label (11px → 0.6875rem).
+- **Verified via `npx quasar dev`** — Vite + Vue-tsc compile clean apart from the three pre-existing DashboardPage `draft_shop` / `CardId` type errors, which are unrelated to this change and already documented.
+
+### FU disposition
+
+- **CLOSED — FU-025** archived to `DORA_FOLLOWUPS_RESOLVED.md` with the full root-cause + fix + carve-out list. Runtime verification is owed and now lives as its own DORA_VERIFY block (see below).
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-025 block removed.
+- `DORA_FOLLOWUPS_RESOLVED.md`: new `[RESOLVED] FU-025` at the top with per-fix summary + carve-out list.
+- `DORA_VERIFY.md`: new **Text-scale follow-through into component-internal text — origin FU-025** block under Cross-cutting. Walks: Stock overview + Recipe edit + Stock-item detail + Dashboard + Cookbook overview + Shopping list detail + Cook mode at Small vs Extra-large, plus an icons-stay-put confirmation for the carve-outs.
+- `CHANGELOG.md`: `[Unreleased] > Changed` entry added.
+- `PROJECT_STATE.md`: unchanged (no workstream row moves).
+
+### Engineering-standards close-gate
+
+- **R-002 (no theme literals):** not violated. The rem values are compile-time SCSS constants driving Quasar's own default emissions — they're the *token layer* here, not runtime hardcodes. They multiply against a runtime CSS var (`--dora-base-font-size`) which *is* the theme token.
+- **R-003 (state ownership):** not touched.
+- **R-004 (framework discipline):** stays on Quasar; we override its SCSS vars via its documented mechanism.
+- **R-005 (portable data access):** not touched.
+- **No new rule / ADR needed.** The "override Quasar SCSS vars to rem so `--dora-base-font-size` scales through" pattern is already implied by A6; this is the follow-through, not a new architecture.
+
+### Next up
+
+User runtime walk of the new DORA_VERIFY block. If any specific surface still fails to scale under the fix, log it as a fresh FU pointing at the offending selector.
+
+---
+
+## 2026-07-10 — FU-108 closed: filter bars on Cookbook, Stock, My Products reordered by usage frequency (one pass)
+
+**Why:** User picked up FU-108 (Cookbook filter reorder) and asked whether the same treatment should apply to every filter surface in the app. Only three pages carry the full `FilterBar` shell — Cookbook, Stock, My Products — so scope was "all three, one pass." Confirmed target orders with the user before touching code.
+
+### Shipped
+
+- **[RecipesOverview.vue](web_app/src/pages/RecipesOverview.vue)** — new order matches the user-approved plan: quick chips (Favourites · Cookable now · Have meals in pool · Planned tri-state · Uses expiring) → **Sort by + direction, moved forward from the tail** → single-selects (Cuisine · Category · Time of day · Difficulty) → Ingredients tri-state → numerics (Meals ≥ · Missing ≤ · # ingredients ≤ · Kcal ≤) → Dietary · Tools → Collection last (set-and-forget). Added a top-of-slot comment naming FU-108 as origin so future eyes don't "tidy" it back to author-order.
+- **[StockOverview.vue](web_app/src/pages/StockOverview.vue)** — chip cluster reordered so **Needs attention leads** (highest signal); Essential · Open/in-use · Needs check follow. **Sort by moved ahead of Location/Group** with a new vertical separator delimiting sort from refinement filters. Level dropdown intentionally kept first as the primary triage control.
+- **[MyProductsPage.vue](web_app/src/pages/MyProductsPage.vue)** — **Show inactive** moved from second-position to the tail as housekeeping. New order: On deal now → Store → Linked stock item → Show inactive.
+
+### FU disposition
+
+- **CLOSED — FU-108** moved to top of `DORA_FOLLOWUPS_RESOLVED.md`. Resolution note captures the extended scope (Stock + My Products landed in the same pass, not just Cookbook).
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: FU-108 block removed.
+- `DORA_FOLLOWUPS_RESOLVED.md`: new `[RESOLVED] FU-108` entry at the top with per-file summary of the reorder.
+- `CHANGELOG.md`: `[Unreleased] > Changed` entry added.
+- `DORA_VERIFY.md`: unchanged. Reorder is trivial to eyeball on the page; not worth a verify checkbox.
+- `PROJECT_STATE.md`: unchanged — no workstream row moves.
+
+### Engineering-standards close-gate
+
+- Rules touched: none. Pure template reorder inside three existing surfaces — no state ownership move (R-003), no theme literals introduced (R-002), no framework rewrite (R-004), no data-access shape change (R-005). Nothing to flag or fix.
+- No new rule / ADR needed. "Order filter chrome by usage frequency" is a per-page product judgement, not a codebase-wide rule.
+- `vue-tsc --noEmit` clean on all three files (only pre-existing DashboardPage errors remain, unrelated).
+
+### Next up
+
+Back to whatever the user redirects to. No new loops opened by this pass.
+
+---
+
+## 2026-07-10 — PageErrorState dashboard button reloads when already on dashboard
+
+**Why:** User reported that on the render-error screen ("Something went wrong on this screen."), the "Go to dashboard" button did nothing when the error surfaced on the dashboard itself — because Vue-Router `to="/"` no-ops on route match. Left the user with only "Reload page" as a real escape hatch, and the dead button looked broken.
+
+### Shipped
+
+- `web_app/src/components/PageErrorState.vue` — swapped `to="/"` for a `@click="onDashboard"` handler. If `route.path === '/'` it calls the same `window.location.reload()` used by the reload button; otherwise it `router.push('/')`. Same visual affordance, just alive on the dashboard.
+
+### Ledger updates
+
+- `CHANGELOG.md`: `[Unreleased] > Fixed` entry added at the top.
+- `DORA_FOLLOWUPS.md` / `DORA_FOLLOWUPS_RESOLVED.md` / `DORA_VERIFY.md`: unchanged. No open loop spun off. Static behaviour is obvious from the change; no browser-verify item logged.
+- `PROJECT_STATE.md`: unchanged — this doesn't move any workstream row.
+
+### Engineering-standards close-gate
+
+- Rules touched: none. Small, localised behaviour fix inside an existing shared component; no new state, no cross-file surface, no theme literals, no data-access shape. R-003 (state ownership) not implicated — `route.path` is presentation, resolved at the boundary.
+- No new rule / ADR needed.
+
+### Next up
+
+Back to the finalisation sweep — no redirect from this fix.
+
+---
+
+## 2026-07-10 — Finalisation plan drafted + 3 FUs closed by absorption, 5 more annotated
+
+**Why:** User asked to lock in an end-of-project sweep — one disciplined feature-by-feature walk that builds up a Full Systems Test procedure doc, in-app help & guides, senior-review findings, and a test plan inventory all in parallel, so the code is read once and every output track advances from the same reading. Also asked to roll in matching FUs (361 / 510 / 406 / 404 / 395 / 320 / 224 / 010), and — on a follow-up turn — to **close outright** the ones whose full scope is captured in the plan doc, so the plan becomes their sole tracker instead of both existing in parallel.
+
+### Shipped (docs only, no code)
+
+- **[FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — governance-level plan doc under `01_charter/`. Locks the four output tracks, the FST persona × surface × condition matrix (8 personas: fresh install / dense long-tenure / minimal / power / admin / multi-user / self-host operator / managed Path-B, plus device+condition modifiers), 20 feature chunks in walk order (loop spine → adjacent → infra), per-track formatting rules, the per-session recipe, the FU rollup taxonomy, and the definition-of-done for the plan.
+- **[FINALISATION_COVERAGE.md](docs/01_charter/FINALISATION_COVERAGE.md)** — companion register. One row per chunk × four track columns (FST / Help / Review / Tests). Legend ⬜🟡✅➖. Closing checklist mirrors the plan's §7; FU-361/320/395 archival row already flipped to ✅ (done at draft).
+
+### FU disposition
+
+**CLOSED by absorption — moved to `DORA_FOLLOWUPS_RESOLVED.md`:**
+
+- **FU-361 A-4 Help content overhaul** — Track 2 (Help & guides) is the resolution. Answers the "own proposal vs fold into HelpPage" question posed in the original FU (fold into the plan; per-chunk content).
+- **FU-320 auto-behaviour docs + escape hatch** — Track 2 formatting rule §3.2 hard-codes this FU's shape (name behaviour · trigger · link to controlling setting). The gate that used to defer this FU (wait for FU-315/316/317/318/319) is now moot: per-chunk sequencing means each surface's help copy is written after the surface is walked, so staleness is impossible.
+- **FU-395 P5-11 Production readiness review** — Track 3 (senior review) + FST release-gate checklist *is* the comprehensive pre-launch review this FU asked for.
+
+**Stays OPEN — partial coverage / ride-along:**
+
+- **[[FU-510]] hand-rolled vs library sweep** — Phase 1 (assessment) rolled into Track 3 as a per-chunk `keep / replace / wrap-thin-adapter` bucket. Phase 2 (per-swap actions) explicitly stays open; each `replace` verdict at plan close spawns its own per-swap FU. Kept the detailed focus-area shortlist on the FU itself so nothing is lost.
+- **[[FU-406]] P7-10 Launch readiness** — *partially* covered. FST doc + release-gate = QA half. Marketing / legal / on-call / incident channels stay in this FU.
+- **[[FU-404]] P7-08 Compliance** — *partially* covered. FST multi-user + admin persona flows will exercise DSAR export / delete / privacy-policy surfaces. Legal drafting + compliance contract stay in this FU.
+- **[[FU-010]] holistic theme / colour review** — ride-along on Track 3. Every chunk logs theme anomalies against this FU so the eventual eyes-on-app pass has a triaged shortlist. Doesn't replace the run-the-app judgement pass.
+- **[[FU-224]] primary vs secondary vs accent colour audit** — same treatment as FU-010.
+
+### Ledger updates
+
+- `DORA_FOLLOWUPS.md`: **FU-361, FU-320, FU-395 removed.** FU-510, FU-406, FU-404, FU-010, FU-224 edited in place with partial/ride-along notes.
+- `DORA_FOLLOWUPS_RESOLVED.md`: **3 new `[RESOLVED]` entries** at the top (FU-395, FU-361, FU-320) with state notes pointing at the plan.
+- `PROJECT_STATE.md`: regen note bumped to 2026-07-10; new "Finalisation sweep" workstream row (🔵 designed, not started); new "Recently shipped" bullet reflecting the closures; charter register grows 3 → 5 (adds FINALISATION_PLAN.md + FINALISATION_COVERAGE.md); Phase-0 row's residual-cluster note updates to remove FU-361 and cite the absorption.
+- `CHANGELOG.md`: unchanged (no product/code changes).
+- `DORA_VERIFY.md`: unchanged.
+
+### Engineering-standards close-gate
+
+- No code touched, so no `R-0NN` rules apply. The plan doc itself references the standards close-gate as a per-chunk requirement.
+- No new rule / ADR needed. The finalisation-sweep pattern is project-lifecycle, not a code architecture rule.
+
+### Next up
+
+Plan is written but not started. Two options for the next session:
+
+1. **Kick off Chunk 1 (Cookbook).** Assemble the reading list per the plan's §5 (`PROPOSAL_COOKBOOK.md`, `IMPL_PLAN_RECIPE_IMPORTER.md`, relevant feedback bullets, open FUs FU-432/085/108), walk the backend + SPA + tests, populate the first section of the four output docs (which need to be created on first chunk: `04_proposals/FULL_SYSTEMS_TEST.md`, `05_investigations/FINALISATION_REVIEW.md`, `04_proposals/TEST_PLAN_INVENTORY.md`), update the coverage register.
+2. **Continue Phase 4 kick-off / other in-flight work.** The plan is late-game and doesn't have to start immediately — the user's call. Everything the top of `PROJECT_STATE.md § Needs your attention now` calls out (browser-verify sweep on P8-07/08/09/10, meal-plans screen pick, FU-346 admin-settings host, FU-353 repo rename) still stands.
+
+The plan is discoverable from `PROJECT_STATE.md` (both dashboard row + charter register) and from the 8 rolled-in FUs.
+
+---
+
 ## 2026-07-09 — FU-169 close-out — parametrize sweep, FU-518 root-caused, Phase 3/4 spun off
 
 **Why:** User said "let's try close this FU. finish it." after the initial Phase-2 land. Three loose ends to nail: FU-518 root cause, parametrize sweep, split Phase 3/4 into their own tracked items so FU-169 can honestly close.

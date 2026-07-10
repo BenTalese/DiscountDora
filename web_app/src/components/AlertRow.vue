@@ -110,7 +110,12 @@
     // Slim rows keep only the single most useful in-context action; the full
     // row shows every action the kind supports.
     const inlineActions = computed(() => {
-        const all = actionsFor(props.alert.kind);
+        // Defensive `?? []`: a new alert kind added on the backend without
+        // matching frontend switch coverage would return undefined here and
+        // crash the bell + hub (real regression on 2026-07-09 with
+        // `meal_reconcile_overdue`). Falling back to an empty action list
+        // renders the row as a nav-only nudge — degraded but safe.
+        const all = actionsFor(props.alert.kind) ?? [];
         return props.slim ? all.slice(0, 1) : all;
     });
 

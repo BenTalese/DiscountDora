@@ -29,7 +29,7 @@
                 variant="secondary"
                 :icon="ICONS.home"
                 label="Go to dashboard"
-                to="/"
+                @click="onDashboard"
             />
             <!-- Repo is private — the "Report this" button used to
                  pre-fill a GitHub issue with the error + correlation
@@ -45,6 +45,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
+    import { useRoute, useRouter } from 'vue-router';
 
     const props = withDefaults(
         defineProps<{
@@ -140,6 +141,20 @@
     function onReload() {
         if (typeof window !== 'undefined') {
             window.location.reload();
+        }
+    }
+
+    const route = useRoute();
+    const router = useRouter();
+
+    function onDashboard() {
+        // Router-link no-ops when the target matches the current route, which
+        // left the button dead when the error surfaced on the dashboard itself.
+        // Reload in that case so the user still gets an escape hatch.
+        if (route.path === '/') {
+            onReload();
+        } else {
+            void router.push('/');
         }
     }
 </script>

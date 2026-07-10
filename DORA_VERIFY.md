@@ -1035,6 +1035,11 @@ Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8`
 - [ ] **C-9.5 subscriptions / price-watch tier:** money flag ON + armed price alert → Price watch region lists it (product · merchant · "notify below $X" · last-alerted); View opens price-history explorer with that product; Remove deletes (row gone + toast); empty-state clean; hidden when money flag OFF
 - [ ] **C-9.6 Upcoming fortnight timeline (Phase A):** Upcoming mini-calendar renders on hub; days with events show correct per-category dots (warning expiry, primary shopping, positive meal); out-of-window dimmed, today ringed; clicking a day expands its detail list + links navigate (expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`); refresh works; empty-state clean; dark-mode clean (token dots survive theme switch)
 
+### Cross-app undo after push-expiry (fixes 2026-07-10) — origin FU-357
+- [ ] From the **Dashboard's dashboard-card push-expiry action** (i.e. the push-expiry rendered on the Dashboard alerts card, not just the bell) → toast now reads **"Done."** (this used to be silent — fixed 2026-07-10). Confirm the toast fires on Dashboard, Bell peek, and `/alerts` page — all three surfaces should behave identically.
+- [ ] With a **`meal_reconcile_overdue`** alert present (e.g. leave a past-day meal-plan entry unresolved so it fires — see FU-317 Chunk 4) → the bell + `/alerts` page render the row cleanly, use the checklist icon, theme text "meals to reconcile", tapping the row navigates to `/meal-plans/reconcile`, no ErrorBoundary. Regression from FU-317 Chunk 4 fixed 2026-07-10 (SPA `AlertKind` union + five kind-switches extended; defensive `?? []` in AlertRow).
+- [ ] Push expiry via bell/dashboard/`/alerts`, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
+
 ### good_deal alerts + fake-markdown buy verdict — origin FU-450
 - [ ] **Money features on.** For a product linked to a tracked stock item, add a *fresh* offer that's the lowest it's been (great band) → an alert appears in AlertsPage: "«item» — «brand product» is at its lowest price in months · $X · usually $Y", green tag icon, FYI tier (doesn't inflate the bell badge). Tapping it opens the stock item (where add-to-list lives).
 - [ ] **Threshold.** Settings → Notifications → **Deal alerts** shows a "Good & great" / "Great only" segmented control (only when money features are on). Set "Great only" → a merely-`good`-band product stops alerting; a `great` one still does.
@@ -1493,6 +1498,18 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Cross-cutting
+
+### Text-scale follow-through into component-internal text — origin FU-025 (2026-07-10)
+*Fix landed via `quasar.variables.scss` rem-overrides (Quasar's `body { font-size: 14px }` and ~30 component vars) plus `.q-field__bottom` / `.q-bar--dense` rescues in `app.scss`. Walk one form-heavy page and one table-heavy page at both Small and Extra-large in Settings → Appearance → Text size, and confirm the previously-unresponsive text now moves.*
+- [ ] Settings → Appearance → **Text size = Small** — cold-load Stock overview: level dropdown value, chip labels ("Needs attention", "Essential", "Open / in-use", "Needs check"), row text, footer counters all render smaller than default
+- [ ] Same page, **Text size = Extra-large** — every one of the above renders larger; nothing gets stuck at the default 14px
+- [ ] Open Recipe edit (any recipe → Edit): **input labels, field-native text, `.q-field__bottom` helper/error text, dense-field bottom text, toggle labels ("Enable this recipe", etc.), checkbox labels, chip inputs (tags / dietary), button labels ("Save", "Cancel"), the toolbar title** all track the pref at Small and XL
+- [ ] Stock item detail: same test — labels, values, dropdown text, `Buy verdict` badge + card headline all scale
+- [ ] Dashboard: `DoraScoreCard` hero number, trend badge, per-component captions all scale (they were px-hardcoded)
+- [ ] Cookbook overview `FilterBar`: filter chip labels, dropdown labels (Cuisine / Category / etc.), sort dropdown all scale
+- [ ] Shopping list detail: line item text, quantity/unit inputs, totals footer all scale
+- [ ] Cook mode: step text scales (this was already fine via rem)
+- [ ] **Icons stay put.** Quasar's `q-icon`, tab icons, avatar/checkbox/radio glyphs, meal-plan slot icons, decorative Onboarding letters, camera scanner UI, price-history chart labels, dashboard 3px/7.5px micro-gauge — **do not** scale with the pref. This is intentional.
 
 ### R-029 hide-don't-nag sweep — Product Search nav entry — origin FU-500 (2026-07-08)
 *The one behavioural change from the R-029 sweep: when `features.products` is on but no `product_search_url` is configured, the Product Search entry disappears from the nav instead of rendering disabled-with-tooltip. Quick eye-check to confirm the three states.*

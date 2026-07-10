@@ -1,7 +1,36 @@
 <template>
     <div class="settings-shell">
         <header class="settings-shell__header">
-            <h1 class="settings-shell__title">Settings</h1>
+            <!-- FU-346: for admins, the h1 becomes a two-mode segmented
+                 toggle. "Settings" holds the personal groups (Account,
+                 Kitchen setup); "Admin" holds the admin sections. The
+                 sidebar underneath is filtered to only the active mode's
+                 groups — Admin is a peer mode, not a buried third group.
+                 Non-admins see the plain h1. -->
+            <div v-if="isAdmin" class="settings-shell__mode-toggle" role="tablist" aria-label="Settings section">
+                <button
+                    type="button"
+                    role="tab"
+                    class="settings-shell__mode-btn"
+                    :class="{ 'is-active': mode === 'settings' }"
+                    :aria-selected="mode === 'settings'"
+                    @click="switchMode('settings')"
+                >
+                    Settings
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    class="settings-shell__mode-btn"
+                    :class="{ 'is-active': mode === 'admin' }"
+                    :aria-selected="mode === 'admin'"
+                    @click="switchMode('admin')"
+                >
+                    <q-icon :name="ICONS.shield" size="18px" class="q-mr-xs" />
+                    Admin
+                </button>
+            </div>
+            <h1 v-else class="settings-shell__title">Settings</h1>
         </header>
 
         <!-- Mobile (<md): top tab strip (§6.3). Shown via CSS below. -->
@@ -33,7 +62,7 @@
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { computed, nextTick, ref, watch } from 'vue';
-    import { useRoute } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
 
     // IMPL_PLAN_SETTINGS_REBUILD §2.1 — three top-level groups, Account first.
     // §6.5 (user pick): nested groupings render as an indented sub-list under a
@@ -139,13 +168,33 @@
         },
     );
 
-    const navGroups = computed<SettingsNavGroupDef[]>(() => [
-        { label: 'Account', items: accountSections },
-        { label: 'Kitchen setup', items: kitchenSetupSections.value },
-        ...(isAdmin.value
-            ? [{ label: 'Admin · global', items: adminSections, icon: ICONS.shield }]
-            : []),
-    ]);
+    // FU-346: mode is derived from the URL, so refresh / back-button /
+    // deep-link all preserve it without a separate stored flag. Any
+    // /settings/admin/* path is Admin mode; everything else is Settings.
+    const mode = computed<'settings' | 'admin'>(() =>
+        route.path.startsWith('/settings/admin') ? 'admin' : 'settings',
+    );
+
+    const router = useRouter();
+
+    function switchMode(next: 'settings' | 'admin') {
+        if (next === mode.value) return;
+        // Land on the first item of the mode's sidebar so the destination
+        // matches what the user is about to see. `/settings/admin/users`
+        // is the first admin section; `/settings/account` is the first
+        // personal one.
+        void router.push(next === 'admin' ? '/settings/admin/users' : '/settings/account');
+    }
+
+    const navGroups = computed<SettingsNavGroupDef[]>(() => {
+        if (isAdmin.value && mode.value === 'admin') {
+            return [{ label: 'Admin · global', items: adminSections, icon: ICONS.shield }];
+        }
+        return [
+            { label: 'Account', items: accountSections },
+            { label: 'Kitchen setup', items: kitchenSetupSections.value },
+        ];
+    });
 </script>
 
 <style scoped lang="scss">
@@ -179,6 +228,45 @@
         letter-spacing: -0.01em;
         color: var(--text-primary);
         line-height: 1.2;
+    }
+    /* FU-346 — admin-only mode toggle sits where the h1 does. Segmented
+       control: two pills inside a bordered pill container. Active pill
+       takes the brand-primary background; inactive pill stays flat but
+       shows a hover affordance so it clearly reads as clickable. */
+    .settings-shell__mode-toggle {
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 999px;
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-default, transparent);
+    }
+    .settings-shell__mode-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 20px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text-primary);
+        font: inherit;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .settings-shell__mode-btn:hover:not(.is-active) {
+        background: var(--overlay-hover, rgba(0, 0, 0, 0.05));
+    }
+    .settings-shell__mode-btn:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+    .settings-shell__mode-btn.is-active {
+        background: var(--brand-primary);
+        color: var(--text-inverse);
     }
     .settings-shell__body {
         flex: 1 1 auto;

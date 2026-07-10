@@ -156,7 +156,7 @@
     }
     .dora-buy-verdict-card__headline {
         font-weight: 600;
-        font-size: 16px;
+        font-size: 1rem;
     }
     .dora-buy-verdict-card__dot {
         display: inline-block;

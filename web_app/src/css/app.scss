@@ -42,3 +42,20 @@ body {
 .q-tooltip {
     font-size: calc(var(--font-size-sm) * 1rem);
 }
+
+// FU-025 — the sibling of the Quasar SCSS-var overrides in
+// `quasar.variables.scss`. Quasar computes `$field-with-bottom-padding-bottom`
+// and `$bar-dense-height` from these font-size vars via `+ 10px` / `+ 8px`
+// arithmetic, so they had to stay in px at compile time. We restore
+// text-scale tracking for the *visible text* of the same components here
+// — the layout math still consumes the original px value, but users see
+// scaled text.
+.q-field__bottom {
+    font-size: 0.75rem;
+}
+.q-field--dense .q-field__bottom {
+    font-size: 0.6875rem;
+}
+.q-bar--dense {
+    font-size: 0.875rem;
+}

@@ -15,3 +15,57 @@ $positive:  hsl(140, 50%, 50%);
 $negative:  hsl(7, 75%, 56%);
 $info:      hsl(218, 76%, 56%);
 $warning:   hsl(20, 95%, 55%);
+
+// ─────────────────────────── FU-025 text-scale ────────────────────
+// A6 wired `:root { font-size: var(--dora-base-font-size) }` and made
+// `--font-size-*` unitless ratios, so anything in rem scales with the
+// user's Settings → Text size preference. Quasar's own defaults are
+// px-hardcoded — most crucially `$body-font-size: 14px`, which the
+// framework emits as `body { font-size: 14px }` and every downstream
+// component-internal size inherits from. Overriding these here to
+// their rem equivalents (14px → 0.875rem, 12px → 0.75rem, etc.)
+// makes Quasar itself scale-aware without a stylesheet cascade fight.
+//
+// Only text-content-carrying vars are overridden. Icon/graphic sizing
+// vars ($avatar-font-size, $checkbox-inner-font-size, $tabs-icon-font-size,
+// $button-fab-icon-font-size, $img-loading-font-size, etc.) stay in px
+// — those size glyphs, not readable text, and shouldn't grow with the
+// user's Small/Med/Large/XL text-size choice.
+// A handful of Quasar vars participate in `$var + 10px` or similar
+// SCSS-time arithmetic downstream (`$bar-dense-height`,
+// `$field-with-bottom-padding-bottom`, `$field-dense-with-bottom-padding-bottom`)
+// which fails if the operand is a rem. Those specific font-size vars
+// stay in px here; their real `.q-*` selectors are re-scaled to rem
+// in `app.scss` instead so the visible text still tracks the pref.
+$body-font-size:                        0.875rem;
+$button-font-size:                      0.875rem;
+$input-font-size:                       0.875rem;
+$chip-font-size:                        0.875rem;
+$badge-font-size:                       0.75rem;
+$field-label-font-size:                 1rem;
+$field-dense-label-font-size:           0.875rem;
+$table-tbody-td-font-size:              0.8125rem;
+$table-th-font-size:                    0.75rem;
+$table-bottom-font-size:                0.75rem;
+$table-grid-item-title-font-size:       0.75rem;
+$table-grid-item-value-font-size:       0.8125rem;
+$table-title-font-size:                 1.25rem;
+$toolbar-title-font-size:               1.3125rem;
+$stepper-caption-font-size:             0.75rem;
+$stepper-title-font-size:               0.875rem;
+$stepper-tab-font-size:                 0.875rem;
+$slider-text-font-size:                 0.75rem;
+$slide-item-active-text-font-size:      0.875rem;
+$timeline-subtitle-font-size:           0.75rem;
+$uploader-title-font-size:              0.875rem;
+$uploader-subtitle-font-size:           0.75rem;
+$knob-font-size:                        3rem;
+$date-header-title-label-font-size:     1.5rem;
+$date-header-subtitle-font-size:        0.875rem;
+$date-calendar-weekdays-inner-font-size: 0.75rem;
+$time-header-label-font-size:           1.75rem;
+$time-clock-position-font-size:         0.75rem;
+$bar-inner-font-size:                   1rem;
+$bar-button-font-size:                  0.6875rem;
+$bar-dense-button-font-size:            0.5rem;
+$color-picker-tune-tab-input-font-size: 0.6875rem;

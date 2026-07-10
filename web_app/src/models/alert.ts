@@ -16,7 +16,8 @@ export type AlertKind =
     | 'essential_low'
     // forward-looking nudges (no stock item).
     | 'no_planned_meals'
-    | 'shopping_day';
+    | 'shopping_day'
+    | 'meal_reconcile_overdue';
 
 export type Alert = {
     // Stable scoped key `<scope>:<id>:<kind>` — opaque to the client; posted
@@ -137,6 +138,8 @@ export function iconFor(kind: AlertKind): string {
             return ICONS.restaurant;
         case 'shopping_day':
             return ICONS.shopping_cart;
+        case 'meal_reconcile_overdue':
+            return ICONS.playlist_add_check;
     }
 }
 
@@ -174,6 +177,10 @@ export function colorForKind(kind: AlertKind): string {
             return 'alert-kind-no-planned-meals';
         case 'shopping_day':
             return 'alert-kind-shopping-day';
+        case 'meal_reconcile_overdue':
+            // Reuses the FYI-tier low accent; a dedicated categorical token
+            // could be added if the visual identity turns out to need it.
+            return 'severity-low';
     }
 }
 
@@ -196,6 +203,8 @@ export function kindTheme(kind: AlertKind): string {
             return 'meals to plan';
         case 'shopping_day':
             return 'shopping day';
+        case 'meal_reconcile_overdue':
+            return 'meals to reconcile';
     }
 }
 
@@ -227,6 +236,7 @@ export function actionsFor(kind: AlertKind): { action: AlertAction; label: strin
             ];
         case 'no_planned_meals':
         case 'shopping_day':
+        case 'meal_reconcile_overdue':
             // Navigation-only nudges — acting on them means opening the linked
             // surface (linkFor), not a server-side state change.
             return [];
@@ -243,6 +253,8 @@ export function linkFor(alert: Alert): string | null {
             return '/meal-plans';
         case 'shopping_day':
             return alert.target_id ? `/shopping-lists/${alert.target_id}` : '/shopping-lists';
+        case 'meal_reconcile_overdue':
+            return '/meal-plans/reconcile';
         default:
             return alert.stock_item_id ? `/stock/${alert.stock_item_id}` : null;
     }

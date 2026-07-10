@@ -76,6 +76,11 @@
             @clear="clearFilters"
         >
             <template #filters>
+            <!-- FU-108: filter controls ordered by usage frequency
+                 (quick chips → sort → common single-selects →
+                 ingredients → numeric bounds → occasional
+                 dietary/tools → set-and-forget collection). Pure
+                 template reorder; no state or logic changed. -->
             <div class="row q-gutter-sm items-center">
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
                 Favourites
@@ -117,52 +122,30 @@
 
             <q-separator vertical class="q-mx-sm" />
 
-            <!-- :hint removed; the under-input copy was just
-                 padding out the filter row's height and offsetting
-                 alignment without adding info. -->
-            <q-input
-                v-model.number="mealCountMin"
-                dense
-                outlined
-                type="number"
-                min="0"
-                style="max-width: 140px"
-                label="Meals ≥"
-                hide-bottom-space
-            />
-            <q-input
-                v-model.number="missingMax"
-                dense
-                outlined
-                type="number"
-                min="0"
-                style="max-width: 130px"
-                label="Missing ingredients ≤"
-                hide-bottom-space
-            />
-            <!-- kcal upper-bound filter (gated). -->
-            <q-input
-                v-if="nutritionEnabled"
-                v-model.number="kcalMax"
-                dense
-                outlined
-                type="number"
-                min="0"
-                style="max-width: 130px"
-                label="Kcal ≤"
-                hide-bottom-space
-            />
             <q-select
-                dense
-                outlined
-                style="min-width: 200px"
+                v-model="sortBy"
+                :options="SORT_OPTIONS"
                 emit-value
                 map-options
-                clearable
-                v-model="collectionFilter"
-                :options="collectionOptionsWithNone"
-                label="Collection"
+                outlined
+                dense
+                label="Sort by"
+                style="min-width: 180px"
             />
+            <!-- direction toggle. Icon flips between
+                 arrow-up (asc) and arrow-down (desc). Tooltip explains
+                 the current axis's meaning in the chosen direction. -->
+            <BaseButton
+                variant="ghost"
+                :icon="sortDir === 'asc' ? ICONS.arrow_upward : ICONS.arrow_downward"
+                :aria-label="`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`"
+                @click="toggleSortDir"
+            >
+                <q-tooltip>{{ sortDirTooltip }}</q-tooltip>
+            </BaseButton>
+
+            <q-separator vertical class="q-mx-sm" />
+
             <!-- L235 — cuisine + category are distinct single-select filters,
                  no longer lumped together as one "tags" multi-select. -->
             <q-select
@@ -214,18 +197,6 @@
                 :options="DIFFICULTY_OPTIONS"
                 label="Difficulty"
             />
-            <!-- "# ingredients ≤" numeric cap. Pairs with the
-                 new sort axis below. -->
-            <q-input
-                v-model.number="ingredientsMax"
-                dense
-                outlined
-                type="number"
-                min="0"
-                style="max-width: 140px"
-                label="# ingredients ≤"
-                hide-bottom-space
-            />
             <!-- Uses / Doesn't use ingredients consolidated
                  into the shared TriStateFilter, with `searchable` for the
                  large stock-item set and a per-row stock-level colour dot.
@@ -239,6 +210,51 @@
                 default-sort="name"
                 v-model:include="usesStockItemIds"
                 v-model:exclude="excludesStockItemIds"
+            />
+            <!-- :hint removed; the under-input copy was just
+                 padding out the filter row's height and offsetting
+                 alignment without adding info. -->
+            <q-input
+                v-model.number="mealCountMin"
+                dense
+                outlined
+                type="number"
+                min="0"
+                style="max-width: 140px"
+                label="Meals ≥"
+                hide-bottom-space
+            />
+            <q-input
+                v-model.number="missingMax"
+                dense
+                outlined
+                type="number"
+                min="0"
+                style="max-width: 130px"
+                label="Missing ingredients ≤"
+                hide-bottom-space
+            />
+            <q-input
+                v-model.number="ingredientsMax"
+                dense
+                outlined
+                type="number"
+                min="0"
+                style="max-width: 140px"
+                label="# ingredients ≤"
+                hide-bottom-space
+            />
+            <!-- kcal upper-bound filter (gated). -->
+            <q-input
+                v-if="nutritionEnabled"
+                v-model.number="kcalMax"
+                dense
+                outlined
+                type="number"
+                min="0"
+                style="max-width: 130px"
+                label="Kcal ≤"
+                hide-bottom-space
             />
             <!-- L237 — one tri-state dietary filter (must-have / must-not /
                  neutral) replacing the old two include/exclude selects. -->
@@ -261,31 +277,17 @@
                  exclusion can be added back behind a more discoverable
                  control if real usage demands it; the text-match was a
                  source of false negatives. -->
-
-
-            <q-separator vertical class="q-mx-sm" />
-
             <q-select
-                v-model="sortBy"
-                :options="SORT_OPTIONS"
+                dense
+                outlined
+                style="min-width: 200px"
                 emit-value
                 map-options
-                outlined
-                dense
-                label="Sort by"
-                style="min-width: 180px"
+                clearable
+                v-model="collectionFilter"
+                :options="collectionOptionsWithNone"
+                label="Collection"
             />
-            <!-- direction toggle. Icon flips between
-                 arrow-up (asc) and arrow-down (desc). Tooltip explains
-                 the current axis's meaning in the chosen direction. -->
-            <BaseButton
-                variant="ghost"
-                :icon="sortDir === 'asc' ? ICONS.arrow_upward : ICONS.arrow_downward"
-                :aria-label="`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`"
-                @click="toggleSortDir"
-            >
-                <q-tooltip>{{ sortDirTooltip }}</q-tooltip>
-            </BaseButton>
             </div>
             </template>
         </FilterBar>

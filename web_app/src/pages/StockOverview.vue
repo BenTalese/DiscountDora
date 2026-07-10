@@ -138,6 +138,12 @@
 
             <q-separator vertical class="q-mx-sm" />
 
+            <!-- FU-108: chip cluster ordered by usage frequency —
+                 highest-signal alert chip leads. -->
+            <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
+                Needs attention
+            </FilterChip>
+
             <span class="row items-center no-wrap">
                 <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="secondary">
                     Essential
@@ -162,10 +168,6 @@
                     </q-tooltip>
                 </q-icon>
             </span>
-
-            <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
-                Needs attention
-            </FilterChip>
 
             <span class="row items-center no-wrap">
                 <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
@@ -210,6 +212,24 @@
                 {{ recipeFilterChipLabel }}
             </q-chip>
 
+            <q-separator vertical class="q-mx-sm" />
+
+            <!-- FU-108: sort ahead of location/group refinements —
+                 users pick a sort axis far more often than they narrow
+                 by location or group. -->
+            <q-select
+                v-model="filters.sortBy.value"
+                :options="STOCK_SORT_OPTIONS"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                outlined
+                dense
+                label="Sort by"
+                style="min-width: 180px"
+            />
+
             <q-select
                 v-model="filters.locationFilter.value"
                 :options="filters.locationOptions.value"
@@ -236,19 +256,6 @@
                 map-options
                 clearable
                 label="Any group"
-                style="min-width: 180px"
-            />
-
-            <q-select
-                v-model="filters.sortBy.value"
-                :options="STOCK_SORT_OPTIONS"
-                option-value="value"
-                option-label="label"
-                emit-value
-                map-options
-                outlined
-                dense
-                label="Sort by"
                 style="min-width: 180px"
             />
             </div>

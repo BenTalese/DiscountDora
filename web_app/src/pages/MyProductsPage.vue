@@ -120,7 +120,6 @@
             <template #filters>
             <div class="row q-gutter-sm items-center">
             <q-toggle v-model="onDealOnly" label="On deal now" dense />
-            <q-toggle v-model="includeInactive" label="Show inactive" dense />
             <q-select
                 v-model="storeFilter"
                 outlined
@@ -146,6 +145,7 @@
                 label="Linked stock item"
                 style="min-width: 240px"
             />
+            <q-toggle v-model="includeInactive" label="Show inactive" dense />
             </div>
             </template>
         </FilterBar>

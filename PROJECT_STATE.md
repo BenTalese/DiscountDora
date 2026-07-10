@@ -1,7 +1,46 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-09** — hand-edited row refresh after **FU-169 CLOSED
-end-to-end (2026-07-09)**: the earlier Phase-1-tail + Phase-2 land got a
+**Regenerated: 2026-07-10** — hand-edited row refresh after **FU-357 CLOSED
+end-to-end + bell crash root-caused and fixed (2026-07-10)**: user's browser
+walk on the FU-357 verify steps hit a real `ErrorBoundary` crash on the alerts
+bell (`TypeError: all is undefined` at `AlertRow.vue:114`). Static-read root
+cause: **FU-317 Chunk 4 (2026-07-09) added the `meal_reconcile_overdue` alert
+kind on the backend but never extended the SPA's `AlertKind` union in
+`alert.ts`.** Since the union didn't include it, TS couldn't warn about the
+missing case in the five kind-switches (`iconFor` / `colorForKind` /
+`kindTheme` / `actionsFor` / `linkFor`) — all fell through and returned
+`undefined`, so `actionsFor(kind).slice()` threw and blew up the bell. Fixed
+by (a) extending the union + adding a case to all five switches with sane
+defaults (nav-only nudge, icon `playlist_add_check`, link
+`/meal-plans/reconcile`), (b) defensive `?? []` at `AlertRow:112-118` so the
+next backend-only kind rollout degrades to a nav row instead of crashing.
+Same session also fixed a second finding — **Dashboard alert-action was
+silently succeeding/failing** (no `$q.notify` call), so `AlertsBell` +
+`AlertsPage` toasted "Done." but Dashboard didn't; parity restored. **FU-357
+closed** (the reported "cross-app undo seems off" turned out to be this toast
+inconsistency, not an undo — no undo exists on the push_expiry path
+anywhere in the SPA, confirmed by grepping every `label: 'Undo'` site). New
+**FU-521** logged (state-ownership drift — three hand-rolled alert-action
+wrappers + five parallel kind-switch lists) for the finalisation plan Chunk
+9 senior review to consolidate. Prior regen note: **Finalisation
+plan drafted (2026-07-10)**: new [docs/01_charter/FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)
++ companion [FINALISATION_COVERAGE.md](docs/01_charter/FINALISATION_COVERAGE.md)
+lock the shape of the end-of-project sweep — 20 feature chunks × 4 output tracks
+(FST procedure doc, in-app help & guides, senior code review, test plan
+inventory). Each chunk gets one deep read with all four tracks advanced from
+the same walk; coverage register keeps it honest. Rolled 8 FUs into it: **FU-361
+A-4 help content overhaul / FU-320 auto-behaviour documentation / FU-395 P5-11
+production readiness review CLOSED end-to-end** at plan draft (moved to
+`_RESOLVED` — full scope absorbed into the plan, plan is the sole tracker for
+their content). **FU-510 Phase 1** rolled into Track 3 as the hand-rolled-vs-
+library per-chunk bucket (Phase 2 stays open for per-swap sequencing).
+**FU-406 P7-10 launch readiness + FU-404 P7-08 compliance** stay open with
+partial-coverage notes (FST doc handles the QA/exercise halves; legal +
+marketing + on-call + DSAR drafting stay out). **FU-010 holistic theme review +
+FU-224 colour-usage audit** stay open, riding along as per-chunk signal
+collection — the plan populates their shortlists but eyes-on-app judgement
+is still needed to close them. No code touched. Prior regen note: **FU-169
+CLOSED end-to-end (2026-07-09)**: the earlier Phase-1-tail + Phase-2 land got a
 close-out pass — FU-518 root-caused (not fixture-ordering; a freshly-POSTed
 expired item generates *both* `stock:{id}:expired` + `stock:{id}:low_stock`
 alerts, so dedup misses the second key — test-design flaw, not a Phase 2
@@ -167,7 +206,7 @@ list-state clear.
 
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
-| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-360/361/363/431/432); FU-359 + FU-421 + FU-430 closed to `_RESOLVED`. |
+| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-360/363/431/432); FU-359 + FU-421 + FU-430 + **FU-361 (help content — absorbed into FINALISATION_PLAN)** closed to `_RESOLVED`. |
 | **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~90% | **Stocktake mode redesign shipped end-to-end** (Chunks 1–3 + housekeeping); SK-1..11 resolved. **FU-449 closed** — P6-07 cook→consume `ConsumptionEvent` persists. **FU-351 shipped** — P6-10 "Draft my shop" one-click dashboard card on top of the existing `/auto-generate` engine (2026-07-07). **FU-352 closed** — P6-12 briefing / P8-08 Score coexistence decided (2026-07-07: keep both cards, no fold). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` (shipped; `good_deal` alert cut same day); **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping. |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
 | **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence P8-01..P8-10 complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and P8-10 Native mobile app all BUILT (Capacitor 8 wraps the SPA; Android scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode). P8-01/02/05/06 shipped earlier. P8-03 + P8-04 formally cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
@@ -201,6 +240,7 @@ list-state clear.
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
 | Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Parser green on 20/20 corpus; schema migration for unlinked-ingredient tri-state cookability; paste importer replaces the URL fetcher (FU-104 + FU-199 closed); bulk-linker page + PWA share target. Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Commercialization (P7) | ⚪ | Tenancy/Stripe/billing not started; zero such code yet | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
+| **Finalisation sweep** | 🔵 | **Designed, not started (2026-07-10).** 20 feature chunks × 4 output tracks (FST procedure, in-app help & guides, senior code review, test plan inventory) with a coverage register. Rolls in FU-361/320/395 (fully), FU-510 Phase 1, FU-406/404 (partially), FU-010/224 (ride-along). Runs late-game before Phase 4 close-out. | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
 
 ---
 
@@ -224,6 +264,8 @@ first.
 
 ## Recently shipped (newest first)
 
+- **Alerts bell crash fixed + Dashboard toast parity + FU-357 closed (2026-07-10).** User's browser walk on FU-357 hit a real `ErrorBoundary` crash on the bell after pushing a few expiries. Root cause: FU-317 Chunk 4 (2026-07-09) added `meal_reconcile_overdue` on the backend but never extended the SPA's `AlertKind` union, so TS couldn't enforce the five kind-switches — all fell through to `undefined` and `AlertRow.vue:114`'s `.slice()` threw. Fixed by extending the union + all five switches (icon `playlist_add_check`, link `/meal-plans/reconcile`, nav-only nudge) + a defensive `?? []` in AlertRow so the next kind rollout can't crash. Same session found and fixed a second real drift — Dashboard's alert-action was silently succeeding (no `$q.notify` while AlertsBell + AlertsPage both toasted "Done."); parity restored. **FU-357 closed** — the reported "cross-app undo seems off" turned out to be this toast inconsistency, not an undo (no undo exists on the push_expiry path anywhere in the SPA, confirmed by grepping every `label: 'Undo'` site). New **FU-521** logged for the state-ownership drift (three hand-rolled alert-action wrappers + five parallel kind-switch lists) — folds into finalisation plan Chunk 9 senior review.
+- **Finalisation plan drafted + 3 FUs closed by absorption (2026-07-10).** New [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) + [FINALISATION_COVERAGE.md](docs/01_charter/FINALISATION_COVERAGE.md) at `docs/01_charter/`. 20 feature chunks × 4 output tracks (Full Systems Test procedure with an 8-persona × device × condition matrix / in-app help & guides / senior code review / test plan inventory) built up in the same code-walk per chunk. **FU-361 A-4 help content + FU-320 auto-behaviour documentation + FU-395 P5-11 production readiness review CLOSED** — full scope absorbed into the plan (moved to `_RESOLVED`; plan is the sole tracker for their content). **FU-510 hand-rolled-vs-library Phase 1** rolled into Track 3 as a per-chunk `keep / replace / wrap-thin-adapter` bucket, Phase 2 stays open. **FU-406 launch readiness + FU-404 P7-08 compliance** stay open with partial-coverage notes (FST doc + persona flows exercise the QA/DSAR halves; marketing/legal/on-call/DSAR-drafting stay in their own FUs). **FU-010 holistic theme review + FU-224 colour-usage assessment** stay open, riding along — every chunk's senior review logs candidate sites against them so the eventual eyes-on-app pass starts with a triaged shortlist. No code touched.
 - **FU-317 Chunk 5 shipped — reconcile page + dashboard chip + meal-plans header nudge (2026-07-09).** First user-visible surface for FU-317. New `/meal-plans/reconcile` runner (same shell shape as `StocktakeRunner`) with five verb buttons matching proposal §3.2 (Cooked / Different portions / Cooked later / Didn't cook / Skip). Two inline dialogs capture `actual_servings` + `cooked_on`. Five-counter completion recap; `(?)` help dialog explaining every verb. New shared `useReconcileQueue` composable powers the page + a new dashboard chip (`ReconcilePastMealsChip`, hide-when-empty in the *Your kitchen* zone) + a meal-plans header nudge line (also hide-when-empty). `vue-tsc` clean for touched files (pre-existing `draft_shop` errors unrelated). DORA_VERIFY entry logged. Chunk 6 (settings row + copy polish) is the last remaining piece.
 - **FU-317 Chunk 4 shipped — `meal_reconcile_overdue` alert + `reconcile_meals_pending` suggestion (2026-07-09).** Backend-only; two backward-looking nudges wired off one shared signal (`reconcile.reconcile_overdue_signal`, R-003) so the alert emitter + suggestion generator both defer to the same threshold check (D1: ≥3 unresolved entries stretching ≥4 days back). Alert added to `alert_kinds.py` as `TIER_FYI` (matches `no_planned_meals` / `shopping_day`), keyed `meal:meal_reconcile_overdue:<head_iso>` so a user snooze/dismiss persists while the head-of-queue entry sits there and rolls to a fresh key once cleared. Suggestion generator's `primary_action.path` deep-links to `/meal-plans/reconcile` (Chunk 5 registers the page). Both surfaces auto-clear when the queue empties. 5 e2e tests in `test_reconcile_signal.py` cover below-count, all-recent, at-threshold, alert-prefs default, and firing→clearing round-trip. Backend done — Chunk 5 (UX) is next.
 - **FU-317 Chunk 3 shipped — reconcile queue + verb endpoints (2026-07-09).** Backend-only; no user-visible surface yet (that's Chunk 5). New `dora_api/features/meal_plans/reconcile.py` exposes `GET /api/meal-plans/reconcile-queue` (cursor-paged past-day entries whose latest receipt is unresolved, plus a `total` count for the future dashboard chip) and `POST /api/meal-plans/reconcile/<entry_id>` (five verbs: `cooked` / `cooked_adjusted` / `cooked_later` / `not_cooked` / `skip` → append-only receipts, pool math through Chunk 2's `bump_pool`, `consumed_at` synced, idempotent replays return `idempotent: true`, rate-limited 60/min per user via the FU-458 subject bucket). Nine e2e tests in `test_reconcile_verbs.py` cover queue filter, every verb on both auto-drain postures, change-of-mind (cooked → not_cooked restores drain + writes corrective receipt), idempotence, unknown-verb 400, unknown-entry 404. Next: Chunk 4 — `meal_reconcile_overdue` alert kind + `reconcile_meals_pending` suggestion kind.
@@ -336,13 +378,15 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 3. **🔴 Security (FU-447).** `AUTH_ASSISTANT_SECURITY_FINDINGS` has an unfixed HIGH CSRF + MEDIUM email-change flaw.
 4. **~23 docs orphaned** from the (now-retired) indexes — real, mostly-shipped records.
 
-## 01_charter — governance (3)
+## 01_charter — governance (5)
 
 | Doc | Type | State | Purpose | Evidence |
 |---|---|---|---|---|
 | DASHY_DORA_CHAMPION_PLAN.md | Charter | 🟢 authoritative | Vision + 12-principle Decision Charter + P8 prompts | Cited library-wide as arbiter |
 | ENGINEERING_STANDARDS.md | Standards | 🟢 authoritative | Code/architecture rubric R-001..R-026 + ADR log | Enforced by CLAUDE.md close-gate |
 | RECONCILED_FINISHING_PLAN.md | Master-plan | 🟢 authoritative | 5-phase order, scope, §7 resolved decisions | Self-maintaining |
+| FINALISATION_PLAN.md | End-plan | 🔵 designed, not started (2026-07-10) | End-of-project sweep: 20 chunks × 4 output tracks; FU rollup for FU-361/320/395/510/406/404/010/224 | New this session |
+| FINALISATION_COVERAGE.md | Register | 🔵 blank (2026-07-10) | Per-chunk × per-track status matrix for the finalisation plan | Companion to FINALISATION_PLAN.md |
 
 ## 02_feedback — inputs (3)
 

@@ -132,7 +132,7 @@
         font-weight: 600;
         letter-spacing: 0.02em;
         text-transform: uppercase;
-        font-size: 11px;
+        font-size: 0.6875rem;
         padding: 0 8px;
         height: 22px;
         border: 1px solid transparent;

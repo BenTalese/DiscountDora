@@ -1155,6 +1155,7 @@
     import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
@@ -1834,9 +1835,12 @@
         try {
             await alertApi.applyActionAsync(alert.alert_id, action);
             await Promise.all([loadAlerts(), loadSummary()]);
-        } catch {
-            // Best-effort; the alerts panel page is the canonical surface
-            // for retries.
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Done.' });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not apply.', caption: toastCaption(err),
+            });
         }
     }
 

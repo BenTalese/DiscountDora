@@ -188,7 +188,7 @@
     }
 
     .dora-score-hero__number {
-        font-size: 40px;
+        font-size: 2.5rem;
         font-weight: 600;
         line-height: 1;
         color: var(--dora-text);
@@ -204,7 +204,7 @@
         gap: 2px;
         padding: 2px 6px;
         border-radius: 999px;
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: 500;
     }
     .dora-score-trend--up {
@@ -272,7 +272,7 @@
         justify-content: space-between;
         gap: 8px;
         margin-top: 4px;
-        font-size: 12px;
+        font-size: 0.75rem;
     }
     .dora-score-component__reason {
         color: var(--dora-text-muted, #666);

@@ -73,11 +73,15 @@ def test__filter_value_injection__contains_operator_is_also_literal(api):
 
 def test__filter_field_injection__unknown_field_is_rejected_not_reflected(api):
     # The field is allowlist-mapped to an EntityField; anything off the map
-    # must be rejected, never reflected into SQL.
-    for field in ["__class__", "1=1", "name);DROP TABLE StockItem;--", "password"]:
+    # must be rejected, never reflected into SQL. Includes dunders (the
+    # FU-546 dunder-traversal fix) and a relationship name (`stock_level`) —
+    # a non-column attribute that used to reach the query builder and 500;
+    # the FU-546 strict-column allowlist now 400s it.
+    for field in ["__class__", "1=1", "name);DROP TABLE StockItem;--", "password",
+                  "stock_level", "products", "__dict__"]:
         resp = requests.get(STOCK_ITEMS, params={"filter": f"{field}:eq:x"})
         assert resp.status_code == 400, (
-            f"unknown filter field {field!r} should 400, got {resp.status_code}: "
+            f"non-column filter field {field!r} should 400, got {resp.status_code}: "
             f"{resp.text[:200]}"
         )
 

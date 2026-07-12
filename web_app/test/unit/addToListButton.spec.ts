@@ -350,7 +350,7 @@ describe('AddToListButton — inline-product variant', () => {
         m.state.membership = membershipWith({
             active_lists: [
                 { shopping_list_id: 'L1', name: 'Groceries', status: 'draft' },
-                { shopping_list_id: 'L9', name: 'Done', status: 'completed' },
+                { shopping_list_id: 'L9', name: 'Done', status: 'done' },
             ],
         });
         const wrapper = mountButton({
@@ -368,7 +368,7 @@ describe('AddToListButton — inline-product variant', () => {
     it('does nothing but nudge when no draft list exists', async () => {
         m.state.membership = membershipWith({
             active_lists: [
-                { shopping_list_id: 'L9', name: 'Done', status: 'completed' },
+                { shopping_list_id: 'L9', name: 'Done', status: 'done' },
             ],
         });
         const wrapper = mountButton({

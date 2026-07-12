@@ -1,73 +1,179 @@
-"""STUB — FU-535: concurrency / race / idempotency behaviour.
+"""FU-535 — concurrency / race / idempotency behaviour.
 
-WHY THIS MATTERS: every test to date issues requests strictly one-at-a-time
-against a freshly-rolled-back DB, so nothing exercises two operations touching
-the same row, a double-submitted mutation, or a replayed offline-queue action.
-Real users double-tap buttons, the SPA's useOfflineQueue replays mutations on
-reconnect, and FU-529 already caught a non-deterministic reconcile ordering
-flake — all concurrency-shaped. These are the bugs that never show in
-single-threaded tests and are brutal to debug in production.
+Every other test issues requests one-at-a-time; nothing exercises a
+double-submitted mutation, an offline-queue replay, or two operations
+touching one row. These are the bugs single-threaded tests miss.
 
-FEASIBILITY — READ FIRST (this is why it's a stub, not written):
-  The e2e conftest dispatches IN-PROCESS through Flask's test client over a
-  single SQLite file with a per-test snapshot rollback. True parallel requests
-  via ThreadPoolExecutor may hit SQLite's write-lock (`database is locked`) and
-  the test client is not guaranteed thread-safe. The next agent must FIRST
-  decide the right level for each case:
-    (a) Genuine threads against the test client — try it; if SQLite locking
-        makes it flaky, don't force it.
-    (b) INTERLEAVED simulation — the higher-value, more deterministic option:
-        drive the two operations' steps by hand in one thread in the
-        adversarial order (read A, read B, write A, write B) to reproduce the
-        lost-update / stale-read without real parallelism. Most of these bugs
-        are logic races, not timing races, and reproduce interleaved.
-    (c) Repository/handler level with a real short-lived Postgres (ties to
-        FU-045 / FU-405 Postgres CI) for the cases that genuinely need MVCC.
-  Document the choice per test in a comment.
+APPROACH (decided per the stub's feasibility note): **deterministic
+interleaving**, not real threads. The e2e conftest dispatches in-process
+through Flask's test client over one SQLite file — genuine ThreadPoolExecutor
+parallelism hits SQLite write-locks and the client's thread-safety and would
+be flaky. Every race here is a *logic* race (idempotency, lost-update via
+read-modify-write, delete-then-reference ordering), so it reproduces by
+driving the steps by hand in the adversarial order. Cases that genuinely need
+MVCC (true simultaneous writers) are deferred to Postgres CI (FU-045/FU-405)
+and noted where they'd apply.
 
-CASES TO COVER:
-  1. Double-submit idempotency — POST the same create twice (same client-
-     generated id if the API takes one; else assert two distinct rows is the
-     intended contract and pin it). The SPA's offline queue CAN replay, so a
-     non-idempotent create is a real duplicate-data bug.
-  2. Lost update on concurrent PATCH — two PATCHes to one stock item, one sets
-     notes, one sets level; assert BOTH land (no last-writer-wins clobber of
-     the untouched field). This is the read-modify-write window.
-  3. Reconcile sweep vs manual verb (ties FU-529) — interleave the auto-drain
-     sweep with a user "didn't cook" verb on the same entry; assert the user's
-     decision wins and no duplicate receipt is written regardless of order.
-  4. Concurrent stock-level drops — two drops on one item; assert the
-     ConsumptionEvent / StockLevelChange ledger is consistent (no double-count,
-     no skipped sequence). Depends on the FU-533 noload fix landing first.
-  5. Delete-while-referenced race — delete an entity while another request adds
-     a reference to it; assert a clean outcome (either the add 404s or the
-     delete is blocked), never an orphan row or a 500.
-
-CONVENTIONS: module-level `requests.*` is the authenticated admin client;
-per-test rollback is automatic. Name tests test__<scenario>__<invariant>.
+Covers stub cases 1 (double-submit), 2 (disjoint PATCH lost-update), 4
+(repeated level drops), 5 (delete-then-reference). Case 3 (reconcile sweep vs
+manual verb) is already owned by the reconcile suite + [[FU-529]]'s ordering
+pin, so it's not duplicated here.
 """
-import pytest
+import requests
 
-pytestmark = pytest.mark.skip(reason="FU-535 stub — assess feasibility per module docstring")
+from dora_api.app import app
+from dora_api.domain.entities.consumption_event import ConsumptionEvent
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from tests.factories import make_stock_item
 
-
-def test__double_submit_create__does_not_duplicate(api):
-    ...
-
-
-def test__concurrent_patch_disjoint_fields__both_land(api):
-    ...
-
-
-def test__reconcile_sweep_vs_manual_verb__user_decision_wins(api):
-    """Ties FU-529 — deterministic ordering / no duplicate receipt."""
-    ...
+BASE = "http://localhost:5170/api"
+STOCK_ITEMS = f"{BASE}/stock-items"
 
 
-def test__concurrent_level_drops__ledger_stays_consistent(api):
-    """Depends on the FU-533 consumption-event fix landing first."""
-    ...
+def _uniq(prefix: str) -> str:
+    import uuid
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
-def test__delete_while_referenced__no_orphan_no_500(api):
-    ...
+def _levels_top_bottom() -> tuple[str, str]:
+    levels = sorted(
+        requests.get(f"{BASE}/stock-levels").json()["items"],
+        key=lambda l: l["sequence"],
+    )
+    return levels[0]["stock_level_id"], levels[-1]["stock_level_id"]
+
+
+def _detail(item_id: str) -> dict:
+    return requests.get(f"{STOCK_ITEMS}/{item_id}/detail").json()
+
+
+def _consumption_count(item_id: str) -> int:
+    with app.app_context():
+        return len(
+            SqlAlchemyRepository().get(ConsumptionEvent).all(
+                EntityField(ConsumptionEvent, "stock_item_id").eq(item_id)
+            )
+        )
+
+
+# ── Case 1 — double-submit ─────────────────────────────────────────────────
+
+def test__double_submit_create__is_deduped_by_name_uniqueness(api):
+    """Double-tapping a stock-item create does NOT produce two rows: the
+    name-uniqueness guard rejects the second identical POST with a 422. So the
+    server itself protects against the classic double-submit duplicate for
+    name-unique entities — the second tap is a clean business-rule rejection,
+    not a phantom duplicate. (Entities WITHOUT a uniqueness guard are why the
+    offline queue still refuses to queue creates at all — identity-creating
+    ops fail loudly offline rather than risk a duplicate on replay.)"""
+    level, _ = _levels_top_bottom()
+    body = {"name": _uniq("dbl-create"), "stock_level_id": level}
+    r1 = requests.post(STOCK_ITEMS, json=body)
+    r2 = requests.post(STOCK_ITEMS, json=body)
+    assert r1.status_code == 201, r1.text
+    assert r2.status_code == 422, (
+        f"a duplicate-name create should be rejected, got {r2.status_code}: {r2.text[:200]}"
+    )
+
+
+def test__double_submit_level_drop__records_consumption_once(api):
+    """The offline queue replays a mutation VERBATIM, and a user can double-tap.
+    A level drop applied twice must be idempotent in its side effects: the
+    first PATCH (top->bottom) is a real drop and records one ConsumptionEvent;
+    the second (bottom->bottom) is a no-op and must record NOTHING. A
+    double-count here would corrupt depletion history on every reconnect."""
+    top, bottom = _levels_top_bottom()
+    item = make_stock_item(stock_level_id=top, name=_uniq("dbl-drop"))
+    item_id = item["stock_item_id"]
+
+    payload = {"stock_level_id": bottom, "consumption_source": "manual"}
+    assert requests.patch(f"{STOCK_ITEMS}/{item_id}", json=payload).status_code in (200, 204)
+    history_after_first = len(_detail(item_id)["level_history"])
+    assert requests.patch(f"{STOCK_ITEMS}/{item_id}", json=payload).status_code in (200, 204)
+
+    assert _consumption_count(item_id) == 1, (
+        "a re-applied (same-level) drop double-counted consumption — offline "
+        "replay / double-tap would corrupt depletion history"
+    )
+    # And the no-op second PATCH must not append a phantom history row (FU-533).
+    assert len(_detail(item_id)["level_history"]) == history_after_first
+
+
+# ── Case 2 — lost update via read-modify-write ─────────────────────────────
+
+def test__disjoint_patches__both_fields_persist_either_order(api):
+    """Two PATCHes to one item touching DIFFERENT fields (notes vs level) must
+    BOTH land, in either interleaving — no last-writer-wins clobber of the
+    field the other request didn't touch. This proves the handler does a
+    PARTIAL update (writes only model_fields_set), not a read-whole-modify-
+    write-whole that would clobber. If it regressed to full-object writes,
+    interleaved requests would lose the earlier field."""
+    top, bottom = _levels_top_bottom()
+    for order in ("notes_first", "level_first"):
+        item = make_stock_item(stock_level_id=top, name=_uniq(f"disjoint-{order}"))
+        item_id = item["stock_item_id"]
+        patches = [
+            {"notes": "concurrent note"},
+            {"stock_level_id": bottom},
+        ]
+        if order == "level_first":
+            patches.reverse()
+        for p in patches:
+            assert requests.patch(f"{STOCK_ITEMS}/{item_id}", json=p).status_code in (200, 204)
+
+        detail = _detail(item_id)
+        assert detail["notes"] == "concurrent note", (order, "notes clobbered")
+        assert detail["stock_level_id"] == bottom, (order, "level clobbered")
+
+
+# ── Case 4 — repeated level drops keep the ledger consistent ────────────────
+
+def test__successive_sourced_drops__record_one_event_each(api):
+    """Two genuine drops (top->mid->bottom) each record exactly one
+    ConsumptionEvent — no skipped or double-counted sequence. Guards the
+    FU-533 fix under repeated depletion (the cook-then-cook-again path)."""
+    levels = sorted(
+        requests.get(f"{BASE}/stock-levels").json()["items"],
+        key=lambda l: l["sequence"],
+    )
+    assert len(levels) >= 3, "need >=3 stock levels for a two-step drop"
+    top, mid, bottom = levels[0], levels[len(levels) // 2], levels[-1]
+    item = make_stock_item(stock_level_id=top["stock_level_id"], name=_uniq("multi-drop"))
+    item_id = item["stock_item_id"]
+
+    for lvl in (mid, bottom):
+        assert requests.patch(f"{STOCK_ITEMS}/{item_id}", json={
+            "stock_level_id": lvl["stock_level_id"], "consumption_source": "manual",
+        }).status_code in (200, 204)
+
+    assert _consumption_count(item_id) == 2, (
+        "two distinct drops should record two ConsumptionEvents"
+    )
+
+
+# ── Case 5 — delete-then-reference (delete-wins interleaving) ───────────────
+
+def test__reference_a_just_deleted_item__is_rejected_cleanly(api):
+    """The delete-while-referenced race, driven delete-first: request A deletes
+    a stock item, request B (which read the item before the delete) tries to
+    add it to a shopping list. The add must fail cleanly (4xx) — never a 500,
+    never a dangling line pointing at a ghost item."""
+    top, _ = _levels_top_bottom()
+    item = make_stock_item(stock_level_id=top, name=_uniq("del-race"))
+    item_id = item["stock_item_id"]
+    list_id = requests.post(f"{BASE}/shopping-lists", json={"name": _uniq("race-list")}).json()["shopping_list_id"]
+
+    assert requests.delete(f"{STOCK_ITEMS}/{item_id}").status_code in (200, 204)
+
+    resp = requests.post(
+        f"{BASE}/shopping-lists/{list_id}/lines",
+        json={"stock_item_id": item_id, "quantity": 1},
+    )
+    assert 400 <= resp.status_code < 500, (
+        f"adding a line for a deleted item should 4xx, got {resp.status_code}: "
+        f"{resp.text[:200]}"
+    )
+    # No orphan line landed.
+    lines = requests.get(f"{BASE}/shopping-lists/{list_id}").json()["lines"]
+    assert all(l.get("stock_item_id") != item_id for l in lines)

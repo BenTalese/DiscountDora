@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, Callable, Generic, List
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, inspect as sa_inspect, select
 from sqlalchemy.orm import contains_eager, registry
 
 from dora_api.app import db
@@ -292,15 +292,19 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
     ) -> EntityField:
         if field_map and api_field in field_map:
             return field_map[api_field]
-        # Strict fallback: PUBLIC attributes only, never dunder/private ones
-        # (FU-546). Without the `_`-guard, `hasattr(Entity, '__class__')` (and
-        # every other dunder) is True, so the attribute flowed into the query
-        # builder and 500'd — both a crash on crafted input and a 400-vs-500
-        # info leak that fingerprints which internal attributes exist. No
-        # public API filter/sort field name starts with '_'; field_map (checked
-        # first) already owns the DTO-name -> underscore-FK mappings.
-        if not api_field.startswith("_") and hasattr(self.entity_type, api_field):
-            return EntityField(self.entity_type, api_field)
+        # Strict allowlist fallback (FU-546): a field off `field_map` is only
+        # usable if it's a genuine mapped COLUMN of this entity. The old
+        # `hasattr()` check was a soft allowlist — it admitted ANY attribute,
+        # so a dunder (`__class__`) or a relationship/hybrid flowed into the
+        # query builder and 500'd (a crash on crafted input + a 400-vs-500 leak
+        # fingerprinting internal attributes). Restricting to `column_attrs`
+        # means relationships / properties / dunders all become a clean 400.
+        # (The `_`-prefix underscore-FK columns aren't public API field names —
+        # those are reached via field_map — so excluding them is intended.)
+        if not api_field.startswith("_"):
+            _column_keys = {a.key for a in sa_inspect(self.entity_type).column_attrs}
+            if api_field in _column_keys:
+                return EntityField(self.entity_type, api_field)
         raise InvalidQueryParameter(
             f"Field '{api_field}' is not filterable on '{self.entity_type.__name__}'."
         )

@@ -14,8 +14,6 @@ database layer by the query builder.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
-
 from werkzeug.datastructures import MultiDict
 
 
@@ -117,19 +115,4 @@ def parse_query_options(args: MultiDict[str, str]) -> QueryOptions:
         page=page,
         limit=limit,
     )
-
-
-def validate_known_fields(options: QueryOptions, known_fields: Iterable[str]) -> None:
-    """Raise InvalidQueryParameter if filter or sort references an unknown field."""
-    known = frozenset(known_fields)
-    for f in options.filters:
-        if f.field not in known:
-            raise InvalidQueryParameter(
-                f"Filter field '{f.field}' is not a valid response field."
-            )
-    if options.sort and options.sort.field not in known:
-        raise InvalidQueryParameter(
-            f"Sort field '{options.sort.field}' is not a valid response field."
-        )
-
 

@@ -51,7 +51,7 @@ _NO_AUDIT_ENDPOINTS: frozenset[str] = frozenset({
     "submit_client_log",   # already persisted via its own emit path
     "health_check",
     "login",               # handler emits an explicit auth.login.* row
-    "logout",              # idempotent, not worth a row per call
+    "logout",              # handler emits an explicit auth.logout row (FU-548)
 })
 
 # Endpoint-name → (entity_type, action_suffix) for common verb prefixes.

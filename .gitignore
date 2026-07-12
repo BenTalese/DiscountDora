@@ -77,3 +77,10 @@ venv
 yarn-debug.log*
 yarn-error.log*
 .coverage
+
+# FU-540 Playwright e2e artifacts
+web_app/test-results/
+web_app/playwright-report/
+web_app/blob-report/
+web_app/e2e/.auth/
+data/dora.e2e.db

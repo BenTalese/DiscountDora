@@ -9,6 +9,117 @@ next.
 
 ---
 
+## 2026-07-12 (later 17) — FU-546 CLOSED: filter/sort field allowlist made strict; dead `validate_known_fields` removed
+
+**Why:** User: "then 546." The residual from FU-537 — a soft field allowlist + dead validation code.
+
+**Fix:** `SqlAlchemyRepository._resolve_field` fallback is now a **strict column allowlist** — a field off `field_map` resolves only if it's a genuine mapped column (`sa_inspect(entity).column_attrs`). Relationships / hybrids / dunders (anything that can't translate to a SQL filter and would 500 in the query builder) now raise `InvalidQueryParameter` → 400. This completes the FU-537 dunder-guard into a proper allowlist at one central choke point (all list endpoints). Deleted the dead `validate_known_fields` (+ unused `Iterable` import) — zero callers, superseded.
+
+**Tests:** `test_security_injection.py` field-injection case extended to assert relationship names (`stock_level`, `products`) + dunders → 400. Full backend suite green — no endpoint relied on the old soft `hasattr` fallback for a non-column attribute.
+
+**Ledger:** FU-546 → `_RESOLVED`. CHANGELOG Fixed bullet.
+
+**Status:** all FUs the user directed are now done (540 run + 546). Remaining open: ⚠️ **FU-549** (fresh-install migration boot — the one real reliability risk left), FU-547 (token-lifecycle tests, opportunistic), FU-544 (5-route uuid-converter carve-out, opportunistic), FU-545 (SettingsFileDrop nested-interactive a11y, opportunistic). Decisions all cleared.
+
+---
+
+## 2026-07-12 (later 16) — FU-540 first browser run GREEN (9 tests); found+fixed 2 real bugs (FU-550 build blocker, FU-551 Windows SPA MIME)
+
+**Why:** User: "do 540 first run then 546."
+
+**Got the Playwright suite running + green (9/9)** on this Windows box. The bundled browser binary won't download in the sandbox, so:
+- Added `DORA_E2E_CHANNEL=chrome|msedge` to `playwright.config.ts` — drives an already-installed browser (Chrome/Edge both present); CI leaves it unset → bundled Chromium.
+- Fixed a real bug in the launcher I wrote: `e2e/serve.py` needed the repo root on `sys.path` (running a script doesn't put cwd there) — was `ModuleNotFoundError: dora_api`.
+
+**The e2e layer immediately earned its keep — two real bugs found + fixed:**
+- **[[FU-550]] — the SPA couldn't build at all.** `quasar build` (vue-tsc via vite-plugin-checker) hard-failed on 3 pre-existing `DashboardPage.vue` errors: `'draft_shop'` not in the `CardId` union — though it's a real, registered, rendered card. Textbook R-010 closed-set gap (FU-357 shape). The SPA had been **unbuildable/undeployable since ~2026-06-22** (last successful build). Fixed by adding `'draft_shop'` to the union (one line, no runtime change). Also fixed 2 type errors in a session-written spec (`addToListButton.spec.ts` `'completed'` → `'done'`).
+- **[[FU-551]] — Windows self-host served the SPA blank.** `serve_spa.py` (`send_from_directory`) took the Content-Type from stdlib `mimetypes`, which on Windows reads the registry where `.js` → `text/plain`; browsers reject `text/plain` ES modules → blank page (boot splash only). Fixed by registering correct types at import (`mimetypes.add_type` for .js/.mjs/.css/.json/.svg/.wasm) — R-005 portability; the desktop bundle + Windows self-host are the only paths that reach these routes.
+
+**Diagnosis path** (worth recording): backend probed healthy in isolation (health 200, bootstrap-required false, /me 401, login 200 → seed + endpoints fine); the browser console (captured via a throwaway diag spec) showed `Failed to load module script … MIME type "text/plain"` → pinpointed FU-551. The blank-body + splash-only symptom is the tell.
+
+**Suites all green:** backend **1454** / frontend **337** / Playwright **9**. No regressions from the DashboardPage/serve_spa changes.
+
+**Ledger:** FU-540 resolved-note updated (first run green + the 2 finds); FU-550 + FU-551 added to `_RESOLVED` (found+fixed). CHANGELOG Fixed (550/551) + Added-note (540 green). DORA_VERIFY FU-540 item → first run ticked, CI/Linux re-run left open. Config keeps `DORA_E2E_CHANNEL` + the serve.py fix.
+
+**Next:** FU-546 (strict filter allowlist — backend, unaffected by all this).
+
+---
+
+## 2026-07-12 (later 15) — FU-548 CLOSED: logout is now audited (auth.logout event)
+
+**Why:** User: "548 yes, do it." — audit session termination.
+
+**Fix:** `dora_api/features/auth/logout.py` now emits an explicit `auth.logout` audit event (SEVERITY_AUDIT, actor + entity = the user) **before** `session.clear()`. Done in the handler (mirroring login's own `auth.login.*` emit), NOT via the middleware auto-audit — because the after-request hook runs after the session is cleared and would record an actor-less row. So `logout` stays in `audit._NO_AUDIT_ENDPOINTS` (like login) to avoid a duplicate.
+
+**Tests:** the FU-538 sweep's `logout_is_deliberately_not_audited` flipped to `logout_emits_an_explicit_event` — asserts exactly one new row, action `auth.logout`, actor == the logged-in user. AUDIT_EXEMPT's logout reason updated. `audit.py`'s _NO_AUDIT_ENDPOINTS comment updated. Audit + auth suites green (34); full suite confirming.
+
+**Ledger:** FU-548 → `_RESOLVED`. CHANGELOG Fixed bullet. Engineering-standards: consistent with login's audit pattern; no new rule.
+
+**Decisions/findings still open for the user:** ⚠️ FU-549 (fresh-install migration boot — the remaining real reliability risk), FU-540 first browser run, opportunistic FU-546/547.
+
+---
+
+## 2026-07-12 (later 14) — FU-540 CLOSED: Playwright browser-E2E smoke layer built (complement to manual QA); browser run deferred (sandbox blocked the binary)
+
+**Why:** User: "keep manual DORA_VERIFY, but also build 540 alongside. Playwright is not a replacement for manual QA/UAT." Explicit opt-in.
+
+**Built (in `web_app/`):** a thin single-origin browser smoke layer.
+- **Architecture:** the Flask backend serves both `/api` and the built SPA (`/`, from `dist/spa`) — single origin, no dev proxy/CORS. Playwright's `webServer` boots a **seeded throwaway backend** on :5170 via `e2e/serve.py` (wipes `data/dora.e2e.db`, runs debug+seed → `create_all` + the dora/dora admin, deliberately NOT migrations → sidesteps FU-549).
+- **Specs (9 tests):** `auth.setup.ts` (log in once, save session — Playwright's storageState pattern), `login.spec.ts` (good/bad creds), `smoke.spec.ts` (authed nav sweep over dashboard/stock/cookbook/meal-plans/shopping-lists — shell renders, stays authed, no uncaught error / error-boundary, + a real `/api` handshake).
+- **Selectors grounded in source** (login autocomplete attrs, "Sign In" button, real route paths, `.q-layout` shell) — robust, not brittle text/CSS.
+- npm scripts (`test:e2e` = `quasar build` + `playwright test`; `:ui`, `:only`), `e2e/README.md`, `.gitignore` entries. `@playwright/test` installed.
+
+**Verification status (honest):** `npx playwright test --list` confirms the config + all 9 specs parse and wire correctly (setup→chromium dependency, storageState, route sweep). Vitest unaffected (337 still green). **NOT run in-browser: `npx playwright install chromium` is network-blocked in this sandbox** — the binary won't download. A full green run needs the browser + built SPA + backend, i.e. `npm run test:e2e` on a networked machine / CI. **DORA_VERIFY §Operator** has the first-real-run check (confirm selectors, fix any drift); CHANGELOG notes the pending run.
+
+**Ledger:** FU-540 → `_RESOLVED` (built + validated; run deferred). CHANGELOG Added + DORA_VERIFY operator check. No production code touched (R-007 — pure test infra).
+
+**🏁 ALL test-suite FUs are now addressed** — every writable one shipped (534/535/536/537/538/539/540/541/542) + the earlier bug-fix arc + str/UUID closure. **Decisions/findings still awaiting the user:** ⚠️ FU-549 (fresh-install migration boot — the one real reliability risk), FU-548 (audit logout?), FU-540 first browser run, opportunistic FU-546/547.
+
+---
+
+## 2026-07-12 (later 13) — FU-535 CLOSED: concurrency/idempotency tests (deterministic interleaving) — LAST writable test-suite FU
+
+**Why:** User: "continue to 535." The last big test FU.
+
+**Shipped:** `tests/e2e/dora_api/test_concurrency.py` (5 tests), written as **deterministic interleaving** — NOT real threads. Per the stub's feasibility note, the in-process SQLite test client can't do reliable ThreadPoolExecutor parallelism (write-locks, thread-safety); every case here is a *logic* race that reproduces by hand-ordering the steps. Cases:
+- **double-submit create** → deduped by name-uniqueness (2nd POST is a clean 422, not a duplicate). The stub assumed creates always duplicate; the reality is better — stock items self-protect. Pinned the actual (good) contract.
+- **double-submit level drop** → consumption recorded ONCE + no phantom history (the FU-533 idempotency contract under verbatim offline-replay / double-tap).
+- **disjoint PATCH** (notes vs level, either order) → both persist; proves partial-update design has no lost-update clobber.
+- **successive drops** → one ConsumptionEvent each.
+- **delete-then-reference** → adding a deleted item to a list 4xx's cleanly, no orphan, no 500.
+
+**No bugs found** — all behaviours sound. Case 3 (reconcile-vs-verb) not duplicated (owned by reconcile suite + FU-529). True MVCC/simultaneous-writer cases deferred to Postgres CI (FU-045/FU-405).
+
+**Suite:** full backend green (confirming; +5 tests). No production code touched (R-007).
+
+**Ledger:** FU-535 → `_RESOLVED`. CHANGELOG Added bullet.
+
+**🏁 Milestone — all writable test-suite FUs are now DONE.** This session closed **FU-534, 535, 536, 537, 538, 539, 541, 542** (query budgets / concurrency / migrations / security / audit / frontend-resilience / coverage / a11y) plus the earlier bug-fix arc (FU-522/524/526/527/528/533) and the str/UUID family closure (R-032/R-033 + FU-532). Backend **~1454** / frontend **337** passing. Nearly every FU surfaced a real bug.
+
+**What's left (NOT writable without a decision):**
+- **FU-540** — Playwright browser E2E: needs the user's infra call (build it, or keep the manual DORA_VERIFY walks).
+- **Decisions/findings pending user:** FU-549 (⚠️ fresh-install migration boot — confirm + fix), FU-548 (audit logout?), plus opportunistic FU-546 (strict filter allowlist), FU-547 (token-lifecycle tests), FU-544/545 (route/a11y carve-outs).
+
+---
+
+## 2026-07-12 (later 12) — FU-536 CLOSED: migration integrity tests; found a ⚠️ possible fresh-install boot failure (FU-549)
+
+**Why:** User: "do next test-suite FU." Picked FU-536 (migrations) over FU-535 (concurrency) — higher value (migration bugs = deploy-time data loss), deterministic (no SQLite-threading flake), and de-risks the imminent Postgres work.
+
+**Shipped:** `tests/test_migrations.py`. Two layers:
+- **In-process ScriptDirectory (no DB):** single-head, linear/walkable history, every revision has a real downgrade (1 legit-irreversible allowlisted — the Product.image garbage-nullify data migration). All green.
+- **Subprocess against a temp DB:** real up/down runs happen in a child `python -c` with `DORA_DB_PATH` at a tempfile — because the migration run is coupled to the app's engine, and the in-process app singleton is bound to the e2e DB (running `downgrade base` in-process would clobber it). Postgres portability test gated on `DORA_TEST_POSTGRES_URL` (FU-405 CI).
+
+**⚠️ Major finding → [[FU-549]] (high priority):** the migration chain **does NOT apply from empty** — `upgrade head` on a fresh SQLite DB dies at `a3e9f6c2d8b4` (`op.batch_alter_table('Product')` → Alembic batch `'BINARY' has no attribute 'name'`, on SQLAlchemy 2.0.25 pinned + alembic 1.13.1 UNpinned). It was never caught because the test/seed path uses `db.create_all()`, NOT migrations — the from-empty chain had ZERO coverage. **Production's fresh-boot path runs `upgrade()` from empty**, so a brand-new self-hosted install may fail to boot on the same toolchain. Pinned by 3 strict-xfails; logged with a fix plan (confirm on fresh `pip install`; pin alembic; consider migrating the test schema-build off create_all) + a **DORA_VERIFY operator smoke** check (boot a fresh install from empty).
+
+**Suite:** full backend **1449 passed** / 1 pre-existing FU-328 / 6 skipped / 5 xfailed (2 FU-523 + 3 FU-549). Subprocess tests fully isolated — no interference. No production code touched (R-007 — the finding is logged, not fixed: it's a version-scoped investigation + a shipped-migration edit, its own unit).
+
+**Ledger:** FU-536 → `_RESOLVED`; FU-549 opened (high priority); DORA_VERIFY operator smoke added. CHANGELOG Added bullet.
+
+**Remaining test FUs:** FU-535 (concurrency — last big one; SQLite-threading feasibility caveat), FU-540 (Playwright — infra decision). Plus opportunistic: FU-547 (token tests), FU-546 (strict filter allowlist). **Decisions pending for the user:** FU-548 (audit logout?), FU-549 (fresh-install migration — needs a real look), FU-540 (Playwright yes/no).
+
+---
+
 ## 2026-07-12 (later 11) — FU-538 CLOSED: audit-coverage sweep; architecture sound, one logout-audit decision surfaced (FU-548)
 
 **Why:** User: "continue from most to least critical test-suite FUs." FU-538 (audit completeness) was next.

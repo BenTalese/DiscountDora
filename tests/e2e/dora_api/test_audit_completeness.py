@@ -82,10 +82,10 @@ AUDIT_EXEMPT: dict[str, str] = {
         "a duplicate row for the same request."
     ),
     "logout": (
-        "idempotent session-clear, deliberately not audited "
-        "(_NO_AUDIT_ENDPOINTS comment: 'not worth a row per call'). NOTE: this "
-        "is the ONE mutating /api endpoint that produces NO audit row at all — "
-        "surfaced in the FU-538 report as a judgment call, not a code bug."
+        "handler emits an explicit auth.logout row before clearing the session "
+        "(FU-548) — like login, it's in _NO_AUDIT_ENDPOINTS so the middleware "
+        "doesn't also write a duplicate, actor-less row. See "
+        "test__audit_coverage__logout_emits_an_explicit_event."
     ),
 }
 
@@ -493,21 +493,27 @@ def test__audit_coverage__exempt_set_has_no_stale_rules(api):
 
 # ── D. Pin the one deliberate zero-audit endpoint ──────────────────────────
 
-def test__audit_coverage__logout_is_deliberately_not_audited(api):
-    """logout is the single mutating /api endpoint that writes NO audit row
-    (by design — _NO_AUDIT_ENDPOINTS). Pin that deliberate exemption so a
-    future change that starts auditing session termination is a conscious,
-    visible edit here rather than a silent behaviour flip. (Surfaced in the
-    FU-538 report as a judgment call for the maintainer, not a bug.)"""
+def test__audit_coverage__logout_emits_an_explicit_event(api):
+    """FU-548 — session termination is now audited. logout stays in
+    _NO_AUDIT_ENDPOINTS (like login) but its handler emits an explicit
+    `auth.logout` row BEFORE clearing the session, so the actor is captured.
+    Pins that logout leaves exactly one audit row naming the actor."""
     s = requests.Session()  # fresh authed client
     login = s.post(f"{BASE}/auth/login", json={"username": "dora", "password": "dora"})
     assert login.status_code == 200, login.text
+    actor_id = login.json()["user_id"]
 
     before = set(_audit_rows())
     logout = s.post(f"{BASE}/auth/logout")
     assert logout.status_code in (200, 204), logout.text
-    new_ids = set(_audit_rows()) - before
-    assert not new_ids, (
-        "logout emitted an audit row — the deliberate _NO_AUDIT_ENDPOINTS "
-        f"exemption changed; update AUDIT_EXEMPT + this test. New rows: {new_ids}"
+
+    rows = _audit_rows()
+    new_ids = set(rows) - before
+    assert len(new_ids) == 1, (
+        f"logout should emit exactly one audit row, got {len(new_ids)}: {new_ids}"
+    )
+    row = rows[new_ids.pop()]
+    assert row["action"] == "auth.logout", row
+    assert row["actor_user_id"] == actor_id, (
+        f"logout audit must name the actor ({actor_id}), got {row['actor_user_id']}"
     )

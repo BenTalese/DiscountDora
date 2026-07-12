@@ -1202,6 +1202,11 @@
     type CardId =
         | 'attention'
         | 'primary_list'
+        // 'act' zone — the "draft this week's shop" card. It's a real,
+        // registered, rendered card (see CardDef registry + <DraftShopCard/>),
+        // but its id was missing from this union — an R-010 closed-set gap
+        // that broke `vue-tsc` and hard-failed `quasar build` (FU-550).
+        | 'draft_shop'
         | 'budget'
         | 'suggestions'
         | 'cookable'

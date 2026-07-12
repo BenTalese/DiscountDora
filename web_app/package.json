@@ -12,6 +12,9 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
+        "test:e2e": "quasar build -m spa && playwright test",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:only": "playwright test",
         "dev": "quasar dev",
         "build": "quasar build",
         "postinstall": "quasar prepare"
@@ -46,6 +49,7 @@
     "devDependencies": {
         "@eslint/js": "^9.14.0",
         "@intlify/unplugin-vue-i18n": "^4.0.0",
+        "@playwright/test": "^1.61.1",
         "@quasar/app-vite": "^2.1.0",
         "@types/cytoscape": "^3.21.9",
         "@types/node": "^20.5.9",

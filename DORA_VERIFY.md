@@ -1519,6 +1519,13 @@ machine at this session close-time; walked opportunistically.*
 
 ## Operator
 
+### Playwright browser-E2E smoke — CI / cross-OS re-run — origin FU-540
+- [x] First run GREEN on this Windows dev box (2026-07-12, driving system Chrome via `DORA_E2E_CHANNEL=chrome` since the bundled binary won't download here) — 9 tests: login good/bad creds + authed nav over dashboard/stock/cookbook/meal-plans/shopping-lists + a real /api handshake. Selectors confirmed against the running app.
+- [ ] Re-run in CI (bundled Chromium, `DORA_E2E_CHANNEL` unset) once CI is un-commented (FU-405), and on Linux, to confirm cross-OS. (Complements, does not replace, the manual walks below.)
+
+### ⚠️ Fresh-install migration boot — origin FU-549
+- [ ] On a machine with a clean `pip install -r requirements.txt`, point at an **empty** database and boot in production mode (the path that runs `flask_migrate.upgrade()`, not the create_all seed path) → the app migrates to head and starts, OR reproduces the `a3e9f6c2d8b4` Alembic batch `'BINARY' has no attribute 'name'` crash. This confirms whether FU-549 is a real fresh-install-can't-boot bug on the prod-pinned toolchain or a local alembic-version artifact. **Blocks nothing today (existing installs are fine) but must be resolved before advertising fresh self-host / the Postgres migration (FU-045).**
+
 ### Prod-mode secure-cookies boot warning — origin FU-460
 - [ ] Boot the app with `DORA_ENV=production` set and `DORA_SECURE_COOKIES` **unset** → stderr shows the multi-line `═══ WARNING: DORA_ENV=production but DORA_SECURE_COOKIES is unset. ═══` banner before the DI-container / DB / audit log lines
 - [ ] Same boot with `DORA_SECURE_COOKIES=true` set → **no** warning banner in stderr

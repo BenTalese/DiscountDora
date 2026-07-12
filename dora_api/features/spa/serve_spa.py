@@ -20,6 +20,7 @@ over. The catch-all route is intentionally LESS SPECIFIC than the
 first; the catch-all only ever fires for SPA paths.
 """
 import logging
+import mimetypes
 import os
 from pathlib import Path
 
@@ -30,6 +31,22 @@ from dora_api.infrastructure.api_response import endpoint_not_found
 
 
 _Logger = logging.getLogger(__name__)
+
+
+# FU-540/FU-551 — `send_from_directory` derives Content-Type from the stdlib
+# `mimetypes`, which on Windows reads the registry — where `.js` is often
+# mapped to `text/plain`. Browsers enforce strict MIME checking for ES module
+# scripts, so a `text/plain` `.js` is REJECTED and the SPA never boots (blank
+# page). Force the correct types here so the backend-served SPA works on any
+# host OS (R-005 portability — matters for Windows self-host + the desktop
+# bundle, which is the only path that reaches these routes). Linux/containers
+# are usually already correct; this is belt-and-braces.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/json", ".json")
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("application/wasm", ".wasm")
 
 
 def _spa_dir() -> Path | None:

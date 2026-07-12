@@ -77,7 +77,7 @@ class AdminDeleteUserHandler:
         return AdminDeleteUserResponse()
 
 
-@USER_ROUTER.route("<user_id>", methods=["DELETE"])
+@USER_ROUTER.route("<uuid:user_id>", methods=["DELETE"])
 def admin_delete_user(user_id: UUID):
     _Logger = logging.getLogger(__name__)
     _CallerId, err = _require_admin()

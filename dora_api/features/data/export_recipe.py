@@ -114,7 +114,7 @@ def _render_print_view(recipe: RecipeDto) -> str:
     )
 
 
-@RECIPE_ROUTER.route("/<recipe_id>/export", methods=["GET"])
+@RECIPE_ROUTER.route("/<uuid:recipe_id>/export", methods=["GET"])
 def export_recipe(recipe_id: UUID):
     fmt = (request.args.get("format") or "csv").lower()
     if fmt not in ("csv",):
@@ -136,7 +136,7 @@ def export_recipe(recipe_id: UUID):
     return response
 
 
-@RECIPE_ROUTER.route("/<recipe_id>/print-view", methods=["GET"])
+@RECIPE_ROUTER.route("/<uuid:recipe_id>/print-view", methods=["GET"])
 def print_view_recipe(recipe_id: UUID):
     recipe = GetRecipesHandler(SqlAlchemyRepository()).handle_by_id(recipe_id)
     if recipe is None:

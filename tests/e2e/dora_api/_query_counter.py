@@ -6,9 +6,10 @@ Flask test client is observed. Filters down to SELECT statements
 (the N+1 shape we're guarding against); INSERT/UPDATE/DELETE are
 ignored because they're caller-driven, not engine-driven loops.
 
-Kept minimal on purpose: the project has no other query-count tests
-yet (per FU-138 raise note), so resist the urge to grow this into a
-shared harness until a second consumer shows up.
+Now a shared harness: FU-138 seeded it for the recipe-list test; FU-534
+(2026-07-12) made it the net for the R-032 noload/N+1 family across the
+hot reads (`test_query_budgets.py`). Keep it minimal — a SELECT counter,
+nothing more; endpoint-specific budgets live in the consuming tests.
 """
 import re
 

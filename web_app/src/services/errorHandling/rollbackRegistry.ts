@@ -7,7 +7,17 @@ export function registerRollback(fn: (() => void)) {
 export function executeRollbacks() {
     while (rollbackRegistry.length) {
         const fn = rollbackRegistry.pop();
-        if (fn) fn();
+        // Each rollback is isolated: this registry's whole job is undoing
+        // optimistic UI state, so one throwing undo must not strand the
+        // remaining ones (they'd stay stranded in the stack and never run).
+        // Swallow + log the failure and keep popping.
+        if (fn) {
+            try {
+                fn();
+            } catch (err) {
+                console.error('[rollbackRegistry] a rollback threw; continuing', err);
+            }
+        }
     }
 }
 

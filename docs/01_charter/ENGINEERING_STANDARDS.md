@@ -1237,6 +1237,67 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-032 — Never read a `lazy="noload"` relationship off an un-included load
+- **Rule:** If code reads a relationship that is mapped `lazy="noload"`
+  (the app's default for most FK relationships), the entity **must** have
+  been loaded with that relationship `.include(...)`d on the *same* query.
+  A plain `.by_id()` / `.all()` load followed by a relationship read returns
+  `None`/empty **silently** — no error, just wrong data. Corollary: within
+  one request, build any relationship-dependent map (cookability, expiring
+  counts, etc.) *before* the plain id-universe load of the same entity, so
+  the identity map doesn't hand back already-loaded noload-empty instances.
+  When you only need the FK *value* (an id, for bucketing/comparison), read
+  the underscore-prefixed FK property (`item._stock_group_id`) directly — no
+  relationship load required — rather than `.include`-ing the whole object.
+- **Why:** `noload` is a performance default (don't auto-fetch), but it turns
+  every un-guarded relationship read into a silent correctness bug. This is
+  the single most recurrent defect class in the codebase — six distinct
+  production bugs in two weeks, all the same shape: cookbook filters no-op'd,
+  the keeps-running-out report dropped items, stock-group counts read 0, and
+  three PATCH bugs including **silent loss of every cook-mode ConsumptionEvent**.
+  None raised; all shipped; all were caught by tests, not review.
+- **Apply:** Reading `x.some_relationship`? Confirm the query that loaded `x`
+  has `.include(SomeEntity.Fields.SOME_RELATIONSHIP)`. Only need its id? Read
+  `x._some_fk_id`. Clearing an FK on a noload relationship? Write the
+  underscore FK column directly (`x._cuisine_id = None`) — a relationship-side
+  `= None` doesn't dirty the column. Add a query-count guard (FU-534) on hot
+  read paths so an accidental per-row lazy load also fails loudly.
+- **Violation signal:** any `.by_id(...)` / `.all(...)` immediately followed
+  by a read of a relationship attribute on the result, without a matching
+  `.include` on that same query; any relationship-side `= None` assignment
+  used to clear an FK.
+- **Source:** ADR-028; recurrent noload family (cookbook identity-map fix
+  2026-07-10, FU-527, FU-533).
+
+### R-033 — Entity-id path params use the `uuid` converter; handlers never receive an unvalidated `str` id
+- **Rule:** Flask routes whose path param is an entity UUID declare it with
+  the `uuid` converter — `@ROUTER.route("/<uuid:stock_item_id>")` — never the
+  default string converter (`<stock_item_id>`). With the converter, Flask
+  parses the segment to a real `uuid.UUID` before the handler runs and 404s a
+  malformed value at routing time; the handler's `id: UUID` annotation is then
+  honest. Without it the param arrives as a **`str`** despite the annotation,
+  so `entity.id == param` silently fails, `dict[UUID]` lookups miss, and a
+  non-UUID segment reaches a query and 500s.
+- **Why:** Same root cause, many faces — this str/UUID mismatch produced the
+  taxonomy delete-count-always-0 bugs, the product-unlink-always-404 bug, the
+  rename-to-own-name-rejected bug at five surfaces, and **82 routes returning
+  500 instead of 404** on a non-UUID path segment. The converter fixes the
+  entire class at the routing edge and removes the need for per-handler
+  `str(...)`/`UUID(...)` coercion workarounds.
+- **Apply:** New route with an entity-id param → `<uuid:foo_id>`. The handler
+  receives a `uuid.UUID`; compare/kick it around as one. Existing per-site
+  `str(id)`/`UUID(str(id))` coercions added before this rule are harmless
+  (defensive) and may be removed opportunistically once the route uses the
+  converter. Path params that are legitimately **not** UUIDs (tokens, slugs,
+  external codes) keep their appropriate converter — this rule is for entity
+  ids only.
+- **Violation signal:** a route decorator with a bare `<..._id>` segment that
+  the handler treats as a UUID; any `str(entity.id) != path_param` workaround
+  on a route that could instead use `<uuid:...>`.
+- **Source:** ADR-029; str/UUID family (FU-528, FU-532).
+
+---
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -2023,6 +2084,55 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   - When a genuine swap surface arrives (R-005 auth interface; email transport per FU-500 sweep; push transport; LLM client per-tenant), the pattern is: **add a Protocol to `ports.py`, take it in the ctor, wire the concrete at the router edge or on `app.services` in `create_app`.** No container.
   - The .NET-flavoured naming (`I`-prefix generic interfaces, `SqlAlchemyGateway[T]`) is now discouraged for new work — this ADR is the reference for "why we don't do that here."
 - **Promotes rule:** R-031.
+
+### ADR-028 — Reading a `noload` relationship without including it is a silent-correctness bug; make it a rule
+- **Date / task:** 2026-07-12 (test-suite hardening passes; user confirmed promotion)
+- **Status:** accepted
+- **Context:** Six distinct production bugs in two weeks shared one root cause:
+  code loaded an entity (plain `.by_id()`/`.all()`), then read a `lazy="noload"`
+  relationship off it, which returns `None`/empty **silently**. Instances:
+  cookbook `?cookable`/`?expiring` filters were no-ops (identity-map poisoning);
+  the keeps-running-out report dropped history-less items (FU-527); stock-group
+  `item_count` was always 0 (FU-527); PATCH appended phantom stock-level history,
+  lost every cook-mode `ConsumptionEvent`, and no-op'd recipe FK null-clears
+  (FU-533). None raised an error; all were caught by tests, never by review.
+  FU-527's original note set the trigger "one more incident → promote a rule";
+  it fired repeatedly.
+- **Decision:** Promote **R-032**. Every read of a `noload` relationship must
+  sit behind an `.include` on the same query; relationship-dependent maps load
+  before any plain entity load in the same request; read the underscore FK
+  property when only the id is needed; clear FKs by writing the underscore
+  column, not a relationship-side `= None`.
+- **Consequences:** New relationship reads carry an explicit `.include`
+  (marginally more verbose, always correct). Pairs with the FU-534 query-count
+  guards, which catch the inverse failure (an accidental per-row lazy load).
+  Does **not** mandate changing the `noload` default itself — that's a
+  deliberate perf posture; the rule governs how you *read* under it.
+- **Promotes rule:** R-032.
+
+### ADR-029 — Entity-id path params use Flask's `uuid` converter
+- **Date / task:** 2026-07-12 (test-suite hardening passes; user confirmed promotion)
+- **Status:** accepted
+- **Context:** Routes declared entity-id params with the default string
+  converter (`<stock_item_id>`) while handlers annotated them `UUID`. Flask
+  delivers a `str`, so `entity.id == param` silently failed and UUID-keyed
+  dict lookups missed — producing the taxonomy delete-count-always-0 bugs, the
+  product-unlink-always-404 bug, and the rename-to-own-name-rejected bug across
+  five surfaces (all FU-528). Worse, a non-UUID segment flowed into a UUID query
+  and 500'd — **82 routes** return 500 instead of 404 on garbage input (FU-532).
+  The handler-level instances were fixed with per-site `str(...)` coercion, but
+  that papers over the class.
+- **Decision:** Promote **R-033**. Entity-id path params use `<uuid:id>`; Flask
+  parses to `uuid.UUID` and 404s malformed values at routing time before the
+  handler runs. This fixes the whole class at the edge and lets the per-site
+  coercion workarounds be retired.
+- **Consequences:** FU-532 becomes a mechanical sweep of route decorators
+  (`<foo_id>` → `<uuid:foo_id>`) for the entity-id routes, verified by the
+  existing `test_api_fuzz.py` path-param pin flipping from xfail to pass.
+  Non-UUID path params (tokens, slugs) are explicitly out of scope. Handlers
+  now receive a real `UUID`, so defensive coercions become no-ops (harmless;
+  removable opportunistically).
+- **Promotes rule:** R-033.
 
 ---
 

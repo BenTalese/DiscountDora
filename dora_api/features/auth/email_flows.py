@@ -333,6 +333,14 @@ def request_email_change():
             ),
         )
 
+    # An email-change token must land on /confirm-email-change, not the
+    # /verify-email route build_verify_url defaults to. Compute the rewritten
+    # URL once and use it for BOTH bodies — the text body previously used the
+    # un-rewritten /verify-email URL, dead-ending the flow for text-only mail
+    # clients (FU-522).
+    confirm_url = build_verify_url(raw_token).replace(
+        "/verify-email", "/confirm-email-change"
+    )
     try_send(
         send_email,
         to=new_email,
@@ -341,9 +349,9 @@ def request_email_change():
             "verify_email.html",
             subject="Confirm your new Dashy Dora email",
             username=user.username,
-            verify_url=f"{build_verify_url(raw_token).replace('/verify-email', '/confirm-email-change')}",
+            verify_url=confirm_url,
         ),
-        text_body=f"Confirm: {build_verify_url(raw_token)}",
+        text_body=f"Confirm: {confirm_url}",
     )
 
     audit_emit(

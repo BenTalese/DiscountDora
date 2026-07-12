@@ -112,7 +112,7 @@ class AddSubstituteHandler:
         return AddSubstituteResponse()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/substitutes", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/substitutes", methods=["POST"])
 @has_request_body(AddSubstituteRequest)
 def add_substitute(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)

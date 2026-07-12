@@ -215,6 +215,34 @@ def test__request_email_change__current_password_gates_the_call(api):
     assert ok.status_code == 204, ok.text
 
 
+def test__request_email_change__confirmation_email_links_confirm_route(api, monkeypatch):
+    """FU-522 — the confirmation email sent to the NEW address must link
+    /confirm-email-change (a change-email-purpose token), not the default
+    /verify-email route. The HTML body already rewrote the URL, but the
+    plain-text body used the un-rewritten /verify-email link, dead-ending
+    the flow for text-only mail clients."""
+    import requests
+    from dora_api.features.auth import email_flows
+
+    sent: list[dict] = []
+    # `try_send(send_email, ...)` reads `send_email` from the module at call
+    # time, so patching the module attribute captures the outbound mail.
+    monkeypatch.setattr(email_flows, "send_email", lambda **kw: sent.append(kw))
+
+    new_email = f"chg-{uuid.uuid4().hex[:8]}@example.com"
+    resp = requests.post(f"{BASE}/me/email", json={
+        "new_email": new_email,
+        "current_password": "dora",
+    })
+    assert resp.status_code == 204, resp.text
+
+    confirm = next(m for m in sent if m.get("to") == new_email)
+    assert "/confirm-email-change" in confirm["text_body"], confirm["text_body"]
+    assert "/verify-email" not in confirm["text_body"], confirm["text_body"]
+    # HTML body already did this pre-fix; lock both so neither regresses.
+    assert "/confirm-email-change" in confirm["html_body"]
+
+
 def test__csrf__mutation_without_header_is_403(api):
     """FU-197 — the double-submit defence rejects an authenticated
     mutating request that's missing the `X-CSRF-Token` header (the

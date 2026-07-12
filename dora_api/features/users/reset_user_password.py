@@ -46,7 +46,7 @@ class ResetUserPasswordHandler:
         return ResetPasswordResponse(new_password=new_password)
 
 
-@USER_ROUTER.route("<user_id>/reset-password", methods=["POST"])
+@USER_ROUTER.route("<uuid:user_id>/reset-password", methods=["POST"])
 def reset_user_password(user_id: UUID):
     _Logger = logging.getLogger(__name__)
     _, err = _require_admin()

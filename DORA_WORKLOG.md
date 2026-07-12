@@ -9,6 +9,310 @@ next.
 
 ---
 
+## 2026-07-12 (later 11) — FU-538 CLOSED: audit-coverage sweep; architecture sound, one logout-audit decision surfaced (FU-548)
+
+**Why:** User: "continue from most to least critical test-suite FUs." FU-538 (audit completeness) was next.
+
+**Delegated to a subagent, independently re-verified (13 audit tests green).** `tests/e2e/dora_api/test_audit_completeness.py` (7 tests): a **structural** layer pinning all ~169 mutating (method, route) pairs are middleware-audited or in an explicit `AUDIT_EXEMPT` set (kept in lockstep with the real `audit._NO_AUDIT_ENDPOINTS`), plus a **behavioural** layer driving 18 mutations end-to-end and asserting each writes exactly one AuditEvent with actor id + non-empty action + scrub-clean payload.
+
+**Key finding (good news):** auditing is a single global `after_app_request` hook, so no mutating endpoint driven to 2xx can escape audit except the skip-list — the architecture is sound; the sweep now guards it. No audit bugs found.
+
+**One judgment call surfaced → [[FU-548]]:** `POST /api/auth/logout` is the ONE mutating endpoint with zero audit trail (deliberate, `_NO_AUDIT_ENDPOINTS`). Session termination is security-relevant (login success/failure ARE audited), so it's flagged for a product-owner decision, not silently accepted — the sweep pins it either way.
+
+**Suite:** full backend **1446 passed** / 1 pre-existing FU-328 fail / 10 skipped (stubs) / 2 xfailed (FU-523). No production code touched (R-007).
+
+**Ledger:** FU-538 → `_RESOLVED`; FU-548 opened (logout audit decision). CHANGELOG Added bullet.
+
+**Remaining test FUs:** FU-535 (concurrency), FU-536 (migration round-trip), FU-540 (Playwright — infra decision). Plus small opportunistic adds: FU-547 (token-lifecycle security tests), FU-546 (strict filter allowlist), FU-544/545 (route/a11y carve-outs). **Session arc:** 9 test-suite FUs closed (534/537/538/539/541/542) + many bug fixes; nearly every FU turned up a real bug that got fixed.
+
+---
+
+## 2026-07-12 (later 10) — FU-537 CLOSED (core): security suite; found+fixed a dunder-attribute-traversal 500/info-leak
+
+**Why:** User: "continue from most to least critical test-suite FUs." FU-537 (security) was next.
+
+**Shipped:** `tests/e2e/dora_api/test_security_injection.py` (11 tests): filter/sort injection (value payloads are bound-parameter literals — DROP/OR-1=1 match nothing, never 500, table survives; unknown field + bad op + malformed sort all 400), mass-assignment (PATCH /auth/me is_admin/id/user_id/email + store-create id all → 400 via extra=forbid), stored-XSS (Jinja autoescapes `<script>` in email username + subject). Full suite **1439 passed**, no regressions.
+
+**Real bug found + fixed:** `SqlAlchemyRepository._resolve_field` ([sqlalchemy_repository.py:288](dora_api/persistence/sqlalchemy_repository.py)) resolved a filter/sort field via field_map then a `hasattr(entity, field)` fallback — which matched **dunder attributes** (`__class__`, `__dict__`, …). Those flowed into the query builder → **500** on crafted input, plus a 400-vs-500 differential that fingerprints which internal attributes exist. Guarded with `not field.startswith("_")`, so they 400 cleanly. Shared choke point (every list endpoint) — full suite confirms no regression. The value position was already injection-safe (bound params); this hardens the field position.
+
+**Logged, not fixed (scope):**
+- **FU-546** — the residual: `validate_known_fields` (`query_options.py`) is written but has **zero callers** (dead code); public non-column attributes (relationships/properties) can still 500 via the `hasattr` fallback. Proper fix = wire the strict allowlist. My fix closed the acute dunder-traversal part.
+- **FU-547** — the token-lifecycle half of FU-537's stub (single-use / expiry / cross-purpose reuse) is deferred; needs a token round-trip (more setup than the rest).
+
+**Ledger:** FU-537 → `_RESOLVED` (core); FU-546 + FU-547 opened. CHANGELOG Added (security suite) + Fixed (field-name hardening). Engineering-standards close-gate: the fix tightens a soft allowlist into strict-for-dunders; no new rule — it's a bug fix. R-007 held (one shared-path fix directly pinned by the new suite; broader allowlist wiring logged not done).
+
+**Next up:** FU-538 (audit-coverage sweep — every mutating route emits an audit event) is next by criticality; then FU-535 (concurrency), FU-536 (migrations), FU-540 (Playwright). FU-547 (token tests) is a small opportunistic add.
+
+---
+
+## 2026-07-12 (later 9) — FU-539 CLOSED: frontend resilience test suite (33 tests); found+fixed a rollback-stranding bug
+
+**Why:** User: "continue working through from most to least critical test-suite FUs." FU-539 was next — the untested SPA safety-net layer (coverage confirmed 0%); a bug there = silent data loss / white-screen.
+
+**Delegated to a subagent (precise brief), independently re-verified.** 5 spec files / 33 tests; frontend suite 304→**337** (the FU-539 stub's it.todos are now real specs; stub deleted):
+- `rollbackRegistry.spec.ts` (8), `offlineQueue.spec.ts` (10 — the highest-value; tryWithQueue + drain branches + idempotency seam), `globalErrorHandler.spec.ts` (3), `errorBoundary.spec.ts` (3 — incl. the FU-357 route-reset recovery), `useUnsavedChangesGuard.spec.ts` (9).
+
+**Real bug found + fixed (the one allowed prod change):** `executeRollbacks` ([rollbackRegistry.ts](web_app/src/services/errorHandling/rollbackRegistry.ts)) had no try/catch — a single throwing rollback propagated out of the loop and **stranded every remaining rollback**, leaving other optimistic UI updates permanently un-reverted after an error. Fixed by isolating each `fn()` in try/catch (swallow+log, keep popping); pinned by the resilience tests. Reviewed the fix — clean, registry still empties fully.
+
+**Test-infra:** `vitest.config.ts` gained a `quasar/wrappers` alias (the bare-`quasar` alias shadowed the package-exports map, so boot-module subpath imports didn't resolve). The `vi.resetModules()` + `instanceof` trap (error fixtures must be minted from the freshly-imported module's class) is documented inline in offlineQueue.spec — worth folding into the store-mock trap note if that convention doc grows.
+
+**Deliberately left:** `useNetworkStatus` (module-level timer/fetch/Notify singleton — awkward to reset, low value; its consumers are covered where they matter). No other resilience bugs found — the offline queue's stop-vs-conflict branching + idempotency headers + the boundary reset all behave as designed.
+
+**Ledger:** FU-539 → `_RESOLVED`; CHANGELOG Added (resilience suite) + Fixed (rollback robustness) bullets. Engineering-standards close-gate: the rollback fix strengthens crash-recovery robustness (R-009-adjacent safe-mutation posture); no new rule warranted — it's a bug fix, not a recurring-decision.
+
+**Next up:** FU-537 (security: filter-parser injection / token single-use / stored-XSS / mass-assignment) — highest remaining test FU. Then FU-538 (audit completeness), FU-535 (concurrency), FU-536 (migrations), FU-540 (Playwright — infra decision).
+
+---
+
+## 2026-07-12 (later 8) — FU-534 CLOSED: query-count / N+1 budget guards on the hot reads (the R-032 automated net)
+
+**Why:** User: "continue with the next most critical test-suite FU." FU-534 was the highest-value remaining — it's the regression net for the noload/N+1 family we just codified as R-032, turning "remember the rule" into "a test fails automatically."
+
+**Shipped:** `tests/e2e/dora_api/test_query_budgets.py` (4 tests), reusing the existing `_query_counter.SelectCounter`. Ratio-test shape (seed N rows, assert the SELECT delta is a small constant, not ~N) — same approach as the FU-138 recipe-list test. Guards the 4 highest-fan-out hot reads:
+- `GET /stock-items` — 4 constant SELECTs (verified via probe)
+- `GET /dashboard/summary` — ~15-16 constant
+- `GET /shopping-lists/<id>` — the line->product->offer->store chain
+- `GET /recipes?cookable=true` — locks the 2026-07-10 identity-map fix
+
+**Verified meaningful:** a probe confirmed baseline counts are real (4 / 15-16, not 0) and adding 10 rows keeps them flat — an N+1 regression would push the delta to ~10+ and fail. Budget is 0.5 SELECT/entity (total 5), generous enough to absorb a benign extra IN-shard.
+
+**Also:** updated `_query_counter.py`'s docstring (it's now a shared harness — FU-138 was the first consumer, this is the second it was waiting for).
+
+**Opportunistic tail (not done — deferred per R-023 per-touch spirit):** `GET /search`, `GET /meal-plans`, the individual `/reports/*` endpoints — one helper-based function each when those surfaces next churn. Noted in the FU-534 close.
+
+**Ledger:** FU-534 → `_RESOLVED`; CHANGELOG Added bullet.
+
+**Next up:** remaining test FUs are the bigger lifts — FU-539 (frontend resilience — coverage confirms 0% on the offline-queue/rollback/error-boundary layer; a strong next pick), FU-537 (security/injection), FU-538 (audit completeness), FU-535 (concurrency), FU-536 (migrations), FU-540 (Playwright). Bug backlog is all judgement-call/latent (FU-523/525/529/544/545).
+
+---
+
+## 2026-07-12 (later 7) — FU-542 CLOSED: frontend a11y testing wired (vitest-axe); found+fixed one real defect, logged FU-545
+
+**Why:** User: "tackle the smallest/easiest test-suite FU next." FU-542 (a11y) was the smallest — mounting infra already existed, so it's ~one dep + a shared helper + assertions.
+
+**Shipped:**
+- Installed `vitest-axe` + `axe-core`; shared helper `web_app/test/unit/_axe.ts` — `expectAccessible(el, {wrapRole?})` runs axe with `color-contrast` + `region` disabled (can't evaluate in jsdom / component-isolation), and supports wrapping a node in a required-parent role (a `listitem` scanned inside a `list`).
+- Wired into 3 specs: **AlertRow** (2, list-wrapped), **DoraModeSlider** (3 — on/off/disabled, the custom ARIA switch), **SettingsFileDrop** (disabled state). Frontend suite 298→**304**.
+
+**Bug found + fixed (the point of a11y tests):** SettingsFileDrop's hidden `<input type="file">` was **unlabelled** (axe `label`, critical). Fixed with `aria-hidden="true" + tabindex="-1"` — the input is programmatically triggered and the wrapping `role="button"` drop-zone is the real exposed control, so it belongs out of the a11y tree. The disabled-state axe test now guards this.
+
+**Logged not fixed (scope):** axe also flagged `nested-interactive` (the native file input nested in the interactive drop-zone) in the enabled states. The proper fix is the label-wrap accessible-file-input refactor, which rewrites the component's interaction model + existing behaviour tests — out of scope for a test-infra FU. **FU-545** opened (cross-ref FU-531, same component). The empty/filled axe assertions are held back until that lands; the disabled one stays green.
+
+**AlertRow note:** its lone axe finding (`aria-required-parent` — `listitem` needs a `list`) was a test-isolation artifact, not a component bug (it's always rendered inside a QList in the app). Solved in the helper via `wrapRole: 'list'`, not by changing the component.
+
+**Ledger:** FU-542 → `_RESOLVED`; FU-545 opened. CHANGELOG Added bullet (a11y infra + the label fix). Fanning axe out to more component specs is now a one-line import.
+
+**Next up:** FU-534 (query budgets — the noload regression net) is the highest-value remaining test FU; FU-539 (frontend resilience — coverage confirms 0%) next. Bug backlog is all judgement-call/latent (FU-523/525/529/544/545).
+
+---
+
+## 2026-07-12 (later 6) — Two ADRs written (R-032/R-033) + FU-532 uuid-converter sweep applied; str/UUID family fully closed
+
+**Why:** User confirmed the two recurring-pattern ADRs. Wrote them, then applied the uuid one as the FU-532 fix.
+
+**ADRs added to `docs/01_charter/ENGINEERING_STANDARDS.md`:**
+- **R-032 / ADR-028** — noload include-discipline (never read a `lazy=noload` relationship off an un-included load; read the underscore FK when only the id is needed; clear FKs via the underscore column). Codifies the ~6-incident noload family (FU-527/FU-533, all already fixed).
+- **R-033 / ADR-029** — entity-id path params use Flask's `<uuid:...>` converter; handlers never receive an unvalidated str id.
+
+**FU-532 applied (delegated to a subagent, independently re-verified):** **123 entity-id path params across 61 feature files** converted to `<uuid:...>`. A non-UUID segment now 404s at routing instead of 500ing. The `test_api_fuzz.py` strict-xfail flipped to a standing guard. Judgment calls the agent got right: left non-UUID params alone (alert scoped `scope:id:kind` keys, tts voice slug, csv section); reverted **5** routes whose handlers do bare `UUID(param)` (breaks on a real UUID object) — they already 4xx so satisfy the goal, logged as [[FU-544]] carve-out. **Bonus real bug fixed:** the sweep surfaced dead cycle-detection in `update_location.py` (str/UUID compare meant "move under own descendant" never hit the cycle branch) — now returns the proper 422.
+
+**Suite:** independently re-ran full backend — **1424 passed / 1 pre-existing FU-328 / 24 skipped (stubs) / 2 xfailed (FU-523 pair only)**. The FU-532 path-param xfail is gone.
+
+**Ledger:** FU-543 (ADR promotions) → `_RESOLVED` (both ADRs written); FU-532 → `_RESOLVED`; [[FU-544]] opened (5-route carve-out). CHANGELOG Fixed bullet (plain-language, incl. the locations cycle-detection side fix).
+
+**Status:** the **entire str/UUID family is now closed** — handler layer (FU-528) + routing layer (FU-532), with R-033 preventing recurrence. Remaining open real bugs: FU-523 (case-sensitive LIKE — latent, needs drop-vs-implement call), FU-525 (buy-verdict clock mix — unconfirmed), FU-529 (reconcile tie-break — needs a sequence column), FU-544 (5-route carve-out — opportunistic). Everything else open is test-backlog (FU-534/535/536/537/538/539/540/542) or the `ensure_utc()` cleanup (FU-510).
+
+---
+
+## 2026-07-12 (later 5) — Batch of pinned finding-level bugs fixed: FU-527, FU-528, FU-524, FU-522 CLOSED; FU-543 (ADR promotions) opened
+
+**Why:** User: "continue fixing." Worked the clear, directly-pinned, no-architecture-decision bugs off the board.
+
+**Fixed + closed (6 production sites across 4 FUs, each pin flipped to an active regression):**
+- **FU-527** (noload counts) — reports keeps-running-out fallback now `.include(STOCK_LEVEL)` (was dropping history-less items); stock-group `item_count` buckets via the underscore FK `_stock_group_id` (was always 0).
+- **FU-528** (str/UUID delete counts) — tools + dietary-tags coerce the str path param to `UUID` before the UUID-keyed count lookup (was always 0). **The whole FU-528 str/UUID family is now closed** (unlink + rename×5 + these two).
+- **FU-524** (unit normalisation) — `normalise_unit` strips AFTER the `°` removal → idempotent; Hypothesis strategy's `°` exclusion removed.
+- **FU-522** (change-email link) — plain-text body now uses the rewritten `/confirm-email-change` URL (computed once, shared with the HTML body); new monkeypatch regression test captures the outbound mail and asserts the route.
+
+**Opened FU-543 (governance):** the two recurring-pattern ADRs (noload include-discipline; uuid path-param converter) were tracked inside FU-527/FU-532 — carved into their own FU so they don't get lost now that the bug instances are fixed. Both await product-owner sign-off; the uuid rule is the same decision that unblocks the FU-532 82-route fix. Bonus: `ensure_utc()` helper (FU-526 note) could ride the same pass.
+
+**Suite:** full backend **1423 passed / 1 pre-existing FU-328 fail / 24 skipped (stubs) / 3 xfailed** (was 5 — FU-527 + FU-524 pins gone). No regressions.
+
+**Ledger:** FU-527/528/524/522 → `_RESOLVED`; FU-543 opened; CHANGELOG combined Fixed bullet.
+
+**Remaining open real bugs (all need a design call or are latent/low-value — deliberately NOT swept):** FU-532 (82-route uuid converter — wants the FU-543 ADR first), FU-523 (case_sensitive LIKE inversion — latent, no prod caller; needs drop-flag-vs-implement decision), FU-525 (buy-verdict clock mix — unconfirmed ±1-day), FU-529 (reconcile tie-break — needs a monotonic sequence column). Good stopping point for clear-cut fixes; what's left is judgement calls.
+
+---
+
+## 2026-07-12 (later 4) — FU-526 CLOSED: stocktake snooze no longer 500s the queue / alerts bell on SQLite
+
+**Why:** User: "continue fixing." FU-526 was the top remaining user-visible bug.
+
+**Root cause + fix:** `resolve_overdue_map` ([stocktake.py:318](dora_api/features/stocktake/stocktake.py)) compared `item.snoozed_until > now_`; SQLite hands `snoozed_until` back tz-naive while `now_` is tz-aware → `TypeError` → `GET /api/stocktake/queue` 500'd, and the alerts feed shares the map so the bell went down too — for as long as *any* item was snoozed. Fixed by coercing `snoozed_until` to aware-UTC before the compare (`if tzinfo is None: replace(tzinfo=UTC)`), the exact idiom already at line ~205 of the same file. One site, minimal.
+
+**Tests:** flipped the strict xfail in `test_stocktake_router.py::test__snooze_stock_item__SnoozedOverdueItem__HiddenFromQueue` to an active regression + added a `GET /api/alerts` 200 assertion to lock the shared-map bell symptom. **Full backend suite 1420 passed / 1 pre-existing FU-328 fail / 24 skipped (stubs) / 5 xfailed** (was 6). No regressions.
+
+**Observation logged (not swept — R-007):** this naive/aware coercion is now inlined at 10+ sites across the codebase (get_alerts, suggestions, reports ×2, deal_quality, your_prices, get_buy_verdict, stocktake ×2, submit_ingestion_batch, app.py). A shared `ensure_utc(dt)` helper is the obvious de-dupe — recorded in the FU-526 close note + tied to the FU-510 library sweep / FU-525 clock-mix family. Any new naive/aware compare should use that helper once it exists.
+
+**Ledger:** FU-526 → `_RESOLVED`; CHANGELOG Fixed bullet; DORA_VERIFY browser walk (snooze → queue → bell on SQLite).
+
+**Next up:** biggest remaining user-visible issues are cleared. Highest-value now: **FU-534** (query-count budgets — the recurring-noload regression net), **FU-539** (frontend resilience specs — coverage confirms 0%), or **FU-542** (a11y). Still open real bugs: FU-532 (82-route uuid-converter — needs the ADR), FU-527 two count-path noload bugs, FU-522/523/524/525/528(×2)/529 (lower-severity findings). Product-owner: two ADR wordings await sign-off.
+
+---
+
+## 2026-07-12 (later 3) — FU-541 CLOSED: frontend coverage reporting wired (no gate)
+
+**Why:** User: "do 541 next."
+
+**Shipped (frontend):** `@vitest/coverage-v8@3.2.7` installed; `vitest.config.ts` gained a `coverage` block (`provider: 'v8'`, `all: true`, `text`+`html` reporters, **no thresholds** — coverage is a map, not a target); `test:coverage` npm script added (opt-in via `--coverage`; plain `npm test` unchanged). `web_app/coverage/` already gitignored by the root pattern. **Backend** needed nothing (`pytest.ini` already runs `--cov=dora_api` report-only).
+
+**First-run signal (the payoff):** tested stores/composables sit at ~97%, but the map immediately surfaced the untested logic — `authStore.ts` 0%, `globalErrorHandler.ts` 0%, and most non-tested stores 0% — corroborating the [[FU-539]] resilience gap and confirming `authStore` as the next store-spec target. The headline "All files 5.45%" is expected noise (`all: true` counts every page/ApiService file, most of which are mocked at the boundary by design) — hence no gate.
+
+**Ledger:** FU-541 → `_RESOLVED` (CI-publish-as-artifact half deferred to FU-405). CHANGELOG dev-tooling bullet; no DORA_VERIFY (no product behaviour). R-007 clean — tooling only, no app code.
+
+**Next up:** FU-526 (stocktake snooze 500) is the top user-visible bug; FU-534 (query budgets) the top test; or FU-542 (a11y/axe) now that coverage can measure it. Product-owner: the two ADR wordings still await sign-off.
+
+---
+
+## 2026-07-12 (later 2) — FU-533 CLOSED (noload PATCH family — the silent data-loss bug); 2 new backlog FUs (a11y + coverage)
+
+**Why:** User asked to add accessibility + coverage reporting to the todo list, then "start on the most critical fixing". Picked **FU-533** as most critical — it was live silent data loss (cook-mode/sourced stock-level drops recorded no `ConsumptionEvent`), not just a test gap.
+
+### Backlog added
+- **FU-542** — frontend accessibility (a11y) tests: none exist; start with `vitest-axe` in the existing jsdom component specs, page-level axe later via FU-540 Playwright. Ties FU-010/FU-224.
+- **FU-541** — coverage reporting: add `@vitest/coverage-v8` + `test:coverage` script (frontend); backend `pytest-cov` already installed but report-only. **Explicitly no % gate** (green-means-correct; coverage is a map to steer FU-534..540, not a target).
+
+### FU-533 fixed (all 3 symptoms) + CLOSED
+- **Root cause:** handlers loaded an entity then read a `lazy="noload"` relationship off it → always `None`.
+- **Fix 1+2 (stock item):** [update_stock_item.py](dora_api/features/stock_items/update_stock_item.py) `handle()` now `.include(StockItem.Fields.STOCK_LEVEL)` on load (idiom copied from `get_buy_verdict.py:634`). Previous level now resolves → no more phantom `StockLevelChange` on same-level PATCH, and the sourced-drop `ConsumptionEvent` records again (the depletion leg was silently writing nothing).
+- **Fix 3 (recipe FK null-out):** [update_recipe.py](dora_api/features/recipes/update_recipe.py) writes the underscore FK columns (`_cuisine_id`/`_category_id`/`_recipe_collection_id`) directly on both set + clear paths, so explicit-null clears actually clear (relationship-side `= None` on a noload rel doesn't dirty the FK).
+- **Tests:** the 3 strict xfails in `test_patch_semantics.py` flipped to active regressions; added `__null_category_and_collection__clear_the_links` to lock the two FKs the cuisine test didn't cover. File 60/60. **Full backend suite 1419 passed / 1 pre-existing FU-328 fail / 24 skipped (stubs) / 6 xfailed** (was 9 — the 3 FU-533 pins gone). No regressions.
+
+### Ledger
+- `DORA_FOLLOWUPS.md`: FU-541 + FU-542 opened; **FU-533 moved to `_RESOLVED`** with a close note; FU-527's noload-ADR note updated (acute bugs cleared, rule still unwritten → still DUE; the 2 count-path bugs in FU-527 stay open).
+- `CHANGELOG.md`: FU-533 Fixed bullet. `DORA_VERIFY.md`: consumption-recording + phantom-history + FK-clear browser walk (origin FU-533). No production scope beyond the fix (R-007).
+
+### Engineering-standards close-gate
+- **R-003 / noload discipline:** the fix *strengthens* single-source correctness (server records the depletion event it's meant to). The include-discipline ADR is still teed up in FU-527 for product-owner sign-off — this fix is another data point for it, not the promotion itself.
+- **R-007:** scope held to the pinned bug; the 2 FU-527 count-path noload bugs were NOT swept in (different surface, own resolution).
+
+### Next up
+- **FU-526** (stocktake snooze 500 on SQLite) is now the top remaining user-visible bug — re-confirmed still xfailing in this run.
+- Then FU-534 (query budgets — highest-value test) or FU-532 (uuid-converter ADR + 82-route fix).
+- Product-owner: confirm the two ADR wordings (noload include-discipline; uuid path-param converter).
+
+---
+
+## 2026-07-12 (later) — Test-suite deep-dive: mapped the MISSING test *types*, wrote skipped stubs + FUs for the next agents (no tests written, no code touched)
+
+**Why:** User asked to keep strengthening the suite but, to conserve usage, to *analyse and write stubs with instructions* (FU-linked) rather than full tests. This is a planning/backlog unit.
+
+**Method:** probed for entirely-absent test *categories* (not more-of-same) — grepped for migration/concurrency/injection/query-count/browser-e2e signal and inspected the frontend infra surface. Findings: the suite is strong on functional e2e + domain units + component/store specs, but **seven test TYPES are missing wholesale.**
+
+**Stubs written (all green — module-`skip` backend, `it.todo` frontend; each carries the full brief in its docstring):**
+- `tests/e2e/dora_api/test_query_budgets.py` — **FU-534** N+1/query-count guards on hot endpoints (reuses existing `_query_counter.SelectCounter`). *Flagged do-first — direct net for the recurring noload family.*
+- `tests/e2e/dora_api/test_concurrency.py` — **FU-535** race/double-submit/idempotency (with a feasibility caveat: prefer deterministic hand-interleaving over real threads on SQLite).
+- `tests/test_migrations.py` — **FU-536** Alembic up/down round-trip + portability (117 migrations, zero tests; pairs with FU-045 Postgres).
+- `tests/e2e/dora_api/test_security_injection.py` — **FU-537** filter-parser SQLi, token single-use/cross-purpose, stored-XSS in emails, mass-assignment.
+- `tests/e2e/dora_api/test_audit_completeness.py` — **FU-538** sweep: every mutating route emits an audit event (mirrors the auth-enforcement sweep shape).
+- `web_app/test/unit/frontendInfra.stub.spec.ts` — **FU-539** offline queue / rollback registry / global error handler / ErrorBoundary / unsaved-changes guard (the untested resilience layer).
+- **FU-540** — no automated browser E2E (Playwright) layer; logged as an infra *decision* (no stub — needs tooling call), lower priority since DORA_VERIFY covers most of it manually.
+
+**Verification:** 24 backend stub tests collect + skip clean; 13 frontend `it.todo` report as pending. Full suites unaffected.
+
+**Ledger:** FU-534..540 opened at the top of `DORA_FOLLOWUPS.md`, each linking its stub file. No CHANGELOG (no product change), no DORA_VERIFY (no behaviour change), no production code touched (R-007).
+
+**Next up:** an agent picks up **FU-534 first** (query budgets — highest value), then FU-537/FU-539 (security + frontend resilience). Each stub is self-contained: read its module docstring, fill the skeletons, remove the module-skip. The two ADRs from pass 4 (noload include-discipline; uuid path-param converter) still await product-owner sign-off.
+
+---
+
+## 2026-07-12 — Test sweep pass 4: API fuzz + PATCH semantics + Pinia stores + e2e tail closed; 7 production bugs found, 7 fixed inline; FU-532/533 logged; two str/UUID+noload ADRs now due
+
+**Why:** User asked for "another targeted sweep - strengthening the suite" + "ensure the most valuable tests are being added". Ran 4 parallel subagents on the fresh-angle gaps (whole-API input fuzzing, PATCH/update semantics, the last e2e tail, Pinia store layer). The fuzz agent was cut off by a usage-limit reset before reporting; the other three completed. Resumed, verified every landed file, and made the fix/log calls inline.
+
+### Suite state at close
+- **Backend `pytest`: 1415 passed / 1 failed (pre-existing FU-328 CSV hint-row only) / 9 xfailed (all deliberate strict pins), ~61 s.** Was 1323.
+- **Frontend `npx vitest run`: 298 passed (19 files), ~5 s.** Was 254.
+
+### Bugs found (7) — all fixed inline this pass
+The fuzz + PATCH-semantics suites were unusually productive. Judgement call on scope (R-007): fixed the ones that are user-visible + small + safe + directly pinned; logged the two that need architecture decisions / careful browser-verified fixes.
+1. **`GET /api/recipes/unlinked-ingredients` 500'd on EVERY request** — `EntityField(RecipeIngredient, "stock_item_id")` but the mapping binds the FK to `_stock_item_id` → AttributeError. Endpoint completely dead. Fixed at both query sites (`_stock_item_id`); every other FK site in the codebase already uses the underscore form, so this was the lone outlier. **Fixed.**
+2. **`GET /api/meal-plans/reconcile-queue` 500'd whenever it paginated** — `_encode_cursor` called `.isoformat()` on `scheduled_for`, which the raw-SQL row returns as `str` on SQLite (`date` on Postgres). Any household >50 unresolved past-day entries hits it. Fixed with str→date coercion at the boundary (R-005, mirrors `_stringify_entry_id`); regression test also round-trips the cursor. **Fixed.**
+3. **Rename-to-own-name rejected as duplicate at 5 sites** (stock item / recipe / stock location / store / admin-user) — `entity.id (UUID) != path_param (str)` self-exemption never matched, so re-saving any edit dialog without a name change 422'd. Fixed with `str(...)` both sides at all 5; the 5 strict xfails flipped to active regression guards. **Fixed.**
+
+### Bugs found — logged, not fixed (need architecture/careful-fix + browser verify)
+- **[[FU-532]]** — **82 routes 500 on a non-UUID path param** (the routing-layer face of the str/UUID family: default string converter feeds an unvalidated str into a UUID query → StatementError). Systemic fix = register a Flask `<uuid:>` converter app-wide; that's a cross-cutting routing change + a product-owner call, not a sweep side effect. Pinned by one strict xfail over the full 82-route list. **ADR recommended.**
+- **[[FU-533]]** — **three noload-read PATCH bugs**: spurious stock-level history on same-level confirms, **silent ConsumptionEvent loss on sourced drops** (worst — corrupts the P8-07/FU-449 depletion leg), and recipe FK null-out being a silent no-op. Same noload root cause as [[FU-527]]; needs `.include` + direct-underscore-FK-write fixes with a cook-mode browser walk. 3 strict xfails.
+
+### Two ADRs now DUE (teed up, not promoted unilaterally — governance doc)
+- **noload family:** FU-527 set the trigger "if one more appears, promote a rule". It's fired several times over — promote *"every read of a `lazy=noload` relationship must sit behind an `.include` on the same query; relationship-dependent maps load before any plain entity load."*
+- **str/UUID path params:** ≥4 incidents across passes (delete counts, product unlink, rename ×5, 82-route 500). Promote *"entity-id path params use the uuid converter; handlers never receive an unvalidated str id"* — which also retires the per-handler `str(...)` workarounds.
+Both recorded in the FUs for the product owner to confirm wording before I touch `ENGINEERING_STANDARDS.md`.
+
+### Shipped (tests)
+- `test_api_fuzz.py` (fuzz sweep, 4 active + 3 known-bug pins → 2 flipped to regressions after fixes, 1 stays xfail as FU-532).
+- `test_patch_semantics.py` (59 — null-out matrix per surface, no-op, unknown-field, cross-field 4xx; 5 rename tests now active, 3 noload xfails as FU-533).
+- `test_suggestions_router.py` (14), `test_substitutes_router.py` (16) — FU-519 tail closed; `deals/` has no HTTP surface.
+- Frontend Pinia stores: `stockItemStore.spec.ts` (16), `shoppingListStore.spec.ts` (10), `alertStore.spec.ts` (9), `locationStore.spec.ts` (9) — +44, suite 254→298.
+
+### Ledger updates
+- `DORA_FOLLOWUPS.md`: **FU-532 + FU-533 opened**; FU-527 ADR flipped to "NOW DUE"; FU-528 updated with the rename-×5 fixes + FU-532 cross-ref; FU-519 tail marked CLOSED (movable to _RESOLVED next close); FU-520 store-layer status added.
+- `CHANGELOG.md`: 3 Fixed bullets (rename ×5, unlinked-ingredients, reconcile-queue) + a pass-4 Added block.
+- `DORA_VERIFY.md`: 4 new checks (rename-to-own-name across 5 surfaces, unlinked-ingredients page, reconcile-queue pagination) under Stock/Cross-cutting.
+
+### Engineering-standards close-gate
+- **R-007 (scope):** 7 production fixes this pass — more than a typical sweep, justified because each is user-visible, small, and directly pinned; the two that would be scope creep (systemic routing change, noload fixes needing browser verify) were logged, not done. The noload PATCH bugs specifically were NOT fixed inline despite being pinned — they need cook-mode verification.
+- **R-005:** the reconcile-queue fix is portable (str-or-date), commented as such.
+- **R-001:** the unlinked-ingredients fix aligns the outlier with the dominant `_fk` idiom rather than adding a new pattern.
+- **ADR evaluation:** two rules are DUE (above) — the explicit action this close-gate surfaces. Product owner to confirm wording.
+
+### Next up
+- **Product-owner decision:** promote the two ADRs (noload include-discipline; uuid path-param converter). Once the uuid-converter rule lands, FU-532 collapses to a mechanical change and the per-handler `str(...)` workarounds can be retired.
+- Fix [[FU-533]] (noload PATCH — consumption loss first) with a cook-mode browser walk; fix [[FU-526]] (stocktake snooze 500) — both still open and high-value.
+- User walks the 4 new DORA_VERIFY checks.
+- Remaining test tail: `authStore` spec (flagged as the strongest remaining single-store target); scraper tests (companion repo); Postgres CI with FU-405.
+
+---
+
+## 2026-07-11 — Test sweep pass 3: auth/permission enforcement sweep + delete integrity + FU-519 minor-surface tail + 4 component specs; product-unlink bug found+fixed; digest test made date-robust
+
+**Why:** User asked for another round of "find holes in the test suite, add tests, find bugs". Fresh angles this pass (vs the coverage-driven passes 1-2): systematic route-enforcement sweep, cross-entity delete integrity, the FU-519 minor-surface tail, and the queued FU-520 component layer. Ran as 4 parallel subagents; two were cut off by a usage-limit reset mid-run (their files landed; verification + reports were lost) — session resumed, verified/repaired inline.
+
+### Suite state at close
+- **Backend `pytest`: 1323 passed / 1 failed (pre-existing FU-328 CSV hint-row only) / 5 xfailed (deliberate FU pins), ~53 s.** Was 1238.
+- **Frontend `npx vitest run`: 254 passed (15 files), ~5 s.** Was 203 (11 files).
+
+### Shipped
+- **`test_route_auth_enforcement.py` (6)** — anonymous 401 sweep over all 271 /api rules (259 protected (method, route) pairs — none leak), PUBLIC_ENDPOINTS allowlist-rot guards, pinned 32-endpoint admin-only 403 contract driven as a fresh non-admin, and a reverse check counting `require_admin` call sites in source so a future ungated admin endpoint fails the suite. **No vulnerabilities found.** Note: routes register inside `startup()`, so the sweep is a runtime loop, not collection-time parametrize (documented in the module docstring).
+- **`test_delete_integrity.py` (24)** — cross-entity delete webs (stock item ← recipe/list/waste; recipe ← meal plan/collection; store ← price history/preferred buys; location ← children/items; product↔stock-item; meal plan ← receipts; list ← attachments; double-deletes 404 never 500). **Found + fixed a real user-visible bug:** `DELETE /api/stock-items/<id>/products/<product_id>` compared `p.id == product_id` against the raw str path param — **product unlink always 404'd** (third FU-528 str/UUID incident; fixed at the route boundary in [unlink_product_from_stock_item.py](dora_api/features/stock_items/unlink_product_from_stock_item.py), pinned by test, browser walk queued in DORA_VERIFY).
+- **FU-519 minor-surface tail** — `test_location_router.py` (21), `test_app_settings_router.py` (17), `test_client_logs.py` (13), `test_help_router.py` (4). Remaining tail is now just suggestions/substitutes detail + deals, per-touch.
+- **Component Vitest (FU-520)** — `addToListButton.spec.ts` (20, the queued item — all 5 variants incl. bulk ambiguous-target flow), `alertRow.spec.ts` (13 — pins the unknown-kind degrade-not-crash regression from FU-357), `doraModeSlider.spec.ts` (6), `settingsFileDrop.spec.ts` (12). Pattern note: Pinia store mocks at the module boundary must return `reactive({...})` — `storeToRefs` rewraps computeds (documented in the spec).
+- **Digest dedup test made date-robust.** The FU-518 rewrite went red today on its own: seed timestamps derive from real wall-clock while the test pins digest `now` to fixed June dates, so on some real dates a seeded item's `stocktake_overdue` crosses into existence mid-window — a legitimate new-key email the old assertion misread as a dedup violation. Root-caused via instrumented passes (key sets per simulated day); test now drives passes to convergence asserting the true contract (stamped keys never re-email while active) each pass, then asserts silence.
+- **Enforcement sweep made suite-order-robust.** Full-suite runs 429'd the sweep's register (in-memory `auth_helpers._buckets` is per-IP; all test-client traffic shares one IP and DB rollback can't reset process memory) — the test now drains the pre-auth buckets before registering, same isolation spirit as the snapshot-rollback fixture.
+
+### Findings logged (explain-or-flag)
+- **[[FU-530]]** — `ingestion_source_admin.py:48-65` keeps a local duplicate of `_require_admin` instead of importing `admin_gate.require_admin` (R-001 drift the FU-341 consolidation missed; behaviour identical today, sweep proves it fires).
+- **[[FU-531]]** — component-pass nits, grouped: AddToListButton unreachable `shouldUseCombinedModal` branch (~191-201), SettingsFileDrop hidden-input click re-entrancy (missing `@click.stop`), AlertRow blank icon on unknown kind. All folded toward finalisation-plan senior-review chunks.
+- **FU-528 updated** — third str/UUID incident recorded (the unlink fix); family now matches noload's three-incident ADR-candidacy threshold.
+- **FU-519 / FU-520 bodies updated** with shipped-vs-remaining status.
+
+### Environment notes for the next session (this box)
+- `.venv` here is broken (missing `python-dotenv`); the suite runs on **system Python 3.11**. Installed `hypothesis==6.156.4` + `pytest-cov` into it this session (requirements pin them). `web_app/node_modules` was missing vitest/jsdom/@vue/test-utils — `npm install` ran; nothing else changed.
+- Nothing is committed — all new/changed files are in the working tree on `prototype/claude-upgrades` for the user's review.
+
+### Engineering-standards close-gate
+- **R-007 (scope)** — exactly one production fix beyond test-writing (product unlink), justified as user-visible + directly pinned by the new suite (same precedent as the cookbook-filter fix). All other finds logged as FUs.
+- **R-001** — the sweep derives its reverse-check from source rather than duplicating route lists; the one R-001 violation found (duplicate admin gate) is flagged as FU-530, not silently fixed.
+- **R-005** — new e2e stays SQLite-file based and HTTP-first; the two test-side reaches into process internals (rate-limit buckets, digest instrumentation) are commented in place.
+- **ADR evaluation** — str/UUID path-param family reached 3 incidents; candidacy was already recorded in FU-528 (product owner to confirm wording, e.g. "path params carrying entity ids are coerced to UUID at the route boundary, never compared as str"). Not promoted unilaterally.
+
+### Next up
+- Fix [[FU-526]] (stocktake snooze 500 + broken bell on SQLite) — still the highest-value single fix on the board.
+- User walks the new DORA_VERIFY item (product unlink) plus the outstanding cookbook-filter walk.
+- Remaining test tail: suggestions/substitutes detail + deals e2e per-touch; scraper tests (companion repo); Postgres CI with FU-405.
+
+---
+
 ## 2026-07-10 (later) — Test sweep pass 2: search e2e + DTO snapshots + 10 long-tail surfaces + first component tests; 4 more findings logged
 
 **Why:** User said "continue upgrading the test suite to be as solid as possible in chunks" after the earlier sweep. Executed the remaining FU-519 slices + the FU-520 component layer, in verified chunks.

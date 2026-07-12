@@ -128,7 +128,7 @@ def _parse_dora_link(value: str) -> UUID | None:
 
 # ── GET /api/stock-items/<id>/qr ───────────────────────────────────────
 
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/qr", methods=["GET"])
+@STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/qr", methods=["GET"])
 def stock_item_qr(stock_item_id: UUID):
     size_raw = request.args.get("size") or str(QR_DEFAULT_SIZE)
     try:
@@ -453,7 +453,7 @@ def register_barcode():
 
 # ── DELETE /api/data/barcodes/<id> ─────────────────────────────────────
 
-@DATA_ROUTER.route("/barcodes/<barcode_id>", methods=["DELETE"])
+@DATA_ROUTER.route("/barcodes/<uuid:barcode_id>", methods=["DELETE"])
 def delete_barcode(barcode_id: UUID):
     _Logger = logging.getLogger(__name__)
     repo = SqlAlchemyRepository()

@@ -126,7 +126,7 @@ class UpdateMealPlanHandler:
         return UpdateMealPlanResponse()
 
 
-@MEAL_PLAN_ROUTER.route("<meal_plan_id>", methods=["PATCH"])
+@MEAL_PLAN_ROUTER.route("<uuid:meal_plan_id>", methods=["PATCH"])
 @has_request_body(UpdateMealPlanRequest)
 def update_meal_plan(meal_plan_id: UUID):
     _Logger = logging.getLogger(__name__)

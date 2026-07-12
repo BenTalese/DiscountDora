@@ -71,7 +71,7 @@ class BulkTickHandler:
         return BulkTickResponse(updated_count=updated)
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines/bulk-tick", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines/bulk-tick", methods=["POST"])
 @has_request_body(BulkTickRequest)
 def bulk_tick(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ class ReorderHandler:
         return ReorderResponse(reordered_count=len(request.line_ids))
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines/reorder", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines/reorder", methods=["POST"])
 @has_request_body(ReorderRequest)
 def reorder_lines(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)

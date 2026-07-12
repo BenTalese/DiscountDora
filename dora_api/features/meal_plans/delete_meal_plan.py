@@ -33,7 +33,7 @@ class DeleteMealPlanHandler:
         return DeleteMealPlanResponse()
 
 
-@MEAL_PLAN_ROUTER.route("<meal_plan_id>", methods=["DELETE"])
+@MEAL_PLAN_ROUTER.route("<uuid:meal_plan_id>", methods=["DELETE"])
 def delete_meal_plan(meal_plan_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Handler = DeleteMealPlanHandler(SqlAlchemyRepository())

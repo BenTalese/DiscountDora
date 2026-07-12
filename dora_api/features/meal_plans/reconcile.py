@@ -234,12 +234,20 @@ def reconcile_overdue_signal(today: date) -> ReconcileOverdueSignal:
     )
 
 
-def _encode_cursor(scheduled_for: date) -> str:
+def _encode_cursor(scheduled_for) -> str:
     """Cursor is just the last page's max `scheduled_for` — the next page
     filters `scheduled_for > cursor`. Same-day ties (30+ past-day entries
     on a single calendar day for one household) are the only edge that
     could skip — negligible at household scale, documented rather than
-    engineered around."""
+    engineered around.
+
+    R-005 portability: the raw-SQL row hands `scheduled_for` back as a
+    `date` on Postgres but a `str` ("YYYY-MM-DD") on SQLite. Without this
+    coercion `.isoformat()` raised AttributeError on SQLite → 500 the
+    moment the queue paginated (>limit unresolved entries). Same divergence
+    `_stringify_entry_id` handles for UUIDs below."""
+    if isinstance(scheduled_for, str):
+        scheduled_for = date.fromisoformat(scheduled_for[:10])
     return base64.urlsafe_b64encode(scheduled_for.isoformat().encode()).decode()
 
 

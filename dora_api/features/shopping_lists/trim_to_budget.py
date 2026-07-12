@@ -581,7 +581,7 @@ def _response_payload(response: TrimToBudgetResponse) -> dict:
 
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/trim-to-budget", methods=["POST"],
+    "/<uuid:shopping_list_id>/trim-to-budget", methods=["POST"],
 )
 @has_request_body(TrimToBudgetRequest)
 def trim_to_budget(shopping_list_id: UUID):

@@ -150,7 +150,7 @@ class GetTemplateDetailHandler:
         )
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>", methods=["GET"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["GET"])
 def get_template_detail(template_id: UUID):
     _Result = GetTemplateDetailHandler(SqlAlchemyRepository()).handle(template_id)
     if _Result is None:
@@ -248,7 +248,7 @@ class UpdateTemplateHandler:
         return UpdateTemplateResponse()
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>", methods=["PATCH"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["PATCH"])
 @has_request_body(UpdateTemplateRequest)
 def update_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -280,7 +280,7 @@ class DeleteTemplateHandler:
         return DeleteTemplateResponse()
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>", methods=["DELETE"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["DELETE"])
 def delete_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteTemplateHandler(SqlAlchemyRepository()).handle(template_id)
@@ -342,7 +342,7 @@ class AddTemplateLineHandler:
         return AddTemplateLineResponse(line_id=line.id)
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>/lines", methods=["POST"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>/lines", methods=["POST"])
 @has_request_body(AddTemplateLineRequest)
 def add_template_line(template_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -383,7 +383,7 @@ class DeleteTemplateLineHandler:
         return DeleteTemplateLineResponse()
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>/lines/<line_id>", methods=["DELETE"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>/lines/<uuid:line_id>", methods=["DELETE"])
 def delete_template_line(template_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteTemplateLineHandler(SqlAlchemyRepository()).handle(template_id, line_id)
@@ -429,7 +429,7 @@ class UpdateTemplateLineHandler:
         return UpdateTemplateLineResponse()
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>/lines/<line_id>", methods=["PATCH"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>/lines/<uuid:line_id>", methods=["PATCH"])
 @has_request_body(UpdateTemplateLineRequest)
 def update_template_line(template_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -513,7 +513,7 @@ class InstantiateTemplateHandler:
         )
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<template_id>/instantiate", methods=["POST"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/<uuid:template_id>/instantiate", methods=["POST"])
 @has_request_body(InstantiateTemplateRequest)
 def instantiate_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -587,7 +587,7 @@ class SnapshotFromListHandler:
         return SnapshotResponse(template_id=template.id, line_count=added)
 
 
-@SHOPPING_LIST_TEMPLATE_ROUTER.route("/from-list/<source_list_id>", methods=["POST"])
+@SHOPPING_LIST_TEMPLATE_ROUTER.route("/from-list/<uuid:source_list_id>", methods=["POST"])
 @has_request_body(SnapshotRequest)
 def snapshot_from_list(source_list_id: UUID):
     _Logger = logging.getLogger(__name__)

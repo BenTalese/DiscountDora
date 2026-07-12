@@ -163,7 +163,7 @@ class DeleteStoreMappingHandler:
 # ── Routes ─────────────────────────────────────────────────────────────
 
 
-@INGESTION_SOURCE_ROUTER.route("<source_id>/store-mappings", methods=["GET"])
+@INGESTION_SOURCE_ROUTER.route("<uuid:source_id>/store-mappings", methods=["GET"])
 def list_store_mappings(source_id: UUID):
     _, err = _require_admin()
     if err is not None:
@@ -174,7 +174,7 @@ def list_store_mappings(source_id: UUID):
     return {"items": [asdict(it) for it in items]}
 
 
-@INGESTION_SOURCE_ROUTER.route("<source_id>/store-mappings", methods=["PUT"])
+@INGESTION_SOURCE_ROUTER.route("<uuid:source_id>/store-mappings", methods=["PUT"])
 @has_request_body(UpsertStoreMappingRequest)
 def upsert_store_mapping(source_id: UUID):
     _, err = _require_admin()
@@ -194,7 +194,7 @@ def upsert_store_mapping(source_id: UUID):
 
 
 @INGESTION_SOURCE_ROUTER.route(
-    "<source_id>/store-mappings/<mapping_id>", methods=["DELETE"]
+    "<uuid:source_id>/store-mappings/<uuid:mapping_id>", methods=["DELETE"]
 )
 def delete_store_mapping(source_id: UUID, mapping_id: UUID):
     _, err = _require_admin()

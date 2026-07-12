@@ -87,10 +87,7 @@ def test__delete_dietary_tag__InUse__ReportsAffectedLinkCount(api):
     row = next(r for r in crud.get_all(SURFACE) if r["dietary_tag_id"] == tag_id)
     assert row["recipe_count"] == 1
 
-    # Pins current (buggy) behaviour — FU-candidate: delete_dietary_tag
-    # computes `_recipe_counts().get(dietary_tag_id, 0)`
-    # (manage_dietary_tags.py:192) but the Flask path param is a *str* while
-    # the dict is keyed by UUID, so the affected count is always 0 even
-    # though the link exists (the list count above proves it). The delete
-    # itself still works. Should be 1 once fixed.
-    crud.delete(SURFACE, tag_id, expect_affected=0)
+    # Regression for the FU-528 fix (2026-07-12): the handler coerces the str
+    # path param to UUID before the UUID-keyed `_recipe_counts()` lookup, so
+    # recipes_affected reports the real count instead of always 0.
+    crud.delete(SURFACE, tag_id, expect_affected=1)

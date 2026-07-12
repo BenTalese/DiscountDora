@@ -44,7 +44,7 @@ class AdjustRecipeMealsHandler:
         return AdjustRecipeMealsResponse(available_meals = _NewPool)
 
 
-@RECIPE_ROUTER.route("<recipe_id>/adjust-meals", methods=["POST"])
+@RECIPE_ROUTER.route("<uuid:recipe_id>/adjust-meals", methods=["POST"])
 @has_request_body(AdjustRecipeMealsRequest)
 def adjust_recipe_meals(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)

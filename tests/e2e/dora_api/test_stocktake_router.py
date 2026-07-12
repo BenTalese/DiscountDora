@@ -203,18 +203,20 @@ def test__snooze_stock_item__OverdueItem__ThreeDayPushWithoutCheckClaim(api):
     assert after["last_checked_at"] == before["last_checked_at"]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "FU-candidate: with any active Push, GET /api/stocktake/queue 500s on "
-    "SQLite — resolve_overdue_map (stocktake.py:318) compares the tz-naive "
-    "snoozed_until loaded from SQLite against tz-aware now_ and raises "
-    "TypeError. The alerts feed shares resolve_overdue_map, so the bell "
-    "breaks too. Postgres (tz preserved) is unaffected."
-))
 def test__snooze_stock_item__SnoozedOverdueItem__HiddenFromQueue(api):
+    # Regression for the FU-526 fix (2026-07-12): an active snooze made
+    # resolve_overdue_map compare a tz-naive (SQLite) snoozed_until against a
+    # tz-aware now_ → TypeError → GET /api/stocktake/queue 500'd. `_queue_ids`
+    # asserts the 200, so this now proves the queue survives an active snooze.
     item_id = _overdue_item(f"{_token()} noodles")
     assert requests.post(f"{BASE}/stock-items/{item_id}/snooze").status_code == 200
 
     assert item_id not in _queue_ids()
+
+    # The alerts feed shares resolve_overdue_map, so the same TypeError broke
+    # the alerts bell while any snooze was active. Confirm it stays healthy.
+    alerts = requests.get(f"{BASE}/alerts")
+    assert alerts.status_code == 200, alerts.text
 
 
 def test__snooze_stock_item__ThenCheck__CheckClearsTheSnooze(api):

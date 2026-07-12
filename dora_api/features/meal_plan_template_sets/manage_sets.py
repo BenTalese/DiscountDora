@@ -142,7 +142,7 @@ class GetSetDetailHandler:
         )
 
 
-@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<set_id>", methods=["GET"])
+@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<uuid:set_id>", methods=["GET"])
 def get_template_set_detail(set_id: UUID):
     _Result = GetSetDetailHandler(SqlAlchemyRepository()).handle(set_id)
     if _Result is None:
@@ -262,7 +262,7 @@ class UpdateSetHandler:
         return UpdateSetResponse()
 
 
-@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<set_id>", methods=["PATCH"])
+@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<uuid:set_id>", methods=["PATCH"])
 @has_request_body(UpdateSetRequest)
 def update_template_set(set_id: UUID):
     _Request: UpdateSetRequest = get_request_body()
@@ -296,7 +296,7 @@ class DeleteSetHandler:
         return DeleteSetResponse()
 
 
-@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<set_id>", methods=["DELETE"])
+@MEAL_PLAN_TEMPLATE_SET_ROUTER.route("/<uuid:set_id>", methods=["DELETE"])
 def delete_template_set(set_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteSetHandler(SqlAlchemyRepository()).handle(set_id)

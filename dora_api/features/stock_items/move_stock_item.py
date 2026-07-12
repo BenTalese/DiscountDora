@@ -59,7 +59,7 @@ class MoveStockItemHandler:
         return MoveStockItemResponse()
 
 
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/move", methods=["PATCH"])
+@STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/move", methods=["PATCH"])
 @has_request_body(MoveStockItemRequest)
 def move_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)

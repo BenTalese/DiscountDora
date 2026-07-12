@@ -42,7 +42,7 @@ class RemoveSubstituteHandler:
         return RemoveSubstituteResponse()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/substitutes/<substitute_id>", methods=["DELETE"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/substitutes/<uuid:substitute_id>", methods=["DELETE"])
 def remove_substitute(stock_item_id: UUID, substitute_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Handler = RemoveSubstituteHandler(SqlAlchemyRepository())

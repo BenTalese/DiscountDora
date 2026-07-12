@@ -68,7 +68,10 @@ class AdminUpdateUserHandler:
             _SameName: User | None = (
                 self.repository.get(User).one(_UsernameField.eq(request.username))
             )
-            if _SameName and _SameName.id != user_id:
+            # str(...) both sides — raw str path param vs UUID id (FU-528
+            # family): a bare `!=` made an admin re-submitting a user's own
+            # username 422 as "taken".
+            if _SameName and str(_SameName.id) != str(user_id):
                 return AdminUpdateUserResponse(username_taken=True)
             _Target.username = request.username
 
@@ -101,7 +104,7 @@ class AdminUpdateUserHandler:
         return AdminUpdateUserResponse()
 
 
-@USER_ROUTER.route("<user_id>", methods=["PATCH"])
+@USER_ROUTER.route("<uuid:user_id>", methods=["PATCH"])
 @has_request_body(AdminUpdateUserRequest)
 def admin_update_user(user_id: UUID):
     _Logger = logging.getLogger(__name__)

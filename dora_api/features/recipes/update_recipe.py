@@ -217,35 +217,48 @@ class UpdateRecipeHandler:
         if "name" in _SetFields and request.name is not None:
             _NameField = EntityField(Recipe, Recipe.Fields.NAME)
             _SameName: Recipe | None = self.repository.get(Recipe).one(_NameField.eq(request.name))
-            if _SameName and _SameName.id != recipe_id:
+            # str(...) both sides — raw str path param vs UUID id (FU-528
+            # family): a bare `!=` made renaming a recipe to its own name 422.
+            if _SameName and str(_SameName.id) != str(recipe_id):
                 return UpdateRecipeResponse(recipe_already_exists = True)
             _Recipe.name = request.name
 
+        # FU-533: these three are lazy="noload" relationships, so a
+        # relationship-side `= None` assignment doesn't dirty the FK column
+        # (the recipe was loaded without them) — an explicit-null clear 204'd
+        # but the link survived. Write the underscore FK column directly on
+        # both paths, same as update_stock_item.py does for stock_location.
         if "recipe_collection_id" in _SetFields:
             if request.recipe_collection_id is None:
+                _Recipe._recipe_collection_id = None
                 _Recipe.recipe_collection = None
             else:
                 _Collection = self.repository.get(RecipeCollection).by_id(request.recipe_collection_id)
                 if not _Collection:
                     return UpdateRecipeResponse(recipe_collection_not_found = True)
+                _Recipe._recipe_collection_id = _Collection.id
                 _Recipe.recipe_collection = _Collection
 
         if "cuisine_id" in _SetFields:
             if request.cuisine_id is None:
+                _Recipe._cuisine_id = None
                 _Recipe.cuisine = None
             else:
                 _Cuisine = self.repository.get(Cuisine).by_id(request.cuisine_id)
                 if not _Cuisine:
                     return UpdateRecipeResponse(cuisine_not_found = True)
+                _Recipe._cuisine_id = _Cuisine.id
                 _Recipe.cuisine = _Cuisine
 
         if "category_id" in _SetFields:
             if request.category_id is None:
+                _Recipe._category_id = None
                 _Recipe.category = None
             else:
                 _Category = self.repository.get(Category).by_id(request.category_id)
                 if not _Category:
                     return UpdateRecipeResponse(category_not_found = True)
+                _Recipe._category_id = _Category.id
                 _Recipe.category = _Category
 
         # sections replace first so the new ingredient/step
@@ -409,7 +422,7 @@ class UpdateRecipeHandler:
         return UpdateRecipeResponse()
 
 
-@RECIPE_ROUTER.route("<recipe_id>", methods=["PATCH"])
+@RECIPE_ROUTER.route("<uuid:recipe_id>", methods=["PATCH"])
 @has_request_body(UpdateRecipeRequest)
 def update_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)

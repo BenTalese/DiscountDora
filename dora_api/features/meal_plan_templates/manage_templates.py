@@ -151,7 +151,7 @@ class GetMealPlanTemplateDetailHandler:
         )
 
 
-@MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>", methods=["GET"])
+@MEAL_PLAN_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["GET"])
 def get_meal_plan_template_detail(template_id: UUID):
     _Result = GetMealPlanTemplateDetailHandler(SqlAlchemyRepository()).handle(template_id)
     if _Result is None:
@@ -274,7 +274,7 @@ class UpdateMealPlanTemplateHandler:
         return UpdateMealPlanTemplateResponse()
 
 
-@MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>", methods=["PATCH"])
+@MEAL_PLAN_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["PATCH"])
 @has_request_body(UpdateMealPlanTemplateRequest)
 def update_meal_plan_template(template_id: UUID):
     _Request: UpdateMealPlanTemplateRequest = get_request_body()
@@ -306,7 +306,7 @@ class DeleteMealPlanTemplateHandler:
         return DeleteMealPlanTemplateResponse()
 
 
-@MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>", methods=["DELETE"])
+@MEAL_PLAN_TEMPLATE_ROUTER.route("/<uuid:template_id>", methods=["DELETE"])
 def delete_meal_plan_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteMealPlanTemplateHandler(SqlAlchemyRepository()).handle(template_id)
@@ -355,7 +355,7 @@ class CloneMealPlanTemplateHandler:
         return CloneMealPlanTemplateResponse(template_id=clone.id)
 
 
-@MEAL_PLAN_TEMPLATE_ROUTER.route("/<template_id>/clone", methods=["POST"])
+@MEAL_PLAN_TEMPLATE_ROUTER.route("/<uuid:template_id>/clone", methods=["POST"])
 def clone_meal_plan_template(template_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = CloneMealPlanTemplateHandler(SqlAlchemyRepository()).handle(template_id)

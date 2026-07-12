@@ -480,7 +480,7 @@ class GetShoppingListDetailHandler:
         )
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>", methods=["GET"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>", methods=["GET"])
 def get_shopping_list_detail(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Detail = GetShoppingListDetailHandler(SqlAlchemyRepository()).handle(shopping_list_id)

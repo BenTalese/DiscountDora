@@ -315,8 +315,17 @@ def resolve_overdue_map(
     for item in items:
         if not item.stocktake_alerts_are_enabled:
             continue
-        if item.snoozed_until is not None and item.snoozed_until > now_:
-            continue
+        if item.snoozed_until is not None:
+            # SQLite hands back naive datetimes; `now_` is tz-aware, so a bare
+            # `>` raised TypeError → GET /api/stocktake/queue (and the alerts
+            # bell, which shares this map) 500'd for as long as any snooze was
+            # active (FU-526). Coerce to aware-UTC before comparing — same
+            # idiom as _gather_engagement_signals above (line ~205).
+            snoozed_until = item.snoozed_until
+            if snoozed_until.tzinfo is None:
+                snoozed_until = snoozed_until.replace(tzinfo=UTC)
+            if snoozed_until > now_:
+                continue
         if not _is_engaged(item, signals):
             continue
         history = ItemHistory(
@@ -399,7 +408,7 @@ def get_stocktake_queue():
 
 # ── /check (single) ────────────────────────────────────────────────────
 
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/check", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/check", methods=["POST"])
 def mark_stock_item_checked(stock_item_id: UUID):
     """Confirm the current level is still correct. Bumps last_checked_at
     AND clears any active Push snooze (a Check is a stronger claim than
@@ -422,7 +431,7 @@ def mark_stock_item_checked(stock_item_id: UUID):
 
 # ── /snooze (single) — Push 3 days ────────────────────────────────────
 
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/snooze", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/snooze", methods=["POST"])
 def snooze_stock_item(stock_item_id: UUID):
     """PROPOSAL_STOCKTAKE_MODE §5 — the honest defer. Hides the item
     from the queue for the fixed 3-day window. Deliberately does NOT
@@ -486,7 +495,7 @@ def _stocked_level_id(repo: SqlAlchemyRepository) -> UUID | None:
 from dora_api.features.routers import SHOPPING_LIST_ROUTER  # noqa: E402
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/review/complete", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/review/complete", methods=["POST"])
 @has_request_body(ReviewCompleteRequest)
 def shopping_list_review_complete(shopping_list_id: UUID):
     """Mark every ticked item on this list as Stocked AND bump both

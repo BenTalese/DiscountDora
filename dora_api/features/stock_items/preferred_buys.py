@@ -95,7 +95,7 @@ class PreferredBuyHandler:
         return PreferredBuyMutationResponse()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/preferred-buys", methods=["POST"])
 @has_request_body(AddPreferredBuyRequest)
 def add_preferred_buy(stock_item_id: UUID):
     _Handler = PreferredBuyHandler(SqlAlchemyRepository())
@@ -109,7 +109,7 @@ def add_preferred_buy(stock_item_id: UUID):
     return no_content()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys/<preferred_buy_id>", methods=["PATCH"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/preferred-buys/<uuid:preferred_buy_id>", methods=["PATCH"])
 @has_request_body(UpdatePreferredBuyRequest)
 def update_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
     _Handler = PreferredBuyHandler(SqlAlchemyRepository())
@@ -122,7 +122,7 @@ def update_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
     return no_content()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys/<preferred_buy_id>", methods=["DELETE"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/preferred-buys/<uuid:preferred_buy_id>", methods=["DELETE"])
 def delete_preferred_buy(stock_item_id: UUID, preferred_buy_id: UUID):
     _Handler = PreferredBuyHandler(SqlAlchemyRepository())
     _Response = _Handler.delete(stock_item_id, preferred_buy_id)

@@ -97,7 +97,7 @@ class MoveUntickedHandler:
 
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<source_id>/move-unticked-to/<target_id>", methods=["POST"]
+    "/<uuid:source_id>/move-unticked-to/<uuid:target_id>", methods=["POST"]
 )
 def move_unticked_to(source_id: UUID, target_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ class RefreshDealsHandler:
         )
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/refresh-deals", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/refresh-deals", methods=["POST"])
 def refresh_deals(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = RefreshDealsHandler(SqlAlchemyRepository()).handle(shopping_list_id)
@@ -230,7 +230,7 @@ class ClearListHandler:
         return ClearListResponse(removed_count=len(lines))
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/clear", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/clear", methods=["POST"])
 def clear_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = ClearListHandler(SqlAlchemyRepository()).handle(shopping_list_id)

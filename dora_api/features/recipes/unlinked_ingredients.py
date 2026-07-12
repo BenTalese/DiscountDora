@@ -100,7 +100,10 @@ class GetUnlinkedIngredientsHandler:
         # ``recipe_ingredient_anchor`` CHECK (Chunk 4).
         rows = (
             self.repository.get(RecipeIngredient)
-            .all(EntityField(RecipeIngredient, "stock_item_id").is_null())
+            # FK column is bound to the underscore-prefixed property in
+            # table_mappings (`_stock_item_id`); the un-prefixed name isn't a
+            # mapped property, so it raised AttributeError → 500 on every call.
+            .all(EntityField(RecipeIngredient, "_stock_item_id").is_null())
         )
 
         # Group by the normalised key; keep the *first-seen* raw_text
@@ -163,7 +166,8 @@ class BulkLinkHandler:
         # ``raw_text_normalised`` generated column (Chunk 7 candidate).
         rows: list[RecipeIngredient] = (
             self.repository.get(RecipeIngredient)
-            .all(EntityField(RecipeIngredient, "stock_item_id").is_null())
+            # See above — FK is `_stock_item_id`, not `stock_item_id`.
+            .all(EntityField(RecipeIngredient, "_stock_item_id").is_null())
         )
         linked = 0
         for row in rows:

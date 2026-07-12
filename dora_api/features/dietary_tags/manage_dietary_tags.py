@@ -161,7 +161,7 @@ class UpdateDietaryTagHandler:
         return UpdateDietaryTagResponse()
 
 
-@DIETARY_TAG_ROUTER.route("/<dietary_tag_id>", methods=["PATCH"])
+@DIETARY_TAG_ROUTER.route("/<uuid:dietary_tag_id>", methods=["PATCH"])
 @has_request_body(UpdateDietaryTagRequest)
 def update_dietary_tag(dietary_tag_id: UUID):
     _Request: UpdateDietaryTagRequest = get_request_body()
@@ -189,14 +189,17 @@ class DeleteDietaryTagHandler:
         tag: DietaryTag | None = self.repository.get(DietaryTag).by_id(dietary_tag_id)
         if tag is None:
             return DeleteDietaryTagResponse(not_found=True)
-        affected = _recipe_counts().get(dietary_tag_id, 0)
+        # `_recipe_counts()` is keyed by UUID, but `dietary_tag_id` arrives as
+        # the raw str path param — a bare `.get(str, 0)` always missed, so
+        # recipes_affected was always 0 (FU-528 str/UUID family).
+        affected = _recipe_counts().get(UUID(str(dietary_tag_id)), 0)
         # RecipeTag links cascade away via the FK's ON DELETE CASCADE.
         self.repository.remove(tag)
         self.repository.save_changes()
         return DeleteDietaryTagResponse(recipes_affected=affected)
 
 
-@DIETARY_TAG_ROUTER.route("/<dietary_tag_id>", methods=["DELETE"])
+@DIETARY_TAG_ROUTER.route("/<uuid:dietary_tag_id>", methods=["DELETE"])
 def delete_dietary_tag(dietary_tag_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteDietaryTagHandler(SqlAlchemyRepository()).handle(dietary_tag_id)

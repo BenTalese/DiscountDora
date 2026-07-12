@@ -88,7 +88,7 @@ class AddShoppingListAttachmentHandler:
 
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/attachments", methods=["POST"]
+    "/<uuid:shopping_list_id>/attachments", methods=["POST"]
 )
 @has_request_body(AddShoppingListAttachmentRequest)
 def add_shopping_list_attachment(shopping_list_id: UUID):
@@ -140,7 +140,7 @@ class DeleteShoppingListAttachmentHandler:
 
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/attachments/<attachment_id>", methods=["DELETE"]
+    "/<uuid:shopping_list_id>/attachments/<uuid:attachment_id>", methods=["DELETE"]
 )
 def delete_shopping_list_attachment(
     shopping_list_id: UUID, attachment_id: UUID,
@@ -161,7 +161,7 @@ def delete_shopping_list_attachment(
 # ───── Bytes ──────────────────────────────────────────────────────────────
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/attachments/<attachment_id>", methods=["GET"]
+    "/<uuid:shopping_list_id>/attachments/<uuid:attachment_id>", methods=["GET"]
 )
 def get_shopping_list_attachment_bytes(
     shopping_list_id, attachment_id,

@@ -30,7 +30,7 @@ class DeleteStockLocationHandler:
         return DeleteStockLocationResponse()
 
 
-@STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["DELETE"])
+@STOCK_LOCATION_ROUTER.route("<uuid:stock_location_id>", methods=["DELETE"])
 def delete_stock_location(stock_location_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to delete stock location.")

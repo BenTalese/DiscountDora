@@ -64,7 +64,7 @@ class GetPriceHistoryHandler:
         return PriceHistoryDto(product_id=product_id, points=_Points)
 
 
-@PRODUCT_ROUTER.route("<product_id>/price-history")
+@PRODUCT_ROUTER.route("<uuid:product_id>/price-history")
 def get_price_history(product_id: UUID):
     _Logger = logging.getLogger(__name__)
     _History = GetPriceHistoryHandler(SqlAlchemyRepository()).handle(product_id)

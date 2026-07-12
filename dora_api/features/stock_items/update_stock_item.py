@@ -98,7 +98,19 @@ class UpdateStockItemHandler:
         self.repository = repository
 
     def handle(self, request: UpdateStockItemRequest, stock_item_id: UUID) -> UpdateStockItemResponse:
-        _StockItem: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
+        # `.include(STOCK_LEVEL)` is load-bearing (FU-533): `stock_level` is a
+        # lazy="noload" relationship, so a plain `by_id()` load left
+        # `_PreviousLevel` below always None. That silently (a) appended a
+        # StockLevelChange history row on EVERY level PATCH (the id != None
+        # guard always passed → "Stocked → Stocked" noise) and (b) dropped
+        # every depletion ConsumptionEvent (the recorder bails when the
+        # previous sequence is None) — the P8-07/FU-449 cook-mode depletion
+        # leg wrote nothing. Eager-loading the current level fixes both.
+        _StockItem: StockItem | None = (
+            self.repository.get(StockItem)
+            .include(StockItem.Fields.STOCK_LEVEL)
+            .by_id(stock_item_id)
+        )
         if not _StockItem:
             return UpdateStockItemResponse(stock_item_not_found = True)
 
@@ -174,7 +186,10 @@ class UpdateStockItemHandler:
             _SameName: StockItem | None = (
                 self.repository.get(StockItem).one(_NameField.eq(request.name))
             )
-            if _SameName and _SameName.id != stock_item_id:
+            # str(...) both sides: `stock_item_id` is the raw str path param,
+            # `_SameName.id` a UUID — a bare `!=` never matched, so renaming an
+            # item to its OWN name was rejected as a duplicate (FU-528 family).
+            if _SameName and str(_SameName.id) != str(stock_item_id):
                 return UpdateStockItemResponse(stock_item_already_exists=True)
             _StockItem.name = request.name
 
@@ -398,7 +413,7 @@ class UpdateStockItemHandler:
         return (line.id, target.id)
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["PATCH"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>", methods=["PATCH"])
 @has_request_body(UpdateStockItemRequest)
 def update_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)

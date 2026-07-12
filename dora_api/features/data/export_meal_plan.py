@@ -123,7 +123,7 @@ def _render_print_view(plan: MealPlanDto) -> str:
     )
 
 
-@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/print-view", methods=["GET"])
+@MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/print-view", methods=["GET"])
 def print_view_meal_plan(meal_plan_id: UUID):
     plan = GetMealPlansHandler(SqlAlchemyRepository()).handle_by_id(meal_plan_id)
     if plan is None:

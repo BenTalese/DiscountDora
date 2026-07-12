@@ -75,7 +75,7 @@ class UpdateProductHandler:
         return UpdateProductResponse()
 
 
-@PRODUCT_ROUTER.route("<product_id>", methods=["PATCH"])
+@PRODUCT_ROUTER.route("<uuid:product_id>", methods=["PATCH"])
 @has_request_body(UpdateProductRequest)
 def update_product(product_id: UUID):
     _Logger = logging.getLogger(__name__)

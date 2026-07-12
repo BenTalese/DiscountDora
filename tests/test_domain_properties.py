@@ -413,27 +413,19 @@ def test__convert__property__mass_volume_density_round_trip(amount, mass_u, vol_
     assert math.isclose(back, amount, rel_tol=1e-9)
 
 
-# Strategy deliberately excludes "°": normalise_unit is NOT idempotent when a
-# degree mark sits next to end-of-string whitespace — see the strict-xfail pin
-# below. Everything else must be idempotent.
-@given(st.text(max_size=20).filter(lambda s: "°" not in s))
-def test__normalise_unit__property__idempotent_without_degree_marks(raw):
+# FU-524 fixed (2026-07-12): normalise_unit now strips AFTER removing "°", so
+# it's idempotent for ALL inputs incl. degree marks — the strategy no longer
+# needs to exclude "°".
+@given(st.text(max_size=20))
+def test__normalise_unit__property__idempotent(raw):
     once = units.normalise_unit(raw)
     assert units.normalise_unit(once) == once
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FU-candidate: normalise_unit is not idempotent — it strips whitespace "
-        "BEFORE removing '°', so removing the degree mark can re-expose "
-        "trailing/leading whitespace ('gas °' → 'gas ' → 'gas'). Harmless for "
-        "table lookups today (the un-stripped form simply misses), but the "
-        "function's contract reads as a canonicaliser. Fix would be to strip "
-        "after the replace (dora_api/domain/units.py:338-341)."
-    ),
-)
+# Regression for the FU-524 fix: a degree mark beside end-of-string whitespace
+# canonicalises fully (no re-exposed trailing space) and is idempotent.
 def test__normalise_unit__degree_mark_beside_whitespace__idempotent():
+    assert units.normalise_unit("gas °") == "gas"
     once = units.normalise_unit("gas °")
     assert units.normalise_unit(once) == once
 

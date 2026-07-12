@@ -202,7 +202,7 @@ class NewRecipeVersionHandler:
         return len(rows)
 
 
-@RECIPE_ROUTER.route("<recipe_id>/new-version", methods=["POST"])
+@RECIPE_ROUTER.route("<uuid:recipe_id>/new-version", methods=["POST"])
 def new_recipe_version(recipe_id: UUID):
     logger = logging.getLogger(__name__)
     handler = NewRecipeVersionHandler(SqlAlchemyRepository())

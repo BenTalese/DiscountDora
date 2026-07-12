@@ -101,7 +101,7 @@ class LinkProductToStockItemHandler:
         return LinkProductResponse()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/products", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/products", methods=["POST"])
 @has_request_body(LinkProductRequest)
 def link_product_to_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)

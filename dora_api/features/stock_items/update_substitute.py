@@ -108,7 +108,7 @@ class UpdateSubstituteHandler:
 
 
 @STOCK_ITEM_ROUTER.route(
-    "<stock_item_id>/substitutes/<substitute_id>", methods=["PATCH"]
+    "<uuid:stock_item_id>/substitutes/<uuid:substitute_id>", methods=["PATCH"]
 )
 @has_request_body(UpdateSubstituteRequest)
 def update_substitute(stock_item_id: UUID, substitute_id: UUID):

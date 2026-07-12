@@ -205,7 +205,9 @@ class UpdateStoreHandler:
             target = req.name.strip()
             normalised = target.lower()
             for s in self.repository.get(Store).all():
-                if s.id != store_id and s.name.strip().lower() == normalised:
+                # str(...) both sides — raw str path param vs UUID id (FU-528
+                # family): a bare `!=` made renaming a store to its own name 422.
+                if str(s.id) != str(store_id) and s.name.strip().lower() == normalised:
                     return UpdateStoreResponse(duplicate=True)
             store.name = target
         if req.clear_image:
@@ -216,7 +218,7 @@ class UpdateStoreHandler:
         return UpdateStoreResponse()
 
 
-@STORE_ROUTER.route("/<store_id>", methods=["PATCH"])
+@STORE_ROUTER.route("/<uuid:store_id>", methods=["PATCH"])
 @has_request_body(UpdateStoreRequest)
 def update_store(store_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -280,7 +282,7 @@ class DeleteStoreHandler:
         )
 
 
-@STORE_ROUTER.route("/<store_id>", methods=["DELETE"])
+@STORE_ROUTER.route("/<uuid:store_id>", methods=["DELETE"])
 def delete_store(store_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteStoreHandler(SqlAlchemyRepository()).handle(store_id)
@@ -321,7 +323,7 @@ def _decode_data_url(blob: bytes | None) -> tuple[str, bytes] | None:
     return match.group("mime"), raw
 
 
-@STORE_ROUTER.route("/<store_id>/image", methods=["GET"])
+@STORE_ROUTER.route("/<uuid:store_id>/image", methods=["GET"])
 def get_store_image(store_id):
     repository = SqlAlchemyRepository()
     store = repository.get(Store).by_id(store_id)

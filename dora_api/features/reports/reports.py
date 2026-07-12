@@ -584,8 +584,14 @@ class KeepsRunningOutHandler:
             changes_by_item.setdefault(stock_item_id, []).append((changed_at, level_id))
 
         # Items' current level, used as the fallback for adds that
-        # predate any change-log entry.
-        items = self.repository.get(StockItem).all(
+        # predate any change-log entry. `.include(STOCK_LEVEL)` is
+        # load-bearing (FU-527): `stock_level` is lazy="noload", so without
+        # it the `_level_id_as_of` fallback read `item.stock_level` as None
+        # and silently dropped every item with no change-log history from the
+        # keeps-running-out tally.
+        items = self.repository.get(StockItem).include(
+            StockItem.Fields.STOCK_LEVEL
+        ).all(
             EntityField(StockItem, "id").in_(list(adds_by_item.keys()))
         )
         items_by_id = {i.id: i for i in items}

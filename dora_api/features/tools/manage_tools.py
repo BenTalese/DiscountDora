@@ -147,7 +147,7 @@ class UpdateToolHandler:
         return UpdateToolResponse()
 
 
-@TOOL_ROUTER.route("/<tool_id>", methods=["PATCH"])
+@TOOL_ROUTER.route("/<uuid:tool_id>", methods=["PATCH"])
 @has_request_body(UpdateToolRequest)
 def update_tool(tool_id: UUID):
     _Request: UpdateToolRequest = get_request_body()
@@ -175,13 +175,16 @@ class DeleteToolHandler:
         tool: Tool | None = self.repository.get(Tool).by_id(tool_id)
         if tool is None:
             return DeleteToolResponse(not_found=True)
-        affected = _recipe_counts().get(tool_id, 0)
+        # `_recipe_counts()` is keyed by UUID, but `tool_id` arrives as the raw
+        # str Flask path param — a bare `.get(str, 0)` always missed, so the
+        # response's recipes_affected was always 0 (FU-528 str/UUID family).
+        affected = _recipe_counts().get(UUID(str(tool_id)), 0)
         self.repository.remove(tool)
         self.repository.save_changes()
         return DeleteToolResponse(recipes_affected=affected)
 
 
-@TOOL_ROUTER.route("/<tool_id>", methods=["DELETE"])
+@TOOL_ROUTER.route("/<uuid:tool_id>", methods=["DELETE"])
 def delete_tool(tool_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteToolHandler(SqlAlchemyRepository()).handle(tool_id)

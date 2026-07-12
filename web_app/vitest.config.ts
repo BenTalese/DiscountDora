@@ -14,6 +14,14 @@ export default defineConfig({
     resolve: {
         alias: {
             src: fileURLToPath(new URL('./src', import.meta.url)),
+            // The bare-`quasar` alias below shadows Quasar's package-exports
+            // map, so the `quasar/wrappers` subpath (used by boot modules like
+            // globalErrorHandler) no longer resolves on its own. Point it at
+            // the real file so boot-module specs can import it (tests still
+            // vi.mock it to unwrap boot()).
+            'quasar/wrappers': fileURLToPath(
+                new URL('./node_modules/quasar/wrappers/index.js', import.meta.url),
+            ),
             // Vitest's node-side module resolution picks Quasar's SSR
             // bundle (quasar.server.prod.js), whose plugin install
             // expects an ssrContext and throws under jsdom mounts. Pin
@@ -27,5 +35,22 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['test/**/*.spec.ts'],
+        // FU-541 — coverage is a MAP to find untested modules, not a gate.
+        // Opt-in only: `npm run test:coverage` (passing --coverage enables
+        // this block; a plain `npm test` run ignores it). Deliberately NO
+        // `thresholds` / fail-under — green-means-correct, so a % target would
+        // just incentivise filler tests. `all: true` is the point: it reports
+        // every src file even if no spec imports it, so a completely-untested
+        // module (e.g. the FU-539 resilience layer) shows up as 0% instead of
+        // being invisibly absent.
+        coverage: {
+            provider: 'v8',
+            all: true,
+            include: ['src/**/*.{ts,vue}'],
+            // Pure type declarations compile to nothing; excluding them keeps
+            // the report from listing 0%-of-0-lines noise.
+            exclude: ['src/**/*.d.ts'],
+            reporter: ['text', 'html'],
+        },
     },
 });

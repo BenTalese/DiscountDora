@@ -851,7 +851,7 @@ class GetStockItemDetailHandler:
         )
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/detail")
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/detail")
 def get_stock_item_detail(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Detail = GetStockItemDetailHandler(SqlAlchemyRepository()).handle(stock_item_id)

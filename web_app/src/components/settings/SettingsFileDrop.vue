@@ -17,10 +17,20 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="onDrop"
     >
+        <!--
+            The visible drop-zone (the wrapping div: role="button" + aria-label
+            + tabindex) is the exposed control; this input is a hidden
+            implementation detail triggered programmatically via inputEl.click().
+            Keep it OUT of the accessibility tree (FU-542): aria-hidden removes
+            the nested-interactive + unlabelled-input violations, tabindex="-1"
+            keeps keyboard focus on the wrapper only.
+        -->
         <input
             ref="inputEl"
             type="file"
             class="file-drop__input"
+            aria-hidden="true"
+            tabindex="-1"
             :accept="accept"
             :disabled="disabled"
             @change="onInputChange"

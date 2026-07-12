@@ -104,7 +104,7 @@ class GetMealPlanIngredientsHandler:
         return aggregate_meal_plan_ingredients(self.repository, _RecipeIdToServings)
 
 
-@MEAL_PLAN_ROUTER.route("<meal_plan_id>/ingredients")
+@MEAL_PLAN_ROUTER.route("<uuid:meal_plan_id>/ingredients")
 def get_meal_plan_ingredients(meal_plan_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Handler = GetMealPlanIngredientsHandler(SqlAlchemyRepository())

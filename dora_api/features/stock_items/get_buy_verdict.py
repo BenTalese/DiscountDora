@@ -627,7 +627,7 @@ def _item_has_fake_markdown(
 # ── Endpoint ───────────────────────────────────────────────────────────
 
 
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/buy-verdict", methods=["GET"])
+@STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/buy-verdict", methods=["GET"])
 def get_buy_verdict(stock_item_id: UUID):
     repo = SqlAlchemyRepository()
     item: StockItem | None = (

@@ -60,7 +60,7 @@ class DeleteLocationHandler:
         return result
 
 
-@LOCATION_ROUTER.route("/<location_id>", methods=["DELETE"])
+@LOCATION_ROUTER.route("/<uuid:location_id>", methods=["DELETE"])
 def delete_location(location_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteLocationHandler(SqlAlchemyRepository()).handle(location_id)

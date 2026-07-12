@@ -1073,7 +1073,7 @@ def _parse_recipe_filters(args) -> RecipeFilters:
 # route. The old filter-by-id path on the list endpoint still works as
 # the cookbook overview's primary call (cheap list shape is fine there).
 
-@RECIPE_ROUTER.route("/<recipe_id>", methods=["GET"])
+@RECIPE_ROUTER.route("/<uuid:recipe_id>", methods=["GET"])
 def get_recipe(recipe_id: UUID):
     handler = GetRecipesHandler(SqlAlchemyRepository())
     dto = handler.handle_by_id(recipe_id)
@@ -1118,7 +1118,7 @@ def get_recipes():
 # served here as raw bytes so the SPA can use a plain <img src> without
 # inlining megabytes of base64 into every list/detail JSON payload.
 
-@RECIPE_ROUTER.route("/<recipe_id>/image", methods=["GET"])
+@RECIPE_ROUTER.route("/<uuid:recipe_id>/image", methods=["GET"])
 def get_recipe_image(recipe_id):
     import base64
     import re as _re
@@ -1149,7 +1149,7 @@ def get_recipe_image(recipe_id):
 # plain <img src>. Mirrors `/recipes/<id>/image` exactly; lives on a child
 # route so the decoder stays a one-liner.
 
-@RECIPE_ROUTER.route("/<recipe_id>/step-images/<image_id>", methods=["GET"])
+@RECIPE_ROUTER.route("/<uuid:recipe_id>/step-images/<uuid:image_id>", methods=["GET"])
 def get_recipe_step_image(recipe_id, image_id):
     import base64
     import re as _re

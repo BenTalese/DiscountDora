@@ -144,7 +144,7 @@ class UpdateShoppingListHandler:
         return UpdateShoppingListResponse()
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>", methods=["PATCH"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>", methods=["PATCH"])
 @has_request_body(UpdateShoppingListRequest)
 def update_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -185,7 +185,7 @@ class DeleteShoppingListHandler:
         return DeleteShoppingListResponse()
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>", methods=["DELETE"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>", methods=["DELETE"])
 def delete_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteShoppingListHandler(SqlAlchemyRepository()).handle(shopping_list_id)
@@ -363,7 +363,7 @@ class FinishShoppingListHandler:
             ))
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/finish", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/finish", methods=["POST"])
 @has_request_body(FinishShoppingListRequest)
 def finish_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -436,7 +436,7 @@ class CopyShoppingListHandler:
         return CopyShoppingListResponse(new_shopping_list_id=target.id)
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/copy", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/copy", methods=["POST"])
 @has_request_body(CopyShoppingListRequest)
 def copy_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -480,7 +480,7 @@ class StartShoppingHandler:
         return StartShoppingResponse()
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/start", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/start", methods=["POST"])
 def start_shopping(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = StartShoppingHandler(SqlAlchemyRepository()).handle(shopping_list_id)

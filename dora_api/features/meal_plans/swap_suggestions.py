@@ -380,7 +380,7 @@ def _recompute_after(repository, meal_plan_id, user) -> tuple[float, bool]:
 # ── Endpoints ──────────────────────────────────────────────────────────
 
 
-@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/swap-suggestions", methods=["GET"])
+@MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/swap-suggestions", methods=["GET"])
 def get_swap_suggestions(meal_plan_id: UUID):
     repo = SqlAlchemyRepository()
     user_id = _current_user_id()
@@ -391,7 +391,7 @@ def get_swap_suggestions(meal_plan_id: UUID):
     return ok(_suggestions_payload(result))
 
 
-@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/apply-swap", methods=["POST"])
+@MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/apply-swap", methods=["POST"])
 @has_request_body(ApplySwapRequest)
 def apply_swap(meal_plan_id: UUID):
     repo = SqlAlchemyRepository()
@@ -452,7 +452,7 @@ def apply_swap(meal_plan_id: UUID):
     })
 
 
-@MEAL_PLAN_ROUTER.route("/<meal_plan_id>/undo-swap", methods=["POST"])
+@MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/undo-swap", methods=["POST"])
 @has_request_body(UndoSwapRequest)
 def undo_swap(meal_plan_id: UUID):
     repo = SqlAlchemyRepository()

@@ -92,7 +92,7 @@ def _blocked_by_recipes_response(blocked_by: list[BlockingRecipe]) -> Response:
     return response
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["DELETE"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>", methods=["DELETE"])
 def delete_stock_item(stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to delete stock item.")

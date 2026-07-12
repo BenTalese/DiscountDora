@@ -127,12 +127,9 @@ def test__keeps_running_out__ItemDroppedToOutThenAdded__Tallied(api):
     assert row["times_out_when_added"] == 1
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "FU-candidate: KeepsRunningOutHandler fetches the fallback items without "
-    ".include('stock_level') (reports.py ~line 588), so for an item with no "
-    "StockLevelChange history the documented 'fall back to the current level' "
-    "path reads item.stock_level as None (noload) and the add is never tallied."
-))
+# Regression for the FU-527 fix (2026-07-12): the fallback items query now
+# `.include(STOCK_LEVEL)`, so an item with no change-log history falls back to
+# its current level and is tallied instead of silently dropped.
 def test__keeps_running_out__ItemCreatedOutWithNoLevelHistory__FallbackTallies(api):
     token = _token()
     levels = requests.get(f"{BASE}/stock-levels").json()["items"]

@@ -29,7 +29,7 @@ class DeleteRecipeCollectionHandler:
         return DeleteRecipeCollectionResponse()
 
 
-@RECIPE_COLLECTION_ROUTER.route("<recipe_collection_id>", methods=["DELETE"])
+@RECIPE_COLLECTION_ROUTER.route("<uuid:recipe_collection_id>", methods=["DELETE"])
 def delete_recipe_collection(recipe_collection_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Handler = DeleteRecipeCollectionHandler(SqlAlchemyRepository())

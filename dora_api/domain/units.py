@@ -338,7 +338,10 @@ GAS_MARK_ALIASES = frozenset({"gas", "gas mark", "gm"})
 def normalise_unit(unit: str) -> str:
     """Lowercase + strip whitespace + strip degree marks. Use before any
     :data:`UNIT_TABLE` lookup so "L", " L", "°C" all collapse correctly."""
-    return unit.strip().lower().replace("°", "")
+    # strip() LAST (FU-524): removing the degree mark can re-expose trailing
+    # whitespace (e.g. "gas °" → "gas "), so stripping before the replace left
+    # the result non-idempotent and missed UNIT_TABLE / gas-mark aliases.
+    return unit.lower().replace("°", "").strip()
 
 
 # server mirror of `web_app/src/helpers/formatQuantity.ts`.

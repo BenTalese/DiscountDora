@@ -54,8 +54,13 @@ class GetStockGroupsHandler:
         items = self.repository.get(StockItem).all()
         counts: dict[UUID, int] = {}
         for item in items:
-            if item.stock_group is not None:
-                counts[item.stock_group.id] = counts.get(item.stock_group.id, 0) + 1
+            # Bucket via the underscore FK, not the `stock_group` relationship:
+            # the latter is lazy="noload" so it read as None on every item and
+            # item_count was always 0 (FU-527). We only need the id to count,
+            # so read the FK column directly — no relationship load required.
+            group_id = item._stock_group_id
+            if group_id is not None:
+                counts[group_id] = counts.get(group_id, 0) + 1
         out = [
             StockGroupDto(
                 stock_group_id = g.id,
@@ -161,7 +166,7 @@ class UpdateStockGroupHandler:
         return UpdateStockGroupResponse()
 
 
-@STOCK_GROUP_ROUTER.route("/<stock_group_id>", methods=["PATCH"])
+@STOCK_GROUP_ROUTER.route("/<uuid:stock_group_id>", methods=["PATCH"])
 @has_request_body(UpdateStockGroupRequest)
 def update_stock_group(stock_group_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -205,7 +210,7 @@ class DeleteStockGroupHandler:
         return DeleteStockGroupResponse(items_affected=affected)
 
 
-@STOCK_GROUP_ROUTER.route("/<stock_group_id>", methods=["DELETE"])
+@STOCK_GROUP_ROUTER.route("/<uuid:stock_group_id>", methods=["DELETE"])
 def delete_stock_group(stock_group_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteStockGroupHandler(SqlAlchemyRepository()).handle(stock_group_id)

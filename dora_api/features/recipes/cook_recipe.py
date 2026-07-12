@@ -78,7 +78,7 @@ class CookRecipeHandler:
         return CookRecipeResponse(available_meals = _NewPool)
 
 
-@RECIPE_ROUTER.route("<recipe_id>/cook", methods=["POST"])
+@RECIPE_ROUTER.route("<uuid:recipe_id>/cook", methods=["POST"])
 @has_request_body(CookRecipeRequest)
 def cook_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)

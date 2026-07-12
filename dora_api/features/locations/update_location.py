@@ -76,7 +76,7 @@ class UpdateLocationHandler:
         return UpdateLocationResponse()
 
 
-@LOCATION_ROUTER.route("/<location_id>", methods=["PATCH"])
+@LOCATION_ROUTER.route("/<uuid:location_id>", methods=["PATCH"])
 @has_request_body(UpdateLocationRequest)
 def update_location(location_id: UUID):
     _Logger = logging.getLogger(__name__)

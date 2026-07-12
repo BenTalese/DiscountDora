@@ -292,7 +292,14 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
     ) -> EntityField:
         if field_map and api_field in field_map:
             return field_map[api_field]
-        if hasattr(self.entity_type, api_field):
+        # Strict fallback: PUBLIC attributes only, never dunder/private ones
+        # (FU-546). Without the `_`-guard, `hasattr(Entity, '__class__')` (and
+        # every other dunder) is True, so the attribute flowed into the query
+        # builder and 500'd — both a crash on crafted input and a 400-vs-500
+        # info leak that fingerprints which internal attributes exist. No
+        # public API filter/sort field name starts with '_'; field_map (checked
+        # first) already owns the DTO-name -> underscore-FK mappings.
+        if not api_field.startswith("_") and hasattr(self.entity_type, api_field):
             return EntityField(self.entity_type, api_field)
         raise InvalidQueryParameter(
             f"Field '{api_field}' is not filterable on '{self.entity_type.__name__}'."

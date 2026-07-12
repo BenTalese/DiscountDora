@@ -76,13 +76,10 @@ def test__delete_stock_group__InUse__ReportsAffectedItemCount(api):
         stock_group_id=group_id,
     )
     row = next(r for r in crud.get_all(SURFACE) if r["stock_group_id"] == group_id)
-    # Pins current (buggy) behaviour — FU-candidate: GetStockGroupsHandler
-    # buckets via `item.stock_group` (manage_stock_groups.py:57) but that
-    # relationship is lazy="noload" (table_mappings.py:1173) and the items
-    # are fetched without .include("stock_group"), so item_count is always 0.
-    # Should be 1 once fixed. The delete pre-count below uses a SQL count on
-    # the FK column instead, so *it* reports correctly.
-    assert row["item_count"] == 0
+    # Regression for the FU-527 fix (2026-07-12): GetStockGroupsHandler now
+    # buckets via the underscore FK (`item._stock_group_id`) instead of the
+    # lazy="noload" `item.stock_group` relationship, so item_count is real.
+    assert row["item_count"] == 1
 
     crud.delete(SURFACE, group_id, expect_affected=1)
 

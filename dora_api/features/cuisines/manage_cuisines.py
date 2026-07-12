@@ -149,7 +149,7 @@ class UpdateCuisineHandler:
         return UpdateCuisineResponse()
 
 
-@CUISINE_ROUTER.route("/<cuisine_id>", methods=["PATCH"])
+@CUISINE_ROUTER.route("/<uuid:cuisine_id>", methods=["PATCH"])
 @has_request_body(UpdateCuisineRequest)
 def update_cuisine(cuisine_id: UUID):
     _Request: UpdateCuisineRequest = get_request_body()
@@ -187,7 +187,7 @@ class DeleteCuisineHandler:
         return DeleteCuisineResponse(recipes_affected=affected)
 
 
-@CUISINE_ROUTER.route("/<cuisine_id>", methods=["DELETE"])
+@CUISINE_ROUTER.route("/<uuid:cuisine_id>", methods=["DELETE"])
 def delete_cuisine(cuisine_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteCuisineHandler(SqlAlchemyRepository()).handle(cuisine_id)

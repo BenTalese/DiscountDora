@@ -105,7 +105,7 @@ class PriceObservationHandler:
         return PriceObservationMutationResponse()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/price-observations", methods=["POST"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/price-observations", methods=["POST"])
 @has_request_body(AddPriceObservationRequest)
 def add_price_observation(stock_item_id: UUID):
     _Handler = PriceObservationHandler(SqlAlchemyRepository())
@@ -124,7 +124,7 @@ def add_price_observation(stock_item_id: UUID):
     return no_content()
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/price-observations/<observation_id>", methods=["DELETE"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/price-observations/<uuid:observation_id>", methods=["DELETE"])
 def delete_price_observation(stock_item_id: UUID, observation_id: UUID):
     _Handler = PriceObservationHandler(SqlAlchemyRepository())
     _Response = _Handler.delete(stock_item_id, observation_id)

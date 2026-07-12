@@ -196,21 +196,39 @@ def test__digest__dedups_until_alert_clears_and_refires(api):
             f"key {key} was re-emailed while its alert was still active"
         )
 
-    # Third pass — by now every key the user has is stamped, so the
-    # digest has nothing left to send: no new email, no stamp moves.
-    pre = len(calls)
-    send_alerts_digest(now=_TUESDAY + timedelta(days=1), _send_email=sender)
-    assert len(calls) == pre, "fully-stamped alert set must not re-email"
-    assert {
-        row.alert_key: row.last_emailed_at
-        for row in _interactions_for(user_id)
-        if row.last_emailed_at is not None
-    } == second_stamps
+    # Subsequent passes — drive forward until the key set converges.
+    # Seeded alerts can be date-dependent (e.g. a seeded item's
+    # `stocktake_overdue` crosses into existence mid-window because seed
+    # anchors derive from real wall-clock while our `now` is pinned to
+    # fixed June dates — observed live 2026-07-11), and each *new* key
+    # legitimately earns exactly one email. The invariant under test is
+    # only that already-stamped keys never re-email while active.
+    day = 1
+    stamps = second_stamps
+    for _ in range(6):
+        pre = len(calls)
+        send_alerts_digest(now=_TUESDAY + timedelta(days=day), _send_email=sender)
+        day += 1
+        next_stamps = {
+            row.alert_key: row.last_emailed_at
+            for row in _interactions_for(user_id)
+            if row.last_emailed_at is not None
+        }
+        for key, stamped_at in stamps.items():
+            assert next_stamps[key] == stamped_at, (
+                f"key {key} was re-emailed while its alert was still active"
+            )
+        stamps = next_stamps
+        if len(calls) == pre:
+            break  # converged: a fully-stamped set sent nothing
+    else:
+        pytest.fail("digest never converged — emailed on 6 consecutive passes")
 
     # Clearing the alerts (delete the item) drops the keys from the
     # user's set → the stale-flag cleanup pass clears `last_emailed_at`.
     _delete_item(item_id)
-    send_alerts_digest(now=_TUESDAY + timedelta(days=2), _send_email=sender)
+    send_alerts_digest(now=_TUESDAY + timedelta(days=day), _send_email=sender)
+    day += 1
     assert not any(
         key.startswith(f"stock:{item_id}:")
         for key in _emailed_keys_for(user_id)
@@ -220,7 +238,7 @@ def test__digest__dedups_until_alert_clears_and_refires(api):
     # keys with no prior interaction) produces a fresh email.
     new_item = _create_expired_item(name)
     pre = len(calls)
-    send_alerts_digest(now=_TUESDAY + timedelta(days=3), _send_email=sender)
+    send_alerts_digest(now=_TUESDAY + timedelta(days=day), _send_email=sender)
     assert len(calls) == pre + 1, "re-fired condition should email fresh"
     assert name in calls[-1]["html_body"]
     assert f"stock:{new_item}:expired" in _emailed_keys_for(user_id)

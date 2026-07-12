@@ -148,7 +148,7 @@ class UpdateCategoryHandler:
         return UpdateCategoryResponse()
 
 
-@CATEGORY_ROUTER.route("/<category_id>", methods=["PATCH"])
+@CATEGORY_ROUTER.route("/<uuid:category_id>", methods=["PATCH"])
 @has_request_body(UpdateCategoryRequest)
 def update_category(category_id: UUID):
     _Request: UpdateCategoryRequest = get_request_body()
@@ -184,7 +184,7 @@ class DeleteCategoryHandler:
         return DeleteCategoryResponse(recipes_affected=affected)
 
 
-@CATEGORY_ROUTER.route("/<category_id>", methods=["DELETE"])
+@CATEGORY_ROUTER.route("/<uuid:category_id>", methods=["DELETE"])
 def delete_category(category_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteCategoryHandler(SqlAlchemyRepository()).handle(category_id)

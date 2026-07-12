@@ -137,7 +137,7 @@ class AddLineHandler:
         return AddLineResponse(line_id=line.id)
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines", methods=["POST"])
 @has_request_body(AddLineRequest)
 def add_line(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -309,7 +309,7 @@ class UpdateLineHandler:
         return UpdateLineResponse()
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines/<line_id>", methods=["PATCH"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines/<uuid:line_id>", methods=["PATCH"])
 @has_request_body(UpdateLineRequest)
 def update_line(shopping_list_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
@@ -365,7 +365,7 @@ class DeleteLineHandler:
         return DeleteLineResponse()
 
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/lines/<line_id>", methods=["DELETE"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines/<uuid:line_id>", methods=["DELETE"])
 def delete_line(shopping_list_id: UUID, line_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteLineHandler(SqlAlchemyRepository()).handle(shopping_list_id, line_id)
@@ -429,7 +429,7 @@ class RemoveLineByStockItemHandler:
 
 
 @SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/lines/by-stock-item/<stock_item_id>", methods=["DELETE"]
+    "/<uuid:shopping_list_id>/lines/by-stock-item/<uuid:stock_item_id>", methods=["DELETE"]
 )
 def remove_line_by_stock_item(shopping_list_id: UUID, stock_item_id: UUID):
     _Logger = logging.getLogger(__name__)

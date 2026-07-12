@@ -46,7 +46,9 @@ class UpdateStockLocationHandler:
                 .one(_StockLocationName.eq(request.name))
             )
 
-            if _SameNameStockLocation and _SameNameStockLocation.id != stock_location_id:
+            # str(...) both sides — raw str path param vs UUID id (FU-528
+            # family): a bare `!=` made renaming a location to its own name 422.
+            if _SameNameStockLocation and str(_SameNameStockLocation.id) != str(stock_location_id):
                 return UpdateStockLocationResponse(stock_location_already_exists=True)
 
             _StockLocation.name = request.name
@@ -55,7 +57,7 @@ class UpdateStockLocationHandler:
         return UpdateStockLocationResponse()
 
 
-@STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["PATCH"])
+@STOCK_LOCATION_ROUTER.route("<uuid:stock_location_id>", methods=["PATCH"])
 @has_request_body(UpdateStockLocationRequest)
 def update_stock_location(stock_location_id: UUID):
     _Logger = logging.getLogger(__name__)

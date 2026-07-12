@@ -36,7 +36,7 @@ def _decode_data_url(blob: bytes | None) -> tuple[str, bytes] | None:
     return match.group("mime"), raw
 
 
-@PRODUCT_ROUTER.route("/<product_id>/image", methods=["GET"])
+@PRODUCT_ROUTER.route("/<uuid:product_id>/image", methods=["GET"])
 def get_product_image(product_id):
     repository = SqlAlchemyRepository()
     product = repository.get(Product).by_id(product_id)

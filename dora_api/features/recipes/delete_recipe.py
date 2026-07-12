@@ -36,7 +36,7 @@ class DeleteRecipeHandler:
         return DeleteRecipeResponse()
 
 
-@RECIPE_ROUTER.route("<recipe_id>", methods=["DELETE"])
+@RECIPE_ROUTER.route("<uuid:recipe_id>", methods=["DELETE"])
 def delete_recipe(recipe_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to delete recipe.")

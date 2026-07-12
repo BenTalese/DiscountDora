@@ -169,7 +169,7 @@ def _render_print_view(detail: ShoppingListDetailDto) -> str:
 
 # ── Route ──────────────────────────────────────────────────────────────
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/print-view", methods=["GET"])
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/print-view", methods=["GET"])
 def print_view_shopping_list(shopping_list_id: UUID):
     detail = GetShoppingListDetailHandler(SqlAlchemyRepository()).handle(shopping_list_id)
     if detail is None:

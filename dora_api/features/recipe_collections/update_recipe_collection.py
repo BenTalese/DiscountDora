@@ -46,7 +46,7 @@ class UpdateRecipeCollectionHandler:
         return UpdateRecipeCollectionResponse()
 
 
-@RECIPE_COLLECTION_ROUTER.route("<recipe_collection_id>", methods=["PATCH"])
+@RECIPE_COLLECTION_ROUTER.route("<uuid:recipe_collection_id>", methods=["PATCH"])
 @has_request_body(UpdateRecipeCollectionRequest)
 def update_recipe_collection(recipe_collection_id: UUID):
     _Logger = logging.getLogger(__name__)

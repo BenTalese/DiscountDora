@@ -87,7 +87,7 @@ class StockItemPriceHistoryHandler:
         )
 
 
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/price-history", methods=["GET"])
+@STOCK_ITEM_ROUTER.route("<uuid:stock_item_id>/price-history", methods=["GET"])
 def get_stock_item_price_history(stock_item_id: UUID):
     _Result = StockItemPriceHistoryHandler(SqlAlchemyRepository()).handle(stock_item_id)
     if _Result is None:

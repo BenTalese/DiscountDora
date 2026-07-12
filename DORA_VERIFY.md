@@ -630,6 +630,31 @@ top-to-bottom.
 
 ## Stock
 
+### Product unlink fix (str/UUID 404) — origin FU-528 family
+- [ ] On a stock item that has a linked product (detail page → linked products), unlink the product → it disappears from the list without an error toast (previously every unlink silently failed with a 404 under the hood)
+- [ ] Refresh the page → the product stays unlinked; relink it → link works as before
+
+### Stocktake snooze no longer 500s the queue / breaks the bell (SQLite) — origin FU-526
+- [ ] On a SQLite install: with at least one item overdue for stocktake, **snooze** one item from the stocktake queue → the queue still loads (no 500 / error state) and the snoozed item drops off it
+- [ ] While that snooze is active, open the **alerts bell** and the `/alerts` page → both load normally (previously any active snooze took the bell down too)
+- [ ] Let/ set the snooze to expire (or Check the item) → the item reappears in the queue as expected
+
+### Consumption-event recording restored (cook-mode depletion) — origin FU-533
+- [ ] Set a stock item to a full/high level, then **cook a recipe that uses it** (or manually drop its level with a consumption source) so the level DROPS → the depletion is recorded: the item's run-out prediction / "your prices" depletion signal reflects the drop (previously a sourced drop silently recorded nothing)
+- [ ] On a stock item, **re-confirm the SAME level** (tap the current level again) → the level-history timeline does NOT gain a phantom "Stocked → Stocked" entry (only the "last checked" stamp bumps)
+- [ ] PATCH a recipe's cuisine/category/collection to empty (clear it in the edit form) → the link actually clears and stays cleared after refresh
+
+### Rename-to-own-name fix (str/UUID 422) — origin FU-528 family
+- [ ] Open the edit dialog for a **stock item**, change some other field (e.g. notes) but leave the **name** untouched, and save → saves cleanly (previously 422'd "already exists")
+- [ ] Same check on a **recipe** (rename dialog, keep the same name), a **stock location**, a **store**, and (as admin) a **user's username** → all save without a spurious duplicate error
+- [ ] Sanity: renaming one entity to a *genuinely* existing OTHER entity's name still shows the duplicate error (the guard still works)
+
+### Unlinked-ingredients page loads — origin FU-532/fuzz
+- [ ] Navigate to whatever surfaces the "ingredients not linked to stock" review (recipe ingredient linking) → the list loads instead of erroring (the backing `GET /api/recipes/unlinked-ingredients` was 500-ing on every request)
+
+### Reconcile-queue pagination — origin fuzz
+- [ ] With enough unresolved past-day meal entries to paginate (>1 page), open the meal-plan reconcile queue and page through → no error, next page loads (cursor previously 500'd on SQLite the moment the queue paginated)
+
 ### Expiry-on-open prompt — origin FU-507
 - [ ] On a stock item's row, tap the **open / lock** icon on a currently-sealed item — a dialog appears titled **Marking "&lt;name&gt;" as open** with the current expiry prefilled in a date picker and the message "Update its effective expiry?"
 - [ ] Pick a new date and tap **Update expiry** → row is marked open AND the new expiry saves (row's expiry chip reflects it)

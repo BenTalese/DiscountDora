@@ -197,7 +197,7 @@ class UpdateMealSlotHandler:
         return UpdateMealSlotResponse()
 
 
-@MEAL_SLOT_ROUTER.route("/<meal_slot_id>", methods=["PATCH"])
+@MEAL_SLOT_ROUTER.route("/<uuid:meal_slot_id>", methods=["PATCH"])
 @has_request_body(UpdateMealSlotRequest)
 def update_meal_slot(meal_slot_id: UUID):
     _Request: UpdateMealSlotRequest = get_request_body()
@@ -236,7 +236,7 @@ class DeleteMealSlotHandler:
         return DeleteMealSlotResponse(entries_affected=affected)
 
 
-@MEAL_SLOT_ROUTER.route("/<meal_slot_id>", methods=["DELETE"])
+@MEAL_SLOT_ROUTER.route("/<uuid:meal_slot_id>", methods=["DELETE"])
 def delete_meal_slot(meal_slot_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Response = DeleteMealSlotHandler(SqlAlchemyRepository()).handle(meal_slot_id)

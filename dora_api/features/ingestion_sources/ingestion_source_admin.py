@@ -218,7 +218,7 @@ def create_ingestion_source():
     return {"source": asdict(result.source), "key": result.key}, 201
 
 
-@INGESTION_SOURCE_ROUTER.route("<source_id>", methods=["PATCH"])
+@INGESTION_SOURCE_ROUTER.route("<uuid:source_id>", methods=["PATCH"])
 @has_request_body(UpdateIngestionSourceRequest)
 def update_ingestion_source(source_id: UUID):
     _, err = _require_admin()
@@ -231,7 +231,7 @@ def update_ingestion_source(source_id: UUID):
     return asdict(updated)
 
 
-@INGESTION_SOURCE_ROUTER.route("<source_id>", methods=["DELETE"])
+@INGESTION_SOURCE_ROUTER.route("<uuid:source_id>", methods=["DELETE"])
 def delete_ingestion_source(source_id: UUID):
     _, err = _require_admin()
     if err is not None:

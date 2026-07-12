@@ -105,10 +105,30 @@ reversible, single head. Backend-heavy → strong e2e; the keys page + price vie
 > Later (separate): P8-03 email + P8-04 crowd sources + trust enforcement; the C-9 inflated-price
 > alert type; the **`merchant_api` / in-app live-search decommission** (FU-186).
 
+### C-10.5 — Read-side lookup: "is this product already linked?" (FU-422) ✅ shipped 2026-07-12
+**Delivers:** an ingestion source (or any external caller) can decorate its own search results with
+an "already linked to a stock item" hint, so a user doesn't try to re-link a product Dora already
+has bound. From the original spec — search moved out of Dora, so the rule needs an API hook.
+- **Backend (as shipped):** `POST /api/ingest/link-status`. Request shape mirrors the write side —
+  `{ items: [{ ref, store, merchant_stockcode?, name? }] }`, stockcode-first / name-fallback
+  identity so callers can reuse their `/api/ingest` payload builder. Per-item response
+  `{ ref, product_id | null, linked_stock_item_id | null, linked_stock_item_name | null, reason? }`
+  (reason ∈ `store_not_mapped` / `product_not_found`). Auth is the existing bearer-key lane from
+  C-10.1. Source-agnostic; the response shape says nothing about who is asking (invisibility
+  rule). Per-source store-mapping cache scoped to the call. 200-item cap. POST over GET because
+  the payload is a batch of tuples, not a single key.
+- **Frontend:** none in Dora — MyProducts already shows linked/unlinked state for the local
+  catalogue; this endpoint exists so callers *outside* Dora can render the same badge.
+- **Risk:** Low. **Close-gate:** R-003 (server owns the fact), R-005 (portable — no
+  companion-specific coupling). *Acceptance:* an ingestion source can POST a batch of external-ids
+  and receive per-id link status; MyProducts behaviour unchanged.
+
+
 ---
 
 ## 2. Sequencing & cross-cutting close-gate
-Order C-10.1 → .4 (.1 auth foundation, .2 the contract, .3 observability, .4 the payoff). The
+Order C-10.1 → .4 (.1 auth foundation, .2 the contract, .3 observability, .4 the payoff); .5 is a
+small read-side add-on that can land any time after .2. The
 producer can be pointed at `/ingest` after .2; the user sees value after .4. Cross-cutting:
 portable reversible migrations (SQLite+Postgres, single head, §7.5); machine auth behind a helper;
 **source-agnostic + zero companion references (invisibility rule)**; one shared offer-append

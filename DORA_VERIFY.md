@@ -8,6 +8,17 @@ top-to-bottom.
 
 ---
 
+## Onboarding story pass (2026-07-12)
+- [ ] Launch onboarding as a fresh install → scene 1 (problem) renders and **does not auto-advance**; sitting on it 10+ seconds waits for you.
+- [ ] Click Next → scene 2 (loop) draws in ring + nodes, then Dora at centre; the "What you're here for" persona-chip bar **does not appear anywhere** below the loop.
+- [ ] Tap Dora in the centre → detail panel reads the new stronger sell ("expiry, stock, spend and habits, hinting at what you can cook now, and answering when you ask"). Tap each stage (Stock / Plan / List / Shop / Restock / Cook) → each renders its own sell line.
+- [ ] Confirm scene 2 has **no** headline sub — the second "Tap any stage — or Dora in the middle" hint below the loop is gone; only the one hint under the ring remains.
+- [ ] Next → scene 3 (brain) does not auto-advance; Next → scene 4 (control).
+- [ ] Scene 4 shows the tune icon plus a stylised **switch panel** with four rows (AI assistant, Spend tracking, Voice replies, Barcode scanning); switches show mixed on/off states. Headline reads "every part of Dora is a toggle." Copy no longer mentions Cooking / Spend / Everything.
+- [ ] Skip button (top-right) reads **"Skip onboarding"** on every scene (not just "Skip"); clicking it skips the whole wizard as before.
+- [ ] Refresh mid-story → draft resumes at the same scene; no console errors about a missing `personaPreview` field on the persisted draft (old drafts should hydrate cleanly and just ignore that key).
+- [ ] Reduced-motion OS setting → the ring/nodes still appear in their final state without motion (no regression from removing autoplay).
+
 ## Dora assistant / helper bubble (FU-429 + FU-360)
 - [ ] **Basic-mode add-to-list (FU-429).** With AI mode OFF (no LLM configured), open Dora and type **"add milk"** → she resolves it against your pantry and confirms "Added Milk to your list. 🛒" with an "Open shopping lists" button; the item is actually on your primary list.
 - [ ] Type **"add eggs and bread"** → both added in one go (comma / "and" / "&" all split); reply names both.
@@ -21,7 +32,7 @@ top-to-bottom.
 - [ ] **Mode slider (FU-360.3).** With AI mode configured (Settings → Assistant: provider + model + base URL/api key saved, install master ON), open Dora → the chat header shows a two-position pill "Basic | AI" with a skewed thick knob glowing on the active side. Tap the inactive side → knob slides across with the glow, PATCH `/auth/me` fires, and `/assistant/status` re-probes; the "AI mode unavailable" banner appears if the LLM isn't currently reachable. Tap back → returns to Basic. Slider grows with the text-size preference (rem-based).
 - [ ] **Mode slider — disabled states (FU-360.3).** With **no LLM configured** (fresh user) → slider renders dimmed, cursor `not-allowed`, tooltip explains what to save in Settings → Assistant first; tapping does nothing. With **install master OFF** (Admin → System → AI assistant) → slider dimmed with tooltip "AI mode is disabled install-wide…"; tapping does nothing.
 - [ ] **FU-360.1 (text size honoured).** Set a large text size in Preferences → open Dora → the chat message text scales up with it (appears already fixed by the A6 rem migration — this is a confirm, not a known bug).
-- [ ] **FU-360.4 (DS4 hover-flash regression).** Hover the launcher / mascot repeatedly → watch for any animation flashing/flicker on hover (the reported regression). Note exact conditions if it reproduces.
+- [ ] **FU-360.4 (DS4 hover-flash regression) — fix landed 2026-07-12.** Hover the launcher / mascot repeatedly, and specifically *hover off* → mascot should stay put, no disappear-and-animate-back-in. Cause: the one-shot `dora-entrance` keyframes lived on the base `.dora-bubble-launcher-inner` rule, so when the hover-bob animation stopped and the base declaration reasserted, `dora-entrance` (with 300ms delay + `both` fill) restarted from its `scale(0) opacity: 0` frame. Moved onto a `.is-entering` modifier removed via `@animationend` after the entrance plays.
 - [ ] **FU-386 (cookable chip).** Open Dora on the Dashboard or Cookbook → tap the **"Cookable now"** / "Find a recipe to cook" chip → lands on the cookbook filtered to cookable recipes (the `?cookable=true` contract, confirmed live end-to-end).
 - [ ] **FU-515 B.3 (tool-arg bound, AI mode only).** With AI mode on, ask Dora to **"push the milk expiry by 99999 days"** → she declines with a "more than ~10 years — give me a sensible number" style message rather than proposing an absurd date. (Sanity check on the boundary cap; normal pushes like "+3 days" still work.)
 

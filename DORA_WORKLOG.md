@@ -9,6 +9,132 @@ next.
 
 ---
 
+## 2026-07-12 (later 3) — C-10.5 shipped: `POST /api/ingest/link-status` (FU-422 follow-through)
+
+**Why:** User: "add the ability for the companion app to see what is already in dora using dora's api. hopefully this can utilise existing (or previously existing from prior commits) code logic." Immediate follow-on to the FU-422 decision recorded in (later 2). The doc-only close-gate parked the endpoint against `IMPL_PLAN_INGESTION_API.md § C-10.5`; the user asked to build it now.
+
+### Shipped
+- **New endpoint:** `POST /api/ingest/link-status` — `dora_api/features/ingestion/get_link_status.py`. Bearer-auth via the existing `extract_bearer_token` / `find_ingestion_source` helpers (same lane as `submit_ingestion_batch`, no new auth surface). Request `{ items: [{ ref, store, merchant_stockcode?, name? }] }` mirrors `_ProductIn` identity on the write side (stockcode-first, name-fallback) so a caller reuses its ingest-payload builder. Per-item response `{ ref, product_id, linked_stock_item_id, linked_stock_item_name, reason? }` with `reason` ∈ `store_not_mapped` / `product_not_found`. Per-source `IngestionStoreMapping` cache scoped to the call. Cap 200 items.
+- **Reused logic (per user's ask):**
+  - `IngestionStoreMapping` lookup follows the shape of `SubmitIngestionBatchHandler._resolve_store` — same per-source external-name resolution, minus the write-side quarantine (a lookup is not an ingest event; unresolved names return `store_not_mapped` and are not persisted).
+  - Product lookup uses the same `EntityField(Product.MERCHANT_STOCKCODE)` / `EntityField(Product.NAME)` + `EntityField(Store.ID)` pattern as the write path.
+  - The linked-stock-item stamping mirrors `products.get_products.stamp_linked_stock_items` — same `StockItemProduct` join-table pattern (a bulk `SELECT product_id, stock_item_id` then a single `StockItem` lookup for names). Not called through the shared helper because that one mutates `ProductDto` in place; the shape here is `_LinkStatusResult`.
+- **Middleware wiring:** `ingest_link_status` added to `PUBLIC_ENDPOINTS` (bearer-auth, no session cookie needed) and `CSRF_EXEMPT_ENDPOINTS` (bearer tokens aren't ambient — no CSRF surface) in `dora_api/infrastructure/middleware.py`.
+- **Tests:** `tests/e2e/dora_api/test_ingest_link_status.py` — 8 e2e tests covering missing bearer, unmapped store, mapped-store + unknown product, known-product-unlinked, known-product-linked (via `POST /api/stock-items/<id>/products`), name-fallback path, mixed batch (hit + miss + unmapped in one call), item without stockcode-or-name, and over-cap (>200 items).
+- **Plan updated:** `IMPL_PLAN_INGESTION_API.md § C-10.5` flipped to ✅ shipped and reshaped from the earlier `GET ?external_id=…` sketch to the actual `POST` batch shape (GET-with-array-params gets ugly at the wire; the caller is a batch consumer).
+
+### Verification
+- `python -c "from dora_api.features.ingestion import get_link_status"` clean; url_map inspection shows `POST /api/ingest/link-status -> INGEST_ROUTER.ingest_link_status` registered.
+- e2e test suite **not** driven from this session — needs a live app on `:5170`; owed to the user for their next run. The tests are shaped identically to `test_ingest_batch.py` (same `_mint_key`/`_seeded_store_id`/`_map_store` helper pattern, same `api` fixture).
+
+### Ledger updates
+- `CHANGELOG.md`: entry under `Added`.
+- `DORA_VERIFY.md`: no new items — endpoint is machine-facing; a companion consumer is the verification, deferred until that lands.
+- `DORA_FOLLOWUPS.md`: no new opens. FU-422 stays resolved (its resolution scope was "the rule now lives at C-10.5" — C-10.5 is now built).
+
+### Engineering-standards close-gate
+- **R-003 (state ownership)** — server owns the "is this product linked?" fact; response is per-item derived, not an entity dump.
+- **R-005 (portable / distribution posture)** — response shape carries no caller-specific fields; per-source scope is on the *store-mapping* lookup only, because store mapping is genuinely per-source (matches how the write side resolves the same name → Store; read must match write).
+- **R-007 (scope)** — only the endpoint + its middleware wiring + tests. No refactor of existing helpers, even though `stamp_linked_stock_items` is close-but-not-identical to the join needed here (their result shapes differ; forcing a shared abstraction would be R-019 magic).
+- **R-008 (no dead code)** — nothing removed; the endpoint is exercised by 8 tests.
+- **Feedback cross-check table** — n/a; this is a plan-motivated chunk, not a feedback-bullet-motivated one (matches C-10 chunks 1-4).
+- **PROJECT_STATE regeneration** — not required: an impl-plan chunk flipped 🔵→✅, no workstream state change.
+
+### Next up
+- User: run the backend e2e suite (`pytest tests/e2e/dora_api/test_ingest_link_status.py`) to confirm the 8 new tests green against a live app.
+- Companion-side integration is the caller's job — when the companion adds a "already linked" badge to its search UI, it POSTs a batch of `{ref, store, merchant_stockcode | name}` to `/api/ingest/link-status`, keyed by the same bearer as its ingest push.
+- Same standing next-ups: `DORA_VERIFY.md § Onboarding story pass 2026-07-12` walk; FU-526 stocktake snooze 500 on SQLite.
+
+---
+
+## 2026-07-12 (later 2) — FU-422 RESOLVED: "already-linked" rule homed on the ingestion read side
+
+**Why:** User: "do FU-422." The FU (original-spec sweep) asked that product search visibly mark products already linked to a stock item. FU's own recommended resolution was a decision — Dora surfaces it, or the companion queries a Dora endpoint.
+
+### Decision
+Dora has **no in-app product-search UI**: the "Product Search" nav (`useProductSearchUrl`) just opens an admin-configured external URL in a new tab. So the rule can't live in Dora's search UI because Dora doesn't have one. Dora's *own* catalogue (`MyProductsPage`) already renders per-product linked/unlinked state with a filter — that surface is already covered. The remaining gap is the *external* search surface (companion or otherwise). That's a read-side ingestion-API concern, not an in-app change.
+
+### Shipped
+- `docs/04_proposals/IMPL_PLAN_INGESTION_API.md`: added chunk **C-10.5** — `GET /api/ingest/products/link-status` (source-agnostic, invisibility-rule preserved, bearer-auth from C-10.1, returns `{external_id, product_id, linked_stock_item_id, linked_stock_item_name}`). Sequencing note updated: C-10.5 can land any time after C-10.2.
+- `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md`: FU-422 moved with a decision note pointing at C-10.5.
+
+### Verification
+- Docs-only change. Confirmed by inspection: `useProductSearchUrl.ts` only loads a URL; no in-app search component exists. `MyProductsPage` already surfaces `linked_stock_item_id`/`linked_stock_item_name` on each row. No code needed to touch.
+
+### Ledger updates
+- `CHANGELOG.md`: no entry — no product-visible change.
+- `DORA_VERIFY.md`: no new items.
+- `DORA_FOLLOWUPS.md`: FU-422 resolved (see above).
+
+### Engineering-standards close-gate
+- **R-007 (scope)** — decision + doc note; no code drift.
+- **R-005 (portable/invisibility)** — endpoint drafted as source-agnostic; no companion-specific coupling.
+- **PROJECT_STATE regeneration** — not required: FU archive movement + one impl-plan chunk, no workstream state shift.
+
+### Next up
+- User walks `DORA_VERIFY.md § Onboarding story pass 2026-07-12` in the browser (still owed).
+- FU-526 (stocktake snooze 500 on SQLite) still the highest-value single fix on the board.
+
+---
+
+## 2026-07-12 (later) — Server-error page: dropped "team's been notified" copy + fake correlation-id leak
+
+**Why:** User hit an error page reading *"Something on the server didn't respond as expected. The team's been notified — try again, or come back in a few minutes. Reference: The requested module 'http://localhost:5174/src/pages/onboarding/onboardingConte…"*. Two problems: (a) the copy implies auto-telemetry we don't have, and (b) a Vite dev-server module URL was leaking to the end user under the "Reference:" label. Root cause of (b): router `onError` was pushing `err.message.slice(0, 80)` into `?ref=`, and `ErrorServer.vue` rendered that as the correlation id. So on a lazy-chunk failure the raw *"The requested module '…' does not provide…"* string ended up in the user's face.
+
+### Shipped
+- `web_app/src/components/PageErrorState.vue`: `variant='server'` description trimmed — the "The team's been notified" sentence removed. `variant='render'` description trimmed too — the "please tell us about it with the reference below" tail was another retired-report-surface leftover, dropped.
+- `web_app/src/router/index.ts`: `ROUTER.onError` no longer stuffs `err.message` into a `?ref=` query. Now just `ROUTER.push({ path: '/errors/server' })`. The message still goes to `console.error` for dev debugging. `ErrorServer.vue`'s `?ref=` slot is kept for legit callers that might later pin a real correlation id (X-Request-Id).
+
+### Verification
+- `npx vue-tsc --noEmit` clean over the touched scope.
+- Manual repro path for the browser walk: navigate to a route whose lazy chunk 500s (or kill the dev server between chunks) → should now land on `/errors/server` with just the two-line copy and the reload/dashboard buttons — no "Reference:" caption, no team-notified line.
+
+### Ledger updates
+- `CHANGELOG.md`: entry under `Fixed` with both bullets.
+- `DORA_VERIFY.md`: no new items — the fix is small enough that the walk is covered by observing the next lazy-chunk failure.
+- `DORA_FOLLOWUPS.md`: no new opens.
+
+### Engineering-standards close-gate
+- **R-007 (scope)** — surgical: two copy lines + one router query dropped.
+- **P3 Honest** — removing the "team's been notified" claim brings user-facing copy back in line with the actual system (no auto-telemetry).
+
+---
+
+## 2026-07-12 — Onboarding story polish: no auto-advance, persona chips retired, control scene redone
+
+**Why:** Direct user feedback on the cinematic intro: (1) scenes shouldn't auto-progress, (2) the "What you're here for" chip bar was doing nothing useful (only rewrote the Dora centre sell — the persona fork was already removed in FU-210), (3) the second "Tap any stage" hint was redundant, (4) "Skip" reads as "skip to next part" not "skip onboarding", (5) scene 4 (control) still felt persona-flavoured with Cooking / Spend / Everything pills. User wanted scene 4 leaning toward "customisation" — mix of settings-toggles teaser + quiet/loud vibe — but didn't have a fixed picture.
+
+### Shipped
+- **Auto-advance removed.** `NarrativeScene.autoAdvanceMs` field + all timer / `autoCancelled` / `useReducedMotion` machinery in `OnboardingStory.vue` deleted. Every scene now waits for Next.
+- **Persona plumbing deleted end-to-end.** From `onboardingContent.ts`: `PersonaPreviewKey`, `PersonaPreview`, `PERSONA_PREVIEWS`, `DEFAULT_PERSONA_PREVIEW`. From `OnboardingLoop.vue`: the `.loop-personas` chip bar template + CSS, `persona` prop / emit / v-model, `localPersona`, `activePreview`, the `revealed` reveal-timer, related watch. From `OnboardingStory.vue`: the `persona` prop + `update:persona` emit. From `WelcomeWizard.vue`: the `v-model:persona`, the `personaPreview` ref, its draft save/load/hydrate + watch entry, the `'persona'` StepId union member, and the `DEFAULT_PERSONA_PREVIEW` / `PersonaPreviewKey` imports.
+- **`LOOP_CENTRE.sell` rewritten** to describe the full assistant ("expiry, stock, spend and habits, hinting at what you can cook now, and answering when you ask"), since it's now the single source of the Dora centre detail (no per-persona override).
+- **Scene 2 `sub` dropped** — the "Tap any stage" hint already lives under the ring; two of them was noise.
+- **Skip label** → "Skip onboarding" (was "Skip").
+- **Scene 4 (control) revisualised.** Copy: kicker "You're in control", headline "every part of Dora is a toggle.", sub "Turn things on as you find you need them. Nothing is locked in — everything lives in Settings." Visual: tune icon + a `CONTROL_SWITCHES` panel — four rows (AI assistant, Spend tracking, Voice replies, Barcode scanning) rendered as stylised on/off toggle switches (track+thumb CSS). Every row names a real Settings toggle so this stays P3-Honest.
+
+### Verification
+- `npx vue-tsc --noEmit` clean over onboarding scope (`grep -iE "onboard|persona"` on the type-check output returns nothing). Only pre-existing unrelated errors remain (`DashboardPage` `draft_shop` CardId, `stockLevelDot.spec.ts` missing `@vue/test-utils`).
+- Browser walk queued in `DORA_VERIFY.md` (§"Onboarding story pass (2026-07-12)") — 9 checkbox items covering all five feedback bullets plus reduced-motion + draft hydration.
+
+### Ledger updates
+- `CHANGELOG.md`: entry under `Changed` with the five-point breakdown.
+- `DORA_VERIFY.md`: new section right after the Dora-assistant one.
+- `DORA_FOLLOWUPS.md`: **no new opens** — every feedback bullet was addressed inline.
+
+### Engineering-standards close-gate
+- **R-007 (scope)** — scoped to the onboarding intro; nothing else touched.
+- **R-001 (componentisation)** — the toggle-switch visual was kept inline in `OnboardingStory.vue` rather than promoted: it's a decorative onboarding-only illustration, not a real form control, and using Quasar `QToggle` here would misleadingly look interactive. CSS is scoped.
+- **R-002 (theme tokens)** — new switch CSS uses `--border-default`, `--brand-primary`, `--surface-component`, `--space-*`, `--radius-*`, `--motion-fast`, `--motion-ease`. No hex, no px-magic.
+- **P3 Honest** — every switch row on scene 4 names a real Settings toggle in the running app; the new centre sell reflects features the day-1 install actually has.
+- **Feedback cross-check table** — not applicable: this is a bug/finish pass on a single surface directly from user feedback, not a Wave-C brief.
+- **PROJECT_STATE regeneration** — not required: the onboarding surface's overall workstream state didn't change; only in-surface polish.
+
+### Next up
+- User walks `DORA_VERIFY.md § Onboarding story pass 2026-07-12` in the browser.
+- FU-526 (stocktake snooze 500 on SQLite) remains the highest-value single fix on the board (per the previous session's next-up).
+
+---
+
 ## 2026-07-12 (later 17) — FU-546 CLOSED: filter/sort field allowlist made strict; dead `validate_known_fields` removed
 
 **Why:** User: "then 546." The residual from FU-537 — a soft field allowlist + dead validation code.
@@ -2119,7 +2245,7 @@ All carry an inline HTML comment naming the reason:
   2. Section registered in `_COMMIT_KNOWN_SECTIONS` (no template ships for a section the commit path doesn't process).
   3. `set(t.headers) == set(expected_headers)` (headers can't drift from the source-of-truth tuple for that section).
   4. `set(t.example.keys()) <= set(t.headers)` (no stale keys quietly disappearing at emit time).
-  
+
   Called at module scope, so failures crash the API at boot with a readable message — not at user download time. Each error message names the offending template and shows the sets that don't match, so the fix is obvious.
 
 **`tests/e2e/dora_api/test_data_router.py`:**

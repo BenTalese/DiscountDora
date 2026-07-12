@@ -15,38 +15,36 @@
             <OnboardingStory
                 v-if="view === 'story'"
                 v-model:scene-index="storySceneIndex"
-                v-model:persona="personaPreview"
                 @enter-setup="enterSetup"
                 @skip="onSkipEverything"
             />
 
             <!-- ══ SETUP — the steps (draft-until-finish; applied on Finish) ══ -->
             <template v-else>
-            <!-- ── Header: progress + skip-everything ─────────────────── -->
-            <div class="row items-center q-mb-md">
-                <div class="col">
-                    <div class="text-h5">Welcome to Dashy Dora</div>
-                    <div class="text-caption dora-text-muted">
-                        Step {{ stepIndex + 1 }} of {{ visibleSteps.length }}
-                        · {{ visibleSteps[stepIndex]?.title }}
-                    </div>
-                </div>
+            <!-- ── Header: skip-everything on non-final steps; on the
+                 finish step, a duplicate Finish button so the user can
+                 commit from either the top or the bottom of a long
+                 flow-cards list. Progress lives in the shared step-rail
+                 at the top of the shell. ─────────────────────────── -->
+            <div class="row justify-end q-mb-md">
                 <BaseButton
+                    v-if="isLastStep"
+                    variant="primary"
+                    icon-right="check"
+                    label="Finish"
+                    :loading="completing"
+                    @click="advance"
+                />
+                <BaseButton
+                    v-else
                     variant="ghost"
                     class="dora-text-secondary"
                     :icon="ICONS.skip_next"
-                    label="Skip"
+                    label="Skip onboarding"
                     :loading="completing"
                     @click="onSkipEverything"
                 />
             </div>
-            <q-linear-progress
-                :value="(stepIndex + 1) / visibleSteps.length"
-                size="6px"
-                rounded
-                color="primary"
-                class="q-mb-lg"
-            />
 
             <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
                 {{ loadError }}
@@ -550,7 +548,6 @@ Toilet paper, Toiletries, Bathroom"
                         Pick where to go next.
                     </div>
                 </div>
-                <div class="text-subtitle1 q-mb-sm">Where to go next</div>
                 <div class="row q-col-gutter-md">
                     <div
                         v-for="card in flowCards"
@@ -598,8 +595,7 @@ Toilet paper, Toiletries, Bathroom"
                 <BaseButton
                     variant="ghost"
                     :icon="ICONS.arrow_back"
-                    label="Back"
-                    :disable="stepIndex === 0"
+                    :label="stepIndex === 0 ? 'Back to intro' : 'Back'"
                     @click="onBack"
                 />
                 <q-space />
@@ -631,11 +627,7 @@ Toilet paper, Toiletries, Bathroom"
         StarterPack,
         StarterPackItem,
     } from 'src/models/onboarding';
-    import {
-        DEFAULT_PERSONA_PREVIEW,
-        NARRATIVE_SCENES,
-        type PersonaPreviewKey,
-    } from 'src/pages/onboarding/onboardingContent';
+    import { NARRATIVE_SCENES } from 'src/pages/onboarding/onboardingContent';
     import type { StockGroup } from 'src/models/stockGroup';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
@@ -685,7 +677,7 @@ Toilet paper, Toiletries, Bathroom"
     ];
     // ── Wizard step state ────────────────────────────────────────────
     type StepId =
-        | 'welcome' | 'admin' | 'persona'
+        | 'welcome' | 'admin'
         | 'seed' | 'first_item' | 'finish';
     type Step = { id: StepId; title: string };
 
@@ -699,9 +691,6 @@ Toilet paper, Toiletries, Bathroom"
     // Two sections with instant, non-linear cross-jump via the shared rail.
     const view = ref<'story' | 'setup'>('story');
     const storySceneIndex = ref(0);
-    // Persona PREVIEW only — sets no flags. Remembered so the C-5.3 fork can
-    // pre-fill from whatever the user last previewed in the hero loop.
-    const personaPreview = ref<PersonaPreviewKey>(DEFAULT_PERSONA_PREVIEW);
 
     // Two tracks. First user of an install (fresh self-host or first user in a
     // new SaaS household) walks the full setup — admin bootstrap, seed the
@@ -921,7 +910,6 @@ Toilet paper, Toiletries, Bathroom"
                     draftItems: draftItems.value,
                     view: view.value,
                     storySceneIndex: storySceneIndex.value,
-                    personaPreview: personaPreview.value,
                     packItemSelected: { ...packItemSelected },
                     groupPicks: { ...groupPicks },
                     locationPicks: { ...locationPicks },
@@ -941,7 +929,6 @@ Toilet paper, Toiletries, Bathroom"
                 draftItems?: DraftItem[];
                 view?: 'story' | 'setup';
                 storySceneIndex?: number;
-                personaPreview?: PersonaPreviewKey;
                 packItemSelected?: Record<string, boolean>;
                 groupPicks?: Record<string, boolean>;
                 locationPicks?: Record<string, boolean>;
@@ -956,7 +943,6 @@ Toilet paper, Toiletries, Bathroom"
                 draftItems: savedItems,
                 view: savedView,
                 storySceneIndex: savedScene,
-                personaPreview: savedPersona,
                 packItemSelected: savedPacks,
                 groupPicks: savedGroupPicks,
                 locationPicks: savedLocationPicks,
@@ -976,9 +962,6 @@ Toilet paper, Toiletries, Bathroom"
             }
             if (typeof savedScene === 'number') {
                 storySceneIndex.value = Math.max(0, savedScene);
-            }
-            if (savedPersona) {
-                personaPreview.value = savedPersona;
             }
             if (savedPacks) {
                 Object.assign(packItemSelected, savedPacks);
@@ -1012,7 +995,7 @@ Toilet paper, Toiletries, Bathroom"
     watch(
         [
             form, stepIndex, draftItems, view, storySceneIndex,
-            personaPreview, packItemSelected, groupPicks, locationPicks,
+            packItemSelected, groupPicks, locationPicks,
         ],
         saveDraft,
         { deep: true },
@@ -1184,7 +1167,12 @@ Toilet paper, Toiletries, Bathroom"
 
     // ── Navigation ───────────────────────────────────────────────────
     function onBack() {
-        if (stepIndex.value === 0) return;
+        // On the first setup step, "Back" returns the user to the story
+        // section instead of being a dead-end disabled button.
+        if (stepIndex.value === 0) {
+            view.value = 'story';
+            return;
+        }
         stepIndex.value--;
     }
 

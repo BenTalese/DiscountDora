@@ -47,6 +47,15 @@ _DRY_RUN_CONFIG = _SmtpConfig(
 )
 
 
+def email_sender_configured() -> bool:
+    """True when the sender has a live SMTP username to use. Dry-run
+    installs (which just log the outbound body) are treated as *not*
+    configured — a normal user can't read server logs, so surfaces gated
+    on this (e.g. the login page's "Forgot password?" link) should hide.
+    """
+    return not _config().dry_run
+
+
 def _config() -> _SmtpConfig:
     """Read the resolved AppSetting-backed SMTP config. If the DB isn't
     available (e.g. a unit test that imports this module without a Flask

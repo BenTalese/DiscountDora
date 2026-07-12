@@ -94,7 +94,7 @@ export interface LoopCentre {
 
 export const LOOP_CENTRE: LoopCentre = {
     label: 'Dora',
-    sell: 'The brain in the middle — watching expiry and stock, and answering when you ask.',
+    sell: 'D.O.R.A. — the brain in the middle, quietly watching over your kitchen and lending a hand at every step.',
 };
 
 // LOOP_INSIGHT was the dimmed "Spend smarter" emerging node — removed
@@ -114,8 +114,6 @@ export interface NarrativeScene {
     kicker?: string;
     headline: string;
     sub?: string;
-    /** ms before auto-advancing; `null` waits for the user (the hero loop). */
-    autoAdvanceMs: number | null;
 }
 
 export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
@@ -125,15 +123,12 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
         kicker: 'The weekly shop',
         headline: 'is detective work.',
         sub: 'What’s run out? What’s already in the cupboard? What do you cook — and what did it cost?',
-        autoAdvanceMs: 5200,
     },
     {
         id: 'loop',
         visual: 'loop',
         kicker: 'Dora turns it into',
         headline: 'one loop that mostly runs itself.',
-        sub: 'Tap any stage — or Dora in the middle — to see how it hands off to the next.',
-        autoAdvanceMs: null,
     },
     {
         id: 'brain',
@@ -141,60 +136,17 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
         kicker: 'Dora is the brain',
         headline: 'doing the remembering, so you don’t.',
         sub: 'Expiry, stock and your questions — quietly watched over.',
-        autoAdvanceMs: 5200,
     },
     {
         id: 'control',
         visual: 'control',
         kicker: 'You’re in control',
-        headline: 'as quiet or as powerful as you like.',
-        sub: 'Choose what Dora does for you next — and change it any time.',
-        autoAdvanceMs: 5200,
+        headline: 'every part of Dora is a toggle.',
+        sub: 'Turn things on as you find you need them. Nothing is locked in — everything lives in Settings.',
     },
 ] as const;
 
-// ── Loop-emphasis preview chips (illustrative; sets no flags) ────────────
-// The hero lets the user preview how the loop FEELS for different reasons
-// to use Dora. It writes nothing — the persona FORK was removed in the FU-210
-// pass; only the visual preview survived. Re-framed 2026-06-17 from
-// "pick your persona" labels into "what Dora does for…" outcomes (the keys
-// stay so existing draft persistence is undisturbed).
-
-export type PersonaPreviewKey = 'cooking' | 'spend' | 'everything';
-
-export interface PersonaPreview {
-    key: PersonaPreviewKey;
-    /** Chip label — describes the user's reason, not a persona identity. */
-    label: string;
-    /** Override for the Dora-centre sell on this preview. Verified against
-     *  the running app on 2026-07-06 (FU-184 honesty pass). */
-    centreSell: string;
-}
-
-export const PERSONA_PREVIEWS: readonly PersonaPreview[] = [
-    {
-        key: 'cooking',
-        label: 'Mostly cooking',
-        centreSell: 'Watching expiry and stock, and flagging what you can cook now.',
-    },
-    {
-        key: 'spend',
-        label: 'Watching spend',
-        centreSell: 'Watching expiry, stock, and what you’ve been paying.',
-    },
-    {
-        key: 'everything',
-        label: 'All of it',
-        centreSell: 'The full brain — pantry, planning, spend and more.',
-    },
-] as const;
-
-/** Default preview on first paint — "All of it", so the reveal sells the ceiling. */
-export const DEFAULT_PERSONA_PREVIEW: PersonaPreviewKey = 'everything';
-
-// ── Persona fork presets — REMOVED (FU-210) ──────────────────────────────
-// Onboarding no longer forks on personas or writes install flags / per-user
-// opt-ins; there is one "show everything" path and features are enabled in
-// Settings (money/spend is its own Settings toggle). The hero-loop preview
-// chips above stay — they are illustrative only and set nothing. See
-// docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md §5.
+// Persona previews / fork REMOVED (FU-210 + follow-up 2026-07-12): onboarding
+// no longer forks or sells category personas. The hero-loop centre sell comes
+// straight from LOOP_CENTRE.sell above; the "you're in control" scene shows a
+// generic customisation visual, not category chips.

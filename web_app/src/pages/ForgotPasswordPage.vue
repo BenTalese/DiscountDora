@@ -1,5 +1,5 @@
 <template>
-    <AuthShell backdrop="blobs" mascot="none">
+    <AuthShell backdrop="blobs" mascot="top-right">
         <template #card-head>
             <q-icon :name="ICONS.lock_reset" size="56px" :style="'color: var(--auth-shell-accent)'" />
             <div class="text-h6 q-mt-md">Forgot password</div>

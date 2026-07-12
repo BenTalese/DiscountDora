@@ -570,10 +570,6 @@
                                                 >
                                                     {{ line.stock_item_name }}
                                                 </router-link>
-                                                <StockLevelDot
-                                                    v-if="stockItemFor(line.stock_item_id)"
-                                                    :stock-item="stockItemFor(line.stock_item_id)!"
-                                                />
                                                 <!-- in-shop "should I buy?" nudge.
                                                      Silent on low-confidence items so the
                                                      line list stays legible; when the pantry
@@ -1198,7 +1194,7 @@
                     {{
                         finishEntries.length === 0
                             ? 'No items are ticked — the list is marked done and nothing is restocked.'
-                            : 'Ticked items restock to Stocked. Adjust any that you only partly topped up.'
+                            : 'These ticked items will be restocked:'
                     }}
                 </div>
             </q-card-section>
@@ -1208,18 +1204,8 @@
                         <q-item-section>
                             <q-item-label>{{ entry.name }}</q-item-label>
                         </q-item-section>
-                        <q-item-section side>
-                            <q-select
-                                v-if="entry.stock_item_id"
-                                v-model="entry.level_id"
-                                :options="levelOptions"
-                                dense
-                                outlined
-                                emit-value
-                                map-options
-                                style="min-width: 150px"
-                            />
-                            <span v-else class="text-caption dora-text-muted">
+                        <q-item-section v-if="!entry.stock_item_id" side>
+                            <span class="text-caption dora-text-muted">
                                 Not stock-tracked
                             </span>
                         </q-item-section>
@@ -1259,7 +1245,6 @@
     import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
     import PageToolbar from 'src/components/PageToolbar.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
-    import StockLevelDot from 'src/components/StockLevelDot.vue';
     import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
     import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
@@ -1274,7 +1259,6 @@
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { useWakeLock } from 'src/composables/useWakeLock';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
-    import { STOCKED_SEQUENCE } from 'src/helpers/stockStatus';
     import {
         chosenOfferFor,
         priceOfLine,
@@ -1286,7 +1270,6 @@
     import type { StockItem } from 'src/models/stockItem';
     import type { Substitute } from 'src/models/stockItemDetail';
     import ShoppingListApiService, {
-        type FinishLevelOverride,
         shoppingListAttachmentUrl,
         type TrimToBudgetResult,
     } from 'src/services/api/shoppingListApiService';
@@ -1378,29 +1361,19 @@
         }
     }
 
-    // ── Finish & restock — UX-v2 M12 restock review ───────────────────
+    // ── Finish & restock ────────────────────────────────────────────
+    // The dialog previously let you pick a per-item stock level (in case
+    // you'd only partly topped something up). With levels simplified, every
+    // ticked item just restocks to Stocked — the server default when no
+    // overrides are sent.
     const finishReviewOpen = ref(false);
     const finishing = ref(false);
     type FinishEntry = {
         line_id: string;
         stock_item_id: string | null;
         name: string;
-        level_id: string | null;
     };
     const finishEntries = ref<FinishEntry[]>([]);
-
-    const levelOptions = computed(() =>
-        stockLevelStore.stockLevels.map((l) => ({
-            label: l.name,
-            value: l.stock_level_id,
-        })),
-    );
-    const stockedLevelId = computed<string | null>(
-        () =>
-            stockLevelStore.stockLevels.find(
-                (l) => l.sequence === STOCKED_SEQUENCE,
-            )?.stock_level_id ?? null,
-    );
 
     function openFinishReview() {
         if (!detail.value) return;
@@ -1419,7 +1392,6 @@
                 line_id: l.line_id,
                 stock_item_id: l.stock_item_id,
                 name: l.stock_item_name,
-                level_id: l.stock_item_id ? stockedLevelId.value : null,
             }));
         finishReviewOpen.value = true;
     }
@@ -1427,22 +1399,7 @@
     async function confirmFinish() {
         finishing.value = true;
         try {
-            // Only non-default picks travel as overrides; everything else
-            // takes the server's Stocked default.
-            const overrides: FinishLevelOverride[] = finishEntries.value
-                .filter(
-                    (e): e is FinishEntry & { stock_item_id: string; level_id: string } =>
-                        !!e.stock_item_id
-                        && !!e.level_id
-                        && e.level_id !== stockedLevelId.value,
-                )
-                .map((e) => ({
-                    stock_item_id: e.stock_item_id,
-                    stock_level_id: e.level_id,
-                }));
-            const result = await api.finishAsync(listId.value, {
-                level_overrides: overrides,
-            });
+            const result = await api.finishAsync(listId.value);
             finishReviewOpen.value = false;
             await Promise.all([
                 refreshAll(),
@@ -2999,7 +2956,7 @@
 
     onMounted(async () => {
         await stockItemStore.ensureLoadedAsync();
-        // Levels power the StockLevelDot and the restock-review modal.
+        // Levels power the inline StockLevelDot on shopping-list rows.
         await stockLevelStore.ensureLoadedAsync();
         // needed to resolve a product-only line's
         // linked stock item for the rule-4 modal and for nested-display

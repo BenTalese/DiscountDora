@@ -1,11 +1,8 @@
 <template>
-    <AuthShell backdrop="blobs" mascot="none">
+    <AuthShell backdrop="blobs" mascot="top-right">
         <template #card-head>
             <q-icon :name="ICONS.password" size="56px" :style="'color: var(--auth-shell-accent)'" />
             <div class="text-h6 q-mt-md">Choose a new password</div>
-            <div class="text-caption q-mt-xs auth-aux-sub">
-                Must be at least 8 characters. A short passphrase works well.
-            </div>
         </template>
 
         <q-banner v-if="!token" class="dora-bg-negative-soft text-negative" rounded>

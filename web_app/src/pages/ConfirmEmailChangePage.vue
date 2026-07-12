@@ -1,5 +1,5 @@
 <template>
-    <AuthShell backdrop="blobs" mascot="none">
+    <AuthShell backdrop="blobs" mascot="top-right">
         <template #card-head>
             <q-icon
                 :name="status === 'ok' ? 'check_circle' : status === 'error' ? 'error' : 'mail_lock'"

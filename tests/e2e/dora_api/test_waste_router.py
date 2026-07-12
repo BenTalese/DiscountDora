@@ -279,7 +279,15 @@ def test__get_waste_insights__RepeatOffender__RankedByEventCount(api):
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body.keys()) == {"window_days", "total_events", "most_wasted", "most_recent"}
+    assert set(body.keys()) == {
+        "window_days", "total_events", "by_reason", "most_wasted", "most_recent",
+    }
+    # Per-reason counts: every canonical reason key is present (zero-filled
+    # so the client can render a fixed reason grid without gaps).
+    assert set(body["by_reason"].keys()) == {
+        "expired", "spoiled", "did_not_like", "overbought", "other",
+    }
+    assert sum(body["by_reason"].values()) == body["total_events"]
     assert body["window_days"] == 90
     assert body["total_events"] >= 3
     buckets = {b["stock_item_id"]: b for b in body["most_wasted"]}

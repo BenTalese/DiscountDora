@@ -73,6 +73,17 @@ def test__register__never_grants_admin(api):
     assert body["email_verified"] is False
 
 
+def test__capabilities__unauthenticated_and_reports_email_state(api):
+    """The capabilities probe is reachable pre-auth (no session cookie)
+    and reports whether outbound email is live. The test suite runs with
+    no SMTP config, so it should report false."""
+    s = _fresh_session()
+    response = s.get(f"{BASE}/capabilities")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body == {"email_sender_configured": False}
+
+
 def test__bootstrap_required__false_when_users_exist(api):
     """FU-200 — the bootstrap-required probe returns `false` once any user
     exists. The seeded `dora` test account guarantees that's the case here.

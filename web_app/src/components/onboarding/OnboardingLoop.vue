@@ -35,7 +35,7 @@
                 <span class="loop-node-label">{{ stage.label }}</span>
             </button>
 
-            <!-- Dora at the centre + the provisional Insight candidate -->
+            <!-- Dora at the centre -->
             <div class="loop-centre" :class="{ 'is-shown': nodesShown }">
                 <button
                     type="button"
@@ -43,52 +43,29 @@
                     :class="{ 'is-active': focusedKey === 'centre' }"
                     :disabled="!interactive"
                     :aria-pressed="focusedKey === 'centre'"
-                    :aria-label="`${LOOP_CENTRE.label}. ${activePreview.centreSell}`"
+                    :aria-label="`${LOOP_CENTRE.label}. ${LOOP_CENTRE.sell}`"
                     @click="focus('centre')"
                 >
-                    <DoraMascot :mood="doraMood" :size="64" />
+                    <DoraMascot :mood="doraMood" :size="96" />
                 </button>
-
-                <!-- LOOP_INSIGHT removed 2026-06-17 (FU-210 revisit) — the
-                     dimmed "Spend smarter / coming soon" satellite node violated
-                     P3 Honest. Reintroduce as a real loop entry only when a
-                     shipping "paying more than usual" surface exists. -->
             </div>
         </div>
 
-        <!-- Detail panel — what the focused stage does. Announced politely. -->
+        <!-- Detail panel — what the focused stage does. Announced politely.
+             Node/centre labels are already on the buttons themselves, so the
+             detail block only shows the sell sentence and cross-fades between
+             selections. -->
         <div class="loop-detail" role="status" aria-live="polite">
-            <template v-if="focusedKey">
-                <div class="loop-detail-title">{{ detail.title }}</div>
-                <p class="loop-detail-body">{{ detail.body }}</p>
-                <p v-if="detail.note" class="loop-detail-note">{{ detail.note }}</p>
-            </template>
-            <p v-else class="loop-detail-hint">
-                Tap a stage — or Dora in the middle — to see how it works.
-            </p>
-        </div>
-
-        <!-- Loop-emphasis preview — illustrative only, no flags set.
-             Re-framed 2026-06-17 from "pick your persona" to outcome chips. -->
-        <div
-            v-if="revealed && interactive"
-            class="loop-personas"
-            role="radiogroup"
-            aria-label="Preview what Dora emphasises for different reasons to use it"
-        >
-            <span class="loop-personas-label">What you’re&nbsp;here&nbsp;for</span>
-            <button
-                v-for="preview in PERSONA_PREVIEWS"
-                :key="preview.key"
-                type="button"
-                class="loop-persona"
-                :class="{ 'is-selected': preview.key === localPersona }"
-                role="radio"
-                :aria-checked="preview.key === localPersona"
-                @click="selectPersona(preview.key)"
-            >
-                {{ preview.label }}
-            </button>
+            <transition name="loop-detail-swap" mode="out-in">
+                <p
+                    v-if="focusedKey"
+                    :key="focusedKey"
+                    class="loop-detail-body"
+                >{{ detail.body }}</p>
+                <p v-else key="hint" class="loop-detail-hint">
+                    Click or tap on a feature to see how it works.
+                </p>
+            </transition>
         </div>
     </div>
 </template>
@@ -98,27 +75,21 @@
     import type { DoraMood } from 'src/components/dora/doraTypes';
     import { useReducedMotion } from 'src/composables/useReducedMotion';
     import {
-        DEFAULT_PERSONA_PREVIEW,
         LOOP_CENTRE,
         LOOP_STAGES,
-        PERSONA_PREVIEWS,
         type LoopStageKey,
-        type PersonaPreviewKey,
     } from 'src/pages/onboarding/onboardingContent';
-    import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
     const props = withDefaults(
         defineProps<{
-            /** Selected persona preview (v-model). */
-            persona?: PersonaPreviewKey;
             /** Play the one-time draw-in reveal. Finish-step recap passes false. */
             autoplay?: boolean;
-            /** Allow tapping stages / switching persona. */
+            /** Allow tapping stages. */
             interactive?: boolean;
         }>(),
-        { persona: DEFAULT_PERSONA_PREVIEW, autoplay: true, interactive: true },
+        { autoplay: true, interactive: true },
     );
-    const emit = defineEmits<{ 'update:persona': [PersonaPreviewKey] }>();
 
     const prefersReducedMotion = useReducedMotion();
 
@@ -129,21 +100,7 @@
     );
 
     const nodesShown = ref(!shouldAnimate.value);
-    const revealed = ref(!shouldAnimate.value);
     const focusedKey = ref<LoopStageKey | 'centre' | null>(null);
-
-    const localPersona = ref<PersonaPreviewKey>(props.persona);
-    watch(
-        () => props.persona,
-        (next) => {
-            localPersona.value = next;
-        },
-    );
-    const activePreview = computed(
-        () =>
-            PERSONA_PREVIEWS.find((p) => p.key === localPersona.value) ??
-            PERSONA_PREVIEWS[PERSONA_PREVIEWS.length - 1]!,
-    );
 
     const stageLabels = computed(() => LOOP_STAGES.map((s) => s.label).join(' → '));
 
@@ -166,12 +123,13 @@
     const detail = computed(() => {
         const key = focusedKey.value;
         if (key === 'centre') {
-            return { title: LOOP_CENTRE.label, body: activePreview.value.centreSell, note: '' };
+            // The acronym reveal ("D.O.R.A. — …") lives inside the sentence
+            // itself (LOOP_CENTRE.sell) rather than as a separate title;
+            // the button already tells the user which node they clicked.
+            return { body: LOOP_CENTRE.sell };
         }
         const stage = LOOP_STAGES.find((s) => s.key === key);
-        return stage
-            ? { title: stage.label, body: stage.sell, note: '' }
-            : { title: '', body: '', note: '' };
+        return { body: stage?.sell ?? '' };
     });
 
     function focus(key: LoopStageKey | 'centre') {
@@ -179,31 +137,19 @@
         focusedKey.value = key;
     }
 
-    function selectPersona(key: PersonaPreviewKey) {
-        localPersona.value = key;
-        emit('update:persona', key);
-    }
-
-    // Reveal choreography: the ring draws, then the nodes cascade in, then the
-    // persona control appears. Pure setTimeout so reduced-motion can skip it.
+    // Reveal choreography: the ring draws, then the nodes cascade in.
     const RING_DRAW_MS = 900;
-    const STAGGER_TOTAL_MS = LOOP_STAGES.length * 90 + 260;
     let nodeTimer: ReturnType<typeof setTimeout> | null = null;
-    let revealTimer: ReturnType<typeof setTimeout> | null = null;
 
     onMounted(() => {
         if (!shouldAnimate.value) return;
         nodeTimer = setTimeout(() => {
             nodesShown.value = true;
         }, RING_DRAW_MS);
-        revealTimer = setTimeout(() => {
-            revealed.value = true;
-        }, RING_DRAW_MS + STAGGER_TOTAL_MS);
     });
 
     onBeforeUnmount(() => {
         if (nodeTimer !== null) clearTimeout(nodeTimer);
-        if (revealTimer !== null) clearTimeout(revealTimer);
     });
 </script>
 
@@ -266,6 +212,7 @@
         opacity: 0;
         transition: opacity var(--motion-normal) var(--motion-ease-out),
             transform var(--motion-normal) var(--motion-ease-spring),
+            background var(--motion-fast) var(--motion-ease),
             border-color var(--motion-fast) var(--motion-ease),
             color var(--motion-fast) var(--motion-ease),
             box-shadow var(--motion-fast) var(--motion-ease);
@@ -279,16 +226,27 @@
         border-color: var(--brand-primary);
         color: var(--text-primary);
         outline: none;
+        transform: translate(-50%, -50%) scale(1.05);
     }
+    /* Active node: filled brand-primary background with contrasting text,
+       a soft accent halo, and a lift. The scale bump is deliberate so the
+       swap between nodes reads as a smooth flow, not a colour flicker. */
     .loop-node.is-active {
-        border-color: var(--brand-accent);
-        color: var(--text-primary);
-        box-shadow: 0 0 0 2px var(--brand-accent-soft),
-            0 6px 18px var(--overlay-active);
+        background: var(--brand-primary);
+        border-color: var(--brand-primary);
+        color: var(--surface-component);
+        transform: translate(-50%, -50%) scale(1.12);
+        box-shadow: 0 0 0 4px var(--brand-accent-soft),
+            0 10px 24px var(--overlay-active);
+        z-index: 1;
+    }
+    .loop-node.is-active .loop-node-icon {
+        color: var(--surface-component);
     }
     .loop-node-icon {
         font-size: 22px;
         color: var(--brand-primary);
+        transition: color var(--motion-fast) var(--motion-ease);
     }
     .loop-node-label {
         font-size: 0.72rem;
@@ -319,39 +277,35 @@
         border-radius: var(--radius-full);
         cursor: pointer;
         line-height: 0;
-        transition: box-shadow var(--motion-fast) var(--motion-ease);
+        transition: box-shadow var(--motion-fast) var(--motion-ease),
+            transform var(--motion-normal) var(--motion-ease-spring);
+    }
+    .loop-dora:hover:not(:disabled) {
+        transform: scale(1.06);
     }
     .loop-dora:focus-visible {
         outline: none;
-    }
-    .loop-dora.is-active,
-    .loop-dora:focus-visible {
         box-shadow: 0 0 0 3px var(--brand-accent-soft);
+    }
+    .loop-dora.is-active {
+        box-shadow: 0 0 0 5px var(--brand-accent-soft),
+            0 10px 28px var(--overlay-active);
+        transform: scale(1.08);
     }
     /* ── Detail panel ──────────────────────────────────────────────── */
     .loop-detail {
         min-height: 4.5em;
         max-width: 30rem;
         text-align: center;
-    }
-    .loop-detail-title {
-        font-size: 0.78rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--brand-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .loop-detail-body {
-        margin: 4px 0 0;
-        font-size: 1.02rem;
-        line-height: 1.4;
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.45;
         color: var(--text-primary);
-    }
-    .loop-detail-note {
-        margin: 4px 0 0;
-        font-size: 0.8rem;
-        font-style: italic;
-        color: var(--text-muted);
     }
     .loop-detail-hint {
         margin: 0;
@@ -359,52 +313,23 @@
         color: var(--text-muted);
     }
 
-    /* ── Persona preview control ───────────────────────────────────── */
-    .loop-personas {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-1);
-        padding: 4px;
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-pill);
-        background: var(--surface-component);
-        flex-wrap: wrap;
-        justify-content: center;
+    /* Sleek out-in cross-fade when the focused node changes. */
+    .loop-detail-swap-enter-active {
+        transition:
+            opacity var(--motion-normal) var(--motion-ease-out),
+            transform var(--motion-normal) var(--motion-ease-spring);
     }
-    .loop-personas-label {
-        font-size: 0.72rem;
-        color: var(--text-muted);
-        padding: 0 var(--space-2);
+    .loop-detail-swap-leave-active {
+        transition:
+            opacity var(--motion-fast) var(--motion-ease-in),
+            transform var(--motion-fast) var(--motion-ease-in);
     }
-    .loop-persona {
-        border: none;
-        background: transparent;
-        color: var(--text-secondary);
-        font-size: 0.82rem;
-        font-weight: 600;
-        padding: var(--space-1) var(--space-3);
-        border-radius: var(--radius-pill);
-        cursor: pointer;
-        transition: background var(--motion-fast) var(--motion-ease),
-            color var(--motion-fast) var(--motion-ease);
-    }
-    .loop-persona:hover,
-    .loop-persona:focus-visible {
-        color: var(--text-primary);
-        outline: none;
-    }
-    .loop-persona.is-selected {
-        background: var(--brand-primary);
-        color: var(--surface-component);
-    }
-
-    /* Insight chip fade (lighter than the reveal — a UI affordance). */
-    .dora-fade-enter-active,
-    .dora-fade-leave-active {
-        transition: opacity var(--motion-normal) var(--motion-ease);
-    }
-    .dora-fade-enter-from,
-    .dora-fade-leave-to {
+    .loop-detail-swap-enter-from {
         opacity: 0;
+        transform: translateY(6px);
+    }
+    .loop-detail-swap-leave-to {
+        opacity: 0;
+        transform: translateY(-6px);
     }
 </style>

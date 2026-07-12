@@ -191,13 +191,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
 
-## [OPEN] FU-422 — Search: display which products already link to a stock item
-- **Raised:** 2026-07-01 (original-spec sweep).
-- **Type:** deferred job (dropped intent from original spec).
-- **What:** Original spec (`docs/00_original_spec/Unprocessed Ideas (from Google Docs).md`) asked that when searching for products, the UI should visibly mark ones **already linked to a stock item** so the user isn't tempted to re-link. Search now lives in the companion, but the *linkage-display* rule may still belong in Dora (the "Products" tab on a stock item) or become part of the companion's ingestion contract. Decide where it lives.
-- **Why deferred:** search moved to companion mid-flight; the rule was never re-homed.
-- **Recommended resolution:** during any companion↔Dora ingestion-boundary work — call whether Dora surfaces "already-linked" itself, or the companion queries a Dora endpoint. If the latter, add to the ingestion API's read-side.
-
 ## [OPEN] FU-413 — EMAIL_SETUP_FINDINGS: promote proposal to IMPL
 - **Raised:** 2026-07-01 (investigations audit).
 - **Type:** deferred job.

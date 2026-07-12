@@ -13,7 +13,7 @@
                     <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
                 </q-avatar>
                 <q-toolbar-title class="welcome-title">
-                    Dashy Dora
+                    <DoraBrand />
                 </q-toolbar-title>
                 <BaseButton
                     variant="ghost"
@@ -39,6 +39,7 @@
 <script setup lang="ts">
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import DoraBrand from 'src/components/DoraBrand.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useAuthStore } from 'src/stores/authStore';
@@ -68,7 +69,8 @@
         margin: 0 auto;
     }
     .welcome-title {
-        font-weight: 600;
-        letter-spacing: -0.01em;
+        font-size: clamp(22px, 2.4vw, 30px);
+        letter-spacing: 0;
+        line-height: 1;
     }
 </style>

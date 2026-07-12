@@ -56,8 +56,10 @@ export default defineRouter(function (/* { store, ssrContext } */) {
 
     // Navigation errors (lazy-loaded chunk failed to fetch, etc) route the
     // user to /errors/server with a retry rather than leaving them on a
-    // half-loaded screen. We tag with the error message so the report-this
-    // link in PageErrorState carries useful context.
+    // half-loaded screen. The raw error message (e.g. "The requested module
+    // '.../onboardingContent.ts' does not provide…") is dev-facing and MUST
+    // NOT surface to the user — it's logged to the console for debugging
+    // instead, and the error page renders without a spurious "ref".
     ROUTER.onError((err) => {
         console.error('Vue Router Error: ' + err.message);
         Notify.create({
@@ -71,10 +73,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
             return;
         }
         try {
-            void ROUTER.push({
-                path: '/errors/server',
-                query: { ref: err.message.slice(0, 80) },
-            });
+            void ROUTER.push({ path: '/errors/server' });
         } catch {
             if (typeof window !== 'undefined') {
                 window.location.assign('/');

@@ -60,9 +60,6 @@
                                 @click.stop
                             />
                         </q-item-section>
-                        <q-item-section avatar>
-                            <StockLevelDot :stock-item="row.stockItem" />
-                        </q-item-section>
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
                             <q-item-label v-if="row.statusWord" caption>
@@ -92,9 +89,6 @@
                                 @update:model-value="toggle(row.stock_item_id)"
                                 @click.stop
                             />
-                        </q-item-section>
-                        <q-item-section avatar>
-                            <StockLevelDot :stock-item="row.stockItem" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
@@ -128,7 +122,6 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
-    import StockLevelDot from 'src/components/StockLevelDot.vue';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
     import { useStockItemStore } from 'src/stores/stockItemStore';

@@ -34,6 +34,9 @@ PUBLIC_ENDPOINTS = frozenset({
     # creates the first admin and 410s once any user exists.
     "bootstrap_required",
     "bootstrap_admin",
+    # pre-auth capability probe (login page reads it to decide whether to
+    # render "Forgot password?" — gated on outbound email being real).
+    "get_auth_capabilities",
     "health_check",            # health probes must not require auth (used by container orchestrators)
     "submit_client_log",       # the SPA may need to ship errors before login completes
     # ── A1 out-of-band auth flows; reached from email links + login screen ──
@@ -48,6 +51,9 @@ PUBLIC_ENDPOINTS = frozenset({
     # the handler own auth. The admin CRUD over keys is NOT listed —
     # that page stays session+admin-gated.
     "submit_ingestion_batch",
+    # C-10.5 / FU-422: read-side link-status lookup. Same bearer auth
+    # as the batch endpoint; session cookie is not involved.
+    "ingest_link_status",
 })
 
 
@@ -227,6 +233,7 @@ CSRF_EXEMPT_ENDPOINTS = PUBLIC_ENDPOINTS | frozenset({
     # Bearer-auth ingestion: the long-lived API key is the proof; the
     # browser never holds it ambient, so there's no CSRF surface.
     "submit_ingestion_batch",
+    "ingest_link_status",
 })
 
 

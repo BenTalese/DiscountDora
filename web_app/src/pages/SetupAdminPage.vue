@@ -76,11 +76,6 @@
                 sign-in becomes the entry point and new accounts can
                 register normally.
             </div>
-            <div class="setup-fineprint q-mt-xs">
-                Passwords must be at least 8 characters. A short
-                passphrase of a few words is easier to remember and
-                just as safe.
-            </div>
         </template>
     </AuthShell>
 </template>

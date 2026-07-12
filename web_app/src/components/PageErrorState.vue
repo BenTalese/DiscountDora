@@ -96,12 +96,12 @@
             case 'not_found':
                 return "The link you followed might be stale, or the page may have moved. Head back to the dashboard or use the menu to find what you need.";
             case 'server':
-                return "Something on the server didn't respond as expected. The team's been notified — try again, or come back in a few minutes.";
+                return "Something on the server didn't respond as expected. Try again, or come back in a few minutes.";
             case 'navigation':
                 return "The page failed to load. Reloading usually does the trick.";
             case 'render':
             default:
-                return "This screen ran into an unexpected error. Reloading the page is the fastest fix; if it keeps happening, please tell us about it with the reference below.";
+                return "This screen ran into an unexpected error. Reloading the page is the fastest fix.";
         }
     });
 

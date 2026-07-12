@@ -133,6 +133,62 @@
                 </div>
             </article>
 
+            <!-- Wastage log -->
+            <article class="report-card">
+                <header class="report-card-head">
+                    <q-icon :name="ICONS.wasted" size="22px" class="report-card-icon" />
+                    <h3 class="report-card-title">Wastage</h3>
+                </header>
+                <div v-if="loading.waste" class="report-card-loading">
+                    <AppSpinner size="32px" />
+                </div>
+                <template v-else-if="waste">
+                    <div class="waste-summary">
+                        <span class="waste-total">{{ waste.total_events }}</span>
+                        <span class="waste-sub">
+                            item{{ waste.total_events === 1 ? '' : 's' }} logged
+                            in the last {{ waste.window_days }} day{{ waste.window_days === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+                    <div class="waste-reason-grid">
+                        <div
+                            v-for="tile in wasteReasonTiles"
+                            :key="tile.reason"
+                            class="waste-reason-tile"
+                            :class="{ 'is-zero': tile.count === 0 }"
+                        >
+                            <q-icon :name="tile.icon" size="20px" class="waste-reason-icon" />
+                            <span class="waste-reason-count">{{ tile.count }}</span>
+                            <span class="waste-reason-label">{{ tile.label }}</span>
+                        </div>
+                    </div>
+                    <ul v-if="waste.most_wasted.length > 0" class="report-list">
+                        <li
+                            v-for="row in waste.most_wasted"
+                            :key="row.stock_item_id ?? row.stock_item_name"
+                        >
+                            <a
+                                v-if="row.stock_item_id"
+                                class="report-list-name"
+                                @click="goToStock(row.stock_item_id!)"
+                            >
+                                {{ row.stock_item_name }}
+                            </a>
+                            <span v-else class="report-list-name dora-text-muted">
+                                {{ row.stock_item_name }}
+                            </span>
+                            <span class="report-list-count">×{{ row.event_count }}</span>
+                        </li>
+                    </ul>
+                    <div v-else class="report-empty">
+                        Nothing wasted in this range — nicely played.
+                    </div>
+                </template>
+                <div v-else class="report-empty">
+                    No wastage data available.
+                </div>
+            </article>
+
             <!-- Savings captured -->
             <article class="report-card">
                 <header class="report-card-head">
@@ -422,6 +478,7 @@
         type YoYReportRange,
     } from 'src/services/api/reportsApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import WasteApiService, { type WasteInsights } from 'src/services/api/wasteApiService';
     import { computed, onMounted, ref } from 'vue';
     import VChart from 'vue-echarts';
     import { useRouter } from 'vue-router';
@@ -439,6 +496,7 @@
     const router = useRouter();
     const reportsApi = new ReportsApiService();
     const stockApi = new StockItemApiService();
+    const wasteApi = new WasteApiService();
     // products read through the store so a save on product-search
     // is visible here without a hard refresh (R-003).
     const productStore = useProductStore();
@@ -469,6 +527,7 @@
         mealsCooked: false,
         spendByCategory: false,
         spendYoY: false,
+        waste: false,
     });
 
     const stockValue = ref<StockValueResponse | null>(null);
@@ -483,6 +542,11 @@
     // YoY only accepts bounded windows; if the user picks "All time",
     // we skip the YoY fetch and the card renders its own explanation.
     const spendYoY = ref<SpendYoYResponse | null>(null);
+    // Waste log — always reported over a day-count window; the API caps at
+    // 365, so a "2y"/"5y"/"all" pick from the shared range picker still
+    // shows the last year of wastage. The card subtitle uses the effective
+    // window returned by the server so what you see matches what's real.
+    const waste = ref<WasteInsights | null>(null);
 
     const selectedProductIds = ref<string[]>([]);
     const productOptions = ref<{ label: string; value: string }[]>([]);
@@ -742,6 +806,35 @@
         try { spendByCategory.value = await reportsApi.getSpendByCategoryAsync(range.value); }
         finally { loading.value.spendByCategory = false; }
     }
+    // Reason tiles for the Wastage card — one per canonical waste reason.
+    // Zero-count tiles still render (dimmed) so the grid stays a stable
+    // shape and "you haven't logged any of these" reads as intentional.
+    const WASTE_REASON_TILES: {
+        reason: 'expired' | 'spoiled' | 'did_not_like' | 'overbought' | 'other';
+        label: string;
+        icon: string;
+    }[] = [
+        { reason: 'expired', label: 'Expired', icon: ICONS.wasteExpired },
+        { reason: 'spoiled', label: 'Spoiled', icon: ICONS.wasteSpoiled },
+        { reason: 'did_not_like', label: "Didn't like", icon: ICONS.wasteDidNotLike },
+        { reason: 'overbought', label: 'Overbought', icon: ICONS.wasteOverbought },
+        { reason: 'other', label: 'Other', icon: ICONS.wasteOther },
+    ];
+    const wasteReasonTiles = computed(() =>
+        WASTE_REASON_TILES.map((t) => ({
+            ...t,
+            count: waste.value?.by_reason[t.reason] ?? 0,
+        })),
+    );
+
+    const RANGE_TO_DAYS: Record<ReportRange, number> = {
+        '30d': 30, '90d': 90, '1y': 365, '2y': 730, '5y': 1825, 'all': 3650,
+    };
+    async function loadWaste() {
+        loading.value.waste = true;
+        try { waste.value = await wasteApi.getInsightsAsync(RANGE_TO_DAYS[range.value]); }
+        finally { loading.value.waste = false; }
+    }
     async function loadSpendYoY() {
         // YoY skips the "all" range — it needs a bounded window to
         // compare against the same-length prior window. Blank the card
@@ -772,6 +865,7 @@
                 loadMealsCooked(),
                 loadSpendByCategory(),
                 loadSpendYoY(),
+                loadWaste(),
             ]);
         } catch {
             loadError.value = 'Could not load reports. Try refreshing.';
@@ -959,6 +1053,54 @@
         color: var(--text-secondary);
         font-size: 0.85rem;
         font-variant-numeric: tabular-nums;
+    }
+    .waste-summary {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin: 4px 0 12px;
+    }
+    .waste-total {
+        font-size: 1.8rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+    }
+    .waste-sub { color: var(--text-secondary); font-size: 0.85rem; }
+    .waste-reason-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    @media (max-width: 640px) {
+        .waste-reason-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    .waste-reason-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 10px 6px;
+        background: var(--surface-elevated);
+        border-radius: 10px;
+        aspect-ratio: 1;
+        text-align: center;
+    }
+    .waste-reason-tile.is-zero { opacity: 0.45; }
+    .waste-reason-icon { color: var(--brand-primary); }
+    .waste-reason-tile.is-zero .waste-reason-icon { color: var(--text-secondary); }
+    .waste-reason-count {
+        font-size: 1.2rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+    }
+    .waste-reason-label {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        line-height: 1.15;
     }
     .savings-body {
         flex: 1;

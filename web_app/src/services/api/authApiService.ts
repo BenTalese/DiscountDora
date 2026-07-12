@@ -139,6 +139,18 @@ export default class AuthApiService {
         return result.required;
     };
 
+    /** Pre-auth capability probe. Currently exposes just
+     *  `email_sender_configured` — false when the install has no live
+     *  SMTP (dry-run only logs the outbound body, which a normal user
+     *  can't read), so login-screen surfaces that would only work with
+     *  real email (Forgot password?, Resend verification) should hide. */
+    getCapabilitiesAsync = async (): Promise<{ emailSenderConfigured: boolean }> => {
+        const result = await this.httpClient.get<{ email_sender_configured: boolean }>(
+            '/auth/capabilities',
+        );
+        return { emailSenderConfigured: result.email_sender_configured };
+    };
+
     /** FU-200 — single-use first-admin creation. The server 410s once any
      *  user exists, so the SPA should only call this when
      *  bootstrapRequiredAsync() returned true. Success auto-logs the new

@@ -365,6 +365,15 @@ def get_waste_insights():
         key=lambda b: (-b["event_count"], b["stock_item_name"]),
     )[:_MAX_ROWS]
 
+    # Per-reason counts. Every canonical reason is emitted even at zero, so
+    # the client can render a fixed grid without hiding tiles the user
+    # never populated (an empty tile is the intended affordance — "you
+    # haven't logged any of these" is meaningful).
+    by_reason = {reason: 0 for reason in WASTE_REASON_VALUES}
+    for event in events:
+        if event.reason in by_reason:
+            by_reason[event.reason] += 1
+
     most_recent = [
         {
             "event_id": str(e.id),
@@ -379,6 +388,7 @@ def get_waste_insights():
     return ok({
         "window_days": window_days,
         "total_events": len(events),
+        "by_reason": by_reason,
         "most_wasted": most_wasted,
         "most_recent": most_recent,
     })

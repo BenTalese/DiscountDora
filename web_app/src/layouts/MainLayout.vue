@@ -252,6 +252,12 @@
             // dropdown (header avatar). Duplicating it in the main menu was
             // confusing — removed.
         );
+        // On mobile the header's Help icon is hidden (space); mirror it into
+        // the drawer as a nav row so the guides stay reachable. Desktop
+        // keeps the header icon and doesn't need a duplicate here.
+        if ($q.screen.lt.md) {
+            base.push({ label: 'Help & Guides', icon: ICONS.help_outline, link: '/help' });
+        }
         return base;
     });
 

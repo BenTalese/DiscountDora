@@ -73,6 +73,7 @@ export type MostRecentRow = {
 export type WasteInsights = {
     window_days: number;
     total_events: number;
+    by_reason: Record<WasteReason, number>;
     most_wasted: MostWastedRow[];
     most_recent: MostRecentRow[];
 };

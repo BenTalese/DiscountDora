@@ -6,7 +6,7 @@
                 variant="ghost"
                 class="dora-text-secondary"
                 :icon="ICONS.skip_next"
-                label="Skip"
+                label="Skip onboarding"
                 @click="emit('skip')"
             />
         </div>
@@ -20,11 +20,7 @@
                     :sub="currentScene.sub"
                 >
                     <!-- Scene 2: the hero loop. -->
-                    <OnboardingLoop
-                        v-if="currentScene.visual === 'loop'"
-                        :persona="persona"
-                        @update:persona="emit('update:persona', $event)"
-                    />
+                    <OnboardingLoop v-if="currentScene.visual === 'loop'" />
 
                     <!-- Scene 1: the problem — scattered, dim domain glyphs. -->
                     <div
@@ -46,17 +42,27 @@
                         <DoraMascot mood="thinking" :size="132" />
                     </div>
 
-                    <!-- Scene 4: you're in control — persona teaser. -->
+                    <!-- Scene 4: you're in control — customisation teaser.
+                         Stylised switch panel, not category chips: every row
+                         is a real Settings toggle in the running app. -->
                     <div
                         v-else
                         class="story-glyph story-glyph--control"
                         aria-hidden="true"
                     >
                         <q-icon :name="ICONS.tune" class="g g--big" />
-                        <div class="story-pills">
-                            <span class="story-pill">Cooking</span>
-                            <span class="story-pill">Spend</span>
-                            <span class="story-pill">Everything</span>
+                        <div class="story-switches">
+                            <div
+                                v-for="row in CONTROL_SWITCHES"
+                                :key="row.label"
+                                class="story-switch"
+                                :class="{ 'is-on': row.on }"
+                            >
+                                <span class="story-switch-label">{{ row.label }}</span>
+                                <span class="story-switch-track">
+                                    <span class="story-switch-thumb" />
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </OnboardingScene>
@@ -97,37 +103,34 @@
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import OnboardingLoop from 'src/components/onboarding/OnboardingLoop.vue';
     import OnboardingScene from 'src/components/onboarding/OnboardingScene.vue';
-    import { useReducedMotion } from 'src/composables/useReducedMotion';
-    import {
-        NARRATIVE_SCENES,
-        type PersonaPreviewKey,
-    } from 'src/pages/onboarding/onboardingContent';
+    import { NARRATIVE_SCENES } from 'src/pages/onboarding/onboardingContent';
     import { ICONS } from 'src/style/icons';
-    import { computed, onBeforeUnmount, watch } from 'vue';
+    import { computed } from 'vue';
 
     const props = defineProps<{
         /** Current scene (v-model) so the shared rail can jump non-linearly. */
         sceneIndex: number;
-        /** Previewed persona (v-model) — remembered for the C-5.3 fork. */
-        persona: PersonaPreviewKey;
     }>();
     const emit = defineEmits<{
         'update:sceneIndex': [number];
-        'update:persona': [PersonaPreviewKey];
         'enter-setup': [];
         skip: [];
     }>();
-
-    const prefersReducedMotion = useReducedMotion();
 
     const currentScene = computed(
         () => NARRATIVE_SCENES[props.sceneIndex] ?? NARRATIVE_SCENES[0]!,
     );
     const isLast = computed(() => props.sceneIndex >= NARRATIVE_SCENES.length - 1);
 
-    // Going Back (or any reverse review) stops autoplay so we never yank the
-    // user forward while they're re-reading. Forward Next keeps it flowing.
-    let autoCancelled = false;
+    // Illustrative control panel for the "you're in control" scene — every
+    // row is a real toggle that exists in Settings today, so the visual
+    // says "customisable" without implying category personas.
+    const CONTROL_SWITCHES = [
+        { label: 'AI assistant', on: true },
+        { label: 'Spend tracking', on: false },
+        { label: 'Voice replies', on: true },
+        { label: 'Barcode scanning', on: false },
+    ] as const;
 
     function go(index: number) {
         const clamped = Math.min(Math.max(index, 0), NARRATIVE_SCENES.length - 1);
@@ -141,30 +144,8 @@
         go(props.sceneIndex + 1);
     }
     function back() {
-        autoCancelled = true;
         go(props.sceneIndex - 1);
     }
-
-    // Auto-advance: arm a timer for scenes that opt in, unless the user asked
-    // for reduced motion or has taken manual control. The hero loop scene has
-    // autoAdvanceMs = null, so autoplay naturally pauses there for exploration.
-    let advanceTimer: ReturnType<typeof setTimeout> | null = null;
-    function clearTimer() {
-        if (advanceTimer !== null) {
-            clearTimeout(advanceTimer);
-            advanceTimer = null;
-        }
-    }
-    function arm() {
-        clearTimer();
-        if (prefersReducedMotion.value || autoCancelled || isLast.value) return;
-        const ms = currentScene.value.autoAdvanceMs;
-        if (ms === null) return;
-        advanceTimer = setTimeout(() => go(props.sceneIndex + 1), ms);
-    }
-
-    watch(() => props.sceneIndex, arm, { immediate: true });
-    onBeforeUnmount(clearTimer);
 </script>
 
 <style scoped>
@@ -238,20 +219,51 @@
         font-size: 84px;
         color: var(--brand-primary);
     }
-    .story-pills {
+    .story-switches {
         display: flex;
+        flex-direction: column;
         gap: var(--space-2);
-        flex-wrap: wrap;
-        justify-content: center;
+        min-width: 220px;
     }
-    .story-pill {
-        padding: 4px var(--space-3);
+    .story-switch {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: 6px var(--space-3);
         border: 1px solid var(--border-default);
-        border-radius: var(--radius-pill);
+        border-radius: var(--radius-md);
+        background: var(--surface-component);
+    }
+    .story-switch-label {
         font-size: 0.82rem;
         font-weight: 600;
         color: var(--text-secondary);
+    }
+    .story-switch-track {
+        position: relative;
+        display: inline-block;
+        width: 30px;
+        height: 16px;
+        border-radius: var(--radius-pill);
+        background: var(--border-default);
+        transition: background var(--motion-fast) var(--motion-ease);
+    }
+    .story-switch-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
         background: var(--surface-component);
+        transition: left var(--motion-fast) var(--motion-ease);
+    }
+    .story-switch.is-on .story-switch-track {
+        background: var(--brand-primary);
+    }
+    .story-switch.is-on .story-switch-thumb {
+        left: 16px;
     }
 
     /* ── Scene cross-fade ──────────────────────────────────────────── */

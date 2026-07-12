@@ -41,7 +41,10 @@
             :aria-label="open ? 'Close Dora' : 'Open Dora help assistant'"
             @click="onLauncherClick"
         >
-            <div class="dora-bubble-launcher-inner">
+            <div
+                class="dora-bubble-launcher-inner"
+                :class="{ 'is-entering': !hasEntered }"
+            >
                 <DoraMascot
                     :mood="displayMood"
                     :state="mascotState"
@@ -221,6 +224,16 @@
         toggle();
     }
 
+    // FU-360.4 — one-shot entrance animation. Held on a `.is-entering`
+    // modifier class rather than the base CSS rule so hover-off doesn't
+    // reapply the base declaration and retrigger the animation (which
+    // used to flash Dora out and back in). Vue scopes @keyframes names in
+    // <style scoped>, so an animationend event listener would need the
+    // scoped name — a plain timeout matching entrance-delay + duration is
+    // simpler and just as reliable.
+    const hasEntered = ref(false);
+    const ENTRANCE_TOTAL_MS = 1500;
+
     function onClose() {
         open.value = false;
         // Re-fetch suggestions after closing — the user may have just
@@ -267,6 +280,13 @@
     }
 
     onMounted(async () => {
+        // Peel off .is-entering once the one-shot entrance is done. Anything
+        // sooner leaves the class on, and hover-off would resurrect the
+        // entrance animation.
+        setTimeout(() => {
+            hasEntered.value = true;
+        }, ENTRANCE_TOTAL_MS);
+
         // Surface the first-time hint once per browser. Skip on the login
         // page (the bubble itself only renders behind auth via MainLayout).
         try {
@@ -384,10 +404,14 @@
         display: inline-block;
         transform-origin: center bottom;
         will-change: transform;
-        /* One-time entrance: Dora pops in with a small spring overshoot the
-           first time the launcher mounts (login / app load). Hover and wiggle
-           rules are more specific, so they take over once the user interacts.
-           Disabled under prefers-reduced-motion (see the media query below). */
+    }
+    /* One-time entrance: Dora pops in with a small spring overshoot the
+       first time the launcher mounts (login / app load). Held on a modifier
+       class rather than the base rule so that when a hover-bob / wiggle
+       animation ends and the base declaration reasserts, the entrance
+       doesn't retrigger — the FU-360.4 hover-flash bug. Removed via
+       @animationend once the entrance has played. */
+    .dora-bubble-launcher-inner.is-entering {
         animation: dora-entrance var(--motion-slow) var(--motion-ease-spring) 300ms both;
     }
     /* Translucent disc behind the mascot — only shown when the chat is open,

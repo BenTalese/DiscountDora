@@ -76,15 +76,11 @@
                     @click="toggleMode"
                 />
                 <AuthButton
-                    v-if="mode === 'login'"
+                    v-if="mode === 'login' && emailSenderConfigured"
                     colour="ghost"
                     label="Forgot password?"
                     @click="router.push('/forgot-password')"
                 />
-                <div v-if="mode === 'register'" class="login-fineprint">
-                    Passwords must be at least 8 characters. A short
-                    passphrase of a few words works well.
-                </div>
             </div>
         </template>
     </AuthShell>
@@ -95,6 +91,7 @@
     import AuthShell from 'src/components/AuthShell.vue';
     import AuthButton from 'src/components/AuthButton.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
+    import AuthApiService from 'src/services/api/authApiService';
     import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import { useFormErrors } from 'src/composables/useFormErrors';
     import { useAuthStore } from 'src/stores/authStore';
@@ -106,7 +103,22 @@
     const router = useRouter();
     const route = useRoute();
 
-    onMounted(() => {
+    // Pre-auth capability probe. Hides the "Forgot password?" link on
+    // installs with no outbound email — dry-run mode logs the reset link
+    // to the server, which a normal user can't read, so surfacing the
+    // link would send them into a dead-end loop.
+    const emailSenderConfigured = ref(false);
+    const authApi = new AuthApiService();
+
+    onMounted(async () => {
+        try {
+            const caps = await authApi.getCapabilitiesAsync();
+            emailSenderConfigured.value = caps.emailSenderConfigured;
+        } catch {
+            // Probe failure defaults to hidden — safer to under-surface
+            // a broken link than to promise one that doesn't work.
+        }
+
         // A1: surface a toast when arriving from /verify-email so the user
         // sees confirmation of the click-through.
         if (route.query.verified === '1') {

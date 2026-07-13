@@ -493,25 +493,46 @@ before they get marked done:
 
 ## 11. Smaller secondary open decisions
 
+> **Status: closed 2026-07-13 — reconciled against the shipped rebuild
+> (FU-375 / FU-364 remediation).** The authoritative current design is
+> `IMPL_PLAN_MEAL_PLANS_REBUILD.md` + the shipped code; this block is
+> annotated against that reality, not against this proposal's own "will"
+> prose. All five calls were resolved by the build — no live fork remains.
+
 The big ones are locked in §2. Remaining smaller calls:
 
-1. **Recurring window cap** — currently proposing 26 weeks. Pick a
-   number.
-2. **Number of trays max** — 2 (Favourites + Haven't-had-in-a-while)
-   shipping, but the brief leaves room for "frequently-picked on
-   plans" as a third future tray.
-3. **Templates page route** — `/cookbook/templates` (under cookbook —
-   they ARE recipe groupings), or `/meal-plans/templates` (under
-   planner — that's where they're applied)? **Recommend
-   `/meal-plans/templates`** because they live in the meal-plan
-   mental model.
-4. **Slot remap UI** — a one-shot "remap legacy entries to current
-   vocabulary" button in settings; build now or defer?
-5. **Set rotation start anchor** — when applying a set from
-   `start_monday`, position 0 = the first week. Alternatively,
-   "always start from position 0 of the set on the calendar-year
-   start" gives a fixed cycle even if the user pauses. Default to
-   apply-time anchor (simpler).
+1. **Recurring window cap** — ✅ **RESOLVED — 26 weeks shipped.**
+   `RECURRING_WEEK_CAP = 26` in
+   `dora_api/features/meal_plan_templates/manage_templates.py:375`; the
+   `from-template/recurring` handler rejects any range over the cap
+   (lines 523–525). The proposal's proposed number was taken as-is.
+2. **Number of trays max** — ✅ **RESOLVED — the third tray was built.**
+   Three trays ship, not two: `Favourites`, `Haven't had in a while`,
+   and `Frequently planned`
+   (`web_app/src/composables/useMealPlanner.ts:156–167`, each capped at
+   `RECIPE_TRAY_CAP = 10`; confirmed in `IMPL_PLAN_MEAL_PLANS_REBUILD.md:77`).
+   The "future third tray" became a shipped tray.
+3. **Templates page route** — ✅ **RESOLVED — `/meal-plans/templates`
+   shipped**, matching the recommendation.
+   `web_app/src/router/routes.ts:119` mounts `MealPlanTemplatesPage.vue`
+   at `meal-plans/templates` (title "Rotating template sets"). The
+   `/cookbook/templates` alternative was not built.
+4. **Slot remap UI** — 📦 **MOOT / SUPERSEDED — not built, and the rebuild
+   removed the need.** No remap/migrate/reassign control exists
+   (`RecipeMealSlotsSettings.vue` has none; no `remap` reference anywhere
+   in `web_app/src` or `dora_api`). The rebuild instead surfaces any
+   off-vocabulary entry gracefully via a dedicated **"Other" off-vocabulary
+   row** on the calendar (see `DORA_WORKLOG.md` C-2 rebuild notes), so
+   legacy entries never strand. Combined with the pre-release posture
+   (no real users / clean breaking migrations allowed), a one-shot legacy
+   remap tool is unnecessary. If it's ever wanted it's a small additive
+   build, not a blocking fork.
+5. **Set rotation start anchor** — ✅ **RESOLVED — apply-time anchor
+   shipped** (the recommended simpler default). The recurring handler
+   enumerates weeks from `start_monday` and rotates `items[week_index %
+   len(items)]`, so position 0 = the first applied week
+   (`manage_templates.py:555–557`). The fixed calendar-year cycle
+   alternative was not built.
 
 ---
 

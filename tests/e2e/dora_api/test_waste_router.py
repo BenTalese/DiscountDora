@@ -255,10 +255,16 @@ def test__delete_waste_event__RepeatDelete__IdempotentNoContent(api):
     assert event_id not in {e["event_id"] for e in remaining}
 
 
-def test__delete_waste_event__MalformedId__BadRequest(api):
+def test__delete_waste_event__MalformedId__NotFound(api):
+    # R-033/FU-544: the route uses the `<uuid:event_id>` converter, so a
+    # non-UUID segment matches no route and 404s at the routing edge (was a
+    # handler-level 400 before the converter conversion). A no-route 404 is
+    # the shared plain-`application/json` "Endpoint was not found." envelope
+    # (see test_misc.py), not the `application/problem+json` handler body.
     resp = requests.delete(f"{EVENTS}/not-a-uuid")
 
-    assert_problem(resp, 400, title="event_id must be a UUID.")
+    assert resp.status_code == 404
+    assert resp.json()["title"] == "Endpoint was not found."
 
 
 #endregion waste events

@@ -24,18 +24,15 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.ingestion_source import (ALLOWED_TRUSTS,
                                                        TRUST_HIGH,
                                                        IngestionSource)
-from dora_api.domain.entities.user import User
-from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.routers import INGESTION_SOURCE_ROUTER
-from dora_api.infrastructure.api_response import (bad_request, forbidden,
-                                                  no_content, not_found,
-                                                  unauthorized)
+from dora_api.infrastructure.api_response import (bad_request, no_content,
+                                                  not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.ingestion_auth import (hash_ingestion_key,
                                                     mint_ingestion_key)
@@ -43,26 +40,6 @@ from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
-
-
-def _require_admin() -> tuple[UUID | None, object]:
-    """Mirror `update_user_as_admin._require_admin`. Kept local to avoid
-    pulling that module's larger surface for a one-line check."""
-    raw = session.get(SESSION_USER_ID_KEY)
-    if not raw:
-        return None, unauthorized()
-    try:
-        user_id = UUID(raw)
-    except (ValueError, TypeError):
-        session.clear()
-        return None, unauthorized()
-    me: User | None = SqlAlchemyRepository().get(User).by_id(user_id)
-    if me is None:
-        session.clear()
-        return None, unauthorized()
-    if not me.is_admin:
-        return None, forbidden("Admin role required.")
-    return user_id, None
 
 
 # ── DTOs ───────────────────────────────────────────────────────────────
@@ -194,7 +171,7 @@ class DeleteIngestionSourceHandler:
 
 @INGESTION_SOURCE_ROUTER.route("", methods=["GET"])
 def list_ingestion_sources():
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     items = ListIngestionSourcesHandler(SqlAlchemyRepository()).handle()
@@ -204,7 +181,7 @@ def list_ingestion_sources():
 @INGESTION_SOURCE_ROUTER.route("", methods=["POST"])
 @has_request_body(CreateIngestionSourceRequest)
 def create_ingestion_source():
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     req: CreateIngestionSourceRequest = get_request_body()
@@ -221,7 +198,7 @@ def create_ingestion_source():
 @INGESTION_SOURCE_ROUTER.route("<uuid:source_id>", methods=["PATCH"])
 @has_request_body(UpdateIngestionSourceRequest)
 def update_ingestion_source(source_id: UUID):
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     req: UpdateIngestionSourceRequest = get_request_body()
@@ -233,7 +210,7 @@ def update_ingestion_source(source_id: UUID):
 
 @INGESTION_SOURCE_ROUTER.route("<uuid:source_id>", methods=["DELETE"])
 def delete_ingestion_source(source_id: UUID):
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     ok = DeleteIngestionSourceHandler(SqlAlchemyRepository()).handle(source_id)

@@ -212,21 +212,19 @@ def get_audit_events():
     return paginated(items, total, page, size)
 
 
-@AUDIT_ROUTER.route("/events/<event_id>", methods=["GET"])
-def get_audit_event(event_id: str):
+@AUDIT_ROUTER.route("/events/<uuid:event_id>", methods=["GET"])
+def get_audit_event(event_id: UUID):
+    # R-033: entity-id path param uses the uuid converter — a malformed id
+    # 404s at the routing edge, so the handler receives a real UUID (FU-544).
     _, err = require_admin()
     if err is not None:
         return err
-    try:
-        parsed_id = UUID(event_id)
-    except (ValueError, TypeError):
-        return bad_request("event_id must be a UUID.")
     table = db.metadata.tables["AuditEvent"]
     row = db.session.execute(
-        select(table).where(table.c.id == parsed_id),
+        select(table).where(table.c.id == event_id),
     ).mappings().first()
     if row is None:
-        return not_found("AuditEvent", parsed_id)
+        return not_found("AuditEvent", event_id)
     actor_uuid = row.get("actor_user_id")
     usernames = _resolve_usernames([actor_uuid] if isinstance(actor_uuid, UUID) else [])
     return ok(_row_to_dto(dict(row), usernames))

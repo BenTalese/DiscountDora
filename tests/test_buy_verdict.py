@@ -304,6 +304,35 @@ def test__data_used_reflects_the_actual_inputs():
     assert data.days_since_last_purchase is not None
 
 
+def test__observation_dates_bucket_in_household_zone__not_utc():
+    """FU-525 — a UTC observation timestamp is bucketed into a calendar day in
+    the *household* zone so it agrees with `today` (R-021). 23:00 UTC on Jun 1
+    is already Jun 2 in Sydney (AEST, UTC+10); the surfaced `price_last_at` must
+    be the Sydney day, not the UTC one — otherwise the wait-hint's dates drift a
+    day and can flip its `next_low <= today` staleness check."""
+    from zoneinfo import ZoneInfo
+
+    ts = datetime(2026, 6, 1, 23, 0, tzinfo=timezone.utc)  # == 2026-06-02 09:00 AEST
+    syd = _AxisInputs(
+        price_samples=[(3.50, ts)],
+        unique_purchase_dates=[date(2026, 6, 2)],
+        stock_level_band="stocked",
+        today=date(2026, 6, 2),
+        tz=ZoneInfo("Australia/Sydney"),
+    )
+    assert compose_verdict(syd).data_used.price_last_at == "2026-06-02"
+
+    # Same instant read in UTC (the pre-FU-525 behaviour) buckets a day earlier.
+    utc = _AxisInputs(
+        price_samples=[(3.50, ts)],
+        unique_purchase_dates=[date(2026, 6, 1)],
+        stock_level_band="stocked",
+        today=date(2026, 6, 1),
+        tz=timezone.utc,
+    )
+    assert compose_verdict(utc).data_used.price_last_at == "2026-06-01"
+
+
 # ── P8-06 wait-hint (`_wait_hint`) ────────────────────────────────────
 
 

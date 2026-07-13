@@ -278,8 +278,8 @@ def list_backups():
     return paginated(items, total, page, size)
 
 
-@DATA_ROUTER.route("/backups/<backup_id>/download", methods=["GET"])
-def download_backup(backup_id: str):
+@DATA_ROUTER.route("/backups/<uuid:backup_id>/download", methods=["GET"])
+def download_backup(backup_id: UUID):
     _, err = require_admin()
     if err is not None:
         return err
@@ -301,8 +301,8 @@ def download_backup(backup_id: str):
     )
 
 
-@DATA_ROUTER.route("/backups/<backup_id>/restore", methods=["POST"])
-def restore_saved_backup(backup_id: str):
+@DATA_ROUTER.route("/backups/<uuid:backup_id>/restore", methods=["POST"])
+def restore_saved_backup(backup_id: UUID):
     _Logger = logging.getLogger(__name__)
     _, err = require_admin()
     if err is not None:
@@ -339,8 +339,8 @@ def restore_saved_backup(backup_id: str):
     return ok(_Result.model_dump())
 
 
-@DATA_ROUTER.route("/backups/<backup_id>", methods=["DELETE"])
-def delete_backup(backup_id: str):
+@DATA_ROUTER.route("/backups/<uuid:backup_id>", methods=["DELETE"])
+def delete_backup(backup_id: UUID):
     _Logger = logging.getLogger(__name__)
     _, err = require_admin()
     if err is not None:
@@ -363,12 +363,9 @@ def delete_backup(backup_id: str):
 
 # ── Internal helpers ───────────────────────────────────────────────────
 
-def _resolve_backup(backup_id: str) -> Backup | Response:
-    try:
-        parsed = UUID(backup_id)
-    except (ValueError, TypeError):
-        return bad_request("backup_id must be a UUID.")
-    row = SqlAlchemyRepository().get(Backup).by_id(parsed)
+def _resolve_backup(backup_id: UUID) -> Backup | Response:
+    # R-033: callers now pass a real UUID (routes use the uuid converter, FU-544).
+    row = SqlAlchemyRepository().get(Backup).by_id(backup_id)
     if row is None:
         return not_found("Backup", backup_id)
     return row

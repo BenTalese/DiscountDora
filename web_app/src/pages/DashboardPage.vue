@@ -1155,7 +1155,7 @@
     import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useAlertActions } from 'src/composables/useAlertActions';
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
@@ -1322,6 +1322,7 @@
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
     const productApi = new ProductApiService();
+    const { applyAction } = useAlertActions();
     const budgetApi = new BudgetApiService();
     const reportsApi = new ReportsApiService();
     // suggestion store shared with the Dora launcher badge and
@@ -1836,17 +1837,15 @@
         }
     }
 
+    // Routed through the shared useAlertActions composable (FU-521); the
+    // dashboard passes its own refresh because it also reloads the summary/score
+    // cards, not just the alert store.
     async function applyAlertAction(alert: Alert, action: AlertAction) {
-        try {
-            await alertApi.applyActionAsync(alert.alert_id, action);
-            await Promise.all([loadAlerts(), loadSummary()]);
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Done.' });
-        } catch (err) {
-            $q.notify({
-                type: 'negative', position: 'bottom-right',
-                message: 'Could not apply.', caption: toastCaption(err),
-            });
-        }
+        await applyAction(alert, action, {
+            refresh: async () => {
+                await Promise.all([loadAlerts(), loadSummary()]);
+            },
+        });
     }
 
     // ── Cookable tonight ────────────────────────────────────────────────

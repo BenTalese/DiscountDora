@@ -9,6 +9,536 @@ next.
 
 ---
 
+## 2026-07-13 (later 11) — FU-553 investigated + root-caused, deliberately NOT force-fixed (stays open)
+
+**Why:** User: "do 553" (the downgrade-only SQLite CHECK-drop issue spun off from
+FU-549). Investigated deeply; root-caused precisely; made a proportionate call NOT
+to force a fragile fix.
+
+**Root cause (now nailed):** naming-convention × alembic-batch-rebuild double-
+application. Plain `Table(autoload_with)` reflects the CHECK correctly
+(`ck_RecipeIngredient_recipe_ingredient_anchor`), but batch re-renders that
+already-final name through the metadata `ck_%(table)s_%(name)s` convention on the
+table rebuild → doubled `ck_RecipeIngredient_ck_RecipeIngredient_...` (proven from
+the rebuilt CREATE TABLE). So batch's `named_constraints` is keyed by the doubled
+name and no single-rendered `drop_constraint` matches; and the CHECK can't just be
+left (it references `raw_text`, which the downgrade drops).
+
+**3 approaches tried, all fail (recorded in the FU so nobody repeats them):**
+logical-name drop; rely-on-rebuild-to-omit; `naming_convention=` on batch.
+
+**Decision:** downgrade-only, SQLite-only, dev/rollback tooling — production never
+downgrades (FU-549 fixed the upgrade/boot path). Likely fine on Postgres (native
+DROP CONSTRAINT, no rebuild). Not worth a raw-SQL table-rebuild workaround now
+(Effortless + Anti-creep). Left the downgrade in its clean intended form with an
+inline NOTE; the round-trip test stays strict-xfailed on FU-553; FU-553 stays OPEN
+with the full diagnosis + recommended resolution (confirm-on-Postgres + gate the
+test there under FU-045/FU-405).
+
+**No functional change this unit** — migration upgrade path unchanged (5 passed /
+1 xfailed / 1 skipped, same as after FU-549). No CHANGELOG.
+
+**R-checks / ADR:** none — no shippable change. Diagnosis captured in the FU +
+migration NOTE.
+
+**Next up:** FU-553 is parked (revisit with Postgres). Backlog is otherwise
+low-severity; the finalisation sweep (Chunk 1, Cookbook, Stage-1 analysis) is the
+natural next substantive move.
+
+---
+
+## 2026-07-13 (later 10) — FU-549 closed: fresh-install migration boot fixed (the ⚠️ #0 reliability item)
+
+**Why:** User: "do FU-549." The migration chain didn't apply from an empty DB —
+production fresh-boot runs `flask_migrate.upgrade()` from empty, so a brand-new
+self-hosted install would crash on first boot. Reproduced, root-caused, fixed,
+verified with `.venv` pytest.
+
+**Reproduced:** `flask_migrate.upgrade()` on an empty SQLite DB died in
+`a3e9f6c2d8b4_20260618_rename_merchant_to_store.py` at the `Product` batch rename:
+`AttributeError: 'BINARY' object has no attribute 'name'`.
+
+**Root cause:** Alembic batch-mode `alter_column` on a *rename* reads
+`existing_type.name` for `SchemaEventTarget` types; `sqlalchemy_utils.UUIDType`
+(TypeDecorator) proxies `.name` to its `BINARY` impl, which has none. Crashes on
+alembic 1.13.1 AND the installed 1.14.1 → pinning alone wouldn't fix it.
+
+**Fix:**
+- `a3e9f6c2d8b4` — the 6 UUIDType-column renames (up + down) pass
+  `existing_type=sa.BINARY(16)` (the physical type UUIDType compiles to; not a
+  SchemaEventTarget → buggy branch short-circuits; identical DDL). Full 116-migration
+  chain now applies from empty → `MIGRATION_OK`.
+- `requirements.txt` — pinned `alembic==1.14.1` (was transitive via Flask-Migrate).
+- `tests/test_migrations.py` — un-xfailed the from-empty-upgrade + schema-match
+  tests (now pass + run in-suite → first real from-empty coverage; chose this over
+  switching the suite's `create_all()`→`upgrade()`).
+- DORA_VERIFY §Operator item flipped to "confirm a clean install boots".
+
+**Also fixed in passing:** `c5a8e1f7d3b2` downgrade passed a pre-`ck_`-prefixed
+constraint name that the `ck_%(table)s_%(name)s` convention doubled — now passes
+the logical name. (Still not enough for `downgrade base` on SQLite — see below.)
+
+**Spun off [[FU-553]]:** the round-trip test's `downgrade base` still fails on a
+separate, downgrade-only, likely-SQLite-specific issue (alembic batch can't drop a
+reflected named CHECK constraint on RecipeIngredient). Production never downgrades,
+so it's out of the boot-risk scope — re-xfailed that one test with the FU ref.
+
+**Verified:** `test_migrations.py` → 5 passed / 1 xfailed (FU-553) / 1 skipped
+(Postgres, gated on FU-405). e2e suite unaffected (migration files only run under
+`upgrade`, not the `create_all` test path).
+
+**R-checks / ADR:** R-005 (portability — the fix + Postgres note), R-013 (from-empty
+coverage now runs). No new ADR (a batch-mode gotcha, documented inline in the
+migration + the test). CHANGELOG (Fixed) + PROJECT_STATE #0 item flipped ✅.
+
+**Next up:** FU-553 (downgrade CHECK-drop) if wanted, but low-priority; otherwise
+the finalisation sweep or remaining backlog.
+
+---
+
+## 2026-07-13 (later 9) — FU-531 closed: three component nits (dead branch / re-entrancy / blank icon)
+
+**Why:** User: "do FU-531." Three small maintainability nits from the component
+Vitest pass; each a two-line fix.
+
+**What changed (frontend):**
+- `AddToListButton.vue` — `shouldUseCombinedModal` had an unreachable
+  `return draftCount >= 2` tail (linkedProductCount is a non-negative int, ≥2/0/1
+  all handled). Collapsed to `() => linkedProductCount.value >= 2`; removed the
+  now-dead `draftCount` computed.
+- `SettingsFileDrop.vue` — `@click.stop` on the hidden file `<input>` so its
+  programmatic `.click()` stops re-entering `onZoneClick`.
+- `alert.ts` `iconFor` — unmapped kind → `ICONS.notifications` (bell) instead of
+  a blank QIcon circle.
+
+**Verified (node):** full frontend vitest **329 passed** (addToListButton /
+settingsFileDrop / alertRow specs included), `vue-tsc` clean, eslint clean.
+
+**Ledger:** [[FU-545]] cross-ref updated — its click-re-entrancy half is closed
+here; its remaining scope is purely the `nested-interactive` a11y refactor.
+
+**R-checks / ADR:** dead-code removal (R-001 hygiene). No new ADR. No CHANGELOG
+(internal; the only user-facing sliver is a fallback icon on a rare degrade path).
+
+**Next up:** FU-549 (fresh-install migration/boot) remains the top substantive item.
+
+---
+
+## 2026-07-13 (later 8) — FU-529 closed: reconcile receipt ordering made deterministic + clock-step-safe
+
+**Why:** User: "do FU-529." `_latest_receipt` + the queue's correlated subqueries
+ordered receipts purely by wall-clock `created_at`; a tie or a clock step-back
+made "latest" ambiguous → the sweep's `unresolved_auto` could read as newer than
+the user's resolved receipt → same-verb replay wrote a duplicate (the observed
+transient idempotence flake).
+
+**What changed (`reconcile.py`, zero migration, portable):**
+- Deterministic **`(created_at, id)`** order: `_latest_receipt` `ORDER BY
+  created_at DESC, id DESC`; the 3 correlated subqueries use
+  `r2.created_at > r.created_at OR (= AND r2.id > r.id)`. (FU's stated minimum.)
+- **Monotonic clamp** in `submit_verb`: a correction's `created_at` is clamped to
+  just after the latest existing receipt, so a backwards clock step can't make a
+  correction sort older than what it supersedes. Directly kills the suspected
+  cause.
+
+**Gotcha the test caught:** first clamp cut used `isinstance(created_at, datetime)`
+— but `_latest_receipt` runs raw `text()` SQL, so on SQLite created_at comes back
+a **str**, so the clamp silently no-op'd (in prod too!). The new regression test
+failed, exposing it; fixed by parsing the str (still handles datetime for
+Postgres). Good example of a test earning its place.
+
+**Test:** `test__replay_idempotent_when_latest_receipt_created_at_is_ahead` —
+forces the sweep receipt a day ahead (simulates the clock-step), asserts the
+replay stays idempotent with no duplicate. Fails without the fix, passes with.
+
+**Verified (`.venv` pytest):** reconcile + concurrency suites **28 passed**; the
+two idempotence tests **8/8 in a loop** (the FU's "re-run in a loop to confirm").
+No CHANGELOG — internal reconcile correctness, no user-visible change.
+
+**R-checks / ADR:** R-005 (portable — str+datetime, no migration), R-013
+(regression test), R-003 (one ordering definition across all 4 sites). No new ADR.
+
+**Next up:** FU-549 (fresh-install migration/boot) remains the top substantive item.
+
+---
+
+## 2026-07-13 (later 7) — FU-523 closed: LIKE operators always case-insensitive + portable (R-005/R-003)
+
+**Why:** User: "do FU-523." `Contains`/`StartsWith` in `bool_operation.py` inverted
+the `case_sensitive` flag on the value side, and a case-sensitive LIKE can't be
+expressed portably on SQLite anyway. Took the FU's sanctioned option (b): drop the
+flag, always case-insensitive, portable.
+
+**What changed (backend):**
+- `bool_operation.py` — `Contains`/`StartsWith` now lower **both** column and
+  value via `_resolve` → `lower(col) LIKE '%<lowered>%'`, identical on SQLite +
+  Postgres. Dropped their `case_sensitive` param. (Fixes the real latent bug: the
+  old default lowered only the column, so an upper-case value missed on Postgres —
+  SQLite's case-insensitive LIKE had been masking it.)
+- `field.py` — dropped `case_sensitive` from `.contains()`/`.starts_with()` +
+  the docstring example. **Deleted dead `EntityField._coerce`** (0 call sites,
+  superseded by `_resolve`) — it carried the *same* inverted-flag bug, so removing
+  it kills a second copy of the trap.
+- `test_sqlalchemy_repository.py` — removed the two `xfail(strict=True)` cases
+  (pinned a now-removed capability); updated the matrix comment; added
+  `test__contains__lowers_both_sides__portable` (compiled-SQL guard proving the
+  value is lowered — the Postgres-portability pin SQLite behavioural tests can't
+  give).
+
+**Scope note:** `Equal`/`NotEqual` keep their working `case_sensitive` (exact
+matches, portable + tested + used). Only the two LIKE operators lost it, since
+substring case-sensitivity is the non-portable one and no feature used it.
+
+**Verified (`.venv` pytest):** repository suite 58 passed; search + tool-router
+consumers green (70 passed combined). Byte-compile clean. No CHANGELOG entry —
+infra-only, no user-visible change on the current SQLite datastore (matters when
+[[FU-045]] Postgres lands).
+
+**R-checks / ADR:** R-005 (portability — the whole point), R-003 (one casing
+source; removed the duplicate `_coerce`), R-010 (removed an unhonorable flag),
+R-013 (regression test). No new ADR.
+
+**Next up:** FU-549 (fresh-install migration/boot) remains the top substantive item.
+
+---
+
+## 2026-07-13 (later 6) — FU-525 closed: buy-verdict dates bucketed in household tz (R-021)
+
+**Why:** User: "deal with FU-525." Buy-verdict took `.date()` on UTC observation
+timestamps while `today` is household-local (R-021) — a ±1-day drift on the
+wait-hint for non-UTC households + an edge flip of its `next_low <= today`
+staleness check. Took the proper R-021 fix, not the accept-the-fuzz option.
+
+**What changed (backend):**
+- `app_settings/clock.py` — new `household_timezone(repository) -> ZoneInfo`
+  (mirrors `household_today`).
+- `stock_items/get_buy_verdict.py` — `_AxisInputs` gains `tz: tzinfo` (defaults
+  UTC); new `_local_date(dt, tz)` helper (`_as_utc(dt).astimezone(tz).date()`).
+  All calendar-day bucketing now goes through it: `_wait_hint` low-dates,
+  `_gather_inputs` unique-dates, `_data_used_dto` `price_last_at`; and both
+  window horizons (`_price_axis` 90d, `_gather_inputs` 365d) are anchored to
+  household-local midnight. `_gather_inputs` sets `tz=household_timezone(repo)`.
+- `tests/test_buy_verdict.py` — regression test (23:00-UTC sample buckets to the
+  Sydney next-day; UTC control buckets a day earlier).
+
+**Test-compat note:** the `tz` field defaults to UTC and the suite builds samples
+at UTC-noon (the 2026-07-10 flake fix), so every existing test's `.date()` is
+unchanged — the fix only bites the production non-UTC path.
+
+**Verified (`.venv` pytest):** `test_buy_verdict.py` 23 passed (incl. new tz
+test); dora-score + trim-to-budget + stock-item-router e2e 93 passed. Byte-compile
+clean. CHANGELOG (Fixed) + worklog updated.
+
+**R-checks / ADR:** R-021 (household-tz date boundary) now consistently applied on
+this surface; R-013 (bug fix ships with a regression test) satisfied. No new ADR —
+straight R-021 application. Broader R-021 app-wide adoption remains FU-174.
+
+**Next up:** FU-549 (fresh-install migration/boot) still the top substantive item.
+
+---
+
+## 2026-07-13 (later 5) — FU-521 closed: alert-action triad + per-kind switches consolidated (R-001/R-003)
+
+**Why:** User: "deal with FU-521." Two R-003 drifts on the alerts surface: the
+apply-action mutation wired 3× (Bell/Page/Dashboard, divergent toasts — the
+FU-357 bug root), and 5 per-kind `switch`es in `alert.ts` that had to agree with
+nothing enforcing it (the 2026-07-09 unknown-kind crash). The finding was already
+execution-ready, so executed directly rather than waiting on FINALISATION_PLAN
+Chunk 9.
+
+**What changed (frontend):**
+- **New `useAlertActions()`** composable — owns applyAction + refresh + toast +
+  `busyAlertId`; refresh defaults to `alertStore.refreshAsync()`, overridable
+  (Dashboard passes its own summary+score reload). Mirrors
+  `useShoppingListActions`/`useStockItemActions`.
+- `AlertsBell.vue` / `AlertsPage.vue` / `DashboardPage.vue` — dropped their
+  hand-rolled apply handlers + local busy; call the composable. Bell shed its now
+  -dead `AlertApiService`/`toastCaption`/`AlertAction` imports; Page shed
+  `AlertAction`; Dashboard shed `toastCaption`.
+- **`ALERT_KIND_META: Record<AlertKind, AlertKindMeta>`** in `alert.ts` — one row
+  per kind; `iconFor`/`colorForKind`/`kindTheme`/`actionsFor`/`linkFor` are now
+  thin readers. `Record<AlertKind,…>` gives the compile-time exhaustiveness that
+  was missing. Accessors use `?.`+fallback to keep the graceful unknown-kind
+  degrade (backend-ahead kind → blank/nav-only row, never throws).
+
+**Gotcha caught in-flight:** first cut used `META[kind].icon` which *throws* on an
+unknown kind — reintroducing the very crash class the FU is about. The pinned
+`alertRow.spec.ts` "unknown kind degrades safely" block (4 tests) caught it
+immediately; fixed with `?.` fallbacks. Good example of the test net doing its job.
+
+**Verified (`.venv`-independent, node):** full frontend vitest **329 passed**
+(alertStore 9 + alertRow 15 among them), `vue-tsc --noEmit` clean, eslint clean.
+No user-visible behaviour change — pure consolidation.
+
+**R-checks / ADR:** R-003 (ALERT_KIND_META = one source for per-kind presentation;
+useAlertActions = one source for the action triad) + R-001 (shared composable).
+No new ADR (straight R-001/R-003 application). [[FU-531]] item 3 (blank-icon
+fallback) left open — degrade stays intentionally blank.
+
+**Next up:** FU-549 (fresh-install migration/boot) still the top substantive item.
+
+---
+
+## 2026-07-13 (later 4) — FINALISATION_PLAN: reshaped to a strict two-stage effort under a single-maintainer north-star
+
+**Why:** Owner directive — the app must be **maintainable by one person, by hand,
+if AI ever becomes inaccessible**: neat, non-redundant, logically placed,
+industry-standard. Owner was explicit about the *shape*: **strict two-stage** —
+(1) put ALL effort into analysing the code in detail, file by file, writing every
+finding down; (2) from those written findings — no further investigation — make
+the exact efficient changes. NOT analyse-and-fix-in-the-same-pass.
+
+**Correction note:** my first draft added a "Track 5 — remediate in-pass" track;
+that interleaves analysis and fixing and was wrong per the directive. Reworked to
+the two-stage model below (Stage 1 analysis / Stage 2 execution).
+
+**What changed (docs only, no code):**
+- `FINALISATION_PLAN.md` — **Governing objective** callout (§1) now defines the
+  two-stage effort; the 4 tracks are all **Stage-1 analysis, no code change**;
+  **Track 3 (senior review) upgraded to the execution-ready change record** (exact
+  file:line + exact change per finding, covering redundancy/dead-code/
+  componentisation/placement/naming/inefficiency/standards). **§2** reworded
+  (Stage 1 changes no code; Stage 2 executes; feature-rewrites/contract/data-model
+  → new proposal, out of scope). **§3.5** rewritten as **Stage 2 — Execution**
+  (apply from the record, no re-analysis, test-guarded, kick under-specified
+  findings back to Stage 1). **§5 recipe** = Stage-1 analysis only ("write, don't
+  fix"). **§7 DoD** split into Stage-1-complete + Stage-2-complete + north-star.
+  **FU-510** rollup recast to two-stage.
+- `FINALISATION_COVERAGE.md` — added the **Applied** column (Stage-2 execution;
+  ticks only after a chunk's Review cell is ✅) + Stage-1/Stage-2 checklist rows.
+- `PROJECT_STATE.md` — workstream + doc-register rows refreshed to two-stage.
+- Memory — saved [[goal-single-maintainer-legible]] (two-stage shape) + indexed.
+
+**Key design calls:** analysis fully precedes execution (the whole point — so the
+change phase is mechanical, unambiguous, no half-measures); the review record is
+the contract, and if Stage 2 ever needs to re-investigate, the finding was
+under-specified and goes back to Stage 1. Anti-ballooning guard kept: only the
+maintainability class + verified bugs are in Stage 2; design-level changes →
+proposal/FU. Test suite (FU-371) is the execution guard.
+
+**Not started:** still 🔵. Entry point = chunk 1 (Cookbook), Stage-1 analysis, via
+FINALISATION_COVERAGE. No chunk walked yet.
+
+**R-checks / ADR:** none — planning doc only.
+
+**Next up:** on owner's go, start chunk 1 (Cookbook) per the §5 recipe — or
+continue the FU backlog / FU-549.
+
+---
+
+## 2026-07-13 (later 3) — FU-530 closed: ingestion admin-gate duplicate consolidated to `admin_gate.require_admin` (R-001)
+
+**Why:** User: "do FU-530." `ingestion_source_admin.py` kept a local `_require_admin`
+copy instead of the canonical `admin_gate.require_admin` (FU-341's single source) —
+R-001 drift hazard.
+
+**What changed:**
+- `ingestion_source_admin.py` — deleted the local `_require_admin` (behaviourally
+  identical to canonical), imported `admin_gate.require_admin`, updated 4 call
+  sites, pruned orphaned imports (`session`, `User`, `SESSION_USER_ID_KEY`,
+  `forbidden`, `unauthorized`).
+- `store_mappings.py` — **also** imported that local `_require_admin` (a second
+  reach-in). Repointed to `admin_gate.require_admin`, 3 call sites; drops its
+  dependency on the heavier `ingestion_source_admin` module.
+
+**Verified (`.venv` pytest):** `test_route_auth_enforcement.py` (6),
+`test_ingestion_sources.py` + `test_ingestion_store_mappings.py` (11) all green;
+both files byte-compile; no lingering `_require_admin`. No behaviour change — the
+enforcement sweep confirms anon→401 / non-admin→403 on every ingestion route.
+
+**R-checks / ADR:** R-001 (DRY) applied — completes the FU-341 gate consolidation
+the original sweep missed. No new ADR (canonical gate already exists).
+
+**Next up:** FU-549 (fresh-install migration/boot) remains the top substantive item.
+
+---
+
+## 2026-07-13 (later 2) — FU-544 closed: last 5 entity-id routes onto the `<uuid:>` converter (R-033)
+
+**Why:** User: "do FU-544." The FU-532 sweep left 5 routes (7 endpoints) on the
+string converter because their handlers called bare `UUID(param)` (which would
+500 the *valid* path under the converter). Bringing them into R-033 consistency.
+
+**What changed (7 routes across 5 files):** each route → `<uuid:...>`, handler
+signature → `: UUID`, per-site `UUID(param)` parse removed (use the real UUID):
+- `audit/get_audit_events.py` `/events/<uuid:event_id>`
+- `data/backup_library.py` — 3 routes (download/restore/delete) + the shared
+  `_resolve_backup` helper retyped `str`→`UUID`
+- `data/uploads.py` `/uploads/<uuid:upload_id>` (DELETE) — dropped the
+  `_is_valid_upload_id` check on this path (converter validates + kills the
+  staged-filename traversal concern); kept it for the body-based `/chunk`/
+  `/finish`; `upload_id` is server `str(uuid4())` so filename case still matches
+- `price_history/price_history.py` `/alerts/<uuid:alert_id>` (DELETE)
+- `waste/waste.py` `/events/<uuid:event_id>` (DELETE)
+
+**Behaviour change (intended per R-033):** non-UUID path segment → 404 at the
+routing edge (shared plain-json "Endpoint was not found.") instead of handler 400.
+
+**Tests:** updated `test_waste_router.py` malformed-id case (400→404, no-route
+envelope; can't use `assert_problem` — that 404 is plain `application/json`, not
+`problem+json`). Ran via `.venv` pytest: waste/data/price-history/audit/
+audit-completeness/fuzz/route-auth = **95 passed** first pass (2 failed: my test
+before the envelope fix — now green on re-run, 20 passed; + the **pre-existing
+FU-328** `test__import_template__csv_download` CSV-template failure, unrelated).
+The whole-API fuzz path-param guard (`test__..._path_params__..._not_500`)
+confirms these now 4xx-not-500 on garbage ids.
+
+**R-checks / ADR:** this *is* R-033 application (ADR-029); no new violations, no
+new ADR. Imports checked — `UUID`/`bad_request` remain used in every touched
+file (no orphans).
+
+**Next up:** FU-549 (fresh-install migration/boot) remains the top substantive
+open item.
+
+---
+
+## 2026-07-13 (later) — FU-336 shipped: Dora builds + serves as a real PWA
+
+**Why:** User: "can we do FU-336." The PWA config (Workbox GenerateSW + manifest
++ shortcuts + offline + push) was fully wired but `npm run build` ran SPA mode,
+so none of it ever shipped. Highest-ROI platform move per PLATFORM_BUILDS_AUDIT.
+
+**What changed (code):**
+- `web_app/package.json` — `build`: `quasar build` → `quasar build -m pwa`.
+  (PWA mode also auto-added `register-service-worker` + `workbox-*` deps to
+  package.json / package-lock.json — legit, commit them.)
+- `web_app/quasar.config.ts` — `build.distDir: 'dist/spa'`. PWA mode defaults to
+  `dist/pwa`; pinning to `dist/spa` keeps ONE canonical output path so all 7
+  consumers (nginx.conf, `serve_spa.py`, `dora.spec`, `build-{linux,macos}.sh`,
+  Playwright) work untouched. A PWA is the SPA bundle + SW, so one path serves
+  both modes — cheaper + safer than threading a second path everywhere.
+- `nginx.conf` — added a `no-cache` location for `sw.js`/`push-sw.js` before the
+  generic hashed-asset block (SWs must not be long-cached → stale-worker pinning).
+- **Incidental (committed frontend build was RED — `npm run build` failed lint):**
+  removed dead `stockItemFor` + orphaned `import type { StockItem }` in
+  `ShoppingListDetail.vue`; eslint-ignored the generated (untracked)
+  `src-pwa/custom-service-worker.ts` (InjectManifest template, unused under our
+  GenerateSW mode) so a fresh checkout's regenerated scaffold can't re-break the
+  build. Left my `void self.skipWaiting()` tidy in that untracked file (inert).
+
+**Verified (real build, node_modules present):** `npm run build` → **Build
+succeeded, mode pwa, output dist/spa**; emitted `sw.js` (with `dora-api` +
+`dora-merchant-images` runtime caches + offline fallback), `workbox-*.js`,
+`manifest.json`, `offline.html`, `push-sw.js`, icons. `npm run lint` → 0 errors.
+Serving verified by reading `serve_spa.py` (real files, forced MIME per FU-551)
++ `nginx.conf` (try_files). **Not yet browser-verified** — logged in DORA_VERIFY.
+
+**Spun off:** [[FU-552]] — PWA ships Quasar-placeholder icons for iOS
+apple-touch + Safari pinned-tab (Android/Chrome/favicon already Dora-branded).
+
+**Handoff / commit notes:**
+- `web_app/src-pwa/` is **untracked** (generated 2026-06-22, never committed).
+  Build is now robust either way (the one lint-breaking file is eslint-ignored,
+  Quasar regenerates the rest), but committing it is the Quasar convention.
+- **Do NOT commit** the Quasar-placeholder icons in `web_app/public/icons/`
+  (`apple-icon-*`, `icon-*`, `ms-icon-*`, `safari-pinned-tab.svg`) — FU-552
+  replaces them with Dora-branded versions.
+
+**R-checks / ADR:** R-005 (portable output path — one `dist/spa` for SQLite/PG
+self-host, Docker, desktop; MIME already handled) ✅. R-008 (comments record why
+— distDir + nginx + eslint-ignore all carry rule/why comments) ✅. No new ADR
+(build-config change, not a recurring architectural decision).
+
+**Next up:** browser-verify the PWA (DORA_VERIFY §Build/Operator); FU-549
+(fresh-install migration/boot) still the top substantive open item.
+
+---
+
+## 2026-07-13 — FU-triage session: cleared the 2026-07-01 proposals-audit backlog (12 FUs resolved, 1 tightened), no code
+
+**Scope:** resolved FU-362, 364, 368, 369, 371, 372, 375, 377, 379, 380
+(won't-do), 381, 382 (+ FU-519); tightened FU-378 to its single remaining item.
+No code changed — doc/ledger reconciliation + open-decision closure only.
+
+
+**Why:** User walked open FUs one at a time asking "what to do with each." All
+turned out to be already-done or stale trackers; this was ledger/status
+reconciliation, not a build. **Pattern confirmed:** the 2026-07-01 proposals
+audit produced multiple "not built" FUs (368/369/371/372) for proposals that had
+*already shipped* — the audit trusted each doc's "draft" status line over the
+code. Ran a skeptical sweep of the whole audit batch (see below).
+
+**Skeptical sweep of the 2026-07-01 proposals-audit FUs — verdict:**
+- **False "not built" → RESOLVED:** FU-368 (LOCALE), FU-369 (IMAGE_STEPS),
+  FU-371 (TEST_SUITE), FU-372 (CARD_REVISION). All verified shipped in code.
+- **Genuinely open (register agrees):** FU-370 SUPPORT_CHANNEL (🔵 designed,
+  correctly Phase-4), FU-376 PRODUCTS_AS_OVERLAY (🟡 active, Phase F),
+  FU-373 BARCODE_SCANNING deferred slices (named Phase-2 deferrals).
+  - **FU-374 SIMPLE_MODE — since RESOLVED 2026-07-13 (later):** doc-drift only;
+    verified in code that the surviving substrate all shipped
+    (`StockItemPriceObservation`, `get_stock_item_unit_cost_at`, `usual_store_id`,
+    Store rename) and the spine (`products_enabled` flag) was added-then-dropped
+    in the products-as-overlay pivot. Nothing to build. Status line corrected.
+- **FU-364 "open-decisions" cluster — NOT the same pattern, left for a
+  separate pass:** FU-375/377/378/379/380/381/382 track whether shipped
+  proposals' in-doc open-decision blocks were closed (the FU-364 remediation).
+  The proposals are built; the question is decision-recording, which needs a
+  per-proposal read. Not swept here.
+
+**FU-364 "open-decisions" cluster — swept via 7 parallel audit agents (one
+per proposal), each reconciling the doc's open-decision block against shipped
+code and annotating the proposal in place:**
+- **RESOLVED (all decisions closed-by-shipped-behaviour):** FU-375 (MEAL_PLANS
+  §11 — 5 decisions, all shipped/moot per the rebuild), FU-377 (COOKBOOK — 6
+  decisions inc. cuisine≠category kept separate, flat version siblings, option-A
+  sections), FU-379 (ALERTS §7 — delivery-dedup shipped as `AlertInteraction`
+  columns per C-9.7 ADR), FU-381 (COOK_MODE §5 — ticking removed, one-level
+  sub-steps, `NO_SPACE_UNITS`), FU-382 (SHOPPING_LIST_UX_V2 §11 — all 4 decided
+  in §12 + shipped).
+- **FU-378 — KEPT-OPEN, TIGHTENED:** §2.3 #1 nav-model decision is CLOSED
+    (mobile full-page / desktop splitter-peek, shared `StockItemDetailPage`);
+    only the action-first scan-mode (§7.4) never shipped. Narrowed to that.
+    Note: the §2.3 close unblocked FU-384, but FU-384 already resolved via
+    FU-508 — no longer load-bearing.
+  - **FU-380 — CLOSED AS WON'T-DO:** §7 decisions 1–6 CLOSED (`AddToListButton`);
+    the only remnant (decision 7 — swipe-right-to-choose-list + success
+    animation) was cut on the user's call — anti-creep, redundant with the
+    shipped tap→popover flow, swipe-right is a mobile back-gesture liability, and
+    a cart-add animation contradicts the app-wide confetti removal. Proposal §7
+    annotated 🚫.
+- Each proposal doc now carries a "Status: reconciled 2026-07-13" banner on its
+  open-decision block with per-decision ✅/🔴/📦 + code evidence. **This clears
+  the FU-364 backlog** (only FU-376 PRODUCTS_AS_OVERLAY §7 remains, deliberately
+  untouched — it's the live 🟡 Phase-F workstream, not a stale block).
+
+**Resolved (moved to `DORA_FOLLOWUPS_RESOLVED.md`):**
+- **FU-372** (COOKBOOK_CARD_REVISION not built) — stale; Chunks A+B+C all
+  shipped (`difficulty`, `time_of_day`, `RecipeIngredientPickerDialog`,
+  `RecipeIngredient.is_optional`). §3/§5 decisions were already resolved
+  2026-06-13. Register row 439 already ✅.
+- **FU-369** (RECIPE_IMAGE_STEPS not built) — stale; feature shipped 2026-06-25,
+  same day the proposal was drafted (audit missed it). All 3 components +
+  `steps_mode` enum + `RecipeStepImage` + migration + cook-mode branch + tests
+  verified present. All 5 §5 decisions recorded closed in the proposal.
+- **FU-362** (Settings theme type vs identity) — already shipped in
+  `PreferencesSettings.vue` (separate "Mode" segmented + "Theme" palette
+  picker). Flipped COVERAGE_GAPS A-5 → RESOLVED.
+- **FU-364** (proposals shipped with open-decision blocks) — process fix:
+  added a new **"Closing out a proposal / brief — MANDATORY"** section to
+  `CLAUDE.md` (after the coverage-table rule). First application: FU-368/371 below.
+- **FU-368** (LOCALE_I18N not built) — stale dup of FU-043; Layers A+B shipped
+  2026-07-06. Recorded the 4 §3 open decisions as closed in the proposal;
+  Layer C stays parked (§2.5).
+- **FU-371** (TEST_SUITE_IMPROVEMENTS not built) — **stale parent tracker**;
+  proposal was decomposed + executed across ~8 sessions. Phases 1-3 done,
+  Phase 4 mostly shipped, bonus hardening fleet (FU-534..542) all closed.
+  Marked ➗ built-with-carve-outs. **FU-519** (Phase 3) moved to RESOLVED per
+  its own note. **FU-520** (Phase 4) kept OPEN, tightened to its 3 real
+  remnants: Postgres CI + coverage gate (blocked on CI-off / [[FU-405]]),
+  scraper tests (companion repo / [[FU-161]]), opportunistic component specs.
+
+**Docs touched (no code):** `CLAUDE.md` (+1 section), `PROJECT_STATE.md`
+(register rows for LOCALE + TEST_SUITE split/refreshed), `PROPOSAL_LOCALE_I18N.md`
+(§3 closed), `PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` (status line), COVERAGE_GAPS A-5.
+
+**R-checks / ADR:** none — no code changed. Doc/ledger only.
+
+**Next up:** user flagged interest in **FU-549** (⚠️ `upgrade head` from an
+empty DB fails — migrations never exercised because tests use `create_all`;
+possible fresh-install boot failure). Offered to dig in — not yet started.
+
+---
+
 ## 2026-07-12 (later 3) — C-10.5 shipped: `POST /api/ingest/link-status` (FU-422 follow-through)
 
 **Why:** User: "add the ability for the companion app to see what is already in dora using dora's api. hopefully this can utilise existing (or previously existing from prior commits) code logic." Immediate follow-on to the FU-422 decision recorded in (later 2). The doc-only close-gate parked the endpoint against `IMPL_PLAN_INGESTION_API.md § C-10.5`; the user asked to build it now.

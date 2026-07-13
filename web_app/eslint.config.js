@@ -14,7 +14,16 @@ export default defineConfigWithVueTs(
      *
      * ESLint requires "ignores" key to be the only one in this object
      */
-    // ignores: []
+    // FU-336: `src-pwa/custom-service-worker.ts` is Quasar's generated
+    // InjectManifest service-worker template. Our PWA uses GenerateSW mode
+    // (quasar.config `pwa.workboxMode`), so this file is never consumed — but
+    // `src-pwa/` is untracked scaffold that Quasar regenerates from template on
+    // a fresh checkout, reintroducing a `no-floating-promises` hit on
+    // `self.skipWaiting()`. Ignoring the generated template keeps `npm run build`
+    // (which lints via vite-plugin-checker) green on any checkout without
+    // depending on committing generated code. The used registration file
+    // (`register-service-worker.ts`) stays linted.
+    ignores: ['src-pwa/custom-service-worker.ts'],
   },
 
   pluginQuasar.configs.recommended(),

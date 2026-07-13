@@ -1,6 +1,6 @@
 # Proposal — Stock Overview Redesign (C-1)
 
-**Status:** **Decisions resolved 2026-06-09** (see §7a) · **Date:** 2026-06-06 · Changes NO code.  
+**Status:** **Decisions resolved 2026-06-09** (see §7a) · **Reconciled against shipped reality 2026-07-13** (see §7b — FU-378) · **Date:** 2026-06-06 · Changes NO code.  
 **Scope:** Redesign the stock overview — top area, the row (kill the "chip", make
 stock-level the focus action), the detail-navigation model, filters, footer
 counts, scan mode, images, and the per-item metric. Defers the cart button to
@@ -82,6 +82,20 @@ taller (L78).
   selection never collides with the status outline colour.
 
 ### 2.3 Detail navigation model (the #1 open decision — L68, L71)
+
+> **✅ CLOSED — reconciled 2026-07-13 (FU-378).** Shipped exactly as proposed.
+> `StockOverview.vue` `onRowClick` (≈L702) branches on `$q.screen.lt.md`:
+> **mobile → full page** (`router.push('/stock/<id>')`, no drawer); **desktop →
+> embedded peek** in the `q-splitter` `#after` pane (the Google-Drive-style
+> side drawer). One shared `StockItemDetailPage` powers both frames — desktop
+> mounts it with `embedded` + `:id-override="peekId"`, mobile navigates to it as
+> a full route (L69 satisfied, one component two frames). Row-tap is the only nav
+> to detail; **long-press → bulk-select on mobile** (`onRowLongPress`, ≈L717,
+> emitted by `v-touch-hold` on the row). Miss-tap risk is handled by `@click.stop`
+> on every in-row control so button taps never bubble to a row-open, and a stray
+> row-open is read-only/harmless — no dedicated open affordance was added (matches
+> §7a decision 2). **This unblocked FU-384**, though FU-384 has since been closed
+> by another route (obsoleted by FU-508, which dropped per-item images).
 
 Proposed, reconciling the two feedback bullets:
 
@@ -244,6 +258,29 @@ Non-authoritative; included where it adds or corroborates. Tagged keep / conside
 | 5 | Planned-meals metric fallback | **Keep "# recipes" until C-2 allocation ships**, then swap to "# upcoming planned meals". No misleading count, no churn. |
 | 6 | Outline colour scheme | **Confirmed:** whole-row outline — neutral default / amber expiring-soon / red out-or-expired; out-of-stock rows dim; **selection fills the row** (never clashes with the status outline); "essential" stays a filter, not a row badge. |
 | 7 | 50-item cap fix | **Virtualised / infinite-scroll paging** (diverged from the quick `?limit` bump). Proper windowed rendering so large pantries stay fast; per `STOCK_OVERVIEW_PERF.md`. |
+
+---
+
+## 7b. Shipped-reality reconciliation (2026-07-13 — FU-378)
+
+C-1 shipped; this closes the audit that §7a's design calls actually landed in code.
+Verified against `web_app/src/pages/StockOverview.vue`,
+`web_app/src/components/stock/StockItemRow.vue`, and `StockItemDetailPage.vue`.
+Legend: ✅ closed-by-shipped-behaviour · 🔴 genuinely-open · 📦 moot/superseded.
+
+| # | Decision | Verdict | Shipped reality / evidence |
+|---|---|---|---|
+| 1 | Detail nav model | ✅ | Shipped as resolved — see §2.3 note. `onRowClick`: mobile full-page, desktop splitter peek; one shared `StockItemDetailPage` in two frames; long-press → bulk on mobile. **Unblocked FU-384** (now closed via FU-508). |
+| 2 | Miss-tap risk | ✅ | No extra open affordance added. Every in-row control uses `@click.stop`; row-open is read-only/harmless. Matches "rely on well-sized buttons". |
+| 3 | Open/in-use toggle | ✅ | Kept in the row as resolved — `RowActionButton` with `lock`/`lock_open` in the right cluster (`StockItemRow.vue` ≈L233), `onToggleOpen` PATCHes `is_open` (+ FU-507 effective-expiry prompt). |
+| 4 | Scan mode vs stocktake | 🔴 | **Design call settled, build NOT shipped.** The Overview `Scan` button (gated on `scanningEnabled`) still uses the *old* jump-to-item behaviour (`onOverviewScanDecoded` → `router.push('/stock/<id>')`). No action-first "pick an action, then scan to apply" mode exists in the SPA. Unified scanner remains unbuilt. |
+| 5 | Planned-meals metric fallback | 📦 | Superseded. The row renders **neither** "# recipes" nor "# upcoming planned meals" — the whole metric was dropped from the row. Decision-useful signal is now the `BuyVerdictBadge` ("should I buy this?"). The keep-#-recipes-until-C-2 fallback is moot. |
+| 6 | Outline colour scheme | ✅ | Shipped (evolved to "Model C round 8"). `rowClasses` in `StockItemRow.vue`: `--warn` (amber) / `--alert` (red) whole-row outline, non-essential Out rows dim, `--selected` fills the row (L91). Palette via theme tokens (`--q-warning`/`--q-negative`). |
+| 7 | 50-item cap fix | ✅ | Shipped as the virtualised path (not the quick `?limit` bump). `StockOverview.vue` uses `q-virtual-scroll` above `VIRTUAL_SCROLL_THRESHOLD` (50), `ListTransition` glide-in below it. Full pantry renders. |
+
+**Net:** 5 of 7 closed-by-shipped-behaviour, 1 superseded (metric), 1 genuinely-open
+(the action-first scan-mode was never built — scanning stays gated off by default).
+The §2.3 #1 decision is fully closed.
 
 ---
 

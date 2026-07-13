@@ -180,25 +180,15 @@
         );
         return item?.linked_product_count ?? 0;
     });
-    const draftCount = computed<number>(() => {
-        const lists = membership.value?.active_lists ?? [];
-        return lists.filter((l) => l.status === 'draft').length;
-    });
-    /** Either axis ambiguous → open the combined modal. The proposal
-     *  spec'd "both ambiguous" but decision 2 promotes the 2+ products
-     *  case unconditionally; both share the same UX so route them
-     *  through QuickAddSheet rather than maintaining two paths. */
-    const shouldUseCombinedModal = computed<boolean>(() => {
-        if (linkedProductCount.value >= 2) return true;
-        if (linkedProductCount.value === 0 || linkedProductCount.value === 1) {
-            // Only escalate to the combined modal when BOTH axes are
-            // ambiguous (matches the §2.3 language). With 0/1 products
-            // the existing single-item flow already handles
-            // ambiguous-drafts via the radio dialog without stacking.
-            return false;
-        }
-        return draftCount.value >= 2;
-    });
+    /** 2+ linked products → route through the combined QuickAddSheet.
+     *  Decision 2 promotes the multi-product case unconditionally; with 0/1
+     *  products the single-item flow handles ambiguous drafts via the radio
+     *  dialog, so it never escalates here. (FU-531: the proposal's "both axes
+     *  ambiguous" draft-count branch was dropped with decision 2 — the
+     *  `draftCount >= 2` tail was unreachable, so it's gone.) */
+    const shouldUseCombinedModal = computed<boolean>(
+        () => linkedProductCount.value >= 2,
+    );
 
     const busy = ref(false);
     const multiPopoverOpen = ref(false);

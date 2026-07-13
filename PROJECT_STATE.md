@@ -303,7 +303,7 @@ list-state clear.
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
 | Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Parser green on 20/20 corpus; schema migration for unlinked-ingredient tri-state cookability; paste importer replaces the URL fetcher (FU-104 + FU-199 closed); bulk-linker page + PWA share target. Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Commercialization (P7) | ⚪ | Tenancy/Stripe/billing not started; zero such code yet | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
-| **Finalisation sweep** | 🔵 | **Designed, not started (2026-07-10).** 20 feature chunks × 4 output tracks (FST procedure, in-app help & guides, senior code review, test plan inventory) with a coverage register. Rolls in FU-361/320/395 (fully), FU-510 Phase 1, FU-406/404 (partially), FU-010/224 (ride-along). Runs late-game before Phase 4 close-out. | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
+| **Finalisation sweep** | 🔵 | **Designed, not started (2026-07-10; model revised 2026-07-13).** 20 feature chunks, **strict two-stage**: **Stage 1 — Analysis** (read file-by-file; 4 written tracks — FST / help & guides / senior code review / test-plan; the review record is *execution-ready*: exact file:line + change per finding; **no code changed**), then **Stage 2 — Execution** (apply the exact changes from the record — DRY/dead-code/componentisation/placement/naming/standards + verified bugs — test-guarded, **no re-investigation**). **North-star (owner directive):** the app must be hand-maintainable by one person with no AI. Feature-rewrites / contract / large-blast-radius items → new proposal/FU, not in scope. Rolls in FU-361/320/395 (fully), FU-510 Phase 1 + safe Phase-2 swaps, FU-406/404 (partially), FU-010/224 (ride-along). Runs late-game before Phase 4 close-out. | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
 
 ---
 
@@ -313,7 +313,7 @@ Full backlog is **~60 open items** in `DORA_FOLLOWUPS.md`; these are the
 ones that want a decision or a running-app check *now*, most important
 first.
 
-0. **🔴 RELIABILITY — [FU-549](DORA_FOLLOWUPS.md) fresh-install migration may not boot.** New (2026-07-12): the migration chain doesn't apply from an empty DB (crashes at `a3e9f6c2d8b4`, Alembic batch/BINARY), and migrations were never run in tests (create_all is used). Prod fresh-boot runs upgrade-from-empty, so a new self-host may fail to start on the release toolchain. **Confirm on a fresh `pip install` + pin alembic before advertising fresh self-host / the Postgres migration (FU-045).** DORA_VERIFY §Operator has the smoke check.
+0. **✅ RELIABILITY — [FU-549](DORA_FOLLOWUPS_RESOLVED.md) fresh-install migration boot — FIXED 2026-07-13.** The empty-DB `upgrade head` crash (`a3e9f6c2d8b4`, Alembic batch/BINARY) is fixed (UUIDType-column renames pass `sa.BINARY(16)`); the full 116-migration chain now applies cleanly from empty, `alembic` is pinned, and 2 migration tests (from-empty upgrade + schema-vs-model match) now run + guard it. **Residual:** a one-time operator smoke on a real fresh `pip install` (DORA_VERIFY §Operator), and [[FU-553]] — a downgrade-only (`downgrade base`) SQLite CHECK-drop issue that doesn't affect boot.
 0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work. Tracked as [FU-447](DORA_FOLLOWUPS.md).
 1. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering.
 2. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
@@ -399,7 +399,7 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | DASHY_DORA_CHAMPION_PLAN.md | Charter | 🟢 authoritative | Vision + 12-principle Decision Charter + P8 prompts | Cited library-wide as arbiter |
 | ENGINEERING_STANDARDS.md | Standards | 🟢 authoritative | Code/architecture rubric R-001..R-026 + ADR log | Enforced by CLAUDE.md close-gate |
 | RECONCILED_FINISHING_PLAN.md | Master-plan | 🟢 authoritative | 5-phase order, scope, §7 resolved decisions | Self-maintaining |
-| FINALISATION_PLAN.md | End-plan | 🔵 designed, not started (2026-07-10) | End-of-project sweep: 20 chunks × 4 output tracks; FU rollup for FU-361/320/395/510/406/404/010/224 | New this session |
+| FINALISATION_PLAN.md | End-plan | 🔵 designed, not started (2026-07-10; model revised 2026-07-13) | End-of-project sweep, 20 chunks, **strict two-stage** (Stage 1 analysis → execution-ready written findings; Stage 2 execution from the record, no re-investigation) under the single-maintainer north-star; FU rollup for FU-361/320/395/510/406/404/010/224 | Two-stage model 2026-07-13 |
 | FINALISATION_COVERAGE.md | Register | 🔵 blank (2026-07-10) | Per-chunk × per-track status matrix for the finalisation plan | Companion to FINALISATION_PLAN.md |
 
 ## 02_feedback — inputs (3)
@@ -440,7 +440,8 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 | STATE_OWNERSHIP_REFACTOR_PROPOSAL | ✅ done | R-003 authority; IMPL executed |
 | PROPOSAL_PRODUCTS_AS_OVERLAY / IMPL_PLAN_PRODUCTS_AS_OVERLAY / PRODUCTS_OVERLAY_RUNBOOK | 🟡 active | Phase F in progress; RUNBOOK is the ⭐ live driver |
 | PROPOSAL_HELP_OVERLAY | 📦 superseded | Overlay mechanism retired 2026-07-06 → executed as targeted `(?)` chips per `IMPL_PLAN_HELP_CHIPS.md` (FU-503 / FU-044 both resolved) |
-| PROPOSAL_SUPPORT_CHANNEL / _TEST_SUITE_IMPROVEMENTS | 🔵 designed | Real pending design debt |
+| PROPOSAL_SUPPORT_CHANNEL | 🔵 designed | Real pending design debt (Phase 4 / commercialization) |
+| PROPOSAL_TEST_SUITE_IMPROVEMENTS | ➗ carve-outs | Built across ~8 sessions (FU-371 resolved 2026-07-13); Phases 1-3 done, Phase 4 (FU-520) mostly shipped. Carve-outs: Postgres CI + coverage gate (blocked on CI-off, FU-405), scraper tests (companion repo, FU-161), opportunistic component specs |
 | IMPL_PLAN_HELP_CHIPS | ✅ done | Executed 2026-07-06 (FU-503) |
 | PROPOSAL_LOCALE_I18N | ➗ carve-outs | Layers A + B shipped 2026-07-06 (FU-043); Layer C (full UI translation) explicitly parked as someday |
 | PROPOSAL_SIMPLE_MODE | 📦 superseded | → products-as-overlay |

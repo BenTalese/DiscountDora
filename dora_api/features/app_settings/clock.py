@@ -35,3 +35,10 @@ def today_in_timezone(tz_name: str | None) -> date:
 
 def household_today(repository: SqlAlchemyRepository) -> date:
     return today_in_timezone(get_or_create_app_setting(repository).timezone)
+
+
+def household_timezone(repository: SqlAlchemyRepository) -> ZoneInfo:
+    """The install's configured zone, resolved. Callers that bucket UTC
+    timestamps into calendar days must do so in this zone so the day
+    boundary agrees with `household_today` (R-021)."""
+    return resolve_timezone(get_or_create_app_setting(repository).timezone)

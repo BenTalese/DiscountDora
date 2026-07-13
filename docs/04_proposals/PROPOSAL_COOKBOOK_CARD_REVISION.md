@@ -1,8 +1,13 @@
 # Cookbook card revision — FU-088 redesign
 
-**Status:** design-only (no code). Sequel to `PROPOSAL_COOKBOOK.md §2.10`
-("Card redesign") and `IMPL_PLAN_COOKBOOK.md Chunk 3`, written off FU-088
-browser-verification feedback (2026-06-13).
+**Status:** ✅ **BUILT — all chunks (A + B + C) shipped.** Chunk A (card visual
+redesign) per CHANGELOG; Chunk B (`Recipe.difficulty`, `Recipe.time_of_day`
+vocab, `RecipeIngredientPickerDialog.vue`) and Chunk C (`RecipeIngredient.is_optional`,
+optional rows excluded from cookability §1.9) all present in code. All §3/§5 open
+decisions were resolved 2026-06-13 (below). Corrected 2026-07-13 — the 2026-07-01
+audit mislogged this as "not built" (FU-369-class error). Original brief:
+sequel to `PROPOSAL_COOKBOOK.md §2.10` + `IMPL_PLAN_COOKBOOK.md Chunk 3`, written
+off FU-088 browser-verification feedback (2026-06-13).
 
 **Why a new proposal, not an amend of §2.10:** Chunk 3 shipped and was
 browser-tested; the user came back with ten distinct findings, several of

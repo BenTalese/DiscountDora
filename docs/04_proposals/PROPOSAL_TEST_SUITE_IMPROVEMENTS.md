@@ -1,6 +1,13 @@
 # Proposal — Test-suite coverage, quality & cleanup
 
-**Status:** draft for review (no code)
+**Status:** ➗ **BUILT (with carve-outs) — 2026-07-13.** Executed across ~8
+sessions (2026-07-09 → 2026-07-12) via phase-children FU-519 (Phase 3) /
+FU-520 (Phase 4), plus a bonus hardening fleet (FU-534..542). Phases 1-3 done;
+Phase 4 mostly shipped. **Remaining carve-outs:** Postgres-backed CI + the
+coverage gate/ratchet (blocked on CI being un-commented — FU-405, P7-09 Ops);
+`merchant_api` scraper fixtures (companion repo — FU-161); a few opportunistic
+component/composable specs. Full resolution trail: `DORA_FOLLOWUPS_RESOLVED.md`
+FU-371.
 **Author/date:** 2026-06-13, written off the back of FU-166 (legacy e2e
 triage + test-client conversion).
 **Type:** cross-cutting engineering proposal (test infrastructure). Not a

@@ -133,27 +133,38 @@ class Between(BoolOperation):
 
 
 class Contains(BoolOperation):
-    def __init__(self, field, value: str, case_sensitive: bool = False):
+    """Case-insensitive substring match (`LIKE '%value%'`).
+
+    Always case-insensitive (FU-523): SQLite's `LIKE` is ASCII-case-insensitive
+    regardless of the value, so a *case-sensitive* LIKE can't be expressed
+    portably across SQLite + Postgres. Both the column and the value are lowered
+    (via `_resolve`, the single source of casing) so the match is identical on
+    either backend (R-005) — the old code lowered only the column and, worse,
+    inverted the value-side flag, so an upper-case value silently missed on
+    Postgres (whose LIKE is case-sensitive).
+    """
+    def __init__(self, field, value: str):
         self.field = field
         self.value = value
-        self.case_sensitive = case_sensitive
 
     def to_sqla(self, mapper_registry: registry) -> ColumnElement:
-        col = self._resolve(self.field, self.case_sensitive)
-        val = f"%{self.value.lower() if self.case_sensitive else self.value}%"
-        return col.like(val)
+        col = self._resolve(self.field, case_sensitive=False)
+        val = self._resolve(self.value, case_sensitive=False)
+        return col.like(f"%{val}%")
 
 
 class StartsWith(BoolOperation):
-    def __init__(self, field, value: str, case_sensitive: bool = False):
+    """Case-insensitive prefix match (`LIKE 'value%'`). Always case-insensitive
+    for the same portability reason as `Contains` (FU-523); both column and
+    value are lowered."""
+    def __init__(self, field, value: str):
         self.field = field
         self.value = value
-        self.case_sensitive = case_sensitive
 
     def to_sqla(self, mapper_registry: registry) -> ColumnElement:
-        col = self._resolve(self.field, self.case_sensitive)
-        val = f"{self.value.lower() if self.case_sensitive else self.value}%"
-        return col.like(val)
+        col = self._resolve(self.field, case_sensitive=False)
+        val = self._resolve(self.value, case_sensitive=False)
+        return col.like(f"{val}%")
 
 
 # ── Logical operations ─────────────────────────────────────────────────────────

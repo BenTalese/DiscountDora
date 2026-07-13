@@ -10,7 +10,18 @@
 > first; treat this file as the surviving substrate design plus historical context for the
 > superseded parts.
 
-**Status:** proposal, ready for co-design.
+**Status:** 📦 **SUPERSEDED (spine) + ✅ BUILT (substrate)** — reconciled 2026-07-13 (FU-374).
+The spine (the `products_enabled` flag / persona / 2×2 / "Simple mode" *identity*) was
+dropped in the pivot to `PROPOSAL_PRODUCTS_AS_OVERLAY.md`: the flag was added (migration
+`d1f4b8c3e7a9`, 2026-06-16) then dropped the next day (`f1d5b8a2c4e6`, 2026-06-17), replaced
+by the invisible data-presence overlay. The **surviving substrate all shipped**: the
+`StockItemPriceObservation` table (§2.1; migrations `b3d5f7a9c2e4` + `c6e9a4b8d5f2`), the
+server-owned `get_stock_item_unit_cost_at` cost helper (§2.1), the price-entry surfaces
+(§2.7; `features/stock_items/price_observations.py`), and the Merchant→Store rename +
+`StockItem.usual_store_id` (§2.6 / FU-189; migration `a3e9f6c2d8b4`). Nothing here is
+unbuilt or worth building. The §4 open decisions are moot (1–2 were spine; 3–5 were absorbed
+into products-as-overlay). Historical reference only — read `PROPOSAL_PRODUCTS_AS_OVERLAY.md`
+for the live design.
 **Promotes:** `99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` (the
 talk-time assessment + the 2026-06-15 brainstorm addendum).
 **Closes / consumes:** FU-182 (this is its promoted form).

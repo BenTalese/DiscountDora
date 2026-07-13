@@ -119,28 +119,62 @@ export type AlertAction =
     | 'mark_restocked'
     | 'acknowledge_stocktake';
 
-// Icon per kind so the panel rows render consistently.
+export type AlertActionOption = { action: AlertAction; label: string; icon: string };
+
+// The per-kind presentation contract. Every AlertKind has exactly one row —
+// `Record<AlertKind, …>` makes TS reject a new kind that forgets one (FU-521:
+// this is what was missing when `meal_reconcile_overdue` was added on the
+// backend and five separate switch sites silently fell through). Add a kind =
+// extend the union + add one row here; the accessors below need no edit.
+export type AlertKindMeta = {
+    icon: string;      // panel row / avatar icon
+    color: string;     // categorical accent for summary boxes (class-suffix)
+    theme: string;     // plain-language label, e.g. "expiring soon"
+    actions: AlertActionOption[];  // inline actions this kind offers (empty = nav-only nudge)
+    // Deep-link for the non-stock nudge kinds. Stock kinds omit it and fall back
+    // to the item route in `linkFor`. A function because `shopping_day` needs the id.
+    link?: (alert: Alert) => string;
+};
+
+// Inline actions, shared by the kinds that offer the same set.
+const EXPIRY_ACTIONS: AlertActionOption[] = [
+    { action: 'extend_expiry', label: 'Push 7 days', icon: ICONS.event_repeat },
+    { action: 'reset_expiry', label: 'Clear expiry', icon: ICONS.event_busy },
+];
+const RESTOCK_ACTIONS: AlertActionOption[] = [
+    { action: 'mark_restocked', label: 'Mark restocked', icon: ICONS.inventory },
+];
+const STOCKTAKE_ACTIONS: AlertActionOption[] = [
+    { action: 'acknowledge_stocktake', label: 'Looks fine', icon: ICONS.check },
+];
+
+// Colours: some kinds intentionally reuse severity-ladder tokens where the
+// semantic overlaps (expired ⇒ critical, expiring_soon ⇒ medium, low_stock ⇒
+// low, essential_low ⇒ high); the rest have their own categorical accents.
+// `meal_reconcile_overdue` reuses the FYI-tier low accent (a dedicated token
+// could be added if its visual identity needs one).
+export const ALERT_KIND_META: Record<AlertKind, AlertKindMeta> = {
+    expired:                { icon: ICONS.event_busy,           color: 'severity-critical',            theme: 'expired',            actions: EXPIRY_ACTIONS },
+    expiring_soon:          { icon: ICONS.schedule,             color: 'severity-medium',              theme: 'expiring soon',      actions: EXPIRY_ACTIONS },
+    out_of_stock:           { icon: ICONS.remove_shopping_cart, color: 'alert-kind-out-of-stock',      theme: 'out of stock',       actions: RESTOCK_ACTIONS },
+    low_stock:              { icon: ICONS.trending_down,        color: 'severity-low',                 theme: 'low stock',          actions: RESTOCK_ACTIONS },
+    stocktake_overdue:      { icon: ICONS.fact_check,           color: 'alert-kind-stocktake-overdue', theme: 'stocktake due',      actions: STOCKTAKE_ACTIONS },
+    essential_low:          { icon: ICONS.priority_high,        color: 'severity-high',                theme: 'essential low',      actions: RESTOCK_ACTIONS },
+    no_planned_meals:       { icon: ICONS.restaurant,           color: 'alert-kind-no-planned-meals',  theme: 'meals to plan',      actions: [], link: () => '/meal-plans' },
+    shopping_day:           { icon: ICONS.shopping_cart,        color: 'alert-kind-shopping-day',      theme: 'shopping day',       actions: [], link: (a) => (a.target_id ? `/shopping-lists/${a.target_id}` : '/shopping-lists') },
+    meal_reconcile_overdue: { icon: ICONS.playlist_add_check,   color: 'severity-low',                 theme: 'meals to reconcile', actions: [], link: () => '/meal-plans/reconcile' },
+};
+
+// Icon per kind so the panel rows render consistently. The `?.` fallbacks in
+// these accessors are load-bearing: the backend can ship a new AlertKind before
+// the frontend knows it (that's the 2026-07-09 crash), so an unmapped kind must
+// degrade to a blank/nav-only row, never throw (regression-pinned in
+// test/unit/alertRow.spec.ts "unknown alert kind degrades safely").
 export function iconFor(kind: AlertKind): string {
-    switch (kind) {
-        case 'expired':
-            return ICONS.event_busy;
-        case 'expiring_soon':
-            return ICONS.schedule;
-        case 'out_of_stock':
-            return ICONS.remove_shopping_cart;
-        case 'low_stock':
-            return ICONS.trending_down;
-        case 'stocktake_overdue':
-            return ICONS.fact_check;
-        case 'essential_low':
-            return ICONS.priority_high;
-        case 'no_planned_meals':
-            return ICONS.restaurant;
-        case 'shopping_day':
-            return ICONS.shopping_cart;
-        case 'meal_reconcile_overdue':
-            return ICONS.playlist_add_check;
-    }
+    // FU-531: an unmapped kind (backend shipped ahead of the client) falls back
+    // to a generic bell rather than an empty circle — "degraded but safe" should
+    // still look intentional.
+    return ALERT_KIND_META[kind]?.icon ?? ICONS.notifications;
 }
 
 // Severity ladder — returned string is the class-suffix Quasar's `color` prop
@@ -156,56 +190,13 @@ export function colorFor(severity: AlertSeverity): string {
 
 // Per-kind accent colour (C-9.3) — a stable visual identity per kind for the
 // summary boxes (L224), distinct from the severity-driven row avatar above.
-// Some kinds intentionally reuse severity-ladder tokens where the semantic
-// overlaps (expired ⇒ critical, expiring_soon ⇒ medium, low_stock ⇒ low,
-// essential_low ⇒ high); the rest have their own categorical accents.
 export function colorForKind(kind: AlertKind): string {
-    switch (kind) {
-        case 'expired':
-            return 'severity-critical';
-        case 'essential_low':
-            return 'severity-high';
-        case 'expiring_soon':
-            return 'severity-medium';
-        case 'out_of_stock':
-            return 'alert-kind-out-of-stock';
-        case 'low_stock':
-            return 'severity-low';
-        case 'stocktake_overdue':
-            return 'alert-kind-stocktake-overdue';
-        case 'no_planned_meals':
-            return 'alert-kind-no-planned-meals';
-        case 'shopping_day':
-            return 'alert-kind-shopping-day';
-        case 'meal_reconcile_overdue':
-            // Reuses the FYI-tier low accent; a dedicated categorical token
-            // could be added if the visual identity turns out to need it.
-            return 'severity-low';
-    }
+    return ALERT_KIND_META[kind]?.color ?? '';
 }
 
 // Plain-language theme for the summary boxes, e.g. "5 expiring soon".
 export function kindTheme(kind: AlertKind): string {
-    switch (kind) {
-        case 'expired':
-            return 'expired';
-        case 'expiring_soon':
-            return 'expiring soon';
-        case 'out_of_stock':
-            return 'out of stock';
-        case 'low_stock':
-            return 'low stock';
-        case 'essential_low':
-            return 'essential low';
-        case 'stocktake_overdue':
-            return 'stocktake due';
-        case 'no_planned_meals':
-            return 'meals to plan';
-        case 'shopping_day':
-            return 'shopping day';
-        case 'meal_reconcile_overdue':
-            return 'meals to reconcile';
-    }
+    return ALERT_KIND_META[kind]?.theme ?? '';
 }
 
 // The two count tiers (C-9.2). Actionable drives the badge; FYI is shown but
@@ -215,47 +206,17 @@ export function tierLabel(tier: AlertTier): string {
 }
 
 // Actions the user can take inline. The set varies by alert kind — e.g.
-// "Mark restocked" makes no sense for an expiry alert.
-export function actionsFor(kind: AlertKind): { action: AlertAction; label: string; icon: string }[] {
-    switch (kind) {
-        case 'expired':
-        case 'expiring_soon':
-            return [
-                { action: 'extend_expiry', label: 'Push 7 days', icon: ICONS.event_repeat },
-                { action: 'reset_expiry', label: 'Clear expiry', icon: ICONS.event_busy },
-            ];
-        case 'out_of_stock':
-        case 'low_stock':
-        case 'essential_low':
-            return [
-                { action: 'mark_restocked', label: 'Mark restocked', icon: ICONS.inventory },
-            ];
-        case 'stocktake_overdue':
-            return [
-                { action: 'acknowledge_stocktake', label: 'Looks fine', icon: ICONS.check },
-            ];
-        case 'no_planned_meals':
-        case 'shopping_day':
-        case 'meal_reconcile_overdue':
-            // Navigation-only nudges — acting on them means opening the linked
-            // surface (linkFor), not a server-side state change.
-            return [];
-    }
+// "Mark restocked" makes no sense for an expiry alert. Nav-only nudges return [].
+export function actionsFor(kind: AlertKind): AlertActionOption[] {
+    return ALERT_KIND_META[kind]?.actions ?? [];
 }
 
-// Where opening an alert (row click / "View in context") navigates. Stock kinds
-// go to the item; the C-9.4 nudges deep-link to their surface — shopping_day to
-// the list (target_id), no_planned_meals to the planner. Routing lives client-
-// side (presentation); the server only supplies the ids.
+// Where opening an alert (row click / "View in context") navigates. The C-9.4
+// nudges deep-link to their surface via the META `link`; stock kinds fall back
+// to the item. Routing lives client-side (presentation); the server only
+// supplies the ids.
 export function linkFor(alert: Alert): string | null {
-    switch (alert.kind) {
-        case 'no_planned_meals':
-            return '/meal-plans';
-        case 'shopping_day':
-            return alert.target_id ? `/shopping-lists/${alert.target_id}` : '/shopping-lists';
-        case 'meal_reconcile_overdue':
-            return '/meal-plans/reconcile';
-        default:
-            return alert.stock_item_id ? `/stock/${alert.stock_item_id}` : null;
-    }
+    const meta = ALERT_KIND_META[alert.kind];
+    if (meta?.link) return meta.link(alert);
+    return alert.stock_item_id ? `/stock/${alert.stock_item_id}` : null;
 }

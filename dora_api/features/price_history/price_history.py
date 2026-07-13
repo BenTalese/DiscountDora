@@ -304,24 +304,21 @@ def list_price_alerts():
     })
 
 
-@PRICE_HISTORY_ROUTER.route("/alerts/<alert_id>", methods=["DELETE"])
-def delete_price_alert(alert_id: str):
+@PRICE_HISTORY_ROUTER.route("/alerts/<uuid:alert_id>", methods=["DELETE"])
+def delete_price_alert(alert_id: UUID):
+    # R-033: uuid converter parses the id at the routing edge (FU-544).
     user_id = _current_user_id()
     if user_id is None:
         return bad_request("Not signed in.")
-    try:
-        parsed = UUID(alert_id)
-    except (ValueError, TypeError):
-        return bad_request("alert_id must be a UUID.")
     alert_table = db.metadata.tables["PriceAlert"]
     # Scope by user so one account can't delete another's alerts.
     result = db.session.execute(
         alert_table.delete().where(
-            alert_table.c.id == parsed,
+            alert_table.c.id == alert_id,
             alert_table.c.user_id == user_id,
         )
     )
     db.session.commit()
     if (result.rowcount or 0) == 0:
-        return not_found("PriceAlert", parsed)
+        return not_found("PriceAlert", alert_id)
     return no_content()

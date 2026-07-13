@@ -139,16 +139,22 @@ options:
 
 ## 3. Open decisions (for co-design)
 
-1. **Currency home (§2.1)** — install-wide currency (recommended, household shares
-   one) + optional per-user display locale, or fully per-user?
-2. **vue-i18n fate (§2.3)** — adopt-lite for formatting only (recommended), or rip
-   out the dead scaffold until full translation is greenlit?
-3. **C-10 currency field (§2.1)** — add a currency to `price_observation` now
-   (recommended; prevents cross-currency summing), or assume single-currency per
-   install and skip?
-4. **Merchant branding (§2.2)** — fully remove `AldiLogo`/`IgaLogo` from core and
-   treat logos as ingested/companion metadata, or keep them as optional bundled
-   assets for AU installs?
+**Status: closed — all four locked at the FU-043 close-gate (2026-07-06); Layers A + B
+shipped. See `DORA_FOLLOWUPS_RESOLVED.md` FU-043 / FU-368.**
+
+1. **Currency home (§2.1)** — ✅ **install-wide** currency + locale on `AppSetting`
+   (no per-user override). ~~install-wide (recommended) or fully per-user?~~
+2. **vue-i18n fate (§2.3)** — ✅ **adopt-lite** — kept installed, money formatter is a
+   direct `Intl.NumberFormat` wrapper (`useMoney.ts`), not string translation.
+3. **C-10 currency field (§2.1)** — ✅ **skipped** — single-currency-per-install
+   assumption stays; a per-observation currency is a future multi-tenant concern.
+4. **Merchant branding (§2.2)** — ✅ **n/a** — the expected `AldiLogo`/`IgaLogo`
+   component files don't exist in the repo (only generic `StoreLogo.vue`); nothing to
+   remove. AU merchant *copy* was removed from core.
+
+**Remaining (deferred someday, per §2.5): Layer C** — full multi-language UI
+translation. No user demand beyond "usable outside Australia," which A + B satisfy.
+Not tracked as an active FU; recorded here.
 
 ---
 

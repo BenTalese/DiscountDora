@@ -34,6 +34,7 @@
             :accept="accept"
             :disabled="disabled"
             @change="onInputChange"
+            @click.stop
         />
 
         <!-- Idle / prompt state -->

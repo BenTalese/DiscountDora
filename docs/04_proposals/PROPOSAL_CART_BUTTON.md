@@ -219,25 +219,61 @@ toasts) and L380 (see each item's list status).
 
 ## 7. Open decisions (for co-design)
 
-1. **Already-on-list click** — popover with *Add-to-another / Remove* (proposed), or
+> **Status: reconciled 2026-07-13 (FU-380).** All seven decisions below were
+> answered in §7a (2026-06-09) and the proposal SHIPPED as Cart Button
+> Chunks 1–4 (`AddToListButton.vue`; CHANGELOG "Unified cart button",
+> "combined modal", "Standalone-product lines", Chunk 4 target picker). Each
+> item is annotated with its verified shipped reality:
+> ✅ closed-by-shipped-behaviour · 🔴 genuinely open · 📦 moot/superseded · 🚫 won't-do.
+> Net: decisions 1–6 ✅ built-and-verified in code; decision 7's swipe-right +
+> success-animation was **🚫 closed as won't-do 2026-07-13** (FU-380) — anti-creep,
+> redundant with the shipped tap→popover flow, swipe-right is a mobile back-gesture
+> liability, and the success animation contradicts the app-wide removal of
+> celebration/confetti. See `DORA_FOLLOWUPS_RESOLVED.md` FU-380.
+
+1. ✅ **Already-on-list click** — popover with *Add-to-another / Remove* (proposed), or
    simpler no-op-with-hint? (§4)
-2. **>1 product** — always show the choice modal, or auto-pick `preferred_product_id`
+   → **CLOSED.** Toggle model shipped: 1 list → silent remove; 2+ → `MultiListPopover`
+   with per-list remove / remove-all / add-to-another
+   (`AddToListButton.vue` `onPrimaryClick` L464-477 + `MultiListPopover` L483-600).
+2. ✅ **>1 product** — always show the choice modal, or auto-pick `preferred_product_id`
    silently when set (with a "change" affordance)? Ties to the unresolved
    preferred-product question (L131).
-3. **Standalone-product line model** — nullable `product_id` on the line (proposed)
+   → **CLOSED.** `linkedProductCount >= 2` unconditionally routes to the combined
+   `QuickAddSheet` (`shouldUseCombinedModal` L191-201, `openQuickAdd` L452-454).
+3. ✅ **Standalone-product line model** — nullable `product_id` on the line (proposed)
    vs a separate line type; and confirm the exact L191 cascade wording for rules
    3–4.
-4. **"Remember the list pick"** — does the session default span the whole app, or
+   → **CLOSED.** Nullable `product_id` line shipped (Chunk 3; CHANGELOG L2327,
+   L3895); `variant="inline-product"` adds a product-only line via
+   `onInlineProductClick` (L352-413).
+4. ✅ **"Remember the list pick"** — does the session default span the whole app, or
    reset per surface? (Mirrors `SHOPPING_LIST_REDESIGN` open-Q on session vs
    persist.)
-5. **Quantity** — does the unified button ever ask quantity, or always default 1 and
+   → **CLOSED.** App-wide for the tab session via `useQuickAddTargetPick`
+   (sessionStorage key `dora.quick_add_target_list_id`); fresh tab re-prompts.
+5. ✅ **Quantity** — does the unified button ever ask quantity, or always default 1 and
    edit on the list (only the full combined modal asks)? Proposed: never ask in the
    quick paths; quantity is a list-detail concern.
-6. **Bulk mixed-state reporting** — one summary toast ("5 added, 2 already on
+   → **CLOSED.** Quick paths never ask (default 1); quantity lives only in the
+   combined modal (comment L448-451; no qty prompt in `onPrimaryClick`).
+6. ✅ **Bulk mixed-state reporting** — one summary toast ("5 added, 2 already on
    list") confirmed as the pattern?
-7. **Swipe-to-choose-list** (from the original spec, §9) — add swipe-right on the
+   → **CLOSED.** `bulk` variant resolves the target once and emits one summary via
+   `listActions.addItems` (`onBulkAdd` L298-344).
+7. 🚫 **Swipe-to-choose-list** (from the original spec, §9) — add swipe-right on the
    row cart button to open the list picker (tap = inferred target), plus a
    success animation? Or keep touch interactions to the popover only?
+   → **CLOSED — WON'T DO (2026-07-13, FU-380).** Was deferred-unbuilt (§7a: "no
+   swipe-right gesture / success animation in the initial build"); confirmed still
+   unbuilt (no `v-touch-swipe` handler in `AddToListButton.vue` or the stock row;
+   the only `confetti` is `OnboardingConfetti.vue`). Cut rather than carried:
+   anti-creep (an original-spec "consider", never a feedback ask); redundant with
+   the shipped tap→`MultiListPopover` flow; swipe-right collides with the mobile
+   OS/browser back-gesture and is undiscoverable; and a success animation
+   contradicts the deliberate app-wide removal of celebration/confetti (kept only
+   in onboarding). If a swipe gesture is ever genuinely wanted, re-open from
+   scratch. See `DORA_FOLLOWUPS_RESOLVED.md` FU-380.
 
 ---
 
@@ -285,7 +321,7 @@ pre-date the charter, the shopping-list redesign, and the current feedback.
 
 | Original note | Verdict | Effect on this proposal |
 |---|---|---|
-| *"I can swipe right on the shopping cart button to bring up shopping-list selection"* (+ "likely want a success animation") | **consider** | A touch affordance for Axis B: swipe-right opens the list picker; plain tap takes the inferred target. Good mobile complement to §2.2. Add the success animation to §4. New open decision (§7.7). |
+| *"I can swipe right on the shopping cart button to bring up shopping-list selection"* (+ "likely want a success animation") | **superseded** | Was a "consider" (§7 decision 7); **closed as won't-do 2026-07-13 (FU-380)** — redundant with the shipped tap→popover flow, swipe-right is a mobile back-gesture liability, and a success animation contradicts the app-wide confetti removal. |
 | *"I am prompted to choose which lists to **remove** from … options: remove from primary / remove from all"* | **keep (gap!)** | The brief only designed **add**. The button is also the **remove** affordance, and removal has its own multi-list branch. See §9.1. (Reframe "remove from primary" → "remove from this list / remove from all" under the no-stored-primary model.) |
 | *"'create new' and 'move to existing' can be the same action — the list picker's last option is a green-plus 'create new'"* | **keep** | Folds cleanly into the Axis-B picker and L382: the picker's final row is always **+ New list**. One surface for add-to-existing and add-to-new. |
 | *"I can add a product directly to the cart from saved products — make it the **same button** as the stock-item overview"* | **keep (corroborates)** | Independent confirmation of the unify mandate (§5) and the standalone-product line (§3). The My-Products product button is the same component, `variant="inline-product"`. |

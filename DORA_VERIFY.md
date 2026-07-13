@@ -86,6 +86,16 @@ top-to-bottom.
 - [ ] Log in with an existing pre-policy password (e.g. an old 6-char account) still works — the new policy only applies at set-time, not at login
 - [ ] No admin toggle exists to loosen the rules (grep the Settings tree in the browser — Preferences, Admin, Security should have no password-policy option)
 
+## PWA install + offline (build now ships in PWA mode) — origin FU-336
+Requires a **built** frontend served over HTTPS or localhost (SW won't register on plain-HTTP). Use the Docker/nginx image, the desktop bundle, or `quasar serve dist/spa` after `npm run build`.
+- [ ] DevTools → Application → **Service Workers**: `sw.js` registers + activates (no errors); Application → **Manifest** shows name "Dashy Dora", theme `#f5c462`, the 3 shortcuts, and no manifest warnings
+- [ ] Browser offers **Install** (Chrome desktop/Android address-bar install icon); after install the app opens standalone (no browser chrome) and the window/title is Dora
+- [ ] Go offline (DevTools → Network → Offline) and reload → the app shell still loads (not the browser's dinosaur); navigating to an uncached route shows Dora's `offline.html`, not a raw error
+- [ ] API calls while offline fall back to the last cached GET (NetworkFirst) rather than hanging; coming back online refreshes normally
+- [ ] Deploy a new build over the top → within a reload or two the "new version" flow kicks in (skipWaiting/clientsClaim) and you're not pinned to the old worker (confirms the nginx `sw.js` no-cache rule)
+- [ ] Web Push: with VAPID configured, subscribe from Settings/Alerts and confirm a push arrives (the SW is what receives it) — ties off the previously-unreachable push path
+- [ ] ⚠️ iOS/Safari branding gap (FU-552): the iOS add-to-home-screen icon + Safari pinned-tab currently show Quasar's placeholder logo, not Dora — expected until FU-552; Android/Chrome/favicon should be Dora-branded
+
 ## Runtime backend URL (browser + PWA) — origin P8-10
 - [ ] In a browser tab (dev or PWA), Settings → About → **Dora API endpoint** shows the current URL; clicking **Change** opens the prompt with the current URL pre-filled
 - [ ] Save a bogus URL → toast "Instance URL saved", full reload, network banner drops (server unreachable) — confirm the app doesn't hard-crash and the About page still lets you re-open the prompt to fix it
@@ -1534,8 +1544,8 @@ machine at this session close-time; walked opportunistically.*
 - [x] First run GREEN on this Windows dev box (2026-07-12, driving system Chrome via `DORA_E2E_CHANNEL=chrome` since the bundled binary won't download here) — 9 tests: login good/bad creds + authed nav over dashboard/stock/cookbook/meal-plans/shopping-lists + a real /api handshake. Selectors confirmed against the running app.
 - [ ] Re-run in CI (bundled Chromium, `DORA_E2E_CHANNEL` unset) once CI is un-commented (FU-405), and on Linux, to confirm cross-OS. (Complements, does not replace, the manual walks below.)
 
-### ⚠️ Fresh-install migration boot — origin FU-549
-- [ ] On a machine with a clean `pip install -r requirements.txt`, point at an **empty** database and boot in production mode (the path that runs `flask_migrate.upgrade()`, not the create_all seed path) → the app migrates to head and starts, OR reproduces the `a3e9f6c2d8b4` Alembic batch `'BINARY' has no attribute 'name'` crash. This confirms whether FU-549 is a real fresh-install-can't-boot bug on the prod-pinned toolchain or a local alembic-version artifact. **Blocks nothing today (existing installs are fine) but must be resolved before advertising fresh self-host / the Postgres migration (FU-045).**
+### Fresh-install migration boot — origin FU-549 (FIXED 2026-07-13 — confirm on a clean install)
+- [ ] On a machine with a clean `pip install -r requirements.txt` (now pins `alembic==1.14.1`), point at an **empty** database and boot in production mode (the path that runs `flask_migrate.upgrade()`, not the create_all seed path) → the app migrates cleanly to head and starts, **no** `a3e9f6c2d8b4` Alembic batch `'BINARY' has no attribute 'name'` crash. The crash was fixed 2026-07-13 (batch renames now pass `sa.BINARY(16)` instead of `UUIDType()`) and is now covered by `tests/test_migrations.py::test__migrations__upgrade_head_from_empty_succeeds` — this is the eyes-on-the-running-thing confirmation on the real prod toolchain.
 
 ### Prod-mode secure-cookies boot warning — origin FU-460
 - [ ] Boot the app with `DORA_ENV=production` set and `DORA_SECURE_COOKIES` **unset** → stderr shows the multi-line `═══ WARNING: DORA_ENV=production but DORA_SECURE_COOKIES is unset. ═══` banner before the DI-container / DB / audit log lines

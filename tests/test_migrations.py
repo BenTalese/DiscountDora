@@ -143,29 +143,19 @@ def temp_db_path():
         yield Path(d) / "migtest.db"
 
 
-# ── FU-549 — the migration chain does NOT apply cleanly from empty ─────────
-# `upgrade head` on a fresh DB dies inside migration
+# ── FU-549 — the migration chain now applies cleanly from empty ────────────
+# `upgrade head` on a fresh DB previously died inside migration
 # a3e9f6c2d8b4_20260618_rename_merchant_to_store at
-# `op.batch_alter_table('Product')` with:
-#     AttributeError: 'BINARY' object has no attribute 'name'
-# an Alembic batch-mode failure resolving a UUIDType→BINARY column, on the
-# alembic + SQLAlchemy 2.0.25 combo here. This was never caught because the
-# app's test/seed path uses `db.create_all()` (metadata), NOT migrations —
-# so the from-empty migration chain had ZERO coverage. Production's fresh-boot
-# path DOES run `upgrade()` from empty, so a fresh self-hosted install may fail
-# to boot on the same toolchain. Strict-xfail until FU-549 confirms scope on
-# the prod-pinned versions / a fresh install and fixes the migration (or pins
-# a working alembic). These flip to XPASS (→ suite failure → un-xfail) the
-# moment the chain applies.
-_MIG_FROMEMPTY_BROKEN = pytest.mark.xfail(
-    strict=True,
-    reason="FU-549: upgrade-from-empty dies at a3e9f6c2d8b4 (Alembic batch "
-    "'BINARY' has no attribute 'name'); migrations are untested (create_all).",
-)
+# `op.batch_alter_table('Product')` with `AttributeError: 'BINARY' object has
+# no attribute 'name'` — an Alembic batch-mode rename reading `existing_type.name`
+# on a `sqlalchemy_utils.UUIDType`, whose BINARY impl has no `.name`. Fixed
+# 2026-07-13 (FU-549) by passing the concrete `sa.BINARY(16)` as `existing_type`
+# for the UUIDType-column renames. These tests give the from-empty chain its
+# first real coverage (the app's test/seed path uses `db.create_all()`, which
+# never exercised migrations), so a regression there fails the suite here.
 
 
 @pytest.mark.slow
-@_MIG_FROMEMPTY_BROKEN
 def test__migrations__upgrade_head_from_empty_succeeds(temp_db_path):
     result = _run_migration(temp_db_path, "flask_migrate.upgrade()")
     assert result.returncode == 0 and "MIGRATION_OK" in result.stdout, (
@@ -175,7 +165,15 @@ def test__migrations__upgrade_head_from_empty_succeeds(temp_db_path):
 
 
 @pytest.mark.slow
-@_MIG_FROMEMPTY_BROKEN
+@pytest.mark.xfail(
+    strict=True,
+    reason="FU-553: `downgrade base` dies dropping the named CHECK constraint on "
+    "RecipeIngredient (c5a8e1f7d3b2) — alembic batch mode on SQLite doesn't carry "
+    "reflected CHECK constraints into its rebuild table, so drop_constraint can't "
+    "find it. Upgrade-from-empty (the fresh-install boot path) is fixed under "
+    "FU-549; this is downgrade-only (dev/rollback) and likely SQLite-batch-specific "
+    "(Postgres drops named checks natively). Flip to XPASS → un-xfail when fixed.",
+)
 def test__migrations__down_up_roundtrip_is_clean(temp_db_path):
     """upgrade head -> downgrade base -> upgrade head with no exception.
     Catches downgrades that were never actually run (the common rot)."""
@@ -191,7 +189,6 @@ def test__migrations__down_up_roundtrip_is_clean(temp_db_path):
 
 
 @pytest.mark.slow
-@_MIG_FROMEMPTY_BROKEN
 def test__migrations__migrated_schema_matches_orm_metadata(temp_db_path):
     """After `upgrade head`, the migrated schema must contain every table the
     ORM metadata declares — catches 'model added, migration forgotten' drift."""

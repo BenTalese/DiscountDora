@@ -47,7 +47,7 @@ import base64
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -210,7 +210,11 @@ def reconcile_overdue_signal(today: date) -> ReconcileOverdueSignal:
             f'WHERE r.state IN ({states_in}) '
             '  AND NOT EXISTS ('
             '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
-            '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+            '    WHERE r2.meal_plan_entry_id = mpe.id '
+            # FU-529: "newer" uses the same (created_at, id) order as
+            # _latest_receipt so the latest-per-entry pick is deterministic.
+            '      AND (r2.created_at > r.created_at '
+            '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
             '  ) '
             '  AND mpe.scheduled_for < :today'
         ),
@@ -294,7 +298,10 @@ def _fetch_queue(today: date, cursor: Optional[str], limit: int) -> tuple[list[d
         f'WHERE r.state IN ({states_in}) '
         '  AND NOT EXISTS ('
         '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
-        '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+        '    WHERE r2.meal_plan_entry_id = mpe.id '
+        # FU-529: deterministic (created_at, id) "newer" — matches _latest_receipt.
+        '      AND (r2.created_at > r.created_at '
+        '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
         '  ) '
         '  AND mpe.scheduled_for < :today '
         f'  {cursor_clause}'
@@ -326,7 +333,10 @@ def _count_queue(today: date) -> int:
         f'WHERE r.state IN ({states_in}) '
         '  AND NOT EXISTS ('
         '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
-        '    WHERE r2.meal_plan_entry_id = mpe.id AND r2.created_at > r.created_at'
+        '    WHERE r2.meal_plan_entry_id = mpe.id '
+        # FU-529: deterministic (created_at, id) "newer" — matches _latest_receipt.
+        '      AND (r2.created_at > r.created_at '
+        '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
         '  ) '
         '  AND mpe.scheduled_for < :today'
     )
@@ -420,7 +430,11 @@ def _latest_receipt(entry_id) -> Optional[dict]:
             'SELECT state, original_servings, actual_servings, cooked_on, created_at '
             'FROM "MealPlanReconcileReceipt" '
             'WHERE meal_plan_entry_id = :eid '
-            'ORDER BY created_at DESC LIMIT 1'
+            # FU-529: `id` is the deterministic tie-break so "latest" is
+            # unambiguous when two receipts share a created_at (portable on
+            # SQLite BINARY(16) + Postgres uuid). The monotonic clamp in
+            # `submit_verb` keeps created_at itself causally ordered.
+            'ORDER BY created_at DESC, id DESC LIMIT 1'
         ),
         {"eid": _id_bytes(entry_id)},
     ).mappings().first()
@@ -536,6 +550,26 @@ def submit_verb(entry_id: UUID):
             new_pool=current_pool,
             idempotent=True,
         ))
+
+    # FU-529 — monotonic guard: a correction must never sort *older* than the
+    # receipt it supersedes, even if the wall clock stepped backwards between
+    # the auto-sweep receipt and this action (the observed idempotence flake,
+    # suspected Windows time-sync). Clamp created_at to just after the latest
+    # existing receipt so "latest by (created_at, id)" reliably means "most
+    # recently decided" and a same-verb replay stays a no-op.
+    # NOTE: `_latest_receipt` runs raw SQL, so created_at comes back as a str on
+    # SQLite and a datetime on Postgres — handle both.
+    prev_created = latest.get("created_at") if latest else None
+    if isinstance(prev_created, str):
+        try:
+            prev_created = datetime.fromisoformat(prev_created)
+        except ValueError:
+            prev_created = None
+    if isinstance(prev_created, datetime):
+        if prev_created.tzinfo is None:
+            prev_created = prev_created.replace(tzinfo=UTC)
+        if prev_created >= now:
+            now = prev_created + timedelta(microseconds=1)
 
     # Compute pool delta.
     current_drained = _effective_drained(

@@ -165,17 +165,48 @@ No change; cross-reference only.
 
 ## 5. Open decisions (for co-design)
 
+> **Status: reconciled 2026-07-13 (FU-381 / FU-364 remediation).** All five
+> decisions were answered in co-design (§5a, 2026-06-08) *and* have since shipped
+> (Cook Mode C-3 + recipe model C-4). Each is annotated below with the verified
+> shipped reality — none remains open. Evidence is cited to live code, not the
+> proposal. ✅ = closed by shipped behaviour.
+
 1. **Ticking removal** (L327/328) — remove entirely + per-step highlight
-   (proposed), or keep an optional "mark done"?
+   (proposed), or keep an optional "mark done"? — ✅ **CLOSED (removed entirely).**
+   `RecipeCookMode.vue` has no `usedIds`/`doneSteps`/checkbox state; comments state
+   "no more per-step tick state" (`:1112`) and "The user no longer ticks
+   ingredients" (`:1174`). Replaced by per-step highlight — `highlightedIngredientIds`
+   / `highlightedToolIds` computeds (`:902`, `:923`) drive `ingredient-row--highlighted`
+   / `tool-chip--highlighted` classes (`:283`, `:381`). Matches DEC-1.
 2. **Sub-step / structured-steps model** (L323) — model structured steps in C-4
    (proposed; enables reliable highlighting, per-step tools/hints/timers), or keep
-   freeform + text-match?
+   freeform + text-match? — ✅ **CLOSED (structured, one-level sub-steps).**
+   `dora_api/domain/entities/recipe_step.py` `RecipeStep` has self-referential
+   `parent_step_id: UUID | None` giving "exactly one level of sub-steps"
+   (docstring; depth > 1 rejected), plus `text`, `hint`, `sequence`, `section_id`;
+   ingredient/tool links in `RecipeStepIngredient`/`RecipeStepTool` association
+   tables. Migrations `c9d4f8e2a5b6_20260609_recipe_steps.py` +
+   `f6c8e3a9b1d2_20260612_recipe_sections.py`. Cook mode consumes
+   `recipe.steps[]` with `parent_step_id` (`:724`) and degrades to text-match for
+   freeform. Matches DEC-2; closes FU-040.
 3. **Quantity-unit inclusion list** (L326) — confirm which units attach with no
-   space (`ml, g, kg, l, mg, tsp, tbsp`?) vs spaced.
+   space (`ml, g, kg, l, mg, tsp, tbsp`?) vs spaced. — ✅ **CLOSED.**
+   `web_app/src/helpers/formatQuantity.ts` is the single source of truth:
+   `NO_SPACE_UNITS = { ml, g, kg, l, mg, oz, lb, floz, pt, qt }`; everything else
+   (tsp/tbsp/cloves/…) gets a space. Exactly the DEC-3 list — note `tsp`/`tbsp`
+   are *spaced*, correcting this proposal's original "`tsp, tbsp`?" guess.
 4. **Serving scaling display** (§2.2) — how to render fractional scaled
-   quantities (round / fractions / show as-is)?
+   quantities (round / fractions / show as-is)? — ✅ **CLOSED (round sensibly).**
+   `web_app/src/helpers/scaleQuantity.ts`: countable units (eggs, cloves, …)
+   round to nearest whole, floored at 1; continuous units snap to ¼/⅓/½/⅔/¾ within
+   0.04 tolerance, else one decimal place trimmed. Never shows raw decimals.
+   Matches DEC-4.
 5. **Finish-flow level controls** — per-item "set any level" (proposed) vs simpler
-   "↓ one / Out / unchanged" quick choices only?
+   "↓ one / Out / unchanged" quick choices only? — ✅ **CLOSED (both: chips + full
+   picker).** `RecipeCookMode.vue` finish flow renders per-row `BaseSegmented`
+   with "Down one / Out / Unchanged" (`:501-505`, default "Down one level" `:480`)
+   *plus* an "Override to a specific level" `q-select` (`:512-522`) and per-row
+   "Add to list" (`:525-529`). Matches DEC-5.
 
 ---
 

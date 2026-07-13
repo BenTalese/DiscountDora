@@ -410,14 +410,41 @@ Original L400–L421 (`Feedback _ Fixes - as of [06-Jun-2026].md`):
 
 *All four resolved 2026-06-12 — see §12. Kept for the trail.*
 
-1. **Zero-overflow toolbar?** §8 keeps rare/destructive actions in one "More"
-   menu. If you want literally everything visible, say so — it costs a row of
+**Status: reconciled 2026-07-13 (FU-382 / FU-364 remediation).** Every question
+below was answered in §12 *and* has now been verified closed against the shipped
+code — the proposal built and landed (CHANGELOG "Shopping lists UX v2 — one page
+for the whole shop"). All four are ✅ closed by shipped behaviour; none remain
+open. Per-question evidence annotated inline.
+
+1. ✅ **CLOSED — Zero-overflow toolbar?** §8 keeps rare/destructive actions in one
+   "More" menu. If you want literally everything visible, say so — it costs a row of
    buttons on mobile.
-2. **Rail kebab** (§3.1) — copy/archive/delete stay behind a kebab *on rail
+   *Shipped as decided (lean "More" menu, not zero-overflow): working actions
+   (quick add, group-by, refresh deals, select, lifecycle) are visible toolbar
+   buttons; only template/print/move-unticked/copy/clear/delete live in a labelled
+   "More" menu; CSV export removed end-to-end. Promoted to engineering rule R-012.
+   Evidence: CHANGELOG "Toolbar instead of ellipsis menus (new rule R-012)".*
+2. ✅ **CLOSED — Rail kebab** (§3.1) — copy/archive/delete stay behind a kebab *on rail
    items only*. OK?
-3. **Pause button** (M13): keep a quiet way to drop from `shopping` back to
+   *Shipped: `ShoppingListRailItem.vue:34–59` renders a `more_vert` kebab menu
+   scoped to rail items with "Copy to new list", "Copy unticked → new", and
+   "Delete list". Archive was dropped (comment at lines 70–71 cites §12 Q2 —
+   "lists are finished or deleted"), consistent with the decision.*
+3. ✅ **CLOSED — Pause button** (M13): keep a quiet way to drop from `shopping` back to
    `draft`, or is Start → Finish enough?
-4. **Remove-line with no confirm** (§7) — comfortable, or want an undo toast?
+   *Shipped as "no Pause": the `POST /stop` endpoint was deleted with the shop-mode
+   page; lifecycle is Start shopping → Finish & restock → (Reopen). Evidence:
+   CHANGELOG "The `/stop` ("pause") endpoint is gone".*
+4. ✅ **CLOSED — Remove-line with no confirm** (§7) — comfortable, or want an undo toast?
+   *Shipped as "no undo toast": `ShoppingListDetail.vue:2589` `onRemoveLine` deletes
+   the line and shows only a plain positive notify with an inline comment citing
+   §12 Q4 (lines 2639–2640). The broader undo question flagged in §12 Q4 was
+   subsequently resolved wholesale by FU-163 — app-wide undo (`useUndo`,
+   tick/untick undo) and even shopping-list Reopen were removed (CHANGELOG
+   "App-wide undo / shopping-list Reopen — gone (FU-163)"), so this is doubly
+   settled. (Note: a product-only line still shows a scoped "also remove the
+   linked stock item?" prompt — that is the Cart-Button rule-4 dialog, FU-131,
+   not a remove-confirm, and does not reopen this question.)*
 
 ## 12. Decisions (2026-06-12 review)
 

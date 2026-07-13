@@ -1,6 +1,10 @@
 # Proposal — Recipe "Image" Steps Mode (C-4 add-on)
 
-**Status:** **Draft for co-design** · **Date drafted:** 2026-06-25 · Changes NO code.
+**Status:** ✅ **BUILT — 2026-06-25** (proposal + all §5 decisions + full
+implementation shipped the same day; see `DORA_WORKLOG.md` 2026-06-25 and
+`DORA_FOLLOWUPS_RESOLVED.md` FU-369). The 2026-07-01 proposals audit mistakenly
+logged this as "not built" (FU-369) — corrected 2026-07-13.
+· **Date drafted:** 2026-06-25 · *(proposal-as-written changed no code; the build landed the same day)*
 **Scope:** Add a third recipe-steps mode — **image** — alongside the existing
 **structured** and **freeform** modes. The user uploads ordered photos of their
 recipe (a cookbook spread, a handwritten card, a printout) and Dora renders them
@@ -218,21 +222,20 @@ No items extracted from the original spec for this proposal.
 
 ## 5. Open decisions (for co-design)
 
-1. **Mode-switch semantics** (§2.1) — peer switch that retains all three
-   payloads (proposed; safer, allows experimentation), vs. exclusive switch
-   that prompts before clearing the others (cleaner data, more friction).
-2. **Cook-mode rendering** (§2.4) — vertical scroll of all images (proposed;
-   simpler, two-page-spread friendly), vs. swipe carousel (more app-like, but
-   widget cost + obscures context).
-3. **Resize target + image cap** (§2.6) — client-side resize to 1600px long
-   edge at JPEG q=0.85, soft cap of 20 images per recipe (proposed). Tune?
-4. **Recipe-level images vs step images** — `Recipe.image` (dish hero, single)
-   stays as-is per Cookbook §2.3; this proposal only adds *step* images.
-   Confirm those are kept as distinct concerns (proposed) rather than
-   collapsing one into the other.
-5. **Manual timer in image mode** (§2.4) — keep the standalone timer affordance
-   available (proposed; cooking still needs timers regardless of step source)
-   vs. hide all timer UI for image-mode recipes.
+**Status: closed — all five resolved with the user 2026-06-25 and built the same
+day (`DORA_WORKLOG.md` 2026-06-25). All landed on the proposed default.**
+
+1. **Mode-switch semantics** (§2.1) — ✅ **peer / non-destructive** (proposed).
+   All three step payloads coexist; `steps_mode` is just the active render selector.
+2. **Cook-mode rendering** (§2.4) — ✅ **vertical scroll** gallery, full-width
+   images, tap-to-zoom (proposed; no carousel widget).
+3. **Resize target + image cap** (§2.6) — ✅ **1600px long edge / JPEG q=0.85 /
+   20-image soft cap** (proposed). Also spawned the centralised image-upload
+   memory (`feedback-centralise-image-upload`, R-003).
+4. **Recipe-level vs step images** — ✅ **kept distinct** (proposed). `Recipe.image`
+   (dish hero) unchanged; this added only `RecipeStepImage` step photos.
+5. **Manual timer in image mode** (§2.4) — ✅ **standalone timer kept available**
+   (proposed).
 
 ---
 

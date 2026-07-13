@@ -95,7 +95,17 @@ export default defineConfig((ctx): any => {
             // ignorePublicFolder: true,
             // minify: false,
             // polyfillModulePreload: true,
-            // distDir
+
+            // FU-336: the build ships in PWA mode (`quasar build -m pwa`), whose
+            // default output dir would be `dist/pwa`. Pin it back to `dist/spa`
+            // so the one canonical frontend-output path stays mode-agnostic: the
+            // whole serving layer keys off `dist/spa` (nginx.conf, dora_api
+            // serve_spa.py, the PyInstaller `dora.spec` data tuple, packaging/
+            // build-{linux,macos}.sh, and the Playwright e2e harness). A PWA is
+            // still fundamentally the SPA bundle plus a service worker + manifest,
+            // so one output path serves both modes — cheaper and less error-prone
+            // than threading a second `dist/pwa` path through seven consumers.
+            distDir: 'dist/spa',
 
             // extendViteConf (viteConf) {},
             // viteVuePluginOptions: {},

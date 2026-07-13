@@ -24,7 +24,7 @@ Design points that keep this honest:
 import logging
 import statistics
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Optional
 from uuid import UUID
 
@@ -36,7 +36,9 @@ from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.stock_status import (
     is_low_stock, is_out_of_stock,
 )
-from dora_api.features.app_settings.clock import household_today
+from dora_api.features.app_settings.clock import (
+    household_timezone, household_today,
+)
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import not_found, ok
@@ -53,6 +55,15 @@ def _as_utc(dt: datetime | None) -> datetime | None:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _local_date(dt: datetime, tz: tzinfo) -> date:
+    """Calendar day of a (UTC) observation timestamp *in the household zone*.
+    FU-525: bucketing UTC timestamps with a bare `.date()` while `today` is
+    household-local (R-021) drifts the day by one for non-UTC households and can
+    flip the wait-hint's `next_low <= today` staleness check. Take the date in
+    the same zone as `today` so the two clocks agree."""
+    return _as_utc(dt).astimezone(tz).date()
 
 
 # ── Tunables (single source, easy to iterate) ─────────────────────────
@@ -161,6 +172,10 @@ class _AxisInputs:
     stock_level_band: str = "unknown"        # "out" | "low" | "stocked" | "unknown"
     is_on_open_list: bool = False            # drives one_tap_action for "skip"
     today: date = field(default_factory=date.today)
+    # Household zone (R-021 / FU-525) — the zone `today` is expressed in, and the
+    # zone UTC observation timestamps are bucketed into via `_local_date` so the
+    # two clocks agree. Defaults to UTC (tests build samples at UTC-noon).
+    tz: tzinfo = timezone.utc
     # FU-450 — at least one product linked to this item is currently
     # running an inflated "special" (claims a saving, but the household has
     # paid less recently). Demotes a price-driven `buy` to `wait` and
@@ -195,8 +210,11 @@ def _price_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
     prices = [p for p, _ in samples]
     usual = _trimmed_mean(prices)
     last_price, last_at = samples[0]
+    # Window boundary anchored to household-local midnight (R-021 / FU-525), so
+    # the "cheapest in 3 months" cutoff agrees with `today`. Both sides are
+    # tz-aware, so the comparison is a correct absolute-instant one.
     horizon = (
-        datetime.combine(inputs.today, datetime.min.time(), tzinfo=timezone.utc)
+        datetime.combine(inputs.today, datetime.min.time(), tzinfo=inputs.tz)
         - timedelta(days=_PRICE_RECENT_WINDOW_DAYS)
     )
     recent = [p for p, ts in samples if ts >= horizon]
@@ -331,7 +349,7 @@ def _wait_hint(inputs: _AxisInputs) -> Optional[WaitHintDto]:
     # threshold, not two. `low_dates` sorted oldest→newest so gaps read
     # left-to-right chronologically.
     low_dates = sorted({
-        ts.date() for price, ts in samples
+        _local_date(ts, inputs.tz) for price, ts in samples
         if price <= _CHEAP_BAND_FRACTION * usual
     })
     if len(low_dates) < _MIN_LOWS_FOR_CYCLE:
@@ -490,7 +508,7 @@ def _data_used_dto(inputs: _AxisInputs) -> VerdictDataUsedDto:
         prices = [p for p, _ in inputs.price_samples]
         price_average = round(_trimmed_mean(prices), 2)
         price_last = round(inputs.price_samples[0][0], 2)
-        price_last_at = inputs.price_samples[0][1].date().isoformat()
+        price_last_at = _local_date(inputs.price_samples[0][1], inputs.tz).isoformat()
 
     days_since: Optional[int] = None
     avg_days: Optional[float] = None
@@ -537,9 +555,10 @@ def _gather_inputs(
     repository: SqlAlchemyRepository, item: StockItem,
 ) -> _AxisInputs:
     today = household_today(repository)
+    tz = household_timezone(repository)
     horizon_start = datetime.combine(
         today - timedelta(days=_HISTORY_WINDOW_DAYS),
-        datetime.min.time(), tzinfo=timezone.utc,
+        datetime.min.time(), tzinfo=tz,
     )
 
     # Completed-list lines for this item.
@@ -572,7 +591,7 @@ def _gather_inputs(
         samples.append((price, completed_at))
     samples.sort(key=lambda s: s[1], reverse=True)
 
-    unique_dates = sorted({s[1].date() for s in samples})
+    unique_dates = sorted({_local_date(s[1], tz) for s in samples})
 
     # Waste events over the same window.
     waste_events: list[StockItemWasteEvent] = repository.get(StockItemWasteEvent).all(
@@ -595,6 +614,7 @@ def _gather_inputs(
         stock_level_band=_stock_level_band(item),
         is_on_open_list=is_on_open_list,
         today=today,
+        tz=tz,
         fake_markdown=_item_has_fake_markdown(repository, item.id),
     )
 

@@ -286,21 +286,18 @@ def list_waste_events():
 # already gone (double-tap, retry after network blip). Returning 204
 # in both the "deleted now" and "not present" cases keeps the client
 # simple. Only a malformed UUID is a real error.
-@WASTE_ROUTER.route("/events/<event_id>", methods=["DELETE"])
-def delete_waste_event(event_id: str):
+@WASTE_ROUTER.route("/events/<uuid:event_id>", methods=["DELETE"])
+def delete_waste_event(event_id: UUID):
+    # R-033: uuid converter parses the id at the routing edge (FU-544).
     _Logger = logging.getLogger(__name__)
-    try:
-        parsed = UUID(event_id)
-    except (ValueError, TypeError):
-        return bad_request("event_id must be a UUID.")
     repo = SqlAlchemyRepository()
-    event = repo.get(StockItemWasteEvent).by_id(parsed)
+    event = repo.get(StockItemWasteEvent).by_id(event_id)
     if event is None:
-        _Logger.debug("Delete waste event %s: already gone (no-op)", parsed)
+        _Logger.debug("Delete waste event %s: already gone (no-op)", event_id)
         return no_content()
     repo.remove(event)
     repo.save_changes()
-    _Logger.info("Deleted waste event %s", parsed)
+    _Logger.info("Deleted waste event %s", event_id)
     return no_content()
 
 

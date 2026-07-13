@@ -7,7 +7,7 @@ past-day plan, lets the sweep drop a receipt, then hits
 the pool + `consumed_at` + receipt state converged as the proposal §3.2
 locked.
 """
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import requests
 from sqlalchemy import text
@@ -345,6 +345,45 @@ def test__same_verb_replay_is_idempotent(api):
         assert r1.json()["idempotent"] is False
         r2 = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "cooked"})
         assert r2.json()["idempotent"] is True
+        states = [r["state"] for r in _receipts_for(entry_id)]
+        assert states == ["unresolved_auto", "resolved_confirmed"], states
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
+def test__replay_idempotent_when_latest_receipt_created_at_is_ahead(api):
+    """FU-529 regression — the monotonic clamp. If the latest existing receipt
+    carries a created_at *ahead* of the server clock (the clock-step-backwards
+    flake: a fresh verb write stamped at real `now` would otherwise sort older
+    than the sweep receipt), the correction must still become the newest
+    receipt so a same-verb replay is a no-op, not a duplicate. Without the
+    clamp the replay reads the stale `unresolved_auto` as latest and writes a
+    third receipt (idempotent: false)."""
+    _set_auto_drain(True)
+    recipe = _pick_recipe()
+    _bump_pool(recipe["recipe_id"], target=5)
+    plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
+    try:
+        _trigger_sweep()  # writes the unresolved_auto sweep receipt
+
+        # Force the sweep receipt's created_at a day AHEAD of the server clock.
+        ahead = datetime.now(UTC) + timedelta(days=1)
+        with app.app_context(), db.engine.begin() as conn:
+            conn.execute(
+                text('UPDATE "MealPlanReconcileReceipt" SET created_at = :ahead '
+                     'WHERE meal_plan_entry_id = :eid AND state = :s'),
+                {"ahead": ahead, "eid": uuid_bind(entry_id), "s": "unresolved_auto"},
+            )
+
+        first = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "cooked"})
+        assert first.status_code == 200, first.text
+        assert first.json()["idempotent"] is False
+
+        replay = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "cooked"})
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["idempotent"] is True, replay.text
+        # Exactly two receipts — the clamp kept the resolved one newest, so no
+        # duplicate resolved_confirmed was written on replay.
         states = [r["state"] for r in _receipts_for(entry_id)]
         assert states == ["unresolved_auto", "resolved_confirmed"], states
     finally:

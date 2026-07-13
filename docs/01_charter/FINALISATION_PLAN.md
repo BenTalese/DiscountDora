@@ -17,7 +17,34 @@ things fall through the cracks between passes. This plan bundles them into one
 disciplined sweep so each chunk of the code is read once, deeply, and every
 track is advanced from the same reading.
 
-The four tracks built up in parallel per chunk:
+> **Governing objective (added 2026-07-13, owner directive).** The app must be
+> **maintainable by one person — the owner — by hand, if AI ever becomes
+> inaccessible**: neat, non-redundant, logically organised, industry-standard,
+> legible and changeable by a single competent developer with no generation
+> assistance.
+>
+> **Delivered as a strict two-stage effort — analysis fully precedes execution:**
+>
+> - **Stage 1 — Analysis (this plan's code-walk).** Put *all* effort into reading
+>   the code in detail, **file by file**, and writing every finding down. The
+>   senior-review track (§3.3) is the record, and it must be **execution-ready**:
+>   each finding names the exact file(s) + line(s) and the exact change to make,
+>   so Stage 2 needs **zero further investigation**. **No code is changed in
+>   Stage 1** — the deliverables are the written track docs.
+> - **Stage 2 — Execution (§3.5).** Working *purely from the written findings*,
+>   make the exact, efficient changes — DRY, dead-code removal, componentisation,
+>   relocation, renaming, standards fixes, and the verified bug fixes — guarded by
+>   the test suite. No re-reading the code to decide *what* to do; the Stage-1
+>   record already says. Pure, mechanical, precise application.
+>
+> The whole point of the split: analyse everything exactly first, so the change
+> phase is unambiguous and efficient — no investigate-while-you-edit, no
+> half-measures, no second-guessing mid-change. (Verified bugs still get an urgent
+> FU at discovery — don't wait for Stage 2. Findings needing *design* become a new
+> proposal, not a tidy — see §2.)
+
+The four analysis tracks built up in parallel per chunk during Stage 1 (all four
+produce a written deliverable; **none changes code** — that's Stage 2):
 
 1. **Full Systems Test (FST) procedure** — a manual walkthrough document the
    user follows to verify the whole app end-to-end from multiple perspectives,
@@ -26,18 +53,21 @@ The four tracks built up in parallel per chunk:
 2. **In-app help & guides content** — plain-English behaviour docs for every
    feature, landing on `HelpPage.vue` + the `(?)` help chips + DoraBot answers.
    Resolves [[FU-361]] + [[FU-320]].
-3. **Senior code review findings** — a running assessment doc capturing bugs,
-   dead code, refactors worth the churn, and library-vs-hand-rolled verdicts.
-   Resolves [[FU-395]] and folds in the Phase-1 (assessment) half of
-   [[FU-510]]. Lives at
+3. **Senior code review findings — the execution-ready change record.** A running
+   assessment doc capturing bugs, **redundancy/DRY, dead code, componentisation
+   opportunities, misplaced modules, naming/idiom, inefficiency**, refactors worth
+   the churn, standards drift, and library-vs-hand-rolled verdicts. Every entry
+   records the **exact file:line + the exact change to make** so Stage 2 applies
+   it without re-reading the code. Resolves [[FU-395]] and folds in the Phase-1
+   (assessment) half of [[FU-510]]. Lives at
    [../05_investigations/FINALISATION_REVIEW.md](../05_investigations/FINALISATION_REVIEW.md)
-   (created on first chunk).
+   (created on first chunk). This track is the heart of the north-star.
 4. **Test plan** — for every chunk, list the unit / integration / e2e tests
    that *should* exist to protect the surface long-term. **Do not write the
    tests** in this pass; capture enough that they can be written cold later.
    Feeds [[FU-519]] / [[FU-520]].
 
-Each chunk also cross-checks the four tracks against the shipped `(?)` help
+Each chunk also cross-checks the tracks against the shipped `(?)` help
 chips (FU-503/044), the state-ownership audit
 (`STATE_OWNERSHIP_REFACTOR_PROPOSAL.md`), and the engineering standards
 (`ENGINEERING_STANDARDS.md`).
@@ -46,17 +76,24 @@ chips (FU-503/044), the state-ownership audit
 
 ## 2. Scope discipline (what this plan is not)
 
-- **Not** a fresh design pass. Anything that would rewrite a feature belongs
-  in a new proposal doc, not here. If a senior-review finding is large enough
-  to need design, log it as a new `FU-NNN` and keep walking.
+- **Not** a code-change pass *(Stage 1)*. The code-walk **analyses and writes
+  findings; it does not edit code**. All editing happens in **Stage 2 (§3.5)**,
+  which applies the exact changes from the written record. The separation is the
+  point — analyse everything precisely first, then change it mechanically.
+- **Not** a fresh design pass. Anything that would rewrite a feature, change a
+  contract / DTO shape, or touch a data model is **not a tidy-up** — it belongs
+  in a new proposal doc + `FU-NNN`, sequenced separately by risk, and is out of
+  Stage 2's scope. If a senior-review finding is large enough to need design, log
+  it and keep walking. Stage 2 executes the maintainability class
+  (DRY / dead-code / componentisation / placement / naming / standards) + verified
+  bugs — not redesigns. The test suite (`FU-371`, done) is the guard: a change
+  that can't be test-covered cheaply is large-blast-radius → new proposal/FU.
 - **Not** the browser-verify pile. `DORA_VERIFY.md` stays the user's manual
   walk list; the FST doc is different — it's the *reproducible protocol* the
   user (or a fresh collaborator) follows on a near-final build to certify
   release-readiness. FST rows will *become* verify items when picked up.
 - **Not** a documentation project for internal architecture. The Help track
   is user-facing copy only. Architecture stays in the charter + proposal docs.
-- **Not** a bulk refactor. Findings get logged; whether to act on them is a
-  separate decision per finding, sequenced by risk + blast-radius.
 
 ---
 
@@ -171,6 +208,49 @@ At close, "must-write-before-ship" rows are opened as their own FUs and
 sequenced into [[FU-519]]; "nice-to-have" rows accumulate against
 [[FU-520]] as a menu.
 
+### 3.5 Stage 2 — Execution (apply the findings; only after Stage-1 analysis is complete)
+
+Stage 2 is a **separate pass that changes code**, run *after* the Stage-1 analysis
+for its scope is fully written. It is deliberately **not** interleaved with
+reading: by the time Stage 2 starts, the senior-review record (§3.3) already says
+*exactly* what to change and where, so Stage 2 does **no fresh investigation** — it
+reads the finding, makes the prescribed change, and moves on. This is what makes
+the change phase fast, unambiguous, and half-measure-free.
+
+**What Stage 2 executes** (the maintainability class + verified bugs — the exact
+categories the review must have already pinned per finding):
+
+- **Redundancy / DRY (R-001, R-003)** — collapse duplicated logic/values to one
+  source (client recomputing a server-owned fact, a constant duplicated across
+  files, two functions doing the same thing → one).
+- **Dead code** — remove the unused functions, fields, imports, branches, styles,
+  routes, commented-out blocks the review catalogued.
+- **Componentisation (R-001)** — extract the repeated markup/logic the review
+  flagged into one component/composable; single-responsibility, legible tree; no
+  inline copy of a shared thing. Backend: shared helpers over copy-paste.
+- **Logical placement** — move each misplaced module to its prescribed home; fix
+  layering (server owns derived facts, client owns view — R-003).
+- **Naming & idiom** — apply the prescribed renames; one canonical idiom per
+  pattern across the surface.
+- **Efficiency** — the cheap wins the review noted (redundant passes, needless
+  recompute; N+1s already have the FU-534 guards).
+- **Verified bugs** — the fixes for bugs the review confirmed (each already has
+  its urgent FU from discovery).
+
+**Discipline (non-negotiable):**
+- **No re-analysis.** If Stage 2 finds it *needs* to re-investigate to know what to
+  do, that finding was under-specified — kick it back to Stage 1, sharpen the
+  written record, then execute. The record is the contract.
+- **Test-guarded.** Every change compiles + passes the relevant tests before it's
+  done. A change not cheaply test-coverable is large-blast-radius → it should have
+  been logged as a proposal/FU in Stage 1, not sitting in the execution list (§2).
+- **Scoping** — sequence Stage 2 by risk/blast-radius, smallest-safest first. It
+  can run per-chunk (execute chunk N's findings once its analysis is signed off)
+  or batched across several analysed chunks — owner's call at the time; either way
+  analysis for a given scope is 100% done before its execution starts.
+- **Recorded** — each executed finding ticks in the coverage register's **Applied**
+  column + a worklog note.
+
 ---
 
 ## 4. Feature chunks (walk order)
@@ -207,7 +287,10 @@ added later (e.g. Phase 4 tenancy) become 21+, they don't renumber.
 
 ---
 
-## 5. How to run a chunk (per-session recipe)
+## 5. How to run a chunk — Stage 1 Analysis (per-session recipe)
+
+**This recipe is Stage-1 analysis only — it produces written findings, it does
+not change code.** Execution is Stage 2 (§3.5), run later from the record.
 
 1. **Open [FINALISATION_COVERAGE.md](FINALISATION_COVERAGE.md).** Pick the
    top unstarted chunk. Confirm with the user before starting.
@@ -217,21 +300,33 @@ added later (e.g. Phase 4 tenancy) become 21+, they don't renumber.
      Engineering Standards).
    - The relevant `02_feedback/` bullets for the surface.
    - Any open FU on that surface.
-3. **Read the code**, front to back, for the chunk. Backend features first,
-   then SPA components/pages, then tests. Grep every entry point.
-4. **Advance all four tracks in the same pass** — don't split them. Follow
-   the formatting rules in §3.
-5. **Update the coverage register** with the chunk's row set to ✅ and the
-   date; write a one-line "what came out of it" note (link the sections
-   added to each track doc).
-6. **Standards close-gate** (per `CLAUDE.md`) — every `R-0NN` violation
-   surfaced is fixed / explained / logged.
+3. **Read the code in detail, file by file**, for the chunk. Backend features
+   first, then SPA components/pages, then tests. Grep every entry point. This is
+   where *all* the effort goes — the depth here is what lets Stage 2 be mechanical.
+4. **Advance the four analysis tracks in the same read** — don't split them;
+   follow §3. The senior-review track (Track 3) must come out **execution-ready**:
+   every maintainability finding (redundancy, dead code, componentisation,
+   placement, naming, inefficiency, standards) records the **exact file:line + the
+   exact change** so Stage 2 needs no re-investigation. **Write, don't fix** — the
+   only inline action allowed in Stage 1 is opening an urgent FU for a verified
+   bug.
+5. **Update the coverage register** — set the chunk's **FST / Help / Review /
+   Tests** cells to ✅ (Applied stays ⬜ until Stage 2) and the date; one-line
+   "what came out of it" note linking the sections added.
+6. **Standards close-gate** (per `CLAUDE.md`) — every `R-0NN` violation is
+   *recorded* in the review track with its prescribed fix (fixing happens in
+   Stage 2; a genuinely trivial in-file exception may still be commented inline).
 7. **Worklog entry** on session end.
 
 Expect **one chunk per session** at most for the loop spine chunks
 (1-9) and Assistant/Settings (11/13). The smaller chunks (5→6 sub-splits,
 7, 14, 16, 18) may pair up. Do not batch more than two chunks in a session
 — the review track loses depth.
+
+**Stage 2 execution** is run as its own work unit(s) per §3.5 — once a chunk's (or
+a batch of chunks') analysis is signed off, apply its findings from the record,
+tick the **Applied** column, and worklog it. Do not start a chunk's execution
+before its analysis cell is ✅.
 
 ---
 
@@ -254,10 +349,13 @@ Marked here as **fully rolled in**, **partially rolled in**, or
 **Partially rolled in — corresponding FU stays open:**
 
 - **[[FU-510]] hand-rolled vs library sweep** — Phase 1 (assessment)
-  rolled into Track 3 as a per-chunk `keep / replace /
-  wrap-thin-adapter` bucket. **Phase 2 (per-swap actions) stays open**
-  — this plan produces the shortlist, doesn't ship the swaps. Each
-  `replace` verdict spawns its own per-swap FU at plan close.
+  rolled into Track 3 as a per-chunk `keep / replace / wrap-thin-adapter`
+  verdict (with the exact swap recorded, Stage-1). Under the 2026-07-13
+  two-stage model, **Stage 2 executes the small / low-risk / test-covered
+  swaps** from the record; the large-blast-radius ones (a swap touching many
+  call sites, a dependency add, anything not cheaply test-covered) **stay
+  open as FU-510 Phase 2**, each its own per-swap FU. This plan produces the
+  shortlist and executes the safe end of it.
 
 **Partially rolled in — cross-referenced, corresponding FU stays open:**
 
@@ -292,17 +390,28 @@ Follow-on FUs opened by this plan (opened at plan close, not before):
 
 This plan closes when:
 
-1. Every chunk in §4 shows ✅ in
-   [FINALISATION_COVERAGE.md](FINALISATION_COVERAGE.md) across all four
-   tracks (some tracks may be `N/A` for a chunk — e.g. ops chunks may
-   have no in-app help — but every cell has an explicit value).
+1. **Stage 1 complete:** every chunk in §4 shows ✅ in
+   [FINALISATION_COVERAGE.md](FINALISATION_COVERAGE.md) across the four analysis
+   tracks (FST / Help / Review / Tests) — some cells may be `N/A` (e.g. ops chunks
+   with no in-app help), but every cell has an explicit value, and the Review
+   record is execution-ready (exact file:line + change per finding).
+1a. **Stage 2 complete:** the **Applied** column is ✅ for every chunk — every
+   maintainability finding from the Review record has been executed (or explicitly
+   waived in the doc with reasoning, or promoted to a proposal/FU as too-large).
 2. The FST document has been walked once end-to-end by the user on a
    near-final build, and the release-gate checklist is green.
 3. The Help content is deployed and the `(?)` chips + HelpPage + DoraBot
    corpus reflect it.
 4. The senior review has been triaged: every `replace` / refactor /
-   dead-code item is either fixed, opened as an FU with a resolution
+   dead-code item is either executed (Stage 2), opened as an FU with a resolution
    point, or explicitly waived with reasoning in the doc.
+4a. **Maintainability north-star met.** With Stage 2 done across every chunk: no
+   dead code, no redundant duplication, shared UI componentised, modules in their
+   logical homes, and `ENGINEERING_STANDARDS.md` satisfied on the *existing*
+   codebase — not just new work. The acceptance test: a single competent developer
+   can open the repo cold, find any feature's code where they'd expect it, read it
+   without generation assistance, change it in one place, and trust green tests to
+   catch regressions.
 5. FU-361 / FU-320 / FU-395 are already in `DORA_FOLLOWUPS_RESOLVED.md`
    (closed 2026-07-10 when this plan was drafted; the plan is their
    sole tracker). At plan close, FU-510 gets a state note there marking

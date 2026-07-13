@@ -264,17 +264,57 @@ L252) are moot once cut.
 
 ## 5. Open decisions (for co-design)
 
+> **Status: reconciled 2026-07-13 (FU-364/FU-377 remediation).** All six were
+> answered at co-design in §5a (2026-06-08) and have since **shipped** (C-4
+> Cookbook, chunks 1–10). Each is annotated below against verified shipped code,
+> not just the §5a co-design record. Legend: ✅ resolved + shipped · 🔴 genuinely
+> open · 📦 moot/superseded. **Net: nothing here is open.**
+
 1. **Cuisine vs category fate** — keep both as single-selects, or collapse to
    cuisine + a configurable category? (§2.2)
+   ✅ **Resolved (DEC-1) + shipped — kept both as separate single-select FK
+   vocabularies.** `Recipe.category: Category | None` and `Recipe.cuisine:
+   Cuisine | None` are distinct FK-backed fields
+   (`dora_api/domain/entities/recipe.py:33-35`, comment "Single-select each
+   (DEC-1)"); the two taxonomies are separate entities
+   (`dora_api/domain/entities/category.py`, `.../cuisine.py`) with independent
+   settings editors (`web_app/src/pages/settings/RecipeCategoriesSettings.vue`,
+   `RecipeCuisinesSettings.vue`). No collapse, no multi-select.
 2. **Versions UX** — full-snapshot + current-pointer + allocations-follow-current
    (proposed), or branch/diff + version-pinned allocations? (§2.4)
+   ✅ **Resolved (DEC-2) + shipped — flat equal-sibling model, neither original
+   option.** The brief's "snapshot + current-pointer" was rejected at co-design
+   for equal siblings linked by a shared `Recipe.version_group_id`
+   (`recipe.py:52-57`, "no current pointer, no snapshot/current distinction").
+   Shipped as `POST /recipes/<id>/new-version`
+   (`dora_api/features/recipes/new_recipe_version.py`) which clones the source
+   into a new peer row; **allocations stay per-recipe** (no version-pinning) as
+   DEC-2 specified.
 3. **Multi-part model** — sections-first (proposed), or commit to linked
    sub-recipes now? (§2.5)
+   ✅ **Resolved (DEC-3) + shipped — sections within one recipe (option A).**
+   `RecipeSection` entity (`dora_api/domain/entities/recipe_section.py`, docstring
+   "C-4 Chunk 10 … DEC-3 option A") with nullable `section_id` on
+   ingredients/steps; NULL = implicit "main" group, no data migration. Linked
+   sub-recipes (option B) deferred as designed.
 4. **Nutrition scope** — off + simple now, complex later (proposed)? (§2.9)
+   ✅ **Resolved (DEC-4) + shipped — off + simple.** `Recipe.kcal: int | None`
+   is the single simple-tier field (`recipe.py:58-60`, "simple nutrition (kcal)
+   … when the nutrition opt-in is `simple`"). Complex (auto-derived) not built,
+   as deferred.
 5. **Cost estimate** — acceptable as a labelled estimate given the quantity→size
    math caveat? (§2.8)
+   ✅ **Resolved (DEC-5) + shipped as a labelled estimate.** Cost computation
+   lives in `dora_api/features/recipes/recipe_cost.py`, behind the money opt-in
+   (C-cross).
 6. **Substitute "status"** (L300) — add an "available substitutes" status, or skip
    as over-complication (proposed skip)? (§2.13)
+   ✅ **Resolved (DEC-6) + honoured — skipped on the cookbook.** No
+   "available-substitutes" status was added to cookbook rows; the substitutes
+   affordance stays where DEC-6 kept it (cook-mode B8 session swap + the simple
+   detail-page substitutes list). The `has_substitutes` flag that did ship is on
+   *shopping-list* lines (CHANGELOG FU-407/RD-18), a different surface, not the
+   rejected cookbook status.
 
 ---
 

@@ -77,9 +77,9 @@
         <q-card v-if="totalCount > 0" flat bordered class="q-mb-md">
             <AlertList
                 :alerts="alerts.items"
-                :busy-id="busy"
+                :busy-id="busyAlertId"
                 @open="onOpen"
-                @action="onAction"
+                @action="applyAction"
                 @snooze="onSnooze"
                 @dismiss="onDismiss"
                 @toggle-read="onToggleRead"
@@ -234,7 +234,6 @@
         linkFor,
         tierLabel,
         type Alert,
-        type AlertAction,
         type AlertHistoryEntry,
         type AlertHistoryState,
         type AlertKind,
@@ -242,6 +241,7 @@
         type AlertTier,
     } from 'src/models/alert';
     import AlertApiService from 'src/services/api/alertApiService';
+    import { useAlertActions } from 'src/composables/useAlertActions';
     import { useAlertStore } from 'src/stores/alertStore';
     import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -256,6 +256,7 @@
     const alertPrefsStore = useAlertPrefsStore();
     const api = new AlertApiService();
     const { money } = useFeatureFlags();
+    const { busyAlertId, applyAction } = useAlertActions();
 
     const alerts = computed(() => alertStore.alerts);
     const loading = computed(() => alertStore.loading);
@@ -265,7 +266,6 @@
     const snoozedAlerts = computed(() => alertStore.snoozedAlerts);
     const managePrefs = computed(() => alertPrefsStore.prefs);
 
-    const busy = ref<string | null>(null);
     const prefBusy = ref<Set<string>>(new Set());
 
     const tierOptions = [
@@ -324,22 +324,9 @@
         void router.push({ path: '/stock', query: { attention: 'true' } });
     }
 
-    // ── Inline act_on_alert actions (extend/reset/restocked/acknowledge) ──
-    async function onAction(alert: Alert, action: AlertAction): Promise<void> {
-        busy.value = alert.alert_id;
-        try {
-            await api.applyActionAsync(alert.alert_id, action);
-            await alertStore.refreshAsync();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Done.' });
-        } catch (err) {
-            $q.notify({
-                type: 'negative', position: 'bottom-right',
-                message: 'Could not apply.', caption: toastCaption(err),
-            });
-        } finally {
-            busy.value = null;
-        }
-    }
+    // Inline act_on_alert actions (extend/reset/restocked/acknowledge) route
+    // through the shared useAlertActions composable (FU-521) — bound directly
+    // as `@action="applyAction"` in the template.
 
     async function onSnooze(alert: Alert): Promise<void> {
         await alertStore.snoozeAlert(alert.alert_id, 7);

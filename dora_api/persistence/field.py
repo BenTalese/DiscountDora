@@ -23,7 +23,7 @@ class EntityField:
     ```python
         Or(
             And(
-                Field(Product, "name").contains("milk", case_sensitive=False),
+                Field(Product, "name").contains("milk"),
                 Field(Product, "score").between(1.0, 5.0),
             ),
             And(
@@ -44,13 +44,6 @@ class EntityField:
         if not case_sensitive and isinstance(col.property.columns[0].type, String):
             return func.lower(col)
         return col
-
-    def _coerce(self, value, case_sensitive: bool = False):
-        if isinstance(value, str):
-            return value.lower() if case_sensitive else value
-        if isinstance(value, EntityField):
-            return value._col(case_sensitive)
-        return value
 
     # Comparisons
     def eq(self, value, case_sensitive: bool = False):
@@ -97,13 +90,15 @@ class EntityField:
         from dora_api.persistence.bool_operation import Between
         return Between(self, lower, upper)
 
-    def contains(self, value: str, case_sensitive: bool = False):
+    def contains(self, value: str):
+        # Always case-insensitive — see Contains (FU-523): a case-sensitive LIKE
+        # isn't portable across SQLite + Postgres.
         from dora_api.persistence.bool_operation import Contains
-        return Contains(self, value, case_sensitive=case_sensitive)
+        return Contains(self, value)
 
-    def starts_with(self, value: str, case_sensitive: bool = False):
+    def starts_with(self, value: str):
         from dora_api.persistence.bool_operation import StartsWith
-        return StartsWith(self, value, case_sensitive=case_sensitive)
+        return StartsWith(self, value)
 
     def to_sqla(self, case_sensitive: bool = False):
         return self._col(case_sensitive)

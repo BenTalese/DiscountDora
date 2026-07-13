@@ -222,14 +222,16 @@ def finish_upload():
 
 # ── /abort (DELETE) ────────────────────────────────────────────────────
 
-@DATA_ROUTER.route("/uploads/<upload_id>", methods=["DELETE"])
-def abort_upload(upload_id: str):
+@DATA_ROUTER.route("/uploads/<uuid:upload_id>", methods=["DELETE"])
+def abort_upload(upload_id: UUID):
+    # R-033: the uuid converter validates + parses the id at the routing edge
+    # (a malformed value 404s), which also removes the path-traversal concern
+    # on the staged-file name (FU-544). The `/start|/chunk|/finish` routes take
+    # upload_id in the BODY as a str, so `_is_valid_upload_id` stays for them.
     _Logger = logging.getLogger(__name__)
     _, err = require_admin()
     if err is not None:
         return err
-    if not _is_valid_upload_id(upload_id):
-        return bad_request("Malformed upload_id.")
     path = staged_path(upload_id)
     if path.exists():
         try:

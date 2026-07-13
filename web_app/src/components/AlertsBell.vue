@@ -47,10 +47,10 @@
                             v-for="alert in peekItems"
                             :key="alert.alert_id"
                             :alert="alert"
-                            :busy="busy === alert.alert_id"
+                            :busy="busyAlertId === alert.alert_id"
                             slim
                             @open="goToItem(alert)"
-                            @action="(action) => apply(alert, action)"
+                            @action="(action) => applyAction(alert, action)"
                             @toggle-read="(read) => toggleRead(alert, read)"
                         />
                     </q-list>
@@ -99,13 +99,12 @@
     import { useQuasar } from 'quasar';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import AlertRow from 'src/components/AlertRow.vue';
-    import { linkFor, type Alert, type AlertAction } from 'src/models/alert';
-    import AlertApiService from 'src/services/api/alertApiService';
+    import { linkFor, type Alert } from 'src/models/alert';
+    import { useAlertActions } from 'src/composables/useAlertActions';
     import { useAlertStore } from 'src/stores/alertStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, onUnmounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     // The bell is a fast PEEK + jump (C-9.3): the top few rows + the bulk
     // shortcut, then "Open Alerts" → the hub page, which owns the rich
@@ -118,10 +117,9 @@
     const alertStore = useAlertStore();
     const shoppingListStore = useShoppingListStore();
     const { addItems } = useShoppingListActions();
-    const api = new AlertApiService();
+    const { busyAlertId, applyAction } = useAlertActions();
 
     const open = ref(false);
-    const busy = ref<string | null>(null);
     const addingAll = ref(false);
 
     const alerts = computed(() => alertStore.alerts);
@@ -171,24 +169,8 @@
     }
 
     // The single in-context action kept on the peek row (mark-restocked /
-    // push-expiry); routed through act_on_alert like before.
-    async function apply(alert: Alert, action: AlertAction) {
-        busy.value = alert.alert_id;
-        try {
-            await api.applyActionAsync(alert.alert_id, action);
-            await alertStore.refreshAsync();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Done.' });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not apply.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            busy.value = null;
-        }
-    }
+    // push-expiry) is routed through the shared useAlertActions composable
+    // (FU-521) so the bell, hub, and dashboard behave identically.
 
     async function toggleRead(alert: Alert, read: boolean) {
         if (read) await alertStore.markRead(alert.alert_id);

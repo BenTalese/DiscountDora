@@ -279,16 +279,17 @@ _OPERATOR_CASES = [
     # Null checks on a nullable UUID FK column.
     pytest.param(_PARENT.is_null(), {"Pantry", "fridge", "Freezer", "cellar"}, id="is-null"),
     pytest.param(_PARENT.is_not_null(), {"Top Shelf", "bottom shelf"}, id="is-not-null"),
-    # LIKE operators — default case_sensitive=False lowers the column.
-    # NOTE: an upper-case *value* still matches on SQLite only because SQLite's
-    # LIKE is ASCII-case-insensitive; the value is NOT lowered (inverted flag,
-    # bool_operation.py:143/155) so on Postgres these two would diverge.
+    # LIKE operators — always case-insensitive (FU-523). Both column and value
+    # are lowered, so an upper-case value matches identically on SQLite (LIKE is
+    # ASCII-insensitive) AND Postgres (LIKE is case-sensitive); the two no longer
+    # diverge. Compiled-SQL proof of the value-lowering is the separate
+    # `test__contains__lowers_both_sides__portable` below.
     pytest.param(_NAME.contains("shelf"), {"Top Shelf", "bottom shelf"}, id="contains-default"),
     pytest.param(_NAME.contains("SHELF"), {"Top Shelf", "bottom shelf"},
-                 id="contains-default-upper-value-sqlite-like"),
+                 id="contains-upper-value-still-matches"),
     pytest.param(_NAME.starts_with("fr"), {"Freezer", "fridge"}, id="starts-with-default"),
     pytest.param(_NAME.starts_with("FR"), {"Freezer", "fridge"},
-                 id="starts-with-default-upper-value-sqlite-like"),
+                 id="starts-with-upper-value-still-matches"),
 ]
 
 
@@ -299,22 +300,18 @@ def test__where__operator_matrix__returns_expected_rows(repo, condition, expecte
     assert set(_names(results)) == expected
 
 
-@pytest.mark.parametrize(("condition", "expected"), [
-    pytest.param(_NAME.contains("Shelf", case_sensitive=True), {"Top Shelf"}, id="contains"),
-    pytest.param(_NAME.starts_with("Fr", case_sensitive=True), {"Freezer"}, id="starts-with"),
-])
-@pytest.mark.xfail(strict=True, reason=(
-    "FU-candidate: Contains/StartsWith invert the case_sensitive flag on the "
-    "value side (bool_operation.py:143,155 lower the search value when "
-    "case_sensitive=True — compare BoolOperation._resolve line 19, which "
-    "lowers when NOT case-sensitive), and SQLite's LIKE is ASCII-case-"
-    "insensitive regardless, so case_sensitive=True LIKE matching is "
-    "impossible on SQLite and doubly broken (value lowered) on Postgres."
-))
-def test__where__like_operators_case_sensitive_true__match_exact_case_only(repo, condition, expected):
-    results = repo.get(StockLocation).all(condition)
+def test__contains__lowers_both_sides__portable():
+    """FU-523 — Contains/StartsWith are always case-insensitive, and crucially
+    the *value* is lowered too (not just the column). SQLite tests can't see the
+    difference (its LIKE ignores case), so assert it at the SQL level: the
+    compiled clause must lower the column AND emit a lower-cased pattern, so the
+    match is identical on Postgres (whose LIKE is case-sensitive)."""
+    clause = _NAME.contains("Shelf").to_sqla(None)
+    sql = str(clause.compile(compile_kwargs={"literal_binds": True}))
 
-    assert set(_names(results)) == expected
+    assert "lower(" in sql.lower()          # column is lowered
+    assert "%shelf%" in sql                  # value is lowered into the pattern
+    assert "%Shelf%" not in sql              # ...not passed through as-typed
 
 
 # ── 2b. Not / And / Or composition ───────────────────────────────────────────

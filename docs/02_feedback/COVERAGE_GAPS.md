@@ -108,9 +108,12 @@ implementation work.
 
 Deferred area per master plan, but the bullets are actionable.
 
-- [OPEN] Theme **type** (system / light / dark) separated from theme
-  **identity** (pesto, lemon, …) — two dropdowns, not coloured
-  light/dark buttons on each theme card.
+- [RESOLVED 2026-07-13] Theme **type** (system / light / dark) separated
+  from theme **identity** (pesto, lemon, …) — two dropdowns, not coloured
+  light/dark buttons on each theme card. Verified shipped in
+  `web_app/src/pages/settings/PreferencesSettings.vue`: independent
+  "Mode" segmented control + "Theme" palette-picker grid. See FU-362 in
+  `DORA_FOLLOWUPS_RESOLVED.md`.
 - [RESOLVED 2026-06-23] Profile picture — set/update; surface on the
   menu-bar avatar. Shipped in `IMPL_PLAN_SETTINGS_REBUILD.md` Phase 4:
   `User.image` column + migration `a4f7c2e9b6d1`, `GET /users/<id>/image`

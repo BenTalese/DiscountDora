@@ -324,6 +324,15 @@ the system tier.
 ---
 
 ## 7. Open decisions
+> **Status: reconciled 2026-07-13 (FU-379 / FU-364 remediation).** Alerts C-9 Phase A
+> shipped — `/alerts` hub, `ALERT_ROUTER`, price-watch + email-digest + push delivery.
+> The co-design decisions below all shipped as decided (evaluator + per-user
+> `AlertInteraction` ledger; no recipient routing; phased in-app→email→push; per-user
+> per-type on/off + global channel prefs + configurable email cadence; hub page + peek
+> bell; household-wide `AppSetting` thresholds; per-type tier override; upcoming timeline;
+> shopping-day alert on the existing `planned_shop_date`). The sole "still open" item is
+> now resolved — see annotation below. No open decision remains in this block.
+
 **Resolved 2026-06-15 (co-design):**
 - Data model = live evaluator + per-user interaction ledger (derived conditions, not stored).
 - No multi-user / recipient routing (dropped, not even a seam).
@@ -339,8 +348,16 @@ the system tier.
   consume it, no shopping-list schema change.
 
 **Still open (deferred to their phase, not blocking):**
-1. **Delivery dedup storage (Phase B)** — `last_emailed_at`/`last_pushed_at` columns on
+1. ✅ **Delivery dedup storage (Phase B)** — `last_emailed_at`/`last_pushed_at` columns on
    `AlertInteraction` vs a sibling `AlertDelivery` table. Decide at Phase B.
+   **CLOSED-BY-SHIPPED-BEHAVIOUR (2026-07-13):** resolved as **single per-channel columns
+   on the `AlertInteraction` ledger** (the sibling-table option was dropped), recorded as
+   the C-9.7 ADR in `alert_interaction.py` (lines 34-47). Migrations
+   `c4f9a8b3e2d6` (`last_emailed_at`) and `d7b3e2a1f4c5` (`last_pushed_at`) landed both
+   columns 2026-06-17. Both channels consume them: `send_alerts_digest.py` and
+   `send_alerts_push.py` set the timestamp on delivery and independently clear it when the
+   key drops out of the user's actionable set, so a re-fired condition re-notifies.
+   Per-alert-key dedup is regression-pinned (FU-518 close, 2026-07-10; CHANGELOG).
 
 ---
 

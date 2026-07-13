@@ -48,10 +48,20 @@ def upgrade():
 
     # 2) `Product.merchant_id` → `store_id`. Drop the old FK (named
     #    deterministically per R-015), rename, recreate against `Store`.
+    #
+    # FU-549: on a batch-mode column *rename*, Alembic reads `existing_type.name`
+    # for SchemaEventTarget types — and `sqlalchemy_utils.UUIDType` (a
+    # TypeDecorator) proxies `.name` to its `BINARY` impl, which has none →
+    # `AttributeError: 'BINARY' object has no attribute 'name'`, which broke
+    # `upgrade head` from an empty DB (fresh self-hosted install). The column is
+    # physically `BINARY(16)` (what `UUIDType(binary=True)` compiles to), so pass
+    # that concrete type: it is not a SchemaEventTarget, so the buggy branch
+    # short-circuits, and the recreated column DDL is identical. All the
+    # UUIDType-column renames below use the same fix.
     with op.batch_alter_table('Product') as batch_op:
         batch_op.alter_column(
             'merchant_id', new_column_name='store_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=False,
         )
 
@@ -59,7 +69,7 @@ def upgrade():
     with op.batch_alter_table('ShoppingListLine') as batch_op:
         batch_op.alter_column(
             'purchased_merchant_id', new_column_name='purchased_store_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=True,
         )
 
@@ -67,7 +77,7 @@ def upgrade():
     with op.batch_alter_table('IngestionStoreMapping') as batch_op:
         batch_op.alter_column(
             'merchant_id', new_column_name='store_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=True,
         )
 
@@ -97,7 +107,7 @@ def downgrade():
     with op.batch_alter_table('IngestionStoreMapping') as batch_op:
         batch_op.alter_column(
             'store_id', new_column_name='merchant_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=True,
         )
 
@@ -105,7 +115,7 @@ def downgrade():
     with op.batch_alter_table('ShoppingListLine') as batch_op:
         batch_op.alter_column(
             'purchased_store_id', new_column_name='purchased_merchant_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=True,
         )
 
@@ -113,7 +123,7 @@ def downgrade():
     with op.batch_alter_table('Product') as batch_op:
         batch_op.alter_column(
             'store_id', new_column_name='merchant_id',
-            existing_type=sqlalchemy_utils.types.uuid.UUIDType(),
+            existing_type=sa.BINARY(16),
             existing_nullable=False,
         )
 

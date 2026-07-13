@@ -251,6 +251,19 @@ A proposal without this table is incomplete. Open
 `docs/02_feedback/COVERAGE_GAPS.md` after writing one to flip any
 bullets that now have a home from gap → covered.
 
+## Closing out a proposal / brief — MANDATORY
+
+Before marking a Wave-C brief, INV report, implementation plan, or design
+proposal as "done", walk its **"Open decisions"** (or equivalent) section and
+close it out — every entry must be either **(a)** answered inline with the
+decision recorded in the doc, or **(b)** spawned as a `DORA_FOLLOWUPS.md`
+entry with a recommended resolution point, and the doc updated to reference
+that FU id. No proposal ships with a live "Open decisions" block still
+holding undecided items — that's the pattern FU-364 called out (proposals
+looked done but had unresolved forks buried in them). Add a short "Open
+decisions — closed" (or "spawned as FUs") line at the bottom of that section
+so a reviewer can confirm the sweep happened at a glance.
+
 ## Consulting the original spec — for briefs/investigations
 
 When a brief, proposal, or investigation targets a specific surface, **also skim

@@ -24,8 +24,7 @@ from dora_api.domain.entities.ingestion_source import IngestionSource
 from dora_api.domain.entities.ingestion_store_mapping import \
     IngestionStoreMapping
 from dora_api.domain.entities.store import Store
-from dora_api.features.ingestion_sources.ingestion_source_admin import \
-    _require_admin
+from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.routers import INGESTION_SOURCE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found)
@@ -165,7 +164,7 @@ class DeleteStoreMappingHandler:
 
 @INGESTION_SOURCE_ROUTER.route("<uuid:source_id>/store-mappings", methods=["GET"])
 def list_store_mappings(source_id: UUID):
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     items = ListStoreMappingsHandler(SqlAlchemyRepository()).handle(source_id)
@@ -177,7 +176,7 @@ def list_store_mappings(source_id: UUID):
 @INGESTION_SOURCE_ROUTER.route("<uuid:source_id>/store-mappings", methods=["PUT"])
 @has_request_body(UpsertStoreMappingRequest)
 def upsert_store_mapping(source_id: UUID):
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     req: UpsertStoreMappingRequest = get_request_body()
@@ -197,7 +196,7 @@ def upsert_store_mapping(source_id: UUID):
     "<uuid:source_id>/store-mappings/<uuid:mapping_id>", methods=["DELETE"]
 )
 def delete_store_mapping(source_id: UUID, mapping_id: UUID):
-    _, err = _require_admin()
+    _, err = require_admin()
     if err is not None:
         return err
     ok = DeleteStoreMappingHandler(SqlAlchemyRepository()).handle(source_id, mapping_id)

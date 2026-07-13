@@ -73,8 +73,6 @@ def upgrade():
 
 
 def downgrade():
-    with op.batch_alter_table('RecipeIngredient') as batch:
-        batch.drop_constraint('ck_recipe_ingredient_anchor', type_='check')
     # Reverse: any unlinked rows cannot be resurrected as linked, so
     # downgrade fails loudly if any exist. That matches the migration
     # policy for "you cannot go back from a schema loosening".
@@ -87,6 +85,18 @@ def downgrade():
             f'downgrade would violate the NOT NULL restore. Link or delete them '
             f'before downgrading.'
         )
+    # NOTE (FU-553): this is the intended downgrade, but it does NOT run under
+    # SQLite batch mode today — dropping the named CHECK
+    # (`ck_RecipeIngredient_recipe_ingredient_anchor`) fails because Alembic
+    # batch + this metadata's naming convention double-render the reflected
+    # constraint name on the table rebuild, so `drop_constraint` can't match it
+    # (and leaving it undropped fails when `raw_text`, which the CHECK
+    # references, is dropped). This is downgrade-only — production only ever
+    # runs `upgrade` — and is likely fine on Postgres (native DROP CONSTRAINT, no
+    # batch rebuild). Tracked as FU-553; `test__migrations__down_up_roundtrip_is_clean`
+    # is strict-xfailed on it. See FU-549 for the from-empty *upgrade* fix.
+    with op.batch_alter_table('RecipeIngredient') as batch:
+        batch.drop_constraint('recipe_ingredient_anchor', type_='check')
     with op.batch_alter_table('RecipeIngredient') as batch:
         batch.alter_column('stock_item_id', nullable=False)
         batch.drop_column('raw_text')

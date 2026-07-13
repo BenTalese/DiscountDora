@@ -53,15 +53,15 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-549 — ⚠️ `upgrade head` from an empty DB FAILS; migrations are never exercised in tests (create_all used) — possible fresh-install boot failure
-- **Raised:** 2026-07-12 (found by the new FU-536 migration suite — the first thing to ever run the migration chain from empty).
-- **Type:** finding (**potentially serious** — needs confirmation on the prod-pinned toolchain; a fresh self-hosted install may not boot).
-- **What:** two linked gaps:
-  1. **Migrations have ZERO test coverage.** `startup.init_db(is_test_env=True)` uses `db.create_all()` (builds the schema straight from ORM metadata), NOT `flask_migrate.upgrade()` — so the whole 116-file migration chain was never run in CI/tests. `db.create_all()` masks any drift between the migrations and the models.
-  2. **`upgrade head` from empty crashes.** Running the real migration chain on a fresh SQLite DB dies inside `a3e9f6c2d8b4_20260618_rename_merchant_to_store.py` at `op.batch_alter_table('Product')` with `AttributeError: 'BINARY' object has no attribute 'name'` — an Alembic batch-mode failure resolving a `UUIDType`→BINARY column. Observed on **SQLAlchemy 2.0.25 (pinned) + alembic 1.13.1 (NOT pinned in requirements)**.
-- **Why it matters:** production's fresh-boot path runs `upgrade()` from empty (startup.py:153, the non-test branch). If this reproduces on the alembic version a fresh `pip install -r requirements.txt` resolves, **a brand-new self-hosted install would fail to boot at first migration** — and FU-045 (Postgres) makes the migration path even more load-bearing. It's gone unnoticed because every existing DB was migrated incrementally as versions landed, never from-empty in one shot on the current toolchain, and tests use create_all.
-- **Pinned by:** 3 strict-xfails in `tests/test_migrations.py` (upgrade-from-empty / round-trip / schema-match) — they XPASS (→ suite failure → prompt to un-xfail) the moment the chain applies cleanly.
-- **Recommended resolution:** **confirm scope, then fix** — (a) reproduce on a fresh `pip install` (pin alembic to a version where the batch op works, OR fix the a3e9f6c2d8b4 migration's Product batch_alter_table to avoid the BINARY-name path); (b) **pin `alembic` in requirements.txt** so prod and dev agree; (c) consider switching the test/seed schema build from `create_all()` to `upgrade()` (or add a CI job that boots from-empty via migrations) so this can't regress silently again. This is a **DORA_VERIFY / operator smoke** candidate too — boot a fresh install and confirm it migrates.
+## [OPEN] FU-553 — `downgrade base` fails on SQLite: alembic batch can't drop the RecipeIngredient named CHECK constraint
+- **Raised:** 2026-07-13 (surfaced by the FU-536 round-trip test once FU-549 unblocked the from-empty chain).
+- **Type:** finding (**downgrade-only — not a boot/production risk**; prod only ever upgrades).
+- **What:** `flask_migrate.downgrade(revision='base')` dies in `c5a8e1f7d3b2_20260704_recipe_ingredient_unlinked.py`'s downgrade at `batch.drop_constraint('recipe_ingredient_anchor', type_='check')` with `ValueError: No such constraint: 'ck_RecipeIngredient_recipe_ingredient_anchor'`.
+- **Root cause (diagnosed 2026-07-13):** a **naming-convention × batch-rebuild double-application**. Plain `Table(autoload_with=...)` reflects the CHECK correctly as `ck_RecipeIngredient_recipe_ingredient_anchor`. But when alembic batch rebuilds the table, it re-renders that already-final name through the metadata's `ck_%(table_name)s_%(constraint_name)s` convention → `ck_RecipeIngredient_ck_RecipeIngredient_recipe_ingredient_anchor` (proven: leaving the CHECK undropped, the rebuilt `CREATE TABLE` emits exactly that doubled name). So batch's `named_constraints` is keyed by the doubled name and `drop_constraint` by any single-rendered name misses. And you can't just skip the drop — the CHECK references `raw_text`, which the same downgrade drops.
+- **Approaches TRIED that DON'T work (don't repeat):** (1) `drop_constraint('recipe_ingredient_anchor')` (logical name) → misses; (2) removing the drop and relying on the `drop_column('raw_text')` rebuild to omit the CHECK → the rebuild instead re-creates it with the doubled name and fails; (3) `op.batch_alter_table(..., naming_convention=NAMING_CONVENTION)` → still misses. Left the downgrade in its clean intended form (fails only under SQLite batch), with an inline NOTE.
+- **Why low-priority:** production never runs `downgrade base` (fresh boot only upgrades — fixed under FU-549). Dev/rollback tooling only. **Likely SQLite-batch-specific**: Postgres drops named CHECKs natively (no table rebuild), so the round-trip probably already passes there — the cheapest "fix" is to confirm that under FU-045 Postgres CI and gate this test to Postgres.
+- **Pinned by:** `tests/test_migrations.py::test__migrations__down_up_roundtrip_is_clean` (strict-xfail → flips to XPASS/un-xfail when fixed).
+- **Recommended resolution:** confirm-on-Postgres + gate the round-trip test there ([[FU-045]] / FU-405 CI); OR, only if a SQLite downgrade is ever genuinely needed, rebuild `RecipeIngredient` via raw SQL in the downgrade (recreate without the CHECK) rather than fighting batch. Not worth a fragile workaround now.
 
 ## [OPEN] FU-547 — FU-537 security-test tail: auth-token single-use / expiry / cross-purpose reuse not yet pinned
 - **Raised:** 2026-07-12 (FU-537 scope note — the filter-injection / mass-assignment / stored-XSS halves shipped; token lifecycle deferred).
@@ -74,57 +74,8 @@ long session summary. Distinct from the other logs:
 - **Type:** finding (real a11y defect — `serious` per axe; screen-reader/keyboard users get an interactive control nested inside another).
 - **What:** `SettingsFileDrop.vue` is a `<div role="button" tabindex="0">` drop-zone that CONTAINS a native `<input type="file">`. axe flags `nested-interactive` (interactive controls must not be nested) in the enabled (non-disabled) states. The unlabelled-input half was already fixed in the FU-542 pass (`aria-hidden="true" + tabindex="-1"` on the input); the nesting remains because a native file input is inherently interactive regardless of aria-hidden.
 - **Proper fix (a small refactor, but it rewrites the interaction model + existing tests → out of scope for the test-infra FU that found it):** adopt the standard accessible-file-input pattern — wrap the input in a `<label>` (label is non-interactive, so no nesting; clicking the label triggers the input natively), drop the `role="button"` / `tabindex` / `keydown` / programmatic `inputEl.click()` machinery, keep the drag-drop handlers on the label. Then the input is the single labelled interactive control. Re-enable the empty/filled axe assertions in `settingsFileDrop.spec.ts` (currently only the disabled state is checked) once done.
-- **Cross-ref:** [[FU-531]] (same component — the hidden-input click re-entrancy / missing `@click.stop`; both would be resolved by the label-wrap refactor).
+- **Cross-ref:** [[FU-531]] (RESOLVED 2026-07-13 — the hidden-input click re-entrancy was fixed interim with `@click.stop`; the eventual label-wrap refactor here supersedes that machinery). FU-545's remaining scope is now *purely* the `nested-interactive` a11y violation.
 - **Recommended resolution:** opportunistic, next time SettingsFileDrop or the Settings import surfaces are touched.
-
-## [OPEN] FU-544 — Five entity-id routes left on the string converter (handlers bare-`UUID(param)`); R-033 carve-out to tidy opportunistically
-- **Raised:** 2026-07-12 (surfaced by the FU-532 `<uuid:>` sweep).
-- **Type:** finding (R-033 carve-out — NOT a bug; these routes already return 4xx on a non-UUID, they just validate in the handler instead of at the routing edge).
-- **What:** the FU-532 sweep converted 123 entity-id params to `<uuid:...>`, but **reverted 5** whose handlers call bare `UUID(param)` (not `UUID(str(param))`) — with the converter those handlers receive a real `uuid.UUID` and `UUID(uuid_obj)` raises → 500 on the *valid* path. So they stayed on the string converter: `audit/get_audit_events.py <event_id>`, `data/backup_library.py <backup_id>` (×3 routes), `data/uploads.py <upload_id>`, `price_history/price_history.py /alerts/<alert_id>`, `waste/waste.py /events/<event_id>`. **They already satisfy the goal** (their own `UUID(param)` parse rejects non-UUIDs with a 4xx — that's why they were never in the FU-528 500-family), so this is a consistency/R-033 carve-out, not a defect.
-- **Recommended resolution:** opportunistic, per handler — when one of these files is next touched, convert its route to `<uuid:...>` AND change the handler's `UUID(param)` → just use `param` (it's already a UUID) or `UUID(str(param))`. One-line each. Until then they're a documented R-033 carve-out (handler owns UUID validation).
-
-## [OPEN] FU-530 — `ingestion_source_admin.py` keeps a local duplicate of `_require_admin` instead of importing `admin_gate.require_admin`
-- **Raised:** 2026-07-11 (found by the new `test_route_auth_enforcement.py` sweep).
-- **Type:** finding (R-001 drift, not a vulnerability — the local copy is functionally identical today and the sweep proves it fires).
-- **What:** [dora_api/features/ingestion_sources/ingestion_source_admin.py:48-65](dora_api/features/ingestion_sources/ingestion_source_admin.py) re-implements the admin gate locally ("kept local to avoid pulling that module's larger surface") instead of importing `dora_api/features/auth/admin_gate.py`'s `require_admin`. Drift hazard the FU-341 consolidation missed — if the canonical gate ever changes (e.g. audit emit, status code), this copy silently diverges. The enforcement sweep's reverse-check counts call sites, so a divergence in *presence* is caught, but a divergence in *behaviour* is not.
-- **Recommended resolution:** opportunistic, next ingestion-sources touch — swap to the canonical import, delete the copy.
-
-## [OPEN] FU-531 — Component-test pass nits: AddToListButton dead branch, SettingsFileDrop click re-entrancy, AlertRow blank icon on unknown kind
-- **Raised:** 2026-07-11 (found by the new component-level Vitest pass; none is a runtime bug).
-- **Type:** finding (cosmetic/maintainability — grouped, all small).
-- **What:**
-  1. `AddToListButton.vue` ~191-201 — in `shouldUseCombinedModal` the final `return draftCount.value >= 2` is unreachable (count ≥ 2 already returned true; 0/1 returned false). The "both axes ambiguous → combined modal" branch the comment describes never executes; behaviour is fine (radio dialog handles it downstream) but the code misleads.
-  2. `SettingsFileDrop.vue` ~20-27 — hidden `<input type="file">` lacks `@click.stop`; the synthetic click bubbles back to the zone and re-enters `onZoneClick` (only the browser's click-in-progress flag suppresses the double-open). Harmless, but an `@click.stop` makes it clean and testable.
-  3. `AlertRow.vue` — unknown alert kind renders an empty QIcon circle (`iconFor` has no default). Consistent with the intended "degraded but safe" posture; consider a generic fallback icon.
-- **Recommended resolution:** fold into [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) senior-review chunks for their surfaces (Shopping lists / Settings / Alerts); each is a two-line fix when its file is next open.
-
-## [OPEN] FU-529 — Reconcile "latest receipt" ordering has no deterministic tie-break; transient idempotence flake observed
-- **Raised:** 2026-07-10 (observed live: `test__same_verb_replay_is_idempotent` failed in three consecutive runs in a ~10-minute window, then stopped reproducing — 5/5 green after, incl. the full suite).
-- **Type:** finding (didn't re-reproduce; logged per the reported-defect rule rather than dropped).
-- **What:** `_latest_receipt` in [dora_api/features/meal_plans/reconcile.py:409](dora_api/features/meal_plans/reconcile.py) (and the queue's correlated `r2.created_at > r.created_at` subqueries) order receipts purely by wall-clock `created_at`. A same-timestamp tie or a clock step backwards (Windows time sync is the prime suspect for the observed window) makes "latest" ambiguous — the sweep's `unresolved_auto` receipt can read as newer than the user's verb receipt, so a same-verb replay returns `idempotent: false` and writes a duplicate receipt. Debug dump during the window confirmed receipts + timestamps were well-formed 11 ms apart once the window passed.
-- **Recommended resolution:** next reconcile touch — give receipts a deterministic order (monotonic sequence column, or at minimum a stable secondary sort key that works on both SQLite and Postgres per R-005), then re-run the file in a loop to confirm. Until then, treat a solitary failure of this test as this FU, not a regression.
-
-## [OPEN] FU-523 — `Contains`/`StartsWith` invert `case_sensitive` on the value side; case-sensitive LIKE impossible on SQLite
-- **Raised:** 2026-07-10 (found + pinned by the new `tests/test_sqlalchemy_repository.py` suite).
-- **Type:** finding (real bug in shared query machinery, low blast radius today).
-- **What:** [dora_api/persistence/bool_operation.py:143,155](dora_api/persistence/bool_operation.py) lower-case the search **value** when `case_sensitive=True` (compare `BoolOperation._resolve` line 19, which lowers when NOT case-sensitive — the flag is inverted on the value side). Independently, SQLite's `LIKE` is ASCII-case-insensitive regardless, so `case_sensitive=True` substring matching can't work on SQLite at all and is doubly broken (value pre-lowered) on Postgres. Pinned by two `@pytest.mark.xfail(strict=True)` tests — flipping them green is the done-signal.
-- **Impact today:** no production callsite appears to pass `case_sensitive=True` to Contains/StartsWith, so this is latent — but it's exactly the kind of trap the R-005 SQLite/Postgres portability posture says to fix or document.
-- **Recommended resolution:** opportunistic, next time `bool_operation.py` is touched — fix the inversion, and either implement case-sensitive LIKE portably (SQLite `GLOB`/`BINARY` collation vs Postgres `LIKE`) or drop the flag from the two operators and document them as always-insensitive.
-
-## [OPEN] FU-525 — Buy-verdict wait-hint mixes UTC sample dates with household-local `today` (possible one-day drift)
-- **Raised:** 2026-07-10 (surfaced while fixing the same mix in `tests/test_buy_verdict.py`, which flaked every AEST morning).
-- **Type:** finding (production nuance, unconfirmed impact).
-- **What:** `_wait_hint` / `_price_axis` in [dora_api/features/stock_items/get_buy_verdict.py](dora_api/features/stock_items/get_buy_verdict.py) derive low-dates via `ts.date()` on **UTC** observation timestamps while `inputs.today` is the household-local calendar day (R-021). For UTC+10 households, any observation recorded before 10am local lands on the previous UTC calendar day, which can shift the predicted "next low" date by a day (cosmetic — the hint is "~every N days") and, at the edge, flip the `next_low <= today` staleness check. The test-side fix (2026-07-10) anchors test samples to local-noon; the production data path still mixes the two clocks.
-- **Recommended resolution:** discussion / next buy-verdict touch — either convert observation timestamps to household-tz before `.date()` (R-021-consistent) or accept the ±1-day fuzz with a comment. Not worth its own unit; the hint is deliberately approximate.
-
-## [OPEN] FU-521 — Alert-action toast + kind exhaustiveness sit in three copies (R-003 drift, senior-review track)
-- **Raised:** 2026-07-10 (surfaced during FU-357 close-out — user hit the divergent-toast + missing-kind bug live).
-- **Type:** finding (state-ownership drift).
-- **What:** the same "user taps an inline alert action" mutation is wired three separate times in the SPA — [`DashboardPage.vue:1833`](web_app/src/pages/DashboardPage.vue) `applyAlertAction`, [`AlertsBell.vue:175`](web_app/src/components/AlertsBell.vue) `apply`, [`AlertsPage.vue:328`](web_app/src/pages/AlertsPage.vue) `onAction`. Same API call, three hand-rolled toast pairs, three refresh recipes. The bug that exposed this (Dashboard silently swallowed both success and error toasts) was fixed inline but the shape stays — the next surface added will re-invent it a fourth time. Also: the `AlertKind` union + its five switch sites (`iconFor` / `colorForKind` / `kindTheme` / `actionsFor` / `linkFor` in [`alert.ts`](web_app/src/models/alert.ts)) are three separate lists that must agree, but nothing enforces it — that's exactly how the 2026-07-10 crash happened (`meal_reconcile_overdue` added on the backend by FU-317 Chunk 4 without extending the union, so TS couldn't warn about the five missing cases). Fixed inline with a defensive `?? []` in `AlertRow`, but the pattern is fragile.
-- **Why deferred:** two clean options — (a) extract a `useAlertActions()` composable that owns the applyAction + refresh + toast triad, then have all three surfaces call it (mirrors `useStockItemActions` / `useShoppingListActions`); (b) collapse the five per-kind switches in `alert.ts` into a single `ALERT_KIND_META: Record<AlertKind, {icon, color, theme, actions, link}>` so a new kind lands as one row instead of five cases. Both are Effortless + Anti-creep-safe R-003 wins and both are exactly the shape the finalisation-plan senior-review track (§3.3) is designed to consolidate. Doing them right now is scope-creep on a bug fix.
-- **Recommended resolution:** **fold into [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Chunk 9 (Alerts + Suggestions)** — the senior-review section for that chunk names both refactors, verdicts them, and either ships or logs. If either is `keep`, note why.
-- **Cross-ref:** [[FU-510]] (hand-rolled vs library — same discipline, different surface), FU-357 close-out (state note lives in `_RESOLVED`).
-
 
 ## [OPEN] FU-520 — Test-suite improvements Phase 4: frontend Vitest + Hypothesis + Postgres CI + scraper/emailer fixture tests
 - **Raised:** 2026-07-09 (split from FU-169 close-out).
@@ -137,22 +88,12 @@ long session summary. Distinct from the other logs:
   5. **Postgres-backed CI test runs** once CI is un-commented ([[FU-405]] / `.github/workflows/ci.yml`) — **still open**. Note the commented workflow was fixed 2026-07-10 to run bare `pytest` (full suite) + `npm test`, so un-commenting inherits the right scope.
 - **2026-07-11 update:** component-level Vitest expanded — **AddToListButton (20, the queued item), AlertRow (13, incl. the unknown-kind degrade regression), DoraModeSlider (6), SettingsFileDrop (12)**; frontend suite now 254 tests / 15 files. Pattern note for future specs: module-boundary Pinia store mocks must return `reactive({...})`, not plain objects of refs (`storeToRefs` rewraps computeds — documented in `addToListButton.spec.ts`). Remaining: scraper tests (companion repo), Postgres CI.
 - **2026-07-12 update:** **Pinia store layer** now covered — `stockItemStore` (16, incl. optimistic level-swap + rollback-registry contract + FU-511 cross-store toast), `shoppingListStore` (10), `alertStore` (9, pins server-owned `actionable_count` = R-003), `locationStore` (9). Frontend suite now **298 tests / 19 files**. `authStore` (bootstrap retry / in-flight sharing / 401 clear) flagged as the strongest remaining single-store candidate; thin fetch-wrapper stores deliberately skipped. Store oddities noted (not bugs): `stockItemStore` rollback is index-captured (narrow race) and only fires via the global unhandled-rejection handler — a caller that `catch`es strands optimistic state (documented design). Remaining: scraper tests (companion repo), Postgres CI, authStore spec.
-- **Recommended resolution (remaining):** component-level Vitest when a component surface next changes; scraper tests in the companion repo; Postgres CI with [[FU-405]]. **Recommended resolution point:** opportunistic per workstream.
-- **Cross-ref:** [[FU-519]] Phase 3 (untested API surfaces) — separate; Phases 3 + 4 are proposal-parallel, not sequential.
-
-## [OPEN] FU-519 — Test-suite improvements Phase 3: close coverage gaps
-- **Raised:** 2026-07-09 (split from FU-169 close-out).
-- **Type:** deferred job (large — should be its own multi-session unit).
-- **What:** the Phase-3 slice of [`docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md`](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) §5.D. Status after the 2026-07-10 targeted sweep:
-  1. **Domain-logic unit tests — CLOSED 2026-07-10 (honestly skipped).** `recipe_tags` / `generics` / `types` turned out to be a string constant, three TypeVars, and `EMPTY_UUID` — nothing behavioural to test; writing filler would violate the "green means correct" principle.
-  2. **API e2e — effectively DONE 2026-07-10 (two passes).** Pass 1: `test_recipe_router.py` (found + fixed the identity-map filter bug), `test_meal_plan_router.py`, `test_dashboard_router.py`. Pass 2 (same day): `test_search_router.py` (12 — scoring order, per-type subtitles, types filter, per-type limit clamp), `test_waste_router.py` (13), `test_budget_router.py` (11), `test_reports_router.py` (15 — all 10 report endpoints), `test_stocktake_router.py` (16 — found [[FU-526]]), and the six taxonomy routers (cuisines/categories/dietary-tags/tools/stock-groups/recipe-collections, ~49 via shared `_taxonomy_crud.py`). Found [[FU-527]] + [[FU-528]]. **Remaining minor surfaces (opportunistic per-touch only):** locations tree router, client_logs, help, substitutes detail (metadata partially covered), suggestions detail, deals.
-  3. **Persistence / repository tests — SHIPPED 2026-07-10.** `tests/test_sqlalchemy_repository.py`: paginate math, full operator matrix, field_map resolution, NOCASE sort, UUID round-trip, against a standalone SQLite fixture. Found [[FU-523]].
-  4. **Contract / snapshot tests — SHIPPED 2026-07-10.** `tests/e2e/dora_api/test_dto_contracts.py`: 27 endpoints' response-key shapes pinned against `dto_snapshots.json` (self-seeding; refresh with `DORA_UPDATE_DTO_SNAPSHOTS=1` and commit the JSON diff — the diff is the reviewable contract change).
-- **2026-07-11 update:** minor-surface tail largely closed — new suites landed for **locations tree (21), app_settings (17), help (4), client_logs (13)**, plus two new cross-cutting suites: **route auth/permission enforcement (6 — anonymous 401 sweep over all 271 /api rules + pinned 32-endpoint admin-403 contract + allowlist-rot guards)** and **delete/referential integrity (24 — cross-entity delete webs, double-deletes)**. Remaining tail: suggestions detail, substitutes detail, deals — per-touch.
-- **2026-07-12 update — FU-519 tail now CLOSED.** Final surfaces shipped: **suggestions router (14)**, **substitutes router (16)**, plus a whole-API **fuzz/robustness sweep (7 — malformed bodies / garbage query params / non-UUID path params / wrong-type fields, "4xx never 500")** and **PATCH-semantics suite (59 — null-out matrix, no-op, unknown-field, cross-field 4xx across 9 surfaces)**. `deals/` confirmed to have **no HTTP surface** (`deal_quality.py` is a pure helper consumed by buy-verdict) — nothing to test, tail complete. Bugs found this pass: 2 always-500 endpoints fixed (unlinked-ingredients, reconcile-queue pagination), 5 rename-to-own-name sites fixed, plus [[FU-532]]/[[FU-533]] logged. **FU-519 can move to _RESOLVED at the next close** — only the "add a dto_snapshots row per new endpoint" maintenance habit remains, which belongs to the contract-snapshot workflow, not this FU.
-- **Recommended resolution (remaining):** the minor-surface tail per-touch as those surfaces change (matches R-023's per-edit spirit); add a `dto_snapshots.json` row whenever a new endpoint lands. **Recommended resolution point:** opportunistic per surface.
-- **Cross-ref:** [[FU-520]] Phase 4 (frontend / Hypothesis / scraper / Postgres CI) — separate.
-
+- **2026-07-13 update — parent FU-371 resolved; this FU tightened to its three real remnants (everything else shipped):**
+  1. **Postgres-backed CI + coverage gate/ratchet** — blocked on CI being un-commented ([[FU-405]] P7-09 Ops; `.github/workflows/ci.yml` is deliberately fully commented). No point gating coverage while CI doesn't run. Un-blocks as a set when FU-405 lands.
+  2. **`merchant_api` scraper fixture tests** — the scraper lives in the sibling `dora-companion` repo; belongs there under [[FU-161]], not this repo.
+  3. **Opportunistic component/composable specs** — `authStore` (strongest remaining candidate), shopping rail, lifecycle-coupled composables (`useMealPlanExport`, `useOfflineQueue`); pattern is established, done per-touch when the surface next changes.
+- **Recommended resolution (remaining):** items 1–2 are cross-repo / CI-policy-gated (not unblocked work here); item 3 is opportunistic per surface. **Recommended resolution point:** opportunistic per workstream; Postgres CI with [[FU-405]].
+- **Cross-ref:** parent [[FU-371]] (RESOLVED 2026-07-13); [[FU-519]] Phase 3 (RESOLVED 2026-07-13).
 
 ## [OPEN] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
 - **Raised:** 2026-07-07 (user request).
@@ -333,47 +274,12 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** hasn't been forced by user pain.
 - **Recommended resolution:** pre-Phase-4 gate — do one comprehensive pass with real seed data at pantry size 500+ items, catch N+1s + big-query issues before they hit paying users.
 
-## [OPEN] FU-382 — PROPOSAL_SHOPPING_LIST_UX_V2 §11 open questions
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** finding (unresolved decisions).
-- **What:** V2 shipped but §11 open questions were not all closed in-doc. Read the section and either resolve each against the shipped behaviour or turn each into its own FU.
-- **Why deferred:** end-of-implementation admin miss.
-- **Recommended resolution:** doc-only pass — walk §11, mark each RESOLVED (with the shipped behaviour) or spawn a per-question FU.
-
-## [OPEN] FU-381 — PROPOSAL_COOK_MODE §5 open decisions
-- **Raised:** 2026-07-01 (proposals audit).
+## [OPEN] FU-378 — Stock Overview: action-first scan-mode ("pick action, then scan") never built
+- **Raised:** 2026-07-01 (proposals audit); **tightened 2026-07-13** after the FU-364 §2.3/§7 reconciliation sweep.
 - **Type:** deferred job.
-- **What:** `PROPOSAL_COOK_MODE.md:166` — open decisions: ticking removal, sub-step model, quantity-unit inclusion list. Cook mode C-3 shipped but the doc's open-decision block was not closed.
-- **Why deferred:** built without fully resolving the doc's open calls.
-- **Recommended resolution:** doc-only walk — mark each against shipped behaviour or spawn per-question FUs.
-
-## [OPEN] FU-380 — PROPOSAL_CART_BUTTON §7 open decisions + swipe-right + success animation
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_CART_BUTTON.md:220` (§7 open decisions), plus §7.7 swipe-right affordance and success animation added as new open decisions. Cart button C-7 shipped; not all open decisions closed.
-- **Why deferred:** built without fully resolving.
-- **Recommended resolution:** walk §7 + §7.7 vs shipped, close or spawn.
-
-## [OPEN] FU-379 — PROPOSAL_ALERTS §7 open decisions + still-open deferred cluster
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_ALERTS.md:326` §7 open decisions + `:341` "still open (deferred to their phase, not blocking)" cluster. C-9 Phase A shipped; the deferred cluster survives.
-- **Why deferred:** flagged not-blocking.
-- **Recommended resolution:** revisit when alerts next opens. *(The FU-352 "fold alerts into the Dora Score card" fallback path was closed 2026-07-07 as won't-do — Attention + Kitchen Health stay as coexisting cards — so this FU no longer has that shortcut. Resolve on the Alerts surface itself when it's next touched.)*
-
-## [OPEN] FU-378 — PROPOSAL_STOCK_OVERVIEW §2.3 detail navigation model + §7 open decisions
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job (design call).
-- **What:** `PROPOSAL_STOCK_OVERVIEW.md:84` — §2.3 is flagged as **"the #1 open decision"** (detail navigation model — desktop drawer vs mobile full-page, row-tap vs button-tap miss risk, L68/L71). §7 has additional open decisions. C-1 shipped but this call was not closed.
-- **Why deferred:** shipped without resolving the top-of-doc open decision.
-- **Recommended resolution:** discussion — resolve §2.3 vs shipped behaviour + user preference, then walk §7. Prerequisite for [[FU-384]].
-
-## [OPEN] FU-377 — PROPOSAL_COOKBOOK open decisions (cuisine-vs-category, versions UX, multi-part model)
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_COOKBOOK.md` has three named open decisions: cuisine-vs-category fate, versions UX (full snapshot vs branchable), multi-part model A vs B. C-4 shipped chunks 1–10; these calls were not all closed.
-- **Why deferred:** shipped what was clear, deferred what wasn't.
-- **Recommended resolution:** doc walk vs shipped state; the cuisine-vs-category call cascades into [[FU-XXX]] C-cross taxonomy editors ([[FU-372]]).
+- **What:** The whole `PROPOSAL_STOCK_OVERVIEW.md` open-decision set was walked against shipped C-1 code 2026-07-13 and annotated in-doc (§2.3 + new §7b). The flagged **#1 open decision (§2.3 detail nav model) is CLOSED**: `StockOverview.vue onRowClick` branches mobile→full-page / desktop→splitter-peek (one shared `StockItemDetailPage` in two frames), long-press→bulk on mobile, `@click.stop` on every in-row control covering the miss-tap concern. Six of seven §7 decisions closed; planned-meals metric superseded by `BuyVerdictBadge`. **Only §7.4 remains genuinely unbuilt:** the action-first "pick an action, then scan to apply" scan-mode — the Overview Scan button still does the old jump-to-item, gated behind `scanning_enabled` (off by default).
+- **Why deferred:** scanning is an off-by-default surface; low priority.
+- **Recommended resolution:** opportunistic — build with the next scanning/ingestion pass. **Note:** the §2.3 close unblocked [[FU-384]], but FU-384 has since resolved independently (via FU-508), so this is no longer load-bearing for it.
 
 ## [OPEN] FU-376 — PROPOSAL_PRODUCTS_AS_OVERLAY §7 open decisions + GAP bucket
 - **Raised:** 2026-07-01 (proposals audit).
@@ -382,20 +288,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** small-slice residuals.
 - **Recommended resolution:** doc walk vs shipped; each GAP either becomes its own FU or gets closed with a state note.
 
-## [OPEN] FU-375 — PROPOSAL_MEAL_PLANS §11 smaller secondary open decisions
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_MEAL_PLANS.md:494` — §11 "smaller secondary open decisions" cluster. Meal-plans rebuild has an active IMPL (`IMPL_PLAN_MEAL_PLANS_REBUILD.md`); §11 not fully resolved.
-- **Why deferred:** secondary, not blocking the rebuild.
-- **Recommended resolution:** roll into the meal-plans rebuild close-gate — walk §11 vs shipped, close each.
-
-## [OPEN] FU-374 — PROPOSAL_SIMPLE_MODE: sweep non-spine parts (spine superseded)
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** finding (doc drift).
-- **What:** `PROPOSAL_SIMPLE_MODE.md` marked spine-superseded 2026-06-17 by PRODUCTS_AS_OVERLAY. The doc's non-spine parts (money opt-in framing, some UI notes) were not confirmed re-homed elsewhere.
-- **Why deferred:** doc admin.
-- **Recommended resolution:** doc walk — mark every non-spine section either "re-homed at X" or "dropped by pivot"; close.
-
 ## [OPEN] FU-373 — PROPOSAL_BARCODE_SCANNING deferred slices (register-against-product + scan-unknown)
 - **Raised:** 2026-07-01 (proposals audit).
 - **Type:** deferred job.
@@ -403,54 +295,12 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** waited on ingestion; ingestion landed without pulling these along.
 - **Recommended resolution:** next barcode-touch — build the register-against-product UI (unknown EAN → offer to link to an existing Product) + scan-unknown rework. Resolve §6 placement while there.
 
-## [OPEN] FU-372 — PROPOSAL_COOKBOOK_CARD_REVISION: not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Design-only sequel to Cookbook §2.10. Two open-decision sections (§3, §5). No IMPL plan.
-- **Why deferred:** Cookbook C-4 shipped without this revision.
-- **Recommended resolution:** when Cookbook next opens for change — resolve open decisions + spawn `IMPL_PLAN_COOKBOOK_CARD_REVISION.md` if kept.
-
-## [OPEN] FU-371 — PROPOSAL_TEST_SUITE_IMPROVEMENTS: not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Draft proposal, no IMPL, nothing shipped.
-- **Why deferred:** infra investment; hasn't been forced.
-- **Recommended resolution:** pre-Phase-4 gate; better test suite is a commercialization prerequisite for confident refactors.
-
 ## [OPEN] FU-370 — PROPOSAL_SUPPORT_CHANNEL: not built
 - **Raised:** 2026-07-01 (proposals audit).
 - **Type:** deferred job.
 - **What:** Draft proposal for a user support channel; no IMPL, nothing shipped.
 - **Why deferred:** commercialization-adjacent; no users to support.
 - **Recommended resolution:** Phase 4 alongside [[FU-402]] Stripe + [[FU-404]] compliance.
-
-## [OPEN] FU-369 — PROPOSAL_RECIPE_IMAGE_STEPS: not built (draft for co-design)
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Draft 2026-06-25 with 3 open decisions (peer switch across payload types §5.1; vertical vs swipe carousel §5.2; client-side resize target + image cap §5.3). No IMPL.
-- **Why deferred:** waiting on co-design.
-- **Recommended resolution:** 30-minute co-design session on the 3 open decisions, then `IMPL_PLAN_RECIPE_IMAGE_STEPS.md`.
-
-## [OPEN] FU-368 — PROPOSAL_LOCALE_I18N: not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Draft proposal; §4 open decisions (`:140`); no IMPL. Currency + locale currently AUD-hardcoded in places.
-- **Why deferred:** single-locale is fine while personal-use.
-- **Recommended resolution:** before commercialization (Phase 4-adjacent) — many customers won't be AU-based. Overlaps with [[FU-402]] Stripe (multi-currency).
-
-## [OPEN] FU-366 — Deferred surfaces: Reports, Settings shell, Mobile view
-- **Raised:** 2026-07-01 (Wave-C audit).
-- **Type:** deferred job.
-- **What:** `C_big_rock_design_briefs.md` "do not redesign yet" list. Dashboard has been pulled forward and shipped. **Reports, Settings shell, Mobile view** remain officially deferred — no briefs. Feedback for Reports is empty; Settings has some deferred bullets (see [[FU-365]] A-5); Mobile view has no direct feedback.
-- **Why deferred:** deliberately parked.
-- **Recommended resolution:** discussion at some future point — decide whether each stays parked forever or gets a brief. Not on a critical path.
-
-## [OPEN] FU-364 — Wave-C briefs: unresolved open-decision blocks across shipped proposals
-- **Raised:** 2026-07-01 (proposals audit meta-item).
-- **Type:** finding (meta).
-- **What:** Multiple Wave-C proposals shipped without closing their in-doc "Open decisions" sections. Individual FUs exist for each ([[FU-378]] Stock Overview, [[FU-377]] Cookbook, [[FU-379]] Alerts, [[FU-375]] Meal Plans §11, [[FU-380]] Cart Button, [[FU-381]] Cook Mode, [[FU-382]] Shopping List V2). This meta-FU exists so the pattern is visible: **going forward, add an "open decisions closed / spawned as FUs" step to every proposal close-gate**.
-- **Why deferred:** process gap surfaced only in aggregate.
-- **Recommended resolution:** adopt the close-gate step in CLAUDE.md's "on ending a work unit" section next time it's edited. Meanwhile, individual per-proposal FUs (above) carry the actual delta work.
 
 ## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS)
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
@@ -466,13 +316,6 @@ long session summary. Distinct from the other logs:
   8. General UI consistency — cross-cutting.
 - **Why deferred:** no per-surface home; several are Phase 3/4-timed or design-only.
 - **Recommended resolution:** split into per-item FUs *only when picked up*. Items 1 (QA test doc) and 3 (polish pass) are natural Phase 4 gates; item 2 (telemetry) is a Charter P8 decision + build; item 4 (push notifications) is a Phase 3-ish feature; items 5–8 are one-shots.
-
-## [OPEN] FU-362 — A-5 Settings: theme *type* separated from theme *identity*
-- **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job.
-- **What:** `COVERAGE_GAPS.md` A-5 — theme **type** (system / light / dark) should be separated from theme **identity** (pesto, lemon, …) — two dropdowns, not coloured light/dark buttons on each theme card.
-- **Why deferred:** Settings shell is a deferred surface ([[FU-366]]).
-- **Recommended resolution:** fold into any Settings polish pass — small self-contained change; can precede the full Settings shell redesign.
 
 ## [OPEN] FU-348 — Import templates: registry has no "every importable section has a template" symmetry check
 - **Raised:** 2026-07-01 (post-FU-343 self-review).
@@ -496,37 +339,28 @@ long session summary. Distinct from the other logs:
   pre-design it. **Recommended resolution point:** when the second
   importable section is designed.
 
-## [OPEN] FU-336 — PWA build mode never actually selected — Workbox/manifest config emits nothing
-- **Raised:** 2026-06-30 (FU-327 audit — `docs/05_investigations/PLATFORM_BUILDS_AUDIT.md`).
-- **Type:** finding (config wired, build step skips it).
-- **What:** `web_app/quasar.config.ts` lines ~226–347 define a
-  complete PWA: Workbox `GenerateSW`, manifest with 4 app shortcuts
-  (primary list, shop-now, scan, add-item), NetworkFirst on `/api/`,
-  CacheFirst on stock/merchant images, offline.html fallback.
-  Client-side lifecycle + push subscription wiring are already
-  shipped ([usePwaLifecycle.ts](web_app/src/composables/usePwaLifecycle.ts),
-  [usePushSubscription.ts](web_app/src/composables/usePushSubscription.ts)),
-  and the backend has Web Push end-to-end
-  ([push_sender.py](dora_api/infrastructure/push_sender.py)). But
-  `npm run build` runs `quasar build` (SPA mode), **not**
-  `quasar build -m pwa`. The SW + manifest + offline.html therefore
-  never land in shipped artifacts. The same is true of the
-  PyInstaller bundle (it consumes whatever `web_app/dist/spa/`
-  contains — which today is the SPA-mode build).
-- **Why deferred:** out of scope of the audit prompt; the audit was
-  recon-only.
-- **Recommended resolution:** ~1 hour fix. Two options:
-  1. Change `web_app/package.json`'s `build` script to
-     `quasar build -m pwa`, or
-  2. Add a sibling `build:pwa` script and update consumers
-     (`packaging/build-linux.sh`, `Dockerfile`) accordingly.
-  Then verify the manifest + SW are present in `dist/pwa/` (or
-  `dist/spa/`, depending on what Quasar v2 emits today) and that
-  the PyInstaller spec's `("web_app/dist/spa", "web_app/dist/spa")`
-  data tuple still points at the right output path. **Highest-ROI
-  platform move in the audit** — install-to-home-screen on every
-  modern mobile + desktop with zero new code. Tagged "now" for the
-  next platform-targeted session.
+## [OPEN] FU-552 — PWA ships Quasar-placeholder icons for iOS apple-touch + Safari pinned-tab
+- **Raised:** 2026-07-13 (surfaced while shipping FU-336 — enabling PWA mode exposed the injected icon meta tags).
+- **Type:** finding (branding defect — bounded to iOS/Safari).
+- **What:** With `pwa.injectPwaMetaTags: true` now active, the generated
+  `index.html` references `icons/apple-icon-{120,152,167,180}.png` and
+  `icons/safari-pinned-tab.svg` for the iOS home-screen icon + Safari
+  pinned-tab. Those files (in `web_app/public/icons/`, generated by Quasar on
+  2026-06-22, **untracked**) are Quasar's **default placeholder logo** (blue
+  gear), not Dora branding. **Android/Chrome/favicon are fine** — the
+  `manifest.json` install icons + `<link rel=icon>` tags point at Dora's real
+  `web-app-manifest-*` / `android-chrome-*` / `favicon-*`. So only the iOS
+  add-to-home-screen icon and the Safari pinned-tab show the wrong logo.
+- **Why deferred:** separable from the build-mode flip; a proper fix needs icon
+  generation from Dora's source brand asset, not a hacky resize.
+- **Recommended resolution:** regenerate the full apple-touch + maskable +
+  safari-pinned-tab set from Dora's source logo (ideally a 1024px master via
+  `@quasar/icongenie`, or hand-export), replace the placeholders in
+  `web_app/public/icons/`, and **commit** them (they're currently untracked). Do
+  **not** commit the current Quasar-placeholder `apple-icon-*` / `icon-*` /
+  `ms-icon-*` / `safari-pinned-tab.svg` in the meantime. **Recommended
+  resolution point:** opportunistic, next branding/mobile pass — low urgency
+  (iOS is the lowest-priority PWA target per `PLATFORM_BUILDS_AUDIT.md`).
 
 ---
 

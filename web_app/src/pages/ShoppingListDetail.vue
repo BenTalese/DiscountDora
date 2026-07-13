@@ -1267,7 +1267,6 @@
         type ShoppingListLine,
         type ShoppingListSummary
     } from 'src/models/shoppingList';
-    import type { StockItem } from 'src/models/stockItem';
     import type { Substitute } from 'src/models/stockItemDetail';
     import ShoppingListApiService, {
         shoppingListAttachmentUrl,
@@ -1832,15 +1831,6 @@
     }
     function isProductOnly(line: ShoppingListLine): boolean {
         return !line.stock_item_id && !!line.product_id;
-    }
-
-    // Stock items keyed by id, looked up from the store, so we can hand
-    // the right StockItem to <StockLevelDot> per line.
-    function stockItemFor(stockItemId: string | null | undefined): StockItem | undefined {
-        if (!stockItemId) return undefined;
-        return stockItemStore.stockItems.find(
-            (si) => si.stock_item_id === stockItemId
-        );
     }
 
     const tickedCount = computed(() =>

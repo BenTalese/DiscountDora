@@ -166,28 +166,6 @@
                 </div>
             </SettingsRow>
         </SettingsSection>
-
-        <hr class="settings-divider" />
-
-        <SettingsSection>
-            <template #title>Sign out</template>
-            <template #description>
-                Sign out of this device. Your data stays where it is on the
-                server.
-            </template>
-
-            <SettingsRow stacked>
-                <div>
-                    <BaseButton
-                        variant="danger"
-                        :icon="ICONS.logout"
-                        label="Sign out"
-                        :loading="signingOut"
-                        @click="onSignOut"
-                    />
-                </div>
-            </SettingsRow>
-        </SettingsSection>
     </div>
 </template>
 
@@ -198,7 +176,6 @@
     import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref, watch } from 'vue';
-    import { useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
@@ -209,7 +186,6 @@
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
     const $q = useQuasar();
-    const router = useRouter();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
@@ -254,7 +230,6 @@
     const savingEmail = ref(false);
     const savingUsername = ref(false);
     const savingPassword = ref(false);
-    const signingOut = ref(false);
 
     watch(currentUser, (u) => {
         if (!u) return;
@@ -354,16 +329,6 @@
             notifyError('Could not change password.', err);
         } finally {
             savingPassword.value = false;
-        }
-    }
-
-    async function onSignOut() {
-        signingOut.value = true;
-        try {
-            await authStore.logoutAsync();
-            void router.push('/login');
-        } finally {
-            signingOut.value = false;
         }
     }
 </script>

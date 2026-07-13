@@ -1,6 +1,6 @@
 # Dashy Dora — Project State
 
-**Regenerated: 2026-07-12 (test pass 4, hand-edited refresh)** — fourth
+**Regenerated: 2026-07-13 (hand-edited: FU-392 demo mode shipped; see Recently shipped). Prior full regen 2026-07-12 (test pass 4)** — fourth
 test-sweep pass: backend **1415 passing** (~61 s; 1 pre-existing FU-328 fail,
 9 deliberate strict-xfail pins), frontend **298** Vitest tests (19 files).
 Pass 4 added whole-API **input fuzzing** ("4xx never 500"), a **PATCH-semantics**
@@ -328,6 +328,7 @@ first.
 
 ## Recently shipped (newest first)
 
+- **Demo / sellable-showcase mode — FU-392 (2026-07-13).** `DORA_DEMO_MODE=true` turns any install into a self-resetting product demo: boots a *curated* showcase dataset (`seed_showcase.py` — clean pantry/recipes/meal-plan/shopping story, no dev test artifacts; login `demo`/`demo`), auto re-seeds on an interval (`DORA_DEMO_RESET_MINUTES`, default 60), and the SPA shows a persistent "Demo mode — resets periodically" pill (pre-auth `demo_mode` capability). The **shared** cut (one live install, one dataset); true per-visitor isolation deferred to Phase 4 (FU-555, rides tenancy FU-400/401). Backend auth-flows 31 green; SPA vue-tsc clean + vitest 329.
 - **Filter/sort field allowlist made strict — FU-546 (2026-07-12).** A list filter/sort on a non-column field (relationship name, internal attr) now 400s instead of 500ing — `_resolve_field` restricted to genuine mapped columns; dead `validate_known_fields` removed. Completes the FU-537 hardening at one choke point. Suite 1454 green.
 - **Playwright first run GREEN + 2 real bugs caught — FU-540/550/551 (2026-07-12).** Got the browser E2E smoke suite running green (9 tests, driving system Chrome via `DORA_E2E_CHANNEL` since the bundled binary won't download here). Standing it up immediately caught two "can't ship" bugs, both fixed: **FU-550** — the SPA hadn't been buildable since ~June 22 (`quasar build` type-check failed on a `draft_shop` card missing from the `CardId` union — a deploy blocker); **FU-551** — Windows self-host served `.js` as `text/plain`, so the browser-served SPA never booted (blank page). backend 1454 / frontend 337 / e2e 9, all green.
 - **Logout is now audited — FU-548 (2026-07-12).** Session termination was the one mutating endpoint with no audit trail; the logout handler now emits an `auth.logout` event naming the actor (before clearing the session), mirroring login. FU-538 sweep test flipped to assert it. Suite green.

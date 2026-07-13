@@ -6,7 +6,8 @@
                  Kitchen setup); "Admin" holds the admin sections. The
                  sidebar underneath is filtered to only the active mode's
                  groups — Admin is a peer mode, not a buried third group.
-                 Non-admins see the plain h1. -->
+                 Non-admins see the plain h1. Sign-out is the header's
+                 right-hand peer of the toggle/title. -->
             <div v-if="isAdmin" class="settings-shell__mode-toggle" role="tablist" aria-label="Settings section">
                 <button
                     type="button"
@@ -31,6 +32,14 @@
                 </button>
             </div>
             <h1 v-else class="settings-shell__title">Settings</h1>
+
+            <BaseButton
+                variant="danger-ghost"
+                :icon="ICONS.logout"
+                label="Sign out"
+                :loading="signingOut"
+                @click="onSignOut"
+            />
         </header>
 
         <!-- Mobile (<md): top tab strip (§6.3). Shown via CSS below. -->
@@ -58,6 +67,7 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
+    import BaseButton from 'src/components/BaseButton.vue';
     import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -146,7 +156,8 @@
         { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
     ];
 
-    const { isAdmin } = storeToRefs(useAuthStore());
+    const authStore = useAuthStore();
+    const { isAdmin } = storeToRefs(authStore);
 
     // Independent-scroll shell: the sidebar and the main pane each own their
     // own overflow (see styles below), so the *window* never needs to scroll
@@ -176,6 +187,17 @@
     );
 
     const router = useRouter();
+
+    const signingOut = ref(false);
+    async function onSignOut() {
+        signingOut.value = true;
+        try {
+            await authStore.logoutAsync();
+            void router.push('/login');
+        } finally {
+            signingOut.value = false;
+        }
+    }
 
     function switchMode(next: 'settings' | 'admin') {
         if (next === mode.value) return;
@@ -220,6 +242,10 @@
     .settings-shell__header {
         margin-bottom: 20px;
         flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
     }
     .settings-shell__title {
         margin: 0;

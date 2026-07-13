@@ -342,6 +342,8 @@ _INGREDIENT_NOISE_RE = re.compile(
       | save
       | \d+\s+ingredients?$   # WW "6 Ingredients" section header
       | show\s+ingredient\s+quantity  # taste.com.au widget label
+      | estimate\s+based\s+on  # taste/Coles price-estimate widget
+      | fulfilled\s+by         # taste/Coles "Fulfilled by coles-logo"
     )\b.*$
     """,
     re.I | re.VERBOSE,
@@ -356,9 +358,25 @@ _STEP_NOISE_RE = re.compile(
       | full\s+recipe:?\s*$
       | dotdash\s+meredith               # AllRecipes photographer credit
       | simply\s+recipes\s+/            # Simply Recipes photo credit
+      | show\s+ingredient\s+quantity     # taste "Method / Show ingredient quantity" widget
+      | next\s+video\s+thumbnail         # taste video-carousel spam
+      | .+[-\s]step\s?\d+\s*$            # taste per-step photo caption ("Shephards Pie-Step 1")
     )\b.*$
     """,
     re.I | re.VERBOSE,
+)
+
+# Trailing junk that marks the end of the real steps on taste.com.au: a
+# bare video timecode ("01:01"), the "Next video thumbnail" carousel, or
+# a lone "more" nav link. Everything after the FIRST such line (video
+# title/description, related links) is not part of the method. Used as an
+# extra stop condition in ``_find_steps_block`` — kept separate from
+# ``_STEP_NOISE_RE`` because these END the block rather than being skipped
+# in place (the video title "How to prepare citrus" that follows the
+# carousel has no marker of its own and would otherwise leak).
+_STEPS_TRAILING_JUNK_RE = re.compile(
+    r"^\s*(?:\d{1,2}:\d{2}|next\s+video\s+thumbnail|more)\s*$",
+    re.I,
 )
 
 # Sub-section headers within an ingredient block. Ends with ``:`` and
@@ -545,7 +563,7 @@ def _find_steps_block(lines: list[str], after: int) -> tuple[int, int]:
         return (-1, -1)
     end = len(lines)
     for j in range(anchor + 1, len(lines)):
-        if _STOP_MARKER_RE.match(lines[j]):
+        if _STOP_MARKER_RE.match(lines[j]) or _STEPS_TRAILING_JUNK_RE.match(lines[j]):
             end = j
             break
     return (anchor + 1, end)

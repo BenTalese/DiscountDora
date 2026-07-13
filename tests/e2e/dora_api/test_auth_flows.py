@@ -5,8 +5,17 @@ and the authenticated `dora` cookie from conftest doesn't leak in
 when the test means to be anonymous.
 """
 import uuid
+from datetime import timedelta
 
 import requests
+
+from dora_api.app import app
+from dora_api.domain.entities.auth_token import (
+    PURPOSE_CHANGE_EMAIL, PURPOSE_RESET_PASSWORD, PURPOSE_VERIFY_EMAIL,
+)
+from dora_api.infrastructure.auth_helpers import (
+    CHANGE_EMAIL_TTL, RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL, issue_token,
+)
 
 
 BASE = "http://localhost:5170/api/auth"
@@ -76,12 +85,13 @@ def test__register__never_grants_admin(api):
 def test__capabilities__unauthenticated_and_reports_email_state(api):
     """The capabilities probe is reachable pre-auth (no session cookie)
     and reports whether outbound email is live. The test suite runs with
-    no SMTP config, so it should report false."""
+    no SMTP config, so it should report false. FU-392 added `demo_mode`,
+    which is off unless DORA_DEMO_MODE is set (never in the test env)."""
     s = _fresh_session()
     response = s.get(f"{BASE}/capabilities")
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body == {"email_sender_configured": False}
+    assert body == {"email_sender_configured": False, "demo_mode": False}
 
 
 def test__bootstrap_required__false_when_users_exist(api):
@@ -360,3 +370,133 @@ def test__login__rate_limit_returns_429_eventually(api):
     assert response.status_code in (401, 429)
     if response.status_code == 429:
         assert "Retry-After" in response.headers
+
+
+# ── FU-547 / FU-537 / FU-522 — token lifecycle security pins ──────────
+#
+# The invalid-token 400s above prove a *garbage* string is refused. These
+# prove the three properties that make a real token safe once minted:
+#   (a) single-use — a consumed token can't be replayed;
+#   (b) expiry — an in-date filter actually rejects a stale token;
+#   (c) cross-purpose isolation — a token minted for purpose A is inert on
+#       purpose B's route (the FU-522 concern, generalised).
+#
+# Tokens only ever reach a real user by email, which the test suite doesn't
+# send. The e2e suite runs the app in-process (conftest dispatches through
+# Flask's test client against the same `app`/`db` + SQLite file), so we mint
+# real tokens directly through `issue_token` in an app context and then drive
+# the public consuming routes over HTTP. The per-test snapshot rollback wipes
+# the minted rows (and dora's flipped email_verified / password) afterwards.
+
+
+def _dora_user_id() -> uuid.UUID:
+    # `requests` is rebound to the authenticated `dora` test client by the
+    # `api` fixture, so /me identifies the bootstrap user.
+    return uuid.UUID(requests.get(f"{BASE}/me").json()["user_id"])
+
+
+def _mint(purpose: str, ttl: timedelta, payload: str | None = None) -> str:
+    with app.app_context():
+        return issue_token(_dora_user_id(), purpose, ttl, payload=payload)
+
+
+def _reset_rate_buckets() -> None:
+    # verify-email (10/min) + reset-password (5/min) share process-lifetime
+    # IP buckets across the whole file; several consuming calls per test would
+    # otherwise accumulate toward the limit and flake. Clear before each pin so
+    # a token 400 is a *token* 400, never a 429. Safe globally — the one test
+    # that relies on accumulation (login rate-limit) builds its own burst.
+    from dora_api.infrastructure import auth_helpers
+    with auth_helpers._buckets_lock:
+        auth_helpers._buckets.clear()
+
+
+_GOOD_PW = "Abcdefghij1"
+
+
+def test__verify_email__token_is_single_use(api):
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_VERIFY_EMAIL, VERIFY_EMAIL_TTL)
+    s = _fresh_session()
+    first = s.post(f"{BASE}/verify-email", json={"token": token})
+    assert first.status_code == 200, first.text
+    assert first.json() == {"email_verified": True}
+    # Replay of the now-consumed token must fail.
+    second = s.post(f"{BASE}/verify-email", json={"token": token})
+    assert second.status_code == 400, second.text
+
+
+def test__reset_password__token_is_single_use(api):
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_RESET_PASSWORD, RESET_PASSWORD_TTL)
+    s = _fresh_session()
+    first = s.post(f"{BASE}/reset-password", json={"token": token, "new_password": _GOOD_PW})
+    assert first.status_code == 200, first.text
+    second = s.post(f"{BASE}/reset-password", json={"token": token, "new_password": _GOOD_PW})
+    assert second.status_code == 400, second.text
+
+
+def test__reset_password__consuming_one_token_revokes_sibling_reset_tokens(api):
+    """A successful reset revokes every other live reset token for that user
+    (`revoke_tokens_for_user`), so an attacker holding a second, never-used
+    reset link is locked out the moment the real user resets."""
+    _reset_rate_buckets()
+    used = _mint(PURPOSE_RESET_PASSWORD, RESET_PASSWORD_TTL)
+    sibling = _mint(PURPOSE_RESET_PASSWORD, RESET_PASSWORD_TTL)
+    s = _fresh_session()
+    assert s.post(
+        f"{BASE}/reset-password", json={"token": used, "new_password": _GOOD_PW}
+    ).status_code == 200
+    revoked = s.post(f"{BASE}/reset-password", json={"token": sibling, "new_password": _GOOD_PW})
+    assert revoked.status_code == 400, revoked.text
+
+
+def test__verify_email__expired_token_is_rejected(api):
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_VERIFY_EMAIL, timedelta(seconds=-1))
+    resp = _fresh_session().post(f"{BASE}/verify-email", json={"token": token})
+    assert resp.status_code == 400, resp.text
+
+
+def test__reset_password__expired_token_is_rejected(api):
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_RESET_PASSWORD, timedelta(seconds=-1))
+    resp = _fresh_session().post(
+        f"{BASE}/reset-password", json={"token": token, "new_password": _GOOD_PW}
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test__verify_email__rejects_reset_password_token(api):
+    """Purpose is part of the token lookup — a reset token can't verify email."""
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_RESET_PASSWORD, RESET_PASSWORD_TTL)
+    resp = _fresh_session().post(f"{BASE}/verify-email", json={"token": token})
+    assert resp.status_code == 400, resp.text
+
+
+def test__reset_password__rejects_verify_email_token(api):
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_VERIFY_EMAIL, VERIFY_EMAIL_TTL)
+    resp = _fresh_session().post(
+        f"{BASE}/reset-password", json={"token": token, "new_password": _GOOD_PW}
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test__verify_email__rejects_change_email_token(api):
+    """FU-522 — a change-email token (which carries the pending address as its
+    payload) must not be honoured on the verify-email route."""
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_CHANGE_EMAIL, CHANGE_EMAIL_TTL, payload="hijack@example.com")
+    resp = _fresh_session().post(f"{BASE}/verify-email", json={"token": token})
+    assert resp.status_code == 400, resp.text
+
+
+def test__confirm_email_change__rejects_verify_email_token(api):
+    """FU-522 — the reverse: a verify-email token can't drive an address swap
+    on /email-change/confirm."""
+    _reset_rate_buckets()
+    token = _mint(PURPOSE_VERIFY_EMAIL, VERIFY_EMAIL_TTL)
+    resp = _fresh_session().post(f"{BASE}/email-change/confirm", json={"token": token})
+    assert resp.status_code == 400, resp.text

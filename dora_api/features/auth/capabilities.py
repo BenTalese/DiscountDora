@@ -13,6 +13,7 @@ fresh install. Gating it on this flag closes that gap.
 """
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import ok
+from dora_api.infrastructure.configuration_manager import DORA_CONFIG
 from dora_api.infrastructure.email_sender import email_sender_configured
 
 
@@ -20,4 +21,8 @@ from dora_api.infrastructure.email_sender import email_sender_configured
 def get_auth_capabilities():
     return ok({
         "email_sender_configured": email_sender_configured(),
+        # Demo / sellable-showcase mode (FU-392). Lets the SPA render the
+        # persistent "you're in a demo, it resets periodically" banner and
+        # pre-fill the demo login hint without an authenticated call.
+        "demo_mode": DORA_CONFIG.is_demo_mode_enabled(),
     })

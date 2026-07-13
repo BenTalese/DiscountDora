@@ -10,6 +10,7 @@ load_dotenv(find_dotenv(), override=False)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from flask_cors import CORS
 from flask_migrate import upgrade
 from werkzeug.exceptions import HTTPException
@@ -22,6 +23,7 @@ from dora_api.infrastructure.logging_setup import configure_logging
 from dora_api.infrastructure.middleware import MIDDLEWARE
 from dora_api.infrastructure.utils import get_attributes_ending_with
 from dora_api.persistence.seed import seed_dev_data
+from dora_api.persistence.seed_showcase import reset_showcase
 
 
 def startup(is_test_env: bool = False):
@@ -122,6 +124,20 @@ def startup(is_test_env: bool = False):
             id="alerts_push",
             replace_existing=True,
         )
+        # Demo / sellable-showcase auto-reset (FU-392). When the install is
+        # booted in demo mode, wipe + re-seed the curated showcase dataset on
+        # a fixed interval so anyone poking at the demo starts from a clean,
+        # coherent state. DORA_DEMO_RESET_MINUTES=0 disables the reset (the
+        # boot-time seed still runs), leaving a static demo.
+        if DORA_CONFIG.is_demo_mode_enabled():
+            _reset_minutes = DORA_CONFIG.get_demo_reset_minutes()
+            if _reset_minutes > 0:
+                scheduler.add_job(
+                    reset_showcase,
+                    IntervalTrigger(minutes=_reset_minutes),
+                    id="demo_reset",
+                    replace_existing=True,
+                )
         scheduler.start()
 
     if not is_test_env:  # app.run blocks the thread where tests are ran from
@@ -134,6 +150,16 @@ def startup(is_test_env: bool = False):
 
 
 def init_db(is_test_env: bool):
+    # Demo / sellable-showcase mode (FU-392) takes precedence over the
+    # normal seed/upgrade decision. It seeds the curated showcase dataset
+    # destructively in ANY profile (dev or prod) — the demo install is
+    # disposable by design and re-seeds on a schedule (see the reset job
+    # in startup()). It deliberately bypasses is_seed_allowed()'s
+    # production guard because the operator opted in via DORA_DEMO_MODE.
+    if DORA_CONFIG.is_demo_mode_enabled():
+        reset_showcase()
+        return
+
     with app.app_context():
         # D3: is_seed_allowed() refuses in production regardless of
         # DORA_ALLOW_DESTRUCTIVE, so a misconfigured prod deploy can't

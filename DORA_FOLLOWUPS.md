@@ -53,21 +53,20 @@ long session summary. Distinct from the other logs:
 # Open
 
 
-## [OPEN] FU-553 — `downgrade base` fails on SQLite: alembic batch can't drop the RecipeIngredient named CHECK constraint
-- **Raised:** 2026-07-13 (surfaced by the FU-536 round-trip test once FU-549 unblocked the from-empty chain).
-- **Type:** finding (**downgrade-only — not a boot/production risk**; prod only ever upgrades).
-- **What:** `flask_migrate.downgrade(revision='base')` dies in `c5a8e1f7d3b2_20260704_recipe_ingredient_unlinked.py`'s downgrade at `batch.drop_constraint('recipe_ingredient_anchor', type_='check')` with `ValueError: No such constraint: 'ck_RecipeIngredient_recipe_ingredient_anchor'`.
-- **Root cause (diagnosed 2026-07-13):** a **naming-convention × batch-rebuild double-application**. Plain `Table(autoload_with=...)` reflects the CHECK correctly as `ck_RecipeIngredient_recipe_ingredient_anchor`. But when alembic batch rebuilds the table, it re-renders that already-final name through the metadata's `ck_%(table_name)s_%(constraint_name)s` convention → `ck_RecipeIngredient_ck_RecipeIngredient_recipe_ingredient_anchor` (proven: leaving the CHECK undropped, the rebuilt `CREATE TABLE` emits exactly that doubled name). So batch's `named_constraints` is keyed by the doubled name and `drop_constraint` by any single-rendered name misses. And you can't just skip the drop — the CHECK references `raw_text`, which the same downgrade drops.
-- **Approaches TRIED that DON'T work (don't repeat):** (1) `drop_constraint('recipe_ingredient_anchor')` (logical name) → misses; (2) removing the drop and relying on the `drop_column('raw_text')` rebuild to omit the CHECK → the rebuild instead re-creates it with the doubled name and fails; (3) `op.batch_alter_table(..., naming_convention=NAMING_CONVENTION)` → still misses. Left the downgrade in its clean intended form (fails only under SQLite batch), with an inline NOTE.
-- **Why low-priority:** production never runs `downgrade base` (fresh boot only upgrades — fixed under FU-549). Dev/rollback tooling only. **Likely SQLite-batch-specific**: Postgres drops named CHECKs natively (no table rebuild), so the round-trip probably already passes there — the cheapest "fix" is to confirm that under FU-045 Postgres CI and gate this test to Postgres.
-- **Pinned by:** `tests/test_migrations.py::test__migrations__down_up_roundtrip_is_clean` (strict-xfail → flips to XPASS/un-xfail when fixed).
-- **Recommended resolution:** confirm-on-Postgres + gate the round-trip test there ([[FU-045]] / FU-405 CI); OR, only if a SQLite downgrade is ever genuinely needed, rebuild `RecipeIngredient` via raw SQL in the downgrade (recreate without the CHECK) rather than fighting batch. Not worth a fragile workaround now.
 
-## [OPEN] FU-547 — FU-537 security-test tail: auth-token single-use / expiry / cross-purpose reuse not yet pinned
-- **Raised:** 2026-07-12 (FU-537 scope note — the filter-injection / mass-assignment / stored-XSS halves shipped; token lifecycle deferred).
-- **Type:** deferred job (test-writing).
-- **What:** `test_security_injection.py` covers query-grammar injection, mass-assignment, and stored-XSS-in-email. The **token-lifecycle** half of the FU-537 stub is not yet done: (a) a password-reset / verify token is single-use (using it twice fails the 2nd), (b) an expired token is rejected, (c) a token minted for purpose A (reset) is rejected on route B (verify) — the FU-522 cross-purpose concern as a security pin. `test_auth_flows.py` has invalid-token 400s + anti-enumeration but not these. Needs a real token round-trip (issue via the flow or mint directly through `issue_token`), so it's a bit more setup than the rest.
-- **Recommended resolution:** opportunistic / next auth-surface touch — add beside `test_auth_flows.py` or the security suite.
+## [OPEN] FU-556 — DRY the duplicated seed builders shared by seed.py + seed_showcase.py
+- **Raised:** 2026-07-13 (FU-392 build).
+- **Type:** finding (R-008 scope-discipline carve-out — intentional dup, not silent drift).
+- **What:** `dora_api/persistence/seed_showcase.py` (FU-392) copies a handful of tiny local closure builders from `seed.py::seed_dev_data()` — `make_product`, `make_item`, `make_recipe`, `ingredient`, `price_obs`, `level_change`, `line`, plus the vocab-seed blocks (cuisines / categories / dietary tags / tools / meal slots) and the harvest-observation loop. The two datasets have different *shapes*, so the bodies aren't identical, but the scaffolding is.
+- **Why deferred:** deliberately NOT factored inline — refactoring the working dev seed to share a builder module risks perturbing it, and scope discipline (don't touch adjacent code the prompt didn't ask for) said leave it. Flagged rather than done.
+- **Recommended resolution:** opportunistic — next time either seed is edited substantially. Extract the builders into a `seed_builders.py` that takes an explicit `repo` (both seeds already thread one), leaving each `seed_*_data()` as just the dataset definition. Low risk once there's a reason to be in the file.
+
+## [OPEN] FU-555 — Demo mode: true per-visitor isolation (each prospect gets a private sandbox)
+- **Raised:** 2026-07-13 (FU-392 build — the deferred half of the "full self-serve sandbox" ask).
+- **Type:** deferred job.
+- **What:** FU-392 shipped the *shared* auto-reset demo: one live install, one curated dataset, a scheduled `drop_all`/re-seed. Every visitor sees (and can stomp) the same data until the next reset. The originally-requested "full self-serve sandbox" — where each prospect gets their **own** isolated dataset that can't be seen or clobbered by anyone else — needs per-visitor data partitioning, which is exactly the multi-tenancy the distribution posture says not to pre-build.
+- **Why deferred:** true isolation ⇒ households-as-tenant + repository-enforced scoping. That's [[FU-400]] / [[FU-401]], both Phase-4. Building it just for the demo would dig the speculative-tenant_id hole the charter forbids.
+- **Recommended resolution:** Phase 4, riding on [[FU-400]] (Households-as-tenant) + [[FU-401]] (repo-enforced isolation). Once tenancy exists, a demo can mint a throwaway tenant per session and expire it — no bespoke demo-only isolation code.
 
 ## [OPEN] FU-545 — SettingsFileDrop: `nested-interactive` a11y violation (native file input inside a role="button" drop-zone)
 - **Raised:** 2026-07-12 (found by the new FU-542 axe tests).
@@ -153,14 +152,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Phase 4.
 - **Recommended resolution:** at Phase 4 tenancy kick-off; part of P7-A1 / P7-A2 (see [[FU-406]] / [[FU-407]]).
 
-## [OPEN] FU-409 — AUTH_ASSISTANT_SECURITY_FINDINGS: delta re-audit before commercialization
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** finding.
-- **What:** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` originally listed CSRF / email-change / register-first-admin issues. Most were resolved (per resolved-FUs trail). A comprehensive item-by-item confirmation vs shipped code was not re-run.
-- **Why deferred:** the delta itself is the work.
-- **Recommended resolution:** before any public deployment — walk every finding, tick "fixed" or reopen. Overlaps with [[FU-424]] (senior-review credibility gaps).
-
-
 ## [OPEN] FU-406 — P7-10 Launch readiness
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
 - **Type:** deferred job (Phase 4 gate).
@@ -245,13 +236,6 @@ long session summary. Distinct from the other logs:
 - **What:** P5-08 — comprehensive data-model sanity sweep. `ORPHANED_FIELDS_AUDIT` covered one slice; nullability audit, FK-consistency, index coverage, dead columns — not done as a single pass.
 - **Why deferred:** hasn't been forced.
 - **Recommended resolution:** opportunistic sweeps as touched (partial credit for [[FU-416]]); a single dedicated pass would be a good pre-Phase-4 gate.
-
-## [OPEN] FU-392 — P5-07 Demo & sellable showcase mode
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job.
-- **What:** P5-07 — seed a "showcase" install with representative data + a toggleable demo mode for prospects. Seed system exists; showcase toggle + curated dataset don't.
-- **Why deferred:** Phase 4-ish; needed for sales conversations.
-- **Recommended resolution:** with commercialization prep (Phase 4 opening).
 
 ## [OPEN] FU-391 — P5-06 first-week experience (post-onboarding nudges)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).

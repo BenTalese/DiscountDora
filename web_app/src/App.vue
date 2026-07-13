@@ -15,9 +15,13 @@
     <ErrorBoundary v-if="authStore.isBootstrapped">
         <router-view />
     </ErrorBoundary>
+    <!-- FU-392 — self-gates on the pre-auth demo_mode capability, so it's a
+         no-op on normal installs and safe to mount unconditionally here. -->
+    <DemoBanner />
 </template>
 
 <script setup lang="ts">
+    import DemoBanner from 'src/components/DemoBanner.vue';
     import ErrorBoundary from 'src/components/ErrorBoundary.vue';
     import SplashScreen from 'src/components/SplashScreen.vue';
     import { useAuthStore } from 'src/stores/authStore';

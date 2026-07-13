@@ -167,12 +167,13 @@ def test__migrations__upgrade_head_from_empty_succeeds(temp_db_path):
 @pytest.mark.slow
 @pytest.mark.xfail(
     strict=True,
-    reason="FU-553: `downgrade base` dies dropping the named CHECK constraint on "
-    "RecipeIngredient (c5a8e1f7d3b2) — alembic batch mode on SQLite doesn't carry "
-    "reflected CHECK constraints into its rebuild table, so drop_constraint can't "
-    "find it. Upgrade-from-empty (the fresh-install boot path) is fixed under "
-    "FU-549; this is downgrade-only (dev/rollback) and likely SQLite-batch-specific "
-    "(Postgres drops named checks natively). Flip to XPASS → un-xfail when fixed.",
+    reason="Known SQLite-batch limitation (won't-fix, dev-only): `downgrade base` "
+    "dies dropping the named CHECK constraint on RecipeIngredient (c5a8e1f7d3b2) — "
+    "alembic batch mode on SQLite doesn't carry reflected CHECK constraints into "
+    "its rebuild table, so drop_constraint can't find it. Downgrade is dev/rollback "
+    "tooling only; production never downgrades (upgrade-from-empty boot path is the "
+    "prod path). Expected to XPASS on Postgres CI (named checks drop natively, no "
+    "table rebuild) — revisit if it flips there.",
 )
 def test__migrations__down_up_roundtrip_is_clean(temp_db_path):
     """upgrade head -> downgrade base -> upgrade head with no exception.

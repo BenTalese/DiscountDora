@@ -255,6 +255,22 @@ EXPECTATIONS: dict[str, dict] = {
         "notes": "'Step 1' style markers, not numbered '1.'. Meta values "
                  "live on lines separate from labels ('Prep\\n10m\\n').",
     },
+    "taste.com.au2": {
+        "name_contains": "massaman",  # Thai massaman beef curry
+        "servings": 4,
+        "prep_minutes": 10,
+        "cook_minutes": 100,  # 1h 40m
+        "total_minutes": None,
+        "min_ingredients": 19,
+        "min_steps": 3,
+        "first_ingredient_contains": "vegetable oil",
+        "notes": "Same taste.com.au chrome as fixture1, but the method is "
+                 "followed by a video carousel ('01:01' timecode, 11x 'Next "
+                 "video thumbnail', a video title + 'more' link) that a naive "
+                 "collector grabs as ~16 junk steps. Also leaks the Coles "
+                 "price widget ('Estimate based on...', 'Fulfilled by "
+                 "coles-logo') into ingredients. Both are filtered now.",
+    },
 
     # Woolworths — vertical meta ("Prep\nPreparation time is 10minutes\n
     # 10m\n..."); every ingredient line appears TWICE consecutively in

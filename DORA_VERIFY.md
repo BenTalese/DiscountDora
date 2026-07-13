@@ -159,6 +159,8 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Open Cookbook overview → "Import" button opens the paste dialog. Caption names the paste flow (Ctrl+A / Ctrl+C on the source, Ctrl+V into Dora)
 - [ ] Copy a RecipeTin Eats page (Ctrl+A → Ctrl+C in the browser) → paste into the textarea → optionally type the source URL → "Import" → new recipe lands with name + servings + ingredients + steps; navigator lands on detail
 - [ ] Repeat with an AllRecipes page and a Half Baked Harvest page — verify each imports without the "couldn't auto-structure" degraded banner
+- [ ] Paste a **taste.com.au recipe that has an embedded how-to video** (e.g. the *Thai massaman beef curry* used for the `taste.com.au2` corpus fixture) → the preview shows exactly the real ingredients (no "Estimate based on…" / "Fulfilled by coles-logo" rows) and exactly the real method steps (no "Show ingredient quantity", no "Next video thumbnail" spam, no video title / "more" tail, no per-step photo captions)
+- [ ] Import a recipe with several ingredients that DON'T match existing stock items → open the new recipe → **each unlinked ingredient row shows its original text** (picker label reads "Free-text ingredient" and the quoted text — e.g. "1/3 cup (100g) massaman curry paste" — appears under the picker), not a blank "Stock item" dropdown. Reload the page and confirm the text survives the round-trip. Link one row to a real stock item → its label/caption switch back to the plain "Stock item" picker with no leftover quote
 - [ ] Paste a page that fuzzy-matches < all ingredients → save works with unlinked rows present; recipe detail shows a neutral cookability chip (not True/False) until every row is linked
 - [ ] Confirm `Recipe.source` on the imported recipe carries the URL you typed (if any) and is blank when omitted — nothing was fetched server-side
 - [ ] Old `POST /api/recipes/import-from-url` returns 404 (route deleted); the new `POST /api/recipes/import-from-content` is the only import path
@@ -1547,6 +1549,16 @@ machine at this session close-time; walked opportunistically.*
 ### Fresh-install migration boot — origin FU-549 (FIXED 2026-07-13 — confirm on a clean install)
 - [ ] On a machine with a clean `pip install -r requirements.txt` (now pins `alembic==1.14.1`), point at an **empty** database and boot in production mode (the path that runs `flask_migrate.upgrade()`, not the create_all seed path) → the app migrates cleanly to head and starts, **no** `a3e9f6c2d8b4` Alembic batch `'BINARY' has no attribute 'name'` crash. The crash was fixed 2026-07-13 (batch renames now pass `sa.BINARY(16)` instead of `UUIDType()`) and is now covered by `tests/test_migrations.py::test__migrations__upgrade_head_from_empty_succeeds` — this is the eyes-on-the-running-thing confirmation on the real prod toolchain.
 
+### Companion push round-trip after `merchant`→`store` field fix — origin FU-554 (FIXED 2026-07-13)
+- [ ] With both services standing, push a scraped offer from the companion (`dora-companion` — single-push button or batch-push toolbar) → Dora accepts it (no `400 unexpected key 'merchant'` from `_ProductIn`'s `extra="forbid"`); the product lands / quarantines as `store_not_mapped` rather than schema-rejecting. The payload field was renamed `merchant`→`store` in `companion_common/dora_ingest.py::build_payload` to match Dora's Phase-E `_ProductIn`. If both services are up, also re-run `dora-companion/tests/test_integration_dora_roundtrip.py` (needs a live Dora).
+
+### Demo / sellable-showcase mode — origin FU-392 (shipped 2026-07-13)
+- [ ] Boot the API with `DORA_DEMO_MODE=true` (any profile) → on boot the DB is wiped + re-seeded from the curated showcase dataset (`seed_showcase.py`), NOT the dev fixture: no "Sriracha (chatty history test)" item, no real personal email, clean pantry/recipes/meal-plan/shopping story. Log in as `demo` / `demo` (admin).
+- [ ] With demo mode on, the SPA shows the persistent floating **"Demo mode — this is sample data that resets periodically."** pill (bottom-centre, brand-accent) on every screen, pre-auth and post-auth. It does not reflow layout or cover the mobile bottom nav.
+- [ ] Boot **without** `DORA_DEMO_MODE` (normal install) → **no** demo banner anywhere; `GET /api/auth/capabilities` returns `demo_mode:false`; the normal dev-seed / prod-upgrade boot path runs unchanged.
+- [ ] Leave demo mode running with default `DORA_DEMO_RESET_MINUTES` (60) — or set it low (e.g. `2`) to test faster — make a visible change (tick a shopping-list line, delete a stock item), wait for the interval, reload → the dataset is back to its curated baseline (scheduled `reset_showcase` fired).
+- [ ] Boot with `DORA_DEMO_MODE=true` + `DORA_DEMO_RESET_MINUTES=0` → showcase seeds once on boot but the scheduled reset job is NOT registered (static demo); changes persist until the next manual restart.
+
 ### Prod-mode secure-cookies boot warning — origin FU-460
 - [ ] Boot the app with `DORA_ENV=production` set and `DORA_SECURE_COOKIES` **unset** → stderr shows the multi-line `═══ WARNING: DORA_ENV=production but DORA_SECURE_COOKIES is unset. ═══` banner before the DI-container / DB / audit log lines
 - [ ] Same boot with `DORA_SECURE_COOKIES=true` set → **no** warning banner in stderr
@@ -1728,7 +1740,7 @@ Every other platform: no visible effect; already worked.*
 - [ ] Header right side shows three icons in order: AlertsBell · **Help & guides** (?) · **Profile avatar**. No dropdown chevron / menu anywhere
 - [ ] Click the Help icon → navigates to `/help` (no dropdown opens). Tooltip on hover reads "Help & guides"
 - [ ] Click the avatar → navigates to `/settings/account` (no dropdown opens). Tooltip on hover reads the current username
-- [ ] No Sign-out anywhere in the header — Sign-out lives only on Settings → Account (the existing red "Sign out" button on that page is still present and works)
+- [ ] No Sign-out anywhere in the app toolbar (MainLayout) — Sign-out now lives in the Settings shell page header (see below), not on the Account page anymore
 - [ ] On `/help` or `/help/dora`: **Help icon pulses** in the slide-flash colour, then settles into the 3px accent ring. Avatar stays inactive (no ring)
 - [ ] On any `/settings/*` page: **avatar pulses + settles** to the accent ring. Help icon stays inactive
 - [ ] Switching between Settings sub-pages (`/settings/account` → `/settings/preferences` → `/settings/notifications`) — avatar ring stays lit, **no re-pulse**
@@ -1736,6 +1748,12 @@ Every other platform: no visible effect; already worked.*
 - [ ] Cross between sections (`/settings/account` → `/help`): avatar ring fades out (~320ms), Help ring pulses + settles. Reverse direction also smooth
 - [ ] Navigating between Help/Settings and the main menu (e.g. `/help` → `/cookbook`): header ring fades out, main-menu Cookbook underline fades in. No stuck flash colour
 - [ ] Theme switch — both buttons' flash + resting colours follow the active theme's `--nav-slide-flash` + `--brand-accent` tokens
+
+### Sign-out moved into the Settings shell header (2026-07-13)
+- [ ] On any `/settings/*` page: a **"Sign out"** button (logout icon, danger-ghost styling) sits on the **right** of the shell header, inline with the Settings/Admin toggle (admins) or the "Settings" title (non-admins)
+- [ ] Click it → you're signed out and land on `/login`; the button shows its loading state while the request is in flight
+- [ ] Settings → Account no longer has a "Sign out" section/card at the bottom (it moved to the header)
+- [ ] Both admin (toggle shown) and non-admin (plain title) accounts show the button correctly right-aligned; no overlap/wrap at narrow desktop widths, and it still renders on the mobile settings layout
 - [ ] Mobile (`<md`): both buttons render in the header (next to the AlertsBell), rings still work
 - [ ] **Reduced-motion** (DevTools → Rendering → "Emulate CSS prefers-reduced-motion: reduce"): rings appear in the resting accent colour **without** the pulse beat on either button
 

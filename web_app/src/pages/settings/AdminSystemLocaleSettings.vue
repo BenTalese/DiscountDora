@@ -150,7 +150,6 @@
         // before the round-trip — matches the server-side BCP-47 check
         // and gives an immediate error without a network round-trip.
         try {
-            // eslint-disable-next-line no-new
             new Intl.Locale(value);
         } catch {
             localeError.value = 'Not a valid BCP-47 locale tag.';

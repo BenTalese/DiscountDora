@@ -238,6 +238,27 @@ class DoraConfig:
             return False
         return _env("DORA_ALLOW_DESTRUCTIVE", "false").lower() in {"1", "true", "yes", "on"}
 
+    def is_demo_mode_enabled(self) -> bool:
+        """Demo / sellable-showcase mode (FU-392). When on, the install
+        serves a curated showcase dataset, shows a persistent demo banner,
+        and periodically resets itself back to the baseline so a prospect
+        clicking around can't permanently alter it.
+
+        Operator/deployment decision, set via env — deliberately NOT an
+        admin AppSetting, so a prospect exploring the (admin) demo user
+        can't switch it off from Settings. Off by default. Unlike the dev
+        seed this is allowed to (re)seed destructively in ANY profile,
+        including production-like ones a public demo would run under for
+        HTTPS/secure-cookie reasons — the dataset is disposable by design."""
+        return _env("DORA_DEMO_MODE", "false").lower() in {"1", "true", "yes", "on"}
+
+    def get_demo_reset_minutes(self) -> int:
+        """How often the demo dataset is reset back to the curated showcase
+        baseline, in minutes. Default 60. 0 disables the scheduled reset
+        (the boot seed still runs; the instance just isn't auto-refreshed).
+        Only consulted when is_demo_mode_enabled()."""
+        return _env_int("DORA_DEMO_RESET_MINUTES", 60)
+
     def get_web_app_host(self) -> str:
         return _env("DORA_WEB_APP_HOST", self._config.WEB_APP_HOST) or self._config.WEB_APP_HOST
 

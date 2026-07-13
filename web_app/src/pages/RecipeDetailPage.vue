@@ -1312,6 +1312,10 @@
         // form (a fresh client_id from the editor or an existing UUID) on save.
         const ingredients = source.ingredients.map((i) => ({
             stock_item_id: i.stock_item_id,
+            // Carry the free-text label through load so an unlinked ingredient
+            // (imported or hand-entered) still shows what it was — without this
+            // the row renders as a blank "Stock item" picker with no name.
+            raw_text: i.raw_text,
             quantity: i.quantity,
             unit: i.unit,
             notes: i.notes,

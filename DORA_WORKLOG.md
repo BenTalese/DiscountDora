@@ -9,6 +9,369 @@ next.
 
 ---
 
+## 2026-07-13 (later 18) — FU-392: demo / sellable-showcase mode (shared auto-reset cut)
+
+**Why:** FU-392 (P5-07) asked for a "showcase" install with representative data +
+a toggleable demo mode for prospects. The user initially picked the heaviest scope
+("full self-serve sandbox" where each visitor gets a private dataset), but that
+requires per-visitor data partitioning = the multi-tenancy the distribution posture
+says not to pre-build. After I surfaced that tension, the user chose the achievable
+**shared auto-reset demo**: one live install, one curated dataset, a scheduled wipe/
+re-seed that gives the "ephemeral" feel without any tenancy. All app-code, no
+standalone brief (decisions captured here + in code comments).
+
+**What changed:**
+- `dora_api/infrastructure/configuration_manager.py` — two operator env flags:
+  `is_demo_mode_enabled()` (`DORA_DEMO_MODE`, off by default) + `get_demo_reset_minutes()`
+  (`DORA_DEMO_RESET_MINUTES`, default 60, `0` disables the reset). Env-only, NOT an
+  admin AppSetting — deployment decision; install is disposable.
+- `dora_api/persistence/seed_showcase.py` (new) — `seed_showcase_data()`: curated
+  single-household dataset (2 stores, 7 products w/ offer history, tidy pantry across
+  every stock level, 5 recipes mostly cookable, this-week meal plan, active + finished
+  shopping lists, price/cook/expiry history) with NO dev test artifacts; demo user
+  `demo`/`demo` (admin). `reset_showcase()` wraps `app_context`+`drop_all`/`create_all`/
+  seed for the scheduler thread. Builders are copied from `seed.py` (different dataset
+  shapes) — logged as DRY follow-up FU-556 rather than refactored inline (scope).
+- `dora_api/startup.py` — `init_db` demo branch seeds showcase destructively in ANY
+  profile (bypasses `is_seed_allowed()`'s prod guard because operator opted in via env),
+  returns early; new `IntervalTrigger` reset job added to the existing APScheduler block
+  (only when demo on and reset minutes > 0).
+- `dora_api/features/auth/capabilities.py` — pre-auth `demo_mode` flag.
+- SPA: `demoMode` on `authApiService.getCapabilitiesAsync`; new module-level
+  `useDemoMode.ts` (fetch-once); new `DemoBanner.vue` (theme-token floating pill,
+  self-gates on the capability) mounted unconditionally in `App.vue`.
+
+### Verification
+- Showcase seed smoke-run against a throwaway `DORA_DB_PATH` DB → clean: 17 items,
+  5 recipes, 1 user (`demo`/`demo@dashydora.app`), 3 lists.
+- `./.venv/bin/pytest tests/e2e/dora_api/test_auth_flows.py -q` → **31 passed**
+  (updated the capabilities equality test for the new `demo_mode:false` field).
+- SPA `vue-tsc --noEmit` clean; `vitest run` → **329 passed**.
+
+### Engineering-standards close-gate
+- **R-002 (theme tokens only):** `DemoBanner.vue` uses only `--brand-accent` /
+  `--text-on-accent` / `--radius-pill` / `--elevation-2` (verified defined; swapped an
+  initial `--shadow-2` guess for the real `--elevation-2`). No hardcoded colours.
+- **R-005 (distribution posture):** demo flag is env/config-driven; no `tenant_id`
+  introduced; the shared-demo cut deliberately avoids digging a multi-tenancy hole —
+  true isolation deferred to Phase 4 (FU-555).
+- **R-007/R-008 (scope):** did NOT refactor the working dev seed; duplicated builders
+  flagged as FU-556 instead.
+- No new ADR — reuses existing env-flag + fetch-once-composable + APScheduler patterns.
+
+### Follow-ups spun off
+- **FU-555** — true per-visitor demo isolation (Phase 4, rides FU-400/FU-401 tenancy).
+- **FU-556** — DRY the duplicated seed builders (opportunistic).
+- **DORA_VERIFY.md** — Operator section: banner renders + auto-reset fires + off-by-default.
+
+### Next up
+- None owed. FU-392 closed (moved to RESOLVED).
+
+---
+
+## 2026-07-13 (later 17) — FU-547: auth-token lifecycle security pins (single-use / expiry / cross-purpose)
+
+**Why:** FU-547 was the token-lifecycle remnant of the FU-537 security suite. The
+existing `test_auth_flows.py` proved a *garbage* token 400s, but nothing pinned the
+three properties that make a *real* minted token safe: single-use, expiry, and
+cross-purpose isolation (the FU-522 concern that a change-email token shouldn't
+verify email, and vice-versa).
+
+**What changed** (`tests/e2e/dora_api/test_auth_flows.py`):
+- New "FU-547 / FU-537 / FU-522" section, 9 tests. The e2e suite dispatches
+  in-process through Flask's test client against the same `app`/`db` + SQLite file
+  (conftest), so I mint real tokens via `issue_token` inside an `app.app_context()`
+  and drive the public consuming routes (`/verify-email`, `/reset-password`,
+  `/email-change/confirm`) over the test client. Per-test snapshot rollback wipes
+  the minted rows + dora's flipped `email_verified`/password afterwards.
+- **Single-use:** verify-email + reset-password tokens 400 on replay; plus a pin on
+  `revoke_tokens_for_user` (a successful reset kills a sibling, never-used reset
+  token — the "attacker holding a second live reset link" case).
+- **Expiry:** a token minted with a negative TTL 400s on both verify + reset.
+- **Cross-purpose:** reset→verify, verify→reset, change-email→verify, and
+  verify→confirm-email-change all 400.
+- Added `_reset_rate_buckets()` (clears the process-lifetime IP buckets in
+  `auth_helpers._buckets`) so a token 400 is never masked by a 429 from calls
+  accumulating across the file's shared verify(10/min)/reset(5/min) buckets.
+
+### Verification
+- `./.venv/bin/pytest tests/e2e/dora_api/test_auth_flows.py -q` → **31 passed**
+  (22 existing + 9 new), 6.4s. No changes to production code — pure test coverage.
+
+### Engineering-standards close-gate
+- **R-007 (scope):** test-only; no product code touched. Reaching into
+  `auth_helpers._buckets` + `issue_token` from the test is consistent with the
+  suite's established in-process pattern (it already imports `render_template` /
+  factories directly); commented in place.
+- No new ADR — filling a known test gap, not a recurring decision.
+
+### Next up
+- None owed for this FU. Its parent test-suite umbrella (FU-520) still has its
+  cross-repo / CI-gated remnants (Postgres CI, companion scraper tests).
+
+---
+
+## 2026-07-13 (later 16) — FU-409: AUTH_ASSISTANT_SECURITY_FINDINGS delta re-audit (no code changes)
+
+**Why:** FU-409 asked for the item-by-item confirmation of every finding in
+`docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` vs the shipped code
+that the 2026-07-08 triage had marked done/accepted but never re-verified against
+the current tree. A commercialization gate ("before any public deployment").
+
+**What I did (read-only audit):** grepped/read the concrete code paths behind all
+11 findings. Every disposition in the doc still holds; **nothing reopened.**
+- A.1 CSRF → `dora_api/infrastructure/csrf.py` (double-submit cookie + `hmac.compare_digest`). ✅
+- A.2 email pw-proof → `email_flows.py` (`current_password` + `check_password_hash` + old-address notice); `update_me.py::UpdateMeRequest` forbids `email` with `extra="forbid"`. ✅
+- A.3 email-change UI → verified flow on `AccountSettings.vue`. ✅
+- A.4 pw-rule drift → `infrastructure/auth_helpers.py::MIN_PASSWORD_LENGTH=8` + `LoginPage.vue` `v.length >= 8`. ✅
+- A.5 admin-reset plaintext → `features/users/reset_user_password.py` still returns `new_password` in body — **accepted** self-host fallback, unchanged. ➗
+- A.6 in-memory rate-limit → `auth_helpers.py::_buckets` process-local deque — **accepted**, Phase-4 scaling item. ➗
+- A.7 tokens-in-URL → `route.query.token` on Verify/Reset/ConfirmEmailChange pages — **accepted**. ➗
+- B.0 mutation gate → `ask_assistant.py` `pending_action` short-circuit on `is_action_tool`. ✅ intact
+- B.1 injection → SECURITY block in `_SYSTEM_PROMPT` (`ask_assistant.py:192`) + `_sanitize_tool_output`. ✅
+- B.2 rate/caps → `_ASK_PER_MINUTE=20`, `message max_length=1000`, `current_path max_length=200`, `_MAX_TOOL_ROUNDS=3`. ✅
+- B.3 tool-arg bounds → `confirm_actions.py::_MAX_EXPIRY_PUSH_DAYS=3650` (abs-checked) + `_MAX_COOK` + `_coerce_signed_int`. ✅
+- B.4 current_path → `_safe_current_path` + request-model `max_length=200`. ✅
+
+**Files touched (docs only):** stamped the re-audit confirmation into the findings
+doc's Status line; moved FU-409 from `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md`
+(flipped to `[RESOLVED]` with the per-finding evidence trail).
+
+### Engineering-standards close-gate
+- No code changed — pure verification + ledger bookkeeping. No R-rule surface touched, no ADR.
+
+### Next up
+- Only *future* security item is A.6's shared rate-limit store, parked under Phase-4
+  horizontal scaling ([[FU-045]] Postgres, FU-405 Ops) — not an open assistant-security FU.
+
+---
+
+## 2026-07-13 (later 15) — FU-554: companion push payload `merchant`→`store` (Phase-E field rename)
+
+**Why:** FU-554 flagged a real bug in the sibling `dora-companion` repo: its push
+payload still used the pre-Phase-E field name `merchant`, but Dora's ingestion
+schema (`_ProductIn` in `submit_ingestion_batch.py:80`) renamed it to `store` and
+carries `extra="forbid"` — so every companion `POST /api/ingest` would 400 at the
+schema layer before reaching the store-mapping resolver.
+
+**What changed** (all in `dora-companion`, not this repo):
+- `companion_common/dora_ingest.py::build_payload` — product row now emits
+  `"store": normalise_merchant(offer.merchant_name)` instead of `"merchant"`.
+  `merchant_stockcode` left untouched — Dora's `_ProductIn` still expects that key.
+- Refreshed the stale module docstring (was "verbatim as the payload's `merchant`
+  field") to name the `store` field + the Phase-E rename.
+- `tests/test_dora_ingest_client.py:102` assertion updated to `p["store"]`.
+
+### Verification
+- `dora-companion/.venv/bin/pytest tests/test_dora_ingest_client.py -q` → **8 passed**.
+- The live `test_integration_dora_roundtrip.py` needs both services standing (a real
+  Dora) so it wasn't run here — logged to DORA_VERIFY under Operator.
+
+### Engineering-standards close-gate
+- **R-007 (scope):** one field rename + its docstring + the one assertion that
+  pinned the old name. No adjacent refactor.
+- No new ADR — a field-name drift bug from a rename window, not a recurring decision.
+
+### Next up
+- User: with both services up, push an offer from the companion and confirm Dora
+  accepts (no `400 unexpected key 'merchant'`); optionally re-run the roundtrip test.
+
+---
+
+## 2026-07-13 (later 14) — Import UX: unlinked ingredients rendered as blank pickers (raw_text dropped on load)
+
+**Why:** User pasted the taste.com.au2 massaman recipe (earlier unit's fix) and
+screenshotted the resulting recipe editor: 19 ingredient rows, almost all showing an
+empty "Stock item" dropdown with only a Qty + Unit — "i have no idea what these stock
+items were supposed to be." Only the two rows that fuzzy-matched a real stock item
+(Garlic, Jasmine Rice) showed a name. So the *parser* is fine (correct qty/unit, and
+`raw_text` like "1/3 cup (100g) massaman curry paste" was captured); the *editor* was
+hiding it.
+
+**Root cause** — `web_app/src/pages/RecipeDetailPage.vue::hydrateForm`. The importer
+sends `raw_text` for every ingredient (RecipesOverview `onRecipeImported`), the create
+endpoint stores it, and the read model (`models/recipe.ts` `RecipeIngredient.raw_text`)
+returns it. The editor template even renders it — line ~443 flips the picker label to
+"Free-text ingredient" and line ~492 shows the quoted `raw_text` under the picker when
+`ing.raw_text && !ing.stock_item_id`. But `hydrateForm`'s `source.ingredients.map(...)`
+built the form row from `stock_item_id / quantity / unit / notes / client_id /
+section / is_optional` and **omitted `raw_text`** — so `ing.raw_text` was always
+undefined on load and both the label and the caption never fired. The row collapsed to
+a nameless picker.
+
+**Fix** — one field added to the hydrate map: `raw_text: i.raw_text`. The form
+ingredient type (`IngredientForm = CreateRecipeIngredientCommand`) already carries
+`raw_text?: string | null`, and the save path sends `form.ingredients` wholesale, so it
+now round-trips (unlinked rows keep their text; linked rows keep theirs too, hidden by
+the `!ing.stock_item_id` gate). No template, model, or API change.
+
+### Verification
+- Static trace: confirmed the template already consumes `ing.raw_text` and the only gap
+  was hydrate. Type-safe (`string | null` → `raw_text?: string | null`).
+- `npx vue-tsc --noEmit`: no error in `src/pages/RecipeDetailPage.vue` (the only errors
+  are pre-existing env-level missing-dev-dep noise under `e2e/`, `test/`, `src-pwa/` —
+  @playwright/test, workbox, vitest — not from this change). **Browser confirm owed** →
+  DORA_VERIFY.
+- **Not run:** unit test — this is a template-data-flow fix; left as a browser check.
+
+### Engineering-standards close-gate
+- **R-007 (scope):** one-line data-flow fix, no refactor of the surrounding editor.
+- **R-003 (state ownership):** no domain logic moved; `raw_text` is server-owned text
+  the client merely displays.
+- No new ADR — a dropped-field bug, not a recurring decision.
+- Reported-defect rule: reproduced by inspection (the field was demonstrably omitted
+  from the map) and the fix is direct, so no `finding` FU; browser re-check in DORA_VERIFY.
+
+### Next up
+- User: reload the imported massaman recipe → each unlinked row now shows its original
+  text; link a couple and confirm the caption/label disappear for linked rows.
+
+---
+
+## 2026-07-13 (later 13) — Sign out moved into the Settings shell header
+
+**Why:** User recalled giving an instruction to put the Sign out button inline
+with the Settings/Admin buttons, on the right — and asked whether it had been
+skipped/undone. Investigation: it was **never built and never logged**. Git
+history of `SettingsShell.vue` shows sign-out was never in that header; the only
+sign-out lived as a red card at the bottom of Settings → Account. The ledgers had
+no FU for this. A DORA_VERIFY note (former line 1732) recorded the *opposite*
+decision ("no sign-out in the header — lives only on Settings → Account"), but
+that note is about the **app toolbar** (MainLayout header peer buttons), not the
+Settings shell **page** header — different surface. User confirmed: build it.
+
+### What changed
+- `web_app/src/pages/SettingsShell.vue` — header is now `display:flex;
+  justify-content:space-between`. Left = the admin Settings/Admin segmented
+  toggle (or the "Settings" `<h1>` for non-admins), unchanged. Right = a new
+  `BaseButton variant="danger-ghost"` "Sign out" wired to a local `onSignOut`
+  (`authStore.logoutAsync()` → `router.push('/login')`, `signingOut` loading
+  ref) — same flow the Account card used. `useAuthStore()` was already imported
+  (for `isAdmin`); now kept as `authStore` too.
+- `web_app/src/pages/settings/AccountSettings.vue` — removed the "Sign out"
+  `SettingsSection` + its divider (interpreting the user's word "move"), and the
+  now-dead `useRouter` import, `router`, `signingOut` ref, and `onSignOut`
+  function. `BaseButton` import stays (still used by other buttons on the page).
+- `DORA_VERIFY.md` — updated the stale app-toolbar note to say sign-out now lives
+  in the Settings shell header (not the Account page), and added a new
+  "Sign-out moved into the Settings shell header (2026-07-13)" checklist.
+- `CHANGELOG.md` — Changed bullet.
+
+**Verification:** `vue-tsc` reports no errors on either changed file (only
+pre-existing missing-dep noise from test tooling); `eslint` clean on both.
+Browser pass owed → in DORA_VERIFY. Single sign-out entry point in the settings
+surface now; app toolbar still carries none.
+
+**Engineering standards:** no rule violations — reused `BaseButton` +
+`logoutAsync` (no new pattern), single sign-out source of truth. No new ADR.
+
+**Next up:** unrelated — resume the paste-importer work (below) or user's pick.
+
+---
+
+## 2026-07-13 (later 12) — Paste importer: taste.com.au video-carousel + Coles price-widget noise
+
+**Why:** User dropped `tests/fixtures/recipe_paste_corpus/taste.com.au2.txt` (Thai
+massaman beef curry) and reported the current importer "failed poorly" on a
+copy-paste. Ran it through `parse_recipe_from_text`: name/servings/prep/cook all
+correct, but ingredients + steps were polluted with page chrome the noise filters
+didn't cover. Fixture1 (shepherd's pie) had the same leaks, just milder — it has no
+post-method video carousel, so the loose corpus fences never caught it.
+
+### Root cause (all in `dora_api/features/recipes/_parse_recipe_from_text.py`)
+- **Ingredients:** the ingredient block runs anchor→first-stop, which on taste
+  includes the Coles price widget. `Estimate based on regular price…` (72 chars) and
+  `Fulfilled by coles-logo` (23 chars) both pass `_looks_like_ingredient` (long-ish,
+  no terminal period) and leaked in. (`$19 per serve` / `i` / `Allergens` were already
+  rejected by length; `Recipe may contain:` / `Disclaimer:` by their terminal period.)
+- **Steps:** method block runs Method-anchor→first-stop = `Tried this recipe?`. Between
+  the 3 real steps and that stop sat: `Show ingredient quantity` (the Method widget
+  label — already in `_INGREDIENT_NOISE_RE` but not the step filter), a `01:01` video
+  timecode (which `_STEP_NUMBER_STRIP_RE` mangled to a bare `01` step), 11× `Next video
+  thumbnail`, the video title `How to prepare citrus`, its blurb, and `more`. Result:
+  3 real + 16 junk = 19 steps. Fixture1 instead leaked the per-step photo captions
+  (`Shephards Pie-Step N`).
+
+### Fix (noise-filter additions, no structural change)
+- `_INGREDIENT_NOISE_RE` += `estimate\s+based\s+on`, `fulfilled\s+by`.
+- `_STEP_NOISE_RE` += `show\s+ingredient\s+quantity`, `next\s+video\s+thumbnail`,
+  and a photo-caption alt `.+[-\s]step\s?\d+\s*$` (catches `Shephards Pie-Step 1`,
+  distinct from the existing bare-`Step 1` marker alt).
+- New `_STEPS_TRAILING_JUNK_RE` (`\d{1,2}:\d{2}` timecode | `next video thumbnail` |
+  bare `more`) wired as an extra **stop** condition in `_find_steps_block`. Kept
+  separate from step-noise because these END the block — the video title that follows
+  the carousel has no marker of its own, so skip-in-place would still leak it. A bare
+  timecode is a very safe carousel signal (no real step is `01:01`).
+
+### Result
+- fixture1: 14 ingredients (was 16), 4 steps (was 9). fixture2: 19 ingredients (was
+  21), 3 steps (was 19). Both now clean.
+- Added `taste.com.au2` entry to `_expectations.py` (loose fences: massaman name,
+  serves 4, prep 10, cook 100 = 1h40m, ≥19 ingredients, ≥3 steps, first ingredient
+  "vegetable oil"). Full corpus suite: **21 passed** (`.venv/bin/python -m pytest
+  tests/test_parse_recipe_from_text.py`).
+
+### Engineering-standards close-gate
+- **R-007 (scope):** noise-regex additions + one new stop regex only; no rework of the
+  anchor/grammar machinery even though taste's explicit `Step N` markers would in
+  principle allow a stricter "steps = only prose-after-a-marker" model. The filter
+  approach is the established pattern here (every other site's chrome is handled the
+  same way) so this is consistent, not a shortcut.
+- No new ADR: more corpus coverage for an existing pattern, not a recurring decision.
+- Reported-defect rule: this DID reproduce in a static read (parser output inspected
+  directly) and the fix is verified by the corpus test — not a "didn't reproduce"
+  finding, so no `finding` FU. Optional browser re-paste to eyeball the SPA preview
+  added to DORA_VERIFY under Cookbook.
+
+### Next up
+- Nothing blocking. Standing carry-overs unchanged (companion FU-554; onboarding walk).
+
+---
+
+## 2026-07-13 — C-10.5 companion consumer: `check_link_status` client + search-card decoration
+
+**Why:** Follow-through on yesterday's C-10.5 build. User: "add the ability for the companion app to see what is already in dora using dora's api. hopefully this can utilise existing (or previously existing from prior commits) code logic." The Dora endpoint had shipped; the caller side in `dora-companion` had not. User confirmed via question: keep the Dora endpoint, build the companion caller.
+
+### Shipped (all in `/home/benny/Repos/dora-companion`)
+- **New client** `companion_common/dora_ingest.py::check_link_status(lookups, config, session=?)` — POSTs `{items: [...]}` to `<base_url>/api/ingest/link-status`, returns `dict[str, LinkStatusItem]` keyed by the caller's `ref`. Same bearer as `push_offers` (one `IngestionSource` covers both lanes — nothing new to configure). **Best-effort:** network / 4xx / 5xx errors return `{}` with a warning log — this is a *decoration* call, not a correctness gate; if Dora is unreachable the search still renders, just without the badge. Empty-input short-circuit so a search that returned zero offers doesn't waste a round-trip. New `LinkStatusItem` dataclass with `is_in_dora` / `is_linked` helpers.
+- **Renamed** `_normalise_merchant` → `normalise_merchant` (was private; now shared with the search-side lookup builder — same normalisation must apply to both lanes so Dora's per-source store-mapping table sees consistent identities).
+- **Wired into search** `merchant_api/features/search_for_product.py::_stamp_link_status(offers)` — after scraping + image hydration, builds a batch of `{ref: "o<i>", store, merchant_stockcode, name}` and stamps `linked_product_id` / `linked_stock_item_id` / `linked_stock_item_name` onto each `ScrapedProductOffer`. Skipped cleanly when `DORA_INGEST_URL`/`DORA_INGEST_KEY` unset (same "no Dora → offers keep their default nulls" policy the push path uses).
+- **Domain entity** `merchant_api/domain/entities/scraped_product_offer.py::ScrapedProductOffer` gained three optional fields (`linked_product_id`, `linked_stock_item_id`, `linked_stock_item_name`) defaulted to None.
+- **Frontend model** `web_app/src/models/scrapedProductOffer.ts` — added the three fields, **removed the two dead `is_saved` / `is_saved_product_active` fields** (grepped: nothing consumed them; leftover from the pre-divorce Dora copy).
+- **Frontend UI** `web_app/src/components/ProductSearchCard.vue` — new two-state badge under the product name:
+  - Green "Linked in Dora: {stock item name}" (product bound to a stock item)
+  - Muted "Already in Dora (not linked to a stock item)" (product exists in Dora but no stock-item bind)
+  - Absent when Dora doesn't hold the product OR the lookup couldn't reach Dora.
+  Uses new `ICONS.cloud_check` (added to `src/style/icons.ts`) + `ICONS.link`.
+- **Tests** `tests/test_dora_ingest_client.py` — 3 new unit tests: (a) posts the batch + bearer header + returns ref-keyed map; (b) empty-input short-circuits (no HTTP); (c) network error returns `{}` (does not raise). Full companion unit suite green: **8 passed** in 0.13s.
+
+### Verification
+- `python -c "from merchant_api.features import search_for_product"` clean (module imports + registers).
+- Companion unit tests: 8/8 green.
+- **Not run:** the wire-level round-trip against a live Dora — needs both services up on the same host with `DORA_INGEST_URL` + `DORA_INGEST_KEY` set. Existing `tests/test_integration_dora_roundtrip.py` is the place to extend when the user next does a live-service walkthrough (already gated behind that setup — same as the push round-trip test).
+- **Web-app typecheck:** `npx vue-tsc --noEmit` in `dora-companion/web_app` errored on missing `@types/node` / `quasar` / `vite/client` type packages (env-level dep install missing in this shell, not a code issue). The type change is minimal — three nullable string fields on an existing interface, template consumes them with `v-if` guards.
+
+### Finding surfaced (not fixed)
+- `companion_common/dora_ingest.py::build_payload` pushes the products' external store name as `"merchant": <name>` — but **Dora's `_ProductIn` renamed that field to `"store"` at Phase E** (with `extra="forbid"`, so a `merchant` key gets 400'd). The companion's push path is therefore broken against current Dora. My link-status client uses `"store"` (correct). Logging this separately as an FU rather than in-line — it's out of scope for this task and touches every push consumer + the roundtrip test.
+
+### Ledger updates
+- `CHANGELOG.md`: extended the C-10.5 entry with the companion consumer note.
+- `DORA_FOLLOWUPS.md`: new FU-554 for the companion `merchant`/`store` mismatch (see below).
+- `DORA_VERIFY.md`: no new items — the badge is visible in the companion search results once both services are running; the user's first live scrape with a Dora product mapped will exercise it end-to-end.
+
+### Engineering-standards close-gate
+- **R-003 (state ownership)** — Dora is the sole owner of "is this product linked?"; the companion asks and renders. No cached mirror on the companion side.
+- **R-005 (portable / distribution posture)** — companion → Dora call goes through the same bearer lane that already exists; no new credential; no invisibility-rule violations (Dora response says nothing about "companion").
+- **R-007 (scope)** — one client function + one entity-field add + one badge; no refactor of the surrounding push machinery even though it turned out to be broken (see FU-554).
+- **R-008 (no dead code)** — dropped `is_saved` / `is_saved_product_active` in the same pass (verified unused).
+
+### Next up
+- User: run the companion + Dora together, do a live search that includes at least one product Dora already holds (via a prior push or manual add), confirm the badge appears in the expected two states.
+- FU-554 (companion push field name mismatch) — separate work-unit; the push path is broken until fixed.
+- Standing carry-overs: `DORA_VERIFY.md § Onboarding story pass 2026-07-12` walk.
+
+---
+
 ## 2026-07-13 (later 11) — FU-553 investigated + root-caused, deliberately NOT force-fixed (stays open)
 
 **Why:** User: "do 553" (the downgrade-only SQLite CHECK-drop issue spun off from

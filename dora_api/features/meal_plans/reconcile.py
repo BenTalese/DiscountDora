@@ -412,16 +412,20 @@ class ReconcileVerbRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
-def _id_bytes(value) -> bytes:
-    """Normalise a UUID (in any shape) to `bytes` for raw-`text()` binds
-    against SQLite's BINARY(16) UUIDType columns. See `recipes/pool.py:
-    bump_pool` for the same normalisation applied there; both live in
-    raw-SQL corners of the reconcile feature."""
+def _id_bytes(value) -> bytes | str:
+    """Normalise a UUID (in any shape) to the raw-`text()` bind form the
+    active backend needs: `bytes` for SQLite's BINARY(16) UUIDType
+    columns, the canonical string for Postgres native `uuid` (which
+    rejects a `bytea` bind — `operator does not exist: uuid = bytea`).
+    See `recipes/pool.py:bump_pool` for the same normalisation; both live
+    in raw-SQL corners of the reconcile feature."""
     if isinstance(value, bytes):
-        return value
-    if isinstance(value, UUID):
-        return value.bytes
-    return UUID(str(value)).bytes
+        _Uuid = UUID(bytes=value)
+    elif isinstance(value, UUID):
+        _Uuid = value
+    else:
+        _Uuid = UUID(str(value))
+    return _Uuid.bytes if db.engine.dialect.name == "sqlite" else str(_Uuid)
 
 
 def _latest_receipt(entry_id) -> Optional[dict]:

@@ -9,6 +9,156 @@ next.
 
 ---
 
+## 2026-07-14 (later 17) — FU-520: full Postgres test-isolation rewrite + two SQLite-vs-Postgres divergence bug fixes + companion scraper fixtures
+
+**Why:** FU-520 item 1 (Postgres-backed test runs) was parked as "CI-gated". But
+the *point* of running the suite on Postgres is to catch the divergence class that
+SQLite silently masks — and that's actionable now, independent of CI. User asked
+for the **full PG rewrite** and granted companion-repo access; Postgres is already
+up on `localhost:5432` (dora/dora). Ran the whole backend suite on real Postgres,
+fixed every failure at its source, and confirmed no SQLite regression.
+
+**What shipped:**
+
+**1. DB-backend selector — `tests/db_backend.py` (new).** `configure_db_env()` +
+`IS_POSTGRES` flag. Default stays **SQLite** (zero-dep fast loop); `DORA_TEST_DB=postgres`
+runs the *same* suite against a **dedicated `dora_test` database** (never the dev
+`dora` DB — the suite is destructive). Full URL override via `DORA_TEST_PG_URL`.
+Both conftests (`tests/conftest.py` unit layer, `tests/e2e/dora_api/conftest.py`
+e2e layer) now call it before importing `dora_api.app` so the URL resolves once at
+import time.
+
+**2. Postgres per-test isolation — `tests/e2e/dora_api/conftest.py`.** SQLite
+restores by copying the seeded `.db` file; Postgres can't. Added `_pg_capture_snapshot()`
+(capture every seeded row once, after seed) + `_pg_restore_snapshot()` (per-test:
+DELETE-all in reverse-FK order + bulk reinsert). Whole-DB restore semantics match
+the file copy — including the reconcile sweep's out-of-session `db.engine.begin()`
+writes. ~30-40 ms/test (~6x cheaper than TRUNCATE across 59 tables).
+
+**3. Two systemic SQLite-vs-Postgres divergence bugs — fixed at source** (these are
+real runtime bugs on a Postgres deployment, not just test issues):
+- **Raw-`text()` UUID bind is dialect-dependent.** `UUIDType` stores BINARY(16) on
+  SQLite but native `uuid` on Postgres. A raw bind of `bytes` → Postgres 500
+  (`operator does not exist: uuid = bytea`); a raw bind of the str form → SQLite
+  silently matches **zero rows**. Fixed the three hand-rolled sites to normalise to
+  a `UUID` then bind `bytes` on SQLite / `str` on Postgres: `recipes/pool.py:bump_pool`,
+  `meal_plans/reconcile.py:_id_bytes`, and test helper `tests/support.py:uuid_bind`
+  (drives off `IS_POSTGRES`). The old `uuid_bind` comment claiming "on Postgres both
+  forms are legal" was FALSE — corrected. Preferred long-term fix is ORM Core
+  `select()` (handles both) — logged in memory.
+- **Over-length string writes.** A 250+ char garbage `alert_id` written to
+  `AlertInteraction.alert_key String(255)` passes silently on SQLite but raises
+  `StringDataRightTruncation` (500) on Postgres. `alerts/interact_with_alert.py`
+  now length-guards at the boundary (`_ALERT_KEY_MAX_LENGTH = 255`): an over-length
+  key names no real alert, so `_get_or_create` returns None and the interaction is
+  an idempotent no-op (same as `clear_suppression` on an unknown key).
+
+**4. Opportunistic frontend specs** (FU-520 item 3 leftovers):
+- `web_app/test/unit/shoppingListRailItem.spec.ts` (9) — one shopping-rail row:
+  display name + ticked caption, next-up badge, status-icon colour, done state
+  (`dora-text-muted` + `sl-rail-item-done`), select/copy(unticked|all)/delete emits,
+  disabled copy-when-all-ticked. Real Quasar chrome; `BaseButton`/`QMenu` slot-stubbed
+  so kebab items render inline.
+- `web_app/test/unit/useMealPlanExport.spec.ts` (3) — the print-view opener: URL
+  build, plan-id encoding, base-URL-captured-once. `resolveBaseURL` mocked at the
+  module boundary, `window.open` spied.
+
+**5. Companion scraper fixtures — `dora-companion/tests/test_provider_parsers.py`
+(new, 8)** (FU-520 item 2, [[FU-161]]). Coles: `ColesProvider._translate_offer` over
+a saved Next.js JSON product (brand-join name, image-uri prefix, price maths, size
+split, unavailable→no-pricing). Aldi: real BeautifulSoup selectors (`box--wrapper`
+/`box--amount`/…) mirroring `_update_category_cache` per tile, then `_translate_offer`
+(name rstrip, `"$3."`+`"30"`→3.30, missing-span default). `__new__` skips Aldi's
+heavy category-seed `__init__`.
+
+**Verification:**
+- Backend on **Postgres**: 37 failures → **0**; 1490 passed.
+- Backend on **SQLite** (no regression): 1490 passed.
+- Invocation: `DORA_TEST_DB=postgres DORA_ENV=test .venv/bin/python -m pytest --no-cov -q`.
+- Frontend suite: **372 passed** (adds the 12 new tests over the prior 360).
+- Companion: 8 new parser tests pass (4 pre-existing errors in
+  `test_integration_dora_roundtrip.py` are an unrelated missing `flask_migrate` — it
+  imports the real Dora app).
+
+**Standards close-gate:** the divergence fixes *are* R-005 (portable data access /
+distribution posture — Postgres is the standard datastore target, SQLite still
+supported) — the whole point was to stop digging a SQLite-only hole. The preferred
+ORM-`select()` path over hand-rolled `text()` aligns with R-019 (no magic / follow
+the established pattern). No new rule warranted; the dialect-aware-bind lesson is
+recorded in the `sqlite-uuid-text-binding` memory (which existing hand-rolled sites
+must consult). CI stays disabled per policy — not touched.
+
+**CHANGELOG:** the two divergence fixes are user-visible on a Postgres deployment
+(alert-interaction 500 on garbage ids; recipe-pool / meal-plan-reconcile UUID binds)
+— added a `Fixed` entry.
+
+**FU-520 status:** item 1 (Postgres test runs) now **effectively done** for the
+*run-the-suite-on-PG* half — the suite runs green on Postgres via the selector; only
+the **CI wiring** remains, still gated on [[FU-405]] (CI deliberately disabled). Item
+2 (scraper fixtures) **done** (companion). Item 3 leftovers: shopping-rail +
+`useMealPlanExport` **done**; `useOfflineQueue` stays opportunistic.
+
+### Next up
+- None owed. Remaining FU-520 tail is the CI wiring (blocked on FU-405) +
+  `useOfflineQueue` spec (opportunistic).
+
+---
+
+## 2026-07-14 (later 16) — FU-520: authStore spec (opportunistic frontend coverage)
+
+**Why:** FU-520's three remnants are (1) Postgres CI — gated on FU-405 which is
+deliberately disabled; (2) `merchant_api` scraper fixture tests — live in the
+sibling `dora-companion` repo; (3) opportunistic component/composable specs.
+Only #3 is actionable in this repo, and the 2026-07-12 update flagged **`authStore`
+as "the strongest remaining single-store candidate"**. Knocked it out.
+
+**What shipped:** `web_app/test/unit/authStore.spec.ts` (17 tests) covering the
+store's real behavioural contracts:
+- bootstrap probe: existing-session /me load, fresh-install `bootstrapRequired`
+  skip (asserts /me is NOT probed), **shared in-flight promise** (concurrent
+  App.vue + router-guard callers → one probe), post-boot short-circuit.
+- **boot failure + parked-promise retry** — network error → connection message +
+  still-parked; `retryBootstrap()` resumes the *same* while-loop to success;
+  non-network error → generic startup message. Uses the real `NormalisedApiError`
+  so the `isNetworkError` branch runs for real.
+- credential entry points (login/register set user; first-admin setup clears
+  `bootstrapRequired`).
+- **FU-355 shared-device hygiene** — logout + silent-401 both clear user AND call
+  `clearAllListState`; logout still clears local state when the server call
+  rejects (finally block). The 401 handler is captured via a spied
+  `setUnauthorizedHandler` and driven directly.
+- avatar cache-bust (`updateMe` bumps `imageVersion` only on `image`/`clear_image`),
+  per-user version counter, refresh re-probe, changePassword/requestEmailChange
+  call-through without optimistic email mutation.
+
+**Pattern notes:** api service + `useListState` mocked at the module boundary;
+`axiosHttpClient` partially mocked via `vi.importActual` to keep the real
+`NormalisedApiError` while spying `setUnauthorizedHandler` (the store registers
+its handler on creation — spying it is how you simulate a 401 without a real
+request). Lint fix: use `typeof AxiosHttpClientModule` (a top-level `import type`)
+instead of inline `import()` type — repo bans inline import() types
+(`consistent-type-imports`).
+
+**Verification:** new spec green (17/17); **full frontend suite green — 360 tests /
+27 files** (~3 s); eslint clean on the new file. No product/code change (test-only)
+→ no CHANGELOG entry.
+
+**Standards close-gate:** test-only addition, no rule violations introduced. The
+spec actually *pins* R-003 (server-owned state) at the `bootstrapRequired` /
+session-truth boundary. No new ADR warranted.
+
+**FU-520 status:** stays **OPEN** — authStore (the flagged strongest candidate) is
+now done, but the two gated remnants remain: Postgres CI (blocked on FU-405) and
+scraper fixtures (cross-repo, dora-companion). Item 3's leftover surfaces (shopping
+rail, `useMealPlanExport`, `useOfflineQueue`) stay opportunistic per-touch. FU
+entry updated with a 2026-07-14 line.
+
+### Next up
+- None owed. Remaining FU-520 work is CI-policy-gated or cross-repo; further
+  frontend specs are opportunistic per surface.
+
+---
+
 ## 2026-07-14 (later 15) — FU-393: data-model sanity sweep (P5-08) run
 
 **Why:** the P5-08 comprehensive data-model sweep (nullability, FK-consistency,

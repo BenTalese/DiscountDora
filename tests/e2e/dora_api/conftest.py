@@ -1,31 +1,67 @@
 import io
-import os
 import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
-# pin the e2e suite to a SQLite temp database. Postgres is the
-# standard datastore for dev + prod (Decision 5), but tests want zero
-# external dependencies and per-process isolation. `DORA_DB_PATH` is the
-# friendly SQLite shortcut — plain filesystem path; the config layer
-# builds the URL. Set before importing `dora_api.app` so the env is in
-# place when `DoraConfig.get_db_connection_string()` runs at import.
+from tests.db_backend import IS_POSTGRES, configure_db_env
+
+# Pick the DB backend and pin the env BEFORE importing `dora_api.app` so
+# `DoraConfig.get_db_connection_string()` resolves it at import. SQLite (a temp
+# file) is the default — zero external deps + per-process isolation; set
+# `DORA_TEST_DB=postgres` to run the same suite against the dedicated
+# `dora_test` Postgres (FU-520 item 1) to catch SQLite-vs-Postgres divergence.
 #
-# NOTE — always `os.environ[...] = ...` (not setdefault) so a `.env`
-# `DORA_DB_PATH=./data/dora.dev.db` doesn't leak into the test suite
-# and clobber the developer's actual dev DB. Confirmed hazard as of
-# 2026-07-09.
+# NOTE (SQLite branch) — `configure_db_env()` hard-sets `DORA_DB_PATH` (not
+# setdefault) so a `.env` `DORA_DB_PATH=./data/dora.dev.db` can't leak into the
+# suite and clobber the developer's actual dev DB. Confirmed hazard 2026-07-09.
+configure_db_env()
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 (_REPO_ROOT / "data").mkdir(parents=True, exist_ok=True)
 _TEST_DB_PATH = _REPO_ROOT / "data" / "dora.test.db"
 _SNAPSHOT_DB_PATH = _REPO_ROOT / "data" / "dora.test.snapshot.db"
-os.environ["DORA_DB_PATH"] = str(_TEST_DB_PATH)
 
 import pytest
 import requests
+from sqlalchemy import select
 
 from dora_api.app import app, db
 from dora_api.startup import startup
+
+# ── Postgres per-test isolation snapshot ──────────────────────────────
+# SQLite restores by copying the seeded .db file; Postgres can't. Instead we
+# capture every seeded row once (after the seed) and restore per-test by
+# DELETE-all (reverse FK order) + bulk reinsert. This restores the WHOLE DB
+# regardless of which connection wrote — so, like the file copy, it also
+# captures the reconcile sweep's out-of-session `db.engine.begin()` writes.
+# DELETE+reinsert (~30-40 ms) is ~6x cheaper than TRUNCATE on 59 tables.
+_PG_SNAPSHOT: dict[str, list[dict]] = {}
+
+
+def _pg_capture_snapshot() -> None:
+    with app.app_context():
+        snapshot = {}
+        with db.engine.connect() as conn:
+            for table in db.metadata.sorted_tables:
+                snapshot[table.name] = [
+                    dict(row) for row in conn.execute(select(table)).mappings().all()
+                ]
+    _PG_SNAPSHOT.clear()
+    _PG_SNAPSHOT.update(snapshot)
+
+
+def _pg_restore_snapshot() -> None:
+    with app.app_context():
+        db.session.rollback()
+        db.session.remove()
+        tables = list(db.metadata.sorted_tables)
+        with db.engine.begin() as conn:
+            for table in reversed(tables):  # children before parents (FK-safe)
+                conn.execute(table.delete())
+            for table in tables:
+                rows = _PG_SNAPSHOT.get(table.name)
+                if rows:
+                    conn.execute(table.insert(), rows)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -40,15 +76,19 @@ def api():
     # `app.test_client()`. No socket, no network stack.
     startup(is_test_env=True)
 
-    # FU-169 Phase 2 — snapshot the freshly seeded SQLite DB so the
-    # per-test rollback fixture below can restore it byte-for-byte in
-    # ~milliseconds. Closing the engine pool first ensures every buffered
-    # page is flushed to disk before the copy. `db.engine` is a Flask-
-    # SQLAlchemy property tied to `current_app`, so we need the app
-    # context around the dispose call.
-    with app.app_context():
-        db.engine.dispose()
-    shutil.copyfile(_TEST_DB_PATH, _SNAPSHOT_DB_PATH)
+    # FU-169 Phase 2 — snapshot the freshly seeded DB so the per-test rollback
+    # fixture below can restore the baseline cheaply.
+    if IS_POSTGRES:
+        # FU-520 — capture the seeded rows in memory (no file to copy).
+        _pg_capture_snapshot()
+    else:
+        # SQLite: snapshot the .db file. Closing the engine pool first ensures
+        # every buffered page is flushed to disk before the copy. `db.engine`
+        # is a Flask-SQLAlchemy property tied to `current_app`, so we need the
+        # app context around the dispose call.
+        with app.app_context():
+            db.engine.dispose()
+        shutil.copyfile(_TEST_DB_PATH, _SNAPSHOT_DB_PATH)
 
     # Authenticated client backing the module-level `requests.*` helpers.
     # The test client keeps its own cookie jar, so every subsequent call
@@ -107,9 +147,13 @@ def _db_rollback():
          restored file.
 
     Cost: SQLite file copy is ~1-3 ms for the seed DB. Cheap enough that
-    even 900+ tests only add a few seconds.
+    even 900+ tests only add a few seconds. The Postgres branch (FU-520) is
+    DELETE-all + reinsert (~30-40 ms) — same whole-DB restore semantics.
     """
     yield
+    if IS_POSTGRES:
+        _pg_restore_snapshot()
+        return
     with app.app_context():
         db.session.rollback()
         db.session.remove()

@@ -55,22 +55,27 @@ def bump_pool(recipe_id: UUID | bytes | str, delta: int,
     a valid no-op that returns the current value.
 
     - `recipe_id` may be a `UUID`, a `str`, or the raw `bytes` shape
-      SQLite stores for `UUIDType` columns. On SQLite the column is
-      BINARY(16), so raw-text() binds have to be `bytes` (a str form
-      won't match); on Postgres native `uuid` accepts either. We forward
-      `bytes` verbatim, take `UUID.bytes` off a UUID object, and parse
-      the string form into `UUID(...).bytes` — one path that binds
-      correctly on both backends.
+      SQLite stores for `UUIDType` columns. The bind shape is
+      backend-dependent: SQLite stores the column as BINARY(16) so a
+      raw-text() bind must be `bytes` (a str form won't match); Postgres
+      stores it as native `uuid`, which rejects a `bytea` bind
+      (`operator does not exist: uuid = bytea`) but accepts the canonical
+      string form. We normalise to a `UUID` first, then bind `.bytes` on
+      SQLite and `str(...)` on Postgres.
     - `connection` is a SQLAlchemy `Connection` object; when omitted the
       update runs on `db.session` and is committed by the caller's
       `save_changes()`.
     """
     if isinstance(recipe_id, bytes):
-        _Bind: bytes = recipe_id
+        _Uuid = UUID(bytes=recipe_id)
     elif isinstance(recipe_id, UUID):
-        _Bind = recipe_id.bytes
+        _Uuid = recipe_id
     else:
-        _Bind = UUID(str(recipe_id)).bytes
+        _Uuid = UUID(str(recipe_id))
+    executor = connection if connection is not None else db.session
+    _DialectName = connection.dialect.name if connection is not None \
+        else db.engine.dialect.name
+    _Bind: bytes | str = _Uuid.bytes if _DialectName == "sqlite" else str(_Uuid)
     stmt = text(
         'UPDATE "Recipe" '
         "SET available_meals = CASE "
@@ -81,6 +86,5 @@ def bump_pool(recipe_id: UUID | bytes | str, delta: int,
         "RETURNING available_meals"
     )
     params = {"d": delta, "rid": _Bind}
-    executor = connection if connection is not None else db.session
     result = executor.execute(stmt, params).scalar_one()
     return int(result)

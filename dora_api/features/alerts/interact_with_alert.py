@@ -48,6 +48,15 @@ class SnoozeRequest(BaseModel):
     days: int = Field(default=7, ge=1, le=365)
 
 
+# Matches the `AlertInteraction.alert_key` column width (String(255) in
+# table_mappings.py). A real key is `<scope>:<uuid>:<kind>` — comfortably
+# under this — so anything longer names no alert. SQLite silently accepts an
+# over-length write; Postgres raises `StringDataRightTruncation` (a 500). We
+# reject it at the boundary instead: a non-existent alert is an idempotent
+# no-op, same as `clear_suppression` on an unknown key.
+_ALERT_KEY_MAX_LENGTH = 255
+
+
 class AlertInteractionHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
@@ -58,7 +67,9 @@ class AlertInteractionHandler:
             & EntityField(AlertInteraction, AlertInteraction.Fields.ALERT_KEY).eq(alert_key)
         )
 
-    def _get_or_create(self, user_id: UUID, alert_key: str) -> AlertInteraction:
+    def _get_or_create(self, user_id: UUID, alert_key: str) -> AlertInteraction | None:
+        if len(alert_key) > _ALERT_KEY_MAX_LENGTH:
+            return None
         existing = self._find(user_id, alert_key)
         if existing is not None:
             return existing
@@ -72,17 +83,23 @@ class AlertInteractionHandler:
 
     def set_read(self, user_id: UUID, alert_key: str, read: bool) -> None:
         interaction = self._get_or_create(user_id, alert_key)
+        if interaction is None:
+            return
         interaction.read_at = datetime.now(timezone.utc) if read else None
         self.repository.save_changes()
 
     def snooze(self, user_id: UUID, alert_key: str, days: int) -> None:
         interaction = self._get_or_create(user_id, alert_key)
+        if interaction is None:
+            return
         interaction.snoozed_until = datetime.now(timezone.utc) + timedelta(days=days)
         interaction.dismissed_at = None
         self.repository.save_changes()
 
     def dismiss(self, user_id: UUID, alert_key: str) -> None:
         interaction = self._get_or_create(user_id, alert_key)
+        if interaction is None:
+            return
         interaction.dismissed_at = datetime.now(timezone.utc)
         self.repository.save_changes()
 
@@ -99,7 +116,7 @@ class AlertInteractionHandler:
         changed = False
         for alert in alerts.items:
             interaction = self._get_or_create(user_id, alert.alert_id)
-            if interaction.read_at is None:
+            if interaction is not None and interaction.read_at is None:
                 interaction.read_at = datetime.now(timezone.utc)
                 changed = True
         if changed:

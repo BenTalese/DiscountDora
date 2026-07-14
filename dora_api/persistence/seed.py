@@ -4,40 +4,28 @@ from dora_api.app import db
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.store import Store
-from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
-from dora_api.domain.entities.product_offer import ProductOffer
-from dora_api.domain.entities.category import Category
-from dora_api.domain.entities.cuisine import Cuisine
-from dora_api.domain.entities.dietary_tag import DietaryTag
-from dora_api.domain.entities.meal_slot import MealSlot
-from dora_api.domain.entities.tool import Tool
-from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
-from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (
-    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
-    ShoppingList, ShoppingListLine)
+    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING, ShoppingList)
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine)
 from dora_api.domain.entities.stock_group import StockGroup
-from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.stock_item_expiry_event import (
     EXPIRY_EVENT_PUSHED, EXPIRY_EVENT_SET, StockItemExpiryEvent,
 )
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
-from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
     StockLocation)
 from dora_api.domain.entities.user import User
 from dora_api.infrastructure.auth_helpers import hash_password
+from dora_api.persistence.seed_builders import SeedBuilders
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-def seed_dev_data():
+def seed_dev_data(bulk_stock_items: int = 0):
     """Populate a rich dev dataset that exercises every screen.
 
     Covers: multiple stores and products (with current + historic offers
@@ -46,6 +34,15 @@ def seed_dev_data():
     open markers, substitutes, level-change history, recipes (cookable and
     not) across collections, meals, a full week's meal plan, primary /
     in-progress / archived shopping lists with selected offers, and templates.
+
+    ``bulk_stock_items`` (FU-388) appends that many extra deterministic
+    "load" stock items — plus a proportional set of products/offers,
+    level-change + price history, recipes, and one large shopping list — so
+    an interactive dev session runs against a realistic pantry and N+1s /
+    slow queries surface naturally. Defaults to 0 (curated set only); the
+    dev boot passes ~500 and the e2e suite passes 0 (see startup.init_db).
+    The load reuses the same builder closures as the curated data, so the
+    two never drift.
     """
     repo = SqlAlchemyRepository()
     now = datetime.now(UTC)
@@ -56,6 +53,19 @@ def seed_dev_data():
     # insert with a null FK. The explicit save_changes() calls below flush with
     # every relationship resolved. Restored before the final commit.
     db.session.autoflush = False
+
+    # FU-556 — shared row builders live in seed_builders.SeedBuilders. Bind the
+    # methods to the local names the dataset below already uses, so the dataset
+    # + call sites (incl. the FU-388 bulk block) stay unchanged; only the
+    # builder *bodies* are now shared with seed_showcase.
+    builders = SeedBuilders(repo, now)
+    make_product = builders.make_product
+    make_item = builders.make_item
+    level_change = builders.level_change
+    price_obs = builders.price_obs
+    ingredient = builders.ingredient
+    make_recipe = builders.make_recipe
+    line = builders.make_line
 
     # ---------------- STORES (dev fixtures only) ---------------- #
     # production ships zero pre-seeded stores; these exist only
@@ -68,38 +78,6 @@ def seed_dev_data():
         repo.add(s)
 
     # ---------------- PRODUCTS ---------------- #
-    def make_product(*, store, name, brand, size, size_unit, size_value,
-                     stockcode, price_now, price_was, history):
-        """history: list of (days_ago, price_now, price_was)."""
-        current = ProductOffer(offered_on=now, price_now=price_now, price_was=price_was)
-        repo.add(current)
-        historic = []
-        for days_ago, h_now, h_was in history:
-            offer = ProductHistoricOffer(
-                offered_on=now - timedelta(days=days_ago),
-                price_now=h_now,
-                price_was=h_was,
-            )
-            repo.add(offer)
-            historic.append(offer)
-        product = Product(
-            brand=brand,
-            current_offer=current,
-            historic_offers=historic,
-            image=None,
-            is_active=True,
-            is_available=True,
-            store=store,
-            merchant_stockcode=stockcode,
-            name=name,
-            size=size,
-            size_unit=size_unit,
-            size_value=size_value,
-            web_url=f"https://example.com/p/{stockcode}",
-        )
-        repo.add(product)
-        return product
-
     milk_woolies = make_product(
         store=woolworths, name="Woolworths Full Cream Milk 2L", brand="Woolworths",
         size="2L", size_unit="L", size_value=2.0, stockcode="W-MILK-2L",
@@ -203,24 +181,6 @@ def seed_dev_data():
         repo.add(grp)
 
     # ---------------- STOCK ITEMS ---------------- #
-    def make_item(*, name, group, level, location, **kw):
-        item = StockItem(
-            name=name,
-            notes=kw.get("notes"),
-            stock_group=group,
-            stock_level_last_updated=now - timedelta(days=kw.get("updated_days_ago", 0)),
-            stock_level=level,
-            stock_location=location,
-            stocktake_alerts_are_enabled=kw.get("stocktake_alerts", False),
-            expiry_date=kw.get("expiry"),
-            is_flagged=kw.get("flagged", False),
-            is_open=kw.get("is_open", False),
-            opened_on=kw.get("opened_on"),
-            products=kw.get("products", []),
-        )
-        repo.add(item)
-        return item
-
     # Stocktake demo — a handful of alerts-enabled items are seeded with
     # a backdated `stock_level_last_updated` so the post-rework overdue
     # baseline (COALESCE(last_checked_at, stock_level_last_updated)) lands
@@ -305,14 +265,6 @@ def seed_dev_data():
     db.session.execute(assoc.insert(), rows)
 
     # ---------------- STOCK-LEVEL HISTORY ---------------- #
-    def level_change(item, level, days_ago):
-        repo.add(StockLevelChange(
-            stock_item_id=item.id,
-            stock_level_id=level.id,
-            stock_level_name=level.name,
-            changed_at=now - timedelta(days=days_ago),
-        ))
-
     # Demo history exercising every 3-band transition (stocked → low →
     # out on parmesan; stocked ⇄ low bounce on milk/icecream; a
     # stocked-only refresh on pasta after a shop). Post-2026-07-02 the
@@ -335,21 +287,6 @@ def seed_dev_data():
     # These are all *manual* observations (no FK); the chunk-5 harvest below
     # adds FK-provenance ones from finished lists (milk, pasta, pizza, chips,
     # bread).
-    from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
-
-    def price_obs(item, *, total_price, total_measure, unit, days_ago, store=None, pack_count=None):
-        repo.add(StockItemPriceObservation(
-            stock_item_id=item.id,
-            total_price=float(total_price),
-            total_measure=float(total_measure),
-            unit=unit,
-            observed_at=now - timedelta(days=days_ago),
-            store_id=(store.id if store is not None else None),
-            shopping_list_line_id=None,
-            created_at=now - timedelta(days=days_ago),
-            pack_count=pack_count,
-        ))
-
     # Milk — 4 obs in L, store-tagged, baseline ≈ $2.00/L, latest at baseline.
     price_obs(milk, total_price=4.20, total_measure=2.0, unit="L", days_ago=42, store=woolworths)
     price_obs(milk, total_price=2.00, total_measure=1.0, unit="L", days_ago=21, store=coles)
@@ -389,95 +326,16 @@ def seed_dev_data():
         repo.add(c)
 
     # ---------------- RECIPE VOCABULARIES (C-4 Chunk 2) ---------------- #
-    # Mirror the migration's default seed so a create_all dev DB matches a
-    # migrated prod DB. Only the values the seed recipes reference are bound
-    # to locals; the rest still exist so the settings editor shows a full set.
-    _cuisine_names = [
-        "Italian", "Asian", "Chinese", "Japanese", "Thai", "Indian",
-        "Mexican", "Mediterranean", "American", "French", "Middle Eastern",
-        "Other",
-    ]
-    cuisines = {n: Cuisine(name=n, sequence=i) for i, n in enumerate(_cuisine_names)}
-    for c in cuisines.values():
-        repo.add(c)
-
-    _category_names = [
-        "Main", "Pasta", "Rice", "Stir fry", "Soup", "Salad", "Side",
-        "Breakfast", "Dessert", "Snack", "Drink", "Sauce",
-    ]
-    categories = {n: Category(name=n, sequence=i) for i, n in enumerate(_category_names)}
-    for c in categories.values():
-        repo.add(c)
-
-    _dietary_tags = [
-        ("Vegetarian", "Dietary pattern"), ("Vegan", "Dietary pattern"),
-        ("Pescatarian", "Dietary pattern"), ("Gluten-free", "Allergen-free"),
-        ("Dairy-free", "Allergen-free"), ("Nut-free", "Allergen-free"),
-        ("Egg-free", "Allergen-free"), ("Soy-free", "Allergen-free"),
-        ("Shellfish-free", "Allergen-free"), ("Low-carb", "Nutritional"),
-        ("Low-fat", "Nutritional"), ("Low-sugar", "Nutritional"),
-        ("Low-sodium", "Nutritional"), ("Keto", "Diet pattern"),
-        ("Paleo", "Diet pattern"), ("Whole30", "Diet pattern"),
-        ("Halal", "Religious"), ("Kosher", "Religious"),
-    ]
-    dietary_tags = {
-        name: DietaryTag(name=name, category=cat, sequence=i)
-        for i, (name, cat) in enumerate(_dietary_tags)
-    }
-    for t in dietary_tags.values():
-        repo.add(t)
-
-    _tool_names = [
-        "Frypan", "Saucepan", "Large pot", "Baking tray", "Oven dish",
-        "Mixing bowl", "Food processor", "Blender", "Stand mixer",
-        "Hand mixer", "Wok", "Slow cooker", "Air fryer", "Grater",
-        "Whisk", "Colander", "Rolling pin", "Knife & board",
-    ]
-    tools = {n: Tool(name=n, sequence=i) for i, n in enumerate(_tool_names)}
-    for t in tools.values():
-        repo.add(t)
-
-    # household-wide meal-slot vocabulary. Mirror the migration's
-    # default seed so a create_all dev/test DB matches a migrated prod DB.
-    _meal_slot_names = ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"]
-    for i, n in enumerate(_meal_slot_names):
-        repo.add(MealSlot(name=n, sequence=i))
+    # FU-556 — fixed vocab is shared (see seed_builders). The dicts land on
+    # `builders`; alias them locally because the recipes below + the FU-388
+    # bulk block (cuisines/categories) + the tag/tool links all reference them.
+    builders.seed_vocabularies()
+    cuisines = builders.cuisines
+    categories = builders.categories
+    dietary_tags = builders.dietary_tags
+    tools = builders.tools
 
     # ---------------- RECIPES ---------------- #
-    def ingredient(item, qty, unit, notes=None):
-        ri = RecipeIngredient(notes=notes, quantity=qty, stock_item=item, unit=unit)
-        repo.add(ri)
-        return ri
-
-    def make_recipe(*, name, collection, ingredients, instructions, **kw):
-        recipe = Recipe(
-            available_meals=kw.get("available_meals", 0),
-            category=categories.get(kw["category"]) if kw.get("category") else None,
-            cook_time_minutes=kw.get("cook", 20),
-            cuisine=cuisines.get(kw["cuisine"]) if kw.get("cuisine") else None,
-            difficulty=kw.get("difficulty", "Easy"),
-            image=None,
-            ingredients=ingredients,
-            instructions=instructions,
-            is_favourite=kw.get("favourite", False),
-            last_made_on=kw.get("last_made"),
-            name=name,
-            prep_time_minutes=kw.get("prep", 10),
-            recipe_collection=collection,
-            servings=kw.get("servings", 2),
-            source=kw.get("source"),
-            time_of_day=kw.get("time_of_day", "Dinner"),
-            version_group_id=None,
-            kcal=kw.get("kcal"),
-            steps_mode=kw.get("steps_mode", "freeform"),
-            # seed recipes get the same now() stamp the real
-            # create handlers use; the "Recently added" axis sorts them
-            # by name within the same tick.
-            created_at=kw.get("created_at", datetime.now(UTC)),
-        )
-        repo.add(recipe)
-        return recipe
-
     # Cookable now (all ingredients stocked).
     aglio = make_recipe(
         name="Spaghetti Aglio e Olio", collection=weeknight, cuisine="Italian",
@@ -752,27 +610,6 @@ def seed_dev_data():
         repo.add(sl)
     repo.save_changes()  # lines need persisted list ids
 
-    # (line, selected_product, store) for finished priced lines, harvested into
-    # observations below exactly as POST /finish would (chunk 5 closed loop).
-    _harvest_jobs: list[tuple] = []
-
-    def line(list_id, item, seq, qty=1, ticked=False, selected_product=None,
-             actual_unit_price=None, purchased_store=None):
-        sl_line = ShoppingListLine(
-            shopping_list_id=list_id,
-            stock_item_id=item.id,
-            quantity=qty,
-            is_ticked=ticked,
-            sequence=seq,
-            selected_product_id=selected_product.id if selected_product else None,
-            actual_unit_price=actual_unit_price,
-            purchased_store_id=purchased_store.id if purchased_store else None,
-        )
-        repo.add(sl_line)
-        if ticked and actual_unit_price is not None:
-            _harvest_jobs.append((sl_line, selected_product, purchased_store))
-        return sl_line
-
     # Primary: a mix of low/out essentials, one with a chosen offer.
     line(primary.id, milk, 0, qty=2, selected_product=milk_coles)
     line(primary.id, parmesan, 1, selected_product=parmesan_coles)
@@ -801,30 +638,11 @@ def seed_dev_data():
 
     repo.save_changes()  # line ids needed for the harvest FK
 
-    # Harvest one observation per finished priced line, via the same shared
-    # helper the /finish handler uses (R-017 — seed exercises the new path).
-    from dora_api.features.shopping_lists._line_price import (
-        harvest_observation_fields, line_paid_unit_price)
-    _completed_at = {archived.id: archived.completed_at, weekend.id: weekend.completed_at}
-    for sl_line, product, store in _harvest_jobs:
-        unit_price = line_paid_unit_price(sl_line)
-        if unit_price is None:
-            continue
-        _tp, _tm, _unit, _pc = harvest_observation_fields(
-            unit_price=unit_price,
-            quantity=sl_line.quantity,
-            size_value=product.size_value if product else None,
-            size_unit=product.size_unit if product else None,
-            product_pack_count=product.pack_count if product else None,
-        )
-        _at = _completed_at.get(sl_line.shopping_list_id, now)
-        repo.add(StockItemPriceObservation(
-            stock_item_id=sl_line.stock_item_id,
-            total_price=_tp, total_measure=_tm, unit=_unit,
-            observed_at=_at, store_id=(store.id if store else None),
-            shopping_list_line_id=sl_line.id, created_at=_at,
-            pack_count=_pc,
-        ))
+    # FU-556 — harvest finished priced lines into observations (shared logic;
+    # R-017 — seed exercises the same path the /finish handler uses).
+    builders.harvest_price_observations(
+        {archived.id: archived.completed_at, weekend.id: weekend.completed_at}
+    )
     repo.save_changes()
 
     # ---------------- SHOPPING LIST TEMPLATES ---------------- #
@@ -878,6 +696,116 @@ def seed_dev_data():
             for recipe, tool in _tool_links
         ],
     )
+
+    # ---------------- BULK LOAD (FU-388 — dev-only scale data) ---------------- #
+    # So every interactive dev session runs against a realistic pantry
+    # (default 500 items via DORA_SEED_BULK_ITEMS) instead of the ~22 curated
+    # fixtures, and N+1s / slow queries surface naturally rather than only
+    # under a paying user's data. Skipped entirely when bulk_stock_items == 0
+    # (the e2e suite passes 0 so its boot stays fast). Reuses the curated
+    # builder closures above — no duplicate entity construction (R-001/R-003).
+    # Distributions are index-based (no RNG) so the dataset is reproducible.
+    if bulk_stock_items > 0:
+        _bulk_levels = [stocked, stocked, stocked, low, out]  # ~60/20/20 spread
+        _bulk_locations = [
+            pantry, fridge, freezer, top_shelf, middle_shelf,
+            middle_left, middle_right, crisper,
+        ]
+        _bulk_groups = [g_fruit, g_dairy, g_pantry, g_frozen, g_snacks, g_meat]
+        _bulk_stores = [woolworths, coles, aldi, iga]
+        # expiry spread: none / soon / far / already-expired.
+        _bulk_expiry = {
+            0: None,
+            1: today + timedelta(days=3),
+            2: today + timedelta(days=200),
+            3: today - timedelta(days=6),
+        }
+
+        bulk_items: list = []
+        for i in range(bulk_stock_items):
+            grp = _bulk_groups[i % len(_bulk_groups)]
+            lvl = _bulk_levels[i % len(_bulk_levels)]
+            loc = _bulk_locations[i % len(_bulk_locations)]
+            is_open = (i % 5 == 0)
+            # ~1 in 5 items carry a linked product (offers + short history),
+            # exercising the product-join / sparkline / buy-verdict / My
+            # Products surfaces under load.
+            products = []
+            if i % 5 == 0:
+                store = _bulk_stores[(i // 5) % len(_bulk_stores)]
+                base = round(2.0 + (i % 50) * 0.1, 2)
+                products = [make_product(
+                    store=store,
+                    name=f"{store.name} Load Product {i:04d}",
+                    brand=store.name, size="1ea", size_unit="ea", size_value=1.0,
+                    stockcode=f"LOAD-{i:05d}",
+                    price_now=round(base * 0.9, 2), price_was=base,
+                    history=[
+                        (30, base, base),
+                        (14, round(base * 0.95, 2), base),
+                        (5, round(base * 0.9, 2), base),
+                    ],
+                )]
+            bulk_items.append(make_item(
+                name=f"Load item {i:04d} · {grp.name}",
+                group=grp, level=lvl, location=loc,
+                expiry=_bulk_expiry[i % 4],
+                flagged=(i % 7 == 0),
+                is_open=is_open,
+                opened_on=(today - timedelta(days=(i % 20) + 1)) if is_open else None,
+                stocktake_alerts=(i % 6 == 0),
+                updated_days_ago=(i % 25),
+                products=products,
+            ))
+        repo.save_changes()  # ids before history / lines FK to them
+
+        # Level-change history on ~1 in 3 (drives the History tab + any
+        # change-log aggregation query under volume).
+        for i in range(0, bulk_stock_items, 3):
+            it = bulk_items[i]
+            level_change(it, stocked, 20 + (i % 10))
+            level_change(it, _bulk_levels[i % len(_bulk_levels)], 2 + (i % 5))
+
+        # Price observations on ~1 in 4 (drives the "your prices" widget +
+        # baseline maths across many items).
+        for i in range(0, bulk_stock_items, 4):
+            it = bulk_items[i]
+            unit_price = round(3.0 + (i % 40) * 0.1, 2)
+            price_obs(it, total_price=unit_price, total_measure=1.0, unit="ea",
+                      days_ago=30, store=_bulk_stores[i % len(_bulk_stores)])
+            price_obs(it, total_price=round(unit_price * 1.05, 2), total_measure=1.0,
+                      unit="ea", days_ago=14)
+            price_obs(it, total_price=round(unit_price * 0.98, 2), total_measure=1.0,
+                      unit="ea", days_ago=3)
+
+        # Bulk recipes referencing the load items — stresses the cookbook
+        # list + the cross-recipe cookability computation (a prime N+1
+        # candidate). Ingredients span every stock level, so cookability is
+        # a genuine mix.
+        _bulk_cuisines = list(cuisines.values())
+        _bulk_categories = list(categories.values())
+        for r in range(min(bulk_stock_items // 8, 80)):
+            recipe_ings = [
+                ingredient(bulk_items[(r * 5 + k) % bulk_stock_items], 100 + k * 25, "g")
+                for k in range(3 + (r % 3))  # 3–5 ingredients each
+            ]
+            make_recipe(
+                name=f"Load recipe {r:03d}", collection=weeknight,
+                cuisine=_bulk_cuisines[r % len(_bulk_cuisines)].name,
+                category=_bulk_categories[r % len(_bulk_categories)].name,
+                cook=15 + (r % 30), prep=5 + (r % 15), servings=2 + (r % 4),
+                ingredients=recipe_ings,
+                instructions="1. Combine the ingredients.\n2. Cook.\n3. Serve.",
+            )
+
+        # One large draft shopping list — stresses the list-detail render +
+        # its per-line prefill/offer lookups.
+        big_list = ShoppingList(name="Big load list", created_at=now)
+        repo.add(big_list)
+        repo.save_changes()
+        for s in range(min(bulk_stock_items // 10, 60)):
+            line(big_list.id, bulk_items[(s * 3) % bulk_stock_items], s, qty=1 + (s % 3))
+        repo.save_changes()
 
     db.session.autoflush = True
     repo.save_changes()

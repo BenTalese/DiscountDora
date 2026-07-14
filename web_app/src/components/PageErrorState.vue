@@ -31,12 +31,17 @@
                 label="Go to dashboard"
                 @click="onDashboard"
             />
-            <!-- Repo is private — the "Report this" button used to
-                 pre-fill a GitHub issue with the error + correlation
-                 id. With no public issue tracker, the report flow
-                 lives wherever the operator has set it up; the
-                 button is hidden until that surface exists. -->
-
+            <!-- FU-370 — pre-fills the configured support channel with the
+                 error variant, path, correlation id, and message. Renders
+                 only when the caller opts in (`showReport`) AND the operator
+                 has configured a channel; dormant installs show nothing. -->
+            <BaseButton
+                v-if="showReport && hasChannel"
+                variant="secondary"
+                :icon="ICONS.bug_report"
+                label="Report this"
+                @click="onReport"
+            />
         </div>
     </div>
 </template>
@@ -46,6 +51,10 @@
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import {
+        useSupportChannel,
+        supportHref,
+    } from 'src/composables/useSupportChannel';
 
     const props = withDefaults(
         defineProps<{
@@ -134,9 +143,35 @@
         }
     });
 
-    // `reportUrl` retired with the GitHub issues link (repo is now
-    // private). If a self-host operator wires up an internal report
-    // sink, restore a similar pre-fill helper pointing at it.
+    // FU-370 — restores the pre-fill helper the retired `reportUrl` used to
+    // carry, now pointing at whatever channel the operator configured (see
+    // useSupportChannel). Opens in a new tab (window.open keeps this a
+    // BaseButton rather than a raw type="a" anchor).
+    const { channel, hasChannel } = useSupportChannel();
+    const reportBody = computed(() => {
+        const lines = [
+            'What I was doing: ',
+            '',
+            '---',
+            `Path: ${route.path}`,
+            `Screen: ${props.variant}`,
+        ];
+        if (props.correlationId) lines.push(`Reference: ${props.correlationId}`);
+        if (props.error?.message) lines.push(`Error: ${props.error.message}`);
+        return lines.join('\n');
+    });
+    const reportHref = computed(() =>
+        supportHref(channel.value, {
+            subject: `[Dora] Error — ${props.variant} on ${route.path}`,
+            body: reportBody.value,
+        }),
+    );
+    function onReport() {
+        const href = reportHref.value;
+        if (href && typeof window !== 'undefined') {
+            window.open(href, '_blank', 'noopener');
+        }
+    }
 
     function onReload() {
         if (typeof window !== 'undefined') {

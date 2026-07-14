@@ -54,19 +54,41 @@ long session summary. Distinct from the other logs:
 
 
 
-## [OPEN] FU-556 — DRY the duplicated seed builders shared by seed.py + seed_showcase.py
-- **Raised:** 2026-07-13 (FU-392 build).
-- **Type:** finding (R-008 scope-discipline carve-out — intentional dup, not silent drift).
-- **What:** `dora_api/persistence/seed_showcase.py` (FU-392) copies a handful of tiny local closure builders from `seed.py::seed_dev_data()` — `make_product`, `make_item`, `make_recipe`, `ingredient`, `price_obs`, `level_change`, `line`, plus the vocab-seed blocks (cuisines / categories / dietary tags / tools / meal slots) and the harvest-observation loop. The two datasets have different *shapes*, so the bodies aren't identical, but the scaffolding is.
-- **Why deferred:** deliberately NOT factored inline — refactoring the working dev seed to share a builder module risks perturbing it, and scope discipline (don't touch adjacent code the prompt didn't ask for) said leave it. Flagged rather than done.
-- **Recommended resolution:** opportunistic — next time either seed is edited substantially. Extract the builders into a `seed_builders.py` that takes an explicit `repo` (both seeds already thread one), leaving each `seed_*_data()` as just the dataset definition. Low risk once there's a reason to be in the file.
+## [OPEN] FU-562 — Self-host billing: decide revenue model (enforcement = offline license key; platform = Lemon Squeezy MoR — both decided)
+- **Raised:** 2026-07-14 (billing discussion under the self-host-first decision).
+- **Type:** decision + deferred job (self-host commercialization track; the self-host counterpart to the relocated subscription FU-402).
+- **The constraint (why self-host billing is different):** the app runs on the customer's machine, so payment/feature-gating **can't be technically enforced** (any binary check is bypassable; self-hosters skew technical). Design around gating the **download/update channel** (which you control), not the running app. This is also why plan-gating/usage-limits (FU-403) is SaaS-only and got parked in `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`.
+- **DECIDED — enforcement = offline license key.** A signed key file that unlocks the app / gates downloads+updates. Adds friction + legitimacy, bypassable by determined users but standard for paid self-host. **No phone-home activation** (breaks air-gapped self-host + contradicts the privacy posture, Charter P8).
+- **OPEN DECISION 1 — revenue model:**
+  - **(a) Recurring annual license** — yearly fee = ongoing updates + support; stop paying → keep your last build, lose new updates (JetBrains-style). Predictable income; self-host-friendly because you gate *updates*, not the app. *Best recurring option without runtime DRM.*
+  - **(b) One-time + paid upgrades** — buy once, own that version; major versions are a new/discounted purchase (Sublime-style). Lumpier income, no subscription feel.
+  - **(c) Pure one-time perpetual** — pay once, own forever, updates included. Simplest/most generous; no recurring revenue.
+  - **(d) Free + donations / sponsor** — free to run, optional pay. Max goodwill, minimal/uncertain revenue.
+- **DECIDED — payment platform = Lemon Squeezy** (merchant-of-record). Owner chose MoR over raw Stripe to offload global sales-tax/VAT compliance (too much burden for a solo dev), and **Lemon Squeezy** specifically (indie-friendly, simplest onboarding; now Stripe-owned, so effectively Stripe's MoR layer — tax offload without direct-Stripe tax liability). Bonus: LS issues + validates **license keys** and hosts download/update delivery, so most of the decided offline-license-key plumbing comes built-in — the build is mostly wiring the app to check an LS-minted key, not a from-scratch licensing system. Ruled out: raw Stripe (owner tax-liable everywhere + build key issuance/delivery yourself); Paddle (fine too, but LS is the simpler indie fit).
+- **Also decide here:** the free-tier / trial shape (a genuinely useful free tier or time-limited trial so the "aha" lands before the ask), and that the licence + terms disclaim scraping (push it to the off-by-default companion — legal de-risk, COMMERCIALIZATION_REPORT §1–2).
+- **Why deferred:** no pricing decision made yet; part of the self-host commercialization push.
+- **Recommended resolution:** with [[FU-412]] (self-host commercialization plan) — decide 1 + 2, then build the key issuance/validation + the MoR/Stripe checkout + download-gate. **Recommended resolution point:** at the self-host commercialization push, or sooner if you want to start charging.
 
-## [OPEN] FU-555 — Demo mode: true per-visitor isolation (each prospect gets a private sandbox)
-- **Raised:** 2026-07-13 (FU-392 build — the deferred half of the "full self-serve sandbox" ask).
-- **Type:** deferred job.
-- **What:** FU-392 shipped the *shared* auto-reset demo: one live install, one curated dataset, a scheduled `drop_all`/re-seed. Every visitor sees (and can stomp) the same data until the next reset. The originally-requested "full self-serve sandbox" — where each prospect gets their **own** isolated dataset that can't be seen or clobbered by anyone else — needs per-visitor data partitioning, which is exactly the multi-tenancy the distribution posture says not to pre-build.
-- **Why deferred:** true isolation ⇒ households-as-tenant + repository-enforced scoping. That's [[FU-400]] / [[FU-401]], both Phase-4. Building it just for the demo would dig the speculative-tenant_id hole the charter forbids.
-- **Recommended resolution:** Phase 4, riding on [[FU-400]] (Households-as-tenant) + [[FU-401]] (repo-enforced isolation). Once tenancy exists, a demo can mint a throwaway tenant per session and expire it — no bespoke demo-only isolation code.
+## [OPEN] FU-557 — Stand up + wire the real support channel (FU-370 hook-up)
+- **Raised:** 2026-07-14 (FU-370 build).
+- **Type:** deferred job (out-of-app operator action + a one-line code change).
+- **What:** FU-370 shipped the full support/"Report an issue" plumbing **dormant** —
+  it renders nothing until a channel is configured. To turn it on:
+  1. Pick + stand up a channel (see `docs/04_proposals/PROPOSAL_SUPPORT_CHANNEL.md`
+     §3 / §6 — Option A public `dashy-dora-issues` repo w/ a `bug_report.yml`
+     template is the recommendation; Option B hosted form; Option C email).
+  2. Set the target in **one** place: either edit `_DEFAULT_SUPPORT_URL` /
+     `_DEFAULT_SUPPORT_EMAIL` in
+     [`support_channel.py`](dora_api/features/support/support_channel.py) and commit,
+     OR set `DORA_SUPPORT_URL` / `DORA_SUPPORT_EMAIL` env for that install.
+  3. Rewrite the Help "About" copy (currently a solid honest draft) into your own
+     voice if you want — `HelpPage.vue`, the `support-copy` block.
+  Once set, the Help button, the error-state "Report this" button, and the DoraBot
+  `report_issue` link all light up automatically. No further code needed.
+- **Why deferred:** the channel is an out-of-app decision that involves creating
+  external infrastructure (repo/form/alias) — the user's to make, on his time.
+- **Recommended resolution:** when you're ready to point people at a channel (the
+  user asked for this FU explicitly so the hook-up isn't forgotten).
 
 ## [OPEN] FU-545 — SettingsFileDrop: `nested-interactive` a11y violation (native file input inside a role="button" drop-zone)
 - **Raised:** 2026-07-12 (found by the new FU-542 axe tests).
@@ -131,33 +153,19 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
 
-## [OPEN] FU-413 — EMAIL_SETUP_FINDINGS: promote proposal to IMPL
-- **Raised:** 2026-07-01 (investigations audit).
+## [OPEN] FU-412 — Action the COMMERCIALIZATION_REPORT into a self-host commercialization plan
+- **Raised:** 2026-07-01 (investigations audit). **Scoped 2026-07-14 (self-host-first).**
 - **Type:** deferred job.
-- **What:** `docs/05_investigations/EMAIL_SETUP_FINDINGS.md` produced a §"Proposal" section for the forgot-password / email-wiring path. No IMPL plan; nothing shipped. This is the managed-convenience-that-degrades-gracefully case from §7.5 discipline #6.
-- **Why deferred:** feature-absent when unconfigured is currently acceptable; only becomes a blocker at commercialization.
-- **Recommended resolution:** before Phase 4 / any hosted deployment — draft `IMPL_PLAN_EMAIL_SETUP.md`, wire SMTP config through `AppSetting` with a "degrades to feature-absent" default.
+- **What:** turn `docs/05_investigations/COMMERCIALIZATION_REPORT.md` into the actual **self-host** commercialization plan — legal de-risk (§1–2), robustness (§3–4), and the *product-value* monetization (§6) via a one-time licence / paid download. **The report's SaaS/managed recommendations (§5, §7, freemium/plan-gating half of §6) are out of scope here** — they live in `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` for a later revisit.
+- **Why deferred:** at the self-host commercialization push.
+- **Recommended resolution:** read §1–4 + §6-product-value, spawn per-recommendation self-host FUs/plans. **The self-host pricing/billing decision is already captured as [[FU-562]]** (enforcement decided = offline license key; revenue model + payment platform open with options) — resolve it as part of this push.
 
-## [OPEN] FU-412 — COMMERCIALIZATION_REPORT: dormant, not yet actioned
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** deferred job.
-- **What:** `docs/05_investigations/COMMERCIALIZATION_REPORT.md` is a Phase 4 planning input. Not translated into a plan or prompts.
-- **Why deferred:** Phase 4 territory.
-- **Recommended resolution:** at Phase 4 kick-off — read the report top-to-bottom, spawn per-recommendation FUs / plans.
-
-## [OPEN] FU-410 — MULTI_USER_READINESS §5 open questions
-- **Raised:** 2026-07-01 (investigations audit).
-- **Type:** deferred job.
-- **What:** `docs/05_investigations/MULTI_USER_READINESS.md §5` lists open questions gating Phase 4 tenancy work.
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** at Phase 4 tenancy kick-off; part of P7-A1 / P7-A2 (see [[FU-406]] / [[FU-407]]).
-
-## [OPEN] FU-406 — P7-10 Launch readiness
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4 gate).
-- **What:** `docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_7_COMMERCIALIZATION.md §P7-10` — final launch-readiness checklist (marketing, legal, incident channels, escalation, on-call). Nothing done.
-- **Why deferred:** last-mile.
-- **Recommended resolution:** at Phase 4 finish. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the FST document + release-gate checklist (Track 1) fulfil the *QA half* of P7-10 (the "have we actually verified this is ready?" tollgate). **Not covered** by the plan: marketing, legal, incident channels, escalation, on-call. Those remain in this FU's scope and want their own work-unit.
+## [OPEN] FU-406 — Self-host launch readiness (on-call/SLA sliver relocated)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first).**
+- **Type:** deferred job (launch gate for the self-host product).
+- **What:** the launch checklist for *selling self-host* — **marketing** (landing/sales page), **legal** (a self-host licence + the scraping disclaimer), a **support / incident channel** (the FU-370/557 support-channel work is the seed), and a **release process**. **The operate-the-service sliver — uptime/SLA, on-call rotation, escalation — is relocated** to `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` §3 (only meaningful when you host for customers).
+- **Why deferred:** last-mile, at the self-host commercialization push.
+- **Recommended resolution:** at the self-host launch. **QA half already covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** (Track 1 FST + release-gate). Remaining: marketing, legal/licence, support-channel stand-up (FU-557), release process.
 
 ## [OPEN] FU-405 — P7-09 Ops (observability, CI/CD deploy, staging, backups)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -174,55 +182,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Phase 4.
 - **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the multi-user + admin FST persona flows (Track 1) will *exercise* the DSAR export, delete-account, and privacy-policy surfaces end-to-end, and the senior-review pass on the auth + backup chunks will catch drift on security headers + credential exclusion. **Not covered:** the legal drafting itself + the compliance contract wording. Those remain in this FU.
 
-## [OPEN] FU-403 — P7-07 Plan gating + usage limits
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4).
-- **What:** P7-07 — feature/usage limits gated by plan tier once billing is in.
-- **Why deferred:** Phase 4, gated by [[FU-402]] Stripe billing.
-- **Recommended resolution:** immediately after Stripe lands.
-
-## [OPEN] FU-402 — P7-06 Stripe billing
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4).
-- **What:** P7-06 — Stripe integration for the SaaS Path A + managed Path B.
-- **Why deferred:** Phase 4; only after tenancy ([[FU-400]] / [[FU-401]]).
-- **Recommended resolution:** Phase 4.
-
-## [OPEN] FU-401 — P7-A2 Repository-enforced tenant isolation + leak tests
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4, Path A).
-- **What:** P7-A2 — tenant scoping enforced at the repository layer + cross-tenant leak tests. §7.5 discipline #1 keeps this a one-layer change when the time comes.
-- **Why deferred:** Path A is Phase 4.
-- **Recommended resolution:** with [[FU-400]] (Households-as-tenant) as one work-unit.
-
-## [OPEN] FU-400 — P7-A1 Households-as-tenant + admin → owner / platform-admin split
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4, Path A).
-- **What:** P7-A1 — introduce households as the tenancy boundary; split "admin" into household-owner and platform-admin. Gated by [[FU-410]] (MULTI_USER_READINESS §5).
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** first Path-A work item once Phase 4 opens.
-
-## [OPEN] FU-399 — P7-B1 Provisioning control plane
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4, Path B).
-- **What:** P7-B1 — automated provisioning for managed single-tenant instances (Path B). Same artifact, different env per §7.5 discipline #3.
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** first Path-B work item when Phase 4 opens; can precede Path-A work.
-
-## [OPEN] FU-398 — P7-05 Redis + object storage for images
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4).
-- **What:** P7-05 — Redis for sessions/cache/rate-limit + object storage (S3-ish) for uploaded images. Managed-convenience per §7.5 #6 — must degrade gracefully to "feature absent" (in-memory / local disk) on self-host.
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** with P7-04 as the "production stack" work-unit.
-
-## [OPEN] FU-397 — P7-04 Production WSGI + web/worker split
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4).
-- **What:** P7-04 — replace dev server with gunicorn/uwsgi, split web vs worker. Env-driven per §7.5 discipline #3.
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** paired with [[FU-398]] Redis + [[FU-405]] Ops as the production-stack work-unit.
-
 ## [OPEN] FU-394 — P5-10 Merchant data quality & support bundle: confirm companion-scope only
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
 - **Type:** finding.
@@ -230,12 +189,19 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** scoping-only.
 - **Recommended resolution:** doc edit — add a "moved to companion" banner to P5-10 in the legacy plan file; close.
 
-## [OPEN] FU-393 — P5-08 Data-model sanity review sweep
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job.
-- **What:** P5-08 — comprehensive data-model sanity sweep. `ORPHANED_FIELDS_AUDIT` covered one slice; nullability audit, FK-consistency, index coverage, dead columns — not done as a single pass.
-- **Why deferred:** hasn't been forced.
-- **Recommended resolution:** opportunistic sweeps as touched (partial credit for [[FU-416]]); a single dedicated pass would be a good pre-Phase-4 gate.
+## [OPEN] FU-563 — Data-model: schema drift (model≠migrations) + FK index coverage
+- **Raised:** 2026-07-14 (spun from the FU-393 data-model sanity sweep — see [`DATA_MODEL_SANITY_SWEEP_FU393.md`](docs/05_investigations/DATA_MODEL_SANITY_SWEEP_FU393.md) Findings 1, 2, 6).
+- **Type:** deferred job (remediation; cites **R-003** single-source + **R-006** clean-migrations).
+- **What:** `table_mappings.py` (`create_all`, used by dev + the whole e2e suite) builds **1** secondary index; the Alembic chain (`upgrade`, production) builds **32**. 31 index colsets live only in prod, so dev/test run a materially different (near-unindexed) schema. Separately, **42 FK columns have no covering index in prod** (35 with CASCADE/SET NULL → parent-delete scans the child table). And `test__migrations__migrated_schema_matches_orm_metadata` only compares **table names**, so none of this trips CI.
+- **Fix:** make the ORM model the source of truth for indexes — mirror the 31 migration-only index colsets into `table_mappings.py` + declare `index=True` on the 42 FK columns; generate one clean forward-only migration; **strengthen the schema-match test** to compare columns + nullability + index colsets. Spot-confirm the handful of FKs SQLite reflected as `ondelete=None` (Product.store_id, ProductOffer/ProductHistoricOffer.product_id, StockItem.stock_group_id/stock_level_id/stock_location_id) while there.
+- **Recommended resolution:** pre-Phase-4 gate; low-risk/additive. Pairs with [[FU-564]] (same reconciliation migration can carry both if done together).
+
+## [OPEN] FU-564 — Data-model: nullability drift (model vs migrated), 3 Product columns
+- **Raised:** 2026-07-14 (spun from FU-393 — see the sweep report Finding 3).
+- **Type:** finding → small fix.
+- **What:** 4 columns disagree model-vs-prod. `User.username` (model NOT NULL / prod nullable) is a **known, documented deferral** (the `add_user_auth` migration explains the risk; app enforces on insert) — keep, just comment it. The 3 `Product` columns look unintentional: `merchant_stockcode` (model nullable / prod NOT NULL — dev accepts NULL, prod rejects), `is_active` + `is_available` (model NOT NULL / prod nullable — prod can hold NULLs the ORM assumes never occur).
+- **Fix:** per column, decide intended nullability → clean `ALTER SET/DROP NOT NULL` migration (backfill first where tightening) or relax the model to match; add a one-line comment on `User.username` pointing at the deferral.
+- **Recommended resolution:** fold into [[FU-563]]'s reconciliation migration, or a small standalone.
 
 ## [OPEN] FU-391 — P5-06 first-week experience (post-onboarding nudges)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
@@ -251,40 +217,12 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Phase 3-adjacent.
 - **Recommended resolution:** fold into the P8-10 native-app brief; a device-lab pass is a natural gate before deciding native vs PWA-only.
 
-## [OPEN] FU-388 — P5-03 Performance & scale pass
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job.
-- **What:** P5-03 — comprehensive perf sweep (query N+1s, bundle size, load-tests). Only `STOCK_OVERVIEW_PERF` investigation touched a slice. No app-wide pass.
-- **Why deferred:** hasn't been forced by user pain.
-- **Recommended resolution:** pre-Phase-4 gate — do one comprehensive pass with real seed data at pantry size 500+ items, catch N+1s + big-query issues before they hit paying users.
-
-## [OPEN] FU-378 — Stock Overview: action-first scan-mode ("pick action, then scan") never built
-- **Raised:** 2026-07-01 (proposals audit); **tightened 2026-07-13** after the FU-364 §2.3/§7 reconciliation sweep.
-- **Type:** deferred job.
-- **What:** The whole `PROPOSAL_STOCK_OVERVIEW.md` open-decision set was walked against shipped C-1 code 2026-07-13 and annotated in-doc (§2.3 + new §7b). The flagged **#1 open decision (§2.3 detail nav model) is CLOSED**: `StockOverview.vue onRowClick` branches mobile→full-page / desktop→splitter-peek (one shared `StockItemDetailPage` in two frames), long-press→bulk on mobile, `@click.stop` on every in-row control covering the miss-tap concern. Six of seven §7 decisions closed; planned-meals metric superseded by `BuyVerdictBadge`. **Only §7.4 remains genuinely unbuilt:** the action-first "pick an action, then scan to apply" scan-mode — the Overview Scan button still does the old jump-to-item, gated behind `scanning_enabled` (off by default).
-- **Why deferred:** scanning is an off-by-default surface; low priority.
-- **Recommended resolution:** opportunistic — build with the next scanning/ingestion pass. **Note:** the §2.3 close unblocked [[FU-384]], but FU-384 has since resolved independently (via FU-508), so this is no longer load-bearing for it.
-
-## [OPEN] FU-376 — PROPOSAL_PRODUCTS_AS_OVERLAY §7 open decisions + GAP bucket
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_PRODUCTS_AS_OVERLAY.md:262` §7 build-time open decisions + `:391` "GAP = small, not yet built" bucket. IMPL landed but these residual bits were not swept.
-- **Why deferred:** small-slice residuals.
-- **Recommended resolution:** doc walk vs shipped; each GAP either becomes its own FU or gets closed with a state note.
-
 ## [OPEN] FU-373 — PROPOSAL_BARCODE_SCANNING deferred slices (register-against-product + scan-unknown)
 - **Raised:** 2026-07-01 (proposals audit).
 - **Type:** deferred job.
 - **What:** `PROPOSAL_BARCODE_SCANNING.md` cleanup slice landed; **register-against-product UI + scan-unknown rework** deferred to Phase 2 (ingestion). Ingestion has landed but these barcode slices did not follow through. §6 "Scan tab under QR codes placement" also open.
 - **Why deferred:** waited on ingestion; ingestion landed without pulling these along.
 - **Recommended resolution:** next barcode-touch — build the register-against-product UI (unknown EAN → offer to link to an existing Product) + scan-unknown rework. Resolve §6 placement while there.
-
-## [OPEN] FU-370 — PROPOSAL_SUPPORT_CHANNEL: not built
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** Draft proposal for a user support channel; no IMPL, nothing shipped.
-- **Why deferred:** commercialization-adjacent; no users to support.
-- **Recommended resolution:** Phase 4 alongside [[FU-402]] Stripe + [[FU-404]] compliance.
 
 ## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS)
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
@@ -300,28 +238,6 @@ long session summary. Distinct from the other logs:
   8. General UI consistency — cross-cutting.
 - **Why deferred:** no per-surface home; several are Phase 3/4-timed or design-only.
 - **Recommended resolution:** split into per-item FUs *only when picked up*. Items 1 (QA test doc) and 3 (polish pass) are natural Phase 4 gates; item 2 (telemetry) is a Charter P8 decision + build; item 4 (push notifications) is a Phase 3-ish feature; items 5–8 are one-shots.
-
-## [OPEN] FU-348 — Import templates: registry has no "every importable section has a template" symmetry check
-- **Raised:** 2026-07-01 (post-FU-343 self-review).
-- **Type:** finding (latent bug when a second importable section lands).
-- **What:** The `IMPORT_TEMPLATES` tuple is manually curated. Today
-  that's fine (`stock_items` is the only shape the importer supports)
-  — but when a second importable section lands (recipes, shopping
-  lists), someone has to remember to add an `ImportTemplate` entry
-  or the "Download template" button silently misses that section.
-  The commit handler and the templates registry don't share a
-  registry-of-registries; nothing enforces symmetry.
-- **Why deferred:** trivially true today; only bites when a second
-  section lands.
-- **Recommended resolution:** when a second importable section is
-  planned, introduce an `IMPORTABLE_SECTIONS` registry that both the
-  commit handler and the templates endpoint consume — one entry per
-  section with `{name, target_fields, synonyms, example, commit_fn}`.
-  Or, simpler: at module load, assert that every section the commit
-  path recognises has a matching `ImportTemplate`. The exact shape
-  falls out naturally when the second section is designed; don't
-  pre-design it. **Recommended resolution point:** when the second
-  importable section is designed.
 
 ## [OPEN] FU-552 — PWA ships Quasar-placeholder icons for iOS apple-touch + Safari pinned-tab
 - **Raised:** 2026-07-13 (surfaced while shipping FU-336 — enabling PWA mode exposed the injected icon meta tags).

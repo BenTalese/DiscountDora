@@ -88,7 +88,20 @@ The reason this is a checklist and not a backlog: **these fail together.** Shipp
 
 ---
 
-## 5. Open questions
+## 5. Open questions — the SaaS-path parking place
+
+> **This section is the durable home for the SaaS / multi-tenant design questions**
+> (FU-410 was folded in here on 2026-07-14 rather than tracked as a standalone
+> backlog item — these only get answered *if the SaaS path is ever taken*, so they
+> belong with the readiness doc, not the active follow-ups ledger). They are the
+> first thing to settle at a Phase-4 tenancy kick-off, gating the Path-A work
+> (Households-as-tenant `FU-400`, security hardening `FU-401`, launch readiness
+> `FU-406`, provisioning control plane `FU-399`). Until then, the **distribution
+> posture** (RECONCILED_FINISHING_PLAN Decision 5 / §7.5) governs: build the one
+> self-hostable SaaS-style artifact, **don't pre-build multi-tenancy** — and note
+> that posture already leans toward Q2's *per-install* answer as the near-term
+> reality, which would moot most of §2. Related decisions already made: the shared
+> demo stays single-dataset, not per-visitor (FU-555, won't-do).
 
 - **Household vs. user tenancy?** The README's "everyone helps grab the milk" implies a shared household with multiple members — i.e., the scope unit is the *household*, and members within it still share everything. Confirm, because it changes the entire schema.
 - Is multi-tenant **same-deployment** (one DB, many households — needs all of the above) or **per-install** (each household self-hosts its own box — needs almost none of it)? This is the single biggest descoping lever. The self-hosted/desktop-app framing suggests per-install might be the actual intent, which would make most of this moot — worth settling first.

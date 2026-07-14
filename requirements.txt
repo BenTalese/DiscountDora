@@ -20,6 +20,17 @@ Flask_Migrate==4.0.5
 alembic==1.14.1
 flask_sqlalchemy==3.1.1
 Flask[Async]==3.1.3
+# FU-397 — production WSGI server for the self-host container (replaces the
+# Flask dev server, which must never front a real deployment). Pure-Python, so
+# it installs everywhere `pip install -r requirements.txt` runs, but only
+# *runs* on POSIX (no fcntl on Windows) — the Docker/Linux self-host is the
+# target. The Windows desktop bundle keeps using werkzeug's make_server
+# (desktop_app.py), and Windows dev uses the Flask dev server, so neither
+# depends on gunicorn actually running. Single-worker gthread by default
+# (see gunicorn.conf.py) so the in-process APScheduler stays singular;
+# multi-worker/horizontal scale needs the worker-split work parked in
+# OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md.
+gunicorn==23.0.0
 # FU-196 (d2) — rapidfuzz replaces the unmaintained fuzzywuzzy. Same
 # `process` + `fuzz` surface, MIT-licensed (fuzzywuzzy is GPL), actively
 # maintained, no python-Levenshtein warning noise.

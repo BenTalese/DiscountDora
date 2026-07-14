@@ -763,9 +763,12 @@ IMPORT_TEMPLATES_BY_SECTION: dict[str, ImportTemplate] = {t.section: t for t in 
 # mapped to the header tuple it expects for each. Today `stock_items` is
 # the only real target and its expected headers are `TARGET_FIELDS`.
 # When a second section handler lands (recipes, shopping lists, …),
-# whoever wires it MUST add its `(section, expected_headers)` pair here
-# so `_validate_import_templates` catches a template that ships without
-# a matching commit path. Keeping the map explicit (not derived from a
+# whoever wires it MUST add its `(section, expected_headers)` pair here.
+# `_validate_import_templates` then enforces the invariant both ways:
+# a template with no commit path fails to boot (FU-350), AND a
+# commit-known section with no template fails to boot (FU-348) — so the
+# set of importable sections and the set of downloadable templates can
+# never drift apart. Keeping the map explicit (not derived from a
 # dispatch table that doesn't exist yet) means adding a second section
 # is one clearly-marked line, not a spelunk through the handler.
 _COMMIT_KNOWN_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -774,19 +777,27 @@ _COMMIT_KNOWN_SECTIONS: dict[str, tuple[str, ...]] = {
 
 
 def _validate_import_templates() -> None:
-    """FU-350 — fail at module load, not at user download time.
+    """FU-350 + FU-348 — fail at module load, not at user download time.
 
-    Three drift risks the FU-343 shipping shape carried:
+    Four drift risks the FU-343 shipping shape carried:
       1. `example` cells were positional; a reordered / renamed / added
          target field would silently misalign the example under the
          wrong headers. Now dict-keyed, so any stale key or missing
-         column raises here instead of shipping a broken CSV.
+         column raises here instead of shipping a broken CSV. (FU-350)
       2. Header tuples could diverge from the source of truth
          (`TARGET_FIELDS` for stock_items, and whichever tuple owns
          each future section). Enforced via `_COMMIT_KNOWN_SECTIONS`.
+         (FU-350)
       3. A template could ship for a section the commit handler
          doesn't understand — download works, upload silently fails.
-         Enforced via section-membership check.
+         Enforced via the section-in-`_COMMIT_KNOWN_SECTIONS` check
+         below. (FU-350)
+      4. The reverse: a section the commit handler *can* process ships
+         with no template — the "Download template" button silently
+         misses it, so users have to guess that section's schema.
+         Enforced via the `_COMMIT_KNOWN_SECTIONS` ⊆ templates check at
+         the end. Together with (3) this pins a two-way symmetry:
+         importable section ⇔ downloadable template. (FU-348)
     """
     seen_sections: set[str] = set()
     for t in IMPORT_TEMPLATES:
@@ -822,6 +833,23 @@ def _validate_import_templates() -> None:
                 f"{sorted(stale_keys)} that aren't in .headers — "
                 f"they'd silently disappear from the emitted CSV."
             )
+
+    # FU-348 — the reverse-direction symmetry check. The loop above proves
+    # every *template* has a commit path; this proves every *commit-known
+    # section* has a template, so the "Download template" index can't
+    # silently miss a section the importer actually accepts. When a second
+    # section (recipes, shopping lists, …) is added to
+    # `_COMMIT_KNOWN_SECTIONS` without a matching `ImportTemplate`, the API
+    # fails to boot here with a readable message rather than shipping a
+    # download index that omits it.
+    missing_templates = set(_COMMIT_KNOWN_SECTIONS) - seen_sections
+    if missing_templates:
+        raise ValueError(
+            f"Commit handler knows sections {sorted(missing_templates)} "
+            f"with no matching ImportTemplate — the 'Download template' "
+            f"index would silently miss them. Register an ImportTemplate "
+            f"in IMPORT_TEMPLATES for each before shipping."
+        )
 
 
 _validate_import_templates()

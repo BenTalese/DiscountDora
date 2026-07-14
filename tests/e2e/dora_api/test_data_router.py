@@ -563,11 +563,17 @@ def test__import_template__csv_download__includes_hash_comment_row(api):
     if body.startswith(b"\xef\xbb\xbf"):
         body = body[3:]
     text = body.decode("utf-8")
-    lines = [line for line in text.splitlines() if line]
-    # At least one line starting with `#` after the header + example.
-    assert any(line.startswith("#") for line in lines), (
+    # FU-559 — parse via csv.reader before checking for the `#`. The comment
+    # row contains a comma ("replace them, and use…"), so csv.writer quotes
+    # the whole field — the *raw* line starts with `"`, not `#`. What matters
+    # (and what `_strip_comment_rows` keys off on re-upload) is the parsed
+    # first cell, which csv un-quotes back to `# …`. Checking the raw line
+    # would wrongly fail on any comment row that happens to contain a comma.
+    import csv as _csv
+    rows = [row for row in _csv.reader(text.splitlines()) if row]
+    assert any(str(row[0]).startswith("#") for row in rows), (
         "Template CSV must include a #-prefixed hint row explaining "
-        f"that example values are illustrative; got: {lines!r}"
+        f"that example values are illustrative; got: {rows!r}"
     )
 
 
@@ -631,6 +637,27 @@ def test__import_template__csv_download__body_after_bom_parses(api):
     # leading BOM character.
     assert not auto["name"].startswith("﻿"), (
         f"BOM leaked into the mapped name-column header: {auto['name']!r}"
+    )
+
+
+def test__import_templates__section_registry_is_symmetric():
+    """FU-348 — the set of sections the commit handler accepts and the set
+    of sections that ship a downloadable template must stay identical.
+    FU-350 pinned one direction (a template with no commit path fails to
+    boot); FU-348 adds the reverse (a commit-known section with no template
+    fails to boot). Either drift would already crash the API at import via
+    `_validate_import_templates`, so this is a fast, monkeypatch-free
+    documentation of the invariant — if it fails, someone added a section
+    to one registry without the other."""
+    from dora_api.features.data.import_spreadsheet import (
+        IMPORT_TEMPLATES_BY_SECTION,
+        _COMMIT_KNOWN_SECTIONS,
+    )
+    assert set(_COMMIT_KNOWN_SECTIONS) == set(IMPORT_TEMPLATES_BY_SECTION), (
+        "Importable sections and downloadable templates drifted apart. "
+        f"commit-known={sorted(_COMMIT_KNOWN_SECTIONS)}, "
+        f"templates={sorted(IMPORT_TEMPLATES_BY_SECTION)}. Every section the "
+        "importer accepts must ship a template, and vice-versa."
     )
 
 

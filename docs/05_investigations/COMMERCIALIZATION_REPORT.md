@@ -7,6 +7,17 @@ legal exposure, the architectural reality, monetization, and the branching paths
 market. Companion to **PROMPT_PLAN_PART_7_COMMERCIALIZATION.md**, which turns the
 decisions here into runnable prompts.
 
+> **Self-host-first decision (2026-07-14).** The near-term plan is to **sell Dora
+> as self-hosted software**. The **multi-tenant SaaS (Path A) + managed
+> single-tenant (Path B)** material in this report — **§5 (households/tenancy
+> reframe)**, **§7 (path to SaaS)**, and the **freemium / plan-gating parts of §6**
+> — is **deferred and relocated** to
+> [`../04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`](../04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md).
+> Read those sections there when/if a hosted offering is revisited. The
+> **self-host commercialization track** stays here: §1–2 (legal de-risk), §3–4
+> (robustness), and the *product-value* half of §6 (what's worth paying for),
+> monetised via a one-time licence / paid download rather than subscriptions.
+
 > **Not legal advice.** Sections on legal risk are engineering-informed risk
 > analysis. Before selling, engage an Australian IP/commercial lawyer — especially
 > on the retailer-scraping question, which is the dominant risk.
@@ -174,6 +185,10 @@ scalability for a fraction of a rewrite's cost.
 
 ## 5. Households & the admin reframe
 
+> **Deferred → self-host-first (2026-07-14).** This is multi-tenant (Path A) work,
+> relocated to `../04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`. Retained
+> here for the strategic record.
+
 Going commercial is bigger than "add households" (P6-05) — it's **multi-tenancy**, and
 the single `admin` role splits into two distinct concepts you must not conflate:
 
@@ -213,6 +228,12 @@ today's state; paid is everything that makes Dora think.
 ---
 
 ## 7. The path to SaaS
+
+> **Deferred → self-host-first (2026-07-14).** The entire SaaS/managed path
+> (both forks) is relocated to
+> `../04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` as a "revisit later"
+> option. Retained here for the strategic record; act from the optional doc if the
+> hosted path is reopened.
 
 ### The fork that decides everything
 

@@ -259,21 +259,35 @@ because the everyday experience *is* the app.
 
 ---
 
-## 7. Open decisions (for build-time)
+## 7. Open decisions (for build-time) — ✅ CLOSED 2026-07-14 (FU-376)
+
+All four resolved against shipped code during the FU-376 doc-walk. No live forks remain.
 
 1. **Gate source:** `Product.count() > 0` alone, or `Product OR ProductOffer`?
    *Recommendation: `Product.count() > 0` — offers can't exist without products; the product row
    is the natural anchor.*
+   → **Shipped as recommended.** `health_check._feature_flags()` sets
+   `flags["products"] = repo.get(Product).count() > 0` (`dora_api/features/health/health_check.py`).
 2. **Search nav when data present but URL unset:** route admins to the config setting, hide for
    non-admins, or show-disabled with a hint?
    *Recommendation: route admins to the setting; hide for non-admins (R-014 reveal-disable spirit
    — don't show a dead button to someone who can't fix it).*
+   → **Superseded.** R-014 (reveal-disable) was retired by **R-029 / ADR-025** ("respect the
+   off-state; hide, don't nag"), applied here via **FU-500**. The Product Search entry is now
+   **hidden for everyone** when the URL is unset (admins find the config row on Settings → System
+   → Features), not shown-disabled. See `MainLayout.vue` `productSearchEntry` (returns `null` when
+   the URL is blank).
 3. **Search URL target:** same tab or new tab?
    *Recommendation: same tab (feels native); the companion is unlabelled either way.*
+   → **Shipped as new tab** (`target="_blank"` on `MainMenuButton.vue` / `SideMenuButton.vue`),
+   i.e. the recommendation was *not* taken — the external companion opens in its own tab so the
+   user doesn't lose their Dora context. Settled; no change wanted.
 4. **`PreferredBuy` on the shopping line:** persist a chosen hint via `preferred_buy_id` FK, or a
    free-text snapshot copied onto the line?
    *Recommendation: `preferred_buy_id` FK (nullable, ondelete SET NULL) — keeps it a live
    reference; snapshotting is over-engineering for a reminder.*
+   → **Shipped as recommended** (FK). Migration `c4e6a8b1d3f5_20260617_shopping_line_preferred_buy`
+   adds `preferred_buy_id`; wired in `shopping_list.py` + `manage_shopping_list_lines.py`.
 
 ---
 
@@ -374,6 +388,13 @@ data-presence rather than a user/admin flag, exposed as a single server-derived 
 boolean."* Recommend promoting to a new `R-0NN` when the gate-reframe code lands (it generalises
 beyond products — any optional data-fed surface could use it).
 
+> **FU-376 disposition (2026-07-14): NOT promoted — held for a second use.** The gate reframe
+> shipped (FU-209): `features.products` derives from `Product.count() > 0` in `health_check`. But
+> `products` is the *only* data-presence-gated surface today; every other `/health` flag is an
+> admin/env toggle. Per ADR discipline (promote a rule on the second occurrence, not the first),
+> a new `R-0NN` would be premature off a single instance. Revisit if a second optional data-fed
+> surface adopts the same shape — the pattern is documented here for that moment.
+
 ---
 
 ## Appendix A — Complete product-feedback coverage & status (2026-06-17)
@@ -446,3 +467,18 @@ owned by a named proposal/FU.
 disposition under the pivot (L191, L46, and the search-page cluster → companion) and want a quick
 user confirm; a bug-and-polish cluster + two small gaps (L197, L205/206) are logged as **FU-214**
 for the next browser pass. **Nothing is silently dropped.**
+
+> **FU-376 GAP-bucket sweep (2026-07-14).** Walked every non-BUILT status above. Disposition:
+> - **GAP** — only **L205/L206** (bulk "select low-stock-on-deal" / "out-of-stock-on-deal") are
+>   genuinely not-yet-built. Already homed in **FU-214** (open); no new FU needed — it stays there
+>   with its sibling product-surface items rather than fragmenting into a standalone loop.
+> - **VERIFY** (L119, L193, L195-grey/green, L198, L218-225, L160) — reported bugs that look fixed
+>   on a static read; all under **FU-214**'s browser-verify pass. Not GAPs (no missing build).
+> - **REPLACED / Needs-user-OK** (L191 manual product entry, L46 explainer mooted, L197 hard-delete)
+>   — disposition-change decisions, tracked under **FU-214**; L197's hard-delete call is also
+>   surfaced in **FU-214**.
+> - **COMPANION** (L159/160/164/166-170) — moved out with the search page (correct; not Dora GAPs).
+> - **TRACKED** (L216, L226, L418) — design/discoverability owned by named FUs/INVs.
+>
+> Outcome: no orphaned GAP. The single real gap (L205/206) and every VERIFY/decision residual are
+> already owned by **FU-214**; §7's build-time forks are closed above. FU-376 closes clean.

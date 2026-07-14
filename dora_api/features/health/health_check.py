@@ -45,7 +45,7 @@ def _resolve_schema_head() -> str | None:
 _SCHEMA_HEAD = _resolve_schema_head()
 
 
-def _feature_flags() -> dict[str, bool]:
+def _feature_flags(setting) -> dict[str, bool]:
     """Surface what the backend can do, for client capability gating.
     Reads runtime state cheaply — DB-backed flags pull from the
     AppSettings singleton; env-driven flags read the env var directly.
@@ -54,6 +54,12 @@ def _feature_flags() -> dict[str, bool]:
     added here whenever C-cross §2.6 grows its admin panel. Per ADR-002,
     every consumer reads the truth through this endpoint, not direct
     AppSetting access on the client.
+
+    FU-388 — the AppSetting singleton is fetched once by ``health_check``
+    and passed in (was re-fetched independently here + in the locale/image
+    helpers, 3 SELECTs of the same one row per probe). ``setting`` is None
+    only if that fetch failed, in which case the DB-backed flags keep their
+    conservative defaults.
     """
     flags: dict[str, bool] = {
         "auth": True,           # always — session cookies + login flow
@@ -95,33 +101,31 @@ def _feature_flags() -> dict[str, bool]:
     # AppSettings drives every install-wide flag at runtime. Wrapped so a
     # DB hiccup doesn't take the health probe down with it.
     try:
-        from dora_api.features.app_settings.access import \
-            get_or_create_app_setting
         from dora_api.persistence.sqlalchemy_repository import \
             SqlAlchemyRepository
         repo = SqlAlchemyRepository()
-        setting = get_or_create_app_setting(repo)
-        # install-wide assistant gate is now just the
-        # master kill-switch. Per-user enable + provider config layers on
-        # top (see auth/update_me); useFeatureFlags wires the master flag
-        # as the "feature is available here at all" signal.
-        flags["assistant"] = bool(setting.master_llm_enabled)
-        flags["scanning"] = bool(setting.scanning_enabled)
-        flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
-        flags["meal_planning"] = bool(setting.meal_planning_enabled)
-        flags["money"] = bool(setting.money_enabled)
-        flags["nutrition"] = bool(setting.nutrition_enabled)
-        flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
-        flags["deals_email"] = bool(setting.deals_email_enabled)
+        if setting is not None:
+            # install-wide assistant gate is now just the
+            # master kill-switch. Per-user enable + provider config layers on
+            # top (see auth/update_me); useFeatureFlags wires the master flag
+            # as the "feature is available here at all" signal.
+            flags["assistant"] = bool(setting.master_llm_enabled)
+            flags["scanning"] = bool(setting.scanning_enabled)
+            flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
+            flags["meal_planning"] = bool(setting.meal_planning_enabled)
+            flags["money"] = bool(setting.money_enabled)
+            flags["nutrition"] = bool(setting.nutrition_enabled)
+            flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
+            flags["deals_email"] = bool(setting.deals_email_enabled)
+            # C-cross Chunk 3 — derived from the seam value; never publish the
+            # source string itself.
+            flags["nutrition_complex_available"] = bool(
+                (setting.nutrition_db_source or "").strip()
+            )
         # products is on iff product data exists (data-presence gate),
         # not an AppSetting flag. R-003: one server-derived fact via /health.
         from dora_api.domain.entities.product import Product
         flags["products"] = repo.get(Product).count() > 0
-        # C-cross Chunk 3 — derived from the seam value; never publish the
-        # source string itself.
-        flags["nutrition_complex_available"] = bool(
-            (setting.nutrition_db_source or "").strip()
-        )
         # email + push signals derive from the
         # operational-config resolver. Bucket-C secrets (SMTP password,
         # VAPID private key) live encrypted-at-rest on the AppSetting row;
@@ -140,7 +144,7 @@ def _feature_flags() -> dict[str, bool]:
     return flags
 
 
-def _locale_policy() -> dict[str, str]:
+def _locale_policy(setting) -> dict[str, str]:
     """FU-043 (PROPOSAL_LOCALE_I18N Layer A) — install-wide currency + display
     locale, surfaced here (not on `/app-settings`) because every logged-in
     user's browser needs to render money in the household's chosen currency
@@ -152,19 +156,15 @@ def _locale_policy() -> dict[str, str]:
     currency = "AUD"
     locale = "en-AU"
     try:
-        from dora_api.features.app_settings.access import \
-            get_or_create_app_setting
-        from dora_api.persistence.sqlalchemy_repository import \
-            SqlAlchemyRepository
-        setting = get_or_create_app_setting(SqlAlchemyRepository())
-        currency = (getattr(setting, "currency", None) or currency).strip() or currency
-        locale = (getattr(setting, "locale", None) or locale).strip() or locale
+        if setting is not None:  # FU-388 — shared singleton, fetched once by health_check
+            currency = (getattr(setting, "currency", None) or currency).strip() or currency
+            locale = (getattr(setting, "locale", None) or locale).strip() or locale
     except Exception:
         pass
     return {"currency": currency, "locale": locale}
 
 
-def _image_policy() -> dict[str, int]:
+def _image_policy(setting) -> dict[str, int]:
     """FU-345 — install-wide image compression knobs. Read on boot by
     the client-side `processImageFile` helper so every upload site
     (stock items, recipes, products, avatars, receipts, store logos)
@@ -177,16 +177,23 @@ def _image_policy() -> dict[str, int]:
     quality = 85
     max_dim = 1920
     try:
-        from dora_api.features.app_settings.access import \
-            get_or_create_app_setting
-        from dora_api.persistence.sqlalchemy_repository import \
-            SqlAlchemyRepository
-        setting = get_or_create_app_setting(SqlAlchemyRepository())
-        quality = int(getattr(setting, "image_quality", quality) or quality)
-        max_dim = int(getattr(setting, "image_max_dimension", max_dim) or max_dim)
+        if setting is not None:  # FU-388 — shared singleton, fetched once by health_check
+            quality = int(getattr(setting, "image_quality", quality) or quality)
+            max_dim = int(getattr(setting, "image_max_dimension", max_dim) or max_dim)
     except Exception:
         pass
     return {"quality": quality, "max_dimension": max_dim}
+
+
+def _support_channel() -> dict[str, str]:
+    """FU-370 — install's support/report-an-issue channel, surfaced here (not
+    on `/app-settings`) because every logged-in user's browser needs it to
+    decide whether to render the "Report an issue" affordance, not just admins.
+    Unlike the other blocks this is *not* DB-backed: it's a hardcoded
+    commit-and-done switch (with env override) — see
+    `features/support/support_channel.py`. Empty strings ⇒ dormant, no button."""
+    from dora_api.features.support.support_channel import resolve_support_channel
+    return resolve_support_channel()
 
 
 @HEALTH_ROUTER.route("")
@@ -195,12 +202,27 @@ def health_check():
     Mobile/desktop clients can rely on the response shape never
     losing keys — we add, but don't remove."""
     logging.getLogger(__name__).info("API health check requested.")
+    # FU-388 — fetch the AppSetting singleton ONCE and thread it through the
+    # three DB-backed blocks below. They used to each call
+    # get_or_create_app_setting independently → 3 SELECTs of the same one row
+    # per probe (and /health is polled by every client). None on DB error, so
+    # each block falls back to its conservative defaults exactly as before.
+    setting = None
+    try:
+        from dora_api.features.app_settings.access import \
+            get_or_create_app_setting
+        from dora_api.persistence.sqlalchemy_repository import \
+            SqlAlchemyRepository
+        setting = get_or_create_app_setting(SqlAlchemyRepository())
+    except Exception:
+        setting = None
     return jsonify({
         "ok": True,
         "version": CURRENT_VERSION,
         "schema_version": _SCHEMA_HEAD,
         "profile": (os.environ.get("DORA_ENV") or "development").lower(),
-        "features": _feature_flags(),
-        "image_policy": _image_policy(),
-        "locale_policy": _locale_policy(),
+        "features": _feature_flags(setting),
+        "image_policy": _image_policy(setting),
+        "locale_policy": _locale_policy(setting),
+        "support": _support_channel(),
     }), 200

@@ -168,9 +168,9 @@ Add a **scan mode**: pick an **action** first, then scan items to apply it —
 "open details", "mark out of stock", "mark well-stocked", etc. Distinct from
 today's Scan button (which just jumps to the scanned item).
 
-> **Open:** does scan-mode live here, or **fold into stocktake** (scan-to-check)?
-> The brief flags this. Proposed: a single scan-mode that *offers* stock-level
-> actions (covering the stocktake case) so we don't build two scanners (§7).
+> **✅ CLOSED — built 2026-07-14 (FU-378).** Resolved as proposed: a single
+> action-first scan-mode that *offers* stock-level actions (covering the
+> stocktake scan-to-check case) — no second scanner. See §7b row 4.
 
 ---
 
@@ -273,14 +273,15 @@ Legend: ✅ closed-by-shipped-behaviour · 🔴 genuinely-open · 📦 moot/supe
 | 1 | Detail nav model | ✅ | Shipped as resolved — see §2.3 note. `onRowClick`: mobile full-page, desktop splitter peek; one shared `StockItemDetailPage` in two frames; long-press → bulk on mobile. **Unblocked FU-384** (now closed via FU-508). |
 | 2 | Miss-tap risk | ✅ | No extra open affordance added. Every in-row control uses `@click.stop`; row-open is read-only/harmless. Matches "rely on well-sized buttons". |
 | 3 | Open/in-use toggle | ✅ | Kept in the row as resolved — `RowActionButton` with `lock`/`lock_open` in the right cluster (`StockItemRow.vue` ≈L233), `onToggleOpen` PATCHes `is_open` (+ FU-507 effective-expiry prompt). |
-| 4 | Scan mode vs stocktake | 🔴 | **Design call settled, build NOT shipped.** The Overview `Scan` button (gated on `scanningEnabled`) still uses the *old* jump-to-item behaviour (`onOverviewScanDecoded` → `router.push('/stock/<id>')`). No action-first "pick an action, then scan to apply" mode exists in the SPA. Unified scanner remains unbuilt. |
+| 4 | Scan mode vs stocktake | ✅ | **Shipped 2026-07-14 (FU-378).** The Overview `Scan` button opens the camera with a **persistent, always-visible current-action chip** the user can switch without leaving the camera. Default = "Open stock item" (scan → jump to the matched item, then closes). Switch to "Set to <level>" per stock level → the overlay stays open in loop-apply mode, each scan sets that level via the shared `updateStockLevelAsync` (R-003). One unified action-first scanner; covers the stocktake scan-to-check case. Still gated on `scanningEnabled`. Pure logic in `helpers/scanActions.ts` (unit-tested). Product-no-link / unknown barcodes are reported and skipped, not routed into add (that stays FU-373). |
 | 5 | Planned-meals metric fallback | 📦 | Superseded. The row renders **neither** "# recipes" nor "# upcoming planned meals" — the whole metric was dropped from the row. Decision-useful signal is now the `BuyVerdictBadge` ("should I buy this?"). The keep-#-recipes-until-C-2 fallback is moot. |
 | 6 | Outline colour scheme | ✅ | Shipped (evolved to "Model C round 8"). `rowClasses` in `StockItemRow.vue`: `--warn` (amber) / `--alert` (red) whole-row outline, non-essential Out rows dim, `--selected` fills the row (L91). Palette via theme tokens (`--q-warning`/`--q-negative`). |
 | 7 | 50-item cap fix | ✅ | Shipped as the virtualised path (not the quick `?limit` bump). `StockOverview.vue` uses `q-virtual-scroll` above `VIRTUAL_SCROLL_THRESHOLD` (50), `ListTransition` glide-in below it. Full pantry renders. |
 
-**Net:** 5 of 7 closed-by-shipped-behaviour, 1 superseded (metric), 1 genuinely-open
-(the action-first scan-mode was never built — scanning stays gated off by default).
-The §2.3 #1 decision is fully closed.
+**Net (updated 2026-07-14):** 6 of 7 closed-by-shipped-behaviour, 1 superseded
+(metric). The last genuinely-open item — the action-first scan-mode (row 4) — was
+built under FU-378, so **every §7 decision is now resolved**. Scanning stays gated
+off by default. The §2.3 #1 decision is fully closed.
 
 ---
 

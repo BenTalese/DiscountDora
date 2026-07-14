@@ -21,12 +21,26 @@ from dora_api.infrastructure.audit_retention import prune_audit_events
 from dora_api.infrastructure.configuration_manager import DORA_CONFIG
 from dora_api.infrastructure.logging_setup import configure_logging
 from dora_api.infrastructure.middleware import MIDDLEWARE
+from dora_api.infrastructure.profile import is_test
 from dora_api.infrastructure.utils import get_attributes_ending_with
 from dora_api.persistence.seed import seed_dev_data
 from dora_api.persistence.seed_showcase import reset_showcase
 
 
-def startup(is_test_env: bool = False):
+def bootstrap(is_test_env: bool = False):
+    """Wire the app up to the point of serving — everything `startup()`
+    used to do *except* the blocking `app.run()`.
+
+    FU-397: split out so a production WSGI server (gunicorn) can import a
+    fully-configured `app` via `dora_api.wsgi` without going through Flask's
+    dev server. `startup()` (dev / desktop-adjacent path) calls this and then
+    blocks on `app.run()`; the WSGI entry point calls this at import time and
+    hands `app` to gunicorn. The e2e suite calls it via `startup(is_test_env
+    =True)`, exercising the same setup path.
+
+    Runs CORS wiring, legacy-path migrations, DB init/upgrade, logging,
+    router registration, and — outside tests — the background scheduler.
+    """
     # D3: refuse to boot in production when required env vars are
     # missing. No-op in dev/test. Runs before *anything* else so the
     # friendly error fires before we read appsettings, wire routes, etc.
@@ -73,7 +87,15 @@ def startup(is_test_env: bool = False):
     )
     register_routers()
 
-    if not is_test_env:
+    # Skip the scheduler in tests (the `is_test_env` flag) AND whenever the
+    # profile is `test` — the latter guards the WSGI import path (FU-397): a
+    # test that imports `dora_api.wsgi` under DORA_ENV=test must not spawn a
+    # real background thread. In a single-worker gunicorn (the default, see
+    # gunicorn.conf.py) this scheduler runs in exactly one process, so the
+    # daily/hourly jobs fire once. Running >1 worker would duplicate them —
+    # that needs the worker-split / externalised-scheduler work parked in
+    # OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md.
+    if not is_test_env and not is_test():
         # Nightly audit-log retention sweep. Hour 3 local time keeps it
         # well clear of any deals-email schedule. Tests skip the
         # scheduler entirely — they don't run long enough to trip it,
@@ -140,6 +162,15 @@ def startup(is_test_env: bool = False):
                 )
         scheduler.start()
 
+
+def startup(is_test_env: bool = False):
+    """Dev / local entry point: wire everything up, then block on Flask's
+    dev server. Production uses a real WSGI server instead (gunicorn →
+    `dora_api.wsgi:app`); see startup.sh + gunicorn.conf.py (FU-397). Tests
+    call this with `is_test_env=True` to run the setup without blocking.
+    """
+    bootstrap(is_test_env)
+
     if not is_test_env:  # app.run blocks the thread where tests are ran from
         app.run(
             DORA_CONFIG.get_api_host(),
@@ -167,7 +198,14 @@ def init_db(is_test_env: bool):
         if is_test_env or (DORA_CONFIG.is_debug_mode_enabled() and DORA_CONFIG.is_seed_allowed()):
             db.drop_all()
             db.create_all()
-            seed_dev_data()
+            # FU-388 — interactive dev always seeds under load (default 500
+            # extra items); the e2e suite passes 0 so its boot stays fast.
+            seed_dev_data(
+                bulk_stock_items=(
+                    0 if is_test_env
+                    else DORA_CONFIG.get_seed_bulk_stock_item_count()
+                )
+            )
             return
 
         if DORA_CONFIG.is_debug_mode_enabled():

@@ -17,6 +17,10 @@
 // `find_recipe`, since both could contain food words).
 import type { DoraMood } from 'src/components/dora/doraTypes';
 import { LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE } from 'src/helpers/stockStatus';
+import {
+    currentSupportChannel,
+    supportHref,
+} from 'src/composables/useSupportChannel';
 
 export type DoraIntentId =
     | 'greet'
@@ -1365,8 +1369,30 @@ export async function runIntent(
         }
 
         case 'report_issue': {
-            // Repo is private; no public issue tracker. Acknowledge the
-            // problem and point at Help instead of an external link.
+            // FU-370 — if the operator has configured a support channel, surface
+            // it as a real "Report it" button (externalLink → new tab); otherwise
+            // fall back to pointing at Help. Same acknowledge-first tone either way.
+            const channel = currentSupportChannel();
+            const href = supportHref(channel, {
+                subject: '[Dora] Bug report',
+                body: '\n\n---\n(reported from the Dora assistant)',
+            });
+            if (href) {
+                const introsWithChannel = [
+                    "Oh no — sorry about that. Jot down what you did and what you expected, then hit the button below to send it in.",
+                    "Bugs! My one weakness (other than soggy buns). Note the steps + what you expected and file it below.",
+                    "Appreciate the heads-up. Capture the details so they don't get lost, then use the button to report it properly.",
+                    "Noted! Steps to reproduce + what you expected = chef's kiss — pop them in a report below.",
+                ];
+                return {
+                    text: pick(introsWithChannel),
+                    mood: 'worried',
+                    externalLink: { url: href, label: 'Report it' },
+                    suggestions: ['stuck', 'guides'],
+                };
+            }
+            // Dormant install — no channel configured. Acknowledge and point at
+            // Help; no external link to offer.
             const intros = [
                 "Oh no — sorry about that. Hit Help for the guides; if it's a real bug, jot down what happened so it can be looked at properly.",
                 "Bugs! My one weakness (other than soggy buns). Note the steps + what you expected and pass it on to whoever's running this Dora instance.",

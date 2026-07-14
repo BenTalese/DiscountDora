@@ -35,6 +35,13 @@ export interface HealthInfo {
         currency: string;        // ISO 4217, e.g. 'AUD'
         locale: string;          // BCP-47, e.g. 'en-AU'
     };
+    // FU-370 — install's support / report-an-issue channel. Optional in the
+    // type because older backends won't emit it; both strings empty ⇒ dormant
+    // (no report affordance renders). `url` wins over `email` when both set.
+    support?: {
+        url: string;             // external "Report an issue" URL, or ''
+        email: string;           // mailto: fallback address, or ''
+    };
 }
 
 export default class HealthApiService {

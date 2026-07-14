@@ -17,10 +17,23 @@
                 :to="{ path: '/help/dora' }"
                 class="q-mr-sm"
             />
-            <!-- Repo is private — no public issues page. Bug reports
-                 go through whatever channel the operator has set up
-                 with the user; removed the dead-link button. -->
-
+            <!-- FU-370 — renders only when the operator has configured a
+                 support channel (see support_channel.py). Dormant installs
+                 show nothing here, exactly as before. type="a" anchor form
+                 isn't in BaseButton's type union; matches the sibling raw
+                 q-btn pattern above. -->
+            <q-btn
+                v-if="hasChannel"
+                flat
+                no-caps
+                color="accent"
+                :icon="ICONS.bug_report"
+                label="Report an issue"
+                type="a"
+                :href="reportHref"
+                target="_blank"
+                rel="noopener"
+            />
         </div>
 
         <q-banner
@@ -189,14 +202,44 @@
                         </div>
                     </q-card-section>
                     <q-separator />
-                    <!-- Repo is private — the public-repo + issues
-                         links were removed. Bug reports and feature
-                         requests go through whatever channel the
-                         operator has set up. -->
-                    <q-card-section class="dora-text-muted text-caption">
-                        Found a bug or want a feature? Note the steps
-                        you took and what you expected, and pass it
-                        to whoever runs this Dora instance.
+                    <!-- FU-370 — honest one-person/side-project support copy
+                         (replaces the old "pass it to whoever runs this Dora
+                         instance" line). The final paragraph adapts: when a
+                         support channel is configured it points at the
+                         Report-an-issue button above; when dormant it falls
+                         back to the graceful "ask whoever runs this" form. -->
+                    <q-card-section class="text-caption">
+                        <div class="text-body2 text-weight-medium q-mb-xs">
+                            Getting help &amp; reporting issues
+                        </div>
+                        <div class="dora-text-muted support-copy">
+                            <p>
+                                Dashy Dora is built by one person as a side
+                                project. Bug reports and feature requests are
+                                welcome and every one gets read — but replies can
+                                take days or weeks. There's no on-call and no
+                                support team; just someone doing this in evenings
+                                and weekends.
+                            </p>
+                            <p>
+                                If a family member set up this Dora for you, ask
+                                them first — most problems are quicker to solve
+                                locally.
+                            </p>
+                            <p v-if="hasChannel">
+                                Otherwise, use the
+                                <strong>Report an issue</strong> button at the top
+                                of this page. Before filing, note the steps you
+                                took, what you expected, and what happened
+                                instead. Screenshots help.
+                            </p>
+                            <p v-else>
+                                Otherwise, note the steps you took, what you
+                                expected, and what happened instead (screenshots
+                                help), and pass it to whoever runs this Dora
+                                instance.
+                            </p>
+                        </div>
                     </q-card-section>
                 </q-card>
             </q-tab-panel>
@@ -218,8 +261,12 @@
         type VersionInfo
     } from 'src/services/api/helpApiService';
     import { computed, onMounted, ref } from 'vue';
-    import { useRouter } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import {
+        useSupportChannel,
+        supportHref,
+    } from 'src/composables/useSupportChannel';
 
     type GuideEntry = {
         title: string;
@@ -358,7 +405,17 @@
 
     const $q = useQuasar();
     const router = useRouter();
+    const route = useRoute();
     const helpApi = new HelpApiService();
+
+    // FU-370 — support channel; button + copy self-gate on `hasChannel`.
+    const { channel, hasChannel } = useSupportChannel();
+    const reportHref = computed(() =>
+        supportHref(channel.value, {
+            subject: `[Dora] Bug — v${versionInfo.value?.current_version ?? 'unknown'}`,
+            body: `\n\n---\nDora ${versionInfo.value?.current_version ?? 'unknown'} · ${route.path}`,
+        }),
+    );
 
     const tab = ref<'guides' | 'changelog' | 'about'>('guides');
     const search = ref('');
@@ -448,5 +505,11 @@
         white-space: pre-wrap;
         font-family: inherit;
         margin: 0;
+    }
+    .support-copy p {
+        margin: 0 0 8px;
+    }
+    .support-copy p:last-child {
+        margin-bottom: 0;
     }
 </style>

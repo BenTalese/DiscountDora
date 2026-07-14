@@ -24,6 +24,26 @@
                 </div>
             </transition>
 
+            <!-- ── Action-result banner (FU-378) ────────────────────────
+                 In action mode the parent applies the scan (e.g. set a
+                 level) and calls pushResult() with the per-item outcome, so
+                 the banner shows "<item> → <level>" or the failure reason
+                 rather than the raw barcode value. -->
+            <transition name="fade">
+                <div
+                    v-if="actionBanner"
+                    class="scan-banner"
+                    :class="actionBanner.ok ? 'scan-banner--ok' : 'scan-banner--bad'"
+                >
+                    <q-icon
+                        :name="actionBanner.ok ? ICONS.check_circle : ICONS.error"
+                        size="18px"
+                        class="q-mr-xs"
+                    />
+                    {{ actionBanner.text }}
+                </div>
+            </transition>
+
             <!-- ── Top bar ──────────────────────────────────────────── -->
             <div class="scan-topbar">
                 <div class="scan-status">
@@ -50,6 +70,12 @@
 
             <!-- ── Manual entry escape hatch ────────────────────────── -->
             <div class="scan-bottombar">
+                <!-- FU-378 — caller-owned control zone (e.g. the current-action
+                     switcher). Kept above the manual-entry box so it's always
+                     visible while scanning and clear of the centred target. -->
+                <div v-if="$slots.controls" class="scan-controls">
+                    <slot name="controls" />
+                </div>
                 <q-input
                     v-model="manualValue"
                     dense
@@ -87,9 +113,15 @@
          *  decode. Useful for "scan to navigate" flows; off by default so
          *  the user can keep scanning. */
         closeOnDecode?: boolean;
+        /** FU-378 — suppress the built-in "Decoded <code>" banner + success
+         *  chime on decode, letting the parent report the real per-item
+         *  outcome via pushResult() once its async apply resolves. Keeps the
+         *  debounce; only the feedback is deferred. */
+        deferFeedback?: boolean;
     }
     const props = withDefaults(defineProps<Props>(), {
         closeOnDecode: false,
+        deferFeedback: false,
     });
     const emit = defineEmits<{
         (e: 'update:modelValue', value: boolean): void;
@@ -112,6 +144,11 @@
     // successful decode.
     const lastDecodeBanner = ref<string | null>(null);
     let bannerTimer: ReturnType<typeof setTimeout> | null = null;
+    // FU-378 — action-mode result banner, pushed by the parent after it
+    // applies a scan (distinct from the raw-decode banner so the two never
+    // collide: defer mode uses this one, the legacy jump flow uses the other).
+    const actionBanner = ref<{ text: string; ok: boolean } | null>(null);
+    let actionBannerTimer: ReturnType<typeof setTimeout> | null = null;
 
     // The active reader + media stream so we can clean them up on close.
     // Lazy-loaded so the chunk only ships when the dialog opens.
@@ -131,11 +168,15 @@
             await startScanner();
         } else {
             stopScanner();
+            // Clear any lingering result banner so a reopen starts fresh.
+            if (actionBannerTimer) clearTimeout(actionBannerTimer);
+            actionBanner.value = null;
         }
     });
 
     onBeforeUnmount(() => {
         if (bannerTimer) clearTimeout(bannerTimer);
+        if (actionBannerTimer) clearTimeout(actionBannerTimer);
         void stopScanner();
     });
 
@@ -210,8 +251,12 @@
         if (text === lastDecoded && now - lastDecodedAt < DEBOUNCE_MS) return;
         lastDecoded = text;
         lastDecodedAt = now;
-        showBanner(text);
-        void flashAndChime('good');
+        // In defer mode the parent owns the feedback (pushResult) once its
+        // async apply resolves — don't flash a premature green.
+        if (!props.deferFeedback) {
+            showBanner(text);
+            void flashAndChime('good');
+        }
         emit('decoded', text);
         if (props.closeOnDecode) modelOpen.value = false;
     }
@@ -232,8 +277,10 @@
         manualValue.value = '';
         // Don't dedup manual entries — the user typed it on purpose.
         lastDecoded = null;
-        showBanner(value);
-        void flashAndChime('good');
+        if (!props.deferFeedback) {
+            showBanner(value);
+            void flashAndChime('good');
+        }
         emit('decoded', value);
         if (props.closeOnDecode) modelOpen.value = false;
     }
@@ -275,6 +322,17 @@
         void flashAndChime('bad');
     }
 
+    /** FU-378 — action-mode result feedback. The parent applies the scan
+     *  (set level, etc.) and calls this with the outcome so the overlay
+     *  shows "<item> → <level>" (green) or the reason it couldn't act (red),
+     *  and chimes to match. Stays open so the user keeps scanning. */
+    function pushResult(message: string, kind: 'good' | 'bad') {
+        actionBanner.value = { text: message, ok: kind === 'good' };
+        if (actionBannerTimer) clearTimeout(actionBannerTimer);
+        actionBannerTimer = setTimeout(() => { actionBanner.value = null; }, 2000);
+        void flashAndChime(kind);
+    }
+
     async function toggleTorch() {
         if (!torchSupported.value || !stream) return;
         const track = stream.getVideoTracks?.()[0];
@@ -295,7 +353,7 @@
         modelOpen.value = false;
     }
 
-    defineExpose({ flashBad });
+    defineExpose({ flashBad, pushResult });
 </script>
 
 <style scoped>
@@ -383,6 +441,19 @@
         display: flex;
         align-items: center;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        max-width: 90vw;
+    }
+    /* FU-378 — action-result banner colours mirror the good/bad flash. */
+    .scan-banner--ok { background: rgba(76, 175, 80, 0.92); }
+    .scan-banner--bad { background: rgba(239, 83, 80, 0.94); }
+    /* FU-378 — caller-owned control zone (current-action switcher). Centred
+       above the manual-entry box. */
+    .scan-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 12px;
     }
     .fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
     .fade-enter-from, .fade-leave-to { opacity: 0; }

@@ -64,6 +64,16 @@ services:
       - DORA_LOG_LEVEL=${DORA_LOG_LEVEL:-ERROR}
       - DORA_DEBUG=${DORA_DEBUG:-}
 
+      # ── API server (FU-397) ────────────────────────────────────────
+      # Production serves the API via gunicorn (real WSGI server) instead
+      # of Flask's dev server; `auto` picks it from DORA_ENV. Keep
+      # DORA_WEB_CONCURRENCY=1 — the in-process scheduler must run once
+      # (more workers duplicate the daily/hourly jobs). See gunicorn.conf.py.
+      - DORA_API_SERVER=${DORA_API_SERVER:-auto}
+      - DORA_WEB_CONCURRENCY=${DORA_WEB_CONCURRENCY:-1}
+      - DORA_WEB_THREADS=${DORA_WEB_THREADS:-4}
+      - DORA_WEB_TIMEOUT=${DORA_WEB_TIMEOUT:-120}
+
       # ── Transactional email (auth flows). Sender runs in dry-run
       #    mode when DORA_SMTP_USERNAME is unset.
       - DORA_SMTP_HOST=${DORA_SMTP_HOST:-}

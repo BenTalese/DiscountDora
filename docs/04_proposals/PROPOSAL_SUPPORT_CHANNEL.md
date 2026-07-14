@@ -2,6 +2,24 @@
 
 **Type:** 🟠 action plan — mixes out-of-app operator steps + a small code change.
 
+> **Status: ➗ BUILT (dormant) 2026-07-14 — FU-370.** The code half below shipped,
+> **off by default** (no affordance renders until a channel is configured), with
+> **one deliberate, settled divergence directed by the project owner:** the two
+> `AppSetting` columns + migration + admin editor in §4.1/§4.2 were **NOT built and
+> never will be.** Owner directive: *"I wouldn't want this to be controllable by
+> admins ever, this is something I control only."* So the support target is a
+> hardcoded commit-and-done switch + env override in
+> `dora_api/features/support/support_channel.py`. This is **out of R-030's scope by
+> design** (R-030 governs *admin-tweakable* operational config; this is
+> author/deploy-controlled and off-limits to household admins) — not a carve-out
+> awaiting promotion. Settled in **FU-558** (resolved). Everything else in §4.3–§4.5
+> shipped as written (health block, `useSupportChannel`, HelpPage button + copy,
+> `PageErrorState` wiring, DoraBot intent). **Standing up the actual channel +
+> setting the target is FU-557** (the out-of-app §6 action list). **Open decisions
+> — closed:** the §3 channel fork is deferred to FU-557 (owner chose "decide later;
+> ship dormant + channel-agnostic"); §4.1/§4.2 (AppSetting/admin editor) are
+> **withdrawn**, not deferred; no live forks remain.
+
 **Origin.** Follow-on to FU-146 (GitHub-issues sweep after the repo went
 private). That sweep removed every dead link but left the app with no
 in-product way for a user to reach anyone. The Help-page copy now reads:

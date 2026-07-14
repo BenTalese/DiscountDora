@@ -653,6 +653,20 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ## Stock
 
+### Action-first scan mode on Stock Overview — origin FU-378
+*(Needs the install-wide `scanning_enabled` flag ON — Settings → Admin, or `DORA_*`/AppSetting — and a device with a camera. Manual-entry box in the overlay works as a camera stand-in.)*
+- [ ] With scanning ON, on Stock Overview the **Scan** button opens the camera overlay directly (single button, no menu on the toolbar)
+- [ ] Inside the overlay there's a visible **"Action: Open stock item"** chip (with an open-in-new icon) above the manual-entry box, and a caption "Each scan opens that item — the scanner then closes." — i.e. the current action is always shown
+- [ ] With the default "Open stock item" action, scan a known item's code (or type it in the manual box) → jumps to that item's detail page and the overlay closes (legacy default behaviour)
+- [ ] Reopen Scan → tap the **Action** chip → a menu ("Scan does…") lists **Open stock item** + **Set to <level>** for each configured stock level (each with its colour dot; renamed levels show their custom name); the currently-selected action shows a check mark
+- [ ] Pick **Set to <a level>** → the chip updates to "Action: Set to <level>" with the level's colour dot, the caption changes to "Keep scanning — each item is set to this level.", and the overlay **stays open**
+- [ ] Scan (or manually enter) a known item's barcode/QR → a green "<item> → <level>" banner + chime shows, and the item's level actually changes (verify on the row after closing) — overlay stays open for the next scan
+- [ ] Scan several different items in a row → each is set to the chosen level; the loop never closes on its own
+- [ ] **Switch the action mid-session** (tap the chip, pick a different level, or back to "Open stock item") → the next scan uses the newly-selected action; you never have to leave the camera to change it
+- [ ] Scan an unknown barcode (or a product with no linked stock item) while a level action is selected → a red banner explains it was skipped ("no pantry item linked" / "add it to your pantry first") and the overlay stays open — it does NOT open the add-item dialog
+- [ ] Close the overlay (X) and reopen → the action resets to the "Open stock item" default, and no stale banner from the previous session lingers
+- [ ] With scanning OFF (default) → the Scan button does not appear at all
+
 ### Product unlink fix (str/UUID 404) — origin FU-528 family
 - [ ] On a stock item that has a linked product (detail page → linked products), unlink the product → it disappears from the list without an error toast (previously every unlink silently failed with a 404 under the hood)
 - [ ] Refresh the page → the product stays unlinked; relink it → link works as before
@@ -1542,6 +1556,22 @@ machine at this session close-time; walked opportunistically.*
 
 ## Operator
 
+### Production WSGI server (gunicorn) — origin FU-397 (shipped 2026-07-14)
+*Can't be run on the Windows dev box (gunicorn needs POSIX/fcntl) — confirm in the Linux container or a Linux/WSL checkout.*
+- [ ] Build + boot the container with `DORA_ENV=production` (compose default) and the required prod vars set → container logs show `[startup] dora_api via gunicorn (production WSGI, gunicorn.conf.py)` and gunicorn's own boot lines (`Booting worker`, `Listening at: http://0.0.0.0:5170`), **not** Flask's `WARNING: This is a development server`.
+- [ ] Confirm exactly **one** gunicorn worker by default (`ps aux | grep gunicorn` inside the container → one master + one worker); the SPA + API respond normally through nginx on `:5174`/`:5170`.
+- [ ] Scheduler still fires once: check the logs over a reset interval (or set `DORA_DEMO_MODE=true` + `DORA_DEMO_RESET_MINUTES=2`) → the demo reset / scheduled jobs run **once** per interval, not duplicated.
+- [ ] Force the dev server in a container with `DORA_API_SERVER=flask` → logs show `via Flask dev server`; force gunicorn in a dev profile with `DORA_API_SERVER=gunicorn` → gunicorn boots. (`auto` picks by `DORA_ENV`.)
+- [ ] Set `DORA_WEB_CONCURRENCY=2` → boot logs carry the loud `WARNING: DORA_WEB_CONCURRENCY>1 duplicates scheduled jobs` line (don't run a self-host instance this way).
+- [ ] Restart-cleanliness: `docker compose restart` → gunicorn comes back up, migrations run once, no port bind race with nginx.
+
+### Dev seed runs under load by default — origin FU-388 (2026-07-14)
+*The dev seed now appends ~500 bulk "load" stock items (+ products/offers, history, ~62 recipes, a big shopping list) so every interactive session runs loaded. Env-gated via `DORA_SEED_BULK_ITEMS`; the e2e suite passes 0. Quick eyes-on to confirm it seeds and the app stays usable under load.*
+- [ ] Boot a dev instance with `DORA_ALLOW_DESTRUCTIVE=true` (default `DORA_SEED_BULK_ITEMS`) → Stock overview shows ~521 items ("Load item 0000 · …" through ~0499) alongside the curated fixtures; the page renders + filters without hanging.
+- [ ] Dashboard, Locations heatmap, Cookbook (with ~68 recipes), and a big shopping list ("Big load list") all render under the load — note anything that feels slow (that's the FU-388 sweep's input).
+- [ ] Boot with `DORA_SEED_BULK_ITEMS=0` → back to the ~22 curated items only (no "Load item …" rows), for when you want a light DB.
+- [ ] `DORA_SEED_BULK_ITEMS=2000` → seeds the larger set without erroring (upper-bound sanity).
+
 ### Playwright browser-E2E smoke — CI / cross-OS re-run — origin FU-540
 - [x] First run GREEN on this Windows dev box (2026-07-12, driving system Chrome via `DORA_E2E_CHANNEL=chrome` since the bundled binary won't download here) — 9 tests: login good/bad creds + authed nav over dashboard/stock/cookbook/meal-plans/shopping-lists + a real /api handshake. Selectors confirmed against the running app.
 - [ ] Re-run in CI (bundled Chromium, `DORA_E2E_CHANNEL` unset) once CI is un-commented (FU-405), and on Linux, to confirm cross-OS. (Complements, does not replace, the manual walks below.)
@@ -1571,6 +1601,15 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Cross-cutting
+
+### Support / "Report an issue" channel — origin FU-370 (2026-07-14)
+*Shipped **dormant**: with no channel configured (`support_channel.py` constants blank + no `DORA_SUPPORT_*` env) nothing new should render. Verify both states — dormant, then configured (easiest: boot the API with `DORA_SUPPORT_URL=https://example.com/new?template=bug_report.yml`, or `DORA_SUPPORT_EMAIL=you@example.com` to check the mailto path).*
+- [ ] **Dormant (default):** Help page header shows **no** "Report an issue" button; the About tab reads the honest one-person copy ending "…pass it to whoever runs this Dora instance"; DoraBot "this is broken" reply points at Help with no external link; a forced full-page error shows no "Report this" button
+- [ ] **With `DORA_SUPPORT_URL` set:** Help header shows a **Report an issue** button that opens the URL in a new tab with `?title=…&body=…` appended (and the existing `?template=` preserved via `&`); About tab's last paragraph now points at "the **Report an issue** button at the top of this page"
+- [ ] DoraBot: type "something's broken" → the reply offers a **Report it** button that opens the same URL in a new tab
+- [ ] Force a page error (e.g. break a route) → the error screen's **Report this** button opens the channel pre-filled with the screen/path/reference/error message
+- [ ] **With only `DORA_SUPPORT_EMAIL` set (URL blank):** all the above open a `mailto:` link with a pre-filled subject/body instead of a URL
+- [ ] Non-admin user sees the button too (the channel comes from `/api/health`, not an admin-only setting)
 
 ### Text-scale follow-through into component-internal text — origin FU-025 (2026-07-10)
 *Fix landed via `quasar.variables.scss` rem-overrides (Quasar's `body { font-size: 14px }` and ~30 component vars) plus `.q-field__bottom` / `.q-bar--dense` rescues in `app.scss`. Walk one form-heavy page and one table-heavy page at both Small and Extra-large in Settings → Appearance → Text size, and confirm the previously-unresponsive text now moves.*

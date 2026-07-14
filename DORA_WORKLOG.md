@@ -9,6 +9,665 @@ next.
 
 ---
 
+## 2026-07-14 (later 15) — FU-393: data-model sanity sweep (P5-08) run
+
+**Why:** the P5-08 comprehensive data-model sweep (nullability, FK-consistency,
+index coverage, dead columns) had never been done as a single pass — only INV-1's
+field-usage slice + FU-416's delta.
+
+**How:** built the schema both ways — `db.create_all()` (model; the dev + e2e
+path) and `flask_migrate.upgrade()` from empty (prod) — reflected both throwaway
+SQLite DBs and diffed columns/nullability/indexes/uniques/FKs. Ground truth from
+the schema, not an eyeball of the 1 559-line `table_mappings.py`. Scratch scripts
+removed after the pass. 59 tables.
+
+**Output:** [`docs/05_investigations/DATA_MODEL_SANITY_SWEEP_FU393.md`](docs/05_investigations/DATA_MODEL_SANITY_SWEEP_FU393.md) — read-only, no schema change this pass.
+
+**Headline findings:**
+- **Schema drift** — `create_all` builds **1** secondary index, `upgrade` builds
+  **32**; 31 index colsets are prod-only. Dev + the entire e2e suite run a
+  near-unindexed schema ≠ prod. Tension with R-003 (single-source) / R-006.
+- **FK index coverage** — **42** FK columns unindexed in prod, **35** with
+  CASCADE/SET NULL (parent delete scans the child table).
+- **Nullability drift** — 4 cols differ; `User.username` is a *known documented*
+  deferral, 3 `Product` cols (`is_active`, `is_available`, `merchant_stockcode`)
+  look unintentional.
+- FK `ondelete` in the model is clean (0 missing); no new dead columns.
+- The guard that should've caught the drift (`test__migrations__migrated_schema
+  _matches_orm_metadata`) only compares **table names**.
+
+**Spawned remediation FUs (audit stays read-only):** [[FU-563]] (index drift +
+FK indexes + harden the schema-match test to compare cols/nullability/indexes),
+[[FU-564]] (nullability drift). Both pre-Phase-4-gate, low-risk, clean
+forward-only migrations.
+
+**Standards close-gate:** drift logged as an R-003/R-006 finding + routed to
+FU-563 (explain-or-flag satisfied — not fixed blind in an audit). Cross-referenced
+FU-388 (perf sweep ran on the unindexed dev schema; its N+1 verdict stands, but it
+couldn't see the FK-index gap). No CHANGELOG entry (investigation, not a
+product/code change). FU-393 moved to RESOLVED.
+
+### Next up
+- None owed. FU-563 / FU-564 are the natural pre-Phase-4 schema-hygiene pickups.
+
+---
+
+## 2026-07-14 (later 14) — FU-397 built: production WSGI server (gunicorn)
+
+**Why:** self-host release hardening — the API was fronted by Flask's dev
+server in *every* profile including production. FU-397's remaining scope
+(worker-split was already relocated to the optional doc) was to run a real
+WSGI server, env-driven per §7.5 #3.
+
+**What shipped (code):**
+- `requirements.txt` — `gunicorn==23.0.0` (pure-Python; installs on Windows,
+  runs on the Linux container; dev/desktop don't depend on it running).
+- `dora_api/startup.py` — split into `bootstrap(is_test_env)` (all app wiring:
+  CORS, path migration, `init_db`/`upgrade`, logging, routers, scheduler) +
+  `startup()` = bootstrap + blocking `app.run()`. Scheduler gate now also
+  checks `is_test()` so a WSGI import under a test profile can't spawn a thread.
+- `dora_api/wsgi.py` (new) — `bootstrap()` at import, exposes `app` for
+  `gunicorn dora_api.wsgi:app`.
+- `gunicorn.conf.py` (new) — env-driven bind (mirrors DORA_API_HOST/PORT → nginx
+  `:5170` upstream unchanged), **single `gthread` worker default**
+  (DORA_WEB_CONCURRENCY=1 / DORA_WEB_THREADS=4 / DORA_WEB_TIMEOUT=120), stdout
+  logs, `on_starting` warns at >1 worker.
+- `startup.sh` — `DORA_API_SERVER=auto|gunicorn|flask` (auto = gunicorn when
+  DORA_ENV=production). `.env.example` + `compose.yml` document the vars.
+
+**Key design call — single worker on purpose:** the in-process APScheduler
+(alerts digest/push, audit prune, demo reset, snooze cleanup) must fire once,
+so concurrency is threads-not-processes. Multi-worker/horizontal scale stays
+parked in OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md §3 (out of scope).
+
+**Untouched:** dev `app.run()`, desktop bundle (`make_server` via
+`init_db`/`register_routers`), e2e (`startup(is_test_env=True)`).
+
+**Verification:** e2e **1006 green** (boot path), top-level **484 green**, 9 new
+unit tests (`tests/test_wsgi_entrypoint.py`) over the WSGI callable + gunicorn
+config. gunicorn can't run on the Windows dev box (no fcntl) → operator boot
+smoke logged in `DORA_VERIFY.md` (Operator).
+
+**Standards close-gate:** R-005 / §7.5 #3 — server choice env/config-driven,
+dev+desktop paths preserved (no self-host-only hole), no speculative worker/
+tenant machinery. No new ADR (applies existing distribution posture). FU-397
+moved to RESOLVED (worker-split half already relocated).
+
+### Next up
+- None owed. Pairs conceptually with FU-405 (self-host ops: backups/CI) when
+  that release-hardening work-unit is picked up.
+
+---
+
+## 2026-07-14 (later 13) — FU-378 built: action-first Stock Overview scan mode
+
+**Why:** last genuinely-open item on `PROPOSAL_STOCK_OVERVIEW.md` (§7a decision #4
+/ §7b row 4 / §2.9) — the action-first "pick an action, then scan to apply"
+scan-mode. Every other §7 decision was already closed-by-shipped-behaviour.
+
+**What shipped (code):**
+- `web_app/src/helpers/scanActions.ts` (new, pure) — `buildScanActionOptions`
+  (menu from live level rows, no hardcoded level literals — R-003) +
+  `resolveScanLevelOutcome` (lookup-result → per-item feedback contract).
+- `web_app/src/components/ScanOverlay.vue` — new `deferFeedback` prop, a
+  `pushResult(message, kind)` exposed method (green "<item> → <level>" / red
+  skip banner + chime), and a `#controls` slot (caller-owned control zone above
+  the manual-entry box, e.g. the current-action switcher). Defer mode
+  suppresses the built-in decode banner so the parent owns per-item feedback
+  after its async apply. (Kept generic — the stock-level switcher UI lives in
+  the StockOverview slot content, not the overlay.)
+- `web_app/src/pages/StockOverview.vue` — Scan button opens the camera; the
+  action is a **persistent selection shown + switched inside the overlay** via
+  an always-visible "Action: …" chip + caption (rendered into a new ScanOverlay
+  `#controls` slot). Default = "Open stock item" (legacy N5 jump, closes on
+  decode); switch to "Set to <level>" per level → overlay stays open, loop-apply
+  via the shared `updateStockLevelAsync` (R-003 — optimistic + offline-queue +
+  auto-add). One unified scanner; covers the stocktake scan-to-check case.
+  Gated on `scanningEnabled` (off by default). Opening the button resets to the
+  navigate default; switching happens in-overlay.
+  **(Shape evolved across two rounds of owner feedback: (1) navigate is the
+  one-tap default not a forced menu; (2) the selected action is always visible
+  and switchable while scanning — so a split launch button became an in-overlay
+  current-action switcher.)**
+- `web_app/test/unit/scanActions.spec.ts` (new) — 8 cases over the pure helper.
+
+**Scope discipline:** unknown / product-no-link barcodes in a level scan are
+reported + skipped, NOT routed into the add-item flow — that stays [[FU-373]]
+(register-against-product + scan-unknown). Flagged FU-373 to the user as adjacent
+but out of scope.
+
+**Verification:** vitest 343 green (8 new), vue-tsc clean, eslint clean. The
+camera flow (needs `scanning_enabled` on + a device camera) → `DORA_VERIFY.md`
+under Stock ("Action-first scan mode").
+
+**Docs:** FU-378 moved to `DORA_FOLLOWUPS_RESOLVED.md`; PROPOSAL_STOCK_OVERVIEW
+§7b row 4 🔴→✅, §2.9 + net line updated ("every §7 decision now resolved");
+CHANGELOG `[Unreleased]` Added entry; DORA_VERIFY Stock section.
+
+**Standards close-gate:** R-003 applied (reused mutation seam + level-derived
+labels). ScanOverlay banner uses rgba literals matching the existing
+camera-overlay convention in that file (dark camera surface, not a themed page)
+— consistent, no new R-002 drift. No ADR-worthy new decision.
+
+### Next up
+- None owed. FU-373 (barcode register-against-product + scan-unknown) is the
+  natural next scanning-surface pickup.
+
+---
+
+## 2026-07-14 (later 12) — Self-host billing options captured as FU-562
+
+**Why:** talked through billing for a self-host-only offering. Owner decided
+enforcement but wanted the revenue-model + payment-platform options written up to
+decide later.
+
+- New **FU-562** — the self-host billing decision. Captures the constraint (can't
+  enforce on the customer's box → gate the download/update channel, not the app),
+  the **decided** enforcement (offline license key, no phone-home), and two open
+  decisions with options + reasoning: revenue model (annual-update / one-time+upgrades
+  / perpetual / donations) and payment platform (merchant-of-record vs Stripe).
+- Updated scoped FU-412 to point at FU-562; refined the self-host-first memory.
+- Docs only. No PROJECT_STATE dashboard change (one new backlog item).
+
+### Next up
+- None owed. FU-562 waits on the owner's pricing decision.
+
+**Update (same day):** payment platform decided — **Lemon Squeezy** (MoR), not
+Stripe, to offload tax burden; LS also mints the license keys + hosts download
+delivery. FU-562 heading + body + memory updated. **Only the revenue model
+remains open.**
+
+---
+
+## 2026-07-14 (later 11) — Commercialization split: self-host-first; SaaS/managed → separate optional doc
+
+**Why:** owner decision — **sell Dora as self-hosted**, and see about a different
+deployment strategy later (a revisit). Keep multi-tenant / managed-hosting work
+*out* of the active self-host commercialization track, in a separate "optional"
+doc — not interwoven.
+
+**Decisions on the borderline items (owner-confirmed via AskUserQuestion):**
+- **406** — self-host launch (marketing/legal/licence/support/release) stays
+  current; on-call/SLA sliver → optional.
+- **402** — subscription billing → optional; a lighter self-host one-time-licence
+  payment is a future call folded into scoped FU-412.
+- **403** — plan gating → optional (can't enforce tiers on a box the customer
+  owns).
+- **412** — stays current, scoped to the self-host plan.
+- **397** — production WSGI stays current (do-anyway for a real release); web/worker
+  split → optional.
+
+**What changed (docs only, no code):**
+- New `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` — "revisit later"
+  home for Path A (multi-tenant) + Path B (managed) + scale/billing; lists the
+  parked FUs, the gating (MULTI_USER_READINESS §5), and the distribution-posture
+  insurance (Decision 5) that keeps reopening it a project not a rewrite.
+- Relocated **FU-400/401/399/398/403/402** → RESOLVED-RELOCATED (grouped entry).
+- Narrowed **FU-397/406/412** in place (kept open, self-host-scoped).
+- `COMMERCIALIZATION_REPORT` top banner + §5/§7 pointers → optional doc.
+- PROJECT_STATE register rows + Recently-shipped + regenerated line.
+- Memory saved (self-host-first is the standing commercial posture).
+
+### Next up
+- None owed. Active ledger is now decluttered of the hosted-only cluster.
+
+---
+
+## 2026-07-14 (later 10) — FU-410: folded into MULTI_USER_READINESS §5 (SaaS-path parking place)
+
+**Why:** owner — "roll FU-410 into the doc area relevant to SaaS if I ever went
+down that path." FU-410 was only a backlog pointer at the three SaaS/multi-tenant
+design questions that already live in `MULTI_USER_READINESS.md §5`; they only get
+answered *if* the SaaS path is taken, so they belong with the readiness doc, not
+the active ledger.
+
+**What changed (docs only, no code):**
+- `MULTI_USER_READINESS.md §5` re-headed "the SaaS-path parking place" with a lead
+  note: it gates the Path-A work (FU-400/401/406/399), the distribution posture
+  (RECONCILED Decision 5 / §7.5) governs until then (don't pre-build tenancy;
+  posture already leans *per-install*, which would moot most of §2), and links the
+  shared-demo decision (FU-555).
+- Re-pointed FU-400's "gated by [[FU-410]]" at the doc §5 directly so nothing
+  dangles.
+- FU-410 → RESOLVED (folded-in, not answered). PROJECT_STATE register row notes §5
+  is now the parking place.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 9) — FU-413: email-setup proposal verified already shipped, closed
+
+**Why:** user asked what FU-413 was about + to ensure nothing's left, then resolve.
+FU-413 ("promote INV-4 EMAIL_SETUP_FINDINGS to an IMPL; wire SMTP through
+AppSetting") was raised 2026-07-01 and had gone **stale** — the work shipped
+organically via R-030 / FU-333 operational-config + the capability probe.
+
+**Verified (code + runtime), every applicable INV-4 item shipped:**
+- SMTP on `AppSetting` (host/port/username/from/use_tls + Fernet
+  `smtp_password_encrypted`); `resolved_operational_config()` resolves it;
+  `email_sender._config()` → dry-run when `not username`.
+- Admin UI `AdminSystemEmailSettings.vue`; DTO exposes `smtp_password_configured`,
+  never ciphertext.
+- Pre-auth `/api/auth/capabilities` → `email_sender_configured`; `LoginPage.vue`
+  hides "Forgot password?" when false. Dry-run = NOT configured (INV-4 open Q
+  answered).
+- **Runtime probe:** dry-run install → `email_sender_configured:false`; after
+  setting an SMTP username → `true`.
+
+**Not built (deliberate):** the proposal's "PATCH refuses `email_enabled=true`
+without creds" hard-validation — **superseded** by degrade-to-dry-run + a
+capability keyed on actual sendability (no dead-end; sensible host/from
+defaults). Phase-3 sugar (provider presets, onboarding email step, test-connection
+button) stays parked (Anti-creep). Did **not** write a retroactive
+`IMPL_PLAN_EMAIL_SETUP.md` — bureaucracy for already-shipped work.
+
+**Docs:** INV-4 banner → ✅ SHIPPED; FU-413 → RESOLVED; PROJECT_STATE register
+row split EMAIL_SETUP_FINDINGS out as ✅. No CHANGELOG (verification only, no code).
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 8) — FU-555: closed won't-do (demo stays shared, not per-visitor)
+
+**Decision (owner):** the FU-392 *shared* demo — one dataset, all visitors share
+it, interval reset — is the intended design; per-visitor isolation is not wanted.
+*"One shared demo setup is fine for all demo visitors; they can share the data,
+and it can get reset on an interval."*
+
+**No code:** verified the interval reset the decision relies on is already wired
+(`startup.py` → `demo_reset` `IntervalTrigger(minutes=DORA_DEMO_RESET_MINUTES)`,
+default 60; `0` = static). Reinforces the no-pre-built-multi-tenancy posture —
+per-visitor isolation would have meant demo-only data partitioning.
+
+FU-555 → RESOLVED (won't-do). Saved a memory so a future session doesn't build
+demo tenancy. No CHANGELOG (no code change).
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 7) — FU-556: seed builders DRYed into shared seed_builders.py
+
+**Why:** FU-556 flagged that `seed_showcase.py` (FU-392) duplicated the builder
+closures + vocab blocks + harvest loop from `seed.py`. Recommended point was
+"next time either seed is edited substantially" — FU-388 had just reworked
+`seed.py`, so now.
+
+**What changed:**
+- New `dora_api/persistence/seed_builders.py` — `SeedBuilders(repo, now)` owning
+  the 7 shared builders (`make_product`/`make_item`/`level_change`/`price_obs`/
+  `ingredient`/`make_recipe`/`make_line`), fixed vocab (`seed_vocabularies()` +
+  name constants), and `harvest_price_observations()`.
+- Both seeds build `SeedBuilders` once and **alias its methods to the local
+  names the datasets already used** — so every dataset row + call site (incl.
+  the FU-388 bulk block) stayed byte-identical; only builder *bodies* moved.
+  Removed the now-dead builder-only imports from both seeds.
+
+**Verification (behaviour-preserving):**
+- Pre/post per-table row-count snapshot diff: **dev seed byte-identical** to the
+  pre-refactor baseline; **showcase identical** (17 items / 5 recipes / 7 products
+  / 3 lists / 1 user — matches the FU-392 record).
+- Bulk dev seed still 521 items at `DORA_SEED_BULK_ITEMS=500`.
+- Full backend e2e **1006 passed** + top-level **475 passed**.
+- AST unused-import sweep clean on all touched files (caught + removed one stray
+  `db` import in seed_builders).
+
+### Engineering-standards close-gate
+- **R-001 / R-003:** this *is* the DRY/single-source fix — the two seeds can no
+  longer drift on builder logic. **R-007:** extracted exactly the FU-listed
+  scaffolding; left each dataset + flush choreography + the (legitimately
+  differing) location/level/group structure alone. No new ADR.
+
+### Follow-ups
+- FU-556 RESOLVED. No new loops.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 6) — FU-561: migration tests fixed (leaked DORA_DB_URL overrode child temp DB)
+
+**Root cause:** `tests/test_sqlalchemy_repository.py` sets `os.environ["DORA_DB_URL"]`
+at **module scope** → pytest runs it at collection time for the whole process.
+`DORA_DB_URL` outranks `DORA_DB_PATH` in the resolver, so the migration tests'
+child (`_run_migration`, which set only `DORA_DB_PATH=<temp>`) migrated
+`never-opened.db` instead of its temp file → `temp_db_path` empty → the
+from-empty + schema-match tests failed. Only in the full run (in isolation that
+module isn't imported), which is why it looked like ordering flakiness.
+
+**Fix:** `_run_migration` now `env.pop("DORA_DB_URL", None)` so the temp
+`DORA_DB_PATH` is authoritative regardless of any leaked parent-process DB env.
+Hardened the consumer (robust vs *any* future leak), not the one leaking test.
+
+**Verification:** `pytest tests/ --ignore=tests/e2e` → **475 passed**, 1 skipped
+(Postgres), 1 xfailed (known SQLite downgrade limitation) — was 473 + 2 failed.
+Migration tests still pass in isolation.
+
+### Engineering-standards close-gate
+- Test-only change; no product code touched. No rule violations, no ADR.
+
+### Follow-ups
+- FU-561 RESOLVED. No new loops. Both pre-existing test failures found this
+  session (FU-559, FU-561) are now fixed — the top-level + e2e suites are green.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 5) — FU-560: P5-03 leftover slices (bundle-size healthy; AppSetting memoised)
+
+**Slice 1 — frontend bundle-size: analysed, healthy, no action.** `quasar build
+-m pwa` → route-level splitting works (every page a lazy chunk), modest entry
+(`index` 144 KB, `MainLayout` 101 KB). The sole >500 KB chunk is `ReportsPage`
+(549 KB) + echarts vendor (425 KB) — echarts imported tree-shakeably, page is
+route-split, loads only on /reports. Acceptable; documented, no change.
+
+**Slice 2 — request-scoped `AppSetting` memoization: shipped.**
+`get_or_create_app_setting` now memoises the singleton on Flask app-context `g`
+(`app_settings/access.py`). No explicit invalidation needed — cached value is
+the identity-map instance (in-place mutation + commit flow through it), the row
+is never deleted/replaced within a live request (only boot + demo-reset call
+`drop_all`, each own-context; restore is additive), and `g` is per-context.
+Re-profiled at 500 items: `/api/health` **5→2**, `/api/alerts` **11→10**. The
+residual `timezone, auto_drain_past_meals` read on recipes/meal-plans is a
+*different* projected query (clock/reconcile, not via the accessor) — out of
+scope, left as-is.
+
+### Verification
+- Full backend e2e suite **1006 passed** — memoization correct across the
+  settings-mutation, capabilities, stocktake, and reports paths.
+- Re-profile confirmed the query-count drops.
+- Bundle numbers from the real `quasar build` (exit 0).
+
+### Engineering-standards close-gate
+- **R-003:** the cache collapses N per-request reads of the one singleton into
+  one — tighter single-source, and the safety argument (identity-map object +
+  never-deleted row + per-context `g`) is documented in the accessor docstring.
+- **R-007:** did not chase the separate projected clock query; did not touch the
+  lazy ReportsPage/echarts chunk (already correct). No new ADR.
+
+### Follow-ups
+- **FU-560** RESOLVED (both slices). **FU-561** (new) — pre-existing, unrelated:
+  two `tests/test_migrations.py` tests fail in the *full* top-level run (pass in
+  isolation); **verified failing on clean HEAD** (git-stashed my changes), so not
+  mine. Test-isolation fragility, logged for a future test/CI touch.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 4) — FU-559 (test fix) + FU-388 sweep (perf/scale pass — clean)
+
+**FU-559 — one-line test fix.** The pre-existing import-template failure:
+`test__import_template__csv_download__includes_hash_comment_row` asserted a raw
+CSV line `startswith("#")`, but the FU-349 comment row has a comma so
+`csv.writer` quotes the field. Fixed the test to parse via `csv.reader` and
+check the **parsed first cell** (what `_strip_comment_rows` keys off on
+re-upload). `test_data_router.py` → **52 passed** (was 1 failed). Moved to
+RESOLVED.
+
+**FU-388 — ran the actual perf sweep against the now-loaded seed.**
+- **Method:** in-process Flask test client + a SQLAlchemy cursor listener
+  counting SQL statements per request; ran at **500 and 2000** bulk items to
+  see whether query counts scale with row count (the N+1 test).
+- **Result — clean.** Query counts were **identical at 500 and 2000** on every
+  heavy endpoint (stock-items 4, recipes 14, locations 3, shopping-list detail
+  9, alerts 11, …) → **no N+1s**; everything is set-based/eager-loaded. The
+  recipe cookability I feared is set-based, not per-recipe.
+- **One fix shipped:** `/api/health` re-read the `AppSetting` singleton ~4×
+  (each of `_feature_flags`/`_locale_policy`/`_image_policy` fetched it).
+  `health_check()` now fetches once + threads it through (None on DB error →
+  same conservative fallbacks) → **5→3 queries** on a client-polled endpoint.
+  Payload shape unchanged.
+- **Writeup:** `docs/05_investigations/PERF_SCALE_SWEEP_FU388.md`.
+
+### Verification
+- FU-559: `test_data_router.py` 52 passed.
+- FU-388: profiler diff 500↔2000 flat; `/health` 5→3 confirmed via re-profile;
+  regression — health_router + dto_contracts + onboarding_flags (35) +
+  locale_currency + auth_flows (50) all green. No SPA change (health type
+  untouched).
+
+### Engineering-standards close-gate
+- **R-003:** the health fix collapses 3 independent reads of the one singleton
+  into a single fetch — closer to single-source, not further.
+- **R-007 (scope):** applied only the zero-risk hot-path fix; did NOT do a
+  broad request-scoped caching refactor (invalidation nuance) — logged as
+  FU-560. Did NOT touch frontend bundle-size (separate axis) — FU-560.
+- No new ADR.
+
+### Follow-ups
+- **FU-559** RESOLVED (test fix). **FU-388** RESOLVED (DB/query axis clean +
+  harness + one fix). **FU-560** (new) — remaining P5-03 slices: frontend
+  bundle-size + request-scoped AppSetting memoization for alerts/recipes/
+  meal-plans. Both non-load-bearing.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later 3) — FU-388: dev seed now runs under load by default (perf-sweep enabler)
+
+**Why:** FU-388 (P5-03 perf & scale pass) recommended profiling at "pantry size
+500+". The user's chosen way in: **bake the load into the dev seed** so every
+interactive session runs loaded and N+1s surface naturally, rather than doing a
+one-off profiling run against hand-built data.
+
+**What changed:**
+- `configuration_manager.py` — new `get_seed_bulk_stock_item_count()`
+  (`DORA_SEED_BULK_ITEMS`, default **500**; 0 disables). Env knob, not an
+  AppSetting (dev/deploy fixture concern).
+- `startup.py::init_db` — passes the count to `seed_dev_data`, but **0 in the
+  test env** so the e2e suite's boot stays fast; the configured default only
+  applies to interactive dev.
+- `seed.py::seed_dev_data(bulk_stock_items=0)` — new bulk block at the end that
+  **reuses the existing builder closures** (`make_item`/`make_product`/
+  `level_change`/`price_obs`/`make_recipe`/`ingredient`/`line`) so the curated
+  and load datasets can't drift (R-001/R-003). Generates: N stock items spread
+  deterministically across levels/locations/groups/expiry/flags/open; a product
+  + offers + short history on ~1-in-5; level-change history on ~1-in-3; price
+  observations on ~1-in-4; ~N/8 (≤80) recipes referencing load items (stresses
+  cookbook + cross-recipe cookability, a prime N+1); and one large draft
+  shopping list. Index-based distributions (no RNG) → reproducible.
+
+**Verification (live, throwaway DB, count=500):** seed ran in **0.54s** and
+produced 521 stock items / 109 products / 68 recipes / 5 lists / 63 lines.
+Config default resolves to 500. E2E test-env boot (0 bulk) unaffected —
+`test_health_router` + a data-router slice pass in ~2s.
+
+**Deliberately no dedicated pytest** for the bulk block: it reuses the same
+closures the entire e2e suite already exercises, the counts were live-verified,
+and an isolated-DB direct-seed test would need its own harness (the shared
+`dora.test.db` would be clobbered). Consistent with the FU-350 anti-contraption
+precedent + the "build to plan, verify later" steer.
+
+### Engineering-standards close-gate
+- **R-001/R-003:** bulk load reuses curated builder closures — zero duplicate
+  entity construction; no drift between the two datasets.
+- **R-005:** env-driven knob; no DB-specific code; plain rows.
+- **R-007 (scope):** built exactly the seed-load enabler; did NOT fold in the
+  actual N+1 sweep (that's the remaining P5-03 work, FU-388 stays open) and did
+  NOT fix the unrelated pre-existing test failure I found (logged as FU-559).
+- **R-017 (seed coverage):** the load reuses builders, so it exercises the same
+  surfaces as the curated seed. No new ADR.
+
+### Follow-ups
+- **FU-388** stays OPEN — the load harness landed (precondition met); the
+  profiling/fix sweep remains, now cheap to run since dev is always loaded.
+- **FU-559** (new) — pre-existing e2e failure discovered mid-run:
+  `test__import_template__csv_download__includes_hash_comment_row` asserts a raw
+  CSV line `startswith("#")`, but the FU-349 comment row has a comma so csv.writer
+  quotes it (`"#…"`). **Verified failing on clean HEAD** — not caused by this
+  work. Product behaviour is fine; only the test's assertion is wrong. One-line
+  fix logged.
+- **DORA_VERIFY** — Operator: dev boot seeds ~521 items + surfaces stay responsive.
+
+### Next up
+- None owed. Optionally: fix FU-559 (trivial) and/or start the FU-388 profiling sweep.
+
+---
+
+## 2026-07-14 (later 2) — FU-376: PROPOSAL_PRODUCTS_AS_OVERLAY §7 decisions + GAP bucket swept (doc hygiene)
+
+**Why:** FU-376 = residual close-out of `PROPOSAL_PRODUCTS_AS_OVERLAY.md` — its §7
+"Open decisions (for build-time)" block was still live, and Appendix A carried a
+"GAP = not yet built" legend that was never walked against shipped code. Pure doc
+hygiene per the "Closing out a proposal" mandatory rule; **no code changes**.
+
+**What I did — walked each residual vs the actual code:**
+- **§7 (4 build-time decisions) — all closed inline**, block re-headed ✅ CLOSED:
+  1. Gate = `Product.count() > 0` → shipped as recommended (`health_check.py`).
+  2. Search-nav URL-unset → recommendation (R-014 reveal-disable) **superseded by
+     R-029/ADR-025** (FU-500): now hidden entirely (`MainLayout.productSearchEntry`).
+  3. Search URL target → shipped **new tab** (`target="_blank"`), NOT the recommended
+     same-tab. Settled (companion opens in its own tab).
+  4. PreferredBuy line → `preferred_buy_id` FK as recommended (migration c4e6a8b1d3f5).
+- **GAP bucket (Appendix A)** — only **L205/L206** (bulk low/out-of-stock-on-deal
+  selects) is a real gap; already homed in **open FU-214**. Every other non-BUILT row
+  (VERIFY cluster, REPLACED/needs-OK incl. L197 hard-delete, COMPANION, TRACKED) is
+  under FU-214 or out of scope. Added a disposition note; no orphan, no new FU.
+- **§11 ADR rec (data-presence gating → R-0NN)** — recorded as **NOT promoted**
+  (single concrete use = `products`; hold for a 2nd occurrence per ADR discipline).
+
+### Verification
+- Decisions confirmed against code: `health_check.py:119` (gate), `MainLayout.vue:208-217`
+  (hide-when-unset), `MainMenuButton.vue:5` + `SideMenuButton.vue:5` (`target="_blank"`),
+  migration `c4e6a8b1d3f5` + `preferred_buy.py` + `manage_shopping_list_lines.py` (FK).
+- No code touched ⇒ no test run needed.
+
+### Engineering-standards close-gate
+- Doc-only unit; no rules touched. The one standing ADR recommendation (§11) was
+  evaluated and deliberately not promoted (documented). No new ADR.
+
+### Follow-ups
+- None spun off. FU-376 → RESOLVED. The GAP/VERIFY residuals remain owned by open FU-214.
+
+### Next up
+- None owed.
+
+---
+
+## 2026-07-14 (later) — FU-370: support / "Report an issue" channel (built dormant; hardcoded switch, not AppSetting)
+
+**Why:** FU-370 = the un-built `PROPOSAL_SUPPORT_CHANNEL.md`. After FU-146 removed
+the dead GitHub-issues links, the app had no in-product way to reach anyone (Help
+copy read "pass it to whoever runs this Dora instance"). Proposal's code half is
+small + off-by-default, orthogonal to everything, so it landed now rather than
+Phase 4.
+
+**Key user steer (changed the design):** owner directed a **hardcoded
+commit-and-done switch** ("just something i commit hardcoded"), NOT the proposal's
+`AppSetting` + migration + admin-editor. Channel choice: "decide later" → build
+channel-agnostic + dormant. Also asked for an FU to hook it up.
+
+**What changed:**
+- **Backend:** new `dora_api/features/support/support_channel.py` —
+  `resolve_support_channel()` → `{url, email}` from two committed constants (blank =
+  dormant) with `DORA_SUPPORT_URL`/`DORA_SUPPORT_EMAIL` env override (R-005; mirrors
+  FU-392). `/api/health` gained a `support` block (all logged-in users, like
+  `image_policy`). DTO snapshot updated (+`support` key).
+- **Frontend:** new `useSupportChannel.ts` (module-level state, one health probe,
+  mirrors `useImagePolicy`) exposing `{channel, hasChannel}` + shared `supportHref()`
+  pre-fill helper + `currentSupportChannel()` getter. `HealthInfo.support` type added.
+  HelpPage header "Report an issue" button + honest About copy (adapts when dormant);
+  `PageErrorState.showReport` finally wired (pre-fills variant/path/ref/error); DoraBot
+  `report_issue` now offers a real `externalLink` when configured, else falls back to Help.
+- **Import hygiene:** `useSupportChannel` lazy-`import()`s HealthApiService so the pure
+  `supportHref`/`currentSupportChannel` helpers can be imported by the node-env
+  `doraIntents` eval suite without dragging axios+quasar (`window`) in.
+
+### Verification
+- Backend resolver: default dormant, env override, trimming all confirmed.
+- `pytest test_dto_contracts.py -k health + test_health_router.py` → **2 passed**
+  (snapshot now includes `support`, matched live response).
+- SPA `vue-tsc` clean; new `supportChannel.spec.ts` (6) + `doraIntents.spec.ts` (53)
+  pass; full `vitest run` → **335 passed** (was 329).
+
+### Engineering-standards close-gate
+- **R-030 (operational config on AppSetting, not env) — OUT OF SCOPE BY DESIGN.**
+  Initially logged as an R-030 "tension" (FU-558); the owner then made it a firm
+  principle — *"I wouldn't want this controllable by admins ever, this is something
+  I control only."* R-030 governs *admin-tweakable* config; this is
+  author/deploy-controlled and off-limits to household admins by intent, so it sits
+  outside R-030, not against it. **FU-558 resolved same-day** as a settled decision
+  (AppSetting shape withdrawn, never to be built). Commented in-place.
+- **R-003:** channel is server-owned (health block), client reflects it; the pre-fill
+  contract is centralised in `supportHref` (one impl shared by 3 consumers).
+- **R-005:** env override for self-hosters; no `tenant_id`; no migration.
+- **R-029 (hide-don't-nag):** dormant ⇒ nothing renders.
+- **Scope (R-007/R-008):** deliberately did NOT build the AppSetting columns /
+  migration / admin editor. Documented in the proposal status banner + FU-558.
+- No new ADR — the author/deploy-controlled-config-that-is-never-an-admin-setting shape
+  is a single, principled case; not promoting a rule off one instance.
+
+### Follow-ups spun off
+- **FU-557** — stand up the real channel + set the target (the owner's "hook it up"). Open.
+- **FU-558** — record of the author-controlled/never-admin decision. **Resolved same-day**
+  after the owner confirmed it's a firm principle (AppSetting shape withdrawn).
+- **DORA_VERIFY.md** — Cross-cutting: dormant vs configured states across Help / error / DoraBot.
+
+### Next up
+- None owed. FU-370 closed (moved to RESOLVED). FU-557 waits on the user.
+
+---
+
+## 2026-07-14 — FU-348: import templates now enforce two-way section↔template symmetry
+
+**Why:** FU-348 flagged that the import-templates registry only guarded one
+direction of symmetry. FU-350 (shipped 2026-07-07) added
+`_validate_import_templates()` boot-time checks proving every `ImportTemplate`
+has a commit path (`_COMMIT_KNOWN_SECTIONS`), but the **reverse** was unguarded:
+a section the commit handler accepts could ship with no template, so the
+"Download template" index would silently miss it. Recommended resolution point
+was "when a second importable section is designed", but the guard is cheap and
+FU-350 had already built the exact anchor — resolved early.
+
+**What changed** (`dora_api/features/data/import_spreadsheet.py`):
+- New reverse assertion at the end of `_validate_import_templates()`:
+  `set(_COMMIT_KNOWN_SECTIONS) - seen_sections` must be empty, else the API
+  fails to boot naming the template-less section. Pins the two-way invariant
+  **importable section ⇔ downloadable template**.
+- Took the **simpler** of the two FU options (module-load assertion), NOT the
+  speculative `IMPORTABLE_SECTIONS` registry-of-registries — that stays deferred
+  until a second section's real shape is known (R-007/R-008 scope).
+- Docstring "three drift risks" → four; `_COMMIT_KNOWN_SECTIONS` comment updated.
+
+**What changed** (`tests/e2e/dora_api/test_data_router.py`):
+- New `test__import_templates__section_registry_is_symmetric` — pure
+  direct-import test (no server, no monkeypatch) asserting the two registries
+  are set-equal. Consistent with FU-350's anti-contraption stance.
+
+### Verification
+- Module imports cleanly (validation runs at import scope).
+- Injecting a template-less `recipes` section into `_COMMIT_KNOWN_SECTIONS`
+  makes `_validate_import_templates()` raise as designed.
+- `pytest ...::test__import_templates__section_registry_is_symmetric` → **1 passed**.
+
+### Engineering-standards close-gate
+- **R-003 (single source of truth):** reinforced — the section registry is now
+  the two-way SSOT for what's importable vs. downloadable.
+- **R-007/R-008 (scope):** deliberately did NOT pre-build the registry-of-
+  registries; used the minimal assertion the FU also recommended.
+- No new ADR — reuses FU-350's module-load-validation pattern.
+
+### Follow-ups
+- FU-348 moved to RESOLVED. No new loops or verify checks (internal invariant,
+  not a user-visible surface — no CHANGELOG entry either).
+
+### Next up
+- None owed.
+
+---
+
 ## 2026-07-13 (later 18) — FU-392: demo / sellable-showcase mode (shared auto-reset cut)
 
 **Why:** FU-392 (P5-07) asked for a "showcase" install with representative data +

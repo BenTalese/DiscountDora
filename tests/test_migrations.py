@@ -126,7 +126,15 @@ def _run_migration(temp_db: Path, body: str) -> subprocess.CompletedProcess:
         + "print('MIGRATION_OK')\n"
     )
     env = {**os.environ, "DORA_DB_PATH": str(temp_db)}
-    # Belt-and-braces: never let a stray .env point the child at the dev DB.
+    # FU-561 — `DORA_DB_URL` outranks `DORA_DB_PATH` in the config resolver, so
+    # a leaked URL in the parent env (e.g. test_sqlalchemy_repository.py sets one
+    # at module scope, which pytest executes at collection time for the whole
+    # process) would silently override the temp DB and make the child migrate the
+    # wrong file — leaving temp_db empty (missing-tables / no-file failures that
+    # only reproduce in the full-suite run, not in isolation). Drop it so the
+    # temp `DORA_DB_PATH` is authoritative. (The Postgres test below builds its
+    # own env with DORA_DB_URL set deliberately — it doesn't use this helper.)
+    env.pop("DORA_DB_URL", None)
     return subprocess.run(
         [sys.executable, "-c", code],
         cwd=str(_REPO_ROOT),

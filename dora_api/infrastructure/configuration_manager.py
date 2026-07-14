@@ -259,6 +259,17 @@ class DoraConfig:
         Only consulted when is_demo_mode_enabled()."""
         return _env_int("DORA_DEMO_RESET_MINUTES", 60)
 
+    def get_seed_bulk_stock_item_count(self) -> int:
+        """FU-388 — how many extra 'load' stock items the dev seed generates
+        on top of the curated fixture set, so an interactive dev session
+        always runs against a realistic pantry (default 500) and N+1s /
+        slow queries surface naturally rather than only under a paying
+        user's data. Tune via DORA_SEED_BULK_ITEMS; set 0 to disable the
+        load (back to the small curated set). Only consulted for the *dev*
+        seed — the e2e test suite passes 0 explicitly (see startup.init_db)
+        so its boot stays fast."""
+        return max(0, _env_int("DORA_SEED_BULK_ITEMS", 500))
+
     def get_web_app_host(self) -> str:
         return _env("DORA_WEB_APP_HOST", self._config.WEB_APP_HOST) or self._config.WEB_APP_HOST
 

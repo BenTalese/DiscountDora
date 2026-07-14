@@ -6,6 +6,31 @@
 works out-of-the-box, and outline (1) a flexible admin email-setup approach and
 (2) the "hide forgot-password if no sender configured" logic.
 
+> **Status: ✅ PROPOSAL SHIPPED 2026-07-14 (FU-413 closed).** Both halves of the
+> §"Proposal" below are live, delivered via the R-030 / FU-333 operational-config
+> work rather than a standalone IMPL plan:
+> - **Admin email setup on `AppSetting`** — `smtp_host`/`smtp_port`/`smtp_username`/
+>   `smtp_from`/`smtp_use_tls` + Fernet-encrypted `smtp_password_encrypted`;
+>   `resolved_operational_config()` resolves them; `email_sender._config()` reads
+>   DB → degrades to dry-run (`dry_run = not username`); admin UI is
+>   `AdminSystemEmailSettings.vue`; the DTO exposes `smtp_password_configured`
+>   (bool) and never the ciphertext. Password **encryption at rest** (proposal
+>   Phase 3) also shipped.
+> - **Hide forgot-password when unconfigured** — pre-auth
+>   `GET /api/auth/capabilities` returns `email_sender_configured`
+>   (`email_sender.email_sender_configured()` = `not dry_run`); `LoginPage.vue`
+>   gates the link on it. **Open question answered: dry-run counts as NOT
+>   configured** (a normal user can't read the server log).
+> - **Superseded, deliberately not built:** the proposal's "PATCH refuses
+>   `email_enabled=true` unless host/from/creds present" hard-validation — the
+>   degrade-to-dry-run design + a capability derived from *actual sendability*
+>   (username presence) serves the same need better (no "enabled but dead-end"
+>   state, sensible host/from defaults). **Phase-3 "future sugar"** (provider
+>   presets like SendGrid/Mailgun, an onboarding email step) stays parked
+>   (Anti-creep) — resurface only if a hosted-onboarding polish pass wants it.
+> Verified 2026-07-14 end-to-end: dry-run install → `email_sender_configured:false`;
+> setting an SMTP username → `true`. Test coverage: `test_email_sender.py` (16).
+
 ---
 
 ## TL;DR

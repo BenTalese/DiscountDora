@@ -4,12 +4,17 @@
              · Export. Search stays separate on the right. -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
+            <!-- FU-378 — action-first scan. Opens the camera in the default
+                 "open item" action; the current action is shown and switched
+                 from inside the overlay (see the #controls slot below), so
+                 the user can keep scanning and always see what each scan
+                 does. Gated on scanningEnabled. -->
             <BaseButton
                 v-if="scanningEnabled"
                 variant="secondary"
                 :icon="ICONS.qr_code_scanner"
                 label="Scan"
-                @click="overviewScanOpen = true"
+                @click="openScan"
             />
             <BaseButton
                 variant="secondary"
@@ -486,12 +491,60 @@
             @submit="onBulkMarkAsWasted"
         />
 
-        <!-- ── Scan (N5) — jumps to the matching item's detail page ── -->
+        <!-- ── Scan (N5 + FU-378 action-first mode) ──────────────────
+             `open` action → jump to the matched item's detail page (legacy
+             N5 behaviour, closes on first decode). A `level` action stays
+             open, applying the chosen level to each scanned item and
+             reporting the per-item outcome via the overlay's result banner.
+             The current action is shown + switched in the #controls slot, so
+             the user always sees what a scan does and can change it without
+             leaving the camera. -->
         <ScanOverlay
+            ref="scanOverlayRef"
             v-model="overviewScanOpen"
-            close-on-decode
+            :close-on-decode="scanAction.kind === 'open'"
+            :defer-feedback="scanAction.kind === 'level'"
             @decoded="onOverviewScanDecoded"
-        />
+        >
+            <template #controls>
+                <BaseButton variant="primary" :icon="currentScanActionIcon">
+                    <StockLevelDot
+                        v-if="currentScanActionSequence !== null"
+                        :sequence="currentScanActionSequence"
+                        dot-class="q-mr-sm"
+                    />
+                    <span>Action: {{ currentScanActionLabel }}</span>
+                    <q-icon :name="ICONS.expand_more" size="20px" class="q-ml-xs" />
+                    <q-menu auto-close anchor="top middle" self="bottom middle">
+                        <q-list dense style="min-width: 240px">
+                            <q-item-label header>Scan does…</q-item-label>
+                            <q-item
+                                v-for="opt in scanActionOptions"
+                                :key="opt.label"
+                                v-close-popup
+                                clickable
+                                :active="isCurrentScanAction(opt.action)"
+                                active-class="text-primary"
+                                @click="selectScanAction(opt.action)"
+                            >
+                                <q-item-section avatar>
+                                    <StockLevelDot
+                                        v-if="opt.sequence !== undefined"
+                                        :sequence="opt.sequence"
+                                    />
+                                    <q-icon v-else :name="ICONS.open_in_new" />
+                                </q-item-section>
+                                <q-item-section>{{ opt.label }}</q-item-section>
+                                <q-item-section v-if="isCurrentScanAction(opt.action)" side>
+                                    <q-icon :name="ICONS.check" color="primary" />
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-menu>
+                </BaseButton>
+                <div class="scan-action-caption">{{ scanActionCaption }}</div>
+            </template>
+        </ScanOverlay>
     </div>
 </template>
 
@@ -506,6 +559,11 @@
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import ScanOverlay from 'src/components/ScanOverlay.vue';
+    import {
+        buildScanActionOptions,
+        resolveScanLevelOutcome,
+        type ScanAction,
+    } from 'src/helpers/scanActions';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
@@ -1132,12 +1190,96 @@
         overviewExport.openQrSheet(Array.from(bulkSelection.value));
     }
 
-    // ── Scan overlay (N5) ────────────────────────────────────────────────
-    // Same flow as Data → Barcodes & QR · Scan, but the success path jumps
-    // straight to the matched item's detail page rather than opening an
-    // inline modal — the user came here looking for a specific item.
+    // ── Scan overlay (N5 + FU-378 action-first mode) ─────────────────────
+    // `scanAction` is a *persistent* selection shown + switched inside the
+    // overlay: the user always sees what a scan does and can change it
+    // without leaving the camera. `open` is the legacy N5 jump-to-detail
+    // flow (closes on decode); a `level` action stays open and sets that
+    // level on every scanned item (covers the stocktake scan-to-check case
+    // — decision §7a #4). Opening the Scan button resets to the `open`
+    // default (navigate-on-scan unless you pick an action).
     const overviewScanOpen = ref(false);
+    const scanOverlayRef = ref<InstanceType<typeof ScanOverlay> | null>(null);
+    const scanAction = ref<ScanAction>({ kind: 'open' });
+
+    // The full action menu, rebuilt from the live level rows so a renamed
+    // seed level shows its custom name (R-003 — no hardcoded level literals).
+    const scanActionOptions = computed(() => buildScanActionOptions(stockLevels.value));
+
+    // Current-action display: label, the optional level colour-dot sequence,
+    // the leading icon, and a one-line caption of what each scan will do.
+    const currentScanActionLabel = computed(() =>
+        scanAction.value.kind === 'open'
+            ? 'Open stock item'
+            : `Set to ${scanAction.value.levelName}`,
+    );
+    const currentScanActionSequence = computed<number | null>(() => {
+        if (scanAction.value.kind !== 'level') return null;
+        const id = scanAction.value.levelId;
+        return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? null;
+    });
+    const currentScanActionIcon = computed(() =>
+        scanAction.value.kind === 'open' ? ICONS.open_in_new : undefined,
+    );
+    const scanActionCaption = computed(() =>
+        scanAction.value.kind === 'open'
+            ? 'Each scan opens that item — the scanner then closes.'
+            : 'Keep scanning — each item is set to this level.',
+    );
+
+    function isCurrentScanAction(action: ScanAction): boolean {
+        const cur = scanAction.value;
+        if (action.kind === 'open') return cur.kind === 'open';
+        return cur.kind === 'level' && cur.levelId === action.levelId;
+    }
+
+    function selectScanAction(action: ScanAction) {
+        scanAction.value = action;
+    }
+
+    function openScan() {
+        // Reset to the navigate-on-scan default each time the button is
+        // pressed; switching to a level action happens inside the overlay.
+        scanAction.value = { kind: 'open' };
+        overviewScanOpen.value = true;
+    }
+
+    // Look up a stock item's display name for the scan result banner.
+    function stockItemName(id: string): string | undefined {
+        return stockItems.value.find((si) => si.stock_item_id === id)?.name;
+    }
+
+    // Apply the chosen level to a scanned item. Reuses the shared
+    // updateStockLevelAsync mutation (R-003) so it behaves exactly like the
+    // in-row level swap (optimistic + offline-queue + auto-add hook). Any
+    // result other than a resolvable stock item is reported and skipped —
+    // we don't derail the scan loop into the add-item flow.
+    async function onScanLevelDecoded(value: string, action: Extract<ScanAction, { kind: 'level' }>) {
+        const overlay = scanOverlayRef.value;
+        try {
+            const result = await barcodeApi.lookupAsync(value);
+            const outcome = resolveScanLevelOutcome(result, action.levelName, stockItemName);
+            if (!outcome.ok || !outcome.stockItemId) {
+                overlay?.pushResult(outcome.message, 'bad');
+                return;
+            }
+            await stockItemStore.updateStockLevelAsync({
+                stock_item_id: outcome.stockItemId,
+                stock_level_id: action.levelId,
+            });
+            overlay?.pushResult(outcome.message, 'good');
+        } catch {
+            overlay?.pushResult('Lookup failed — try again.', 'bad');
+        }
+    }
+
     async function onOverviewScanDecoded(value: string) {
+        // Route level actions to the loop-apply handler; everything else is
+        // the legacy open/navigate flow below.
+        if (scanAction.value.kind === 'level') {
+            await onScanLevelDecoded(value, scanAction.value);
+            return;
+        }
         try {
             const result = await barcodeApi.lookupAsync(value);
             // both stock-item kinds route directly. `UNIQUE` on
@@ -1317,5 +1459,12 @@
         max-height: calc(100vh - 320px);
         min-height: 240px;
         overflow-y: auto;
+    }
+    /* FU-378 — caption under the in-overlay current-action switcher. Light
+       text on the dark camera surface. */
+    .scan-action-caption {
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 13px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     }
 </style>

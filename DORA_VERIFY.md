@@ -105,7 +105,8 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] API calls while offline fall back to the last cached GET (NetworkFirst) rather than hanging; coming back online refreshes normally
 - [ ] Deploy a new build over the top → within a reload or two the "new version" flow kicks in (skipWaiting/clientsClaim) and you're not pinned to the old worker (confirms the nginx `sw.js` no-cache rule)
 - [ ] Web Push: with VAPID configured, subscribe from Settings/Alerts and confirm a push arrives (the SW is what receives it) — ties off the previously-unreachable push path
-- [ ] ⚠️ iOS/Safari branding gap (FU-552): the iOS add-to-home-screen icon + Safari pinned-tab currently show Quasar's placeholder logo, not Dora — expected until FU-552; Android/Chrome/favicon should be Dora-branded
+- [ ] iOS branding (FU-552, fixed 2026-07-15): add to home screen on a real iPhone → the home-screen icon is Dora's D/D on the pale-yellow tile (not a blue gear, no black corners). Android/Chrome/favicon were always Dora-branded — confirm still fine
+- [ ] Safari pinned-tab (FU-552, fixed 2026-07-15): on older Safari that still honours `mask-icon`, pin the tab → the `safari-pinned-tab.svg` "D/D" mark renders recoloured to theme gold, not a blue gear. **Low priority / legacy** — Safari 15+ ignores mask-icon and uses the regular icons; this is really just confirming the hand-authored monochrome D/D vector reads acceptably (it couldn't be rendered headlessly this session — the in-app browser blocks `file://`/`localhost`)
 
 ## Runtime backend URL (browser + PWA) — origin P8-10
 - [ ] In a browser tab (dev or PWA), Settings → About → **Dora API endpoint** shows the current URL; clicking **Change** opens the prompt with the current URL pre-filled

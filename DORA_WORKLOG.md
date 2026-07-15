@@ -9,6 +9,51 @@ next.
 
 ---
 
+## 2026-07-15 (later 8) — FU-552 RESOLVED: real Dora-branded iOS/Safari/MS-tile PWA icons
+
+**Why:** User asked "what to work on next?"; picked FU-552 from the board (branding
+defect: the full-PWA build injects icon meta tags Quasar can't rebrand).
+
+**Root cause confirmed:** `injectPwaMetaTags: true` (FU-336) makes Quasar emit tags
+(`node_modules/@quasar/app-vite/lib/modes/pwa/utils.js`) for six fixed paths —
+`icons/apple-icon-{120,152,167,180}.png`, `icons/ms-icon-144x144.png`,
+`icons/safari-pinned-tab.svg`. The placeholder files those pointed at had already been
+**deleted** (working tree clean, only Dora icons left), so the built `index.html` was
+404'ing all six on iOS/Safari/MS-tile.
+
+**What shipped (assets only, no code):**
+- Extracted the 1024px Dora master embedded in `favicon.svg` to eyeball the brand mark
+  (pale-yellow circle, green "D/D" + gold slash, transparent bg).
+- Generated the four `apple-icon-*` sizes + `ms-icon-144x144.png` as `HighQualityBicubic`
+  downscales of the committed **`apple-touch-icon.png` (180px)** via PowerShell
+  `System.Drawing` — deliberately from that asset, not the master, because the master's
+  transparent corners render **black** on iOS; the 180px apple-touch is the already-approved
+  solid-yellow-square treatment iOS needs.
+- Hand-authored `safari-pinned-tab.svg` — a monochrome "D/D" vector (two evenodd-countered
+  D's + a slash, viewBox `0 0 760 512`). Safari recolours it via `mask-icon color`
+  (already theme gold `#f5c462`).
+- All six committed (were untracked); temp files cleaned up.
+
+**Verification:** scripted check — every `/icons/*` path in built `dist/spa/index.html`
+resolves to a real file in `public/icons/` (14/14 OK; was 6 MISS). SVG well-formed.
+Could **not** render the SVG visually this session — the in-app browser pane blocks
+`file://` and `localhost`, so a pixel-perfect pinned-tab spot-check is queued in
+DORA_VERIFY (it's a **deprecated** surface anyway — Safari 15+ ignores mask-icon).
+
+**Standards close-gate:** assets-only, no R-rule touched. Generated from the real brand
+master (FU's explicit ask), no hacky resize. No config change — kept Quasar's hard-coded
+paths satisfied (lower blast radius than switching to custom meta injection). No new ADR.
+
+**Ledgers:** FU-552 → `_RESOLVED`; CHANGELOG Fixed bullet + FU-336 "known gap" note flipped
+to "closed"; DORA_VERIFY PWA item flipped from "expected gap" to "confirm branding".
+PROJECT_STATE: tiny asset unit, no workstream row moved → Regenerated-line note only.
+
+**Next up:** nothing from this arc. Board's remaining code-actionable tracks are the
+Finalisation sweep (designed, not started) and the Phase-4 billing build (FU-562, step 1
+buildable). Most other open FUs need the running app or an owner decision.
+
+---
+
 ## 2026-07-15 (later 7) — FU-562 trial / free-tier shape designed with owner (planning, no code)
 
 **Why:** Owner: "plan with me how to create the trial side of the app" — the free-tier /

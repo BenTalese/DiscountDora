@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Dashy Dora Safari pinned-tab mask icon (FU-552). Monochrome vector: the
+     "D/D" wordmark. Safari recolours this via the mask-icon `color` attribute,
+     so the fill colour here is irrelevant. Legacy surface (Safari 15+ ignores
+     mask-icon and uses the regular icons); kept branded so the tag never 404s. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 512" fill="#000000">
+  <path fill-rule="evenodd" d="
+    M 60 150 L 150 150 C 235 150 275 200 275 256 C 275 312 235 362 150 362 L 60 362 Z
+    M 110 195 L 150 195 C 205 195 230 222 230 256 C 230 290 205 317 150 317 L 110 317 Z
+    M 360 385 L 415 385 L 500 130 L 445 130 Z
+    M 520 190 L 610 190 C 695 190 735 240 735 296 C 735 352 695 402 610 402 L 520 402 Z
+    M 570 235 L 610 235 C 665 235 690 262 690 296 C 690 330 665 357 610 357 L 570 357 Z
+  "/>
+</svg>

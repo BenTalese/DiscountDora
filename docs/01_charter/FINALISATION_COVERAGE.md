@@ -54,6 +54,6 @@ every session — the plan is only credible if this table stays honest.
 - ⬜ Senior review triaged — every finding actioned or waived.
 - ⬜ Maintainability north-star met across every chunk — no dead code / no redundancy / componentised / logically placed / standards-clean on existing code (PLAN §7.4a).
 - ✅ FU-361, FU-320, FU-395 archived to `DORA_FOLLOWUPS_RESOLVED.md` (done 2026-07-10 at plan draft; this plan is their sole tracker).
-- ⬜ FU-510 Phase 1 state note; Phase 2 kept open.
+- ⬜ **Hand-rolled-vs-library Phase 2 discharged (ex-FU-510, PLAN §7 DoD step 5 — hard gate):** verdicts consolidated into `HANDROLLED_VS_LIBRARIES.md`; every large-blast-radius `replace` executed or spawned as a per-swap FU. (FU-510 already retired into the plan 2026-07-15 — no standing FU; this gate is the sole guarantee.)
 - ⬜ FU-406 + FU-404 state notes on partial coverage.
 - ⬜ PROJECT_STATE workstream row promoted to "recently shipped".

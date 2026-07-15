@@ -183,9 +183,12 @@ Tracked separately in `DORA_FOLLOWUPS.md`:
   `scripts/security-audit.sh` to a scheduled job. Interim: manual invocation.
 - **[[FU-409]]** — auth-findings delta re-audit before commercialisation.
   Distinct methodical walk; not folded into this sweep.
-- **[[FU-510]]** — late-game hand-rolled-vs-library audit. Includes
-  the security-adjacent bits (CSRF impl vs Flask-WTF/SeaSurf, security
-  headers vs Talisman, Fernet handling, password hashing).
+- **Hand-rolled-vs-library audit (ex-[[FU-510]], retired 2026-07-15 into
+  [FINALISATION_PLAN.md](../01_charter/FINALISATION_PLAN.md) §3.3)** — includes
+  the security-adjacent bits (CSRF impl vs Flask-WTF/SeaSurf, security headers vs
+  Talisman, Fernet handling, password hashing). Runs as part of the finalisation
+  plan; the security-adjacent `replace` verdicts spawn per-swap FUs at plan close
+  (plan §7 DoD step 5).
 - **[[FU-401]]** / **[[FU-404]]** — P5-02 privacy + P7-08 compliance.
   Own the DSAR / export / delete surface.
 

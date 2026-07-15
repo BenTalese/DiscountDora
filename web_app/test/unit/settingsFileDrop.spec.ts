@@ -3,9 +3,14 @@
  * FU-520 component layer — SettingsFileDrop, the shared drop-zone /
  * file-picker used by the Settings import surfaces. v-model'd File with
  * `pick`/`clear` events; the parent owns the actual upload (R-003).
- * Mounted with the real Quasar components per stockLevelDot.spec.ts. The
- * hidden input's native `.click()` is spied and no-opped so the zone
- * click test doesn't recursively re-dispatch through jsdom.
+ * Mounted with the real Quasar components per stockLevelDot.spec.ts.
+ *
+ * FU-545 reworked the interaction model to the accessible label-wrap pattern:
+ * the wrapper is a <label> and the native <input type="file"> (visually hidden,
+ * still focusable) is the single interactive control the label forwards to
+ * natively — no more role="button" / tabindex / programmatic `inputEl.click()`.
+ * That killed the `nested-interactive` axe violation, so the empty + filled
+ * axe assertions (held back under FU-542) are now enabled alongside disabled.
  */
 import { mount } from '@vue/test-utils';
 import { QBtn, QIcon, QLinearProgress, QSpinner, Quasar } from 'quasar';
@@ -49,20 +54,23 @@ describe('SettingsFileDrop — idle state', () => {
         expect(wrapper.text()).toContain('CSV or JSON');
         expect(wrapper.find('input[type="file"]').attributes('accept'))
             .toBe('.csv,.json');
-        expect(wrapper.attributes('role')).toBe('button');
-        expect(wrapper.attributes('tabindex')).toBe('0');
     });
 
-    it('clicking the zone forwards to the hidden input', async () => {
+    it('exposes a single labelled file input inside a non-interactive label (FU-545)', () => {
         const wrapper = mountDrop();
-        const click = vi
-            .spyOn(wrapper.find('input').element, 'click')
-            .mockImplementation(() => {});
 
-        await wrapper.trigger('click');
-        await wrapper.trigger('keydown', { key: 'Enter' });
+        // The wrapper is a <label>, not a role="button" widget, so there's no
+        // interactive control nested inside another (the old violation).
+        expect(wrapper.element.tagName).toBe('LABEL');
+        expect(wrapper.attributes('role')).toBeUndefined();
+        expect(wrapper.attributes('tabindex')).toBeUndefined();
 
-        expect(click).toHaveBeenCalledTimes(2);
+        // The native input is the exposed control: labelled + in the a11y tree
+        // (not aria-hidden), and enabled while idle so the label forwards to it.
+        const input = wrapper.find('input[type="file"]');
+        expect(input.attributes('aria-label')).toBe('Drop a backup here');
+        expect(input.attributes('aria-hidden')).toBeUndefined();
+        expect(input.attributes('disabled')).toBeUndefined();
     });
 });
 
@@ -127,8 +135,11 @@ describe('SettingsFileDrop — selected-file state', () => {
 
         expect(wrapper.emitted('update:modelValue')).toEqual([[null]]);
         expect(wrapper.emitted('clear')).toHaveLength(1);
-        // @click.stop — clearing must not bubble into onZoneClick.
+        // The Remove button is interactive content, so a native <label> never
+        // forwards a click on it to the file input (FU-545, supersedes the old
+        // @click.stop guard) — no picker re-open, no stray pick.
         expect(click).not.toHaveBeenCalled();
+        expect(wrapper.emitted('pick')).toBeUndefined();
     });
 });
 
@@ -148,50 +159,45 @@ describe('SettingsFileDrop — busy state', () => {
         expect(wrapper.find('.q-linear-progress').exists()).toBe(true);
     });
 
-    it('ignores clicks and drops while busy', async () => {
+    it('disables the input while busy so the label cannot open the picker, and ignores drops', async () => {
         const wrapper = mountDrop({ loading: true });
-        const click = vi
-            .spyOn(wrapper.find('input').element, 'click')
-            .mockImplementation(() => {});
 
-        await wrapper.trigger('click');
+        // The input is disabled, so a native label click no-ops — the picker
+        // stays shut without any programmatic guard.
+        expect(wrapper.find('input').attributes('disabled')).toBeDefined();
+
         await wrapper.trigger('drop', { dataTransfer: { files: [csvFile()] } });
-
-        expect(click).not.toHaveBeenCalled();
         expect(wrapper.emitted('pick')).toBeUndefined();
     });
 });
 
 describe('SettingsFileDrop — disabled state', () => {
-    it('is inert: no picker, no drag highlight, no drop, out of tab order', async () => {
+    it('is inert: input disabled, no drag highlight, no drop', async () => {
         const wrapper = mountDrop({ disabled: true });
-        const click = vi
-            .spyOn(wrapper.find('input').element, 'click')
-            .mockImplementation(() => {});
 
         expect(wrapper.classes()).toContain('file-drop--disabled');
-        expect(wrapper.attributes('tabindex')).toBe('-1');
+        // The disabled native input is out of the tab order and can't be
+        // activated by the label — no separate wrapper tabindex to manage now.
         expect(wrapper.find('input').attributes('disabled')).toBeDefined();
 
-        await wrapper.trigger('click');
         await wrapper.trigger('dragover');
         expect(wrapper.classes()).not.toContain('file-drop--dragging');
         await wrapper.trigger('drop', { dataTransfer: { files: [csvFile()] } });
 
-        expect(click).not.toHaveBeenCalled();
         expect(wrapper.emitted('pick')).toBeUndefined();
     });
 
-    // FU-542 — accessibility. A file drop-zone with a hidden <input type=file>
-    // is a classic a11y trap. axe found two issues here: the input was
-    // unlabelled (FIXED — it's now aria-hidden + tabindex=-1, since the
-    // wrapping role="button" div is the real exposed control), and a
-    // `nested-interactive` (the native file input is interactive and sits
-    // inside the interactive drop-zone). The nested-interactive needs the
-    // label-wrap accessible-file-input refactor — logged as FU-545 — so it's
-    // out of scope for this test-infra FU. The disabled state (input
-    // non-interactive) is fully clean and guards the label fix.
-    it('has no accessibility violations (disabled)', async () => {
-        await expectAccessible(mountDrop({ disabled: true }).element);
+    // FU-542 / FU-545 — accessibility. A file drop-zone with a hidden
+    // <input type=file> is a classic a11y trap. axe originally found two issues:
+    // an unlabelled input, and a `nested-interactive` (an interactive file
+    // input nested inside a role="button" drop-zone). Both are now fixed by the
+    // FU-545 label-wrap pattern — a non-interactive <label> wrapping a single
+    // labelled input — so all three states scan clean, not just disabled.
+    it.each([
+        ['idle', {}],
+        ['filled', { modelValue: csvFile() }],
+        ['disabled', { disabled: true }],
+    ] as const)('has no accessibility violations (%s)', async (_name, props) => {
+        await expectAccessible(mountDrop(props).element);
     });
 });

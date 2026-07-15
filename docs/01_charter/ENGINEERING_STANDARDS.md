@@ -1296,6 +1296,35 @@ exceptions, which still must be commented) · **Source** (where it was establish
   on a route that could instead use `<uuid:...>`.
 - **Source:** ADR-029; str/UUID family (FU-528, FU-532).
 
+### R-034 — The ORM model is the source of truth for the *whole* schema, indexes included; a migration is not a place to hold schema the model doesn't declare
+- **Rule:** Every index, unique constraint, and FK covering index that exists in
+  the production (migrated) schema must also be **declared in the ORM model**
+  (`table_mappings.py`), so `create_all()` (dev + the e2e suite) builds the same
+  schema `flask_migrate.upgrade()` builds. A migration adds the DDL to existing
+  installs; it never *owns* a schema object the model is silent about. Foreign-key
+  columns get a covering index by default (neither SQLite nor Postgres auto-indexes
+  them — an unindexed FK full-scans the child table on a parent delete and leaves
+  every join on that key unindexed).
+- **Why:** For a long time every secondary index lived *only* in the Alembic chain
+  and was never mirrored back, so dev + the entire e2e suite ran on a near-unindexed
+  schema (1 index) that didn't match production (32) — behaviour depending on an
+  index or a `UNIQUE` couldn't be exercised where the model didn't declare it, and
+  42 FK columns were unindexed in prod (FU-393 sweep, Findings 1–2). Two build paths
+  that disagree is drift by construction; the model being the single source of truth
+  (R-003) has to include indexes, not just tables + columns.
+- **Apply:** New index/unique/FK → declare it on the model (an `Index(...)` in
+  `table_mappings.py`, or `index=True`/`unique=True` on the `Column`) **and** write
+  the additive migration. Adding a table? Every FK column on it gets a covering index
+  in the same change. The `test__migrations__migrated_schema_matches_orm_metadata`
+  gate compares tables + columns + nullability + index/unique colsets + FK `ondelete`
+  rules between the two build paths and fails on any undocumented difference; a
+  genuinely-intentional divergence goes in that test's allowlist with an owner, never
+  silently.
+- **Violation signal:** an `op.create_index` in a migration with no matching
+  `Index(...)`/`index=True` in `table_mappings.py`; a new FK column with no covering
+  index; the schema-match test flipping red without an allowlist entry explaining why.
+- **Source:** ADR-030; FU-563 (from the FU-393 data-model sanity sweep).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -2133,6 +2162,39 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   now receive a real `UUID`, so defensive coercions become no-ops (harmless;
   removable opportunistically).
 - **Promotes rule:** R-033.
+
+### ADR-030 — The ORM model owns the whole schema (indexes included); reconcile the model↔migration drift and gate it with a schema-match test
+- **Date / task:** 2026-07-15 (FU-563, from the FU-393 data-model sanity sweep)
+- **Status:** accepted
+- **Context:** `table_mappings.py` declared almost no secondary indexes — 1, vs
+  the 32 the Alembic chain builds. Every other index (and 4 unique constraints)
+  lived only in migrations, so `create_all()` (dev + the whole e2e suite) built a
+  near-unindexed schema that didn't match production, and behaviour depending on an
+  index/UNIQUE couldn't be exercised where the model was silent. Separately, 43 FK
+  columns had no covering index in prod (parent-delete full-scans + unindexed joins).
+  The guard that should have caught it — `test__migrations__migrated_schema_matches_orm_metadata`
+  — only compared table *names*, so all of it passed CI blind.
+- **Decision:** Promote **R-034**. The model is the single source of truth for the
+  entire schema, indexes and unique constraints included; FK columns are indexed by
+  default. Mirrored all 32 pre-existing prod indexes/uniques into `table_mappings.py`
+  (names copied from the migrations so autogenerate stays a no-op on them), added the
+  43 FK covering indexes to both the model and one additive forward-only migration
+  (`b9d4f2a7c3e1`), and rewrote the schema-match test to compare tables + columns +
+  nullability + index/unique colsets with a small documented allowlist.
+- **Consequences:** dev/test now build the same schema as prod (drift went from 31
+  missing indexes + 4 missing uniques to zero). The additive index migration is
+  portable (pure `CREATE INDEX`, no table rewrite — SQLite + Postgres, R-005/R-006).
+  Two classes of drift needing risky batch table rebuilds were split off from this
+  additive change and finished in follow-on migrations the same day: the 4 nullability
+  drifts (3 `Product` cols reconciled + the `User.username` deferral documented —
+  **FU-564**, migration `c1e8a5f3d9b2`) and the 6 FK `ondelete` mismatches (model
+  declares CASCADE/SET NULL/RESTRICT, prod had none — **FU-565**, migration
+  `d3f8b1a6c4e2`). The schema-match gate was extended each time (it now also compares
+  nullability + FK `ondelete`), so the whole FU-393 sweep is closed and every class it
+  found is now enforced, not just detected. Batch-mode fragility (this repo's
+  double-render trap) was navigated with `batch.f(...)`-wrapped constraint names; the
+  rebuilds preserved all other FKs + the covering indexes.
+- **Promotes rule:** R-034.
 
 ---
 

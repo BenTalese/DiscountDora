@@ -197,26 +197,125 @@ def test__migrations__down_up_roundtrip_is_clean(temp_db_path):
     )
 
 
+# Alembic's own bookkeeping table — exists in the migrated DB, never in the ORM.
+_IGNORE_TABLES = {"alembic_version"}
+
+# FU-563 — documented, tracked model↔migration drifts the comparison below
+# deliberately ignores so it can still catch NEW drift. Every entry is a known
+# carve-out with an owner; do NOT add here to silence a real regression.
+_KNOWN_NULLABILITY_DRIFT: dict[tuple[str, str], str] = {
+    ("User", "username"): (
+        "documented deferral — the add_user_auth migration left username nullable "
+        "in prod (risky in-place rewrite over pre-existing rows); the app enforces "
+        "non-null uniqueness on insert. Model keeps NOT NULL intentionally."
+    ),
+    # The 3 Product nullability drifts (is_active / is_available / merchant_stockcode)
+    # were reconciled in prod by migration c1e8a5f3d9b2 (FU-564), so they're no longer
+    # allowlisted — the comparison below now actively enforces them.
+}
+# Unique colsets the model declares but prod doesn't (or vice-versa), by (table, cols).
+_KNOWN_UNIQUE_DRIFT: dict[tuple[str, tuple[str, ...]], str] = {
+    ("User", ("username",)): (
+        "paired with the username nullability deferral above — the model declares "
+        "the uniqueness the app enforces; prod's column stays nullable + unindexed."
+    ),
+}
+
+
+def _reflect(insp):
+    """table -> {cols: {name: nullable}, plain: set[colset], uniq: set[colset]}."""
+    out = {}
+    for t in insp.get_table_names():
+        if t in _IGNORE_TABLES:
+            continue
+        cols = {c["name"]: bool(c["nullable"]) for c in insp.get_columns(t)}
+        plain, uniq = set(), set()
+        for ix in insp.get_indexes(t):
+            (uniq if ix.get("unique") else plain).add(tuple(ix["column_names"]))
+        for uc in insp.get_unique_constraints(t):
+            uniq.add(tuple(uc["column_names"]))
+        # FU-565 — FK ondelete rule per column-set (None = no rule). The whole
+        # class of "model declares CASCADE/SET NULL/RESTRICT, prod has none" is
+        # gated here now that the drift is reconciled.
+        fks = {
+            tuple(fk["constrained_columns"]): ((fk.get("options") or {}).get("ondelete") or None)
+            for fk in insp.get_foreign_keys(t)
+        }
+        out[t] = {"cols": cols, "plain": plain, "uniq": uniq, "fks": fks}
+    return out
+
+
 @pytest.mark.slow
 def test__migrations__migrated_schema_matches_orm_metadata(temp_db_path):
-    """After `upgrade head`, the migrated schema must contain every table the
-    ORM metadata declares — catches 'model added, migration forgotten' drift."""
+    """The migrated (prod) schema and the ORM model's `create_all()` schema
+    (dev + the whole e2e suite) must agree on tables, columns, nullability,
+    index/unique colsets, and FK `ondelete` rules — the FU-563/564/565 regression
+    gate for the drift the FU-393 sweep found (dev ran on 1 index vs prod's 32;
+    3 Product nullability mismatches; 6 FK ondelete mismatches). Only the
+    documented carve-outs above are tolerated; anything else is 'model changed,
+    migration forgotten' (or vice-versa) and fails here, not silently in prod."""
     result = _run_migration(temp_db_path, "flask_migrate.upgrade()")
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
 
-    from dora_api.app import db  # metadata only; no engine access here
+    from dora_api.app import db  # metadata only; no app-engine access here
 
-    expected = set(db.metadata.tables.keys())
-    engine = create_engine(f"sqlite:///{temp_db_path}")
+    mig_engine = create_engine(f"sqlite:///{temp_db_path}")
+    model_engine = create_engine("sqlite://")  # in-memory; our own engine
     try:
-        reflected = set(inspect(engine).get_table_names())
+        # create_all on OUR engine never touches the app's bound (e2e) DB.
+        db.metadata.create_all(model_engine)
+        migrated = _reflect(inspect(mig_engine))
+        model = _reflect(inspect(model_engine))
     finally:
-        engine.dispose()
+        mig_engine.dispose()
+        model_engine.dispose()
 
-    missing = expected - reflected
-    assert not missing, (
-        f"tables declared in ORM metadata but absent from the migrated schema "
-        f"(migration forgotten?): {sorted(missing)}"
+    problems: list[str] = []
+
+    # Tables present in one build path but not the other.
+    for t in sorted(set(model) - set(migrated)):
+        problems.append(f"table {t!r}: in ORM model but NOT migrated (migration forgotten?)")
+    for t in sorted(set(migrated) - set(model)):
+        problems.append(f"table {t!r}: migrated but NOT in ORM model (stale migration?)")
+
+    for t in sorted(set(model) & set(migrated)):
+        m, g = model[t], migrated[t]
+        # Columns.
+        for c in sorted(set(m["cols"]) - set(g["cols"])):
+            problems.append(f"{t}.{c}: in ORM model but NOT migrated")
+        for c in sorted(set(g["cols"]) - set(m["cols"])):
+            problems.append(f"{t}.{c}: migrated but NOT in ORM model")
+        # Nullability.
+        for c in sorted(set(m["cols"]) & set(g["cols"])):
+            if m["cols"][c] != g["cols"][c] and (t, c) not in _KNOWN_NULLABILITY_DRIFT:
+                problems.append(
+                    f"{t}.{c}: nullability drift — model nullable={m['cols'][c]}, "
+                    f"migrated nullable={g['cols'][c]}"
+                )
+        # Index + unique colsets (each direction; allowlist the known unique drift).
+        for cs in sorted(m["plain"] - g["plain"]):
+            problems.append(f"{t}({', '.join(cs)}): index in ORM model but NOT migrated")
+        for cs in sorted(g["plain"] - m["plain"]):
+            problems.append(f"{t}({', '.join(cs)}): index migrated but NOT in ORM model")
+        for cs in sorted(m["uniq"] - g["uniq"]):
+            if (t, cs) not in _KNOWN_UNIQUE_DRIFT:
+                problems.append(f"{t}({', '.join(cs)}): UNIQUE in ORM model but NOT migrated")
+        for cs in sorted(g["uniq"] - m["uniq"]):
+            if (t, cs) not in _KNOWN_UNIQUE_DRIFT:
+                problems.append(f"{t}({', '.join(cs)}): UNIQUE migrated but NOT in ORM model")
+        # FK ondelete rules (FU-565). Compare only FK colsets present in both so a
+        # column-add/drop is reported once (above) not twice.
+        for cs in sorted(set(m["fks"]) & set(g["fks"])):
+            if m["fks"][cs] != g["fks"][cs]:
+                problems.append(
+                    f"{t}({', '.join(cs)}): FK ondelete drift — model={m['fks'][cs]!r}, "
+                    f"migrated={g['fks'][cs]!r}"
+                )
+
+    assert not problems, (
+        "model (create_all) vs migrated (upgrade) schema drift — reconcile "
+        "`table_mappings.py` with the migration chain, or add a documented "
+        "carve-out if the difference is intentional:\n  " + "\n  ".join(problems)
     )
 
 

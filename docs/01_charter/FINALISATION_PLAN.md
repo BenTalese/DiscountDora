@@ -58,8 +58,9 @@ produce a written deliverable; **none changes code** — that's Stage 2):
    opportunities, misplaced modules, naming/idiom, inefficiency**, refactors worth
    the churn, standards drift, and library-vs-hand-rolled verdicts. Every entry
    records the **exact file:line + the exact change to make** so Stage 2 applies
-   it without re-reading the code. Resolves [[FU-395]] and folds in the Phase-1
-   (assessment) half of [[FU-510]]. Lives at
+   it without re-reading the code. Resolves [[FU-395]] and **fully absorbs
+   [[FU-510]]** (hand-rolled-vs-library — both phases; the FU was retired into
+   this plan, see §3.3 + §6). Lives at
    [../05_investigations/FINALISATION_REVIEW.md](../05_investigations/FINALISATION_REVIEW.md)
    (created on first chunk). This track is the heart of the north-star.
 4. **Test plan** — for every chunk, list the unit / integration / e2e tests
@@ -176,11 +177,43 @@ Per chunk, one section with these buckets:
   closes". Do not action inline.
 - **Dead code / unused fields** — kept as a running list; action as one
   batch at plan close (cheaper than per-chunk tidy).
-- **Hand-rolled-vs-library verdicts** — per the [[FU-510]] Phase 1 shape:
-  what it is · what would replace it · verdict `keep` / `replace` /
-  `wrap-thin-adapter` · effort/risk. Charter tie-breaks
-  (Effortless + Anti-creep) are load-bearing — don't default to "prefer
-  library". Each `replace` verdict spawns a follow-on FU at close.
+- **Hand-rolled-vs-library verdicts** (ex-[[FU-510]] — the FU was retired
+  2026-07-15 and its full scope now lives here; this plan is the sole owner, and
+  §7 DoD step 5 is the hard gate that discharges Phase 2). For each hand-rolled
+  site a chunk walks
+  past, record: what it is · what library would replace it · verdict
+  `keep` / `replace` / `wrap-thin-adapter` · effort/risk. Charter tie-breaks
+  (Effortless + Anti-creep) are **load-bearing — don't default to "prefer
+  library"**: sometimes the hand-rolled thing is right because it's smaller, has
+  no supply-chain risk, and stays coupled to our domain. Two phases: **Phase 1
+  (assessment)** is this per-chunk record; **Phase 2 (action)** executes the
+  swaps — the small / low-risk / test-covered ones inline at Stage 2, the
+  large-blast-radius ones (many call sites, a dependency add, not cheaply
+  test-covered) as per-swap follow-on FUs spawned at close (see §6/§7). The
+  plan's close-out consolidates the verdicts into
+  `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md`.
+  Non-exhaustive sites to check as chunks touch them:
+  - **Security-adjacent:** custom CSRF double-submit vs Flask-WTF / Flask-SeaSurf;
+    hand-rolled Fernet key handling vs `cryptography` recipes; the hand-rolled
+    security headers (FU-459) vs Flask-Talisman; session/cookie hardening;
+    password-hashing choices.
+  - **HTTP / API surface:** pagination + query-string parsing
+    (`queryStringBuilder.ts`, `parse_query_options`) vs Flask-Smorest / API-spec
+    libs; response envelope + error translation vs a marshalling lib;
+    audit-retention + audit hooks.
+  - **Data access:** the generic repository (`SqlAlchemyRepository`),
+    `EntityField`, `include` / `then_include` chains vs plain SQLAlchemy 2.0
+    selectinload/joinedload — is the wrapper carrying its weight or fighting the ORM?
+  - **Domain infra:** unit conversion (`units.py`), locale display denominators,
+    currency + locale formatting, timezone / calendar-day helpers
+    (`household_today`), fuzzy-matching wrappers around RapidFuzz.
+  - **Frontend:** drag-drop composables (`useDragDropList`) vs vue-draggable /
+    dnd-kit; toast/notify wrappers; the shortcut registry (`useShortcut`); the
+    offline queue (`useOfflineQueue`) vs Workbox background sync; the rollback
+    registry vs a proper undo/redo stack lib.
+  - **Ops:** log rotation (time-based already), scheduling (APScheduler in place),
+    rate limiting (flag if hand-rolled), config layering (`ConfigurationManager`)
+    vs pydantic-settings.
 - **Standards drift** — every `R-0NN` violation found becomes an inline
   comment (fix), a rule-cited exception (explain), or a follow-up (defer),
   per the standards close-gate rule in `CLAUDE.md`.
@@ -346,16 +379,18 @@ Marked here as **fully rolled in**, **partially rolled in**, or
   review) + the FST release-gate checklist. Moved to
   `DORA_FOLLOWUPS_RESOLVED.md` 2026-07-10.
 
-**Partially rolled in — corresponding FU stays open:**
+**Fully absorbed — FU retired, this plan is the sole owner:**
 
-- **[[FU-510]] hand-rolled vs library sweep** — Phase 1 (assessment)
-  rolled into Track 3 as a per-chunk `keep / replace / wrap-thin-adapter`
-  verdict (with the exact swap recorded, Stage-1). Under the 2026-07-13
-  two-stage model, **Stage 2 executes the small / low-risk / test-covered
-  swaps** from the record; the large-blast-radius ones (a swap touching many
-  call sites, a dependency add, anything not cheaply test-covered) **stay
-  open as FU-510 Phase 2**, each its own per-swap FU. This plan produces the
-  shortlist and executes the safe end of it.
+- **[[FU-510]] hand-rolled vs library sweep** — the whole sweep now lives in
+  this plan (§3.3 "Hand-rolled-vs-library verdicts" holds the two-phase method,
+  the Charter "don't default to library" caveat, and the full focus-area
+  checklist). Phase 1 (assessment) runs per-chunk in Track 3; **Stage 2 executes
+  the small / low-risk / test-covered swaps** from the record; the
+  large-blast-radius ones (many call sites, a dependency add, anything not
+  cheaply test-covered) become **per-swap follow-on FUs spawned at plan close**
+  (see the follow-on list below + §7 DoD step 5 — a hard close-gate). The FU-510
+  ledger entry was retired 2026-07-15; there is **no standing tracker** — this
+  plan carries it, and the DoD guarantees the Phase-2 FUs get opened.
 
 **Partially rolled in — cross-referenced, corresponding FU stays open:**
 
@@ -380,8 +415,9 @@ Follow-on FUs opened by this plan (opened at plan close, not before):
 
 - Every "must-write-before-ship" test row → new FU each, sequenced into
   [[FU-519]].
-- Every "replace" verdict from Track 3 → new per-swap FU per
-  [[FU-510]] Phase 2.
+- Every large-blast-radius "replace" verdict from Track 3 → new per-swap FU
+  (this plan's Phase-2 output, ex-[[FU-510]]; sequence by risk + blast radius).
+  **This is a hard close-gate — see §7 DoD step 5.**
 - Every bug found → new urgent FU at discovery (don't wait for close).
 
 ---
@@ -412,12 +448,21 @@ This plan closes when:
    can open the repo cold, find any feature's code where they'd expect it, read it
    without generation assistance, change it in one place, and trust green tests to
    catch regressions.
-5. FU-361 / FU-320 / FU-395 are already in `DORA_FOLLOWUPS_RESOLVED.md`
-   (closed 2026-07-10 when this plan was drafted; the plan is their
-   sole tracker). At plan close, FU-510 gets a state note there marking
-   Phase 1 done; Phase 2 stays open. FU-406 + FU-404 get state notes
-   ("finalisation plan covered the FST/exercise portion; remaining
-   scope: X").
+5. **Hand-rolled-vs-library Phase 2 discharged (ex-FU-510 — hard gate).**
+   The Track-3 verdicts are consolidated into
+   `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md`, and **every
+   large-blast-radius `replace` verdict not executed at Stage 2 has been opened
+   as its own per-swap FU** (sequenced by risk + blast radius; pair the
+   sequencing with [[FU-412]] COMMERCIALIZATION_REPORT + [[FU-409]] auth security
+   re-audit + [[FU-424]] senior-review Tier-2 delta). FU-510 was retired into the
+   plan on 2026-07-15 and has **no standing ledger entry** — so this step is the
+   *only* thing that guarantees the Phase-2 work isn't dropped. The plan does not
+   close until this list is either executed or spawned as FUs; a `replace` verdict
+   left with no home blocks close.
+5a. FU-361 / FU-320 / FU-395 are already in `DORA_FOLLOWUPS_RESOLVED.md`
+   (closed 2026-07-10 when this plan was drafted; the plan is their sole tracker).
+   FU-406 + FU-404 get state notes ("finalisation plan covered the FST/exercise
+   portion; remaining scope: X").
 6. The plan doc itself gets a "Closed" banner + a link from
    `PROJECT_STATE.md` moves from the workstreams table to the
    "recently shipped" section.

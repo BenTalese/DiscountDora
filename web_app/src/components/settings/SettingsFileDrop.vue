@@ -1,5 +1,5 @@
 <template>
-    <div
+    <label
         class="file-drop"
         :class="{
             'file-drop--dragging': dragging,
@@ -7,34 +7,30 @@
             'file-drop--disabled': disabled,
             'file-drop--filled': !!modelValue,
         }"
-        role="button"
-        :tabindex="disabled ? -1 : 0"
-        :aria-label="label"
-        @click="onZoneClick"
-        @keydown.enter.prevent="onZoneClick"
-        @keydown.space.prevent="onZoneClick"
         @dragover.prevent="onDragOver"
         @dragleave.prevent="onDragLeave"
         @drop.prevent="onDrop"
     >
         <!--
-            The visible drop-zone (the wrapping div: role="button" + aria-label
-            + tabindex) is the exposed control; this input is a hidden
-            implementation detail triggered programmatically via inputEl.click().
-            Keep it OUT of the accessibility tree (FU-542): aria-hidden removes
-            the nested-interactive + unlabelled-input violations, tabindex="-1"
-            keeps keyboard focus on the wrapper only.
+            FU-545: the native <input type="file"> is the single labelled,
+            focusable control; the wrapping <label> (non-interactive) forwards
+            clicks + Enter/Space to it natively. This is the standard accessible
+            file-input pattern — no `role="button"` / `tabindex` / keydown /
+            programmatic `.click()`, so there's no nested-interactive violation
+            (which the old hidden-input-in-a-button-div tripped). The input is
+            visually hidden but kept IN the a11y tree (aria-label + focusable),
+            and disabled while busy/disabled so the label can't open the picker.
+            (Supersedes the FU-531 `@click.stop` re-entrancy guard: the Remove
+            button is interactive content, so a native label never forwards a
+            click on it to the input.)
         -->
         <input
-            ref="inputEl"
             type="file"
             class="file-drop__input"
-            aria-hidden="true"
-            tabindex="-1"
             :accept="accept"
-            :disabled="disabled"
+            :disabled="disabled || loading"
+            :aria-label="label"
             @change="onInputChange"
-            @click.stop
         />
 
         <!-- Idle / prompt state -->
@@ -55,7 +51,7 @@
                 variant="icon"
                 :icon="ICONS.close"
                 aria-label="Remove file"
-                @click.stop="onClear"
+                @click="onClear"
             >
                 <q-tooltip>Remove file</q-tooltip>
             </BaseButton>
@@ -78,7 +74,7 @@
                 class="file-drop__progress"
             />
         </template>
-    </div>
+    </label>
 </template>
 
 <script lang="ts" setup>
@@ -105,13 +101,7 @@
         (e: 'clear'): void;
     }>();
 
-    const inputEl = ref<HTMLInputElement | null>(null);
     const dragging = ref(false);
-
-    function onZoneClick() {
-        if (props.disabled || props.loading) return;
-        inputEl.value?.click();
-    }
 
     function take(file: File | null) {
         if (!file) return;
@@ -172,8 +162,10 @@
         cursor: pointer;
         transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
     }
+    /* Focus lives on the visually-hidden native input now, so surface the ring
+       on the wrapping label via :focus-within (FU-545). */
     .file-drop:hover:not(.file-drop--disabled):not(.file-drop--busy),
-    .file-drop:focus-visible {
+    .file-drop:focus-within:not(.file-drop--disabled):not(.file-drop--busy) {
         border-color: var(--brand-primary);
         background: color-mix(in srgb, var(--brand-primary) 5%, var(--surface-elevated));
         color: var(--text-primary);
@@ -203,8 +195,18 @@
         cursor: not-allowed;
     }
 
+    /* Visually hidden but still focusable + in the a11y tree (not display:none,
+       which would drop it out of the tab order) — FU-545. */
     .file-drop__input {
-        display: none;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
     .file-drop__icon {
         color: var(--brand-primary);

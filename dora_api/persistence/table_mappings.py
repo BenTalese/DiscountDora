@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, UniqueConstraint, false, true
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Table, Text, UniqueConstraint, false, true
 from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
@@ -944,6 +944,12 @@ def configure_mappings(db: SQLAlchemy):
         Column("email", String(255), nullable=True),
         Column("password_hash", String(255), nullable=True),
         Column("send_deals_on_day", Integer),
+        # NOT NULL + unique here is the intended model, and the app enforces both
+        # on insert — but the PROD (migrated) column is deliberately left nullable
+        # and non-unique: the `add_user_auth` migration (4b1d9c2e7a31) couldn't
+        # safely rewrite pre-existing rows in place. This is a documented, tracked
+        # drift (FU-564) — `test_migrations.py` allowlists `User.username` in
+        # `_KNOWN_NULLABILITY_DRIFT` / `_KNOWN_UNIQUE_DRIFT` so it can't grow.
         Column("username", String(255), nullable=False, unique=True),
         Column("is_admin", Boolean, nullable=False, default=False, server_default=false()),
         Column("deals_email_enabled", Boolean, nullable=False, server_default=true()),
@@ -1083,6 +1089,101 @@ def configure_mappings(db: SQLAlchemy):
         Column("consumed_at", DateTime(timezone=True), nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
+
+    # ── FU-563: index / unique reconciliation + FK covering indexes ──
+    # The ORM model is the source of truth for the schema (R-003), but for years
+    # every secondary index lived ONLY in the Alembic chain and was never mirrored
+    # back here — so `create_all()` (dev + the whole e2e suite) built a near-
+    # unindexed schema that didn't match the migrated production one (FU-393
+    # Finding 1). This block mirrors all 32 pre-existing prod indexes/uniques
+    # verbatim (names copied from the migrations so autogenerate stays a no-op on
+    # them) AND adds a covering index on every foreign-key column that lacked one
+    # (Finding 2 — 43 of them; unindexed FKs mean a parent delete full-scans the
+    # child table). The 43 new indexes are created in prod by migration
+    # b9d4f2a7c3e1; the 32 already exist there. `test_migrations.py` now compares
+    # column + nullability + index/unique colsets so this can't silently re-drift.
+    _t = metadata.tables
+
+    # Pre-existing prod indexes, previously only in the migrations (Finding 1):
+    Index("ix_alert_interaction_user_key", _t["AlertInteraction"].c.user_id, _t["AlertInteraction"].c.alert_key)
+    Index("ix_AuditEvent_action_occurred", _t["AuditEvent"].c.action, _t["AuditEvent"].c.occurred_at)
+    Index("ix_AuditEvent_actor_occurred", _t["AuditEvent"].c.actor_user_id, _t["AuditEvent"].c.occurred_at)
+    Index("ix_AuditEvent_entity_occurred", _t["AuditEvent"].c.entity_type, _t["AuditEvent"].c.entity_id, _t["AuditEvent"].c.occurred_at)
+    Index("ix_AuditEvent_occurred_at", _t["AuditEvent"].c.occurred_at)
+    Index("ix_AuthToken_expires_at", _t["AuthToken"].c.expires_at)
+    Index("ix_AuthToken_user_purpose", _t["AuthToken"].c.user_id, _t["AuthToken"].c.purpose)
+    Index("backup_created_at", _t["Backup"].c.created_at)
+    Index("consumption_event_stock_item_id", _t["ConsumptionEvent"].c.stock_item_id)
+    Index("cook_event_recipe_id", _t["CookEvent"].c.recipe_id)
+    Index("ix_dora_suggestion_suppression_kind_key", _t["DoraSuggestionSuppression"].c.kind, _t["DoraSuggestionSuppression"].c.dedup_key)
+    Index("ix_mealplanentry_reconcile", _t["MealPlanEntry"].c.scheduled_for, _t["MealPlanEntry"].c.consumed_at)
+    Index("ix_meal_reconcile_receipt_state_created_at", _t["MealPlanReconcileReceipt"].c.state, _t["MealPlanReconcileReceipt"].c.created_at)
+    Index("ix_PriceAlert_product", _t["PriceAlert"].c.product_id)
+    Index("ix_PriceAlert_user_product", _t["PriceAlert"].c.user_id, _t["PriceAlert"].c.product_id)
+    Index("ix_push_subscription_user_id", _t["PushSubscription"].c.user_id)
+    Index("ix_recipe_section_recipe_id", _t["RecipeSection"].c.recipe_id)
+    Index("ix_recipe_step_parent_id", _t["RecipeStep"].c.parent_step_id)
+    Index("ix_recipe_step_recipe_id", _t["RecipeStep"].c.recipe_id)
+    Index("ix_recipe_step_image_recipe_id", _t["RecipeStepImage"].c.recipe_id)
+    Index("ix_recipe_step_ingredient_ingredient_id", _t["RecipeStepIngredient"].c.recipe_ingredient_id)
+    Index("ix_recipe_step_tool_tool_id", _t["RecipeStepTool"].c.tool_id)
+    Index("ix_recipe_tag_dietary_tag_id", _t["RecipeTag"].c.dietary_tag_id)
+    Index("ix_recipe_tool_tool_id", _t["RecipeTool"].c.tool_id)
+    Index("ix_shopping_list_attachment_shopping_list_id", _t["ShoppingListAttachment"].c.shopping_list_id)
+    Index("ix_StockItem_last_checked_at", _t["StockItem"].c.last_checked_at)
+    Index("ix_StockItem_snoozed_until", _t["StockItem"].c.snoozed_until)
+    Index("stock_item_expiry_event_stock_item_id", _t["StockItemExpiryEvent"].c.stock_item_id)
+
+    # Pre-existing prod UNIQUE constraints, previously only in the migrations:
+    Index("ix_alert_preference_user_kind", _t["AlertPreference"].c.user_id, _t["AlertPreference"].c.kind, unique=True)
+    Index("ix_idempotency_key_source_key", _t["IdempotencyKey"].c.source_id, _t["IdempotencyKey"].c.key, unique=True)
+    Index("uq_ingestion_store_mapping_source_external", _t["IngestionStoreMapping"].c.source_id, _t["IngestionStoreMapping"].c.external_name, unique=True)
+    Index("uq_stock_item_price_observation_shopping_list_line_id", _t["StockItemPriceObservation"].c.shopping_list_line_id, unique=True)
+
+    # FK covering indexes — new, created in prod by migration b9d4f2a7c3e1 (Finding 2):
+    Index("ix_Backup_created_by_user_id", _t["Backup"].c.created_by_user_id)
+    Index("ix_Barcode_stock_item_id", _t["Barcode"].c.stock_item_id)
+    Index("ix_ConsumptionEvent_recipe_id", _t["ConsumptionEvent"].c.recipe_id)
+    Index("ix_CookEvent_cooked_by_user_id", _t["CookEvent"].c.cooked_by_user_id)
+    Index("ix_IngestionStoreMapping_store_id", _t["IngestionStoreMapping"].c.store_id)
+    Index("ix_MealPlanEntry_meal_plan_id", _t["MealPlanEntry"].c.meal_plan_id)
+    Index("ix_MealPlanEntry_recipe_id", _t["MealPlanEntry"].c.recipe_id)
+    Index("ix_MealPlanReconcileReceipt_meal_plan_entry_id", _t["MealPlanReconcileReceipt"].c.meal_plan_entry_id)
+    Index("ix_MealPlanReconcileReceipt_resolved_by_user_id", _t["MealPlanReconcileReceipt"].c.resolved_by_user_id)
+    Index("ix_MealPlanSwapLedger_applied_by_user_id", _t["MealPlanSwapLedger"].c.applied_by_user_id)
+    Index("ix_MealPlanSwapLedger_meal_plan_id", _t["MealPlanSwapLedger"].c.meal_plan_id)
+    Index("ix_MealPlanTemplateEntry_recipe_id", _t["MealPlanTemplateEntry"].c.recipe_id)
+    Index("ix_MealPlanTemplateEntry_template_id", _t["MealPlanTemplateEntry"].c.template_id)
+    Index("ix_MealPlanTemplateSetItem_set_id", _t["MealPlanTemplateSetItem"].c.set_id)
+    Index("ix_PreferredBuy_stock_item_id", _t["PreferredBuy"].c.stock_item_id)
+    Index("ix_Product_store_id", _t["Product"].c.store_id)
+    Index("ix_ProductHistoricOffer_product_id", _t["ProductHistoricOffer"].c.product_id)
+    Index("ix_ProductOffer_product_id", _t["ProductOffer"].c.product_id)
+    Index("ix_Recipe_category_id", _t["Recipe"].c.category_id)
+    Index("ix_Recipe_cuisine_id", _t["Recipe"].c.cuisine_id)
+    Index("ix_Recipe_recipe_collection_id", _t["Recipe"].c.recipe_collection_id)
+    Index("ix_RecipeIngredient_recipe_id", _t["RecipeIngredient"].c.recipe_id)
+    Index("ix_RecipeIngredient_section_id", _t["RecipeIngredient"].c.section_id)
+    Index("ix_RecipeIngredient_stock_item_id", _t["RecipeIngredient"].c.stock_item_id)
+    Index("ix_RecipeStep_section_id", _t["RecipeStep"].c.section_id)
+    Index("ix_ShoppingListLine_product_id", _t["ShoppingListLine"].c.product_id)
+    Index("ix_ShoppingListLine_purchased_store_id", _t["ShoppingListLine"].c.purchased_store_id)
+    Index("ix_ShoppingListLine_selected_product_id", _t["ShoppingListLine"].c.selected_product_id)
+    Index("ix_ShoppingListLine_shopping_list_id", _t["ShoppingListLine"].c.shopping_list_id)
+    Index("ix_ShoppingListLine_stock_item_id", _t["ShoppingListLine"].c.stock_item_id)
+    Index("ix_ShoppingListTemplateLine_stock_item_id", _t["ShoppingListTemplateLine"].c.stock_item_id)
+    Index("ix_ShoppingListTemplateLine_template_id", _t["ShoppingListTemplateLine"].c.template_id)
+    Index("ix_StockItem_stock_group_id", _t["StockItem"].c.stock_group_id)
+    Index("ix_StockItem_stock_level_id", _t["StockItem"].c.stock_level_id)
+    Index("ix_StockItem_stock_location_id", _t["StockItem"].c.stock_location_id)
+    Index("ix_StockItem_usual_store_id", _t["StockItem"].c.usual_store_id)
+    Index("ix_StockItemPriceObservation_stock_item_id", _t["StockItemPriceObservation"].c.stock_item_id)
+    Index("ix_StockItemPriceObservation_store_id", _t["StockItemPriceObservation"].c.store_id)
+    Index("ix_StockItemSubstitute_stock_item_b_id", _t["StockItemSubstitute"].c.stock_item_b_id)
+    Index("ix_StockItemWasteEvent_stock_item_id", _t["StockItemWasteEvent"].c.stock_item_id)
+    Index("ix_StockLevelChange_stock_item_id", _t["StockLevelChange"].c.stock_item_id)
+    Index("ix_StockLevelChange_stock_level_id", _t["StockLevelChange"].c.stock_level_id)
+    Index("ix_StockLocation_parent_id", _t["StockLocation"].c.parent_id)
 
     # ── Mappings ──────────────────────────────────────────────────────────────
 

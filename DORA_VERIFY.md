@@ -68,6 +68,17 @@ top-to-bottom.
 - [ ] After Remove is tapped and a new image picked, the buttons flip back to "Change" labels (the draft has a fresh image)
 - [ ] On mobile (or with `forceCamera` on): the camera button opens the OS camera picker directly
 
+## SettingsFileDrop — accessible file picker (FU-545 label-wrap refactor)
+The Settings → Admin → **Data → Import** and **Data → Backup & restore** drop-zones
+were re-built to the accessible label-wrap pattern (a `<label>` wrapping a visually-
+hidden native file input) — the interaction is now browser-native, so confirm nothing
+regressed:
+- [ ] **Click-to-open still works.** Click anywhere on the drop-zone (icon/text) → the OS file picker opens; choosing a file selects it (filename + size shown).
+- [ ] **Keyboard.** Tab to the drop-zone → a visible focus ring appears on the zone (now driven by `:focus-within` on the hidden input); press **Enter** or **Space** → the OS file picker opens (native `<label>`/`<input>` behaviour, no custom keydown).
+- [ ] **Drag-and-drop still works.** Drag a file over → the zone highlights (dashed→solid, tint); drop → the file is selected. Dragging off without dropping calms the highlight.
+- [ ] **Remove doesn't re-open the picker.** With a file selected, click the **✕ Remove** button → the file clears and the picker does **not** pop open (label never forwards a click on the interactive Remove button).
+- [ ] **Busy / disabled inert.** While an import is uploading (busy spinner) or the zone is disabled, clicking it does nothing (the underlying input is `disabled`), and drops are ignored.
+
 ## BuyVerdictCard one-tap actions — origin FU-454
 - [ ] Find a stock item whose card verdict returns kind `mark_stocked` ("Already stocked" — e.g. an item with waste history that got set back to Well-Stocked accidentally, or engineered by dropping the level from Well-Stocked to Low with waste events present) → tap the button on both Stock Overview AND Stock Item Detail → item flips to Well-Stocked, positive toast fires, verdict card re-renders with the fresh answer
 - [ ] Same on Shopping List Detail line card → tap `mark_stocked` → item flips to Well-Stocked; the shopping-list line stays put (line-level removal is a separate action)
@@ -1555,6 +1566,23 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Operator
+
+### FK-index migration applies incrementally on a populated DB — origin FU-563 (2026-07-15)
+*The test suite covers the from-empty upgrade and the `create_all` path; this confirms the additive index migration also applies cleanly to an already-populated existing install (the real self-host upgrade path).*
+- [ ] On an **existing** install with real data at the previous head (`a1b7f3e9c2d4`), run the app's startup upgrade (or `flask db upgrade`) → migration `b9d4f2a7c3e1_20260715_fk_covering_indexes` runs, boot completes, no error, and the app behaves identically (indexes are transparent).
+- [ ] Optional Postgres pass (when a disposable PG is available, FU-405): `DORA_TEST_DB=postgres` full suite stays green — confirms the 43 `CREATE INDEX`es apply on Postgres too, not just SQLite.
+
+### FK ondelete rebuild preserves data + fixes delete behaviour — origin FU-565 (2026-07-15)
+*Migration `d3f8b1a6c4e2_20260715_fk_ondelete_drift` rebuilds `StockItem`, `Product`, `ProductOffer`, `ProductHistoricOffer` on SQLite to recreate 6 FKs with their correct on-delete rule. `StockItem` is the biggest/most-referenced rebuild in this arc — confirm on real data.*
+- [ ] On an install with real `StockItem` (and ideally `Product`/offer) data, run the startup upgrade → migration runs, **all rows survive**, and the FU-563 covering indexes + `StockItem.usual_store_id`'s existing SET NULL are intact.
+- [ ] Spot-check the fixed behaviour: delete a `StockLevel`/`StockGroup`/`StockLocation` that a stock item references → the item's link **clears (SET NULL)** instead of erroring; deleting a `Product` cleans up its offers (**CASCADE**); a `Store` still referenced by a product is **blocked (RESTRICT)**.
+- [ ] Optional Postgres pass (FU-405): same migration via native DROP/ADD CONSTRAINT (no rebuild) — `DORA_TEST_DB=postgres` suite green.
+
+### Product nullability rebuild preserves data on a populated DB — origin FU-564 (2026-07-15)
+*Migration `c1e8a5f3d9b2_20260715_product_nullability` rebuilds the `Product` table on SQLite (`batch_alter_table`) to tighten `is_active`/`is_available` to NOT NULL and loosen `merchant_stockcode` — a table rebuild is more invasive than the FU-563 `CREATE INDEX`, so confirm on real data. (No-op on installs with no products.)*
+- [ ] On an install with **real Product rows** (products layer populated), run the startup upgrade → migration runs, all Product rows survive the rebuild, `store_id` FK + the `ix_Product_store_id` index are intact, and product surfaces (My Products, Price History, stock-item Products tab) render normally.
+- [ ] Confirm any pre-existing `Product` rows with NULL `is_active`/`is_available` (if any) came through as active/available (backfilled to true), and that a product insert now requires those flags (dev + prod agree).
+- [ ] Optional Postgres pass (FU-405): the same migration applies via native `ALTER COLUMN` (no rebuild) — `DORA_TEST_DB=postgres` suite green.
 
 ### Production WSGI server (gunicorn) — origin FU-397 (shipped 2026-07-14)
 *Can't be run on the Windows dev box (gunicorn needs POSIX/fcntl) — confirm in the Linux container or a Linux/WSL checkout.*

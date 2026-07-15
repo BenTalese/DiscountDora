@@ -9,6 +9,371 @@ next.
 
 ---
 
+## 2026-07-15 (later 7) — FU-562 trial / free-tier shape designed with owner (planning, no code)
+
+**Why:** Owner: "plan with me how to create the trial side of the app" — the free-tier /
+trial shape that FU-562 flagged as still-to-decide.
+
+**The framing agreed:** self-host inverts the SaaS §6 playbook — can't enforce at runtime
+(key = speed-bump + update-gate leverage), no cost-driver to paywall (paywall on value not
+cost), and the "aha" *is* the intelligence layer (so a permanently-dumb free tier doesn't
+convert). Answer: three stacked trial surfaces — hosted demo (built) → time-limited full
+trial on your own pantry → useful free "Core" floor.
+
+**Owner decisions this session (recorded in FU-562):**
+- After-trial = **fall back to a useful Core tier** (no hard bricking; hide-don't-nag upsell).
+- Tier split **decided**: Free Core = pantry/stock/stocktake/recipes+cook/lists/dashboard/
+  Basic assistant/import-backup/expiry+low alerts, **no item caps**. Paid Full = the whole
+  intelligence/proactivity layer **+ meal plans + AI assistant mode + native app** (owner
+  ruled all three ambiguous surfaces paid) **+ updates/support**.
+- Trial **delivery mechanism deferred** ("decide later") — 3 options saved to the FU
+  (first-run grace [rec] / issued key / demo-only) + trial length (14 vs 30d).
+
+**Also captured in the FU:** the buildable enforcement shape (Ed25519 signed key, one
+server-side entitlements service = R-003 single source, extend `/api/auth/capabilities`,
+route through the existing `AdminSystemFeaturesSettings.vue` flags + `master_llm_enabled`),
+the **two expiry semantics** (trial → revert to Core; annual paid → keep build forever,
+gate only updates), and a 5-step build sequence.
+
+**Follow-ups owed:** none new. FU-562 heading + body + recommended-resolution updated;
+still-open forks = revenue model (a–d) + trial mechanism (i–iii) + trial length. Docs only,
+no code, not a PROJECT_STATE dashboard row → no refresh.
+
+---
+
+## 2026-07-15 (later 6) — FU-391 closed as WON'T DO (user's call)
+
+**Why:** User: "resolve FU-391 - not doing." The P5-06 first-week-experience nudge
+layer (post-onboarding gentle prompts) — declined as a build.
+
+**What changed (docs only):** moved FU-391 from `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md`,
+flipped to `[RESOLVED — WON'T DO]` with the rationale (no venue after FU-352; Anti-creep —
+extra surface for a one-time moment) and a re-open note preserving the design thinking
+(Attention-card nudge list / first-week-only overlay chips, never a permanent Score-card
+row). No code, no other ledger touched. Not in the PROJECT_STATE dashboard, so no refresh.
+
+**Follow-ups owed:** none.
+
+---
+
+## 2026-07-15 (later 5) — FU-565 RESOLVED: 6 FK ondelete drifts reconciled; schema-match test now enforces ondelete too. FU-393 sweep fully closed.
+
+**Why:** User: "do 565" — the last FU-393-sweep residual. 6 FKs declared an `ondelete`
+in the model that prod never had (created as anonymous FKs pre-convention). Confirmed
+real (not a reflection artifact) during FU-563, and it bites on **both** engines
+(SQLite runs `PRAGMA foreign_keys=ON`).
+
+**What shipped:**
+- **Migration `d3f8b1a6c4e2_20260715_fk_ondelete_drift`** — recreates each FK with the
+  model's declared rule: `ProductOffer.product_id` + `ProductHistoricOffer.product_id`
+  CASCADE, `Product.store_id` RESTRICT, `StockItem.{stock_group,stock_level,stock_location}_id`
+  SET NULL. One `batch_alter_table` per table (StockItem's 3 rebuild it once). Portable —
+  SQLite table rebuild, native DROP/ADD CONSTRAINT on Postgres (R-005/R-006). **No model
+  change** (the model already declared all 6 right; this only moves prod to match).
+- **`tests/test_migrations.py`** — extended `_reflect` + the schema-match comparison to
+  also compare **FK `ondelete`**, closing the exact class the sweep found. No allowlist
+  needed (parity is 0).
+
+**Batch-mode fragility navigated (the reason this was the risky one):** reflected
+anonymous FKs are named via the metadata `NAMING_CONVENTION` on rebuild, and I wrapped
+the names in `batch.f(...)` so the convention isn't double-applied — the trap documented
+on `c5a8e1f7d3b2`. Empirically verified (not just reasoned): the drop-by-name worked, and
+the rebuilds **preserved** everything — `StockItem.usual_store_id` stayed SET NULL, and
+every FU-563 covering index on the 4 rebuilt tables survived.
+
+**Verification:**
+- Reflected model↔migrated `ondelete` parity across **all** FKs: **0 drifts**.
+- Up→down→up round-trip clean in isolation.
+- `test_migrations.py` 5 passed incl. the extended gate; **full backend suite 1490 passed
+  / 1 skip / 1 xfail** — no regression from the 4 table rebuilds.
+
+**Standards close-gate:** applies + strengthens R-034/ADR-030 — updated both to note the
+gate now covers FK `ondelete`, and that the FU-393 sweep is fully closed (all three classes
+now *enforced*, not just detected). R-006 clean forward-only portable migration.
+
+**Ledgers:** FU-565 → `_RESOLVED`; `CHANGELOG.md` Fixed bullet; `DORA_VERIFY.md` Operator
+check (StockItem/Product ondelete rebuild + behaviour spot-check on a populated DB);
+`PROJECT_STATE.md` refreshed; R-034/ADR-030 updated.
+
+**The FU-393 data-model sanity sweep is now fully remediated** (FU-563 indexes + FU-564
+nullability + FU-565 ondelete), and `test__migrations__migrated_schema_matches_orm_metadata`
+compares tables + columns + nullability + index/unique colsets + FK ondelete — the whole
+model↔migration surface.
+
+**Follow-ups owed:** none. No open FU-393 residual remains.
+
+**Next up:** nothing from this arc. The three migrations (`b9d4f2a7c3e1`, `c1e8a5f3d9b2`,
+`d3f8b1a6c4e2`) chain cleanly onto the previous head.
+
+---
+
+## 2026-07-15 (later 4) — FU-564 RESOLVED: Product nullability reconciled to the model; schema-match test now enforces it
+
+**Why:** User: "do 564" — the FU-393 sweep's Finding 3 (3 `Product` columns + `User.username`
+disagree on nullability between the model's `create_all` and the migrated prod schema).
+Direct follow-on to FU-563, whose strengthened test had these 4 columns allowlisted.
+
+**What shipped:**
+- **Migration `c1e8a5f3d9b2_20260715_product_nullability`** — brings prod to the model's
+  (already-correct) intent: `Product.is_active` + `is_available` → **NOT NULL** (backfilling
+  any stray NULLs to `1`/True first, matching the app's ingestion/create/seed default),
+  `Product.merchant_stockcode` → **nullable** (loosened in the model in the merchant→store
+  era, never enforced in prod). `batch_alter_table` → portable: SQLite table rebuild, native
+  `ALTER COLUMN` on Postgres. No model change (the model already declared the target).
+- **`table_mappings.py`** — added an explicit comment at `User.username` documenting that the
+  model's NOT NULL+unique is intentional/app-enforced while prod stays nullable (the
+  `add_user_auth` deferral), pointing at FU-564 + the test allowlist.
+- **`tests/test_migrations.py`** — removed the 3 `Product` columns from `_KNOWN_NULLABILITY_DRIFT`,
+  so the schema-match gate now **actively enforces** their nullability; only `User.username`
+  remains allowlisted.
+
+**Verification:**
+- Reflected nullability drift after the migration: **1** — exactly `User.username` (the deferral).
+- Product-nullability migration up→down→up round-trip **clean in isolation** — notably the
+  `Product` `batch_alter_table` rebuild works here despite this repo's historical batch-mode
+  fragility (FU-549 UUIDType-rename; the xfail CHECK-constraint downgrade), because it's an
+  `alter_column` (nullability) not a rename, and it preserves rows + the `store_id` FK + the
+  `ix_Product_store_id` index from FU-563.
+- **Full backend suite: 1490 passed / 1 skip / 1 xfail** — no regression from the tightened
+  NOT NULLs or the table rebuild.
+
+**Scope:** stayed strictly on FU-564. The 6 FK `ondelete` drifts ([[FU-565]]) were NOT folded in
+even though FU-565's `Product.store_id` fix could have ridden this Product rebuild — kept
+separate per the explicit ask. Updated FU-565 to note this rebuild proved the pattern is safe on
+`Product`, so it can reuse it with confidence.
+
+**Standards close-gate:** applies R-034/ADR-030 (model is schema SoT; drift reconciled + now
+test-enforced). R-006 clean forward-only portable migration. No new rule/ADR (this executes the
+one FU-563 just promoted).
+
+**Ledgers:** FU-564 → `_RESOLVED`; FU-565 sequencing note updated; `CHANGELOG.md` Fixed bullet;
+`DORA_VERIFY.md` Operator check (Product rebuild preserves data on a populated DB + PG pass);
+`PROJECT_STATE.md` refreshed.
+
+**Follow-ups owed:** none. **[[FU-565]]** (FK ondelete) is the sole remaining FU-393-sweep residual.
+
+**Next up:** FU-565 when a StockItem/Product/ProductOffer batch-rebuild pass is scheduled — it's
+now the last data-model-drift item open.
+
+---
+
+## 2026-07-15 (later 3) — FU-563 RESOLVED: schema-drift reconciliation + 43 FK covering indexes + strengthened schema-match test (R-034/ADR-030)
+
+**Why:** User: "do FU-563" — the FU-393 sweep's Finding 1 (model 1 index vs
+migrations 32) + Finding 2 (43 FK columns unindexed in prod) + Finding 6 (the
+schema-match test only compared table names). Confirmed everything against ground
+truth by reflecting both build paths (create_all vs upgrade-from-empty) on
+throwaway SQLite DBs — the FU-393 method — rather than reading the 1600-line model.
+
+**What shipped:**
+- **`dora_api/persistence/table_mappings.py`** — new `Index(...)` reconciliation
+  block after the table defs: mirrors all **32** pre-existing prod indexes + 4
+  unique constraints (names copied verbatim from the migrations so autogenerate
+  stays a no-op on them) + a covering index on all **43** uncovered FK columns.
+  Added `Index` to the sqlalchemy import.
+- **`…/migrations/versions/b9d4f2a7c3e1_20260715_fk_covering_indexes.py`** — one
+  additive, forward-only migration creating the 43 FK indexes in existing installs.
+  Pure `CREATE INDEX`, no table rewrite → portable SQLite+Postgres (R-005/R-006).
+  Up→down→up round-trip verified in isolation.
+- **`tests/test_migrations.py`** — rewrote `…migrated_schema_matches_orm_metadata`
+  from table-names-only to a full comparison of **tables + columns + nullability +
+  index/unique colsets** between the migrated schema and `create_all`, with a tight
+  documented allowlist (`_KNOWN_NULLABILITY_DRIFT` = 4 cols, `_KNOWN_UNIQUE_DRIFT` =
+  User.username; `alembic_version` ignored). This is the regression gate.
+
+**Verification:**
+- Reflected drift after the change: **0** (bar the documented `User.username` unique
+  = FU-564 deferral). Nullability diffs = exactly the 4 known (3 Product → FU-564,
+  User.username → deferral). No table/column presence diffs.
+- **Full backend suite: 1490 passed / 1 skipped / 1 xfailed — identical to baseline.**
+  The 4 newly-enforced unique constraints + 75 new `create_all` indexes broke no test
+  or seed. `test_migrations.py`: 5 passed (incl. the strengthened gate) + PG-skip + the
+  pre-existing unrelated downgrade xfail.
+
+**Scope calls (R-007) — two drift classes deliberately deferred, both need risky
+batch table rebuilds, so out of this *additive* migration:**
+- **Finding 4 FK `ondelete` → confirmed REAL drift, opened [[FU-565]].** 6 FKs declare
+  an ondelete the prod schema lacks (ProductOffer/ProductHistoricOffer.product_id
+  CASCADE, Product.store_id RESTRICT, StockItem.{stock_group,stock_level,stock_location}_id
+  SET NULL). Not a reflection artifact — verified model=CASCADE/… vs migrated=None.
+- **Nullability (3 Product cols) → stays on [[FU-564]]**, now *actively guarded* by the
+  strengthened test's allowlist (each entry points at the FU). FU-565 + FU-564 should
+  share a per-table batch rebuild pass.
+
+**Standards close-gate:** advances R-003 (model now SoT for indexes). Promoted a new
+rule **R-034** + **ADR-030** ("the ORM model owns the whole schema, indexes included;
+FK columns indexed by default; schema-match test compares colsets"). Migration is R-006
+clean/forward-only/portable.
+
+**Ledgers:** FU-563 → `_RESOLVED`; **FU-565 opened** (ondelete); FU-564 updated with the
+now-guarded note; `CHANGELOG.md` Fixed bullet; `DORA_VERIFY.md` Operator check (incremental
+upgrade on a populated DB + optional PG pass); `PROJECT_STATE.md` refreshed.
+
+**Follow-ups owed:** none from this unit. FU-565 + FU-564 are the tracked remainder of the
+FU-393 sweep.
+
+**Next up:** no direct follow-on. FU-564/FU-565 when a Product/StockItem batch-rebuild pass
+is scheduled (pre-Phase-4 hygiene).
+
+---
+
+## 2026-07-15 (later 2) — FU-510 RETIRED: hand-rolled-vs-library fully absorbed into FINALISATION_PLAN, open FU deleted
+
+**Why:** User asked to move FU-510 into the FINALISATION_PLAN and, after weighing
+stub-vs-delete, chose to **delete it outright** and harden the plan's close-gate to
+compensate. Only Phase 1 had been in the plan; Phase 2 + the concrete focus-area
+checklist lived only in the FU, so this is a genuine content migration, not a rename.
+
+**What changed (docs only):**
+- **[FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) §3.3** "Hand-rolled-vs-library
+  verdicts" now carries FU-510's **full substance**: the two-phase method, the
+  load-bearing Charter "don't default to library" caveat, and the non-exhaustive
+  focus-area checklist (security-adjacent CSRF/Fernet/headers, HTTP query-string/
+  marshalling, `SqlAlchemyRepository`, `units.py`/locale/tz, `useDragDropList`/
+  `useOfflineQueue`/rollback registry, `ConfigurationManager`, ops).
+- **Plan close-gate hardened so no standing FU is needed:** §6 recast FU-510 as
+  "fully absorbed — FU retired, this plan is the sole owner"; the follow-on list +
+  **§7 DoD step 5 rewritten into a hard gate** — the plan cannot close until every
+  large-blast-radius `replace` verdict is executed or spawned as a per-swap FU
+  (consolidated into `HANDROLLED_VS_LIBRARIES.md`); a `replace` with no home blocks
+  close. Track-3 description (§3.2) + `FINALISATION_COVERAGE.md` close-out row updated
+  to match.
+- **`DORA_FOLLOWUPS.md`:** FU-510 **deleted** from the open ledger. Audit trail added
+  to `DORA_FOLLOWUPS_RESOLVED.md` as **`[RETIRED]`** (not `[RESOLVED]` — the sweep
+  hasn't been done; it was relocated) so any lingering `[[FU-510]]` link resolves and
+  a future search lands somewhere.
+- **Live cross-refs reconciled** so nothing implies an open FU-510: `PROJECT_STATE.md`
+  (foundations note), `docs/security/SECURITY_REVIEW.md` (standing-register bullet),
+  `FINALISATION_COVERAGE.md` (close-out checklist). Historical `DORA_WORKLOG` mentions
+  left as-is (trail).
+
+**The safety-net trade-off, explicit:** deleting the open FU removes the
+session-start-scanned reminder; the *sole* guarantee that Phase 2 gets done is now the
+plan's DoD step 5. That's acceptable because it's a hard, blocking close condition and
+the plan is already an active workstream — but if the finalisation plan is ever
+abandoned rather than closed, the library sweep goes with it. Called out here so that's
+a conscious decision, not a silent drop.
+
+**Standards:** docs-only, no code, no rule/ADR. No PROJECT_STATE dashboard regen needed
+beyond the one-line reconcile (no workstream moved).
+
+**Next up:** nothing owed. The sweep now rides the finalisation plan; per-swap FUs
+appear at that plan's close.
+
+---
+
+## 2026-07-15 (later) — FU-545 RESOLVED: SettingsFileDrop accessible label-wrap refactor (kills `nested-interactive`)
+
+**Why:** User: "do FU-545". The last SettingsFileDrop a11y remnant — a native
+`<input type="file">` nested inside a `<div role="button">` drop-zone, which axe
+flags as `nested-interactive` (serious). FU-542 had already fixed the unlabelled
+half but held back the empty/filled axe assertions until this refactor landed.
+
+**What shipped (`web_app/src/components/settings/SettingsFileDrop.vue`):**
+- Rebuilt to the **standard accessible label-wrap file-input pattern**: the wrapper
+  is now a non-interactive `<label>`; the native file input is the single labelled,
+  focusable control the label forwards clicks + Enter/Space to *natively*.
+- Dropped all the custom machinery: `role="button"`, `:tabindex`, `@keydown.enter/space`,
+  `@click="onZoneClick"`, and the programmatic `inputEl.click()` + `inputEl` ref.
+- Input is **visually hidden via sr-only CSS, not `display:none`** (so it stays
+  focusable + in the a11y tree), carries `:aria-label="label"`, and is
+  `:disabled="disabled || loading"` so the label can't open the picker while
+  busy/disabled (replaces the old JS guard).
+- Focus ring moved from `.file-drop:focus-visible` (on the old div) to
+  `.file-drop:focus-within` on the label (focus now lives on the hidden input).
+- Removed the FU-531 interim `@click.stop` on the Remove button — a native `<label>`
+  never forwards a click on interactive content to its control, so it's redundant.
+- All colours stayed `var(--…)` (R-002 preserved).
+
+**Tests (`settingsFileDrop.spec.ts`, 13→15):** reworked to the new model — asserts
+the `<label>` + single-labelled-input structure and the absence of role/tabindex;
+kept change/drag-drop/busy/disabled behaviour (busy/disabled now assert the input is
+`disabled` rather than spying a programmatic click); **re-enabled the empty + filled
+axe assertions** (the FU-545 deliverable) via an `it.each` over idle/filled/disabled —
+all three scan clean. Also fixed 3 `noUncheckedIndexedAccess` vue-tsc errors left in
+yesterday's `useOfflineQueue.spec.ts` (`value[0]` → `?.`/`!`). Frontend Vitest
+**385→387 / 30 files**; full suite green; **`vue-tsc --noEmit` clean (0 errors)**;
+`eslint` clean on the component.
+
+**Parents unaffected:** `AdminDataImport.vue` + `AdminDataBackupRestore.vue` use only
+the `v-model` + `pick`/`clear`/`loading`/`progress` public API — unchanged.
+
+**Engineering-standards close-gate:** R-002 theme-tokens-only preserved; R-003 state
+ownership unchanged (parent still owns the upload). No new rule/ADR — the accessible
+label-wrap file input is a standard web pattern, not a recurring project-specific
+decision worth promoting.
+
+**Ledgers:**
+- `DORA_FOLLOWUPS.md`: FU-545 removed from open → `DORA_FOLLOWUPS_RESOLVED.md` (top),
+  flipped `[RESOLVED]` with the mechanism + supersedes-FU-531 note.
+- `DORA_VERIFY.md`: new "SettingsFileDrop — accessible file picker (FU-545)" section
+  — click-to-open, keyboard Enter/Space + focus ring, drag-drop, Remove-doesn't-reopen,
+  busy/disabled inert (native `<label>` forwarding + the focus ring can't be exercised
+  in jsdom, so eyes-on is warranted).
+- `CHANGELOG.md`: `[Unreleased] › Fixed` bullet.
+
+**Follow-ups owed:** none. FU-545 fully closed pending the browser-verify walk.
+
+**Next up:** no direct follow-on. Open a11y work continues to flow through FU-542's
+one-line-per-spec axe pattern as components are touched.
+
+---
+
+## 2026-07-15 — FU-520 item 3 drained: `useOfflineQueue` composable spec (last opportunistic frontend surface)
+
+**Why:** User asked "what's left on FU-520?" then "do useOfflineQueue spec". FU-520's
+only remaining item-3 surface (per the 2026-07-14 update) was `useOfflineQueue` —
+the last opportunistic component/composable with no coverage. Knocked it out.
+
+**What shipped:**
+- `web_app/test/unit/useOfflineQueue.spec.ts` — **13 tests**, all green. Covers:
+  `tryWithQueue` (swallow network-error → queue + report success; rethrow
+  non-network; pass through success); `drain` (replay oldest-first with the
+  raw-axios offline-replay markers, STOP on first network error leaving the rest
+  queued with `attempts` counted, shunt a non-network 4xx into the conflict pile
+  and continue, no-op on empty queue); the `apiReachable` false→true auto-drain
+  edge; `discardConflict` / `retryConflict` (retry re-queues + drains); per-user
+  localStorage isolation + rehydrate-on-user-switch + corrupt-payload
+  degrade-to-empty.
+- Frontend Vitest suite **372 → 385 tests / 30 files**; full suite green.
+
+**Key testing lesson (worth reusing for other singleton composables):**
+`useOfflineQueue` keeps module-level state (`queue`, `booted`) AND registers
+module-level `watch`ers (on `apiReachable` and the auth user) that are **never
+torn down**. `vi.resetModules()` gives a fresh module per test, but a hoisted
+`vi.mock` does NOT re-run its factory on reset — so the mocked `apiReachable`
+ref is shared across tests and every test's `boot()` stacks another live watcher
+on it. A prior test that left items queued then has a *zombie* watcher that fires
+on the current test's flip and drains its stale queue (this showed up as
+"expected 1 call, got 4"). Fix: wire the reactive seams (`useNetworkStatus`,
+`authStore`) with a **fresh ref/reactive per test via `vi.doMock` in
+`beforeEach`**, not a hoisted `vi.mock`. Also import `NormalisedApiError` fresh
+alongside the composable each test so the `instanceof` branch matches the
+re-evaluated class identity.
+
+**Engineering-standards close-gate:** test-only change, no product code touched —
+no R-0NN rules in scope, no violations, no ADR.
+
+**FU-520 status:** item 3 now **fully drained** (all component/composable surfaces
+covered). **Only item 1 remains — the Postgres CI wiring, gated on FU-405** (CI is
+deliberately commented off). The suite already runs green on Postgres via the
+`DORA_TEST_DB=postgres` selector; only the CI hookup is left. Nothing else on this
+FU is actionable in-repo. Kept OPEN solely as the FU-405 trigger.
+
+**Ledger updates:**
+- `DORA_FOLLOWUPS.md`: FU-520 got a 2026-07-15 update (item 3 drained, spec
+  detail + the `vi.doMock`-fresh-ref pattern note) and the recommended-resolution
+  line narrowed to "Postgres CI with FU-405 — sole remaining trigger".
+- `CHANGELOG.md`: added line under `[Unreleased] › Added`.
+
+**Follow-ups owed:** none. Remaining FU-520 work (Postgres CI) is policy-gated on
+FU-405.
+
+**Next up:** FU-520 is effectively parked until FU-405 (CI un-comment). No
+immediate follow-on from this unit.
+
+---
+
 ## 2026-07-14 (later 17) — FU-520: full Postgres test-isolation rewrite + two SQLite-vs-Postgres divergence bug fixes + companion scraper fixtures
 
 **Why:** FU-520 item 1 (Postgres-backed test runs) was parked as "CI-gated". But

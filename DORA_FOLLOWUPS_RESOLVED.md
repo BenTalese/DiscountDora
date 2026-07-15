@@ -10,6 +10,68 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED — WON'T DO] FU-391 — P5-06 first-week experience (post-onboarding nudges)
+- **Resolved:** 2026-07-15 — **user's call: not doing it.** Declined as a build; closed without code.
+- **What it was:** P5-06 first-week experience — gentle post-onboarding nudges (complete profile, add first recipe, run first stocktake, etc.). First-day onboarding (C-5) shipped; the first-week nudge layer was never built and stayed a deferred backlog item.
+- **Rationale (as closed):** no venue landed for it after [[FU-352]] resolved "keep Attention + Kitchen Health coexisting" (removing the launchpad-alerts fold-in path), and it would have needed its own surface. The user opted not to invest — consistent with the Charter Anti-creep tiebreak (a first-week-only nudge layer is extra surface for a one-time moment). If a real onboarding-retention need surfaces later, re-open from this note; the design thinking (nudge list on the Attention card *or* first-week-only overlay chips, never a permanent Score-card row) is preserved here.
+
+## [RESOLVED] FU-565 — Data-model: 6 FK `ondelete` rules in the model absent from the migrated schema
+- **Resolved:** 2026-07-15 — reconciled all 6 to the model via one portable migration; verified model↔migrated `ondelete` parity is now **0 across every FK**, and the schema-match test now enforces it.
+- **The 6 (all confirmed real, not reflection artifacts — model vs migrated both reflected):** `ProductOffer.product_id` + `ProductHistoricOffer.product_id` (model **CASCADE**/prod none), `Product.store_id` (**RESTRICT**/none), `StockItem.stock_group_id`/`stock_level_id`/`stock_location_id` (**SET NULL**/none). Real bug on **both** engines — SQLite runs `PRAGMA foreign_keys=ON` (dora_api/app.py), Postgres enforces natively — e.g. deleting a `StockLevel` a `StockItem` referenced should SET NULL but instead errored.
+- **Fix:** migration `d3f8b1a6c4e2_20260715_fk_ondelete_drift` recreates each FK with the model's declared `ondelete`, one `batch_alter_table` per table (so `StockItem`'s 3 rebuild it once). Portable — SQLite table rebuild, native DROP/ADD CONSTRAINT on Postgres (R-005/R-006). **No model change** (the model already declared all 6 correctly; this only moves prod to match).
+- **Batch-mode fragility navigated:** the reflected anonymous FKs are named via the metadata `NAMING_CONVENTION` on the rebuild, and the names are wrapped in `batch.f(...)` so the convention isn't applied a second time — the exact double-render trap documented on `c5a8e1f7d3b2`. Verified the rebuilds **preserve** everything else: `StockItem.usual_store_id` stays SET NULL, and every FU-563 covering index on the 4 rebuilt tables survived (`ix_Product_store_id`, `ix_StockItem_stock_{group,level,location}_id`, etc.).
+- **Test extended (the FU's optional ask, done):** `_reflect` + the schema-match comparison now also compare **FK `ondelete`** — so the whole class the FU-393 sweep found (model declares a rule, prod has none) is gated. No allowlist needed; parity is 0.
+- **Verification:** up→down→up round-trip clean in isolation; `test_migrations.py` 5 passed incl. the extended gate; full backend suite **1490 passed / 1 skip / 1 xfail** — no regression from the 4 table rebuilds.
+- **Standards:** applies + strengthens R-034/ADR-030 (the schema-match gate now covers FK ondelete too). R-006 clean forward-only portable migration. **This closes the FU-393 data-model sanity sweep in full** (FU-563 indexes + FU-564 nullability + FU-565 ondelete all resolved). Operator verify (StockItem/Product rebuild on a populated DB) logged in DORA_VERIFY.
+
+## [RESOLVED] FU-564 — Data-model: nullability drift (model vs migrated), 3 Product columns
+- **Resolved:** 2026-07-15 — reconciled prod's `Product` nullability to the ORM model (which was already at the intended state), verified by reflecting both build paths down to a single remaining (intentional) drift.
+- **Fix:** migration `c1e8a5f3d9b2_20260715_product_nullability` — tightens `Product.is_active` + `is_available` to **NOT NULL** (backfilling any stray prod NULLs to `1`/True first, matching the app's ingestion/create/seed default) and loosens `Product.merchant_stockcode` to **nullable** (it was loosened in the model in the merchant→store era but stayed NOT NULL in prod). Uses `batch_alter_table` so it's portable — a table rebuild on SQLite, native `ALTER COLUMN` on Postgres (R-005/R-006). No model change needed (the model already declared the intended nullability); the migration only moves prod to match.
+- **`User.username` (the 4th drift) — kept as documented deferral.** Model stays NOT NULL + unique (app-enforced); prod stays nullable/non-unique per the `add_user_auth` risk. Added an explicit comment at the `Column` in `table_mappings.py` pointing at this FU + the test allowlist.
+- **Test tightened.** Removed the 3 `Product` columns from `test_migrations.py`'s `_KNOWN_NULLABILITY_DRIFT` allowlist, so the schema-match gate now **actively enforces** their nullability; only `User.username` remains allowlisted. Reflected nullability drift is now exactly **1** (the deferral).
+- **Verification:** Product-nullability migration up→down→up round-trip clean in isolation (the `Product` batch rebuild preserves rows + FKs + the `ix_Product_store_id` index from FU-563); full backend suite **1490 passed / 1 skip / 1 xfail** — no regression from the tightened NOT NULLs or the rebuild.
+- **Standards:** applies R-034/ADR-030 (model is schema SoT; drift reconciled + test-enforced). R-006 clean forward-only migration. Cross-ref [[FU-393]] (source sweep Finding 3), [[FU-563]] (sibling index reconciliation), [[FU-565]] (FK ondelete — the remaining sweep residual, still needs its own batch rebuilds). Operator verify (rebuild on a populated Product table) logged in DORA_VERIFY.
+
+## [RESOLVED] FU-563 — Data-model: schema drift (model≠migrations) + FK index coverage
+- **Resolved:** 2026-07-15 — mirrored the drift out of existence and added the covering indexes, all verified by reflecting both build paths. Ground truth was taken by re-running the FU-393 method (reflect `create_all` vs `upgrade`-from-empty on throwaway SQLite DBs), not by eye.
+- **Finding 1 (drift) — fixed.** `table_mappings.py` declared **1** secondary index vs the migrated chain's **32**. Added an `Index(...)` block to the model mirroring all 32 pre-existing prod indexes + the 4 unique constraints, **names copied verbatim from the migrations** so future autogenerate stays a no-op on them. `create_all` (dev/e2e) now builds the same schema as `upgrade` (prod).
+- **Finding 2 (FK coverage) — fixed.** **43** FK columns had no covering index in prod (refined count; the sweep's "42" used a looser coverage definition). Declared `Index("ix_<Table>_<col>", …)` on each in the model **and** created them in prod via one **additive, forward-only** migration `b9d4f2a7c3e1_20260715_fk_covering_indexes` (pure `CREATE INDEX` — no table rewrite, portable SQLite+Postgres, R-005/R-006). Up→down→up round-trip verified in isolation.
+- **Finding 6 (blind test) — fixed.** Rewrote `test__migrations__migrated_schema_matches_orm_metadata` to compare **tables + columns + nullability + index/unique colsets** between the migrated schema and `create_all` (was: table names only). Post-change drift is **zero** except the documented `User.username` unique (FU-564 deferral) + the 4 nullability drifts, all in the test's allowlist.
+- **Finding 4 (FK ondelete) — spot-confirmed = REAL drift, spawned [[FU-565]].** 6 FKs declare an `ondelete` in the model that prod lacks (`ProductOffer`/`ProductHistoricOffer.product_id` CASCADE, `Product.store_id` RESTRICT, `StockItem.stock_group_id`/`stock_level_id`/`stock_location_id` SET NULL). Fixing needs batch table rebuilds (not additive) → deferred to FU-565, sequenced with FU-564.
+- **Verification:** full backend suite **1490 passed / 1 skip / 1 xfail** — identical to baseline (the 4 newly-enforced unique constraints + 75 new `create_all` indexes broke no test or seed); `test_migrations.py` 5 passed incl. the strengthened gate; index/unique drift reflected as 0.
+- **Standards:** promoted **R-034** + **ADR-030** ("the ORM model is source of truth for the whole schema, indexes included; FK columns indexed by default; schema-match test compares colsets"). Cross-ref [[FU-393]] (source sweep), [[FU-564]] (nullability, now test-guarded), [[FU-565]] (ondelete). Browser/operator verify (incremental upgrade on a populated DB) logged in DORA_VERIFY.
+
+## [RETIRED] FU-510 — Late-game sweep: hand-rolled code that should be a battle-tested library
+- **Retired (not worked):** 2026-07-15 — **absorbed wholesale into
+  [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)**, then deleted from
+  the open ledger per user request (reduce followups clutter; the plan is now the
+  sole owner). This is a *relocation*, not a completion — the sweep itself has not
+  been done yet; it runs as part of the finalisation plan.
+- **Where the substance went:** plan **§3.3 "Hand-rolled-vs-library verdicts"** holds
+  the full scope — the two-phase method, the load-bearing Charter "don't default to
+  library" caveat (Effortless + Anti-creep), and the concrete focus-area checklist
+  (security-adjacent CSRF/Fernet/security-headers, HTTP query-string/marshalling,
+  `SqlAlchemyRepository`, `units.py`/locale/tz, `useDragDropList`/`useOfflineQueue`/
+  rollback registry, `ConfigurationManager`, ops). Phase 1 runs per-chunk in Track 3;
+  small/low-risk/test-covered Phase-2 swaps execute at Stage 2.
+- **Phase-2 safety net (why deleting the FU is safe):** the plan's **§7 Definition of
+  Done step 5 is a hard close-gate** — the plan cannot close until every
+  large-blast-radius `replace` verdict is either executed or spawned as its own
+  per-swap FU (consolidated into `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md`).
+  A `replace` verdict left with no home blocks close. So the Phase-2 per-swap FUs are
+  guaranteed to be opened at plan close by the plan itself, not by a standing FU.
+- **Cross-ref:** the per-swap sequencing pairs with [[FU-412]] COMMERCIALIZATION_REPORT
+  + [[FU-409]] auth security re-audit + [[FU-424]] senior-review Tier-2 delta. Any
+  lingering `[[FU-510]]` links in other docs now resolve here.
+
+## [RESOLVED] FU-545 — SettingsFileDrop: `nested-interactive` a11y violation (native file input inside a role="button" drop-zone)
+- **Resolved:** 2026-07-15 — rebuilt `SettingsFileDrop.vue` to the standard accessible label-wrap file-input pattern. The wrapper is now a non-interactive `<label>` and the native `<input type="file">` is the single labelled, focusable control the label forwards clicks + Enter/Space to natively. Dropped the `role="button"` / `tabindex` / `@keydown` / programmatic `inputEl.click()` machinery entirely; the input is visually hidden (sr-only, **not** `display:none`, so it stays focusable + in the a11y tree) with `aria-label`, and `disabled` while busy/disabled so the label can't open the picker. Focus ring moved to `:focus-within` on the label. This removes the `nested-interactive` violation (interactive input nested inside an interactive `role="button"`) that the FU-542 axe tests flagged.
+- **Supersedes:** the FU-531 interim `@click.stop` re-entrancy guard on the hidden input + Remove button — a native `<label>` never forwards a click on interactive content (the Remove button) to its control, so the guard is no longer needed and was removed.
+- **Tests:** `settingsFileDrop.spec.ts` reworked to the new interaction model (13→15 tests): asserts the label/single-labelled-input structure, keeps the change/drag-drop/busy/disabled behaviour, and — the key deliverable — **re-enables the empty + filled axe assertions** that were held back under FU-542 (all three states now scan clean via `expectAccessible`). Frontend Vitest 385→387; full suite green; tree vue-tsc-clean.
+- **Parents unaffected:** `AdminDataImport.vue` / `AdminDataBackupRestore.vue` only use the `v-model` + `pick`/`clear`/`loading`/`progress` public API, which is unchanged.
+- **Verify:** browser-walk of click-to-open / keyboard Enter-Space / drag-drop / Remove-doesn't-reopen / busy-disabled-inert logged in `DORA_VERIFY.md` (native `<label>` forwarding + the focus ring can't be exercised in jsdom).
+- **Standards:** R-002 (theme-tokens-only) preserved — all colours stayed `var(--…)`; no new rule/ADR (a standard a11y pattern, not a recurring project decision). Cross-ref [[FU-542]] (a11y test infra that found it), [[FU-531]] (RESOLVED — click re-entrancy, superseded here).
+
 ## [RESOLVED] FU-393 — P5-08 data-model sanity review sweep (done as a single pass)
 - **Resolved:** 2026-07-14 — ran the comprehensive schema sweep P5-08 asked for as one dedicated pass. Output: [`docs/05_investigations/DATA_MODEL_SANITY_SWEEP_FU393.md`](docs/05_investigations/DATA_MODEL_SANITY_SWEEP_FU393.md). Read-only investigation (no schema change this pass); remediation spawned as [[FU-563]] + [[FU-564]].
 - **Method:** built the schema both ways — `db.create_all()` (model / dev+test path) and `flask_migrate.upgrade()` from empty (production) — reflected both throwaway SQLite DBs and diffed columns, nullability, indexes, uniques, and FKs. Ground truth from the schema, not a by-eye read of the 1 559-line `table_mappings.py`. 59 tables.

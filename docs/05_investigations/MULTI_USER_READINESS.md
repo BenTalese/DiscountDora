@@ -106,3 +106,39 @@ The reason this is a checklist and not a backlog: **these fail together.** Shipp
 - **Household vs. user tenancy?** The README's "everyone helps grab the milk" implies a shared household with multiple members — i.e., the scope unit is the *household*, and members within it still share everything. Confirm, because it changes the entire schema.
 - Is multi-tenant **same-deployment** (one DB, many households — needs all of the above) or **per-install** (each household self-hosts its own box — needs almost none of it)? This is the single biggest descoping lever. The self-hosted/desktop-app framing suggests per-install might be the actual intent, which would make most of this moot — worth settling first.
 - Shared catalogs (stock levels, locations) across households, or per-household copies?
+
+### 5.1 Decision — Kivy P2P sync branch has no home here (FU-363 item 5, 2026-07-15)
+
+**Question (owner feedback, 06-Jun-2026):** *"Looking at my kivy P2P test branch, does this
+have any home in the current app? My vision was for standalone no-server installs to link and
+communicate (syncing data)."*
+
+**Decision: CUT / park as a separate experiment — it does not fold into Dora-core.** Rationale:
+
+- **Architectural mismatch.** Dora-core is **client-server**: one Flask API + one datastore
+  (SQLite/Postgres), many clients. The Kivy P2P vision is **serverless multi-master
+  replication** — N independent installs, each authoritative, reconciling by sync. That is a
+  different product shape, not an increment on the current one. Adopting it means
+  conflict-resolution (CRDTs / vector clocks / last-writer-wins) across *every* mutable
+  entity — the single largest architectural commitment the app could take on, for a feature
+  no current feedback bullet other than this one asks for.
+- **The need it targets is already met by the existing model.** "Standalone installs that link
+  and communicate" is the multi-**user** / shared-household need. Dora already answers that the
+  client-server way: multiple users point at **one** instance (self-hosted or managed), and the
+  planned scoping work (§2 of this doc) makes that safe. You get shared pantry/lists/alerts
+  without any P2P layer. Two *separate* installs syncing is strictly harder and buys nothing the
+  one-instance model doesn't already give.
+- **Cuts against the distribution posture (§7.5 / Decision 5).** The posture is *one artifact,
+  one datastore target, don't pre-build multi-tenancy*. A P2P sync engine is exactly the kind of
+  speculative, hard-to-reverse infrastructure that posture exists to keep out of core until a
+  real, validated demand forces it.
+- **Charter.** Effortless (P1) + Anti-creep (P10): a sync engine is heavy machinery whose
+  failure modes (partial syncs, merge conflicts surfaced to a non-technical pantry user) are the
+  opposite of effortless.
+
+**If the underlying want ever resurfaces**, the cheaper paths in priority order are: (a) point
+both households at one managed/self-hosted instance (today's model); (b) the Phase-4
+same-deployment multi-tenant path (§2 above); (c) only then, if genuinely serverless-offline
+sync is proven necessary, revisit P2P as its own project feeding Dora via `/api/ingest`-style
+seams — never as a core rewrite. The Kivy branch stays an archived personal experiment, not a
+Dora-core workstream.

@@ -1,7 +1,6 @@
 <template>
     <q-layout view="hHh LpR lFf">
         <q-header
-            bordered
             class="dora-toolbar-surface"
             :reveal="$q.screen.lt.md"
         >

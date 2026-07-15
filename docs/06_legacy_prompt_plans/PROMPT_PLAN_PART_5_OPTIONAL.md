@@ -514,6 +514,24 @@ DEFINITION OF DONE:
 
 ## P5-10 - Merchant Data Quality and Support Bundle
 
+> **MOVED / PARKED — 2026-07-15 (FU-394). Do not run this prompt as-written against Dora-core.**
+> This prompt splits into two halves with different homes:
+> - **Merchant data quality** (data-quality checks, `GET /api/merchant-status`, stale-price
+>   warnings) → **moved to the companion project** per §7 **Decision 1** (the scraper /
+>   merchant / provider model was extracted so Dora-core stays Charter-clean). Confirmed
+>   **absent from Dora-core** (2026-07-15): no `merchant-status` endpoint, no data-quality
+>   checks. Any future work on this belongs in the companion, feeding Dora via `/api/ingest`.
+> - **Support bundle** ("Copy support bundle", `docs/support/SUPPORT_PLAYBOOK.md`) → **not
+>   companion-scope; simply never built.** It is generic operator/ops tooling, unrelated to
+>   the scraper. **Not** to be confused with the *shipped* FU-370 "Report an issue" support
+>   *channel* (`dora_api/features/support/support_channel.py` → `/api/health` support block),
+>   which is a different thing. The copy-bundle feature + playbook remain a **parked,
+>   un-built possible-future Dora-core item**, not moved anywhere. There is a `/api/health`
+>   endpoint it could build on if ever picked up.
+>
+> Net: nothing from P5-10 landed in Dora-core; the merchant half is companion-scope, the
+> support-bundle half is parked. FU-394 closed on this basis — no code change.
+
 ```
 Improve trust in merchant/product data and make support/debugging easier without
 exposing secrets.

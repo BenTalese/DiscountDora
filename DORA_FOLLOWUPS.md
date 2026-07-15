@@ -54,6 +54,13 @@ long session summary. Distinct from the other logs:
 
 
 
+## [OPEN] FU-566 — Build usage telemetry (Surface A local insight; Surface B opt-in aggregate is owner-sign-off-gated)
+- **Raised:** 2026-07-15 (FU-363 item 2 — telemetry design proposal written).
+- **Type:** deferred job (build) + decision-gate.
+- **What:** Build the telemetry surfaces designed in [`PROPOSAL_USAGE_TELEMETRY.md`](docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md). **Surface A** (local-only usage counters + operator-only Settings → Admin → Usage read panel; event registry + pre-aggregated `usage_event_daily`) is charter-clean and buildable whenever prioritised. **Surface B** (opt-in, anonymised, aggregate egress to an author-run collector) introduces the app's **first outbound behavioural egress** — do NOT build without explicit owner sign-off on the payload + collector choice + opt-in copy (proposal §4/§7).
+- **Why deferred:** design-only unit; the build competes with the rest of the backlog, and Surface B needs an owner decision first.
+- **Recommended resolution:** Surface A — opportunistic / when analytics is prioritised. Surface B — when the "across-installs" question becomes real **and** owner has signed off on §4.
+
 ## [OPEN] FU-562 — Self-host billing: revenue model + trial delivery mechanism still open (enforcement = offline license key; platform = Lemon Squeezy MoR; tier split + after-trial=Core — all decided)
 - **Raised:** 2026-07-14 (billing discussion under the self-host-first decision).
 - **Type:** decision + deferred job (self-host commercialization track; the self-host counterpart to the relocated subscription FU-402).
@@ -174,13 +181,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Phase 4.
 - **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the multi-user + admin FST persona flows (Track 1) will *exercise* the DSAR export, delete-account, and privacy-policy surfaces end-to-end, and the senior-review pass on the auth + backup chunks will catch drift on security headers + credential exclusion. **Not covered:** the legal drafting itself + the compliance contract wording. Those remain in this FU.
 
-## [OPEN] FU-394 — P5-10 Merchant data quality & support bundle: confirm companion-scope only
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** finding.
-- **What:** P5-10 — merchant data quality is now companion-scope per Decision 1. Confirm nothing in the P5-10 spec landed in Dora-core, and formally mark the P5-10 prompt as "moved to companion project."
-- **Why deferred:** scoping-only.
-- **Recommended resolution:** doc edit — add a "moved to companion" banner to P5-10 in the legacy plan file; close.
-
 ## [OPEN] FU-389 — P5-04 Mobile / PWA field test
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).
 - **Type:** deferred job.
@@ -188,27 +188,20 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** Phase 3-adjacent.
 - **Recommended resolution:** fold into the P8-10 native-app brief; a device-lab pass is a natural gate before deciding native vs PWA-only.
 
-## [OPEN] FU-373 — PROPOSAL_BARCODE_SCANNING deferred slices (register-against-product + scan-unknown)
-- **Raised:** 2026-07-01 (proposals audit).
-- **Type:** deferred job.
-- **What:** `PROPOSAL_BARCODE_SCANNING.md` cleanup slice landed; **register-against-product UI + scan-unknown rework** deferred to Phase 2 (ingestion). Ingestion has landed but these barcode slices did not follow through. §6 "Scan tab under QR codes placement" also open.
-- **Why deferred:** waited on ingestion; ingestion landed without pulling these along.
-- **Recommended resolution:** next barcode-touch — build the register-against-product UI (unknown EAN → offer to link to an existing Product) + scan-unknown rework. Resolve §6 placement while there.
-
-## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS)
+## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS) — 4 of 8 actioned
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
-- **Type:** deferred job (bundle — 8 sub-items).
+- **Type:** deferred job (bundle — 8 sub-items; **items 2, 5, 6, 7 actioned 2026-07-15, 4 remain**).
 - **What:** `COVERAGE_GAPS.md` Bucket C cross-cutting items with no per-surface home:
-  1. Full systems QA test doc (final regression walkthrough of every feature). User wants done LAST to capture the final product.
-  2. Usage analytics / telemetry — "I'd like to know how people are using my app." Privacy-conscious (Charter P8).
-  3. UI uniqueness / polish design pass — "looks just okay, not polished/unique."
-  4. Push notifications between users (share a shopping list via notify).
-  5. Kivy P2P sync branch — decide whether the user's prior experiment has a home here.
-  6. Main menu bottom border — micro polish.
-  7. Real ALDI / IGA logos — asset request.
-  8. General UI consistency — cross-cutting.
-- **Why deferred:** no per-surface home; several are Phase 3/4-timed or design-only.
-- **Recommended resolution:** split into per-item FUs *only when picked up*. Items 1 (QA test doc) and 3 (polish pass) are natural Phase 4 gates; item 2 (telemetry) is a Charter P8 decision + build; item 4 (push notifications) is a Phase 3-ish feature; items 5–8 are one-shots.
+  1. **[OPEN]** Full systems QA test doc (final regression walkthrough of every feature). User wants done LAST to capture the final product.
+  2. **[ACTIONED 2026-07-15 — design]** Usage analytics / telemetry. Design proposal written: [`PROPOSAL_USAGE_TELEMETRY.md`](docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md) (privacy-first; local-insight Surface A recommended core, opt-in aggregate Surface B deferred). **Build** tracked as FU-566.
+  3. **[OPEN]** UI uniqueness / polish design pass — "looks just okay, not polished/unique."
+  4. **[OPEN]** Push notifications between users (share a shopping list via notify).
+  5. **[ACTIONED 2026-07-15 — decided: CUT]** Kivy P2P sync branch — no home in the current client-server architecture; recorded in [`MULTI_USER_READINESS.md`](docs/05_investigations/MULTI_USER_READINESS.md) §5.1.
+  6. **[ACTIONED 2026-07-15 — shipped]** Main menu bottom border — removed the `q-header bordered` border per the feedback lean (`MainLayout.vue`); browser-verify queued.
+  7. **[ACTIONED 2026-07-15 — declined]** Real ALDI/IGA logos — WON'T-DO (trademark/licensing risk; Dora ships zero logos by design per `StoreLogo.vue`). Existing workaround: per-store logo **upload** already exists (`StoresSettings.vue`). Recorded in `DORA_FOLLOWUPS_RESOLVED.md`.
+  8. **[OPEN]** General UI consistency — cross-cutting.
+- **Why deferred:** no per-surface home; the 4 remaining are Phase 3/4-timed or design-only.
+- **Recommended resolution:** split into per-item FUs *only when picked up*. Remaining: items 1 (QA test doc) + 3 (polish pass) + 8 (UI consistency) are natural Phase-4 gates; item 4 (push notifications) is a Phase-3-ish feature build. Close this bundle once those four are picked up.
 
 ## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
 - **Raised:** 2026-06-18 (Stock-pages feedback pass)

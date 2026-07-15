@@ -1,6 +1,9 @@
 # Proposal — Barcode Scanning & QR Labels (P6-02)
 
-**Status:** Implemented (cleanup slice) + Draft (deferred slices) · **Date:** 2026-06-07  
+**Status:** Implemented (cleanup slice + P8-02 barcode-to-add + FU-373
+register-against-product) · **Date:** 2026-06-07 (last updated 2026-07-15) ·
+Only remaining deferred item is §5.2 ingestion auto-populate, which needs an EAN
+field on `Product` (ingestion-API work).  
 **Scope:** Correct the data model behind scanning, gate the whole
 scanning + QR-label surface behind one off-by-default install flag, relabel it
 honestly, and draw a hard boundary: **scanning is a navigation aid only — it
@@ -100,11 +103,16 @@ These are designed but intentionally not built now, because the natural place to
 populate `ProductBarcode` at scale is the ingestion API, and `Product` has no
 EAN field yet (only `merchant_stockcode`):
 
-1. **Register-against-product UI.** The backend route
-   `POST /api/data/barcodes/register-against-product` exists and is tested, but
-   there is no UI to drive it. When built, the flow is: scan an unknown barcode →
-   "link this to a product" → product picker → `ProductBarcode` row. This belongs
-   next to product management, not stock items.
+1. **Register-against-product UI.** ✅ **Shipped 2026-07-15 (FU-373).** The
+   backend (`POST /api/data/barcodes` with a `product_id`) always existed and was
+   tested; the UI now lives on **My Products** — the per-product "⋮" menu →
+   *Register barcode…* opens a text-entry dialog that POSTs `{barcode, product_id}`.
+   This is the "next to product management, not stock items" home called for here,
+   mirroring the stock-item detail *Add barcode* dialog and gated on the same
+   install-wide `scanning_enabled` flag. **Scope call (owner, 2026-07-15):** the
+   entry point is My Products only — the scan-unknown flow was deliberately *not*
+   reworked into a "link to an existing product vs. add a new item" fork, to keep
+   the one-tap P8-02 add path friction-free (Effortless P1 + Anti-creep P10).
 2. **Ingestion auto-populate.** When the ingestion API imports a retailer
    catalogue, it should populate `ProductBarcode` from the feed's EAN/UPC field
    automatically, so most barcodes resolve without any manual registration. This
@@ -119,10 +127,13 @@ EAN field yet (only `merchant_stockcode`):
 
 ## 6. Open design questions (for the deferred slices)
 
-- Should the "Scan" tab exist under Data → Scanning at all, or only on Stock
-  Overview? (Feedback flags it as possibly redundant here.) Leaning: keep Data →
-  Scan as the "print labels" home; move the *action-oriented* scan to Stock
-  Overview where context exists.
+- ✅ **Resolved.** Should the "Scan" tab exist under Data → Scanning at all, or
+  only on Stock Overview? (Feedback flagged it as possibly redundant here.)
+  **Outcome:** the Data → Scan tab was removed entirely; the Data page is now
+  "Print QR labels" only, and the *action-oriented* scan lives on Stock Overview
+  (FU-378) where item context exists. Per-item barcode registration lives on the
+  stock-item detail page; per-product registration on My Products (FU-373). See
+  the note in `QrLabels.vue`.
 - QR labels with the Dora logo in the centre (D/D mark) — nice-to-have polish,
   not load-bearing; slot into the label-rendering work whenever it's touched.
 

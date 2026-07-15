@@ -33,6 +33,7 @@ export const ICONS = {
     language: 'mdi-translate',
     record_voice_over: 'mdi-microphone-message',
     auto_awesome: 'mdi-auto-fix',
+    barcode: 'mdi-barcode',
     bolt: 'mdi-lightning-bolt',
     bookmark: 'mdi-bookmark',
     bug_report: 'mdi-bug',

@@ -146,13 +146,13 @@ These map cleanly to INV prompts.
 No clean per-surface home; mostly future or "nice-to-have".
 
 - [OPEN] **Full systems QA test document** — manual walkthrough of every feature for final regression. The user wants this done last so it captures the final product. No plan yet; add when the implementation waves are mostly done.
-- [OPEN] **Usage analytics / telemetry** — "I'd like to know how people are using my app." Privacy-conscious approach needed (Charter P8).
+- [COVERED] **Usage analytics / telemetry** — "I'd like to know how people are using my app." → `PROPOSAL_USAGE_TELEMETRY.md` (privacy-first; local Surface A + opt-in aggregate Surface B). Build tracked as FU-566. (FU-363 item 2, 2026-07-15.)
 - [OPEN] **UI uniqueness / polish design pass** — "looks just okay, not polished/unique." Cross-cutting.
 - [OPEN] **Push notifications between users** (new-feature idea — alert another user, share a shopping list via notify).
-- [OPEN] **Kivy P2P sync branch** — does the user's prior experiment have a home in current Dora? Architectural question.
-- [OPEN] **Main menu bottom border** — micro polish.
+- [RESOLVED] **Kivy P2P sync branch** — CUT: no home in the current client-server architecture. → `MULTI_USER_READINESS.md` §5.1 (FU-363 item 5, 2026-07-15).
+- [RESOLVED] **Main menu bottom border** — removed the `q-header` border per the feedback lean (`MainLayout.vue`). (FU-363 item 6, 2026-07-15.)
 - [COVERED] **QR codes with the Dora logo in the middle** (D/D simple one). → `PROPOSAL_BARCODE_SCANNING.md` §6 (noted nice-to-have, opportunistic during label-render work).
-- [OPEN] **Real ALDI / IGA logos** — asset request (user said "remind me to provide"; this file is the reminder).
+- [RESOLVED] **Real ALDI / IGA logos** — WON'T-DO: trademark/licensing risk; Dora ships zero logos by design (`StoreLogo.vue`), and per-store logo **upload** already covers the need (`StoresSettings.vue`). (FU-363 item 7, 2026-07-15.)
 - [COVERED] **QR scanning → quick-actions modal** for the scanned item. → `PROPOSAL_BARCODE_SCANNING.md` §5.3 (deferred to C-1 Stock Overview overhaul, where item context exists; today scan → result dialog → open detail).
 - [OPEN] **General UI consistency** — cross-cutting Wave A and the design-pass above.
 

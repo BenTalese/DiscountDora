@@ -683,6 +683,11 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] On a stock item that has a linked product (detail page → linked products), unlink the product → it disappears from the list without an error toast (previously every unlink silently failed with a 404 under the hood)
 - [ ] Refresh the page → the product stays unlinked; relink it → link works as before
 
+### Register barcode against a Product from My Products — origin FU-373
+- [ ] With **scanning ON** (Settings → scanning enabled): open the My Products `⋮` menu on any product → "Register barcode…" is present. Enter a barcode, Register → success toast; the dialog closes.
+- [ ] Re-open the menu on the same product and register the **same barcode again** → inline error shows the "already registered" conflict (409), no crash.
+- [ ] With **scanning OFF**: the "Register barcode…" `⋮` item is hidden entirely (R-029 hide-don't-nag), leaving the other menu actions intact.
+
 ### Stocktake snooze no longer 500s the queue / breaks the bell (SQLite) — origin FU-526
 - [ ] On a SQLite install: with at least one item overdue for stocktake, **snooze** one item from the stocktake queue → the queue still loads (no 500 / error state) and the snoozed item drops off it
 - [ ] While that snooze is active, open the **alerts bell** and the `/alerts` page → both load normally (previously any active snooze took the bell down too)
@@ -1630,6 +1635,11 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Cross-cutting
+
+### Main menu bar bottom border removed — origin FU-363 item 6 (2026-07-15)
+*Subjective micro-polish — trivially revertible (re-add `bordered` to the `q-header` in `MainLayout.vue`) if it reads worse.*
+- [ ] On desktop, the app header/main-menu bar no longer has a hairline bottom border; it still reads as a distinct bar from the page below (the toolbar background separates it). Check in both light and Pesto-dark themes.
+- [ ] On mobile, the left side drawer still has its border (only the top header border was removed).
 
 ### Support / "Report an issue" channel — origin FU-370 (2026-07-14)
 *Shipped **dormant**: with no channel configured (`support_channel.py` constants blank + no `DORA_SUPPORT_*` env) nothing new should render. Verify both states — dormant, then configured (easiest: boot the API with `DORA_SUPPORT_URL=https://example.com/new?template=bug_report.yml`, or `DORA_SUPPORT_EMAIL=you@example.com` to check the mailto path).*

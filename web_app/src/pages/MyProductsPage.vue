@@ -404,6 +404,19 @@
                                         </q-item-section>
                                         <q-item-section>View price history</q-item-section>
                                     </q-item>
+                                    <!-- FU-373 — register a real EAN/UPC against this
+                                         product. Gated on the install-wide scanning flag
+                                         (§3 / R-029: the whole barcode surface hides when
+                                         scanning is off). -->
+                                    <template v-if="scanningEnabled">
+                                        <q-separator />
+                                        <q-item clickable @click="openBarcodeDialog(product)">
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.barcode" />
+                                            </q-item-section>
+                                            <q-item-section>Register barcode…</q-item-section>
+                                        </q-item>
+                                    </template>
                                 </q-list>
                             </q-menu>
                         </BaseButton>
@@ -543,6 +556,47 @@
                     />
                 </template>
         </BaseDialog>
+
+        <!-- ── Register-barcode dialog (FU-373) ───────────────────── -->
+        <!-- Registers a real EAN/UPC against a Product (the catalogue SKU),
+             not a stock item. Mirrors the stock-item detail "Add barcode"
+             dialog. The backend enforces one barcode per product, so a
+             product that already has one surfaces a friendly conflict here. -->
+        <BaseDialog
+            v-model="barcodeOpen"
+            title="Register a barcode"
+            closable
+            card-style="min-width: 320px; max-width: 420px"
+        >
+                <q-card-section>
+                    <div class="text-caption dora-text-muted q-mb-sm">
+                        Scanning this code will resolve to
+                        <strong>{{ barcodeTarget?.name }}</strong> (and its linked
+                        stock item, if any).
+                    </div>
+                    <q-input
+                        v-model="barcodeValue"
+                        outlined
+                        dense
+                        autofocus
+                        placeholder="e.g. 9300675001120"
+                        label="Barcode (EAN / UPC)"
+                        :error="!!barcodeError"
+                        :error-message="barcodeError ?? undefined"
+                        @keydown.enter.prevent="confirmBarcode"
+                    />
+                </q-card-section>
+                <template #actions>
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
+                        label="Register"
+                        :loading="barcodeBusy"
+                        :disable="barcodeValue.trim().length === 0"
+                        @click="confirmBarcode"
+                    />
+                </template>
+        </BaseDialog>
     </q-page>
 </template>
 
@@ -566,8 +620,10 @@
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { StockItem } from 'src/models/stockItem';
+    import BarcodeApiService from 'src/services/api/barcodeApiService';
     import ProductApiService from 'src/services/api/productApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -580,6 +636,8 @@
     const router = useRouter();
     const productApi = new ProductApiService();
     const stockItemApi = new StockItemApiService();
+    const barcodeApi = new BarcodeApiService();
+    const { scanningEnabled } = useScanningEnabled();
     const productStore = useProductStore();
     const shoppingListStore = useShoppingListStore();
     const stockItemStore = useStockItemStore();
@@ -1042,6 +1100,52 @@
             });
         } finally {
             linkBusy.value = false;
+        }
+    }
+
+    // ── Register-barcode dialog (FU-373) ────────────────────────────
+    // Registers a real EAN/UPC against a Product via the shared
+    // `POST /data/barcodes` endpoint ({barcode, product_id}). The Product
+    // is the correct owner of a real barcode (a SKU identifies a sellable
+    // product, not a personal pantry slot); scanning it later resolves
+    // Product → linked stock item. Text-entry only, mirroring the
+    // stock-item detail "Add barcode" dialog.
+    const barcodeOpen = ref(false);
+    const barcodeTarget = ref<Product | null>(null);
+    const barcodeValue = ref('');
+    const barcodeError = ref<string | null>(null);
+    const barcodeBusy = ref(false);
+
+    function openBarcodeDialog(product: Product) {
+        barcodeTarget.value = product;
+        barcodeValue.value = '';
+        barcodeError.value = null;
+        barcodeOpen.value = true;
+    }
+
+    async function confirmBarcode() {
+        const raw = barcodeValue.value.trim();
+        if (!raw || !barcodeTarget.value) return;
+        barcodeError.value = null;
+        barcodeBusy.value = true;
+        try {
+            await barcodeApi.registerAsync({
+                barcode: raw,
+                product_id: barcodeTarget.value.product_id,
+            });
+            barcodeOpen.value = false;
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Barcode registered.',
+            });
+        } catch (err) {
+            // Inline the message (incl. the 409 "already registered" /
+            // "product already has a barcode" conflicts) so the user can
+            // correct without losing the dialog.
+            barcodeError.value = describeApiError(err) || 'Could not register the barcode.';
+        } finally {
+            barcodeBusy.value = false;
         }
     }
 

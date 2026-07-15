@@ -9,6 +9,135 @@ next.
 
 ---
 
+## 2026-07-15 (later 11) — FU-363 (partial): Bucket-C items 2, 5, 6, 7 actioned
+
+**Why:** User: "do 363". FU-363 is an 8-item cross-cutting bundle whose own resolution rule is
+"split into per-item FUs only when picked up." Asked the owner which to pick up (AskUserQuestion);
+he chose **items 2, 5, 6, 7** — one of each type (build, design, decision, decline). Items 1, 3,
+4, 8 stay bundled under FU-363 (still OPEN).
+
+**Item 6 — main menu bottom border → SHIPPED (code).** Feedback was "would it look better
+*without* the bottom border?" (a **remove**, not add — caught by reading the feedback line, not
+the FU paraphrase). Removed `bordered` from the `q-header` in `MainLayout.vue`; kept the mobile
+`q-drawer bordered`. The `--surface-toolbar` background already separates the bar, so the border
+was redundant. vue-tsc + eslint clean. Subjective → browser-verify queued (revert = re-add one
+word).
+
+**Item 7 — real ALDI/IGA logos → DECLINED (WON'T-DO).** `StoreLogo.vue` already documents a
+deliberate **zero-logos** policy (licensing/trademark risk); ALDI/IGA marks are trademarked, so
+shipping them into the repo is exactly the exposure the app avoids. The need is already met —
+per-store logo **upload** exists end-to-end (`StoresSettings.vue` + `manage_stores.py`), so a
+self-hoster adds their own. No code.
+
+**Item 5 — Kivy P2P sync → DECIDED: CUT.** No home in the current client-server architecture;
+the P2P "serverless installs that link and sync" vision is multi-master replication (a different
+product shape), cutting against §7.5 and Effortless/Anti-creep, and the underlying multi-user
+need is already served by the one-instance model (`MULTI_USER_READINESS.md` §2). Rationale
+recorded as a new §5.1 in that doc. Framed as a strong recommendation the owner can override
+(it's his experiment/vision).
+
+**Item 2 — usage telemetry → DESIGNED (proposal, no code).** Wrote
+`docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md`: privacy-first, splits the ask into local-only
+**Surface A** (recommended core, no egress, pre-aggregated `usage_event_daily`, operator-only
+read panel) + opt-in aggregate **Surface B** (deferred, owner-sign-off-gated — the app's first
+outbound behavioural egress). Hard no on third-party analytics SaaS + any content capture
+(Charter P8). Mandatory feedback-coverage table + "from the original spec" (nothing there) +
+"Open decisions — closed" sweep all included. Build spawned as **FU-566**.
+
+**Standards close-gate:** item 6 is a one-attribute template change, no R-rule surface (theme
+tokens already handle separation). Items 2/5/7 are docs. No new ADR.
+
+**Ledgers:** FU-363 updated in-place (items 2/5/6/7 tagged actioned; 1/3/4/8 remain OPEN);
+`_RESOLVED` got an FU-363-partial entry; FU-566 opened for the telemetry build; COVERAGE_GAPS
+Bucket-C flipped (telemetry→covered, Kivy/border/logos→resolved); CHANGELOG Changed bullet
+(border); DORA_VERIFY Cross-cutting item (border). PROJECT_STATE: Regenerated-line note +
+Recently-shipped bullet.
+
+**Next up:** FU-363 remainder (items 1 QA-doc, 3 polish pass, 4 push notifications, 8 UI
+consistency) — all Phase-3/4-timed. FU-566 (telemetry build) buildable for Surface A when
+prioritised.
+
+---
+
+## 2026-07-15 (later 10) — FU-394 RESOLVED: P5-10 scope confirmed (doc-only, no code)
+
+**Why:** User: "do 394" — FU-394 was a scoping finding: confirm no part of legacy prompt
+P5-10 (Merchant data quality & support bundle) leaked into Dora-core, and mark it moved.
+
+**What I confirmed (grep sweep of `dora_api/` + `web_app/src/`):** nothing from P5-10 landed —
+no `merchant-status` endpoint, no data-quality checks, no "Copy support bundle" feature, no
+`docs/support/SUPPORT_PLAYBOOK.md`.
+
+**The nuance that stopped this being a blind "moved to companion" stamp:** P5-10 bundles **two
+unrelated halves**:
+- **Merchant data quality** (checks, `GET /api/merchant-status`, stale-price warnings) →
+  genuinely **companion-scope** per §7 Decision 1 (scraper/merchant model extracted).
+- **Support bundle** ("Copy support bundle" + `SUPPORT_PLAYBOOK.md`) → **NOT companion** — it's
+  generic ops tooling that was simply never built. Distinct from the *shipped* FU-370 "Report
+  an issue" support **channel** (`support_channel.py` → `/api/health`). So it's **parked in
+  core**, not moved.
+
+A flat "moved to companion" banner would have wrongly banished a legit (if unbuilt) core ops
+feature — so the banner I wrote splits the two halves.
+
+**What shipped:** MOVED/PARKED banner on the P5-10 prompt in
+`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_5_OPTIONAL.md`. No code, no CHANGELOG (nothing
+user-visible changed), no DORA_VERIFY (nothing to run). Left retired `STATUS.md` untouched
+(known-stale/retired per CLAUDE.md — not worth a row edit).
+
+**Standards close-gate:** doc-only, no R-rule surface touched. No new ADR.
+
+**Ledgers:** FU-394 → `_RESOLVED`. PROJECT_STATE: doc-only scoping unit, no workstream row moved
+→ Regenerated-line note only.
+
+**Next up:** nothing from this arc.
+
+---
+
+## 2026-07-15 (later 9) — FU-373 RESOLVED: register-barcode-against-Product UI on My Products
+
+**Why:** User asked "what's next?" then "do 373" — FU-373 tracked the three deferred slices
+of `PROPOSAL_BARCODE_SCANNING`: (a) register-against-product UI, (b) scan-unknown rework,
+(c) the §6 "Scan tab under QR codes" placement question.
+
+**Investigation collapsed the scope to one UI slice:**
+- **Backend already existed** — `POST /api/data/barcodes {barcode, product_id}` (per-product
+  UNIQUE) is implemented + tested in `dora_api/features/data/barcodes.py`. No backend work.
+- **§6 already resolved in code** — the Data→Scan tab was already removed (documented in
+  `QrLabels.vue` L118-122). Documentation-only flip.
+- Only the My-Products register UI was missing.
+
+**Scope decisions (asked the user, per lock-scope preference):**
+- Entry point = **My Products only** (not a scan-flow fork). Keeps the P8-02 one-tap
+  scan-unknown → add path untouched (Effortless / Anti-creep). → scan-unknown rework is a
+  deliberate **WON'T-DO**.
+- Input = **text entry only** (no camera button in the register dialog).
+
+**What shipped (frontend only):**
+- `web_app/src/style/icons.ts` — added `barcode: 'mdi-barcode'`.
+- `web_app/src/pages/MyProductsPage.vue` — `scanningEnabled`-gated "Register barcode…" item
+  in the per-card `⋮` menu + a `BaseDialog` (text `q-input`, inline error, Register/Cancel).
+  `confirmBarcode()` calls `barcodeApi.registerAsync`, positive toast on success, inline
+  `describeApiError` on failure incl. 409 "already registered". Mirrors the StockItemDetail
+  "Add barcode" dialog. Whole surface hides when scanning is OFF (R-029).
+
+**Verification:** vue-tsc clean, eslint clean, Vitest 387/387. No new spec added (thin glue
+over an already-tested endpoint; no MyProductsPage harness exists — out of FU scope).
+Browser-verify queued in DORA_VERIFY (register path, 409 conflict path, scanning-off hides).
+
+**Standards close-gate:** R-029 honoured (gated surface). No new domain constant client-side
+(R-003 clean — backend owns the barcode↔product fact). No new ADR.
+
+**Ledgers:** FU-373 → `_RESOLVED` (all three parts closed; scan-unknown = WON'T-DO; §5.2
+ingestion auto-populate remains, tracked with the ingestion surface — needs an EAN field on
+Product). CHANGELOG Added bullet. PROPOSAL_BARCODE_SCANNING §5.1/§6 flipped ✅. DORA_VERIFY
+item added. PROJECT_STATE: small UI unit → Regenerated-line note.
+
+**Next up:** nothing from this arc. §5.2 ingestion auto-populate is the only barcode remainder
+and is gated on the Phase-2 ingestion surface.
+
+---
+
 ## 2026-07-15 (later 8) — FU-552 RESOLVED: real Dora-branded iOS/Safari/MS-tile PWA icons
 
 **Why:** User asked "what to work on next?"; picked FU-552 from the board (branding

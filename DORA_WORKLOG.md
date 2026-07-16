@@ -38,8 +38,15 @@ can legally strip the key check and redistribute). The report only said "conside
 relicensing (source-available / dual / BSL) to a **prerequisite** and the recommended *first* step
 (longest legal lead-time). Owner + lawyer decision.
 
-**Other current-state notes captured in the plan:** DSAR is unbuilt (only `delete_user_as_admin.py`;
-no self-service export/delete → FU-404); cross-store "cheapest" framing still in copy (`DoraChat.vue`,
+**Correction (same session, owner challenge): DSAR rescoped to hosted-only.** The first draft
+put a "Compliance/DSAR" track in the self-host plan; owner rightly pushed back. The DSAR
+obligation follows the *data controller* — on self-host that's the operator, not the vendor
+(report §1.2 "self-hosted sidesteps most; SaaS does not"). So the full compliance contract
+(privacy policy + ToS + self-service export/delete) is **parked as hosted-only** (OPTIONAL_SAAS
+§3, FU-404 rescoped); the self-host residual is just a short **privacy statement** (Track 3),
+and export/delete become optional product features, not a sale prerequisite.
+
+**Other current-state notes captured in the plan:** cross-store "cheapest" framing still in copy (`DoraChat.vue`,
 `StockItemDetailPage.vue`) but architecturally fine (runs over ingestion-fed linked products, not core
 scraping) — the positioning reframe is a marketing decision folded into FU-406, not a new FU.
 

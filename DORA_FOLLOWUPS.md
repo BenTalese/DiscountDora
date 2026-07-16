@@ -196,12 +196,13 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** Phase 4 — pair with billing (P7-06) so ops cost lands with revenue.
 - **Note (2026-07-09, FU-387 audit):** when CI is re-enabled at Phase 4, wire in dependency scanning as part of this FU — a scheduled `pip-audit -r requirements.txt` + `npm audit --prefix web_app` job that opens an issue on new advisories. FU-387 shipped a manual `scripts/security-audit.sh` runner as the interim; promoting it to CI belongs here, not in a fresh FU. See [SECURITY_REVIEW.md](docs/security/SECURITY_REVIEW.md) §6 for the current baseline the CI job should measure against.
 
-## [OPEN] FU-404 — P7-08 Compliance (privacy policy, DSAR, deletion, security headers)
-- **Raised:** 2026-07-01 (legacy prompt-plan audit).
-- **Type:** deferred job (Phase 4).
-- **What:** P7-08 — full compliance surface. Partial: some security-headers work has landed; the privacy-policy hooks + full data-export/deletion (DSAR) contract not confirmed. Overlaps with [[FU-401]] (P5-02 Privacy).
-- **Why deferred:** Phase 4.
-- **Recommended resolution:** Phase 4 — merge P5-02 + P7-08 into one compliance work-unit. **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the multi-user + admin FST persona flows (Track 1) will *exercise* the DSAR export, delete-account, and privacy-policy surfaces end-to-end, and the senior-review pass on the auth + backup chunks will catch drift on security headers + credential exclusion. **Not covered:** the legal drafting itself + the compliance contract wording. Those remain in this FU.
+## [OPEN] FU-404 — P7-08 Compliance (privacy policy, DSAR, deletion) — hosted/controller-scoped
+- **Raised:** 2026-07-01 (legacy prompt-plan audit). **Scoped 2026-07-16 (self-host-first, FU-412 plan).**
+- **Type:** deferred job (hosted/managed — not a self-host sale prerequisite).
+- **What:** P7-08 — the privacy-law **compliance contract**: privacy policy + ToS wording, and self-service **data export + account/data deletion (DSAR)**. Overlaps with [[FU-401]] (P5-02 Privacy). Security-headers half already shipped (FU-387).
+- **Scoping (2026-07-16):** the DSAR/compliance obligation follows the **data controller**. On self-host that's the *operator*, not the software vendor (`COMMERCIALIZATION_REPORT.md` §1.2 — "self-hosted sidesteps most; SaaS does not"), so this **activates only when you host user data** → it now lives with the parked hosted work in [`OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`](docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md) §3. The **self-host** track keeps only a short honest **privacy statement** (`SELF_HOST_COMMERCIALIZATION_PLAN.md` Track 3), drafted with the licence text. Self-service export/delete may still ship as optional *product features* on the repository seam, but they're driven by this hosted need, not by the self-host sale.
+- **Why deferred:** hosted-path work; no near-term trigger while the product is self-host-only.
+- **Recommended resolution:** when a hosted/managed offering is opened (OPTIONAL_SAAS revisit trigger). **Partially covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** — the multi-user + admin FST persona flows (Track 1) will *exercise* any export/delete/privacy surfaces that do get built; the senior-review pass on auth + backup catches security-header/credential-exclusion drift. **Not covered:** the legal drafting + compliance contract wording (owner + lawyer).
 
 ## [OPEN] FU-389 — P5-04 Mobile / PWA field test
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).

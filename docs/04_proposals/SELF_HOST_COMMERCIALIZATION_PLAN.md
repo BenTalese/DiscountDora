@@ -32,7 +32,7 @@ a **legal + packaging + billing** project.
 |---|---|---|---|
 | **1. Legal de-risk** | Relicense off MIT; scraping disclaimer + recipe-import note in terms | **FU-567 (new)** + FU-562 note | 🔴 decision |
 | **2. Billing / product-value** | Offline licence key + entitlements gate + Settings→License; tier split already decided | **FU-562** | 🟡 decided, build pending |
-| **3. Compliance** | Privacy policy; self-service data export + account deletion (DSAR) | **FU-404** | ⚪ mostly unbuilt |
+| **3. Privacy statement** | Short honest disclosure (self-host residual). **DSAR proper is a hosted obligation → parked** | Track 1 drafting; DSAR → OPTIONAL_SAAS / FU-404 | ⚪ small |
 | **4. Launch readiness** | Positioning/marketing, release process, support channel | **FU-406** + FU-557 | ⚪ last-mile |
 
 **The single most important finding:** the repo ships under an **MIT licence**, which
@@ -121,18 +121,28 @@ here; FU-562 stays the source of truth:
 
 ---
 
-## 4. Track 3 — Compliance (report §4.8 / P5-02 → FU-404)
+## 4. Track 3 — Privacy statement (self-host residual; DSAR proper is hosted, parked)
 
-- **Self-service data export** — a user can download their own data. Unbuilt.
-- **Account + data deletion (DSAR)** — a user can delete their account and data. Only an
-  *admin-deletes-a-user* path exists (`delete_user_as_admin.py`); no self-service.
-- **Privacy policy + ToS hooks** — a place in-app to surface them. Unbuilt.
+**The compliance obligation follows the data controller, and on self-host that isn't you.**
+The person running the instance holds the data on their own box, so the mandated
+data-subject rights (export, erasure) are *their* obligation, not the software vendor's.
+The report says this directly (§1.2): *"Self-hosted sidesteps most; SaaS does not."* So the
+full **DSAR/compliance contract — privacy policy + ToS wording + self-service data export +
+account deletion — is a hosted/controller concern and is parked** in
+[`OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`](OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md) under
+**FU-404**. It is **not** a prerequisite to selling self-host.
+
+What remains in the self-host track is small:
+
+- **A short, honest privacy statement** — what the app stores, and that nothing leaves the
+  box by default (fits Charter P8). Folded into the Track-1 licence/terms drafting; a
+  paragraph, not a build.
 - **Security headers** — ✅ already shipped (§1 table).
-
-Scope note (from FU-404): the FINALISATION_PLAN Track-1 FST persona flows will *exercise*
-these once built; the **legal drafting** of the policy/ToS wording stays owner+lawyer work.
-For self-host the bar is lower than SaaS (the operator is the data controller), but export
-+ delete are table-stakes and cheap to build on the existing repository seam.
+- **Optional, not required:** self-service data export + account deletion are reasonable
+  *product features* (there's currently only an `admin-deletes-a-user` path,
+  `delete_user_as_admin.py`) and sit cheaply on the existing repository seam — but they're
+  driven by the hosted-compliance need (FU-404), not by the self-host sale, so they ride
+  with that FU rather than gating this track.
 
 ---
 
@@ -165,14 +175,12 @@ For self-host the bar is lower than SaaS (the operator is the data controller), 
 3. **Build Track 2** (FU-562 build sequence: entitlements service → gate the intelligence
    surfaces → trial mechanism → extend `/api/auth/capabilities` → SPA tier-awareness).
    This is the bulk of the code.
-4. **Build Track 3** (FU-404: data export + self-service account deletion) — bounded,
-   sits on the repository seam.
-5. **Track 1 paperwork + Track 4 launch** (licence text, scraping disclaimer, privacy
-   policy, positioning copy, landing page, support channel FU-557, release process) — the
-   last-mile, much of it non-code, done close to launch.
+4. **Track 1 paperwork + Track 4 launch** (licence text, scraping disclaimer, privacy
+   statement, positioning copy, landing page, support channel FU-557, release process) —
+   the last-mile, much of it non-code, done close to launch.
 
-Tracks 1–2 are the critical path; Tracks 3–4 can proceed in parallel once the licence is
-decided.
+Tracks 1–2 are the critical path; Track 4 is the last-mile. **DSAR/compliance (FU-404) is
+not on this path** — it activates only if a hosted offering is opened (OPTIONAL_SAAS).
 
 ---
 
@@ -188,7 +196,7 @@ Every live section of `COMMERCIALIZATION_REPORT.md` mapped to a home (audit at a
 | §3 | Framework question (don't rewrite) | ✅ resolved — productionized on Flask; **do not reopen** | ✅ |
 | §4.1–4.2, 4.8-headers | Postgres, WSGI, security headers | ✅ done (FU-045, FU-397, FU-387) | ✅ |
 | §4.3–4.6 | Scrape worker, Redis, object storage, multi-tenant | 🔵 parked — OPTIONAL_SAAS §3 (scale/hosted) | 🔵 |
-| §4.8-DSAR | Data export/delete | Track 3 / FU-404 | ⚪ |
+| §4.8-DSAR | Data export/delete (privacy-law compliance) | 📦 parked — hosted/controller obligation, OPTIONAL_SAAS / FU-404; self-host residual = a privacy statement (Track 3) | 📦 |
 | §5 | Households / admin reframe (multi-tenant) | 📦 parked — OPTIONAL_SAAS (Path A) | 📦 |
 | §6 product-value | What's worth paying for (feature-layer split) | Track 2 / FU-562 | 🟡 |
 | §6 freemium/caps | Per-item free caps, SaaS freemium framing | 📦 parked — OPTIONAL_SAAS (rejected for self-host) | 📦 |
@@ -208,7 +216,7 @@ or spawned as an FU:
 - **Scraping disclaimer wording** → Track 1, drafted with FU-567's licence text (no separate FU).
 - **Revenue model / trial mechanism / trial length** → already open in **FU-562** (unchanged).
 - **Positioning reframe (personal-price story)** → folded into **FU-406** marketing (no separate FU).
-- **DSAR build scope** → **FU-404** (unchanged).
+- **DSAR / compliance contract** → **parked as a hosted/controller obligation** (OPTIONAL_SAAS / FU-404); self-host keeps only a short privacy statement (Track 1). Not a self-host sale prerequisite.
 - **Everything hosted/SaaS** → **out of scope**, OPTIONAL_SAAS doc (unchanged).
 
 No live undecided fork remains in this doc.

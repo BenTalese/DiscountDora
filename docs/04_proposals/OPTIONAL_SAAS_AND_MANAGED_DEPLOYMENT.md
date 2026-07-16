@@ -78,6 +78,17 @@ Billing & plan enforcement (hosted-only):
   monetization shape; the underlying *product value* (proactivity layer, household
   sharing, unlimited price tracking) is universal and stays in the self-host track.
 
+Compliance (data-controller obligation — hosted-only):
+- **FU-404** — Privacy-law compliance contract: privacy policy + ToS wording, and
+  self-service **data export + account/data deletion (DSAR)**. The obligation
+  follows the *data controller*; on self-host that's the operator, not the vendor
+  (COMMERCIALIZATION_REPORT §1.2 — "self-hosted sidesteps most; SaaS does not"), so
+  this activates only when *you* host user data. The self-host track keeps only a
+  short honest **privacy statement** (SELF_HOST_COMMERCIALIZATION_PLAN Track 3);
+  security headers already shipped (FU-387). *(Export/delete may still ship as
+  optional product features earlier, but they're driven by this hosted need, not by
+  the self-host sale.)*
+
 Operations (managed-service sliver):
 - **FU-406 (on-call sliver only)** — uptime/SLA, on-call rotation, escalation. Only
   meaningful when you operate the service. *(Marketing, legal/licence, support/

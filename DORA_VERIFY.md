@@ -6,6 +6,10 @@ migration round-trips, CLI/desktop launch checks — whatever needs manual
 verification lives here. Grouped by surface; pick one and walk it
 top-to-bottom.
 
+> **Campaign in progress (2026-07-16):** this pile is being cleared via
+> agent-verified evidence reports — see `DORA_VERIFY_TRIAGE.md` (repo root)
+> for the batch plan, per-section classification, and session protocol.
+
 ---
 
 ## Onboarding story pass (2026-07-12)

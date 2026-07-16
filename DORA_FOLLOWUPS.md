@@ -54,6 +54,35 @@ long session summary. Distinct from the other logs:
 
 
 
+## [OPEN] FU-567 — Relicense Dashy Dora off MIT for the paid self-host model
+- **Raised:** 2026-07-16 (FU-412 self-host commercialization plan).
+- **Type:** decision + deferred job (legal; prerequisite to charging).
+- **What:** The repo ships under an **MIT licence** (`LICENSE`, © 2023 Ben Peter Talese),
+  which explicitly permits resale and redistribution of the source. That directly
+  undermines the paid-self-host model: FU-562's leverage is gating updates/downloads via
+  an offline licence key, but under MIT anyone can legally strip the key check and
+  redistribute the build for free. **Relicensing is a prerequisite to charging, not a
+  nice-to-have** — the report (`COMMERCIALIZATION_REPORT.md` §1.2) flagged it as "consider";
+  the self-host plan promotes it to a blocker.
+- **Options (owner + lawyer call):**
+  - **(a) Source-available commercial licence** — e.g. PolyForm Noncommercial, or a custom
+    "you may run it, not resell/redistribute it" licence. Simplest fit for "sell the right
+    to run it."
+  - **(b) Dual licence** — free for personal/non-commercial use, paid commercial licence.
+    Preserves goodwill + a free tier, adds enforcement teeth.
+  - **(c) BSL (Business Source License)** — source-available now, converts to open (e.g.
+    Apache) after N years. Popular for commercial OSS.
+- **Also settle here:** the **scraping disclaimer** + **recipe-import personal-use note**
+  belong in the same licence/terms drafting pass (self-host plan Track 1) — core ships no
+  scraper, but the companion does, and the terms must push residual scraping liability to
+  the operator (report §1.1).
+- **Why deferred:** needs an owner decision + an Australian IP/commercial lawyer; longest
+  lead-time item on the self-host track, so start it early even though it lands late.
+- **Recommended resolution:** **first** step of the self-host commercialization push
+  (`docs/04_proposals/SELF_HOST_COMMERCIALIZATION_PLAN.md` §6 sequence) — before building
+  FU-562's key gate, since the gate is only meaningful once the licence forbids
+  redistribution. Cross-ref: [[FU-562]] (billing build), [[FU-412]] (RESOLVED — the plan).
+
 ## [OPEN] FU-566 — Build usage telemetry (Surface A local insight; Surface B opt-in aggregate is owner-sign-off-gated)
 - **Raised:** 2026-07-15 (FU-363 item 2 — telemetry design proposal written).
 - **Type:** deferred job (build) + decision-gate.
@@ -151,13 +180,6 @@ long session summary. Distinct from the other logs:
   - Product-surface browser verify (My Products page, Price History page, stock-item Products tab) — waits on a running app.
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
-
-## [OPEN] FU-412 — Action the COMMERCIALIZATION_REPORT into a self-host commercialization plan
-- **Raised:** 2026-07-01 (investigations audit). **Scoped 2026-07-14 (self-host-first).**
-- **Type:** deferred job.
-- **What:** turn `docs/05_investigations/COMMERCIALIZATION_REPORT.md` into the actual **self-host** commercialization plan — legal de-risk (§1–2), robustness (§3–4), and the *product-value* monetization (§6) via a one-time licence / paid download. **The report's SaaS/managed recommendations (§5, §7, freemium/plan-gating half of §6) are out of scope here** — they live in `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` for a later revisit.
-- **Why deferred:** at the self-host commercialization push.
-- **Recommended resolution:** read §1–4 + §6-product-value, spawn per-recommendation self-host FUs/plans. **The self-host pricing/billing decision is already captured as [[FU-562]]** (enforcement decided = offline license key; revenue model + payment platform open with options) — resolve it as part of this push.
 
 ## [OPEN] FU-406 — Self-host launch readiness (on-call/SLA sliver relocated)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first).**

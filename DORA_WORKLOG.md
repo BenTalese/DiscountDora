@@ -9,6 +9,56 @@ next.
 
 ---
 
+## 2026-07-16 — FU-412 RESOLVED: self-host commercialization plan written (planning, no code); spawned FU-567 (relicense off MIT)
+
+**Why:** User: "lets do FU-412" — turn `COMMERCIALIZATION_REPORT.md` (§1–4 + §6-product-value;
+SaaS parked) into an actual self-host commercialization plan.
+
+**Assembled required reading (anti-drift):** the report, `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`
+(the parked-SaaS boundary), FU-562 (billing decisions), the self-host-first memory + charter
+§7.5 distribution posture.
+
+**The key move — verified the report against the code before planning.** The report predates
+~100k LOC; most of its "blocker" recs have since shipped:
+- §1.2 GPL `fuzzywuzzy` → RapidFuzz ✅ (FU-196, `requirements.txt`)
+- §4.1 Postgres ✅ (FU-045, `psycopg[binary]`) · §4.2 gunicorn/WSGI ✅ (FU-397)
+- §4.8 security headers ✅ (FU-387, `middleware.py` CSP/XFO/XCTO)
+- §3 scraping → standalone companion ✅ (Decision 1)
+So the conclusion the plan leads with: **selling self-host is no longer an engineering project
+— it's legal + billing + packaging.**
+
+**Deliverable:** new `docs/04_proposals/SELF_HOST_COMMERCIALIZATION_PLAN.md` — TL;DR, current-state
+reality-check table, 4 tracks (1 legal de-risk / 2 billing=FU-562 / 3 compliance=FU-404 / 4 launch=
+FU-406+FU-557), recommended sequence, a **report-section coverage table** (§1–8 → home/status), and
+a closed "Open decisions" sweep. Kept skimmable (human-digestible-status-doc preference).
+
+**The one genuinely-new finding → FU-567:** the repo ships under **MIT** (`LICENSE`, © 2023), which
+permits resale/redistribution — this **undermines FU-562's whole update-gating leverage** (someone
+can legally strip the key check and redistribute). The report only said "consider"; the plan promotes
+relicensing (source-available / dual / BSL) to a **prerequisite** and the recommended *first* step
+(longest legal lead-time). Owner + lawyer decision.
+
+**Other current-state notes captured in the plan:** DSAR is unbuilt (only `delete_user_as_admin.py`;
+no self-service export/delete → FU-404); cross-store "cheapest" framing still in copy (`DoraChat.vue`,
+`StockItemDetailPage.vue`) but architecturally fine (runs over ingestion-fed linked products, not core
+scraping) — the positioning reframe is a marketing decision folded into FU-406, not a new FU.
+
+**Scope discipline:** SaaS material (report §5/§7/freemium+caps) kept OUT — stays in OPTIONAL_SAAS.
+Plan explicitly rejects the report's per-item free caps for self-host (feature-layer split per FU-562).
+
+**Standards close-gate:** planning/docs only, no code, no R-rule surface. No new ADR. Mandatory
+proposal artifacts present: report-section coverage table + "from the original spec" n/a (report-driven,
+not surface-feedback-driven) + "Open decisions — closed" sweep.
+
+**Ledgers:** FU-412 → `_RESOLVED`; **FU-567 opened** (relicense); no CHANGELOG (nothing user-visible),
+no DORA_VERIFY (nothing to run). PROJECT_STATE: Regenerated-line note (planning unit; Phase-4 frame
+unchanged).
+
+**Next up:** the self-host push's own sequence — FU-567 (licence decision) first, then FU-562's open
+forks, then the Track-2 billing build. None started.
+
+---
+
 ## 2026-07-15 (later 11) — FU-363 (partial): Bucket-C items 2, 5, 6, 7 actioned
 
 **Why:** User: "do 363". FU-363 is an 8-item cross-cutting bundle whose own resolution rule is

@@ -10,6 +10,14 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-412 — Action the COMMERCIALIZATION_REPORT into a self-host commercialization plan
+- **Resolved:** 2026-07-16 — wrote `docs/04_proposals/SELF_HOST_COMMERCIALIZATION_PLAN.md`, the umbrella plan that turns the report's live sections into a current-state, sequenced, FU-linked track.
+- **The synthesis (why the plan is short):** verified the report against the code — **the report's hard technical program is already done**: RapidFuzz swap (FU-196), Postgres (FU-045), gunicorn/WSGI (FU-397), security headers (FU-387), scraping demoted to the standalone companion. So selling self-host is no longer an engineering project; it's a **legal + billing + packaging** project. The plan captures four remaining tracks — (1) legal de-risk, (2) billing/product-value = FU-562, (3) compliance = FU-404, (4) launch readiness = FU-406 + FU-557 — plus a report-section coverage table and a recommended sequence.
+- **The one genuinely-new finding → spawned [[FU-567]]:** the repo ships under **MIT**, which permits resale/redistribution of the source and therefore undermines FU-562's update-gating leverage. Relicensing (source-available / dual / BSL) is promoted from the report's "consider" to a **prerequisite to charging**, and is the recommended *first* step (longest legal lead-time).
+- **Scope discipline:** SaaS/managed material (report §5, §7, freemium/per-item caps) kept **out** — it stays parked in `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`. The plan explicitly rejects the report's per-item free caps for self-host (feature-layer split instead, per FU-562). No code touched — planning unit.
+- **Open decisions — closed:** licence model → FU-567; revenue/trial forks → already open in FU-562; positioning reframe → folded into FU-406; DSAR → FU-404; hosted/SaaS → OPTIONAL_SAAS. No live fork left in the plan doc.
+- **Cross-ref:** [[FU-567]] (new — relicense), [[FU-562]] (billing), [[FU-404]] (compliance), [[FU-406]] (launch), [[FU-557]] (support channel).
+
 ## [RESOLVED] FU-363 (partial) — Bucket-C items 2, 5, 6, 7 actioned
 - **Resolved:** 2026-07-15 — owner picked these four of the 8-item bundle to pick up; each split by type. FU-363 itself **stays OPEN** for the remaining four (items 1 QA-doc, 3 polish pass, 4 push notifications, 8 UI consistency).
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep). **Type:** bundle.

@@ -9,6 +9,45 @@ next.
 
 ---
 
+## 2026-07-16 (later 4) — FU-431 RESOLVED: no Product History redesign brief (decision unit, no code)
+
+**Why:** User: "do FU-431" — the deferred question of whether Product History deserves its own
+redesign brief (PH-1 discoverability + PH-10 desktop drawer), or whether FU-227's "your prices"
+layer subsumes it.
+
+**Investigated the code before deciding (didn't take the FU's paraphrase at face value):**
+- **PH-10's bottom-drawer already exists** — `PriceHistoryBottomSheet.vue`, built for FU-227,
+  used by `YourPricesWidget` on the stock-item detail page. My Products just navigates to the
+  full `/price-history` page instead of reusing it. → no brief needed; at most a small reuse.
+- **PH-1** — `/price-history` has no nav entry but is reached contextually (My Products "View
+  price history", Subscriptions "explorer" link + notify-below alerts, onboarding). For a
+  data-gated niche surface, contextual entry is the right model; a nav tab would surface an
+  often-empty page (Anti-creep).
+- **Subsumption** — FU-227 shipped the personal price-intel layer (stock-item, over `paid_price`)
+  = the de-scraped, always-available "know a good price" core (COMMERCIALIZATION_REPORT §2). The
+  product-side history is supplementary + only meaningful with ingested product/offer data
+  (companion, off by default on self-host).
+
+**Decision: no dedicated redesign brief.** Residuals folded into [[FU-214]]'s product-surface
+browser-verify pass: PH-2 "select products, no change" (behaviour verify w/ real data), the
+PH-10 bottom-sheet reuse (opportunistic, evaluate with data on-screen), PH-1 entry-points
+adequacy confirm. The other 8 PH bullets were already homed (B9.6 shipped + A1/A6/B9/C-9
+proposed; L223/L225 bugs in FU-214).
+
+**Standards close-gate:** decision unit, no code, no R-rule surface. Anti-creep (P10) explicitly
+applied (declined a nav tab + a redesign brief for a niche data-gated surface). No new ADR.
+
+**Ledgers:** FU-431 → `_RESOLVED` (decision + re-open trigger recorded); FU-214 gained the 3 PH
+residuals; no CHANGELOG (nothing shipped), no DORA_VERIFY (verify items live in FU-214, gated on
+real data). PROJECT_STATE Regenerated-line note.
+
+**Re-open trigger:** only if FU-214's browser verify with real ingested product data shows a
+genuine discoverability/layout failure the contextual model + existing bottom sheet can't cover.
+
+**Next up:** nothing from this arc.
+
+---
+
 ## 2026-07-16 (later 3) — FU-566 telemetry RESOLVED as WON'T-DO (self-host); whole topic relocated to the optional SaaS plan
 
 **Why:** Owner asked "are you sure this is the most useful lens over usage stats for admins?"

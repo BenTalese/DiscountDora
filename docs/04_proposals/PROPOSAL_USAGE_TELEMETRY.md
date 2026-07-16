@@ -1,9 +1,21 @@
 # Proposal — Usage telemetry / product analytics (privacy-first)
 
-**Status:** 🔵 designed, not built (2026-07-15; **reframed 2026-07-16** — Surface A
-is now an *efficiency lens*, not a counts panel; see §3). Design-only; no code.
-Origin: FU-363 item 2 (split out of the Bucket-C cross-cutting bundle when picked up).
-Build FU: **FU-566**.
+**Status:** 📦 **parked → hosted-only (2026-07-16, owner).** Design-only; no code, and
+**none planned for self-host.** Governed by
+[`OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`](OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md).
+Origin: FU-363 item 2. Build FU **FU-566 resolved WON'T-DO (self-host).**
+
+> **Decision (2026-07-16, owner): don't build any of this for self-host; migrate the
+> whole topic into the optional SaaS plan.** The motivating ask ("know how people use
+> my app") is the *maintainer's* — it only pays off as **hosted, cross-install
+> aggregate** analytics (Surface B). The self-host **"efficiency lens" (Surface A) was
+> designed below, stress-tested, and dropped**: on a self-host box the reader is the
+> household *operator*, whose real questions are outcomes (pantry accuracy, waste,
+> spend) not feature-engagement — and most of those are already answerable from
+> existing domain data without a telemetry system. So there's no useful self-host
+> product here. The design below is **retained for the record / re-open value** if a
+> hosted offering is ever built; the live home is the SaaS doc's "Product analytics
+> (hosted-only)" bucket. **Everything from §3 down is historical**, not a plan.
 
 **Motivating feedback (06-Jun-2026):**
 > *"I'd like a way to know how people are using my app. I know some companies

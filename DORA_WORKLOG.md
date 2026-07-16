@@ -9,6 +9,43 @@ next.
 
 ---
 
+## 2026-07-16 (later 3) — FU-566 telemetry RESOLVED as WON'T-DO (self-host); whole topic relocated to the optional SaaS plan
+
+**Why:** Owner asked "are you sure this is the most useful lens over usage stats for admins?"
+Prompted a genuine category-by-category critique (not a defence): the six-category lens leaned
+on vendor-vanity metrics (adoption/trend) dressed as coaching; the only genuinely useful bits
+(cadence/health) are outcome signals **already derivable from existing domain data without a
+telemetry system**, and the one real efficiency nudge (do-this-faster) is narrow. The deeper
+point: "which features get used" is the *maintainer's* question, which only pays off as hosted
+cross-install aggregate — on a self-host box the reader is the household operator, who cares
+about outcomes, not feature engagement. Owner's call: **"don't build anything; migrate any
+telemetry stuff into the optional SaaS plan. this isn't really useful for end users."**
+
+**What changed (docs only, no code):**
+- **FU-566 → `_RESOLVED` as WON'T-DO (self-host); relocated hosted-only.** Nothing gets built
+  for self-host.
+- **`PROPOSAL_USAGE_TELEMETRY.md`** re-statused 📦 parked → hosted-only, with a decision banner
+  up top; everything §3-down marked historical (retained for re-open value).
+- **`OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`** §3 "Product analytics" bucket now owns the whole
+  topic (both surfaces), notes the self-host lens was considered + dropped, revisit only if a
+  hosted offering opens.
+- **`COVERAGE_GAPS.md`** telemetry item flipped [COVERED] → [DEFERRED → hosted-only].
+- **FU-363 item 2** reference updated (design→WON'T-DO-self-host).
+
+**Standards close-gate:** docs only, no code. The decision *reduces* surface (P10) and removes a
+would-be first-egress path from the self-host build entirely. No new ADR.
+
+**Ledgers:** FU-566 → `_RESOLVED`; proposal + OPTIONAL_SAAS + COVERAGE_GAPS + FU-363 updated; no
+CHANGELOG/DORA_VERIFY. PROJECT_STATE Regenerated-line note.
+
+**Reusable lesson:** before designing an admin "insights/analytics" surface, ask *who reads it and
+what outcome they act on*. Feature-engagement metrics serve the vendor; a self-host operator wants
+outcome/health signals, most of which are already in the domain data. Recorded to memory.
+
+**Next up:** nothing from this arc. Telemetry is off the self-host board.
+
+---
+
 ## 2026-07-16 (later 2) — FU-566 telemetry simplified per owner: cut per-user + "optimal order" (design, no code)
 
 **Why:** Owner: "lets not overengineer it. cut 'optimal order' for another stat. change the

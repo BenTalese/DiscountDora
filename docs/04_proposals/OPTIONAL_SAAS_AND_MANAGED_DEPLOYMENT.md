@@ -89,14 +89,19 @@ Compliance (data-controller obligation — hosted-only):
   optional product features earlier, but they're driven by this hosted need, not by
   the self-host sale.)*
 
-Product analytics (hosted-only):
-- **FU-566 Surface B** — the "**Share my usage data to help improve Dora**" checkbox
-  (default OFF) that opts a *hosted* install into sending anonymised, aggregate usage
-  counts to the author (`PROPOSAL_USAGE_TELEMETRY.md` §4). **Does not exist on
-  self-host** — there, the same collection powers only a local, admin-only *efficiency
-  lens* (Surface A) that never egresses. Surface B is the app's first outbound
-  behavioural egress and is owner-sign-off-gated; build only if the across-installs
-  question becomes real once a hosted offering exists.
+Product analytics (hosted-only — the whole topic lives here as of 2026-07-16):
+- **Usage analytics / telemetry** (design: `PROPOSAL_USAGE_TELEMETRY.md`, now 📦 parked).
+  **Decided 2026-07-16 (owner): nothing is built for self-host.** The motivating ask
+  ("know how people use my app") is the *maintainer's* and only pays off as **hosted,
+  cross-install aggregate** analytics — the "**Share my usage data to help improve
+  Dora**" checkbox (default OFF) that opts a *hosted* install into sending anonymised,
+  aggregate usage counts to the author (proposal §4). It is the app's first outbound
+  behavioural egress and is owner-sign-off-gated. **The self-host "efficiency lens"
+  (proposal Surface A) was considered and dropped** — on a self-host box the reader is
+  the household operator, whose real questions are outcomes (pantry accuracy, waste,
+  spend), most of which are already answerable from existing domain data without a
+  telemetry system. **Revisit only if a hosted offering opens**; until then, no build.
+  (FU-566 resolved WON'T-DO for self-host.)
 
 Operations (managed-service sliver):
 - **FU-406 (on-call sliver only)** — uptime/SLA, on-call rotation, escalation. Only

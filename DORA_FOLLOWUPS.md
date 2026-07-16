@@ -83,15 +83,6 @@ long session summary. Distinct from the other logs:
   FU-562's key gate, since the gate is only meaningful once the licence forbids
   redistribution. Cross-ref: [[FU-562]] (billing build), [[FU-412]] (RESOLVED — the plan).
 
-## [OPEN] FU-566 — Build the usage *efficiency lens* (Surface A, self-host, opt-in admin-only; Surface B is hosted-only, owner-sign-off-gated)
-- **Raised:** 2026-07-15 (FU-363 item 2 — telemetry design proposal written). **Reframed 2026-07-16 (owner).**
-- **Type:** deferred job (build) + decision-gate.
-- **What:** Build the surfaces in [`PROPOSAL_USAGE_TELEMETRY.md`](docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md). **Surface A is not a stats dashboard — it's a *system-wide efficiency lens*** (owner reframe): the admin opts in (off by default), and the app shows *interpreted, actionable* coaching about their install — "do this faster this way," "this install uses 5 of ~40 features," "least-used feature," "cook-mode use up 3× this month" — with the raw counts underneath. **All insights are system-wide (about the install, never an individual user).** Self-host = **strictly local admin reporting, never egress**. **Surface B** (the traditional "share my usage data to improve the app" checkbox → anonymised aggregate egress) is **hosted-only** — does not exist on self-host, lives in the optional SaaS plan, and is the app's **first outbound behavioural egress** → no build without explicit owner sign-off on payload + collector + opt-in copy (proposal §4/§7).
-- **Build shape (proposal §6):** admin opt-in gate → event registry + `usage_event_daily(event_key, day, count)` (minimal, pre-aggregated, no user_id/sequence) → instrument ~20–30 headline surfaces (incl. paired by-hand-vs-fast-way events) → **insight-rule engine** (curated ruleset, §3.2 catalogue: do-this-faster / adoption / prune / trend / cadence / health) → Settings → Admin → Usage panel (Insights on top, counts underneath).
-- **Scope cut (owner, 2026-07-16 — don't over-engineer):** per-user attribution **CUT** (system-wide only); "sub-optimal order" advice **CUT** (replaced by a plain trend stat). Schema stays minimal; no §7 owner-confirm forks remain.
-- **Why deferred:** design-only unit; the build competes with the rest of the backlog. Surface B needs the hosted context + sign-off.
-- **Recommended resolution:** Surface A — opportunistic / when prioritised (no blockers). Surface B — hosted-only, when the "across-installs" question is real **and** owner has signed off on §4 (tie to the OPTIONAL_SAAS revisit).
-
 ## [OPEN] FU-562 — Self-host billing: revenue model + trial delivery mechanism still open (enforcement = offline license key; platform = Lemon Squeezy MoR; tier split + after-trial=Core — all decided)
 - **Raised:** 2026-07-14 (billing discussion under the self-host-first decision).
 - **Type:** decision + deferred job (self-host commercialization track; the self-host counterpart to the relocated subscription FU-402).
@@ -218,7 +209,7 @@ long session summary. Distinct from the other logs:
 - **Type:** deferred job (bundle — 8 sub-items; **items 2, 5, 6, 7 actioned 2026-07-15, 4 remain**).
 - **What:** `COVERAGE_GAPS.md` Bucket C cross-cutting items with no per-surface home:
   1. **[OPEN]** Full systems QA test doc (final regression walkthrough of every feature). User wants done LAST to capture the final product.
-  2. **[ACTIONED 2026-07-15 — design]** Usage analytics / telemetry. Design proposal written: [`PROPOSAL_USAGE_TELEMETRY.md`](docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md) (privacy-first; local-insight Surface A recommended core, opt-in aggregate Surface B deferred). **Build** tracked as FU-566.
+  2. **[ACTIONED — design, then WON'T-DO for self-host 2026-07-16]** Usage analytics / telemetry. Designed in [`PROPOSAL_USAGE_TELEMETRY.md`](docs/04_proposals/PROPOSAL_USAGE_TELEMETRY.md), then owner decided **not to build for self-host** — the ask is the maintainer's and only pays off as hosted aggregate analytics; the self-host efficiency lens was dropped as not useful to the operator. Whole topic **relocated to `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`** (hosted-only). FU-566 resolved WON'T-DO (see `_RESOLVED`).
   3. **[OPEN]** UI uniqueness / polish design pass — "looks just okay, not polished/unique."
   4. **[OPEN]** Push notifications between users (share a shopping list via notify).
   5. **[ACTIONED 2026-07-15 — decided: CUT]** Kivy P2P sync branch — no home in the current client-server architecture; recorded in [`MULTI_USER_READINESS.md`](docs/05_investigations/MULTI_USER_READINESS.md) §5.1.

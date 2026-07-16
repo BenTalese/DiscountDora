@@ -146,7 +146,7 @@ These map cleanly to INV prompts.
 No clean per-surface home; mostly future or "nice-to-have".
 
 - [OPEN] **Full systems QA test document** — manual walkthrough of every feature for final regression. The user wants this done last so it captures the final product. No plan yet; add when the implementation waves are mostly done.
-- [COVERED] **Usage analytics / telemetry** — "I'd like to know how people are using my app." → `PROPOSAL_USAGE_TELEMETRY.md` (privacy-first; local Surface A + opt-in aggregate Surface B). Build tracked as FU-566. (FU-363 item 2, 2026-07-15.)
+- [DEFERRED → hosted-only] **Usage analytics / telemetry** — "I'd like to know how people are using my app." Designed in `PROPOSAL_USAGE_TELEMETRY.md`, but **decided 2026-07-16 (owner): don't build for self-host.** The ask is the *maintainer's* (which features earn their keep), which only makes sense as hosted aggregate analytics; a local self-host "efficiency lens" was considered and dropped as not useful to the operator. The whole topic is **relocated to `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`** (hosted-only), to revisit if a hosted offering opens. FU-566 resolved (WON'T-DO self-host). (FU-363 item 2, 2026-07-15 → parked 2026-07-16.)
 - [OPEN] **UI uniqueness / polish design pass** — "looks just okay, not polished/unique." Cross-cutting.
 - [OPEN] **Push notifications between users** (new-feature idea — alert another user, share a shopping list via notify).
 - [RESOLVED] **Kivy P2P sync branch** — CUT: no home in the current client-server architecture. → `MULTI_USER_READINESS.md` §5.1 (FU-363 item 5, 2026-07-15).

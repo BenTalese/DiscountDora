@@ -14,8 +14,9 @@ Build FU: **FU-566**.
 it's an **efficiency lens** shown to the *admin of an install*, framed around getting
 more out of the app. Underneath it's the same usage-event collection; the difference
 is entirely in how it's *interpreted and delivered*: "you'd do this faster this way,"
-"you're doing this in a sub-optimal order," "this user has only touched 5% of Dora,"
-"your least-used feature is X." **Off by default, opt-in by the admin.** On self-host
+"this install uses only 5 of Dora's features," "your least-used feature is X,"
+"cook-mode use is up 3× this month." All **system-wide** (about the install, never an
+individual user). **Off by default, opt-in by the admin.** On self-host
 it is **strictly local admin reporting** — nothing egresses. The traditional
 "share my usage data to improve the app" checkbox is a *hosted-only* flavour (Surface
 B, §4), added in the optional SaaS plan — never on self-host.
@@ -64,10 +65,9 @@ The feedback bundles two different needs that have different privacy shapes:
 **Recommendation: build A first (opt-in per install, admin-enabled, off by default);
 make B a deferred, hosted-only add-on that reuses A's event store.** A is the
 self-host product — an efficiency lens the operator turns on for their *own* install;
-it never egresses, so its only privacy cost is local per-user usage the admin already
-oversees, and it de-risks B by proving the event taxonomy before any data egress
-exists. A is opt-in (not "unconditional") because it's a distinct feature that
-collects per-user usage — the admin should choose it on, per P8/P10.
+it never egresses, and it de-risks B by proving the event taxonomy before any data
+egress exists. A is opt-in (not "unconditional") because it's a distinct feature that
+collects usage — the admin should choose it on, per P8/P10.
 
 ## 3. Surface A — the efficiency lens (self-host core; opt-in, admin-only, local)
 
@@ -88,11 +88,12 @@ the client only fires the event name.)
 
 **Layer 2 — the lens (the product).** A small, curated set of **insight rules** read
 the local store and emit plain-language, ranked findings in a digestible format — a
-handful of "tips," not a wall of charts. The kinds of insight (catalogue in §3.2):
+handful of "tips," not a wall of charts. All insights are **system-wide** (about the
+install, not any individual user). The kinds of insight (catalogue in §3.2):
 - "You log stock by hand a lot — barcode scan is faster here." *(do-this-faster)*
-- "You open the meal planner then rebuild the list by hand; 'Draft my shop' does that in one tap." *(better-order)*
-- "This user has touched 5% of what Dora offers." *(adoption)*
+- "This install uses only 5 of Dora's ~40 features." *(adoption)*
 - "Your least-used feature is Product History — hide it, or here's what it's for." *(prune-or-learn)*
+- "Cook-mode use is up 3× this month." *(trend)*
 
 **Event taxonomy:** a small, curated, **enum-like registry** of event keys (committed
 constant, not free-form strings) so the set is auditable at a glance and can't
@@ -100,31 +101,27 @@ silently sprawl (P10). Start with ~20–30 keys covering the headline flows (sto
 add-by-hand vs add-by-scan, cook mode, meal-plan generate, list generate, oracle
 verdict, barcode scan, import, dashboard load). Grow deliberately.
 
-### 3.1 Data-model implications — the richer lens costs some of the schema guarantee
+### 3.1 Data model — deliberately minimal (system-wide counts only)
 
-The original design pre-aggregated at write (`usage_event_daily(event_key, day, count)`)
-so it was *structurally* incapable of storing behavioural detail — you couldn't
-data-mine a sequence because no sequence was recorded. The efficiency lens wants two
-things that minimal shape can't answer, so each is a **conscious, gated tradeoff**
-(acceptable precisely because A is local + admin-only + opt-in + never-egress):
+One narrow table, **pre-aggregated at write**:
+`usage_event_daily(event_key TEXT, day DATE, count INT)` — no `user_id`, no per-action
+row, no timestamp precision, no sequence. It is *structurally* incapable of storing
+behavioural detail: you can't data-mine a user, a session, or an order of actions
+because none of that is ever recorded. This is the privacy guarantee baked into the
+schema, not bolted on as policy — and it's cheap because the lens is deliberately
+kept simple.
 
-- **Per-user attribution** ("this user uses 5%") needs a per-user count dimension:
-  `usage_event_daily(user_id, event_key, day, count)`. More sensitive than
-  install-wide counts. Keep it **aggregate-about-a-user** (coverage %, top/never-used
-  per user) — never a per-action user timeline. *Recommended:* include the user
-  dimension; it drives the most useful coaching. Still counts-only, no content.
-- **Order/flow advice** ("sub-optimal order") needs some notion of *sequence*, which
-  daily counts can't see. Options, cheapest-first:
-  1. **Co-occurrence + curated rules (recommended default)** — infer "you use A and B
-     in the same session" from coarse same-day counts, matched against a small
-     hand-written set of "A-then-B is slower than the one-tap C" rules. No sequence
-     stored; most order-tips are expressible this way.
-  2. **Short-lived local flow buffer** — a rolling, capped, local-only recent-action
-     ring the lens reads then discards. Restores true order-detection but reintroduces
-     a small behavioural store (still local, opt-in, admin-only, never egress). Only if
-     (1) proves too blunt.
-  The **no-content** rule stays absolute (event *names* only), and **nothing about
-  Surface A ever egresses on self-host** regardless of which option.
+**Two things intentionally cut (2026-07-16, owner — don't over-engineer):**
+- **Per-user attribution** ("this user uses 5%") — dropped. All insights are
+  **system-wide** (about the install). Avoids the more sensitive per-user dimension
+  entirely and keeps the schema above.
+- **Order/flow advice** ("sub-optimal order") — dropped. It would need some notion of
+  sequence, which the daily-count schema can't (and now won't) see. Its slot in the
+  catalogue is taken by a plain **trend** stat (rising/falling feature use over time),
+  which is pure daily-count math.
+
+The **no-content** rule remains absolute (event *names* only), and **nothing about
+Surface A ever egresses on self-host**.
 
 ### 3.2 Candidate insight catalogue (the "what's most useful" question)
 
@@ -135,9 +132,9 @@ registry; grow deliberately):
 | Intent | Example insight | Needs |
 |---|---|---|
 | **Do-this-faster** | "You add stock by hand often — scanning is faster" | feature-substitution rules |
-| **Better-order** | "Plan → hand-built list; try Draft-my-shop" | co-occurrence + flow rules |
-| **Adoption** | "You've touched 5% of features; here are 3 you'd likely love" | per-user coverage |
+| **Adoption** | "This install uses 5 of ~40 features; here are 3 you might like" | install-wide coverage |
 | **Prune** | "Least-used: Product History — hide it or learn what it's for" | install-wide counts |
+| **Trend** | "Cook-mode use is up 3× this month" | daily-count deltas |
 | **Habit/cadence** | "No stocktake in 6 weeks — your pantry may be drifting" | coarse last-used |
 | **Health** | "Cook mode used but consumption rarely logged — pantry drifts from reality" | cross-feature counts |
 
@@ -179,12 +176,10 @@ Build it only if A proves insufficient for the "across installs" question. Shape
 ## 5. What NOT to build
 
 - No session recording, no funnels, no per-user journeys, no cohort/retention
-  dashboards. That is the "some companies" surveillance shape P8 rejects — and it is
-  overkill for a solo maintainer who needs "which features get hit most", not a
-  growth-analytics suite (P10). **The efficiency lens's "better-order" tips do NOT
-  reopen this** — they run off co-occurrence + curated rules (§3.1 option 1), or at
-  most a capped, local, never-egress flow buffer (option 2); neither is a stored
-  per-user journey mined for behaviour, and both are admin-only + local.
+  dashboards, **no per-user attribution**. That is the "some companies" surveillance
+  shape P8 rejects — and it is overkill for a solo maintainer who needs "which
+  features get hit most", not a growth-analytics suite (P10). The efficiency lens is
+  **system-wide only** — every insight is about the install, never an individual user.
 - No client-side beacons to any external domain from the SPA.
 - No telemetry in the shared **demo** beyond Surface A's local counters (the demo is
   single-dataset per FU-555; its counts are fine to read locally, never to attribute).
@@ -192,12 +187,12 @@ Build it only if A proves insufficient for the "across installs" question. Shape
 ## 6. Rollout shape (when built)
 
 1. **Admin opt-in toggle** (Settings → Admin, default OFF) that gates all collection.
-2. Event registry + `usage_event_daily(user_id, event_key, day, count)` table + a
+2. Event registry + `usage_event_daily(event_key, day, count)` table + a
    `record_event(key)` server seam (no-ops unless the toggle is on).
 3. Instrument the ~20–30 headline surfaces to fire keys (thin, one line each),
    including the paired do-it-by-hand vs do-it-the-fast-way events the lens compares.
-4. **Insight-rule engine** — a small curated ruleset (§3.2) that reads the store and
-   produces ranked plain-language tips.
+4. **Insight-rule engine** — a small curated ruleset (§3.2) that reads the daily counts
+   and produces ranked plain-language, system-wide tips.
 5. Settings → Admin → **Usage** panel: **Insights** section on top (the lens),
    raw counts underneath; operator-only (hidden for non-admins, R-029 — gone-not-greyed).
 6. *(Hosted-only, deferred, gated)* Surface B "share to improve" checkbox + collector +
@@ -223,18 +218,16 @@ Per the proposal close-out rule, every fork is resolved inline or spawned as an 
    default to a minimal roll-your-own append endpoint; a self-hosted privacy-first
    tool is an acceptable substitute but a third-party SaaS is never acceptable. Final
    pick rides with the item-2 build-gate FU (only relevant if B is built).
-4. **Per-user attribution (needed for "this user uses 5%")?** → *Recommended: yes,
-   counts-only.* Include the `user_id` dimension in the local store (aggregate-about-a-
-   user, never a per-action timeline) — it drives the most useful coaching, and it's
-   local + admin-only + opt-in. **Owner confirm** before build (it's the most sensitive
-   choice in Surface A). Tracked on FU-566.
-5. **Order/flow advice — co-occurrence vs. local flow buffer?** → *Recommended:
-   co-occurrence + curated rules first* (§3.1 option 1); escalate to a capped local
-   flow buffer only if too blunt. No sequence stored by default. Tracked on FU-566.
+4. **Per-user attribution (needed for "this user uses 5%")?** → *Decided (owner,
+   2026-07-16): CUT.* All insights are system-wide (about the install). No `user_id`
+   dimension; schema stays `usage_event_daily(event_key, day, count)`. Simpler and
+   avoids the most sensitive data shape entirely.
+5. **Order/flow advice ("sub-optimal order")?** → *Decided (owner, 2026-07-16): CUT*
+   to avoid over-engineering. Its catalogue slot is a plain **trend** stat instead
+   (rising/falling feature use, pure daily-count math — no sequence stored).
 
-*(Sweep confirmation: 1 & 3 answered inline; 2 spawned as an FU; 4 & 5 carry a
-recommendation for owner confirm at build, tracked on FU-566 — no undecided fork left
-without a home.)*
+*(Sweep confirmation: 1 & 3 answered inline; 2 spawned as an FU; 4 & 5 decided (cut) —
+no undecided fork left.)*
 
 ## 8. Feedback coverage
 

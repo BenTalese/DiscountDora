@@ -9,6 +9,37 @@ next.
 
 ---
 
+## 2026-07-16 (later 2) — FU-566 telemetry simplified per owner: cut per-user + "optimal order" (design, no code)
+
+**Why:** Owner: "lets not overengineer it. cut 'optimal order' for another stat. change the
+framing of per-user to system-wide usage." Trims the reframe from the prior entry back to a
+minimal shape.
+
+**What changed in `PROPOSAL_USAGE_TELEMETRY.md`:**
+- **Per-user attribution CUT** → all insights **system-wide** (about the install). Schema
+  returns to the original minimal `usage_event_daily(event_key, day, count)` — no `user_id`,
+  which restores the "structurally can't store behaviour" guarantee.
+- **"Sub-optimal order" CUT** → replaced by a plain **trend** stat (rising/falling feature use,
+  pure daily-count deltas; no sequence stored).
+- **§3.1 rewritten** from "the richer lens costs some of the schema guarantee" (two gated
+  tradeoffs) → "deliberately minimal, system-wide counts only" + an explicit "two things cut"
+  note. **§3.2 catalogue** now: do-this-faster / adoption (install-wide "uses 5 of ~40") /
+  prune / **trend** / cadence / health. Header example line + §5 (no per-user attribution) +
+  §6 rollout (no user_id) + §7 (items 4 & 5 flipped from owner-confirm → **decided: cut**) all
+  updated.
+- **FU-566** body updated to the system-wide framing + minimal schema; the two prior
+  owner-confirm forks removed (no §7 forks remain).
+
+**Standards close-gate:** design/docs only, no code. Simplification strengthens P8/P10 (smaller
+surface, minimal schema, no per-user data). No new ADR.
+
+**Ledgers:** proposal + FU-566 updated; PROJECT_STATE Regenerated-line note; no CHANGELOG/
+DORA_VERIFY. OPTIONAL_SAAS Surface-B bucket unchanged (still hosted-only, unaffected by the cut).
+
+**Next up:** nothing forced. FU-566 Surface A is buildable when prioritised — no open decisions.
+
+---
+
 ## 2026-07-16 (later) — FU-566 telemetry proposal reframed with owner: Surface A is an *efficiency lens*, not a stats dashboard (design, no code)
 
 **Why:** Owner developed the telemetry vision — the admin-area value isn't usage stats, it's an

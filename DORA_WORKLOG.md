@@ -9,6 +9,52 @@ next.
 
 ---
 
+## 2026-07-16 (later) — FU-566 telemetry proposal reframed with owner: Surface A is an *efficiency lens*, not a stats dashboard (design, no code)
+
+**Why:** Owner developed the telemetry vision — the admin-area value isn't usage stats, it's an
+**efficiency lens**: same collection underneath, but presented as actionable coaching ("do this
+faster this way," "sub-optimal order," "this user uses 5% of Dora," "least-used feature").
+Off by default, opt-in by admin. Self-host = strictly local admin reporting; the traditional
+"share my usage data to improve the app" checkbox is hosted-only.
+
+**What changed in `PROPOSAL_USAGE_TELEMETRY.md`:**
+- **Status/header** — owner-reframe block up top; build FU = FU-566.
+- **§3 rewritten** — Surface A is now a two-layer *efficiency lens*: Layer 1 collection (as
+  before, but only when the admin opts in), Layer 2 the **insight-rule engine** that turns
+  counts into ranked plain-language tips. Opt-in per install (was "build unconditionally").
+- **§3.1 (new) — honest data-model tradeoffs.** The richer lens costs part of the original
+  "pre-aggregate so it *can't* store behaviour" guarantee: per-user coaching needs a `user_id`
+  dimension (recommend yes, counts-only, aggregate-about-a-user, never a timeline); order/flow
+  advice needs sequence, so recommend **co-occurrence + curated rules first**, capped local flow
+  buffer only if too blunt. Both stay local + admin-only + never-egress.
+- **§3.2 (new) — candidate insight catalogue** (6 intent categories × example × data needed) +
+  delivery format (a compact "Insights" section using the app's nudge idiom, not a BI dashboard)
+  — answers the owner's "define the most useful info + deliver it digestibly."
+- **§4** — Surface B reframed as **hosted-only** "share to improve" checkbox; explicitly does
+  not exist on self-host. **§5** — clarified the better-order tips don't reopen the
+  no-journeys/no-funnels line. **§6 rollout** updated (opt-in gate → per-user table → insight
+  engine → panel). **§7 open decisions** — added items 4 (per-user) + 5 (order approach) with
+  recommendations, owner-confirm-at-build.
+
+**Also:** `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` §3 gained a "Product analytics (hosted-only)"
+bucket for Surface B; **FU-566** heading + body rewritten to the lens framing + build shape +
+the two owner-confirm decisions.
+
+**Standards close-gate:** design/docs only, no code, no R-rule surface. The reframe explicitly
+re-checks against P8 (local-only, opt-in, no content, no egress on self-host) and P10 (curated
+enum registry + curated insight ruleset, no sprawl). No new ADR.
+
+**Ledgers:** proposal + FU-566 + OPTIONAL_SAAS updated; no CHANGELOG (nothing user-visible), no
+DORA_VERIFY (nothing to run). PROJECT_STATE: Regenerated-line note.
+
+**Open for owner (at build, not now):** confirm the per-user dimension (§7 item 4) and the
+order-detection approach (§7 item 5). Recommendations recorded; no blocker to logging.
+
+**Next up:** nothing forced. FU-566 Surface A is buildable when prioritised (after the two §7
+confirmations).
+
+---
+
 ## 2026-07-16 — FU-412 RESOLVED: self-host commercialization plan written (planning, no code); spawned FU-567 (relicense off MIT)
 
 **Why:** User: "lets do FU-412" — turn `COMMERCIALIZATION_REPORT.md` (§1–4 + §6-product-value;

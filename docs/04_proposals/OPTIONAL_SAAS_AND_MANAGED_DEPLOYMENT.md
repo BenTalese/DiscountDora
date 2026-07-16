@@ -89,6 +89,15 @@ Compliance (data-controller obligation — hosted-only):
   optional product features earlier, but they're driven by this hosted need, not by
   the self-host sale.)*
 
+Product analytics (hosted-only):
+- **FU-566 Surface B** — the "**Share my usage data to help improve Dora**" checkbox
+  (default OFF) that opts a *hosted* install into sending anonymised, aggregate usage
+  counts to the author (`PROPOSAL_USAGE_TELEMETRY.md` §4). **Does not exist on
+  self-host** — there, the same collection powers only a local, admin-only *efficiency
+  lens* (Surface A) that never egresses. Surface B is the app's first outbound
+  behavioural egress and is owner-sign-off-gated; build only if the across-installs
+  question becomes real once a hosted offering exists.
+
 Operations (managed-service sliver):
 - **FU-406 (on-call sliver only)** — uptime/SLA, on-call rotation, escalation. Only
   meaningful when you operate the service. *(Marketing, legal/licence, support/

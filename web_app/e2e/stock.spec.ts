@@ -51,6 +51,57 @@ test.describe('FU-508 — StockItem.image dropped', () => {
     });
 });
 
+test.describe('Stocktake "Needs check" quick-filter (verify L755–760)', () => {
+    // Read-only: this only toggles a client-side filter (mutates nothing), so
+    // it needs no restore. It DOES depend on the seed's overdue set being
+    // intact, so it must run before stocktake.spec.ts drains the queue — file
+    // order guarantees that ('stock.spec' sorts before 'stocktake.spec').
+    //
+    // The chip narrows the list to the server-owned stocktake queue (R-003 —
+    // the SPA never re-derives "overdue"; both the "Stocktake (N)" button count
+    // and the filter set come from /stocktake/queue). Asserted against that
+    // server truth so the pin doesn't hinge on which items the seed happens to
+    // mark overdue.
+    type QueueItem = { stock_item_id: string; name: string };
+    const queue = (page: Page) =>
+        apiGet<{ items: QueueItem[]; total: number }>(page, '/stocktake/queue?limit=500');
+
+    const chip = (page: Page) => page.locator('.q-chip').filter({ hasText: 'Needs check' });
+
+    test('chip narrows the list to exactly the overdue set; toggling off restores', async ({ page }) => {
+        const { items: overdue, total } = await queue(page);
+        expect(total, 'seed has overdue items to check').toBeGreaterThan(0);
+
+        await page.goto('/#/stock');
+        await page.waitForLoadState('networkidle');
+
+        // The toolbar button mirrors the same server-owned count. (It's a
+        // BaseButton with a `to=` route, so it renders as a link, not a
+        // button — assert on its visible label.)
+        await expect(page.getByText(`Stocktake (${total})`, { exact: true })).toBeVisible();
+
+        // Unfiltered, the list is strictly larger than the overdue subset.
+        const allRows = await page.locator('.stock-row').count();
+        expect(allRows).toBeGreaterThan(total);
+
+        // The chip cluster lives in the collapsed FilterBar panel — open it.
+        await page.getByRole('button', { name: 'Filters' }).click();
+
+        // Flip "Needs check" on → the list narrows to exactly the queue ids.
+        await chip(page).click();
+        await expect(page.locator('.stock-row')).toHaveCount(total);
+        for (const item of overdue) {
+            await expect(
+                page.locator('.stock-row').filter({ hasText: item.name }),
+            ).toBeVisible();
+        }
+
+        // Toggle off → the full list returns.
+        await chip(page).click();
+        await expect(page.locator('.stock-row')).toHaveCount(allRows);
+    });
+});
+
 test.describe('FU-507 — expiry-on-open prompt', () => {
     // Mutates one item's open flag — keep ordered and restore at the end.
     test.describe.configure({ mode: 'serial' });

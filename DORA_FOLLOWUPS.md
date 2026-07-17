@@ -52,6 +52,47 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-577 — Auto-add-on-low branching matrix has no direct backend test
+- **Raised:** 2026-07-17 (verify-campaign Batch 3, auto-add-on-low codification)
+- **Type:** finding
+- **What:** `update_stock_item._auto_add_enabled_for` + `_try_auto_add` (the server-owned
+  auto-add decision: `off`/`essential_only`/`all` × `is_flagged` × active-list dedup ×
+  `resolve_primary_target` draft-count of 0/1/2+) is **not** directly unit/integration
+  tested. Only `test_app_settings_router.py` validates the `auto_add_mode` enum; nothing
+  asserts the *branching* — that Off never fires, Essential-only fires iff flagged, All
+  fires for any Stocked→Low/Out, that an item already on an active list is skipped, and
+  that 0 or 2+ drafts suppress the add. The e2e (`auto-add-on-low.spec.ts`) pins only the
+  `all`-mode happy-path UI seam (toast + `auto: low stock` chip) — the negative/branch
+  cases (DORA_VERIFY L848/850/851/852) are impractical to drive e2e against the shared
+  seed and belong in backend tests per R-003 (server owns the rule).
+- **Why deferred:** the e2e slice deliberately scoped to the deterministic UI seam; the
+  matrix is pure server logic better covered by a focused backend test than by
+  state-heavy browser setup.
+- **Recommended resolution:** opportunistic — add a `test_update_stock_item_auto_add.py`
+  (or extend the stock-items feature tests) exercising the 3 modes × flagged × dedup ×
+  draft-count truth table directly against the handler. Then DORA_VERIFY L848/850/851/852
+  become owner-deletable (backend-pinned) rather than manual browser checks.
+
+## [OPEN] FU-576 — uploads.spec.ts L79 pin fails under the system-Chrome e2e channel
+- **Raised:** 2026-07-17 (verify-campaign Batch 2, running the e2e suite)
+- **Type:** finding
+- **What:** `e2e/uploads.spec.ts:46` ("Remove clears the picked file without reopening
+  the picker", FU-545 L79 pin) fails when the suite runs under `DORA_E2E_CHANNEL=chrome`:
+  clicking **Remove file** emits one `filechooser` event (`pickerOpened` = 1, expected 0).
+  The two functional assertions in the same test PASS — the idle "choose a spreadsheet"
+  prompt returns and the picked filename is cleared — so the Remove UX itself works; only
+  the picker-reopen instrumentation trips. Reproduces in isolation; **not** caused by the
+  stocktake work this session (that spec is green). Suspected browser-channel difference in
+  how `filechooser` fires on the hidden `<input type=file>` — the campaign's green baseline
+  ran the bundled Chromium, which isn't installed on this box (`npx playwright install`
+  couldn't fetch it, hence the `chrome` fallback).
+- **Why deferred:** out of scope for the stocktake slice; needs a bundled-Chromium run to
+  confirm channel-only vs a real Remove-handler regression, and possibly a channel-tolerant
+  assertion.
+- **Recommended resolution:** when a bundled-Chromium (or CI) e2e run is available — re-run
+  `uploads.spec.ts`; if green there, harden the L79 assertion against the Chrome channel
+  (or pin the channel for the pin). Only treat as a product bug if it also fails on Chromium.
+
 ## [OPEN] FU-574 — Bogus runtime backend URL: no self-service recovery path in the browser
 - **Raised:** 2026-07-17 (verify-campaign Batch 0, Runtime URL walk L112–114)
 - **Type:** finding (real gap — verified live)

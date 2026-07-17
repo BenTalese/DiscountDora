@@ -9,6 +9,321 @@ next.
 
 ---
 
+## 2026-07-17 (later 9) — Verify Batch 3: Auto-add-on-low first slice codified (auto-add-on-low.spec.ts 2 tests green)
+
+**Why:** "continue." Took the next Batch-3 section from later 8's Next-up list —
+Auto-add-on-low (FU-315/464/511, DORA_VERIFY L838–857).
+
+**Seed feasibility (the key finding that shaped scope):** the Playwright webServer
+sets `DORA_SEED_BULK_ITEMS=0`, so `big_list` never seeds → **"This week" is the
+only draft** and `resolve_primary_target` returns "single" (happy path is
+deterministic). BUT **every flagged+Stocked seed item is already on an active
+list** (eggs/olive-oil/coffee on the SHOPPING "Saturday shop"; brazil already
+Low), so the server dedup would suppress an Essential-mode add without
+restructuring shared list state. Rather than perturb the seed, the spec drives the
+**`All items` mode** on a clean non-Essential item (**Jasmine Rice**: Stocked, on
+no list, untouched by other specs) — the identical toast + line-chip seam, and
+*itself* L849's deliberate 3-state expansion.
+
+**Codified → green (`auto-add-on-low.spec.ts`, 3 tests, serial, self-restoring):**
+- Test 1 (L843): Settings → Admin → System → Stock 3-way dial loads (seeded
+  `essential_only`), saves each state eagerly with the "Auto-add mode saved."
+  toast, persists across a hard reload (server truth `/app-settings`), restores.
+- Test 2 (L844+L847+L849): mode→`all`, drop Jasmine Rice Stocked→Low Stock via
+  the row level menu → toast **"Added Jasmine Rice to <display_name>."** + caption
+  "Auto-added because it went low." → server truth: draft list carries a line
+  tagged `added_via=auto_low_stock` → list-detail render shows the `auto: low
+  stock` chip → restore via API (delete auto line by-stock-item, reset level, mode
+  back to `essential_only`); afterAll re-asserts clean state.
+- Test 3 (L856/857): read-only absence guard — the retired per-item
+  `auto_add_when_low` UI stays gone (no "Will auto-add on low" overview filter
+  chip, no "Auto-add" footer count, no detail-page toggle row), each asserted
+  beside a surviving control so it can't false-pass on a blank page.
+
+**Selectors/contracts learned:** `/shopping-lists` returns a **bare array** (via
+`ok()`, not `{items}`); `/shopping-lists/{id}` returns `{display_name,status,lines:
+[{stock_item_id,added_via}]}`; row level button `aria-label` = `Stock level:
+<name>`, menu entries are `getByRole('listitem')` with names `Stocked`/`Low
+Stock`/`Out of Stock`; auto-add returns **200** `{auto_added:{line_id,
+shopping_list_id}}` on trigger, **204** otherwise; convenient cleanup endpoint
+`DELETE /shopping-lists/{id}/lines/by-stock-item/{stock_item_id}`.
+
+**Verification:** `auto-add-on-low.spec.ts` **4/4** (incl. auth setup); full suite
+**43 passed / 1 failed** — the one failure the *same* pre-existing unrelated
+`uploads.spec.ts:46` channel flake ([[FU-576]]).
+
+**DORA_VERIFY lines now owner-deletable:** **L843, L844, L847, L849, L856, L857**.
+Not codified (stay owner-verify / other homes): L845 (Out variant), L846
+(no-refresh timing), L853 (detail Level row), L854 (cook-mode decrement), L855
+(offline queue). Server-owned negatives L848/L850 (Off / Essential-only non-fire),
+L851 (dedup), L852 (0/2+ draft ambiguity) → routed to a **backend** test via new
+[[FU-577]].
+
+**New FU:** [[FU-577]] — the auto-add branching matrix (3 modes × flagged × dedup ×
+draft-count) has no direct backend test; recommended a `test_update_stock_item_
+auto_add.py` truth-table test, after which L848/850/851/852 become owner-deletable.
+
+**Standards close-gate:** test-only (new spec, no product code); checked against
+`ENGINEERING_STANDARDS.md` — the branching-matrix gap is a server-ownership (R-003)
+observation, logged as FU-577 rather than fixed in this test-only unit; no new
+R-rule; no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-3 row + new progress subsection; DORA_FOLLOWUPS
+FU-577 added; PROJECT_STATE Regenerated-line note. No CHANGELOG (no product change).
+
+**Next up:** Batch 3 continues. Remaining auto-add negatives are FU-577's backend
+job (not e2e). Next codifiable section: **3-band StockLevel collapse** copy/behaviour
+(L893–902, mostly backend-owned — triage UI-codifiable bullets), then **Zero-Input
+Pantry** belief chips (P8-07, L859–870). Buy-verdict already partly pinned; barcode
+(P8-02) → device-pack.
+
+---
+
+## 2026-07-17 (later 8) — Verify Batch 3: FU-226 waste section completed — single-item row path codified (bulk-waste.spec.ts 6/6 green)
+
+**Why:** "continue." Finished the FU-226 waste section by pinning its last bullet
+(L836) — the single-item row expiry-menu "Log waste" path, whose sanity check is
+"the bulk path didn't regress the single path".
+
+**Codified → green (`bulk-waste.spec.ts`, 5→6 tests):** the **single-item row
+waste** path. It's a *different handler* from the bulk one (its own toast copy
+that quotes the item name), reusing the same MarkAsWastedDialog. The row menu
+only appears when the item has an expiry (no-expiry → date picker), so the test
+PATCHes an expiry onto Canned Tomatoes first, opens the expiry action button via
+its `Expires <date>` accessible name, clicks the "Log waste" menu item → Spoiled
+→ asserts the per-item toast `Logged "Canned Tomatoes" as wasted.` + one server
+event + expiry cleared → Undo restores both → resets the seed item to null.
+
+**Selectors learned:** the row's expiry `RowActionButton` gets `aria-label`
+= `Expires <date>` when an expiry is set (`No expiry set — click to push or set
+one` when not), so `row.getByRole('button', { name: 'Expires 2027-05-01' })`
+targets it; the menu entries are `getByRole('listitem')`.
+
+**Verification:** `DORA_E2E_CHANNEL=chrome npx playwright test` — `bulk-waste.spec.ts`
+**6/6**; full suite **40 passed / 1 failed** — the one failure the *same*
+pre-existing unrelated `uploads.spec.ts:46` channel flake ([[FU-576]]); afterAll
+API cleanup left no leak.
+
+**DORA_VERIFY lines now owner-deletable:** **L836** (adds to L830/831/833/834/835
+from later 7). The whole FU-226 bulk-waste section (L827–836) is now behaviourally
+pinned; only L829's trash-icon + L832's Reports-insights UI render stay V-pack.
+
+**Standards close-gate:** test-only (one added test in an existing spec); no
+product code; no R-rule; no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-3 row + progress section updated; no new FU;
+PROJECT_STATE Regenerated-line note. No CHANGELOG.
+
+**Next up:** Batch 3 continues with the next codifiable section. Highest value is
+**Auto-add-on-low** toast + line chip (FU-315/464/511, DORA_VERIFY ~L847–870) — a
+server-owned 3-state install mode (Off / Essential only / All items) that fires a
+"Added <item> to <list>" toast on a Stocked→Low/Out transition, with an `auto: low
+stock` line chip; heavy state setup (set the mode via Settings → Admin → System →
+Stock, an Essential item, exactly one draft list, plus the dedup/ambiguity
+carve-outs) so budget a full unit for it. After that: **3-band StockLevel collapse**
+copy/behaviour (mostly backend-owned — triage which bullets are UI-codifiable vs
+already-pinned), then **Zero-Input Pantry** belief chips (P8-07). Buy-verdict oracle
+already partly pinned by `buy-verdict.spec.ts`; barcode (P8-02) → device-pack.
+
+---
+
+## 2026-07-17 (later 7) — Verify Batch 3 (Stock B) opens: bulk "Log waste…" FU-226 codified (bulk-waste.spec.ts 4/4 green)
+
+**Why:** "continue." Batch 2's codifiable seams are all pinned; started Batch 3
+(Stock B, DORA_VERIFY L816–1009, ~115 items) with its cleanest self-contained
+flow — the bulk waste action, which has a built-in Undo for clean self-restore.
+
+**Codified → green (new `web_app/e2e/bulk-waste.spec.ts`, 4 tests):** bulk
+**"Log waste…"** on Stock Overview (FU-226, PROPOSAL_WASTE_MINIMISATION §5):
+- **disabled-until-selected** (L834) — in bulk mode with 0 ticked the button is disabled.
+- **plural flow** (L830/831/832-data/833) — tick 3 stable no-expiry seed items
+  (Canned Tomatoes / Brown Onions / Garlic) → MarkAsWastedDialog header "Why did
+  this go to waste?" + subject "3 items" + subline "One reason applies to every
+  selected item." → tap **Spoiled** → dialog closes, bulk mode exits, one plural
+  toast "Logged 3 items as wasted." + Undo → **server truth**: exactly one
+  `spoiled` `/waste/events` per item → Undo → "Undone." → events gone.
+- **singular copy** (L835) — one selected → "Logged 1 item as wasted."
+- **expiry clear + restore** — PATCH an expiry onto Garlic, log waste → expiry
+  cleared (server) → Undo → expiry restored → reset the seed item to null.
+
+**Selectors learned:** bulk mode entered via the toolbar "Bulk select" button;
+rows ticked via the per-row `.q-checkbox` (v-if=bulkMode) inside
+`.stock-row`.filter({hasText: name}); the reason tiles are plain `<button>`s
+(tap = submit, no Log button); the summary toast's Undo is a `.q-notification`
+action button.
+
+**Self-restoring:** each test ends via the UI Undo it pins; an **`afterAll`
+safety net** then hard-resets via the API (delete any lingering event for the
+three ids, null any expiry) from a context rebuilt off `e2e/.auth/user.json`, so
+a mid-flow failure can't leak waste events/expiry into later specs. Chose 3 seed
+items **no other spec touches** to avoid cross-spec contention.
+
+**Verification:** `DORA_E2E_CHANNEL=chrome npx playwright test` (bundled Chromium
+still not installed — same fallback). New file **5/5** (incl. auth setup); **full
+suite: 39 passed / 1 failed** — the one failure the *same* pre-existing unrelated
+`uploads.spec.ts:46` channel flake ([[FU-576]]), and every other spec still green
+(afterAll cleanup left no leak).
+
+**DORA_VERIFY lines now owner-deletable:** **L830, L831, L833, L834, L835** (fully
+pinned). L829 trash-icon + L832 Reports-UI render stay V-pack (one-time visual);
+**L836** (single-item row expiry-menu waste path — different surface) = codify-next.
+
+**Standards close-gate:** test-only (one new spec file); no product code; no
+R-rule; no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-3 row flipped ⚪→🟡 + new Batch-3 progress
+section; no new FU; PROJECT_STATE Regenerated-line note. No CHANGELOG (no
+user-visible change).
+
+**Next up:** Batch 3 continues — codify-next candidates: single-item row
+expiry-menu waste path (L836); **Auto-add-on-low** toast + line chip (FU-315/464/511,
+L847–870, server-owned 3-state mode — high value but heavy env setup); **3-band
+StockLevel collapse** copy/behaviour (L893–902); **Zero-Input Pantry** belief chips
+(P8-07, L872–891, complex). Buy-verdict oracle (L904–922) already partly pinned by
+`buy-verdict.spec.ts`; barcode (P8-02, L924+) → device-pack.
+
+---
+
+## 2026-07-17 (later 6) — Verify Batch 2: "Needs check" Overview filter + alert-threshold removal codified (2 specs green)
+
+**Why:** "continue." Cleared the Batch 2 codify-next tail — the two remaining
+A-codifiable stocktake-redesign seams outside the runner/settings pages.
+
+**Codified → green (1):** the **"Needs check" Overview quick-filter** (DORA_VERIFY
+L755–760), added as a new `test.describe` in `web_app/e2e/stock.spec.ts`. Opens the
+collapsed Filters panel → flips the "Needs check" chip → the visible `.stock-row`
+count narrows to **exactly** `/stocktake/queue` total (and every queued item name is
+visible) → toggling off restores the full list. Also pins the "Stocktake (N)" toolbar
+label mirrors that same server-owned count. **Read-only** (only toggles a client
+filter, mutates nothing) and runs *before* `stocktake.spec.ts` drains the queue —
+file order 'stock' < 'stocktake' guarantees the overdue set is intact. Asserted
+against server truth (R-003 — the SPA never re-derives "overdue"; both the count and
+the filter set come from `/stocktake/queue`), so the pin doesn't hinge on which seed
+items are overdue.
+
+**Codified → green (2):** the **alert-threshold clean removal** (DORA_VERIFY
+L752–753), new `web_app/e2e/alert-thresholds.spec.ts` (2 tests). Pins that the old
+"Default stocktake reminder" section is **gone** from Settings → Admin → System →
+Alert thresholds (no "stocktake reminder" copy; exactly one numeric dial survives)
+AND that the surviving "Expiring-soon window" still edits/saves/persists on blur
+(toast "Alert thresholds saved.", server truth `/app-settings`). **Self-restoring**
+to the seeded default (7 days).
+
+**Fixes during codify:** the "Stocktake (N)" toolbar control is a `BaseButton` with a
+`to=` route → renders as a **link, not a button**, so `getByRole('button', …)` missed
+it — switched to a visible-text assertion. The chip cluster lives in the **collapsed
+FilterBar panel**, so the test must click the "Filters" toggle before the chip is
+clickable.
+
+**Verification:** `DORA_E2E_CHANNEL=chrome npx playwright test` (bundled Chromium
+still not installed — same fallback). New/edited specs green; **full suite: 35
+passed / 1 failed** — the one failure is the *same* pre-existing, unrelated
+`uploads.spec.ts:46` channel flake ([[FU-576]]), not this unit.
+
+**DORA_VERIFY lines now owner-deletable:** **L752–753** (alert-threshold removal,
+fully pinned) and **L755–760** behavioural bullets (chip narrows/restores + count
+match; the icon/position bullet stays V-pack as a one-time visual confirm).
+
+**Standards close-gate:** test-only (one new spec file + one describe block); no
+product code; no R-rule; no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-2 row + section + tally updated; no new FU
+(uploads already FU-576); PROJECT_STATE Regenerated-line note. No CHANGELOG (no
+user-visible change).
+
+**Next up:** Batch 2 codify-next tail is now just the non-codifiable residue —
+non-admin banner (L747, needs a non-admin session) + Auto→runner cadence effect
+(L748–749, deeper behaviour); pulse/reduced-motion/dark → V-pack. Then **Batch 3
+(Stock B, L816+)**.
+
+---
+
+## 2026-07-17 (later 5) — Verify Batch 2: stocktake Chunk 3 settings dials codified (stocktake-settings.spec.ts 3/3 green)
+
+**Why:** "continue." Batch 2's named residual was the stocktake *settings* Chunk 3
+(cadence + Auto self-tuning admin dials). Codified them.
+
+**Codified → green (new `web_app/e2e/stocktake-settings.spec.ts`, 3 tests):** the
+Settings → Admin → System → Stocktake page (`/#/settings/admin/system/stocktake`):
+- page loads with the three cadence bands (Weekly/Fortnightly/Monthly) + the
+  description; server default is Fortnightly.
+- **cadence**: tap Weekly → "Default cadence saved." toast → PATCH persists across a
+  reload → restored to Fortnightly.
+- **Auto self-tuning**: flip off → "Auto self-tuning off." toast → persists across
+  reload; flip on → "Auto self-tuning on." → restored (default).
+- Assertions hit **server truth** (`GET /app-settings`) rather than Quasar's
+  active-button styling, so the pins are robust. **Self-restoring** (ends at the
+  seeded defaults) so the file doesn't perturb the stocktake queue — it sorts +
+  runs *before* `stocktake.spec.ts`, whose verb-walk needs the exact 4-item queue.
+
+**Verification:** `DORA_E2E_CHANNEL=chrome npx playwright test` (bundled Chromium
+still not installed — same fallback as later 4). New file **3/3 green**; ran with
+`stocktake.spec.ts` (verb-walk still drains its 4-item queue → self-restore proven)
+and the **full suite: 32 passed / 1 failed** — the one failure is the *same*
+pre-existing, unrelated `uploads.spec.ts:46` channel flake ([[FU-576]]), not this
+unit.
+
+**DORA_VERIFY lines now owner-deletable** (behaviour pinned): **L741–746** (L743/745/746
+fully; L741/742/744 behaviourally — only the visual highlighted/de-activates nuance
+stays V-pack). Not codified: L740 (nav placement), L747 (non-admin banner — needs a
+non-admin session), L748–749 (Auto reshaping the runner cadence).
+
+**Standards close-gate:** test-only (one new spec file); no product code; no R-rule;
+no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-2 section + tally updated; no new FU (uploads
+already FU-576); PROJECT_STATE Regenerated-line note. No CHANGELOG (no user-visible change).
+
+**Next up:** Batch 2 codify-next tail — "Needs check" Overview filter (L755–760, goes in
+`stock.spec.ts`) + alert-threshold-removal (L752–753); pulse/reduced-motion/dark →
+V-pack. Then Batch 3 (Stock B, L816+).
+
+---
+
+## 2026-07-17 (later 4) — Verify Batch 2: stocktake runner remaining verbs codified (stocktake.spec.ts 5/5 green)
+
+**Why:** "continue the verification effort." Batch 2's named codify-next was the stocktake
+runner's four remaining verbs + help + add-to-list (the first slice codified only the
+Still-correct mainline). Finished the runner.
+
+**Codified → green (`web_app/e2e/stocktake.spec.ts`, 2→5 tests):**
+- **(?) help dialog** — opens from the topbar, asserts all five verb definition-terms
+  (Still correct / Change level / Skip / Push 3 days / Mute) render. No mutation.
+- **Verb-walk** (one deterministic test, replaces the old still-correct-only drain) — uses
+  each verb exactly once and drains the queue: **Skip** (session-only re-queue, `skipped`),
+  **Change level** → picker → "Out of Stock" (`changed` + clock reset + feeds SK-7),
+  **Push 3 days** (snooze, `pushed`), **Mute** → confirm dialog (`muted`), then
+  **Still-correct** the re-queued Skipped item (`checked`). Asserts the five-counter
+  completion summary (each = 1), the **SK-7 add-to-list** prompt ("1 item went Low or Out"
+  → radio dialog on seeded "This week" → "Added."), and **Done → /stock**.
+- Determinism rests on the curated seed's **exactly four** alerts-enabled overdue items
+  (Vanilla Ice Cream / Brazil Nuts / Hot Crispy Chippies / Broccoli — verified in `seed.py`),
+  and the 3-band levels (Stocked / Low Stock / Out of Stock).
+
+**Verification:** built the SPA (`quasar build -m spa` — `dist/spa` was absent) then ran
+Playwright. Bundled Chromium isn't installed on this box, so drove system Chrome via
+`DORA_E2E_CHANNEL=chrome` (config-supported fallback). **stocktake.spec.ts 5/5 green**
+in isolation and in the full run. Full suite otherwise green **except one pre-existing,
+unrelated** failure: `uploads.spec.ts:46` (FU-545 L79 pin) emits a `filechooser` event on
+Remove under the chrome channel — functional assertions pass, only the picker-reopen
+counter trips. Logged **[[FU-576]]** (suspected channel-only; needs a bundled-Chromium run
+to confirm). Not touched by this unit.
+
+**DORA_VERIFY lines now owner-deletable** (behaviour pinned by the spec): L792–797 (Change),
+L798–801 (Skip), L803–806 (Push), L808–812 (Mute), L814–816 (help), L821–824 (add-to-list).
+
+**Standards close-gate:** test-only change (one spec file); no product code touched; no
+R-rule surface; no ADR. Fixed a pre-existing untyped `page` param in the new helper to keep
+tsc/eslint clean.
+
+**Ledgers:** FU-576 opened; DORA_VERIFY_TRIAGE Batch-2 row + tally updated; PROJECT_STATE
+Regenerated-line note. No CHANGELOG entry (no user-visible change).
+
+**Next up:** Batch 2 residual = stocktake *settings* Chunk 3 (cadence/auto-tune admin PATCH,
+~2 codifiable) + V-pack pulse/reduced-motion/dark; then Batch 3 (Stock B, L816+).
+
+---
+
 ## 2026-07-17 (later 2) — Codex review of stock-item create: fixed P1 (PG 500) + P2×2 (normalise, dialog fields); P3 → FU-575
 
 **Why:** User brought a Codex review with 4 findings on stock-item creation. Verified each against

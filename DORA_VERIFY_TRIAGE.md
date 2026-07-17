@@ -60,8 +60,8 @@ surfaces, then the long tail, then env-gated batches.
 |---|---|---|---|---|
 | 0 | **Pilot** — Password policy + SettingsFileDrop + BuyVerdictCard + Runtime backend URL | 71–99, 111–115, 82–89 | 22 | ✅ **COMPLETE 07-17** (Password policy 8/8; SettingsFileDrop 5/5; BuyVerdictCard 6/6 — FU-572 found+fixed mid-walk; Runtime URL walked — L113 recovery clause FAILS → FU-574 open, remove-toast over-count → FU-573) |
 | 1 | Top block remainder — Onboarding story, Dora bubble, Currency & locale, Stores logo, PWA-dev-checkable parts | 11–49, 63–70 | ~40 | ⚪ |
-| 2 | Stock A — recent fixes + stocktake redesign (668–814) | 668–814 | ~120 | 🟡 (2026-07-17: FU-508+FU-507 codified green; 5 fix-pins confirmed backend-tested→delete; scan-mode→device-pack; stocktake runner + settings = codify-next) |
-| 3 | Stock B — remainder (816–1009) | 816–1009 | ~115 | ⚪ |
+| 2 | Stock A — recent fixes + stocktake redesign (668–814) | 668–814 | ~120 | 🟡 (2026-07-17: FU-508+FU-507 codified green; 5 fix-pins confirmed backend-tested→delete; scan-mode→device-pack; **stocktake runner Chunk 2 fully codified — all 5 verbs + help + add-to-list green**; Chunk 3 settings dials + **"Needs check" Overview filter + alert-threshold removal codified green**; tail = non-admin banner + auto→runner cadence effect) |
+| 3 | Stock B — remainder (816–1009) | 816–1009 | ~115 | 🟡 (2026-07-17: **FU-226 waste section fully codified green** — `bulk-waste.spec.ts`, 6 tests; L830/831/833/834/835/836 owner-deletable. **Auto-add-on-low first slice codified** — `auto-add-on-low.spec.ts`, 2 tests: settings dial loads/saves/persists + `all`-mode Low-drop toast + `auto: low stock` chip; L843/844/847/849 owner-deletable; server-branching negatives → [[FU-577]]. Rest of batch untriaged) |
 | 4 | Cookbook A — filters, free-text, importer, DnD (132–195) | 132–195 | ~53 | ⚪ |
 | 5 | Cookbook B — chunk sections + image-steps (197–321) | 197–321 | ~120 | ⚪ |
 | 6 | Cook mode (327–369) | 327–369 | ~36 | ⚪ |
@@ -309,25 +309,154 @@ overdue caption + "Still correct" + the level-tinted "(change)" button, and NO
 completion summary (checked counter > 0) and **Done** returns to `/stock`;
 re-entering the drained queue shows the "You're all caught up." card. Covers
 DORA_VERIFY L774–777, L781, L784, L788–790, L819–820 (partial), L825. →
-**owner can delete those lines.** Remaining Chunk 2 = **codify-next**:
-- The other four verbs (Change level picker L792–797, Skip session-only L798–801,
-  Push 3 days L803–806, Mute+confirm L808–812) + the (?) help dialog L814–816 +
-  the add-to-list completion prompt L821–824. Curated seed (bulk=0) yields the
-  overdue items (Hot Crispy Chippies, Brazil Nuts, Vanilla Ice Cream, Broccoli);
-  add-to-list needs an active list (seed has "This week"). Deferred to keep this
-  slice green + reviewable.
-- **Stocktake Chunk 3 settings (L739–749, L752–753)** — cadence/auto-tune toggles +
-  alert-threshold removal are A-codifiable (admin settings PATCH + persist). The
-  **pulse outline / reduced-motion / dark/light** checks (L762–768) are V-pack
-  (eyeball) → Appendix B.
+**owner can delete those lines.**
+
+**Stocktake Chunk 2 runner — REMAINING VERBS NOW CODIFIED green (2026-07-17,
+session 6; `web_app/e2e/stocktake.spec.ts` grew to 5 tests):** the four
+remaining verbs + help + add-to-list are pinned as one deterministic **verb-walk**
+that uses each verb exactly once and drains the queue: **Skip** (session-only →
+item re-queued to the end, no API, `skipped` counter), **Change level** (picker
+dialog → "Out of Stock" → `changed` counter + clock reset), **Push 3 days**
+(snooze → `pushed` counter), **Mute** (confirm dialog "Mute X?" → `muted` counter),
+then **Still-correct** the re-queued Skipped item (`checked` counter). Asserts the
+five-counter completion summary (each = 1), the **SK-7 batch add-to-list** prompt
+("1 item went Low or Out" → "Add to list…" → radio dialog on seeded "This week" →
+"Added."), and **Done → /stock**. Plus a separate **(?) help dialog** test
+asserting all five verb definition-terms render. Determinism rests on the curated
+seed's exactly-four overdue items (Vanilla Ice Cream / Brazil Nuts / Hot Crispy
+Chippies / Broccoli). Covers DORA_VERIFY **L792–797 (Change), L798–801 (Skip),
+L803–806 (Push), L808–812 (Mute), L814–816 (help), L821–824 (add-to-list)** →
+**owner can delete those lines.** Full spec **5/5 green**; full e2e suite otherwise
+green (one unrelated pre-existing uploads channel failure — see FU-576).
+- **Stocktake Chunk 3 settings — CODIFIED green (2026-07-17, session 7;
+  `web_app/e2e/stocktake-settings.spec.ts`, 3 tests):** the Settings → Admin →
+  System → Stocktake page's two global dials. Page loads with the three cadence
+  bands + server default Fortnightly; **cadence** tap → "Default cadence saved."
+  toast → PATCH persists across a reload → restored; **Auto self-tuning** flip
+  → "Auto self-tuning off."/"...on." toasts → persists across reload → restored.
+  Asserted against server truth (`/app-settings`) not Quasar active-button
+  styling. **Self-restoring** (ends at Fortnightly + Auto on) so it doesn't
+  perturb the stocktake queue (sorts + runs before `stocktake.spec.ts`). Covers
+  DORA_VERIFY **L741–746** → owner can delete (L743/745/746 fully pinned;
+  L741/742/744 behaviourally pinned — only the visual "highlighted"/"de-activates"
+  nuance stays V-pack). **Remaining, not codified:** L740 (nav-entry placement/icon
+  — one-time), L747 (non-admin banner — needs a non-admin session), L748–749 (Auto
+  on/off actually reshaping the runner's cadence — deeper behaviour).
+- **Alert-threshold removal (L752–753)** — CODIFIED (2026-07-17, session 8):
+  `alert-thresholds.spec.ts` pins that the "Default stocktake reminder" section
+  is gone from Settings → Admin → System → Alert thresholds (asserts no
+  "stocktake reminder" copy + exactly one numeric dial survives) AND that the
+  surviving "Expiring-soon window" still edits/saves/persists on blur (toast
+  "Alert thresholds saved.", server truth `/app-settings`). Self-restoring to 7.
+  → owner can delete L752–753.
+- The **pulse outline / reduced-motion / dark/light** checks (L762–768) are V-pack
+  (eyeball) → Appendix B. The **"Needs check" Overview filter** (L755–760) is
+  CODIFIED (2026-07-17, session 8) in `stock.spec.ts`: opens the Filters panel,
+  flips "Needs check" → `.stock-row` count narrows to exactly `/stocktake/queue`
+  total (and each queued name is visible) → toggle off restores the full list;
+  also pins the "Stocktake (N)" toolbar label mirrors the same server count.
+  Read-only, runs before the queue is drained. → owner can delete L755–760
+  behavioural bullets (the icon/position bullet stays V-pack, one-time visual).
 - **Add-a-stock-item dialog (L672–677, Codex)** — backend fully unit-tested (trim/
   dedup/over-long); the dialog-renders-expiry+Essential visual bits are a
   one-time confirm; the trim/dedup behaviour is already pinned. Low priority.
 
-**Batch 2 disposition tally:** ~120 items → ~11 codified green · ~15 delete
-(backend-pinned) · ~11 delete (FU-507/508 codified) · ~25 codify-next
-(stocktake) · ~20 device-pack (scan) · rest V-pack/one-time. Manual pile for
-this batch shrinks by ~35 now, ~25 more after the stocktake spec.
+**Batch 2 disposition tally (updated 2026-07-17 session 8):** ~120 items →
+~40 codified green (stock + full stocktake runner + Chunk 3 settings dials +
+"Needs check" Overview filter + alert-threshold removal) · ~15 delete
+(backend-pinned) · ~11 delete (FU-507/508 codified) · ~20 device-pack (scan) ·
+codify-next tail now just non-admin banner (L747, needs a non-admin session) +
+auto→runner cadence effect (L748–749, deeper behaviour) · rest V-pack/one-time
+(pulse/reduced-motion/dark → Appendix B). Manual pile for this batch has now
+shrunk by ~72; runner + settings dials + Overview filter + alerts-removal pinned.
+
+### Batch 3 (Stock B) progress (2026-07-17, session 9) — first codified increment
+
+**Codified → green (new `web_app/e2e/bulk-waste.spec.ts`, 4 tests):** the bulk
+**"Log waste…"** action on Stock Overview (DORA_VERIFY **L827–836**, origin
+FU-226). Enters bulk mode, ticks stable no-expiry seed items (Canned Tomatoes /
+Brown Onions / Garlic — untouched by any other spec):
+- **L834** — with 0 selected the "Log waste…" bulk-bar button is disabled.
+- **L830 + L831** — select 3 → the MarkAsWastedDialog opens with header "Why did
+  this go to waste?", subject "3 items", subline "One reason applies to every
+  selected item."; tapping the **Spoiled** tile closes the dialog, exits bulk
+  mode, and fires one plural summary toast "Logged 3 items as wasted." with Undo.
+- **L832 (data half)** — server truth: exactly one `spoiled` StockItemWasteEvent
+  per selected item (`/waste/events`). The Reports→waste-insights *UI* surface
+  itself stays a one-time eyeball (V-pack).
+- **L833** — Undo on the summary toast removes all events ("Undone." toast) and
+  restores each item's original expiry (covered by the expiry test below).
+- **L835** — a single selection uses singular copy ("Logged 1 item as wasted.").
+- **expiry clear+restore** — a 4th test PATCHes an expiry onto Garlic, logs
+  waste (expiry cleared, asserted server-side), Undoes (expiry restored), then
+  resets the seed item — fully self-contained.
+
+**Self-restoring:** every test ends via the UI Undo it's pinning; an `afterAll`
+safety net then hard-resets via the API (deletes any lingering event for the
+three ids, nulls any expiry) from a context rebuilt off `e2e/.auth/user.json`,
+so a mid-flow failure can't leak into later specs.
+
+**L836 (single-item row expiry-menu waste path)** — CODIFIED (session 10, 6th
+test): PATCH an expiry onto Canned Tomatoes so the row's expiry button opens the
+push/clear/log-waste **menu** (a no-expiry item shows a date picker instead) →
+open it via the `Expires <date>` accessible name → "Log waste" → Spoiled → the
+**per-item** toast `Logged "Canned Tomatoes" as wasted.` (distinct copy from the
+bulk summary) → server event + expiry cleared → Undo restores both → reset to
+null. Confirms the bulk flow didn't regress the single path.
+
+**Not codified here:** L829's "trash icon" + L832's Reports-UI render are
+one-time visuals (V-pack). The whole FU-226 waste section is now behaviourally
+pinned.
+
+**Verification:** `DORA_E2E_CHANNEL=chrome npx playwright test` — `bulk-waste.spec.ts`
+**6/6** green (incl. the auth setup); full suite **40 passed / 1 failed**, the one
+failure the same pre-existing unrelated `uploads.spec.ts:46` channel flake
+([[FU-576]]). No new FU.
+
+**Auto-add-on-low (L838–857, FU-315/464/511)** — first codified increment
+(session 11) in `auto-add-on-low.spec.ts` (2 tests, serial, self-restoring).
+Seed reality that made it testable: the Playwright webServer sets
+`DORA_SEED_BULK_ITEMS=0`, so the `big_list` draft never seeds → **"This week" is
+the sole draft**, i.e. `resolve_primary_target` returns "single" and the happy
+path is deterministic. But **every** flagged+Stocked seed item is already on an
+active list (eggs/olive-oil/coffee on "Saturday shop", brazil already Low), so
+the Essential-mode happy path can't fire on the seed without restructuring shared
+list state — instead the spec drives the **`All items` mode** path on a clean
+non-Essential item (Jasmine Rice: Stocked, on no list, untouched by other specs),
+which exercises the identical toast + line-chip seam and *is itself* L849's
+deliberate 3-state expansion.
+- Test 1 (L843): Settings → Admin → System → Stock dial loads (reads seeded
+  `essential_only`), saves each state eagerly with the "Auto-add mode saved."
+  toast, persists across a hard reload (server truth via `/app-settings`),
+  restores to `essential_only`.
+- Test 2 (L844 + L847 + L849): mode→`all`, drop Jasmine Rice Stocked→Low Stock
+  via the row level menu → toast **"Added Jasmine Rice to <display_name>."** +
+  caption "Auto-added because it went low." → server truth: the draft list now
+  carries a line for the item tagged `added_via=auto_low_stock` → the list-detail
+  render shows the `auto: low stock` chip. Restores via API (delete the auto line
+  by-stock-item, reset level to Stocked, mode back to `essential_only`); an
+  afterAll re-asserts the clean state.
+- Test 3 (L856/857): the **retired per-item auto-add UI stays gone** — read-only
+  absence guard against the `auto_add_when_low` toggle (collapsed into the
+  install-wide mode by FU-511) creeping back. Stock overview: no "Will auto-add on
+  low" filter chip, no "Auto-add" footer count (asserted alongside a surviving
+  "Essential" control so it's not a blank-page false pass); detail page: no
+  "Auto-add" toggle row (item name rendered as the render sanity).
+→ **owner can delete L843, L844, L847, L849, L856, L857.**
+
+**Not codified here (stay owner-verify / other homes):** L845 (Out transition —
+same handler, not separately driven), L846 (no-manual-refresh timing — UX, not
+asserted), L848 + L850 (Off / Essential-only *negative* paths), L851 (dedup) +
+L852 (0/2+ draft ambiguity) → **server-owned branching, routed to a backend
+follow-up** [[FU-577]], L853 (detail-page Level row), L854 (cook-mode decrement,
+multi-toast), L855 (offline queue).
+
+**Verification:** `auto-add-on-low.spec.ts` **4/4** green (incl. auth setup); full
+suite **43 passed / 1 failed** — the one failure the same pre-existing unrelated
+`uploads.spec.ts:46` channel flake ([[FU-576]]). New FU-577 logged for the
+untested server-side branching matrix.
+
+---
 
 **Harness lesson (major — shapes every future browser batch):** the in-app
 preview pane runs **hidden** (`visibilityState: hidden`): no paint, no

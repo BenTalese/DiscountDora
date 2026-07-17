@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import { type Page } from '@playwright/test';
 
 // FU-540 — authenticated navigation smoke. Uses the saved admin session
 // (see auth.setup.ts). Each key route must: load its lazily-imported page
@@ -14,12 +15,15 @@ function guardPageErrors(page: Page): string[] {
     return errors;
 }
 
+// The router runs in HASH mode (quasar.config vueRouterMode) — a plain
+// path like `/stock` just serves index.html and the router falls back to
+// the dashboard, silently testing `/` five times. Routes must be `/#/...`.
 const ROUTES: { path: string; name: string }[] = [
-    { path: '/', name: 'Dashboard' },
-    { path: '/stock', name: 'Stock' },
-    { path: '/cookbook', name: 'Cookbook' },
-    { path: '/meal-plans', name: 'Meal plans' },
-    { path: '/shopping-lists', name: 'Shopping lists' },
+    { path: '/#/', name: 'Dashboard' },
+    { path: '/#/stock', name: 'Stock' },
+    { path: '/#/cookbook', name: 'Cookbook' },
+    { path: '/#/meal-plans', name: 'Meal plans' },
+    { path: '/#/shopping-lists', name: 'Shopping lists' },
 ];
 
 for (const route of ROUTES) {
@@ -29,6 +33,9 @@ for (const route of ROUTES) {
         await page.goto(route.path);
         await page.waitForLoadState('networkidle');
 
+        // The route actually mounted (its meta.title landed) — guards against
+        // the hash-mode fallback quietly rendering the dashboard instead.
+        await expect(page).toHaveTitle(new RegExp(route.name, 'i'));
         // Authenticated — not bounced back to the login form.
         await expect(page.locator('input[autocomplete="current-password"]')).toHaveCount(0);
         // The Quasar app shell rendered (not a blank page / white-screen crash).

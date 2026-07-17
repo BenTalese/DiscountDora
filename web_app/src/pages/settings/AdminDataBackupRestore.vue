@@ -449,7 +449,7 @@
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
-    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { refreshImagePolicy } from 'src/composables/useImagePolicy';
     import { useAuthStore } from 'src/stores/authStore';
 
@@ -803,7 +803,7 @@
             const response = await fetch(`${baseUrl}/data/backups`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({ sections: selectedBackupKeys.value }),
             });
             if (!response.ok) {
@@ -1011,7 +1011,7 @@
             const response = await fetch(`${baseUrl}/app-settings`, {
                 method: 'PATCH',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({
                     image_quality: Number(imageQualityInput.value),
                     image_max_dimension: Number(imageMaxDimensionInput.value),
@@ -1056,7 +1056,7 @@
             const response = await fetch(`${baseUrl}/app-settings`, {
                 method: 'PATCH',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({
                     backup_retention_count: Number(retentionInput.value),
                     backup_storage_path: (storagePathInput.value ?? '').trim(),
@@ -1132,7 +1132,7 @@
             const inspectResponse = await fetch(`${baseUrl}/data/backup/inspect`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({ upload_id: id }),
             });
             if (!inspectResponse.ok) {
@@ -1241,7 +1241,7 @@
             const response = await fetch(`${baseUrl}/data/backup/restore`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({
                     upload_id: uploadId.value,
                     selection,

@@ -8,7 +8,10 @@
  * commit calls.
  */
 import { ref } from 'vue';
-import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+// FU-571: these calls bypass axios (hand-rolled fetch for chunk streaming),
+// so the interceptor that normally attaches the double-submit CSRF header
+// never runs — without csrfHeader() every upload 403s.
+import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
 
 // Defaults match the server-side constants in
 // dora_api/features/data/uploads.py — overrideable per-call.
@@ -37,7 +40,7 @@ export function useChunkedUpload() {
             const startResponse = await fetch(`${baseUrl}/data/uploads/start`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({ expected_size: file.size }),
             });
             if (!startResponse.ok) {
@@ -64,7 +67,7 @@ export function useChunkedUpload() {
             const finishResponse = await fetch(`${baseUrl}/data/uploads/finish`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({ upload_id: startBody.upload_id }),
             });
             if (!finishResponse.ok) {
@@ -84,7 +87,7 @@ export function useChunkedUpload() {
             const baseUrl = resolveBaseURL();
             await fetch(
                 `${baseUrl}/data/uploads/${encodeURIComponent(uploadId)}`,
-                { method: 'DELETE', credentials: 'include' },
+                { method: 'DELETE', credentials: 'include', headers: csrfHeader() },
             );
         } catch {
             // Ignored — TTL sweep will catch it eventually.
@@ -115,6 +118,7 @@ async function uploadChunkWithRetry(
             const response = await fetch(`${baseUrl}/data/uploads/chunk`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: csrfHeader(),
                 body: form,
             });
             if (response.ok) return;

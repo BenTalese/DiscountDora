@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // FU-540 — thin browser-E2E smoke layer. A COMPLEMENT to the manual
@@ -13,13 +14,26 @@ import { fileURLToPath } from 'node:url';
 //
 // Requires (one-time): `npx playwright install chromium`. See e2e/README.md.
 
+import { E2E_BASE_URL, E2E_PORT } from './e2e/env';
+
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST_SPA = fileURLToPath(new URL('./dist/spa', import.meta.url));
-const PORT = 5170;
-const BASE_URL = `http://localhost:${PORT}`;
+// Port + base URL live in e2e/env.ts (shared with fixtures.ts — see the
+// port-isolation rationale there).
+const PORT = E2E_PORT;
+const BASE_URL = E2E_BASE_URL;
 
-// System python on this box (the .venv is broken); override for CI/other envs.
-const PYTHON = process.env.DORA_E2E_PYTHON ?? 'python';
+// Prefer the repo venv (verified working 2026-07-17); DORA_E2E_PYTHON
+// overrides for CI/other envs, falling back to system `python` if the
+// venv doesn't exist.
+const VENV_PYTHON = fileURLToPath(new URL(
+    process.platform === 'win32'
+        ? '../.venv/Scripts/python.exe'
+        : '../.venv/bin/python',
+    import.meta.url,
+));
+const PYTHON =
+    process.env.DORA_E2E_PYTHON ?? (existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python');
 
 export default defineConfig({
     testDir: './e2e',
@@ -75,6 +89,12 @@ export default defineConfig({
             DORA_DB_PATH: 'data/dora.e2e.db',
             DORA_SPA_DIR: DIST_SPA,
             DORA_API_PORT: String(PORT),
+            // Fast boot: skip the 500-item FU-388 load (the docstrings always
+            // assumed e2e passes 0, but nothing actually set it until now).
+            DORA_SEED_BULK_ITEMS: '0',
+            // Deterministic QA states the specs assert against (e.g. the
+            // buy-verdict fixture) — see seed_dev_data(qa_fixtures=True).
+            DORA_SEED_QA_FIXTURES: 'true',
         },
     },
 });

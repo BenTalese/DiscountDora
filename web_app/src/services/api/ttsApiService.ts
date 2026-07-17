@@ -1,4 +1,4 @@
-import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
+import AxiosHttpClient, { csrfHeader, resolveBaseURL } from './axiosHttpClient';
 
 /** Download/availability state of a voice. `downloadable` = in the catalog but
  * its model isn't fetched yet; `downloading` = fetch in flight; `ready` = model
@@ -71,7 +71,8 @@ export default class TtsApiService {
         const res = await fetch(`${resolveBaseURL()}/tts`, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            // FU-571: raw fetch bypasses the axios CSRF interceptor.
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ text, voice, ...params }),
         });
         if (!res.ok) {

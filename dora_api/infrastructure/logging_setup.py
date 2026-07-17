@@ -91,6 +91,18 @@ def configure_logging(
     formatter = logging.Formatter(_FORMAT)
     context_filter = LogContextFilter()
 
+    # FU-569: Windows consoles default to a legacy code page (cp1252), which
+    # can't encode the → / ← glyphs in the request-log lines — or any
+    # non-ASCII user content that ends up in a log message — so every emit
+    # printed a "--- Logging error ---" traceback to stderr, drowning real
+    # errors on the exact platform the desktop bundle targets. Re-encode the
+    # console stream as UTF-8 (errors='replace' so logging can never crash
+    # on output again). The file handler below was already utf-8.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass  # detached/odd stream (e.g. some embedders) — leave as-is
     stream = logging.StreamHandler(stream=sys.stdout)
     stream.setFormatter(formatter)
     stream.addFilter(context_filter)

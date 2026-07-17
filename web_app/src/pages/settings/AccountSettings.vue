@@ -140,6 +140,7 @@
                         type="password"
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
+                        hint="At least 8 characters — a passphrase works well."
                         :rules="[(v) => !v || v.length >= 8 || 'At least 8 characters']"
                     />
                     <q-input

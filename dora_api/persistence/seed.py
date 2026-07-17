@@ -25,7 +25,7 @@ from dora_api.persistence.seed_builders import SeedBuilders
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-def seed_dev_data(bulk_stock_items: int = 0):
+def seed_dev_data(bulk_stock_items: int = 0, qa_fixtures: bool = False):
     """Populate a rich dev dataset that exercises every screen.
 
     Covers: multiple stores and products (with current + historic offers
@@ -34,6 +34,12 @@ def seed_dev_data(bulk_stock_items: int = 0):
     open markers, substitutes, level-change history, recipes (cookable and
     not) across collections, meals, a full week's meal plan, primary /
     in-progress / archived shopping lists with selected offers, and templates.
+
+    ``qa_fixtures`` (browser-E2E layer, FU-540) appends deterministic items
+    whose *state* the Playwright specs assert against — currently the
+    buy-verdict "skip + mark_stocked" item, which needs backdated purchase +
+    waste history that no API call can create. Off by default (env
+    DORA_SEED_QA_FIXTURES; the Playwright webServer sets it).
 
     ``bulk_stock_items`` (FU-388) appends that many extra deterministic
     "load" stock items — plus a proportional set of products/offers,
@@ -131,13 +137,17 @@ def seed_dev_data(bulk_stock_items: int = 0):
     )
 
     # ---------------- USER ---------------- #
-    # Default dev user. Username `dora`, password `dora`.
+    # Default dev user. Username `dora`, password `dora`. Onboarding is
+    # marked complete — this dataset is an established household, and a
+    # fresh-seed boot shouldn't trap dev/e2e sessions in the first-run
+    # wizard (the wizard itself is exercised by registering a new user).
     repo.add(User(
         email="ben.talese@gmail.com",
         password_hash=hash_password("dora"),
         send_deals_on_day=6,
         username="dora",
         is_admin=True,
+        onboarding_completed_at=now,
     ))
 
     # ---------------- LOCATION HIERARCHY ---------------- #
@@ -696,6 +706,48 @@ def seed_dev_data(bulk_stock_items: int = 0):
             for recipe, tool in _tool_links
         ],
     )
+
+    # ---------------- QA FIXTURES (browser-E2E deterministic states) --------- #
+    # Mirrors the hand-engineered "QA Verdict Cheese" fixture the 2026-07-17
+    # verify session proved live: 3 priced purchases on done lists 90/60/30
+    # days ago ($5/$6/$7 → avg $6, last $7 = above-usual) + 2 waste events
+    # (2 wasted vs 3 purchased = 67%) + level Stocked set 31 days ago →
+    # the oracle returns skip/high with the mark_stocked one-tap, and an
+    # in-app add-to-list flips it to remove_from_list. The Playwright
+    # buy-verdict spec asserts this exact state — keep the numbers in sync
+    # with web_app/e2e/buy-verdict.spec.ts.
+    if qa_fixtures:
+        qa_cheese = make_item(
+            name="QA Verdict Cheese", group=g_dairy, level=stocked,
+            location=fridge, updated_days_ago=31,
+        )
+        repo.save_changes()  # list lines + events FK to the item id
+
+        qa_lists = []
+        for _n, _days_ago, _price in [(1, 90, 5.00), (2, 60, 6.00), (3, 30, 7.00)]:
+            qa_list = ShoppingList(
+                name=f"QA verdict shop {_n}",
+                created_at=now - timedelta(days=_days_ago + 1),
+                completed_at=now - timedelta(days=_days_ago),
+                status=SHOPPING_LIST_STATUS_DONE,
+            )
+            repo.add(qa_list)
+            qa_lists.append((qa_list, _price))
+        repo.save_changes()
+        for _seq, (_l, _price) in enumerate(qa_lists):
+            line(_l.id, qa_cheese, _seq, ticked=True, actual_unit_price=_price)
+        builders.harvest_price_observations(
+            {_l.id: _l.completed_at for _l, _ in qa_lists}
+        )
+
+        for _days_ago, _reason in [(45, "spoiled"), (20, "expired")]:
+            repo.add(StockItemWasteEvent(
+                stock_item_id=qa_cheese.id,
+                stock_item_name=qa_cheese.name,
+                reason=_reason,
+                occurred_at=now - timedelta(days=_days_ago),
+            ))
+        repo.save_changes()
 
     # ---------------- BULK LOAD (FU-388 — dev-only scale data) ---------------- #
     # So every interactive dev session runs against a realistic pantry

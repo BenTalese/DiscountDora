@@ -270,6 +270,15 @@ class DoraConfig:
         so its boot stays fast."""
         return max(0, _env_int("DORA_SEED_BULK_ITEMS", 500))
 
+    def is_qa_fixture_seed_enabled(self) -> bool:
+        """Whether the dev seed also creates the deterministic QA fixtures
+        the browser-E2E suite (FU-540 layer) asserts against — e.g. the
+        buy-verdict "skip + mark_stocked" item, which needs backdated
+        purchase/waste history no API can create. Off by default so an
+        interactive dev pantry isn't cluttered; the Playwright webServer
+        sets DORA_SEED_QA_FIXTURES=true."""
+        return _env("DORA_SEED_QA_FIXTURES", "false").lower() in {"1", "true", "yes", "on"}
+
     def get_web_app_host(self) -> str:
         return _env("DORA_WEB_APP_HOST", self._config.WEB_APP_HOST) or self._config.WEB_APP_HOST
 

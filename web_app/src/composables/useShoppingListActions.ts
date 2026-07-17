@@ -1,4 +1,8 @@
 import { useQuasar } from 'quasar';
+// FU-572: list membership feeds the buy-verdict one-tap action
+// (add_to_list vs remove_from_list), so every add/remove seam here
+// drops the item's cached verdict.
+import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
 import type { AddLineCommand } from 'src/services/api/shoppingListApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -45,6 +49,7 @@ export function useShoppingListActions() {
                 const result = await api.addLineAsync(listId, item);
                 if (result.already_on_list) already++;
                 else added++;
+                if (item.stock_item_id) invalidateBuyVerdict(item.stock_item_id);
             }
             await shoppingListStore.refreshAsync();
             notifyOk(
@@ -70,6 +75,7 @@ export function useShoppingListActions() {
         try {
             await api.removeByStockItemFromListAsync(listId, stockItemId);
             await shoppingListStore.refreshAsync();
+            invalidateBuyVerdict(stockItemId);
             return true;
         } catch (err) {
             notifyErr('Could not remove from list.', String(err));
@@ -96,7 +102,10 @@ export function useShoppingListActions() {
                 // Continue; one bad list shouldn't block the others.
             }
         }
-        if (removed > 0) await shoppingListStore.refreshAsync();
+        if (removed > 0) {
+            await shoppingListStore.refreshAsync();
+            invalidateBuyVerdict(stockItemId);
+        }
         if (removed === listIds.length && removed > 0) {
             notifyOk(`Removed from ${removed} list${removed === 1 ? '' : 's'}.`);
         } else if (removed > 0) {

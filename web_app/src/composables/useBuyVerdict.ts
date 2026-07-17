@@ -79,12 +79,17 @@ function refresh(stockItemId: string): Promise<void> {
 
 /** Invalidate a single item's cached verdict — call this after any
  *  mutation that could change the answer (add to list, mark stocked,
- *  log a waste event, finish a shopping list). Doesn't refetch — the
- *  next `useBuyVerdict(id)` mount triggers the reload. */
+ *  log a waste event, finish a shopping list). If the entry is live
+ *  (some card/badge has already displayed it), refetch immediately so
+ *  mounted consumers repaint with the fresh answer — an entry-only
+ *  stamp reset left mounted cards stale until remount (FU-572).
+ *  `refresh` dedupes on its inflight promise, so double-invalidation
+ *  from nested seams costs one request. */
 export function invalidateBuyVerdict(stockItemId: string): void {
     const entry = cache.get(stockItemId);
     if (entry) {
         entry.fetchedAt = 0;
+        if (entry.value.value !== null) void refresh(stockItemId);
     }
 }
 

@@ -1,5 +1,6 @@
 import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
+import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
 import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { useAuthStore } from 'src/stores/authStore';
@@ -72,6 +73,8 @@ export function useStockItemActions() {
                     stock_item_id: stockItemId,
                 });
                 await shoppingListStore.refreshAsync();
+                // FU-572: list membership flips the verdict's one-tap action.
+                invalidateBuyVerdict(stockItemId);
                 ok(
                     result.already_on_list
                         ? `Already on ${listNameFor(listId)}.`
@@ -140,6 +143,8 @@ export function useStockItemActions() {
             }
             await shoppingListStore.refreshAsync();
             if (outcome.result === 'added') {
+                // FU-572: list membership flips the verdict's one-tap action.
+                invalidateBuyVerdict(stockItemId);
                 const listName = listNameFor(outcome.shopping_list_id);
                 ok(
                     outcome.already_on_list
@@ -178,6 +183,8 @@ export function useStockItemActions() {
                 stock_item_id: stockItemId,
                 stock_level_id: top.stock_level_id,
             });
+            // FU-572: the level feeds the verdict's need axis.
+            invalidateBuyVerdict(stockItemId);
             if (!silent) notifyOk('Marked restocked.');
         } catch (err) {
             if (!silent) notifyErr('Could not restock.', String(err));

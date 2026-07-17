@@ -139,13 +139,23 @@ function sleep(ms: number): Promise<void> {
 // `dora_csrf` (non-HttpOnly) on the first response that doesn't carry
 // it, so this returns null until the SPA has made at least one request
 // (the cold-load `getMe` GET happens before any mutating call).
-function readCsrfCookie(): string | null {
+export function readCsrfCookie(): string | null {
     if (typeof document === 'undefined' || !document.cookie) return null;
     for (const part of document.cookie.split(';')) {
         const [name, ...rest] = part.trim().split('=');
         if (name === 'dora_csrf') return rest.join('=') || null;
     }
     return null;
+}
+
+// FU-571 — spreadable CSRF header for the handful of callers that bypass
+// axios with raw `fetch` (chunked uploads, import/backup inspect+commit,
+// client logs, TTS streaming). The axios interceptor below attaches this
+// automatically; raw fetches MUST spread this in or the FU-197 double-submit
+// defence 403s every mutating call.
+export function csrfHeader(): Record<string, string> {
+    const token = readCsrfCookie();
+    return token ? { 'X-CSRF-Token': token } : {};
 }
 
 // Augment axios's request config with our retry / correlation-id state

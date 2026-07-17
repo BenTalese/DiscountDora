@@ -1,4 +1,4 @@
-import { test as setup, expect } from '@playwright/test';
+import { test as setup, expect } from './fixtures';
 
 // Logs in once as the seeded admin (dora/dora) and saves the session so the
 // smoke specs start authenticated. Playwright's recommended auth pattern.

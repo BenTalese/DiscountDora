@@ -250,7 +250,11 @@ class SeedBuilders:
         timestamp; lines on other lists fall back to ``now``."""
         from dora_api.features.shopping_lists._line_price import (
             harvest_observation_fields, line_paid_unit_price)
-        for sl_line, product, store in self.harvest_jobs:
+        # Drain the queue so a later batch of lines (e.g. the QA-fixture
+        # block) can harvest again without re-processing — and duplicating —
+        # everything harvested here.
+        jobs, self.harvest_jobs = self.harvest_jobs, []
+        for sl_line, product, store in jobs:
             unit_price = line_paid_unit_price(sl_line)
             if unit_price is None:
                 continue

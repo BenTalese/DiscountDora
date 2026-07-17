@@ -204,7 +204,10 @@ def init_db(is_test_env: bool):
                 bulk_stock_items=(
                     0 if is_test_env
                     else DORA_CONFIG.get_seed_bulk_stock_item_count()
-                )
+                ),
+                qa_fixtures=(
+                    not is_test_env and DORA_CONFIG.is_qa_fixture_seed_enabled()
+                ),
             )
             return
 

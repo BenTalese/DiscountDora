@@ -10,6 +10,71 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-572 — Buy-verdict client cache: mounted cards stayed stale after mutations (invalidate never refetched; cart quick-add never invalidated)
+- **Resolved:** 2026-07-17 (found and fixed same session, verify-campaign Batch 0 BuyVerdictCard walk).
+  Two related gaps, one root: (a) `invalidateBuyVerdict` only zeroed the cache
+  stamp and nothing re-ran `fetchIfNeeded` on a *mounted* consumer, so after a
+  one-tap action or level change the detail-page card kept the stale
+  verdict/one-tap button until remount — despite comments
+  (`StockItemDetailPage.vue:1502`) claiming it "re-fetches the new answer";
+  (b) the row cart-button quick-add/remove seams (`useStockItemActions.addToList`,
+  `useShoppingListActions.addItems/removeFromList/removeFromAllLists`,
+  `markRestocked`) never invalidated at all, leaving badges stale up to the
+  5-min window (DORA_VERIFY L889's documented expectation).
+- **Fix:** `invalidateBuyVerdict` now refetches immediately when the entry is
+  live (`entry.value !== null`; `refresh` dedupes on its inflight promise), and
+  the shared list/level mutation seams all invalidate (R-003 — one path per
+  mutation, no per-page copies). Toast copy de-hardcoded while there:
+  "Marked as Well-Stocked." → `Marked as ${level.name}.` (level names are
+  user-configurable; seed says "Stocked").
+- **Verified live:** detail-page tap flipped the card's one-tap
+  remove_from_list → "Already stocked" in place, no remount; list-line +
+  overview-popover taps all consistent; vue-tsc clean.
+- **Spun off:** [[FU-573]] (removeFromAllLists over-counts its toast).
+
+## [RESOLVED] FU-571 — Chunked uploads always 403: useChunkedUpload's raw fetches skip the CSRF header (Import + Backup-restore broken in-browser)
+- **Resolved:** 2026-07-17 — added an exported `csrfHeader()` helper to
+  `axiosHttpClient.ts` (single source over the existing `readCsrfCookie`) and
+  swept **every raw-fetch mutating call** in the SPA, not just the composable:
+  `useChunkedUpload.ts` (start/chunk/finish + DELETE abort), `AdminDataImport.vue`
+  (inspect/commit), `AdminDataBackupRestore.vue` (backups POST, 2× app-settings
+  PATCH, backup inspect/restore), `useClientLogger.ts` (`/client-logs`),
+  `ttsApiService.ts` (`/tts`). Verified live end-to-end: real
+  `useChunkedUpload().upload()` completed start→chunk→finish (200 + upload_id),
+  `/data/import/spreadsheet/inspect` on that upload → 200 with auto-mapping;
+  negative control (header-less POST) still 403s, so the FU-197 defence is intact.
+  vue-tsc clean.
+- **Raised:** 2026-07-16 (verify-campaign Batch 0, SettingsFileDrop walk).
+  **Type:** finding (real bug — Import + restore-from-file hard-broken in any
+  browser since the FU-197 CSRF rollout; only axios calls got the interceptor).
+- **Unblocks:** SettingsFileDrop verify tail (L79/L80), Import/Backup batch-12
+  checks.
+
+## [RESOLVED] FU-568 — Password-policy fineprint regression: "a passphrase works well" hint gone from auth pages
+- **Resolved:** 2026-07-17 — restored the hint copy ("At least 8 characters — a
+  passphrase works well.") as a `hint` prop on all four surfaces:
+  `LoginPage.vue` (register mode only), `ResetPasswordPage.vue`,
+  `SetupAdminPage.vue`, `AccountSettings.vue` (new-password field). Verified
+  rendering live on LoginPage register mode + ResetPasswordPage;
+  SetupAdminPage unreachable live (admin exists → route redirects) and
+  AccountSettings blocked by the hidden-pane transition wedge — both carry the
+  identical one-line prop and typecheck clean. DORA_VERIFY L95's fineprint
+  clause can now be re-verified/deleted by the owner.
+- **Raised:** 2026-07-16 (verify-campaign pilot). **Type:** finding (copy
+  dropped in the C-19 auth-shell rebuild; server-side policy was intact).
+
+## [RESOLVED] FU-569 — Windows console: every request logs a UnicodeEncodeError traceback (cp1252 vs arrow glyphs)
+- **Resolved:** 2026-07-17 — `logging_setup.configure_logging` now re-encodes
+  the console stream via `sys.stdout.reconfigure(encoding="utf-8",
+  errors="replace")` (guarded for embedders/odd streams) before attaching the
+  StreamHandler; the file handler was already utf-8. Kept the → / ← glyphs in
+  the log format (nicer, and now safe). Verified: probe run with
+  `PYTHONIOENCODING=cp1252` (the crash condition) emits `→ é ✓` cleanly, no
+  "--- Logging error ---" traceback, stream reports utf-8.
+- **Raised:** 2026-07-16 (verify-campaign pilot). **Type:** finding (operator
+  papercut — drowned real errors on the Windows desktop-bundle platform;
+  relevant to FU-327).
+
 ## [RESOLVED — decided: no redesign brief] FU-431 — Product History: discoverability + desktop drawer pattern
 - **Resolved:** 2026-07-16 — investigated the current code + the two NO_HOME bullets and **decided a dedicated Product History redesign brief is not warranted.** The primary need is subsumed by FU-227's "your prices" layer; the product-side history is a niche, data-presence-gated surface. Residual polish/behaviour items folded into [[FU-214]]'s product-surface browser-verify pass.
 - **What the code actually shows:**

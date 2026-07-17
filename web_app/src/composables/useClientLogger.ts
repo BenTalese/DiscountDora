@@ -13,7 +13,7 @@
  *   - app.config.errorHandler → Vue render / setup errors.
  */
 import type { App } from 'vue';
-import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
@@ -50,7 +50,8 @@ async function ship(level: Level, message: string, context?: Record<string, unkn
         await fetch(`${baseUrl}/client-logs`, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            // FU-571: raw fetch bypasses the axios CSRF interceptor.
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({
                 level,
                 message: message.slice(0, 2048),

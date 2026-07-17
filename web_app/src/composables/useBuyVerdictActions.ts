@@ -52,7 +52,7 @@ export function useBuyVerdictActions() {
             Notify.create({
                 type: 'negative',
                 position: 'bottom-right',
-                message: "Couldn't find the Well-Stocked band — check Settings → Stock levels.",
+                message: "Couldn't find the most-stocked band — check Settings → Stock levels.",
                 timeout: 4000,
             });
             return false;
@@ -68,7 +68,9 @@ export function useBuyVerdictActions() {
             Notify.create({
                 type: 'positive',
                 position: 'bottom-right',
-                message: 'Marked as Well-Stocked.',
+                // FU-572: level names are user-configurable (seed default
+                // "Stocked") — don't hardcode the legacy "Well-Stocked".
+                message: `Marked as ${stockedLevel.name}.`,
                 timeout: 2000,
             });
             return true;

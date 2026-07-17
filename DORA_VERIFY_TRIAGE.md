@@ -58,9 +58,9 @@ surfaces, then the long tail, then env-gated batches.
 
 | # | Batch | Sections (snapshot lines) | Items | Status |
 |---|---|---|---|---|
-| 0 | **Pilot** — Password policy + SettingsFileDrop + BuyVerdictCard + Runtime backend URL | 71–99, 111–115, 82–89 | 22 | 🟡 (this session) |
+| 0 | **Pilot** — Password policy + SettingsFileDrop + BuyVerdictCard + Runtime backend URL | 71–99, 111–115, 82–89 | 22 | ✅ **COMPLETE 07-17** (Password policy 8/8; SettingsFileDrop 5/5; BuyVerdictCard 6/6 — FU-572 found+fixed mid-walk; Runtime URL walked — L113 recovery clause FAILS → FU-574 open, remove-toast over-count → FU-573) |
 | 1 | Top block remainder — Onboarding story, Dora bubble, Currency & locale, Stores logo, PWA-dev-checkable parts | 11–49, 63–70 | ~40 | ⚪ |
-| 2 | Stock A — recent fixes + stocktake redesign (668–814) | 668–814 | ~120 | ⚪ |
+| 2 | Stock A — recent fixes + stocktake redesign (668–814) | 668–814 | ~120 | 🟡 (2026-07-17: FU-508+FU-507 codified green; 5 fix-pins confirmed backend-tested→delete; scan-mode→device-pack; stocktake runner + settings = codify-next) |
 | 3 | Stock B — remainder (816–1009) | 816–1009 | ~115 | ⚪ |
 | 4 | Cookbook A — filters, free-text, importer, DnD (132–195) | 132–195 | ~53 | ⚪ |
 | 5 | Cookbook B — chunk sections + image-steps (197–321) | 197–321 | ~120 | ⚪ |
@@ -80,6 +80,39 @@ surfaces, then the long tail, then env-gated batches.
 | 19 | **Env-gated: Postgres leg** — alembic-on-PG halves of every migration item (compose.dev PG; `DORA_TEST_DB=postgres`) | scattered | ~12 | ⚪ |
 | 20 | **Operator migrations on populated DB** — FU-563/564/565 (1576–1591), Windows desktop build (1517–1528), fresh-install boots (1542–1552, 1613) | 1517–1614 | ~26 | ⚪ |
 
+### Close-out rule — every batch, every check gets a disposition (2026-07-17)
+
+The campaign's durable artifact is the **Playwright regression suite**
+(`web_app/e2e/`, see its README), not the walk itself. On closing a batch,
+classify each check:
+
+1. **`verified-once → delete`** — one-time confirmations (copy, layout,
+   subjective calls, migration ran). Verified live, owner deletes from
+   DORA_VERIFY, no code.
+2. **`codified → spec + delete`** — behaviour that could regress under
+   future change (flows, gates, integration seams). Verify live FIRST, then
+   pin it as a Playwright spec (or push it down to Vitest/backend tests when
+   a browser isn't needed). The manual check is then deleted *permanently* —
+   a UAT round re-verifies it by running `npm run test:e2e`.
+3. **`env-gated → device pack`** — hardware/host-bound checks; stay manual.
+
+Every real bug the campaign finds gets a pinned regression test where
+feasible (FU-571/FU-572 are the reference shape). Keep the suite curated —
+core journeys + bug pins, not a checkbox dump.
+
+**Batch 0 retro-codified (2026-07-17):** password-policy (5 specs, FU-442 +
+FU-568 pins), uploads/FileDrop (2 specs, FU-571 + FU-545 pins), buy-verdict
+(4 specs, FU-454 + FU-572 pins), plus the pre-existing login/smoke layer
+hardened (hash-mode routes now actually load; per-route title asserted; e2e
+backend isolated to :5171 with the QA-fixture seed).
+**Suite GREEN 2026-07-17: 19/19 (~2.6 min), Vitest 387/387, vue-tsc clean.**
+Two spec-side fixes landed getting there: `/shopping-lists` returns a bare
+summary array (not `{items}`), and a same-document hash-only `page.goto`
+(dashboard → detail) doesn't reliably drive vue-router — engineer state via
+`page.request` first, then do ONE full-document goto to the target route
+(pattern now in buy-verdict.spec.ts). Watch item: the meal-plans smoke test
+flaked once in a full run (networkidle timing), passed on both re-runs.
+
 Notes:
 - **FU-214** (open FU) rides on batch 14 — its product-surface browser-verify pass
   plus the 3 Product-History residuals folded in by FU-431 (2026-07-16).
@@ -88,6 +121,226 @@ Notes:
 - Batch 19/20 overlap heavily with automated migration tests (FU-536/549/563–565
   schema-match + from-empty chain); the residual manual value is the
   populated-DB / real-toolchain legs only.
+
+---
+
+## Pilot results — Password policy (FU-442), 2026-07-16
+
+Walked live against `localhost:5174` (dev SPA) + `:5170` (backend). Test
+accounts created: `qa-admin` (admin, via first-run setup page — which the DB's
+zero-user state surfaced; bonus pre-exercise of FU-200), `qa-user-1`,
+`qa-user-2`. **These live in the repo-root `dora.data.db`** (see the caveat
+below).
+
+| Check (snapshot line) | Verdict | Evidence |
+|---|---|---|
+| L91 8-char letters-only succeeds | ➗ **intent PASS, example stale** | `abcdefgh` → 422 **breach-list** rejection (it's a breached string — correct NIST behaviour, impossible example); `zxqvbnmk` (letters-only, non-breached) → 200, account created. No digit rule anywhere. Checklist needs a new example password. |
+| L92 `passphrase please` succeeds | ✅ PASS | POST register → 200, account created. |
+| L93 `abc123` rejected ≥8 | ✅ PASS | 422, `"Password must be at least 8 characters."` |
+| L94 breach rejection, case-insensitive | ✅ PASS | `password123` → 422 breach message; `QWERTY123` → identical 422 (case-insensitive confirmed). UI renders it inline under the field + "Registration failed" banner (evidenced on the register form). |
+| L95 reset-flow fineprint + no digit language | ✅ PASS (2026-07-17, post-FU-568 fix) | Fineprint restored on all four surfaces; rendered live on LoginPage register mode + ResetPasswordPage ("At least 8 characters — a passphrase works well."). "No letter-and-digit language" half already PASSED. Owner can delete L95. |
+| L96 change-password validator ≥8 | ✅ PASS (2026-07-16, session 2) | Live on `/settings/account`: typed `abc` into New password → inline "At least 8 characters" under both new + confirm fields. |
+| L97 pre-policy password still logs in | ✅ PASS (2026-07-16, session 2) | UI login as seed user `dora`/`dora` (4-char, pre-policy) → 200, session valid, admin. Set-time-only policy confirmed. |
+| L98 no policy-loosening admin toggle | ✅ PASS (2026-07-16, session 2) | Walked the full settings tree in-app: personal pages (Account/Preferences/Notifications/Money/Voice/Nutrition/Assistant/About), kitchen-setup, and the complete Admin mode (Users; System ×12 incl. Features/Email/Push/Hosting; Data ×3; Audit log; API access) — no password-policy surface anywhere. Matches code grep. |
+
+**Findings spun off:** FU-568 (fineprint regression), FU-569 (Windows console
+logging spam), FU-570 (silent boot on stale-schema DB — the cause of the
+dashboard 500s seen mid-pilot; *not* a fresh-install product bug).
+
+**Environment caveat learned (now a standing rule, see Appendix D):** the
+preview-launched backend used the repo-root SQLite `dora.data.db` — a July-10
+`create_all` artifact with **no `alembic_version`** and a stale schema — while
+shell-resolved config pointed at Postgres. Anything beyond the auth tables
+500s on it. **Before batch 1: create a dedicated disposable verify DB**
+(`alembic upgrade head` + FU-388 dev seed on a fresh file, pointed at via env),
+and re-run the deferred L96–L98 there.
+
+### Batch 0 continuation (2026-07-16, session 2) — dedicated DB stood up; SettingsFileDrop + BuyVerdictCard partials; FU-571 found
+
+**Verify DB:** root `dora.data.db` rebuilt (old file backed up to session scratchpad):
+`drop_all` + `create_all` + `seed_dev_data(bulk_stock_items=500)` → 1 user
+(`dora`/`dora`, admin), 521 stock items. Dashboard renders clean (the pilot's
+500s are gone — confirms FU-570 was schema drift, not product).
+
+**SettingsFileDrop (FU-545), 3/5 verified + blocked tail:**
+- L76 click-to-open: ✅ **complete** (tail closed 2026-07-17 post-FU-571 fix) —
+  click forwarding proven earlier; filename+size display now verified live:
+  pick → upload 200 → steady `file-drop--filled` showing "fu545_tail.csv 36 B".
+- L77 keyboard: ✅ — hidden input is tab-reachable; `:focus-within` restyles the
+  zone (bg tint). Enter/Space = native `<input type=file>` activation.
+- L78 drag-and-drop: ✅ — dragover → `file-drop--dragging` (dashed→solid,
+  tint); dragleave calms; drop feeds the same pick path (now 200s post-fix).
+- L79 Remove-doesn't-reopen: ✅ (2026-07-17) — from steady filled state,
+  Remove click → zone back to idle copy, instrumented `input.click()` counter
+  stayed 0 (picker never reopened).
+- L80 busy/disabled inert: ✅ (2026-07-17) — `--busy` caught live mid-upload;
+  `input.disabled === true` during it; zone click during busy → 0 picker
+  opens; settles to `--filled` with filename. **Section 5/5 complete — owner
+  can delete DORA_VERIFY L76–L80.**
+- **FU-571 found here** (chunked uploads always 403 — CSRF header missing from
+  `useChunkedUpload`'s raw fetches; Import + Backup-restore broken in browser).
+
+**BuyVerdictCard (FU-454), state engineered + API-verified:**
+- Fixture created (survives in the verify DB): stock item **"QA Verdict
+  Cheese"** (`b5f476ac-fb96-4e3f-8a5d-c0d0238ab394`), level Stocked, 3 priced
+  lines on 3 done lists ("QA verdict shop 1–3", 90/60/30 days ago), 2 waste
+  events (45/20 days) → waste rate 67%.
+- `GET …/buy-verdict` → `verdict: skip, confidence: high, one_tap_action:
+  {kind: mark_stocked, label: "Already stocked"}`, waste reason "You've wasted
+  this 67% of the time". ✅ the mark_stocked *state* is real and reproducible.
+- Overview row renders the **Skip** chip (seen live). The tap-the-button UI
+  walk (L83–88) is **deferred to the Playwright runner** (below) — the card
+  lives in the detail view, which this harness pane can't mount (no-paint
+  limitation). For `remove_from_list`: add the fixture item to any open list
+  and the same card flips (code path `_pick_action`, is_on_open_list).
+
+### Batch 0 blocker fixes (2026-07-17, session 3) — FU-571/568/569 fixed + verified
+
+- **FU-571 FIXED + verified:** `csrfHeader()` helper exported from
+  `axiosHttpClient.ts`; swept into all raw-fetch mutating sites (chunked
+  upload start/chunk/finish/abort, import inspect/commit, backup
+  create/inspect/restore, 2× app-settings PATCH on the Backup page,
+  `/client-logs`, `/tts`). Live proof: real `useChunkedUpload().upload()`
+  (imported via Vite in-page) ran start→chunk→finish → 200 + upload_id;
+  `/data/import/spreadsheet/inspect` on that upload → 200 with auto-mapping;
+  header-less POST still 403s (FU-197 defence intact). **L79/L80 tail +
+  Import/Backup batch-12 checks are unblocked.**
+- **FU-568 FIXED + verified:** hint prop on the 4 auth surfaces; rendered live
+  on LoginPage (register mode) + ResetPasswordPage. L95 flipped to PASS above.
+- **FU-569 FIXED + verified:** `stdout.reconfigure(encoding='utf-8',
+  errors='replace')` in `configure_logging`; probe under forced
+  `PYTHONIOENCODING=cp1252` emits `→ é ✓` cleanly, no logging traceback.
+
+### Batch 0 completion (2026-07-17, session 3 cont.) — BuyVerdictCard L87–92 + Runtime URL L112–114 walked; FU-572 found+fixed; FU-573/574 opened
+
+**Harness note first:** the full Appendix-D recipe (rAF stub + zero-duration CSS
++ **in-SPA hash nav, stub applied in-session, no reload**) mounts the stock
+**detail page and its BuyVerdictCard** after all — the earlier "detail never
+mounts" result was pre-recipe. The Playwright runner is still the right call for
+screenshot/V-pack batches, but tap-walks are doable in-pane with this recipe.
+
+**BuyVerdictCard one-tap actions (FU-454) — section COMPLETE:**
+- L87 mark_stocked ✅ both surfaces — Stock Overview popover + Stock Item
+  Detail card: tap → level set, positive toast, fresh verdict on
+  re-render. **Found + fixed FU-572 mid-walk:** the detail card kept the stale
+  one-tap until remount (invalidate never refetched) and the cart quick-add
+  seams never invalidated — post-fix, the card updates **in place** (verified:
+  remove_from_list → "Already stocked" live, no remount).
+- L88 list-line mark_stocked ✅ — tap on ShoppingListDetail line badge →
+  "Marked as Stocked." (new data-driven copy), level flipped, **line stayed
+  on both lists**. (State reached via cached verdict after an out-of-band
+  add — mark_stocked + on-open-list is otherwise mutually exclusive by
+  `_pick_action` precedence, so this pairing only occurs via staleness.)
+- L89 remove_from_list on Overview ✅ — toast fired, server-verified gone from
+  every open list (3), reopened popover shows fresh mark_stocked verdict.
+  **Toast over-counts** (fan-out no-ops counted) → **FU-573**.
+- L90 remove_from_list on Detail ✅ — tap → toast, line gone server-side, card
+  live-updated to the fresh one-tap (FU-572 fix proven here).
+- L91 per-line semantics ✅ — on ShoppingListDetail, tap removed ONLY the
+  current line ("Removed QA Verdict Cheese."); the same item's line on the
+  other draft list survived (server-verified).
+- L92 no fallback toasts ✅ — ~8 taps across 3 surfaces, zero "use the row
+  controls"-style toasts.
+- Owner can delete DORA_VERIFY's whole BuyVerdictCard section (L87–92).
+
+**Runtime backend URL (P8-10, L112–114) — walked, one FAIL:**
+- L112 ✅ — About shows "Dora API endpoint http://localhost:5170/api"; Change
+  opens the prompt pre-filled with the current URL.
+- L113 ➗ — bogus URL saved → persists to `dora.backendBaseUrl` + full reload →
+  friendly full-page "Can't reach Dora's brain" screen, **no crash** ✅; but the
+  only affordance is "Try again" — `#/settings/about` renders the same error
+  screen, so the fix-it prompt is **unreachable** → **FU-574** (recovery clause
+  FAILS).
+- L114 ➗ — restoring the original URL recovers cleanly on reload (About +
+  session intact) — but had to be done via localStorage, since the prompt is
+  unreachable in the broken state (same FU-574).
+- Owner can delete L112; L113/L114 stay until FU-574 is fixed + re-verified.
+
+**Fixture left in the documented state:** "QA Verdict Cheese" Stocked, on no
+open list, verdict skip/high + mark_stocked one-tap — ready for reuse.
+
+---
+
+### Batch 2 (Stock) progress (2026-07-17, session 4) — first codified increment
+
+Applying the close-out rule: codify regression-worthy behavioural flows; delete
+what's already pinned or verified-once; route hardware to device packs.
+
+**Codified → green (`web_app/e2e/stock.spec.ts`, 7 tests):**
+- **FU-508 StockItem.image dropped (L730–734)** — 3 pins: no `/stock-items/<id>/image`
+  request fires on overview or detail; no "row images" toolbar toggle; detail
+  Overview tab has zero `input[type=file]`. Cheap, stable, high regression value
+  (guards the column/upload creeping back). → **owner can delete L730–733**;
+  L734 (recipes/avatars/store-logos still render) is a separate-features
+  cross-check — left as a one-time confirm.
+- **FU-507 expiry-on-open (L723–728)** — 4 pins on the curated sealed-with-expiry
+  item "Kensington Pride Mangoes": fixture-contract (sealed + has expiry);
+  detail toggle → "Marking … as open" prompt → Update expiry saves is_open +
+  new expiry in one PATCH (server-verified); re-sealing fires **no** dialog and
+  restores state. Note the detail-page toggle is silent (no toast — that's the
+  row path), so pins assert server truth. Row-path L724–726 share the same
+  handler; detail path pinned as the representative. → **owner can delete
+  L723–728** (row vs detail is the same code).
+
+**Verified-once → already backend-pinned → delete (no e2e dup):** the five
+fix-verify sections are all owned by green backend regression tests — confirmed
+passing this session (86 green across the representative files):
+- L693–695 product unlink (FU-528) → `test_delete_integrity.py`, `test_api_fuzz.py`
+- L702–705 stocktake snooze 500 (FU-526) → snooze regression suite
+- L707–710 consumption/re-confirm level (FU-533) → `test_patch_semantics.py`, `test_concurrency.py`
+- L712–715 rename-to-own-name (FU-528) → `test_patch_semantics.py`
+- L717–718 unlinked-ingredients loads (FU-532) → `test_unlinked_ingredients.py`
+- L720–721 reconcile pagination (fuzz) → `test_reconcile_verbs.py`, `test_api_fuzz.py`
+  → **owner can delete all six sections** — the browser confirm is redundant
+  once the backend tests own the behaviour (that was the whole point of the
+  campaign's "codify" disposition).
+
+**Device-pack (hardware):** Scan mode (FU-378, L679–691) needs `scanning_enabled`
+ON **and a camera**. The manual-entry level-set loop is A-codifiable behind a
+scanning-enabled seed knob, but the camera-decode half is Pack 1 (Android). →
+moved whole to **Appendix A Pack 1**; codify the manual-entry loop opportunistically
+when a scanning-enabled e2e seed flag is worth adding.
+
+**Stocktake Chunk 2 runner — first slice CODIFIED green (2026-07-17, session 5;
+`web_app/e2e/stocktake.spec.ts`, 5 tests):** legacy `/stocktake/run` → `/stocktake`
+redirect; runner opens straight on the first item (no landing) with the cadence/
+overdue caption + "Still correct" + the level-tinted "(change)" button, and NO
+"Out of stock" button; the **Still-correct walk** drains the whole queue to the
+completion summary (checked counter > 0) and **Done** returns to `/stock`;
+re-entering the drained queue shows the "You're all caught up." card. Covers
+DORA_VERIFY L774–777, L781, L784, L788–790, L819–820 (partial), L825. →
+**owner can delete those lines.** Remaining Chunk 2 = **codify-next**:
+- The other four verbs (Change level picker L792–797, Skip session-only L798–801,
+  Push 3 days L803–806, Mute+confirm L808–812) + the (?) help dialog L814–816 +
+  the add-to-list completion prompt L821–824. Curated seed (bulk=0) yields the
+  overdue items (Hot Crispy Chippies, Brazil Nuts, Vanilla Ice Cream, Broccoli);
+  add-to-list needs an active list (seed has "This week"). Deferred to keep this
+  slice green + reviewable.
+- **Stocktake Chunk 3 settings (L739–749, L752–753)** — cadence/auto-tune toggles +
+  alert-threshold removal are A-codifiable (admin settings PATCH + persist). The
+  **pulse outline / reduced-motion / dark/light** checks (L762–768) are V-pack
+  (eyeball) → Appendix B.
+- **Add-a-stock-item dialog (L672–677, Codex)** — backend fully unit-tested (trim/
+  dedup/over-long); the dialog-renders-expiry+Essential visual bits are a
+  one-time confirm; the trim/dedup behaviour is already pinned. Low priority.
+
+**Batch 2 disposition tally:** ~120 items → ~11 codified green · ~15 delete
+(backend-pinned) · ~11 delete (FU-507/508 codified) · ~25 codify-next
+(stocktake) · ~20 device-pack (scan) · rest V-pack/one-time. Manual pile for
+this batch shrinks by ~35 now, ~25 more after the stocktake spec.
+
+**Harness lesson (major — shapes every future browser batch):** the in-app
+preview pane runs **hidden** (`visibilityState: hidden`): no paint, no
+`requestAnimationFrame`, screenshots time out. Vue `<Transition>`s double-rAF
+before resolving, so **any transition-gated content wedges** — route swaps
+after the first, and the stock detail page's skeleton→content `FadeTransition`
+(cold-load included). Partial workaround (in Appendix D): rAF stub +
+zero-duration CSS un-wedges top-level route swaps, but not the C-1b desktop
+peek. **Decision: browser A-checks move to a Playwright-driven runner**
+(already in the repo — FU-540, `test:e2e`; headless Chromium paints, rAF runs,
+screenshots work → also produces the V-pack artifacts). Claude in Chrome is
+the alternative if the extension gets connected. The pane stays fine for
+API-level checks, single-view cold loads, and DOM instrumentation.
 
 ---
 
@@ -389,7 +642,11 @@ ones below can be decided up front.
   the paste-based rebuild (L178 pins the 404). Keep L209/216/217 (migration,
   legacy source, backup round-trip). → 🗑
 
-**Item-level rewrites/deletes (43):** with evidence, by batch —
+**Item-level rewrites/deletes (43 + 1 found in pilot):** with evidence, by batch —
+- L91 — example password `abcdefgh` is itself on breach lists, so the check can
+  never pass as written (pilot-verified: 422 breach rejection). Rewrite with a
+  non-breached letters-only example (e.g. `zxqvbnmk`); the intent (no digit
+  rule) is confirmed working.
 - L57 — scan now opens stock item, add-flow retired (FU-378). Rewrite.
 - L202–203 — HowToStep/HowToSection import went with URL importer. Delete.
 - L274 — command palette CUT; keep `g r` half. Rewrite.
@@ -432,7 +689,28 @@ ones below can be decided up front.
   run against a **copy** of the dev DB or an explicitly disposable one — never
   the owner's live dev data without asking.
 - **App launch:** `.claude/launch.json` has `dora-backend` (:5170) and
-  `dora-spa` (:5174). SQLite dev DB at repo root.
+  `dora-spa` (:5174). **Do not verify against the repo-root `dora.data.db`** —
+  it's a stale `create_all` artifact with no `alembic_version` (see FU-570 and
+  the pilot caveat). First step of every verify session: point the backend at
+  the **dedicated disposable verify DB** (fresh file + `alembic upgrade head` +
+  FU-388 dev seed), e.g. via `DORA_DB_PATH` in the backend's environment.
+  Pilot-created test accounts in the root DB: `qa-admin` /
+  `dora-qa-admin-2026` (admin), `qa-user-1`/`zxqvbnmk`, `qa-user-2`/
+  `passphrase please` — owner may delete at leisure.
+- **Vue form automation:** programmatic `form_input`/typed keystrokes don't
+  reliably reach Quasar v-models in the preview pane; use the native-setter +
+  `input`-event injection pattern (worked everywhere in the pilot).
+- **Preview-pane limits (2026-07-16 session 2):** the pane tab is *hidden* —
+  no paint, no rAF, screenshots time out. Vue `<Transition>`-gated content
+  (route swaps after the first; StockItemDetail's skeleton→content fade) never
+  mounts. Partial fix: stub `requestAnimationFrame` with setTimeout + inject
+  `*{transition:none!important;animation:none!important}` after boot — fixes
+  top-level route swaps only. **Use the Playwright runner for real UI walks**
+  (repo already has it: `web_app` `test:e2e`, FU-540); pane is fine for
+  API checks, cold-load single views, and DOM instrumentation. App router is
+  **hash mode** (`/#/stock`), and the SPA default route on plain URLs.
+- **Verify fixtures in the DB:** "QA Verdict Cheese" + "QA verdict shop 1–3"
+  (see Batch 0 continuation) — reusable for BuyVerdictCard; delete whenever.
 - **Postgres leg:** `compose.dev.yml` PG + `DORA_TEST_DB=postgres`; batch 19.
 - **Built-PWA checks:** `quasar build -m pwa` + `quasar serve` or the Docker
   image; batch 17.

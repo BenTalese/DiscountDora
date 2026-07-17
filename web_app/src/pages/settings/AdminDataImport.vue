@@ -291,7 +291,7 @@
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
-    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
 
     const $q = useQuasar();
@@ -496,7 +496,7 @@
             const response = await fetch(`${baseUrl}/data/import/spreadsheet/inspect`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({
                     upload_id: uploadId.value,
                     filename: file.name,
@@ -569,7 +569,7 @@
             const response = await fetch(`${baseUrl}/data/import/spreadsheet/commit`, {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 body: JSON.stringify({
                     upload_id: uploadId.value,
                     filename: pickedFile.value.name,

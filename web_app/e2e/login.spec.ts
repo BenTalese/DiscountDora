@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // FU-540 — the login flow itself, exercised fresh (no saved session). This is
 // the one journey that can't rely on auth.setup's stored state, so it clears

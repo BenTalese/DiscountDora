@@ -58,6 +58,72 @@ PROJECT_STATE Regenerated-line note. Files: `create_stock_item.py`, `update_stoc
 
 ---
 
+## 2026-07-17 (later 3) — Batch 2 chip-away: stocktake runner first slice codified (stocktake.spec.ts 5/5 green)
+
+**Why:** small chip-away with limited budget — a portion of Stocktake Chunk 2.
+
+**Codified → green (`web_app/e2e/stocktake.spec.ts`, 5 tests):** legacy `/stocktake/run`
+redirect; runner opens straight on first item (cadence/overdue caption + "Still correct" +
+level-tinted "(change)" button; no "Out of stock" button); Still-correct walk drains the queue
+to the completion summary (checked > 0) and Done → /stock; drained queue → "You're all caught
+up." card. Covers DORA_VERIFY L774–777/781/784/788–790/819–820(partial)/825 → owner-deletable.
+Three self-fixes getting there (all test-side, no product code): change-level button is labelled
+`<level> (change)` not "Change level"; the walk raced page-load (added an explicit wait); "Back
+to Stock" is a link not a button.
+
+**Deferred (codify-next):** the other 4 verbs (Change level / Skip / Push / Mute) + (?) help +
+add-to-list completion prompt. Seed facts captured in tracker.
+
+**Standards close-gate:** test/docs only; no R-rule; no ADR. Budget-aware: verified the new
+spec green in isolation (5/5); did not re-run the full 25-test suite (new file is self-contained).
+
+**Ledgers:** no new FUs. Tracker Batch-2 section updated. PROJECT_STATE hand-edit.
+
+**Next up:** remaining stocktake verbs, then Batch 3 (Stock B, L816+).
+
+---
+
+## 2026-07-17 (later 2) — Batch 2 (Stock) first codified increment: stock.spec.ts green, fix-pins dispositioned, suite 25/25
+
+**Why:** "continue to next batch." Batch 2 = Stock (~120 checks). Applied the campaign
+close-out rule (codify regression-worthy flows / delete already-pinned+verified-once / route
+hardware to device packs) rather than hand-walking 120 items.
+
+**Codified → green (`web_app/e2e/stock.spec.ts`, 7 tests):**
+- **FU-508 (StockItem.image dropped)** — 3 pins: no `/stock-items/<id>/image` request on
+  overview or detail; no "row images" toolbar toggle; detail Overview tab has no file input.
+- **FU-507 (expiry-on-open)** — 4 pins on curated sealed+expiry item "Kensington Pride Mangoes":
+  fixture contract, detail-toggle → "Marking … as open" prompt → Update expiry persists is_open
+  + new expiry in one PATCH (server-verified), re-seal fires no dialog. Caught my own wrong
+  assumption first (detail toggle is silent — no toast, that's the row path — pins now assert
+  server truth).
+
+**Verified-once → already backend-pinned → delete (no e2e dup):** the 5 fix-verify sections
+(product unlink FU-528, stocktake snooze FU-526, consumption/re-confirm FU-533, rename-to-own
+FU-528, unlinked-ingredients FU-532, reconcile pagination fuzz) are all owned by green backend
+tests — ran the representative set live: **86 passed** (`test_unlinked_ingredients` +
+`test_patch_semantics` + `test_reconcile_verbs`). Browser confirm is redundant → owner deletes.
+
+**Dispositioned:** scan mode (FU-378) → Appendix A Pack 1 (needs camera + scanning_enabled);
+stocktake runner (Chunk 2, ~25 checks) → **codify-next** (curated seed already yields 4
+deterministic overdue items — named in tracker); stocktake settings toggles → codify-next;
+pulse/reduced-motion/dark → V-pack; add-item dialog → backend-pinned + one-time visual.
+
+**Result:** full e2e suite **25/25 green (~3.5 min)** (19 → 25, +6 net after 1 self-fix).
+Backend representative set 86 green. No product code changed this unit (test + docs only).
+
+**Standards close-gate:** test/docs only; no R-rule surface; no ADR.
+
+**Ledgers:** no new FUs. Tracker: Batch-2 row → 🟡 + full Batch-2 progress section with the
+disposition tally (~35 deletable now, ~25 more after the stocktake spec). PROJECT_STATE
+hand-edit.
+
+**Next up:** Stocktake runner spec (`stocktake.spec.ts`) — the biggest remaining Stock flow;
+seed facts captured in the tracker. Then Batch 3 (Stock B, L816+). Owner still has: Appendix C
+stale deletions + deleting this batch's dispositioned items from DORA_VERIFY.md.
+
+---
+
 ## 2026-07-17 (later) — e2e suite GREEN 19/19: two spec-side fixes close out the Playwright runner unit
 
 **Why:** the previous unit ended with the suite run in flight; its last run had 1 failure

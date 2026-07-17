@@ -669,6 +669,13 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ## Stock
 
+### Add-a-stock-item dialog — expiry + Essential + name trim (Codex review, 2026-07-17)
+*(Backend fully unit-tested — 6 green incl. over-long/whitespace/trim-dedup; these are the visual/UX confirmations. Dialog opens from Stock Overview "Add".)*
+- [ ] The Add dialog now shows, under Location: an **Expiry (optional)** field with a calendar icon that opens a date picker, and an **Essential** toggle with an info tooltip
+- [ ] Add an item with an expiry set + Essential on → open the new item's detail page: the expiry date and the Essential toggle both reflect what you chose
+- [ ] Type a name with leading/trailing spaces (e.g. "  Milk  ") → it's stored trimmed ("Milk"); a name that's only spaces is rejected by the form ("Name is required")
+- [ ] Adding "  Milk  " when a "Milk" already exists shows the "already exists" error (trim + case-insensitive dedup), not a second row
+
 ### Action-first scan mode on Stock Overview — origin FU-378
 *(Needs the install-wide `scanning_enabled` flag ON — Settings → Admin, or `DORA_*`/AppSetting — and a device with a camera. Manual-entry box in the overlay works as a camera stand-in.)*
 - [ ] With scanning ON, on Stock Overview the **Scan** button opens the camera overlay directly (single button, no menu on the toolbar)

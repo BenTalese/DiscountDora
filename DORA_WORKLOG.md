@@ -9,7 +9,236 @@ next.
 
 ---
 
-## 2026-07-16 (later 4) — FU-431 RESOLVED: no Product History redesign brief (decision unit, no code)
+## 2026-07-17 (later 2) — Codex review of stock-item create: fixed P1 (PG 500) + P2×2 (normalise, dialog fields); P3 → FU-575
+
+**Why:** User brought a Codex review with 4 findings on stock-item creation. Verified each against
+the code before acting.
+
+**P1 — over-long name 500s on Postgres (FIXED).** `CreateStockItemRequest.name` had `min_length=1`
+but no `max_length`; column is `String(255)`; the sibling update already capped at 255. Added
+`max_length=255` → clean 422/400 instead of a PG-only 500 (same class as FU-520's `alert_key`).
+
+**P2a — names not normalised (FIXED, both create + update).** Dup check is already case-insensitive
+(`eq` defaults `case_sensitive=False`) so "Milk"/"milk" was caught — but whitespace wasn't trimmed,
+so `" Milk "` and `"   "` slipped through. Added a `field_validator("name", mode="before")` strip to
+both `Create/UpdateStockItemRequest` (runs before length checks → whitespace-only collapses to "" →
+min_length 422; single authority for every caller). Client: dialog rule now checks `.trim()` and
+submit sends `form.name.trim()`.
+
+**P2b — dialog missing promised fields (FIXED).** API + Help promised expiry/flag at add-time but the
+dialog only sent name/level/location. Added an **Expiry (optional)** date field (q-input + q-date
+popup) and an **Essential** toggle (label + tooltip mirror the detail page's `is_flagged` control);
+both already existed on the client `CreateStockItemCommand` type + the API. Help copy now matches — no
+Help change needed.
+
+**P3 — no unique constraint (race) → logged, not fixed.** App-level dup check only; no DB unique
+constraint on `StockItem.name`, so concurrent creates can race (soft dup, not corruption). A real fix
+needs a unique constraint + migration + a case-insensitive-uniqueness decision (case-sensitive by
+default on PG; citext/functional index differs SQLite↔PG) — disproportionate for a single-household
+self-host app (Codex rated it low). **[[FU-575]]** opened. Also flagged there: recipe name has the same
+no-strip latent whitespace issue (same 4-line validator, opportunistic).
+
+**Verification:** venv python sanity (strip/reject-whitespace/reject-overlong/update-None-passes all
+correct); **3 new e2e tests** (over-long→400, whitespace-only→400, `"  Milk  "`→422 trim+dedup); stock
+suite **88+6 green** (`test_stock_item_router.py`); frontend **vue-tsc + eslint clean** on the dialog.
+Browser confirmation of the two new dialog controls + trim UX queued in DORA_VERIFY (backend fully
+tested; another dev server is running in the folder so I didn't spin a parallel stack — matches the
+build-to-plan-verify-later norm).
+
+**Standards close-gate:** R-003 (normalise once at the request boundary; server owns the name fact),
+matched the existing `field_validator` idiom (recipes/barcodes). Recipe-name parallel flagged in FU-575
+per the explain-or-flag rule. No new ADR. **FU number note:** used **FU-575** (concurrent agent had
+already taken 568–574).
+
+**Ledgers:** CHANGELOG 2 Fixed bullets; DORA_VERIFY Stock section (dialog visuals); FU-575 opened;
+PROJECT_STATE Regenerated-line note. Files: `create_stock_item.py`, `update_stock_item.py`,
+`CreateStockItemDialog.vue`, `test_stock_item_router.py`.
+
+**Next up:** nothing forced from this arc; FU-575 is opportunistic.
+
+---
+
+## 2026-07-17 (later) — e2e suite GREEN 19/19: two spec-side fixes close out the Playwright runner unit
+
+**Why:** the previous unit ended with the suite run in flight; its last run had 1 failure
+(buy-verdict FU-572 pin). This unit fixed the remaining spec bugs and confirmed the full stack.
+
+**Fixes (both test-side, no product code):**
+1. `buy-verdict.spec.ts` assumed `GET /api/shopping-lists` returns `{items: […]}` — it returns a
+   **bare array** of summaries (`get_shopping_lists.py` `ok(_Summaries)`). Helper fixed.
+2. The FU-572 pin did `page.goto('/#/')` → api setup → `page.goto('/#/stock/<id>')`; a
+   **same-document hash-only goto doesn't reliably drive vue-router** (test stranded on the
+   dashboard). Restructured: engineer state via `page.request` (context cookie jar, no page
+   needed) FIRST, then one full-document goto to the detail route. Pattern documented in the
+   spec + tracker for future specs.
+
+**Result:** full e2e suite **19/19 green (~2.6 min)** — auth.setup, 5 smoke routes + API
+handshake, login, password-policy (5), uploads/FileDrop (2), buy-verdict (4). Frontend Vitest
+**387/387**; vue-tsc clean. Watch item: the meal-plans smoke test flaked ONCE in one full run
+(networkidle timing) and passed in isolation + the next full run — if it recurs, swap
+`networkidle` for a route-specific ready assertion.
+
+**Standards close-gate:** test-only changes; no R-rule surface; no ADR.
+
+**Ledgers:** no new FUs. Tracker Batch-0 note updated with the green-suite line + the two
+spec-pattern lessons. PROJECT_STATE hand-edit.
+
+**Next up:** Stock batches 2–3 per the tracker plan, applying the close-out rule (each check →
+verified-once-delete / codify / device-pack). FU-573 (toast over-count) and FU-574 (bogus-URL
+recovery) are small and can ride along with Batch 2. Owner still has open decisions: Appendix C
+stale deletions + deleting the Batch-0-passed items from DORA_VERIFY.md.
+
+---
+
+## 2026-07-17 — Blocker FUs fixed (571/568/569) + **Batch 0 COMPLETE**: FileDrop tail, BuyVerdictCard L87–92, Runtime URL walked; FU-572 found+fixed; FU-573/574 opened
+
+**Why:** Owner: "continue" (× 2 — session resumed after a usage-limit cut mid-CSRF-sweep).
+
+**Blocker fixes, all verified live:**
+- **FU-571 (uploads 403) RESOLVED:** exported `csrfHeader()` from `axiosHttpClient.ts`; swept
+  every raw-fetch mutating site (chunked upload start/chunk/finish/abort, import
+  inspect/commit, backup create/inspect/restore, 2× app-settings PATCH, `/client-logs`,
+  `/tts`). Proof: real `useChunkedUpload().upload()` in-page → 200+upload_id, import inspect
+  200 with auto-mapping; header-less POST still 403s (defence intact).
+- **FU-568 (fineprint) RESOLVED:** hint prop on the 4 auth surfaces; rendered live on Login
+  register-mode + ResetPassword. Tracker L95 flipped to PASS.
+- **FU-569 (Windows logging) RESOLVED:** `stdout.reconfigure(utf-8, errors=replace)` in
+  `configure_logging`; probe under forced cp1252 emits `→ é ✓` clean.
+
+**Batch 0 finished in-pane** — key harness discovery: the full Appendix-D recipe (rAF stub +
+zero-anim CSS + **in-SPA hash nav, no reload**) mounts the stock detail page + BuyVerdictCard
+after all. Playwright runner still recommended for screenshot/V-pack batches, but tap-walks
+work in-pane. Walked: SettingsFileDrop tail (**5/5**, L76 filename/L79 remove/L80 busy-inert),
+BuyVerdictCard **L87–92 all pass** (both mark_stocked surfaces, remove_from_list on overview/
+detail/list-line incl. per-line semantics, zero dead-button fallback toasts), Runtime URL
+L112–114 (prompt prefill ✅, bogus-URL no-crash ✅, **recovery FAILS** — error page's only
+affordance is "Try again", About unreachable → FU-574).
+
+**FU-572 found + FIXED mid-walk** (charter: real bug blocking the checks): buy-verdict client
+cache — `invalidateBuyVerdict` never refetched mounted consumers (detail card stale until
+remount, contradicting its own comments) AND the cart quick-add/remove/restock seams never
+invalidated. Fix: invalidate now refetches live entries (inflight-deduped); invalidation added
+to the shared seams in `useShoppingListActions` + `useStockItemActions` (R-003 — one path per
+mutation). Toast de-hardcoded: `Marked as ${level.name}.`. Proven live: card flips one-tap in
+place, no remount. vue-tsc clean ×2.
+
+**New findings (open):** FU-573 (removeFromAllLists toast counts server no-ops — "Removed from
+3 lists" when on 1), FU-574 (bogus runtime URL → no self-service recovery in browser).
+
+**Standards close-gate:** FU-572 fix keeps mutation seams single-sourced (R-003); all edits
+comment the FU id; no rule violations introduced. ADR eval: "cache invalidation must repaint
+live consumers" is a candidate pattern but one instance so far — not promoted.
+
+**Ledgers:** FU-568/569/571/572 → RESOLVED archive; FU-573/574 opened; CHANGELOG 3 Fixed
+entries; tracker Batch 0 row ✅ COMPLETE + per-check evidence sections; PROJECT_STATE
+hand-edit. Env note: backend on :5170 + Vite on :5174 are another session's processes — reused
+read-only-ish (HMR served my edits); typecheck/probes run locally.
+
+**Next up:** (1) stand up the Playwright verify-runner (repo has FU-540 `test:e2e`
+scaffolding; creds `dora`/`dora`) for screenshot/V-pack batches; (2) **Stock batches 2–3**
+per the tracker plan (tap-walks can start in-pane with the Appendix-D recipe if the runner
+lags); (3) FU-570 boot-guard decision is the standing needs-a-decision item.
+
+## 2026-07-16 (later 6) — Verify campaign Batch 0 continued: verify DB stood up, Password policy COMPLETE, FU-571 found (uploads broken), harness limits mapped
+
+**Why:** Owner: "continue to finish batch 0 then stock."
+
+**Verify DB:** root `dora.data.db` was the stale artifact (FU-570) — backed it up to session
+scratchpad, rebuilt in place via the app's own dev path (`drop_all`+`create_all`+
+`seed_dev_data(bulk_stock_items=500)`; env set in-process, `.env` untouched). 1 user
+(`dora`/`dora`, admin), 521 items; dashboard now renders clean → the pilot's 500s were pure
+schema drift, no fresh-install product bug.
+
+**Password policy (FU-442) — section COMPLETE (7/8 pass + 1 fail=FU-568):** L96 ✅ inline
+"At least 8 characters" live on Account settings; L97 ✅ `dora`/`dora` (4-char pre-policy) logs
+in via the UI — set-time-only confirmed; L98 ✅ full settings tree walked in-app (personal +
+kitchen-setup + entire Admin mode incl. System ×12/Data ×3/Audit/API) — no policy toggle.
+Owner can delete DORA_VERIFY L91–94/96–98 (L91 needs the example-password rewrite first,
+tracker Appendix C; L95 stays until FU-568 is fixed + re-verified).
+
+**SettingsFileDrop (FU-545) — 3/5 verified, tail blocked:** click-forwarding ✅, keyboard
+focus-ring ✅, drag highlight/calm ✅ (instrumented DOM evidence). Filename-display/Remove/busy
+tail blocked by **FU-571 (new, real bug):** `useChunkedUpload.ts` raw-fetches
+`/api/data/uploads/start|chunk|finish` with **no X-CSRF-Token** → FU-197's defence 403s every
+chunked upload → **Import + Backup-restore are hard-broken in any browser**. Proven live:
+identical call with the header → 200+upload_id. Fix shape in the FU; recommended now.
+
+**BuyVerdictCard (FU-454) — state engineered + API-verified, UI tap deferred:** built fixture
+"QA Verdict Cheese" (3 priced done-list purchases 90/60/30d + 2 waste events = 67% rate, level
+Stocked) → `/buy-verdict` returns skip/high + one-tap `mark_stocked` "Already stocked" ✅; the
+overview row shows the Skip chip live. Tap-walk deferred (below). Fixture persists for reuse.
+
+**Harness finding (shapes the whole campaign):** the preview pane runs **hidden** — no paint,
+no rAF, screenshots time out → Vue `<Transition>`-gated content never mounts (route swaps
+after the first; StockItemDetail's skeleton→content fade even on cold load). rAF-stub +
+zero-duration-CSS recipe un-wedges top-level routes only. **Decision: UI walks move to a
+Playwright-driven runner next session** (repo already has Playwright — FU-540/`test:e2e`;
+paints headlessly, real screenshots → doubles as V-pack artifact generator). Claude-in-Chrome
+is the alternative (extension currently not connected). Pane remains fine for API checks,
+cold-load single views, DOM instrumentation. All recipes + limits recorded in
+DORA_VERIFY_TRIAGE.md Appendix D.
+
+**Standards close-gate:** no product code touched (ledgers/tracker only + DB reseed via the
+app's own seed path). No R-rule surface; no ADR (harness recipes live in the tracker).
+
+**Ledgers:** FU-571 opened. Tracker: Batch 0 statuses + Batch-0-continuation section +
+Appendix D limits. No CHANGELOG (nothing shipped). PROJECT_STATE hand-edit.
+
+**Next up:** (1) fix FU-571 + FU-568/569 (small, unblock verification); (2) build the
+Playwright verify-runner (drive it from `web_app` e2e scaffolding; qa creds `dora`/`dora`) and
+finish Batch 0 (BuyVerdictCard taps L83–88, SettingsFileDrop tail, Runtime URL L112–114);
+(3) then Stock batches 2–3 per the tracker plan.
+
+---
+
+## 2026-07-16 (later 5) — DORA_VERIFY campaign: full triage of 1,406 checks + pilot verify run (Password policy)
+
+**Why:** Owner: the verify pile (~1,406 unchecked items, 1,948 lines) would take months to
+hand-walk. Agreed approach: **(2) triage → (1) agent-verified evidence reports per surface →
+(4) guided-walkthrough packs for eyeball items**, with (3) Playwright conversion deferred to a
+later session. This unit ran the triage and a pilot.
+
+**Triage (7 parallel agents over gap-free slices of DORA_VERIFY.md):** every checkbox item
+classified A (agent-verifiable) / V (agent-stages, owner eyeballs) / H (hardware/human-only).
+Result: **A 1,300 (92%) · V 66 · H 40 · stale-suspect 61** (each stale with cited evidence —
+biggest clusters: onboarding persona/auto-advance churn from the 07-12 story pass, FU-333
+env→AppSetting supersessions, FU-359 data-page revamp, retired URL importer, shopping-list UX
+v2 over the P6-01 chunks). All consolidated into **`DORA_VERIFY_TRIAGE.md` (new, repo root)** —
+the campaign tracker: numbers, 20-batch session plan, per-section register with statuses,
+device/eyeball pack appendices, stale list awaiting owner delete/rewrite calls, standing
+constraints. DORA_VERIFY.md got a 3-line pointer banner; nothing else touched there (owner
+manages deletions). `.claude/launch.json` added (dora-backend :5170 / dora-spa :5174).
+
+**Pilot (Batch 0 slice — Password policy FU-442, live app):** 5/8 checks done.
+L92/93/94 PASS clean (space-passphrase accepted; <8 rejected with correct copy; breach-list
+rejection case-insensitive, correct inline UI). L91 **intent PASS / example stale** —
+`abcdefgh` is itself breach-listed so the written check can never pass; letters-only confirmed
+OK via `zxqvbnmk`. L95 **FAIL (half)** → **FU-568**: the "a passphrase works well" fineprint
+FU-442 shipped is gone from all four auth surfaces (zero grep hits; ResetPasswordPage has no
+hint at all) — likely lost in the C-19 auth-shell rebuild. L96–L98 deferred (see caveat).
+Bonus evidence banked: first-run setup page works end-to-end (part of FU-200); friendly-error
+toasts render with ref-ids; "Skip onboarding" label confirmed (top-block L18).
+
+**Environment caveat (drove two more FUs):** the preview backend silently used the repo-root
+`dora.data.db` — a July-10 `create_all` artifact with **no alembic_version** and stale schema —
+so everything beyond auth 500'd (dashboard showed 7 friendly errors; NOT a fresh-install bug).
+→ **FU-570** (boot has no schema-version guard; /api/health reports code-head not DB state) and
+→ **FU-569** (Windows cp1252 console: every request logs a UnicodeEncodeError traceback from the
+middleware's →/← arrows). Standing rule added to the tracker: every verify session starts by
+pointing the backend at a dedicated disposable DB (fresh + `upgrade head` + FU-388 seed).
+Pilot test accounts left in root DB (qa-admin / qa-user-1 / qa-user-2), documented in tracker.
+
+**Standards close-gate:** no product code touched (docs + launch.json + ledgers). No R-rule
+surface. ADR eval: none — the "dedicated verify DB" rule lives in the tracker, not
+ENGINEERING_STANDARDS (process, not code).
+
+**Ledgers:** FU-568/569/570 opened. DORA_VERIFY_TRIAGE.md created + pilot results recorded.
+DORA_VERIFY.md pointer banner only. No CHANGELOG (nothing shipped). PROJECT_STATE hand-edit.
+
+**Next up:** owner reviews the tracker — esp. Appendix C stale recommendations (61 items, his
+delete) and the pilot report format. Then batch sessions: (1) stand up the dedicated verify DB +
+finish Batch 0 (L96–98, SettingsFileDrop, BuyVerdictCard, Runtime URL), (2) work the batch plan
+top-down. FU-568/569 are quick fixes worth taking before or during the next batch.
 
 **Why:** User: "do FU-431" — the deferred question of whether Product History deserves its own
 redesign brief (PH-1 discoverability + PH-10 desktop drawer), or whether FU-227's "your prices"

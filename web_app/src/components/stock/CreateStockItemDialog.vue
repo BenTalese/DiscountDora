@@ -55,7 +55,7 @@
                         :error="!!fieldErrors.name"
                         :error-message="fieldErrors.name"
                         @update:model-value="clearField('name')"
-                        :rules="[(v: string) => (!!v && v.length > 0) || 'Name is required']"
+                        :rules="[(v: string) => (!!v && v.trim().length > 0) || 'Name is required']"
                     />
                     <q-select
                         v-model="form.stock_level_id"
@@ -117,6 +117,47 @@
                         @update:model-value="clearField('stock_location_id')"
                     />
 
+                    <!-- Help promises "location, expiry, or flag" at add time,
+                         and the API supports them on create — surface expiry +
+                         Essential here so the dialog matches that contract
+                         (Codex P2). Both optional; blank = unset. -->
+                    <q-input
+                        v-model="form.expiry_date"
+                        outlined
+                        clearable
+                        mask="####-##-##"
+                        label="Expiry (optional)"
+                        placeholder="YYYY-MM-DD"
+                        :error="!!fieldErrors.expiry_date"
+                        :error-message="fieldErrors.expiry_date"
+                        @update:model-value="clearField('expiry_date')"
+                    >
+                        <template #append>
+                            <q-icon :name="ICONS.event" class="cursor-pointer">
+                                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                                    <q-date v-model="form.expiry_date" mask="YYYY-MM-DD">
+                                        <div class="row items-center justify-end">
+                                            <BaseButton variant="ghost" label="Close" v-close-popup />
+                                        </div>
+                                    </q-date>
+                                </q-popup-proxy>
+                            </q-icon>
+                        </template>
+                    </q-input>
+
+                    <div class="row items-center q-gutter-sm">
+                        <q-toggle v-model="form.is_flagged" label="Essential" />
+                        <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                            <q-tooltip max-width="320px">
+                                Flagged as an essential — shows up in
+                                "essentials" auto-generate sources even when
+                                it's stocked. Different from auto-add: this only
+                                matters when you run auto-generate, not on every
+                                stock change.
+                            </q-tooltip>
+                        </q-icon>
+                    </div>
+
                 </q-form>
             </q-card-section>
             <template #actions>
@@ -142,6 +183,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useQuasar } from 'quasar';
+    import { ICONS } from 'src/style/icons';
     import { computed, reactive, ref, watch } from 'vue';
 
     // Prefill type lives in a sibling `.ts` file so page callers
@@ -199,6 +241,8 @@
         name: props.prefill?.name?.trim() || '',
         stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
         stock_location_id: null,
+        expiry_date: null,
+        is_flagged: false,
     });
 
     const form: CreateStockItemCommand = reactive(defaultForm());
@@ -254,9 +298,11 @@
         resetFormErrors();
         try {
             const created = await stockItemStore.createStockItemAsync({
-                name: form.name,
+                name: form.name.trim(),
                 stock_level_id: form.stock_level_id,
                 stock_location_id: form.stock_location_id,
+                expiry_date: form.expiry_date || null,
+                is_flagged: form.is_flagged ?? false,
             });
             // if the dialog was opened from a scan flow with a
             // barcode prefill, register the EAN against the new stock

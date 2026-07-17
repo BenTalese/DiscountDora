@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from dora_api.domain.entities.consumption_event import (
     CONSUMPTION_SOURCE_COOK, CONSUMPTION_SOURCE_MANUAL,
@@ -76,6 +76,15 @@ class UpdateStockItemRequest(BaseModel):
     # server-side so history survives a recipe delete).
     consumption_source: str | None = None
     consumption_recipe_id: UUID | None = None
+
+    # Normalise the name the same way create does — strip surrounding
+    # whitespace before the length checks, so a rename to "   " is a 422 and
+    # " Milk " can't dodge the case-insensitive duplicate check. None (field
+    # omitted) passes through untouched (partial-update semantics).
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 @dataclass(slots=True)

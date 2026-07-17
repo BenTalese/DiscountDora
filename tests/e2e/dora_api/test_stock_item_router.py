@@ -223,6 +223,49 @@ def test__create_stock_item__EmptyName__IsBadRequest(api, stock_level_id):
     assert 'name' in _Response.json()['errors']
 
 
+def test__create_stock_item__NameExceedsMaxLength__IsBadRequest(api, stock_level_id):
+    # Codex P1 — a 256+ char name must be a clean validation failure
+    # (max_length=255 mirrors the String(255) column), not a DB-layer 500 on
+    # Postgres (SQLite would silently accept it).
+    _Request = {"name": "x" * 256, "stock_level_id": str(stock_level_id)}
+
+    _Response = requests.post(base_route, json=_Request)
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert 'name' in _Response.json()['errors']
+
+
+def test__create_stock_item__WhitespaceOnlyName__IsBadRequest(api, stock_level_id):
+    # Codex P2 — "   " must not be storable; it strips to "" at the request
+    # boundary and fails min_length.
+    _Request = {"name": "   ", "stock_level_id": str(stock_level_id)}
+
+    _Response = requests.post(base_route, json=_Request)
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert 'name' in _Response.json()['errors']
+
+
+def test__create_stock_item__NameWithSurroundingWhitespace__IsTrimmedAndDeduped(api, stock_level_id):
+    # Codex P2 — "  Milk  " must be trimmed server-side AND collide with an
+    # existing "Milk" via the case-insensitive duplicate check, rather than
+    # slipping through as a visually-identical duplicate. The 422 proves the
+    # trim happened (without it, the leading/trailing spaces would dodge the
+    # match and create a 201).
+    _First = requests.post(base_route, json={
+        "name": "Milk", "stock_level_id": str(stock_level_id),
+    })
+    assert _First.status_code == 201
+
+    _Second = requests.post(base_route, json={
+        "name": "  Milk  ", "stock_level_id": str(stock_level_id),
+    })
+
+    assert _Second.status_code == 422
+
+
 def test__create_stock_item__ExtraAttributes__IsBadRequest(api, stock_level_id):
     _Request = {
         "name": "Some Stock Item",

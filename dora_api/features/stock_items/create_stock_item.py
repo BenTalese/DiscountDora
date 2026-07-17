@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_expiry_event import (
@@ -28,13 +28,27 @@ from dora_api.infrastructure.ports import Repository
 class CreateStockItemRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length = 1)
+    # max_length mirrors the DB column (String(255)) so an over-length name is a
+    # clean 422 rather than a DB-layer 500 on Postgres (SQLite would silently
+    # accept it) — same class as the FU-520 alert_key truncation fix. The
+    # sibling UpdateStockItemRequest already carries this bound.
+    name: str = Field(min_length = 1, max_length = 255)
     stock_level_id: UUID
     stock_location_id: UUID | None = None
     stock_group_id: UUID | None = None
     expiry_date: date | None = None
     is_flagged: bool = False
     is_open: bool = False
+
+    # Normalise the name at the request boundary: strip surrounding whitespace
+    # BEFORE the length checks run, so a whitespace-only name ("   ") collapses
+    # to "" and fails min_length (422) instead of being stored, and " Milk "
+    # can't masquerade as distinct from "Milk" past the case-insensitive
+    # duplicate check. Single authority for every caller of the endpoint.
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 @dataclass(slots=True)

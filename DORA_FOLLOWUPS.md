@@ -52,7 +52,68 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-574 — Bogus runtime backend URL: no self-service recovery path in the browser
+- **Raised:** 2026-07-17 (verify-campaign Batch 0, Runtime URL walk L112–114)
+- **Type:** finding (real gap — verified live)
+- **What:** Settings → About → **Change instance URL** (P8-10): saving an
+  unreachable URL persists `dora.backendBaseUrl` and reloads — the app then
+  renders the friendly full-page "Can't reach Dora's brain" screen (no crash ✅)
+  whose **only affordance is "Try again"**. `#/settings/about` renders that
+  same error screen, so the Change-URL prompt is unreachable and a browser/PWA
+  user is stuck until they hand-clear localStorage. DORA_VERIFY L113 expects
+  "the About page still lets you re-open the prompt to fix it" — that clause
+  FAILS. (Native/Capacitor may differ — its no-URL guard bounces *to* About;
+  not tested here.)
+- **Fix shape:** add a "Change instance URL" escape hatch on the network-error
+  screen when a runtime override is set (or let /settings/about mount without
+  a reachable backend). Small, isolated.
+- **Recommended resolution:** later, next time the error-page/runtime-URL
+  surface is touched (papercut until the PWA/native distribution push — then
+  it matters).
 
+## [OPEN] FU-573 — "Removed from N lists" toast over-counts: server no-ops counted as removals
+- **Raised:** 2026-07-17 (verify-campaign Batch 0, BuyVerdictCard walk L89)
+- **Type:** finding (cosmetic accuracy — verified live)
+- **What:** `useShoppingListActions.removeFromAllLists` fans
+  `remove-by-stock-item` out over every open list and counts every
+  **non-throwing** call as a removal — but the server endpoint is a deliberate
+  no-op success when the list doesn't contain the item. Observed: item on 1
+  open list, toast said "Removed from 3 lists." `useBuyVerdictActions.
+  removeFromAllOpenLists`'s docstring ("returns the count actually removed")
+  is wrong for the same reason.
+- **Fix shape:** have the server return whether a line was actually removed
+  (or its count) and sum that; or pre-filter `listIds` by the item's known
+  membership (`membership.active_lists`) before fanning out.
+- **Recommended resolution:** opportunistic (next touch of the shopping-list
+  action seams).
+
+## [OPEN] FU-570 — Boot proceeds silently against a stale/unversioned SQLite DB → per-request 500s
+- **Raised:** 2026-07-16 (verify-campaign pilot)
+- **Type:** finding (needs a decision — operator robustness)
+- **What:** the pilot backend booted cleanly against the repo-root
+  `dora.data.db` (July-10 vintage, created via `create_all`, **no
+  `alembic_version` table**, missing newer columns like
+  `AppSetting.auto_drain_past_meals`). No boot-time complaint; the app served
+  traffic and 500'd request-by-request on the missing columns (dashboard showed
+  7 friendly-error toasts). `/api/health` reported `schema_version:
+  d3f8b1a6c4e2` regardless — it evidently reports code-side head, not the
+  connected DB's version, which actively misleads during diagnosis. Consider:
+  (a) boot-time guard comparing DB `alembic_version` (or its absence) to head —
+  warn loudly or refuse with a friendly message; (b) `/api/health` reporting
+  the DB's actual version (or both code + DB).
+- **Why deferred:** design call (guard semantics for dev vs prod, SQLite vs PG)
+  — not a drive-by fix.
+- **Recommended resolution:** later, with FU-549's fresh-install-boot verify /
+  the finalisation plan's ops chunk; decide guard vs health-field first.
+
+## [OPEN] FU-575 — Stock-item / recipe name uniqueness is application-level only (concurrent-create race) + recipe name not whitespace-normalised
+- **Raised:** 2026-07-17 (Codex review of stock-item create — P3, + a parallel spotted while fixing P1/P2).
+- **Type:** finding (low priority).
+- **What:**
+  1. **P3 — no DB unique constraint on `StockItem.name`.** `CreateStockItemHandler` checks for an existing (case-insensitive) name before insert (`create_stock_item.py:~90`), but the column has no unique constraint, so two tabs/devices can both pass the check and insert the same name (a soft duplicate — not corruption). Same shape on `Recipe.name`.
+  2. **Recipe name whitespace parallel** — the P2 fix added a `strip` `field_validator` to `Create/UpdateStockItemRequest`; `create_recipe.py` / `update_recipe.py` use `Field(min_length=1, max_length=255)` **without** it, so recipes still accept `" Foo "` / `"   "`. Same class, different surface (R-code-style consistency).
+- **Why deferred:** the race is vanishingly unlikely + low-harm on a single-household self-host app (Codex itself rated it low). A real fix means a **unique constraint + migration + a case-insensitivity decision** (a plain unique index is case-sensitive on Postgres; case-insensitive uniqueness needs a functional index / `citext`, which differs SQLite↔Postgres — R-005/R-006 care). Disproportionate right now.
+- **Recommended resolution:** opportunistic. (a) The recipe-name strip is a trivial 4-line `field_validator` mirror of the stock-item fix — do it next time recipes are touched. (b) The unique-constraint/race is a data-model call — bundle with the FU-045 Postgres/migration work or whenever concurrent-write hardening is on the table; decide case-insensitive-uniqueness semantics then.
 
 ## [OPEN] FU-567 — Relicense Dashy Dora off MIT for the paid self-host model
 - **Raised:** 2026-07-16 (FU-412 self-host commercialization plan).

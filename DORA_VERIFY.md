@@ -731,17 +731,17 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Buy-verdict popover on a Stocked item: reads "Stocked" as the need-axis label (was "Well stocked")
 
 ### P8-05 "Should I buy?" buy-verdict oracle
-*Needs a seed with plausible price history + a few waste events. `buy_verdict_enabled` defaults on.*
-- [ ] **Feature flag** — Settings → System → Features → toggle "Should I buy? oracle" **off**. Reload Stock Overview: no badges anywhere. Toggle **on** again: badges reappear.
-- [ ] **Silent on low-confidence** — pick an item with < 3 shopping-list price samples. The badge does **not** render on its row (verify in DevTools: `/buy-verdict` request fires and returns `confidence: "low"`, but the row shows nothing).
-- [ ] **Out-of-stock → buy (high)** — mark an item Out of Stock. Its row renders a green **Buy** badge with confidence `high`. Popover shows "You're out of stock" as the first reason. One-tap "Add to primary list" — verify the item lands on the current quick-add-target list; the badge refreshes (may briefly show the *new* verdict factoring in the fact that it's on a list).
-- [ ] **Stocked + wasteful → skip (high)** — pick a stocked item, log 3+ waste events on it (`POST /waste/events` or via the row expiry menu). Rescan the overview: badge is red **Skip**. Popover reason: "You've wasted this ~N% of the time". One-tap label reads "Already stocked" (or "Remove from list" if it happens to be on an open list).
-- [ ] **Low-stock + cheap price → buy (high)** — mark an item Low Stock and log a shopping-list line with price ≤ 92% of its average. Badge is green **Buy** with confidence `high`. Popover reasons: "Running low" + "Cheapest you've paid in 3 months".
-- [ ] **Stocked + above usual → wait (medium)** — mark an item Stocked and log a recent purchase ≥ 108% of its average. Badge is orange **Wait**. Popover reason: "Above your usual price". Detail line quotes `$last vs $usual`.
-- [ ] **Thin data collapse** — pick a brand-new stock item with no history. Badge should render **only** if the oracle managed to produce a non-low-confidence verdict; typically it should be silent. Force-open the item's `/buy-verdict` in a browser: response reads `verdict: "unsure", confidence: "low", reasons: [{signal: "thin_data"}]`.
-- [ ] **In-shop consumer** — open a draft shopping list with a stocked-and-wasteful item on it. The line-row badge reads **Skip**. Popover one-tap action reads "Remove from list"; tapping it calls the existing `onRemoveLine` handler and the line disappears with the same toast the normal remove uses.
-- [ ] **Cache behaviour** — reload Stock Overview twice quickly. Backend logs show one `/buy-verdict` request per item on first paint; the second paint hits the module-level cache (no additional requests within the 5-min stale window unless a mutation invalidated an entry).
-- [ ] **Mutation invalidation** — add an item to a list via the row's cart button. Its badge refreshes (may flip verdict / hide entirely if the new `is_on_open_list` state changes the one-tap action). Backend log confirms a fresh `/buy-verdict` request after `invalidateBuyVerdict(id)`.
+*(Test-pinned 2026-07-18: the verdict engine — full matrix, thin-data collapse, reason
+labels/details, wait-hint — in `tests/test_buy_verdict.py`; the UI seams — feature-flag
+off/on across a reload, low-confidence rows stay silent, out-of-stock Buy walk with the
+"You're out of stock" lead + one-tap add landing on the draft, Skip walk with both
+one-tap variants and the FU-572 in-place repaint — in `web_app/e2e/buy-verdict.spec.ts`;
+the client request cache (one fetch per item, 5-min stale window, invalidation refetch)
+in `web_app/test/unit/useBuyVerdict.spec.ts`. Only the visual below remains.)*
+- [ ] One-time visual: the orange **Wait** badge + its popover ("Above your usual price"
+  with the `$last vs $usual` detail, and the wait-hint sub-caption when a cycle is
+  confident) render legibly across themes — the content is engine-pinned; this is only
+  the orange variant's look (the Buy/Skip variants have been walked)
 
 ### P8-02 barcode-to-add via Open Food Facts
 *Requires `scanning_enabled=true` (Settings → System) and a real camera + real packaged-product barcodes.*
@@ -755,80 +755,83 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] **Scanning off** — flip `scanning_enabled=false` in Settings → System. Stock Overview no longer shows the scan button; the OFF endpoint stays reachable but there's no UI path to it. (Server-side gating of the endpoint itself is deliberately absent — matches `/barcodes/lookup`.)
 - [ ] **Charter honesty** — the "Suggested from Open Food Facts" banner is clearly labelled and the image is a *preview*, not silently ingested. After confirm, `StockItem.image` is empty (FU-033 image seam is separate); user can add the image manually.
 
-### History tab — retention, cap, and truncation footer — origin 2026-06-30 feedback
-*Requires a fresh dev seed (drop `dora.db` with `DORA_ALLOW_DESTRUCTIVE=1` then reseed).*
-- [ ] Stock Overview → search **"Sriracha (chatty history test)"** → open detail → History tab → the timeline renders **50 expiry events** (server-capped) with a small muted footer at the bottom reading *"16 older events not shown"*
-- [ ] The 50 rendered events are the newest ones (occurred_at desc); the oldest visible event is well within the last 90 days but not the earliest (that one was dropped past the cap)
-- [ ] Same page reload → footer count stays exactly the same (the count is server-derived, not client-drift)
-- [ ] Any item with < 50 events per kind → NO footer renders (empty state hidden when `history_older_count === 0`)
-- [ ] **Milk** detail → History shows a populated mix: level-changes, purchase events (from the seeded finished lists), expiry set + 2 pushes, one waste event ("spoiled" 45 days ago). No footer (well under the cap on every kind)
-- [ ] **Pasta / Rice / Garlic** detail → History shows *"Used in <recipe>"* deep-orange entries for the seeded cook events (aglio, simple_pasta, stir_fry, fried_rice — whichever recipes reference that ingredient)
-- [ ] **Broccoli / Icecream / Brazil Nuts** detail → History shows one waste event each in negative-red
-- [ ] Cook events with `meals_cooked > 1` badge *"× N meals"* in the title
-- [ ] Footer copy pluralises: 1 event → "1 older event not shown"; 2+ → "N older events not shown"
-
-### History tab — Bought / Cook / Expiry events — origin 2026-06-30 feedback
-*Requires a fresh migration pass: `flask db upgrade` picks up
-`c3d7f1a2b8e4` (CookEvent) + `d4e8f2b1c9a5` (StockItemExpiryEvent).*
-- [ ] **Expiry: set** — create a new stock item with an expiry date set. History tab → newest entry is *"Set expiry"* with the date in the body, orange
-- [ ] **Expiry: pushed** — on the detail page, edit expiry to a later date (or use the row menu's Push +7 days on the overview). History gets *"Pushed expiry +7 days"* with body *"YYYY-MM-DD → YYYY-MM-DD"*
-- [ ] **Expiry: cleared** — clear the expiry (row menu Clear expiry or detail Set-expiry dialog's Clear button). History gets *"Cleared expiry"* in grey with body *"Was YYYY-MM-DD"*
-- [ ] **Expiry: no-op** — save the same date again → NO new History entry (a save that doesn't change the value must not emit)
-- [ ] **Bought** — with an item that's on a shopping list: Start shopping → tick the item → Finish & restock. History gets *"Bought · &lt;list name&gt;"* with `2× · $2.10/ea · at Coles` (or whichever fields the Finish flow captured); teal icon
-- [ ] **Bought — price/store optional** — the Finish flow leaves till-total or store blank → still emits a "Bought" entry, just with fewer body chips (or none — title still renders)
-- [ ] **Cooked** — cook a recipe that lists this stock item as an ingredient (via cook mode's Log meals or the recipe detail Log-a-cook action). History gets *"Used in &lt;recipe name&gt;"* deep-orange; batch cook (>1 meal) badges *"× N meals"*
-- [ ] **Cook — item not an ingredient** — cook a recipe that DOESN'T reference this stock item as an ingredient → NO cook entry appears on this item's timeline (the join is via `RecipeIngredient.stock_item_id`, not a wildcard)
-- [ ] **Timeline ordering** — all three new event kinds interleave date-sorted (newest first) with the existing level changes / waste / list-adds; nothing gets a separate section
-- [ ] **Cap** — after >20 events of any single kind, only the most recent 20 render (server-capped; check the response body if unsure)
-- [ ] **Migration downgrade** — `flask db downgrade` runs cleanly through both new migrations (drops indexes then tables). Not required to test in normal use, but the R-006 close-gate wants forward-only clean migrations that CAN reverse cleanly
+### History tab — origin 2026-06-30 feedback
+*(Test-pinned 2026-07-18. Server halves: expiry-event emission (set/pushed/cleared +
+no-op silence) and the per-kind cap → `history_older_count` in
+`tests/e2e/dora_api/test_stock_item_router.py`; the Bought feed (ticked+finished only,
+price/store optional, mid-shop tick not yet bought) and the Cooked feed
+(RecipeIngredient join only, `meals_cooked` badge data, zero-meal cook silent) in new
+`tests/e2e/dora_api/test_stock_item_history_feeds.py`; migration reversibility owned by
+`tests/test_migrations.py` (SQLite downgrade xfail is a known carve-out; Postgres leg
+rides batch 19). UI halves in new `web_app/e2e/history-tab.spec.ts`: the Sriracha
+chatty-seed cap walk ("16 older events not shown", server-stable across reload),
+under-cap busy item interleaves Bought/Wasted/Pushed with no footer, "Used in <recipe>
+· N meals" batch badge, and the full Set/Pushed +7 days/Cleared title+body family on an
+engineered item. Only the visuals below remain.)*
+- [ ] One-time visual: event-kind colours ride their theme tokens (Bought
+  `--lifecycle-bought`, cook `severity-high` deep-orange, waste negative-red, cleared
+  muted `--lifecycle-cleared`) and stay legible across themes; and the footer's
+  singular branch ("1 older event not shown") reads right if you ever see it — both
+  are template one-liners whose plural/colour siblings are test-pinned
 
 ### Stock pickers + Log Waste — overview/dialog/detail consistency — origin 2026-06-30 feedback
-- [ ] Stock Overview → expand the filter panel → **Any level** dropdown trigger shows a coloured dot to the left of the picked level (or the muted sunken-bg dot when "Any level" is cleared). Open the dropdown → every option row has the same dot styling, matching the Stock Item detail page's Level picker pixel-for-pixel
-- [ ] Click "Add stock item" on the overview → in the dialog the **Stock level** q-select shows the picked level's dot in the trigger, and each option in the dropdown has the same dot. Pick a different level → trigger dot updates instantly
-- [ ] On a row's expiry-menu (the calendar-icon kebab), the entry under **Clear expiry** now reads **Log waste** and renders in destructive-red (icon + label both red), visually matching Clear expiry. Click it → the existing waste-reason tile dialog still opens unchanged
-- [ ] Stock Item detail page → Level picker still works (the refactor swapped inline avatars for the shared `StockLevelDot` component); changing level updates the dot's colour, "Updated just now" stamp refreshes
-- [ ] No console warnings about missing slot props / undefined sequences when the level filter is cleared (the sunken-bg fallback should kick in silently)
-
-### Recipe-ingredients deep-link filter — origin FU-109 close-out
-- [ ] Open a stock-item detail page → Recipes-using-this tab. Every recipe card carries a filter icon between the favourite heart and the cook button. Hover tooltip: "Filter stock to this recipe's ingredients"
-- [ ] Click that filter icon → lands on Stock Overview with `?recipe=<id>` in the URL, filter panel auto-opens, removable chip reads "Ingredients of: &lt;recipe name&gt;" with a menu-book icon
-- [ ] The list narrows to the recipe's ingredient stock items (combine with other filters, e.g. level/location, still works)
-- [ ] Click the chip's × → filter clears, chip disappears, URL no longer has `?recipe=`. Refresh/back doesn't reinstate
-- [ ] "Clear filters" on the FilterBar also strips `?recipe=` (not just zeroes the chip)
-- [ ] Pasting `/stock?recipe=<bogus-id>` doesn't blank the list — the unresolved id silently disables the filter (no chip rendered)
-- [ ] RecipeCard's filter button is **only** on the stock-item-detail Recipes tab — not on Cookbook overview, Meal Plan recipe picker, or anywhere else `RecipeCard` is rendered
-
-### Recipe card no longer dims on incomplete-set surfaces — origin FU-109
-- [ ] Stock-item detail → Recipes tab: cards never render at reduced opacity, regardless of whether restocking this single item would make them cookable. The "Missing N ingredients" copy on the card face is the only signal
-- [ ] Cookbook overview with "Uses ingredients" filter active: same — no dim
+*(Behavioural halves test-pinned 2026-07-18: the row expiry-menu **Log waste** path
+(menu entry → reason dialog → event + toast + Undo) in `bulk-waste.spec.ts`; the
+detail-page Level picker round-trip (dropdown pick → "Updated just now" stamp →
+server truth) and the level filter's set→clear cycle staying console-clean with the
+fallback trigger in new `stock-pickers.spec.ts`. Only the styling below remains.)*
+- [ ] One-time visual: the three level pickers (overview filter, Add-item dialog,
+  detail Level row) render the same `StockLevelDot` treatment in trigger + option
+  rows (muted sunken dot when cleared), and the row expiry-menu's **Log waste**
+  entry reads destructive-red (icon + label) matching Clear expiry
 
 ### Stock Item Detail — C-1b focused pass + C-1b.1 marquee — origin FU-202
-- [ ] Header: back/close · name · (Show QR if scanning on) · Delete. Secondary toolbar row (Mark open / Set expiry / Add to list) GONE. Level chip no longer in header — lives under Name on Overview tab
-- [ ] Level row sits between Name and Location; dropdown opens, picks a level, "Updated X ago" refreshes to "just now" on save
-- [ ] Location / Stock group clear: with a location set, click picker × (and `Tab`-blur after deleting text) → picker stays empty after refresh. Same for stock group. Network tab shows `{"clear_stock_location": true}` / `{"clear_stock_group": true}`
-- [ ] "—" placeholders on Location / Stock group / Usual store / Expiry / Level when unset
-- [ ] Notes reads as a row in basics list (auto-grows on type, blur saves)
-- [ ] Padding — full-page and embedded peek mode breathe (q-pa-md); nothing touches edge
-- [ ] DoraTabs sliding underline: switching tabs slides + wobbles, settles to accent. Same on `pages/data/BarcodesQR.vue` and `HelpPage.vue`
-- [ ] Splitter peek opens at 50%; clamped to [40%, 65%] while peeking; closing restores list to 100%
-- [ ] **C-1b.5 lifecycle timeline:** History tab shows multiple event kinds (level changes with Restocked/Dropped labels, waste events, past list-adds with provenance, synthetic Opened entry when open). Empty items: "Nothing logged for this item yet…". Busy item: newest → oldest, capped sensibly
-- [ ] **C-1b.4 Recipes tab:** heart toggles favourite (and remove); on cookable recipe, "Add all to list" lands every ingredient on primary draft. Lists tab: dead `open_in_new` gone; primary draft has styled Primary badge. Substitutes: per-row "Swap into list" gone; Remove still works; curated list stays
-- [ ] **C-1b.3 Products tab:** empty Products → centred Find & link a product CTA → seeded `/product-search?q=<name>`; non-empty shows quieter Link another in header; cheapest linked product visually highlighted (chip + tinted card); no Get cheapest toolbar button; with Products off, the Products tab disappears entirely + a stranded `?section=products` URL falls back to Overview
-- [ ] **C-1b.1 marquee:** header has back/close · name · level chip = editor (click → menu) · space · Delete top-right (danger-ghost) in both modes
-- [ ] Toolbar: Mark open · Set expiry · Add-to-list · (Show QR) — no Restock, no Find-deals
-- [ ] Overview is a single column where every row is its own editor: name (blur saves), location, stock group (new), expiry value + ±1d/+7d/+14d + date dialog + × clear, open toggle with "Opened {date}" + tooltip, essential toggle, auto-add toggle, level-updated read-only, Notes calm at bottom
-- [ ] Editors save immediately on change/blur without a Save button — toggle/select round-trips and page reflects the new value
-- [ ] Unsaved-changes guard still fires for in-progress text edits (name/notes)
-- [ ] Tabs legible in light + dark + any other theme (active tab + indicator stay readable)
-- [ ] Show QR tooltip explains the QR vs real-barcode distinction
-- [ ] **Round-2 additions:**
-  - [ ] Level updated really updates — "Updated X ago" flips to "just now", then drifts forward; same on Stock Overview row
-  - [ ] Splitter gripper reachable on long lists — dots stay centred on viewport (sticky)
-  - [ ] Overview tab's image / inputs have even breathing room
-  - [ ] Peek panel scroll: whole detail panel scrolls with the page; nothing scrolls inside the panel; name + Delete never hidden
-  - [ ] DoraTabs hover: inactive tab text transitions to accent, no surface-tint background
-  - [ ] Footer counts: Stocked (positive), Low (negative), Out (muted/grey); "Auto-add" default text colour like "Shown"; label is "Essential" (not Flagged); sits between level stats and Auto-add
-  - [ ] Row buttons cluster: expiry / flag / open / cart same round shape + size. Click flag → toggles essential (left stripe + warning-tint icon)
+*(Triaged 2026-07-18. Already test-pinned and deleted: the Level row round-trip +
+"Updated just now" (`stock-pickers.spec.ts`); the lifecycle timeline's event kinds,
+cap, and footer (`history-tab.spec.ts` + backend feed tests); location/group/notes
+clear semantics and round-trips (server-pinned in `test_patch_semantics.py` +
+`test_stock_item_router.py` — explicit null clears, level null is ignored); the
+expiry editor dialog (`stock.spec.ts` FU-507); the unsaved-changes composable
+(`useUnsavedChangesGuard.spec.ts`). Deleted as stale: the C-1b.1 "level chip in
+header" bullet (superseded — the level lives in the Overview Level row, which is what
+the tests pin) and every "auto-add toggle / footer Auto-add count" mention (retired by
+FU-511; their absence is itself pinned by `auto-add-on-low.spec.ts`). What remains is
+the owner walk below.)*
+- [ ] **Layout/visual walk (one pass, light + dark):** header back/close · name ·
+  (Show QR when scanning on) · danger-ghost Delete, no secondary toolbar row;
+  toolbar = Mark open · Set expiry · Add-to-list (no Restock / Find-deals); "—"
+  placeholders on unset Location/Stock group/Usual store/Expiry; single-column
+  editors with even padding in full-page AND peek mode; Notes auto-grows; DoraTabs
+  underline slide/wobble + hover accent (also `BarcodesQR.vue` / `HelpPage.vue`);
+  tabs legible in every theme; QR tooltip explains QR vs real-barcode; footer counts
+  Stocked-positive / Low-negative / Out-muted with the "Essential" label; row button
+  cluster (expiry / flag / open / cart) same round shape
+- [ ] **Splitter peek:** opens at 50%, clamps to [40%, 65%], closing restores 100%;
+  gripper dots stay viewport-centred on long lists; the whole panel scrolls with the
+  page (name + Delete never hidden)
+- [ ] **Location/group picker × in the browser:** clearing via the picker's × (and
+  Tab-blur) leaves it empty after a refresh — the server null-clear is pinned; this
+  is just the q-select→PATCH wiring
+*(C-1b.4 Recipes/Lists/Substitutes behaviours codified 2026-07-18 in new
+`web_app/e2e/detail-recipes-tab.spec.ts` — heart toggles favourite both ways,
+cookable "Add all to list" lands every ingredient on the draft, Lists tab reflects
+membership with no dead `open_in_new`, Substitutes row has no "Swap into list" and
+Remove unlinks. The old "styled Primary badge" wording was stale — Round-17 replaced
+the pill with a warning-toned star; that's part of the visual walk above.)*
+*(C-1b.3 Products tab codified 2026-07-18 in new
+`web_app/e2e/detail-products-tab.spec.ts` — linked products render with exactly one
+Cheapest chip/highlight + the quiet "Link another" header + no retired "Get
+cheapest" button; the empty state shows the centred "Find & link a product" CTA.
+**The CTA's destination is NOT pinned: it routes to the FU-186-retired
+`/product-search` and 404s — real bug, logged as FU-581 (also hits My Products +
+the Dashboard "Hunt for deals" CTA).** The old `?q=` seeding expectation is dead
+with the route.)*
+- [ ] **C-1b.3 products-OFF half (needs a productless install):** with zero Product
+  rows the Products tab disappears entirely and a stranded `?section=products` URL
+  falls back to Overview — not drivable against the seeded e2e DB
+- [ ] **History extras not yet pinned:** level changes label as "Restocked → X" /
+  "Dropped to X", the synthetic "Opened" entry renders while an item is open, and an
+  empty item shows "Nothing logged for this item yet…"
 
 ### Stock Item Detail + Stock Overview feedback pass — origin FU-222
 - [ ] Stock Overview row — image / level / name have visible breathing room; right cluster (expiry, open, cart) larger; recipe-count chip gone; hover no longer "lifts" — surface tints + border picks up accent; first row's outline doesn't clip under page chrome
@@ -838,23 +841,35 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Filter toggle on Stock Overview, My Products, Cookbook overview: "Filters" button + badge + "Clear" all in main toolbar row; no second toolbar row above the filter panel
 
 ### Stock Overview Chunk 2 — top toolbar + filters + footer — origin FU-121
-- [ ] Top toolbar order: New item · Scan · Stocktake · Bulk select · Export · (spacer) · Search. Bulk select shows "Cancel" once on
-- [ ] Filter panel state remembered per page: toggle open on Stock Overview (desktop), reload — panel stays open. Toggle closed, reload — panel stays closed. Independent state across Stock Overview / My Products / Cookbook overview
-- [ ] Mobile (< md): every filterable page starts with the panel hidden regardless of the desktop-saved state. Can still open in-session via the Filters button, but a reload returns it to hidden
-- [ ] Clear filters button sits to the LEFT of the Filters button on every filterable page; toggling filters on/off makes Clear appear/disappear without the Filters button shifting position
-- [ ] Level filter is a single "Any level" dropdown; selecting filters; clearable; no floating count badges
-- [ ] "Used in a recipe" filter is gone
-- [ ] Search placeholder reads "Search" (no parenthesised hint)
-- [ ] Footer counts in order: Shown · Stocked · Low · Out · Flagged · Auto-add · Needs attention. Reflect filtered set; recompute live
-- [ ] No console errors from dropped `usedInRecipeOnly` / `getStockLevelColour` references
+*(Behavioural halves test-pinned 2026-07-18 in `stock.spec.ts` (new Chunk-2 describe:
+desktop panel-persistence reload round-trip both directions; retired "Used in a
+recipe" filter absent with a surviving control; bare "Search" placeholder) +
+`stock-pickers.spec.ts` (single clearable "Any level" dropdown narrows/restores,
+console-clean incl. the dropped-reference errors bullet) + `useStockFilters.spec.ts`
+(footer counts reflect the filtered set). The old footer-order bullet listed
+"Flagged / Auto-add" — stale: Auto-add's absence is pinned by
+`auto-add-on-low.spec.ts` and the label is now "Essential".)*
+- [ ] Visual walk: toolbar order New item · (Scan) · Stocktake · Bulk select ·
+  Export · spacer · Search, with Bulk select flipping to "Cancel"; Clear sits LEFT
+  of Filters and appears/disappears without the Filters button shifting; footer
+  count order Shown · Needs attention · Stocked · Low · Out · Essential · On a list
+- [ ] Mobile (< md): filterable pages start with the panel hidden regardless of the
+  desktop-saved state; in-session open works, reload returns to hidden
 
 ### Stock Overview Chunk 4 — expiry control — origin FU-123
-- [ ] No expiry set → tap expiry button → q-date picker (popup on desktop, dialog on mobile). Picking future date PATCHes + row reflects new date (icon tone via existing logic); past blocked by `dateOptionsFuture`
-- [ ] Expiry set → tap → menu: **+1 day · +7 days · +14 days · Clear** (no +30). Each PATCH the right ISO; Clear nulls + button reverts to date-picker state
-- [ ] Tone outline flips: <7 days future → `stock-row--warn` (amber); past → `stock-row--alert` (red)
-- [ ] No regressions on right-cluster (#recipes, open/in-use, cart)
-- [ ] +X push semantics (FU-123 follow-on): item with future expiry (e.g. +5 days) → "+1 day" PATCHes to current+1 (not today+1); "+7 days" PATCHes to current+7. Item with past expiry → "+1 day" PATCHes to **tomorrow** (max(today, current) + 1), not yesterday
-- [ ] Detail-panel peek staleness (FU-123 follow-on): open the peek for an item, then in the row use the expiry menu (+1 day), the open-toggle, the flag-toggle, and the level dropdown. Peek's matching field updates **without** closing/reopening the peek. Same when the page is opened full-screen on mobile and the row mutation happens via a different surface
+*(Partially test-pinned 2026-07-18: the **+X push semantics** — `max(today, current
+expiry) + N`, future pushes from the expiry, past pushes land tomorrow, no-expiry
+falls back to today+N, unparseable degrades safely, toast + failure path — in new
+`test/unit/useStockItemActionsPushExpiry.spec.ts` (8 tests). The
+menu-vs-date-picker split (expiry set → menu; unset → picker) and the Clear-null
+round-trip are exercised by `bulk-waste.spec.ts` test 6 + the FU-507 dialog specs.)*
+- [ ] No expiry set → date picker (popup desktop / dialog mobile); picking a future
+  date PATCHes and the row reflects it; past dates blocked by `dateOptionsFuture`
+- [ ] Expiry-set menu shows exactly **+1 day · +7 days · +14 days · Clear** (no +30);
+  tone outline flips amber `<7d` / red past; right-cluster unaffected
+- [ ] Detail-panel peek staleness: with a peek open, drive the row's expiry menu /
+  open-toggle / flag-toggle / level dropdown → the peek's matching field updates
+  without closing/reopening (same full-screen on mobile via a different surface)
 
 ### Stock Overview Chunk 5 — responsive detail nav + long-press — origin FU-124
 - [ ] Desktop (≥ md): tap row → splitter peek opens with shared `StockItemDetailPage` embedded; tap again → closes
@@ -872,17 +887,27 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Dashboard
 
 ### Draft my shop — one-click card — origin FU-351
-- [ ] Dashboard renders a **Draft this week's shop** card in the `act` zone (between Attention and Suggestions) — icon: playlist-check
-- [ ] Card body shows the blurb ("One-click starter list — meal plan for the next 7 days, plus anything low, out, or flagged as an essential. Nothing shopped yet; you edit before heading out.") + a **Draft my shop** button (auto-fix icon)
-- [ ] Happy path — with an active meal plan (at least one recipe scheduled today+6d), at least one Low/Out stock item, and at least one flagged essential: click Draft my shop → button spins → positive toast "Drafted N items." (caption "Review the list, then start shopping when ready.") → SPA navigates to the newly-created draft's detail page
-- [ ] New list appears in the sidebar list-selector under the name `Weekly shop · <weekday> <day> <month>` (e.g. "Weekly shop · Sat 12 Jul") — not the generic "Auto N · date"
-- [ ] On the detail page, every produced line renders the existing `added_via` chip — meal-planned recipes' items get "auto: meal plan", low/out items get "auto: low stock", flagged items get "auto: flagged" (with the priority rule: recipe > meal plan > flagged > essential > low stock > frequently added, so an item on both the meal plan and low gets "auto: meal plan")
-- [ ] Empty case — a fresh account with no meal plan, no low stock, and no essentials: click Draft my shop → button spins → info toast "Nothing to draft yet." (caption "Plan some meals, or mark items as essential — then try again.") → **stays on the dashboard** (no navigation) → sidebar list-selector shows **no phantom "Weekly shop · …" empty list** (the /auto-generate handler defers list creation on the create-new path until candidates exist)
-- [ ] Error case — force a 500 (kill the API or unplug network mid-click): negative toast "Could not draft the shop." with the error caption; button un-spins and re-enables
-- [ ] Card is toggleable via the Dashboard's Cards menu (labelled **Draft this week's shop**, grouped under the `act` zone); hiding removes the card, showing it puts it back
-- [ ] The existing `NewListDialog` multi-checkbox flow (New list → check "Items that are low or out of stock" / "Flagged as always-include" / "Frequently added") is unchanged — it always passes a `merge_into_list_id` to `/auto-generate`, so the "defer list creation" server change doesn't touch its path
-- [ ] Meal-plan window sanity check: click Draft my shop today; then advance a meal-plan entry from today to yesterday (or mark today's entry as consumed) → click again → the "consumed" / past-day entry is filtered by the server's `consumed_at IS NULL` guard and does NOT re-appear on the new draft
-- [ ] Sidebar list-selector is refreshed via `listStore.refreshAsync()` before the router push lands on the new detail, so the list-selector shows the new list from the moment the user arrives
+*(Test-pinned 2026-07-18. UI seams in new `web_app/e2e/dashboard-draft-shop.spec.ts`:
+card renders in the act zone with blurb + button; one-click happy path → "Drafted N
+items." toast + caption → navigates to the new draft named "Weekly shop · <date>"
+(sidebar included — the store refresh precedes the push) with `auto:` provenance
+chips rendering; Cards-menu q-toggle hides and restores the card. Server halves in
+new `tests/e2e/dora_api/test_auto_generate_draft_shop.py`: zero candidates on the
+create-new path → `nothing_to_add` + null id + **no phantom list**, and the explicit
+"Weekly shop ·" name honoured; provenance priority already pinned in
+`test_auto_generate_priority.py`, the single-commit contract in
+`test_auto_generate_unit_of_work.py`. The NewListDialog merge path is untouched by
+the defer change (it always passes `merge_into_list_id` — code-visible at
+`auto_generate.py` §handle).)*
+- [ ] Empty-case UI half (needs a fresh install — seed always has candidates): click
+  → info toast "Nothing to draft yet." + caption, stays on the dashboard (the
+  server's no-phantom-list half is backend-pinned)
+- [ ] Error case — force a 500 mid-click: negative "Could not draft the shop." toast
+  with caption; button un-spins and re-enables
+- [ ] Consumed-entry window sanity: a meal-plan entry marked consumed (cook
+  reconcile) does not reappear on a re-draft — the `consumed_at IS NULL` guard at
+  `auto_generate.py:418` is code-visible but untestable via the API (consumed_at is
+  only written by the reconcile job)
 
 ### ⭐ P8-08 Dora Score — Kitchen health card — origin champion-plan §P8-08
 - [ ] Dashboard renders a new **Kitchen health** card in the "Your kitchen" zone above the Pantry donut card (icon ♥ heart)

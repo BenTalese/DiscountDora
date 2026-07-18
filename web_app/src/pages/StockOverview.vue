@@ -206,7 +206,8 @@
                  the only UI surface for the filter (no dropdown);
                  removing it clears the deep-link state. -->
             <q-chip
-                v-if="filters.recipeFilter.value !== null"
+                v-if="filters.recipeFilter.value !== null
+                    && (filters.recipeFilterContext.value !== null || !recipesHydrated)"
                 clickable
                 color="primary"
                 text-color="white"
@@ -446,7 +447,7 @@
                         </template>
                         <template v-else>
                             No items match the current filters.
-                            <BaseButton variant="ghost" dense label="Clear" @click="filters.clearFilters" />
+                            <BaseButton variant="ghost" dense label="Clear" @click="clearAllFilters" />
                         </template>
                     </q-banner>
                 </div>
@@ -647,7 +648,7 @@
 
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { recipes } = storeToRefs(recipeStore);
+    const { recipes, recipesHydrated } = storeToRefs(recipeStore);
 
     // Stock groups load locally — no store yet, only needed by the filter
     // dropdown on this page.

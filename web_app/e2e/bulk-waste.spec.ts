@@ -21,7 +21,9 @@ type WasteEvent = { event_id: string; stock_item_id: string; reason: string };
 
 const NAMES = ['Canned Tomatoes', 'Brown Onions', 'Garlic'] as const;
 
-async function itemsByName(page: Page): Promise<Record<string, StockItem>> {
+// Returns an accessor that throws on a missing name — keeps every index
+// access non-undefined under noUncheckedIndexedAccess (FU-579).
+async function itemsByName(page: Page): Promise<(name: string) => StockItem> {
     const data = await apiGet<{ items: StockItem[] }>(page, '/stock-items?limit=500');
     const out: Record<string, StockItem> = {};
     for (const name of NAMES) {
@@ -29,7 +31,11 @@ async function itemsByName(page: Page): Promise<Record<string, StockItem>> {
         expect(item, `seed item "${name}" exists`).toBeTruthy();
         out[name] = item!;
     }
-    return out;
+    return (name: string) => {
+        const item = out[name];
+        if (!item) throw new Error(`not a tracked seed item: ${name}`);
+        return item;
+    };
 }
 
 async function eventsFor(page: Page, ids: string[]): Promise<WasteEvent[]> {
@@ -54,13 +60,13 @@ test.afterAll(async ({ browser }) => {
     const page = await context.newPage();
     try {
         const items = await itemsByName(page);
-        const ids = NAMES.map((n) => items[n].stock_item_id);
+        const ids = NAMES.map((n) => items(n).stock_item_id);
         for (const e of await eventsFor(page, ids)) {
             await apiMutate(page, 'delete', `/waste/events/${e.event_id}`);
         }
         for (const n of NAMES) {
-            if (items[n].expiry_date !== null) {
-                await apiMutate(page, 'patch', `/stock-items/${items[n].stock_item_id}`, {
+            if (items(n).expiry_date !== null) {
+                await apiMutate(page, 'patch', `/stock-items/${items(n).stock_item_id}`, {
                     expiry_date: null,
                 });
             }
@@ -80,7 +86,7 @@ test('"Log waste…" is disabled until something is selected', async ({ page }) 
 
 test('bulk waste logs one event per item, plural toast, and Undo reverses it', async ({ page }) => {
     const items = await itemsByName(page);
-    const ids = NAMES.map((n) => items[n].stock_item_id);
+    const ids = NAMES.map((n) => items(n).stock_item_id);
     expect(await eventsFor(page, ids), 'items start with no waste events').toHaveLength(0);
 
     await selectRows(page, NAMES);
@@ -114,7 +120,7 @@ test('bulk waste logs one event per item, plural toast, and Undo reverses it', a
 
 test('a single selected item uses singular copy', async ({ page }) => {
     const items = await itemsByName(page);
-    const id = items['Canned Tomatoes'].stock_item_id;
+    const id = items('Canned Tomatoes').stock_item_id;
 
     await selectRows(page, ['Canned Tomatoes']);
     await page.getByRole('button', { name: /Log waste/ }).click();
@@ -132,12 +138,12 @@ test('a single selected item uses singular copy', async ({ page }) => {
 
 test('logging waste clears a set expiry; Undo restores it', async ({ page }) => {
     const items = await itemsByName(page);
-    const id = items['Garlic'].stock_item_id;
+    const id = items('Garlic').stock_item_id;
     const EXPIRY = '2027-04-01';
 
     // Give Garlic an expiry to clear (the seed item has none).
     await apiMutate(page, 'patch', `/stock-items/${id}`, { expiry_date: EXPIRY });
-    expect((await itemsByName(page))['Garlic'].expiry_date).toBe(EXPIRY);
+    expect((await itemsByName(page))('Garlic').expiry_date).toBe(EXPIRY);
 
     await selectRows(page, ['Garlic']);
     await page.getByRole('button', { name: /Log waste/ }).click();
@@ -146,12 +152,12 @@ test('logging waste clears a set expiry; Undo restores it', async ({ page }) => 
     await expect(toast(page, 'Logged 1 item as wasted.')).toBeVisible();
 
     // Expiry cleared as part of the waste log.
-    await expect.poll(async () => (await itemsByName(page))['Garlic'].expiry_date).toBeNull();
+    await expect.poll(async () => (await itemsByName(page))('Garlic').expiry_date).toBeNull();
 
     // Undo restores BOTH the event deletion and the original expiry.
     await toast(page, 'Logged 1 item as wasted.').getByRole('button', { name: 'Undo' }).click();
     await expect(toast(page, 'Undone.')).toBeVisible();
-    await expect.poll(async () => (await itemsByName(page))['Garlic'].expiry_date).toBe(EXPIRY);
+    await expect.poll(async () => (await itemsByName(page))('Garlic').expiry_date).toBe(EXPIRY);
     await expect.poll(async () => (await eventsFor(page, [id])).length).toBe(0);
 
     // Reset the seed item back to no-expiry.
@@ -164,7 +170,7 @@ test('single-item row expiry-menu "Log waste" still works (bulk path did not reg
     // from. The row menu only appears when the item HAS an expiry (no-expiry
     // shows a date picker instead), so give Canned Tomatoes one first.
     const items = await itemsByName(page);
-    const id = items['Canned Tomatoes'].stock_item_id;
+    const id = items('Canned Tomatoes').stock_item_id;
     const EXPIRY = '2027-05-01';
     await apiMutate(page, 'patch', `/stock-items/${id}`, { expiry_date: EXPIRY });
 
@@ -184,14 +190,14 @@ test('single-item row expiry-menu "Log waste" still works (bulk path did not reg
     // Per-item toast quotes the item name (distinct from the bulk summary copy).
     await expect(toast(page, 'Logged "Canned Tomatoes" as wasted.')).toBeVisible();
     await expect.poll(async () => (await eventsFor(page, [id])).length).toBe(1);
-    await expect.poll(async () => (await itemsByName(page))['Canned Tomatoes'].expiry_date).toBeNull();
+    await expect.poll(async () => (await itemsByName(page))('Canned Tomatoes').expiry_date).toBeNull();
 
     // Undo reverses the event + restores the expiry.
     await toast(page, 'Logged "Canned Tomatoes" as wasted.')
         .getByRole('button', { name: 'Undo' }).click();
     await expect(toast(page, 'Undone.')).toBeVisible();
     await expect.poll(async () => (await eventsFor(page, [id])).length).toBe(0);
-    await expect.poll(async () => (await itemsByName(page))['Canned Tomatoes'].expiry_date).toBe(EXPIRY);
+    await expect.poll(async () => (await itemsByName(page))('Canned Tomatoes').expiry_date).toBe(EXPIRY);
 
     // Reset the seed item back to no-expiry.
     await apiMutate(page, 'patch', `/stock-items/${id}`, { expiry_date: null });

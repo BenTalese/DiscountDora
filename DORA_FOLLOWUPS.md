@@ -52,6 +52,50 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-581 — Stale `/product-search` links: three surfaces route to the retired route and land on the 404
+- **Raised:** 2026-07-18 (verify Batch 3 — codifying the C-1b.3 Products-tab checks)
+- **Type:** finding (real bug, needs a design call)
+- **What:** FU-186 (Phase D) removed the in-app `/product-search` route — the Product
+  Search nav entry now opens the external `AppSetting.product_search_url` in a new
+  tab. But at least three call sites still `router.push` / link to the dead route,
+  landing users on the 404 page:
+  1. `StockItemDetailPage.vue` `onFindAndLink()` — the Products tab's primary
+     "Find & link a product" empty-state CTA AND the "Link another" header action
+     (it also passes `?q=<item name>` seeding that nothing consumes any more);
+  2. `MyProductsPage.vue:184` (`to="/product-search"`) and `:1179` (another push);
+  3. `DashboardPage.vue:655` — the empty-state "Hunt for deals →" CTA.
+  Caught by the new `detail-products-tab.spec.ts`, which pins the CTA render but
+  deliberately NOT its destination until this is decided.
+- **Why deferred:** the right target is an FU-186-scoped design call, not a mechanical
+  fix — options per surface: open the configured `product_search_url` externally (like
+  the nav entry, but then the "link a product to THIS item" flow loses its seeding),
+  route to My Products (which owns create/link actions now), or hide the CTA when no
+  in-app destination exists. Blind inline patching risks re-conflating what FU-186
+  deliberately split.
+- **Recommended resolution:** now-ish (it's a user-visible dead end on three
+  surfaces) — decide the per-surface target with the owner, then update
+  `detail-products-tab.spec.ts` to pin the chosen destination.
+- **State note:** (open)
+
+## [OPEN] FU-580 — Features-page flag toggles don't take effect until a full page reload
+- **Raised:** 2026-07-18 (verify Batch 3 — codifying the P8-05 feature-flag check)
+- **Type:** finding
+- **What:** the install-wide feature flags surfaced via `useBuyVerdictEnabled` /
+  `useScanningEnabled` (and siblings) probe `/api/health` **once per document** and
+  memoise the answer in a module-level ref. The Settings → Admin → System → Features
+  toggle handlers (`AdminSystemFeaturesSettings.vue`, e.g. `onBuyVerdictToggle`) PATCH
+  the setting and toast success but never call the composable's `refresh*()` — so in
+  the running SPA session the badges/buttons gated by the flag don't appear/disappear
+  until the next full page load. Surfaced when the e2e flag test failed on a hash-only
+  (same-document) navigation; the codified test now reloads, matching the verify
+  bullet's "Reload Stock Overview" wording, so current behaviour is pinned as-is.
+- **Why deferred:** verification unit (R-008 scope discipline); the fix is a one-line
+  `refresh*()` call per toggle handler plus deciding whether already-mounted consumers
+  should also live-refetch.
+- **Recommended resolution:** opportunistic — next time the Features settings page or
+  the enabled-flag composables are touched, wire the toggle handlers to refresh the
+  probes (and extend the e2e test to drop its reload).
+
 ## [OPEN] FU-579 — `quasar dev` vite-checker overlay: pre-existing type errors block fresh-browser interaction
 - **Raised:** 2026-07-18 (building the drive.mjs app driver)
 - **Type:** finding
@@ -69,6 +113,15 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — null-guard the index accesses in
   bulk-waste.spec.ts, exclude `src-pwa` from the SPA-mode checker (or add webworker lib),
   and confirm dev-watch and the `vue-tsc` task check the same set.
+- **Update 2026-07-18 (verify Batch 3 session):** the **bulk-waste half is FIXED** —
+  the ×12 index-access errors turned out to hard-fail `npx quasar build` too (exit 2,
+  no `dist/spa`), breaking `npm run test:e2e` from a clean tree; `itemsByName` now
+  returns a throwing accessor and `vue-tsc --noEmit` is clean. Note the earlier "not
+  visible in the vue-tsc task" observation was wrong — plain `vue-tsc --noEmit` did
+  report them. **Still open:** the `src-pwa/*` ×5 workbox-type errors in the dev-watch
+  checker only (they do NOT appear in `vue-tsc --noEmit` or `quasar build`), so the
+  overlay problem in `quasar dev` may persist — re-test `quasar dev` fresh and scope
+  the checker if it still trips.
 
 ## [OPEN] FU-578 — UX/UI review findings (owner-requested critical drive, 2026-07-18)
 - **Raised:** 2026-07-18 (owner asked for a critical UX/UI pass; app driven live via the

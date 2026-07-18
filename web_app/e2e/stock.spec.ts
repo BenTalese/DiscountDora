@@ -156,3 +156,40 @@ test.describe('FU-507 — expiry-on-open prompt', () => {
         await expect.poll(async () => (await findItem(page, NAME)).is_open).toBe(false);
     });
 });
+
+test.describe('Stock Overview Chunk 2 — filter panel behaviours (FU-121)', () => {
+    test('desktop filter panel state survives a reload in both directions', async ({ page }) => {
+        await page.goto('/#/stock');
+        await page.waitForLoadState('networkidle');
+        // Default closed: the level filter lives inside the panel.
+        const panelProbe = page.locator('.q-select').filter({ hasText: 'Any level' });
+        await expect(panelProbe).toHaveCount(0);
+
+        // Open → reload → still open (persisted per page on desktop).
+        await page.getByRole('button', { name: 'Filters' }).click();
+        await expect(panelProbe.first()).toBeVisible();
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        await expect(panelProbe.first()).toBeVisible();
+
+        // Close → reload → stays closed.
+        await page.getByRole('button', { name: 'Filters' }).click();
+        await expect(panelProbe).toHaveCount(0);
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        await expect(panelProbe).toHaveCount(0);
+    });
+
+    test('retired "Used in a recipe" filter stays gone; search placeholder is bare "Search"', async ({ page }) => {
+        await page.goto('/#/stock');
+        await page.waitForLoadState('networkidle');
+        await page.getByRole('button', { name: 'Filters' }).click();
+        // Control so the absence check isn't a blank panel.
+        await expect(page.getByText('Essential', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText(/Used in a recipe/i)).toHaveCount(0);
+        await expect(page.getByPlaceholder('Search', { exact: true })).toBeVisible();
+        // Leave the panel closed again (persisted state — keep the default
+        // for whatever spec runs next).
+        await page.getByRole('button', { name: 'Filters' }).click();
+    });
+});

@@ -9,6 +9,411 @@ next.
 
 ---
 
+## 2026-07-18 (later 15) — Verify Batch 10 (Dashboard) opened: Draft-my-shop (FU-351) codified; Batch 3 flipped ➗
+
+**Why:** Batch 3's agent-verifiable work finished last unit (remainder is
+owner-walk visuals — row flipped ➗). Next per the plan: the Dashboard batch,
+starting with Draft-my-shop (behavioural, e2e-friendly).
+
+**Built:**
+- **New `tests/e2e/dora_api/test_auto_generate_draft_shop.py` (2 tests).**
+  The two create-new-path contracts the card leans on that had no server
+  tests: (1) zero candidates (a 2030 meal-plan week, all other sources off)
+  → `nothing_to_add: true`, null `shopping_list_id`, `added_count: 0`, and
+  the list collection **byte-identical** before/after — no phantom
+  "Weekly shop ·" shell; (2) the explicit `name` is honoured on the created
+  list (the card's "Weekly shop · <date>" instead of "Auto N · <date>").
+  Provenance priority + the single-commit UoW were already pinned.
+- **New `web_app/e2e/dashboard-draft-shop.spec.ts` (2 tests, serial).**
+  (1) Happy path: card renders in the act zone (title heading + "One-click
+  starter list" blurb + button) → click → "Drafted N items." toast + the
+  review caption → lands on `/shopping-lists/<id>` with a visible
+  "Weekly shop · <date>" name and `auto:` provenance chips rendering.
+  Deletes the created list in-test AND via an afterAll safety net (any
+  "Weekly shop ·" list) so the sole-draft assumption other specs rely on
+  holds. (2) Cards menu: the row's q-toggle (not the label — the label is
+  inert) hides the card and restores it; card asserted via its heading role
+  to dodge the menu-label collision.
+
+**Verification:** dashboard-draft-shop 3/3 (incl. auth setup); full e2e **65
+pass / 1 fail** (same pre-existing uploads flake, [[FU-576]]); full backend
+suite **1524 passed**. Tests only — no product code, no CHANGELOG, no new FU.
+
+**Ledgers:** Draft-my-shop section rewritten (pinned-note + three honest walk
+bullets: empty-case UI half needs a fresh install; forced-500 toast; the
+consumed-entry guard is code-visible at `auto_generate.py:418` but
+API-untestable since only the cook-reconcile job writes `consumed_at`).
+Batch rows: 3 → ➗ (owner-walk remainder), 10 → 🟡. PROJECT_STATE hand-edited.
+
+**Standards close-gate:** test-only, established idioms. No violations, no
+new ADR.
+
+**Next up:** Batch 10 remainder — the Dora Score card section (P8-08) is the
+next behavioural chunk; then the rest of the Dashboard section walk-vs-codify
+triage.
+
+---
+
+## 2026-07-18 (later 14) — Verify Batch 3: C-1b.3 Products tab codified → FU-581 found (three surfaces 404 on the retired `/product-search` route)
+
+**Why:** the last C-1b codify-next candidate. The install-wide `products` flag
+is a data-presence gate (Product rows exist) and the e2e seed ships products,
+so the ON path is drivable; the OFF half (tab hidden + `?section=products` →
+Overview fallback) needs a productless install and stays a walk bullet.
+
+**Built — new `web_app/e2e/detail-products-tab.spec.ts` (2 tests):**
+1. Full Cream Milk's two seeded linked products render with **exactly one**
+   "Cheapest" chip + `dora-product-card--cheapest` highlight, the quiet
+   "Link another" header action, per-card Add-to-list, and no retired
+   "Get cheapest" button anywhere on the page.
+2. A throwaway no-products item shows the centred "Find & link a product"
+   CTA (and no "Link another" in the empty state), self-deleting.
+
+**Real bug → [[FU-581]]:** the CTA's first run landed on the **404 page** —
+`onFindAndLink` pushes `/product-search?q=<name>`, but FU-186 (Phase D)
+removed that route (Product Search is now the external
+`AppSetting.product_search_url` opened by the nav entry). The same dead link
+survives on `MyProductsPage.vue` (a `to="/product-search"` + a second push)
+and the Dashboard's empty-state "Hunt for deals →" CTA. Logged as an FU
+rather than blind-patched: the right per-surface target (external URL vs
+My Products vs hide-the-CTA) is an FU-186-scoped design call, and the detail
+CTA's `?q=` seeding has no consumer any more. The spec pins the CTA render
+but deliberately NOT its destination; recommended resolution "now-ish" (a
+user-visible dead end on three surfaces).
+
+**Verification:** detail-products-tab 3/3 (incl. auth setup); full e2e **63
+pass / 1 fail** (same pre-existing uploads flake, [[FU-576]]). Tests + FU
+only — no product code, no CHANGELOG.
+
+**Ledgers:** C-1b.3 bullet replaced with a pinned-note + the products-OFF
+walk bullet in DORA_VERIFY; new FU-581; triage tracker + batch row updated;
+PROJECT_STATE hand-edited.
+
+**Standards close-gate:** test-only; the found bug flagged per rule 2
+(explain-or-flag, FU logged citing the surfaces) instead of a scope-creeping
+inline fix (R-008). No new ADR.
+
+**Next up:** FU-581 needs an owner call on the three targets. Batch 3 is now
+fully triaged: everything left is visual walks / viewport- or install-gated
+bullets (Chunk 5, mobile panel default, products-OFF half, Offers sidecar
+line, dot-styling + C-1b layout walks). Next codification target: the
+Dashboard sections (Draft-my-shop — behavioural and e2e-friendly — then Dora
+Score).
+
+---
+
+## 2026-07-18 (later 13) — Verify Batch 3: C-1b.4 Recipes/Lists/Substitutes tab actions codified
+
+**Why:** first of the two C-1b codify-next candidates from later-12's triage.
+These actions were once live defects (the favourite toggle wired to a dead
+listener; "every recipe action except Cook is dead" — feedback L132/L134), so
+the wiring deserves a regression pin.
+
+**Built — new `web_app/e2e/detail-recipes-tab.spec.ts` (3 tests + setup,
+serial):** an entirely throwaway universe (two API-created Stocked items + a
+recipe using both → cookability guaranteed; beforeAll creates, afterAll
+deletes lines/recipe/items) so no seed item or other spec is touched.
+1. **Heart toggles favourite both ways** — outline click → server
+   `is_favourite: true` + filled heart re-render from the store; second click
+   → false.
+2. **Cookable "Add all to list"** — the card's cart action lands BOTH
+   ingredients on the primary draft ("2 added." toast + list truth via the
+   API); the Lists tab then reflects the membership with no dead
+   `open_in_new` control; lines pulled again to restore.
+3. **Substitutes** — a substitute linked via the API renders as a row with NO
+   retired per-row "Swap into list"; the link-off Remove unlinks (detail-DTO
+   truth polls to zero + the row disappears). Gotcha: substitutes have no GET
+   endpoint — reads ride the `/detail` DTO (matches
+   `test_substitutes_router.py`).
+
+**Triage note:** the old bullet's "styled Primary badge" wording was stale —
+Round-17 replaced the pill with a warning-toned star icon; folded into the
+C-1b visual-walk line.
+
+**Verification:** detail-recipes-tab 4/4 (incl. auth setup); full e2e **61
+pass / 1 fail** (same pre-existing uploads flake, [[FU-576]]). Tests only —
+no product code, no CHANGELOG, no new FU.
+
+**Ledgers:** C-1b.4 bullet replaced with a pinned-note in DORA_VERIFY; triage
+tracker + batch row updated; PROJECT_STATE hand-edited.
+
+**Standards close-gate:** test-only, established idioms (throwaway universe,
+API teardown, server-truth polling). No violations, no new ADR.
+
+**Next up:** the last C-1b codify-next candidate — C-1b.3 Products-tab gating
+(products-flag-dependent: empty-state CTA, cheapest-highlight, tab
+disappears with Products off + `?section=products` fallback) — or move to the
+Dashboard sections (Draft-my-shop, Dora Score).
+
+---
+
+## 2026-07-18 (later 12) — Verify Batch 3: C-1b section triaged; Chunk-4 pushExpiry matrix + Chunk-2 filter-panel guards codified
+
+**Why:** Batch-3 tail. The C-1b Stock Item Detail section (~28 bullets from
+FU-202) needed a coverage-aware triage rather than blind codification; Chunks
+2/4 had cheap high-value pins left.
+
+**C-1b triage (doc-only):** rewritten in DORA_VERIFY against current
+coverage. Deleted as already-pinned: Level row round-trip
+(`stock-pickers.spec.ts`), lifecycle timeline (`history-tab.spec.ts` +
+backend feeds), location/group/notes clear semantics + round-trips
+(`test_patch_semantics.py` / `test_stock_item_router.py`), expiry dialog
+(`stock.spec.ts` FU-507), unsaved-changes composable
+(`useUnsavedChangesGuard.spec.ts`). Deleted as **stale**: the C-1b.1
+"level chip in header" marquee bullet (superseded — the level lives in the
+Overview Level row) and every auto-add-toggle / footer-Auto-add mention
+(retired by FU-511; absence itself pinned by `auto-add-on-low.spec.ts`).
+Remainder compressed to: a layout/visual walk line, the splitter-peek walk,
+picker-× wiring, two **codify-next candidates** (C-1b.4
+Recipes/Lists/Substitutes actions; C-1b.3 Products tab incl. products-off
+gating), and the unpinned History extras (Restocked/Dropped labels, synthetic
+Opened entry, empty-state copy).
+
+**Built:**
+- **New `test/unit/useStockItemActionsPushExpiry.spec.ts` (8 Vitest tests)**
+  — the FU-123 `max(today, current expiry) + N` push matrix: future expiry
+  pushes from the expiry (+1 and +7 cases), past expiry lands tomorrow (never
+  yesterday), no-expiry falls back to today+N, unparseable date degrades to
+  today+N, same-day tie, the "Expiry pushed to <iso>." toast, and the failed-
+  PATCH error toast. Composable driven with module-boundary mocks (Quasar /
+  router / stores / pinia storeToRefs identity).
+- **Chunk-2 describe in `stock.spec.ts` (2 e2e tests)** — desktop filter-panel
+  persistence survives reload in BOTH directions (open→reload→open,
+  close→reload→closed, restored to default); retired "Used in a recipe"
+  filter absent (with a surviving Essential control) + bare "Search"
+  placeholder.
+
+**Ledger rewrites:** Chunk-2 section reworded (stale footer-order bullet
+listing "Flagged / Auto-add" corrected to the current Essential labels);
+Chunk-4 section reworded (push-semantics bullet deleted as Vitest-pinned;
+menu/picker split noted as pinned by `bulk-waste.spec.ts` test 6); triage
+tracker + batch row updated; PROJECT_STATE hand-edited.
+
+**Verification:** pushExpiry spec 8/8; stock.spec 10/10; full e2e **58 pass /
+1 fail** (same pre-existing uploads flake, [[FU-576]]); Vitest **402/32**
+green. Tests + docs only — no product code, no CHANGELOG, no new FU.
+
+**Standards close-gate:** test-only; mocks follow the established
+module-boundary idiom. No violations, no new ADR.
+
+**Next up:** Batch 3 is down to visual walks + viewport-gated bullets (Chunk
+5 responsive/long-press, Chunk-2 mobile-hidden, splitter-peek) + the Offers
+sidecar line + the two C-1b codify-next candidates. Next codification
+sessions can pick up the codify-next candidates or move to the Dashboard
+sections (Draft-my-shop, Dora Score — both largely behavioural and
+e2e-friendly).
+
+---
+
+## 2026-07-18 (later 11) — Verify Batch 3: Stock pickers behavioural halves codified; section down to one visual
+
+**Why:** next Batch-3 chunk — the "Stock pickers + Log Waste consistency"
+section. The row expiry-menu Log-waste path was already pinned
+(`bulk-waste.spec.ts` test 6); the dot styling is a one-time visual; two
+behavioural bullets had nothing.
+
+**Built — new `web_app/e2e/stock-pickers.spec.ts` (2 tests):**
+1. Detail Level row round-trip on a **throwaway API-created item** (Stocked,
+   not Essential, on no list — so the walk can't trip auto-add or another
+   spec's seed state): dropdown (BaseDropdown, accessible name "Expand") pick
+   Stocked → Low Stock → "Updated just now" stamp renders + the trigger
+   re-labels + server truth via `/stock-items`, item deleted in a finally.
+2. Overview level filter set→clear cycle: pick Low Stock narrows the list,
+   the select's clear-× restores the full count with the "Any level" fallback
+   trigger, and the entire interaction is captured **console-clean**
+   (console warnings + errors + pageerrors all asserted empty — the verify
+   bullet's slot-props/undefined-sequence regression net).
+
+**Verification:** stock-pickers 3/3 (incl. auth setup); full e2e **56 pass /
+1 fail** (same pre-existing `uploads.spec.ts:46` channel flake, [[FU-576]]).
+Tests only — no product code, no CHANGELOG, no new FU.
+
+**Ledgers:** DORA_VERIFY pickers section reworded to a single one-time visual
+(dot-styling parity + destructive-red Log-waste entry); triage tracker +
+batch row updated; PROJECT_STATE hand-edited.
+
+**Standards close-gate:** test-only unit following the established spec idioms
+(throwaway-item isolation, API safety teardown, accessible-role locators). No
+violations, no new ADR.
+
+**Next up:** Batch-3 tail is now just the C-1b Stock Item Detail section
+(old L784+) — mostly one-time visuals; triage it into V-pack vs the few
+codifiable behaviours (several already pinned elsewhere: level row this unit,
+expiry editors in `stock.spec.ts` FU-507, tabs in `history-tab.spec.ts`).
+Then the batch closes and the campaign moves to the next sections (Offers
+sidecar / Draft-my-shop / Dora Score).
+
+---
+
+## 2026-07-18 (later 10) — Verify Batch 3: FU-109 deep-link filter codified → 2 real bugs found + fixed; FU-579 bulk-waste half fixed (was breaking `quasar build`)
+
+**Why:** next Batch-3 chunk — the FU-109 "Recipe-ingredients deep-link filter"
++ "no-dim" sections. Narrowing/orphan/AND-compose were already Vitest-pinned in
+`useStockFilters.spec.ts`; the URL/chip wiring had nothing.
+
+**Built — new `web_app/e2e/recipe-deeplink.spec.ts` (4 tests, read-only):**
+card filter icon on the detail Recipes tab → `/stock?recipe=` + "Ingredients
+of: Spaghetti Aglio e Olio" chip + list narrowed to exactly Barilla Pasta /
+Garlic / Olive Oil; chip-× teardown (chip gone, param stripped, full list
+back); toolbar **Clear** (FilterToggleButton → `clearAllFilters`) strips
+`?recipe=` and a reload can't reinstate it; bogus id leaves the list intact
+with no chip; the filter icon exists ONLY on the detail Recipes tab (cookbook
+cards asserted icon-free as the control) and every card there renders at
+computed opacity 1 (FU-109 no-dim; the dim code no longer exists in
+`RecipeCard`).
+
+**Two real bugs the spec caught — fixed inline (CHANGELOG'd):**
+1. **Phantom chip on a dead deep-link.** `/stock?recipe=<bogus-id>` correctly
+   left the list unfiltered (Vitest-pinned) but the chip still rendered with
+   its hydration-fallback label "Ingredients of: this recipe" forever. Root
+   cause: the chip's `v-if` keyed on the raw filter id and the fallback label
+   couldn't distinguish "still hydrating" from "hydrated, unresolved". Fix:
+   `recipeStore.recipesHydrated` promoted from a module-local `let` to a
+   reactive ref (exposed readonly), chip now gated on
+   `context !== null || !recipesHydrated`.
+2. **Empty-state "Clear" leaked `?recipe=`.** The "No items match" banner's
+   Clear called `filters.clearFilters` directly instead of the page's
+   `clearAllFilters` wrapper — exactly the refresh-reinstates-the-filter trap
+   the wrapper's comment warns about. One-line rewire.
+
+**Pipeline finding — FU-579's bulk-waste half FIXED:** `npx quasar build`
+hard-fails (exit 2, deletes/never-writes `dist/spa`) on the 12
+`noUncheckedIndexedAccess` errors in `bulk-waste.spec.ts` — the e2e webServer
+serves the prebuilt bundle, so from a clean tree the whole e2e pipeline was
+broken (discovered when this session's product fix needed a rebuild).
+`itemsByName` now returns a throwing accessor; `vue-tsc --noEmit` fully clean.
+FU-579 amended in place (src-pwa dev-watch half stays open; its "not visible
+in the vue-tsc task" claim corrected).
+
+**Verification:** rebuilt `dist/spa`; recipe-deeplink 5/5 (incl. auth setup);
+full e2e **54 pass / 1 fail** (same pre-existing `uploads.spec.ts:46` channel
+flake, [[FU-576]]); frontend Vitest **394/31** green; `vue-tsc --noEmit` clean.
+
+**Ledgers:** both FU-109 sections deleted from DORA_VERIFY (nothing remains);
+triage tracker + batch row updated; CHANGELOG two Fixed entries; FU-579
+amended; PROJECT_STATE hand-edited.
+
+**Standards close-gate:** product changes are minimal and rule-clean — the
+reactive latch keeps state ownership in the store (R-003/R-016 shape), the
+chip gate is presentation logic in the page, no new tokens/framework drift.
+The store's `collectionsHydrated` twin stays a plain `let` (no consumer needs
+it reactive — noted here rather than speculatively changed, R-008). No new
+ADR.
+
+**Next up:** Batch-3 remainder — "Stock pickers + Log Waste consistency"
+(mostly one-time visuals; the behavioural half is already pinned by
+`bulk-waste.spec.ts` test 6) and the C-1b Stock Item Detail section (V-pack
+candidates), then on to the next batch sections (Offers sidecar / Draft-my-shop
+/ Dora Score).
+
+---
+
+## 2026-07-18 (later 9) — Verify Batch 3: History-tab sections fully codified (backend feed contracts + e2e render walks)
+
+**Why:** continuing the campaign; next codifiable Batch-3 chunk after P8-05 was
+the two History-tab sections (old DORA_VERIFY L758–783). P8-02 (barcode/OFF)
+stays device-gated.
+
+**Coverage audit:** expiry-event emission (set/pushed/cleared, no-op silence)
+and the per-kind cap → `history_older_count` were already pinned in
+`test_stock_item_router.py`; the Bought and Cooked feeds had **zero** server
+tests, and none of the UI render had an e2e.
+
+**Built:**
+- **New `tests/e2e/dora_api/test_stock_item_history_feeds.py` (7 tests).**
+  Bought: ticked+priced line on a finished list → one `purchase_events` entry
+  (price, list name, `completed_at` stamp; store None); price-less/store-less
+  line still surfaces; seeded store resolves to `store_name`; unticked line
+  never surfaces; ticked line on an in-flight `shopping`-status list is
+  mid-shop, not bought. Cooked: `POST /recipes/<id>/cook` surfaces on
+  ingredient items only (bystander clean — RecipeIngredient join), carries
+  `meals_cooked`; a zero-meal cook (204, `last_made_on` bump) records nothing.
+- **New `web_app/e2e/history-tab.spec.ts` (4 tests).** Sriracha chatty-seed
+  cap walk ("16 older events not shown", stable across reload, >5 pushes
+  render); Milk under-cap mixed feed (Bought/Wasted/Pushed interleave, no
+  footer); Garlic "Used in <recipe> · N meals" batch badge; engineered item
+  walking Set → "Pushed expiry +7 days" (`2030-01-01 → 2030-01-08` body) →
+  "Cleared expiry" ("Was …" body), self-deleting.
+
+**Verification:** backend suite **1522 passed** (1 skip Postgres-gated, 1 known
+xfail); history-tab e2e 5/5 (incl. auth setup); full e2e **50 pass / 1 fail**
+(the same pre-existing `uploads.spec.ts:46` channel flake, [[FU-576]]).
+
+**Ledgers:** both DORA_VERIFY History sections deleted per delete-on-pass and
+merged into one section holding a single one-time visual line (event-kind theme
+colours + the singular "1 older event" footer branch); migration-downgrade
+bullet dispositioned to `tests/test_migrations.py` (SQLite xfail carve-out,
+Postgres leg batch 19). Triage tracker updated; PROJECT_STATE hand-edited.
+Tests only — no CHANGELOG, no new FU.
+
+**Standards close-gate:** test-only unit; no product code. The timeline
+composition living inline in `StockItemDetailPage.vue` (an R-001 extraction
+candidate) was deliberately not refactored to make it unit-testable — the e2e
+pins it against the real page instead (R-008 scope discipline; not logged as an
+FU since FU-578's UX pass already has the History tab on its list). No new ADR.
+
+**Next up:** Batch-3 remainder — the "Stock pickers + Log Waste consistency"
+and "Recipe-ingredients deep-link filter" (FU-109) sections are the next
+codifiable chunks; the C-1b Stock Item Detail section is mostly one-time
+visuals (V-pack candidates).
+
+---
+
+## 2026-07-18 (later 8) — Verify Batch 3: P8-05 buy-verdict section fully codified (e2e + Vitest cache spec) → FU-580 found
+
+**Why:** continuing the DORA_VERIFY campaign; next Batch-3 target after the
+Zero-Input Pantry seam was the P8-05 buy-verdict bullets (L733–744).
+
+**Coverage audit first:** the verdict *engine* was already fully unit-pinned
+(`tests/test_buy_verdict.py`, 27 tests — the whole matrix, thin-data collapse,
+reason labels/details, wait-hint, fake-markdown) and the Skip walk e2e'd
+(`web_app/e2e/buy-verdict.spec.ts` tests 1–3 + the Batch-0 live walk). Gaps
+were the feature-flag UI gate, the low-confidence render silence, the Buy walk,
+and the whole client cache. All codified:
+
+- **`web_app/e2e/buy-verdict.spec.ts` → 6 tests** (3 new, plus an afterAll
+  API safety net: flag on, fixture Stocked + off-list). New: (1) feature flag —
+  Settings → Admin → System → Features toggle off → toast + `/app-settings`
+  truth → full reload → fixture row renders with no badge; on → reload → Skip
+  badge back. (2) low-confidence silence — Jasmine Rice answers
+  `confidence: low` and its row renders zero `.dora-buy-verdict-badge`.
+  (3) out-of-stock Buy walk — fixture → Out of Stock, API canary (buy/high,
+  `out_of_stock` reason first, `add_to_list` one-tap), green Buy chip →
+  popover "You're out of stock" → "Add to primary list" → "1 added." toast →
+  server truth on the draft → restored.
+- **New `web_app/test/unit/useBuyVerdict.spec.ts` (7 tests)** — the module
+  cache: one request per item across concurrent consumers, cache-serve in the
+  5-min window, stale-but-usable background refresh, FU-572 live-entry
+  invalidation refetch (lazy on null entries), error → null badge, disabled
+  gate, clearBuyVerdictCache.
+
+**Real finding → [[FU-580]]:** the Features-page toggles never call the
+enabled-composables' `refresh*()`, and the health probe memoises once per
+document — so a flag flip only takes effect after a full page load. The e2e
+test failed on a same-document hash goto and now reloads deliberately, matching
+the verify bullet's "Reload Stock Overview" wording; fix deferred
+(opportunistic, R-008).
+
+**Verification:** buy-verdict e2e 7/7 (incl. auth setup); full e2e suite
+**46 pass / 1 fail** (the same pre-existing `uploads.spec.ts:46` channel flake,
+[[FU-576]]). Frontend Vitest **394/31** green. `vue-tsc` shows only the 12
+pre-existing [[FU-579]] bulk-waste errors — the new files add none.
+
+**Ledgers:** DORA_VERIFY P8-05 section L734–744 deleted per delete-on-pass
+(one V-pack line stays — the orange Wait badge look, the only variant never
+walked); DORA_VERIFY_TRIAGE batch row + progress block updated; new FU-580;
+PROJECT_STATE hand-edited. Tests only — no CHANGELOG.
+
+**Standards close-gate:** test-only unit; no product code touched. Specs follow
+the established idioms (helpers.ts API seams, serial + self-restoring fixture,
+resetModules singleton pattern from `useOfflineQueue.spec.ts`). No new ADR.
+
+**Next up:** rest of Batch 3 (Stock B remainder, DORA_VERIFY L746+ — P8-02
+barcode/OFF is device-gated, so next codifiable chunks are the History-tab
+sections and the stock pickers / recipe-deep-link sections).
+
+---
+
 ## 2026-07-18 (later 7) — UX pass 3 (drive.mjs): My Products / item History tab / Dora helper → FU-578 items 32–36
 
 Third screenshot pass: History tab renders 50 repeated "Pushed expiry" cards as

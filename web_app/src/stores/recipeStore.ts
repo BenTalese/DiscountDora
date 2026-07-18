@@ -19,7 +19,9 @@ export const useRecipeStore = defineStore('recipe', () => {
 
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
-    let recipesHydrated = false;
+    // Reactive so consumers can distinguish "still hydrating" from
+    // "hydrated and the id genuinely doesn't resolve" (FU-109 deep-link chip).
+    const recipesHydrated = ref(false);
     let recipesInflight: Promise<void> | null = null;
     let collectionsHydrated = false;
     let collectionsInflight: Promise<void> | null = null;
@@ -27,7 +29,7 @@ export const useRecipeStore = defineStore('recipe', () => {
     const getRecipesAsync = () =>
         recipeApiService.getAllAsync().then((page) => {
             recipes.value = [...page.items].sort((a, b) => collator.compare(a.name, b.name));
-            recipesHydrated = true;
+            recipesHydrated.value = true;
         });
 
     const getRecipeCollectionsAsync = () =>
@@ -41,7 +43,7 @@ export const useRecipeStore = defineStore('recipe', () => {
      *  refresh. Call `getRecipesAsync` directly for an explicit refetch
      *  (post-mutation, pull-to-refresh). */
     const ensureLoadedAsync = (): Promise<void> => {
-        if (recipesHydrated) return Promise.resolve();
+        if (recipesHydrated.value) return Promise.resolve();
         recipesInflight ??= getRecipesAsync().finally(() => { recipesInflight = null; });
         return recipesInflight;
     };
@@ -121,6 +123,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         // Exposed as a plain ref (not readonly): consumers pass recipes into
         // display components and filter helpers typed as mutable Recipe[].
         recipes,
+        recipesHydrated: readonly(recipesHydrated),
         recipeCollections: readonly(recipeCollections),
         getRecipesAsync,
         getRecipeCollectionsAsync,

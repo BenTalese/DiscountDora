@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "dora-backend",
-            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeExecutable": "python",
             "runtimeArgs": ["-m", "dora_api.startup"],
             "port": 5170
         },

@@ -72,35 +72,6 @@ top-to-bottom.
 - [ ] After Remove is tapped and a new image picked, the buttons flip back to "Change" labels (the draft has a fresh image)
 - [ ] On mobile (or with `forceCamera` on): the camera button opens the OS camera picker directly
 
-## SettingsFileDrop — accessible file picker (FU-545 label-wrap refactor)
-The Settings → Admin → **Data → Import** and **Data → Backup & restore** drop-zones
-were re-built to the accessible label-wrap pattern (a `<label>` wrapping a visually-
-hidden native file input) — the interaction is now browser-native, so confirm nothing
-regressed:
-- [ ] **Click-to-open still works.** Click anywhere on the drop-zone (icon/text) → the OS file picker opens; choosing a file selects it (filename + size shown).
-- [ ] **Keyboard.** Tab to the drop-zone → a visible focus ring appears on the zone (now driven by `:focus-within` on the hidden input); press **Enter** or **Space** → the OS file picker opens (native `<label>`/`<input>` behaviour, no custom keydown).
-- [ ] **Drag-and-drop still works.** Drag a file over → the zone highlights (dashed→solid, tint); drop → the file is selected. Dragging off without dropping calms the highlight.
-- [ ] **Remove doesn't re-open the picker.** With a file selected, click the **✕ Remove** button → the file clears and the picker does **not** pop open (label never forwards a click on the interactive Remove button).
-- [ ] **Busy / disabled inert.** While an import is uploading (busy spinner) or the zone is disabled, clicking it does nothing (the underlying input is `disabled`), and drops are ignored.
-
-## BuyVerdictCard one-tap actions — origin FU-454
-- [ ] Find a stock item whose card verdict returns kind `mark_stocked` ("Already stocked" — e.g. an item with waste history that got set back to Well-Stocked accidentally, or engineered by dropping the level from Well-Stocked to Low with waste events present) → tap the button on both Stock Overview AND Stock Item Detail → item flips to Well-Stocked, positive toast fires, verdict card re-renders with the fresh answer
-- [ ] Same on Shopping List Detail line card → tap `mark_stocked` → item flips to Well-Stocked; the shopping-list line stays put (line-level removal is a separate action)
-- [ ] Find an item whose card verdict returns kind `remove_from_list` ("Remove from list" — item is skip-recommended AND is currently on an open list) → tap on Stock Overview → summary toast reports "Removed from N list" ; verdict card no longer surfaces the button; the line is gone from every open list containing it
-- [ ] Same on Stock Item Detail → same behaviour
-- [ ] On Shopping List Detail, `remove_from_list` removes ONLY the current line (not other lists — that's the correct per-line semantic)
-- [ ] Confirm no "use the row controls" or "use the stock-level control" fallback toasts fire from the card any more — those were the dead-button symptom
-
-## Password policy (NIST/ISO alignment) — origin FU-442
-- [ ] Register a new user with password `abcdefgh` (8 chars, letters only) → succeeds (no more "must include a digit")
-- [ ] Register with `passphrase please` (a real phrase with a space) → succeeds
-- [ ] Register with `abc123` (6 chars) → rejected with "at least 8 characters"
-- [ ] Register with `password123` → rejected with the "appears on public breach lists" message; try `QWERTY123` (uppercase) → same rejection (case-insensitive breach check)
-- [ ] Reset-password flow shows the updated fineprint ("at least 8 characters, a passphrase works well"); no "letter and digit" language anywhere
-- [ ] Settings → Account → Change password inline validator says "At least 8 characters" (not 4)
-- [ ] Log in with an existing pre-policy password (e.g. an old 6-char account) still works — the new policy only applies at set-time, not at login
-- [ ] No admin toggle exists to loosen the rules (grep the Settings tree in the browser — Preferences, Admin, Security should have no password-policy option)
-
 ## PWA install + offline (build now ships in PWA mode) — origin FU-336
 Requires a **built** frontend served over HTTPS or localhost (SW won't register on plain-HTTP). Use the Docker/nginx image, the desktop bundle, or `quasar serve dist/spa` after `npm run build`.
 - [ ] DevTools → Application → **Service Workers**: `sw.js` registers + activates (no errors); Application → **Manifest** shows name "Dashy Dora", theme `#f5c462`, the 3 shortcuts, and no manifest warnings
@@ -113,7 +84,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Safari pinned-tab (FU-552, fixed 2026-07-15): on older Safari that still honours `mask-icon`, pin the tab → the `safari-pinned-tab.svg` "D/D" mark renders recoloured to theme gold, not a blue gear. **Low priority / legacy** — Safari 15+ ignores mask-icon and uses the regular icons; this is really just confirming the hand-authored monochrome D/D vector reads acceptably (it couldn't be rendered headlessly this session — the in-app browser blocks `file://`/`localhost`)
 
 ## Runtime backend URL (browser + PWA) — origin P8-10
-- [ ] In a browser tab (dev or PWA), Settings → About → **Dora API endpoint** shows the current URL; clicking **Change** opens the prompt with the current URL pre-filled
 - [ ] Save a bogus URL → toast "Instance URL saved", full reload, network banner drops (server unreachable) — confirm the app doesn't hard-crash and the About page still lets you re-open the prompt to fix it
 - [ ] Re-save the original URL → app recovers cleanly on reload; API traffic goes back to normal
 
@@ -690,47 +660,12 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Close the overlay (X) and reopen → the action resets to the "Open stock item" default, and no stale banner from the previous session lingers
 - [ ] With scanning OFF (default) → the Scan button does not appear at all
 
-### Product unlink fix (str/UUID 404) — origin FU-528 family
-- [ ] On a stock item that has a linked product (detail page → linked products), unlink the product → it disappears from the list without an error toast (previously every unlink silently failed with a 404 under the hood)
-- [ ] Refresh the page → the product stays unlinked; relink it → link works as before
-
 ### Register barcode against a Product from My Products — origin FU-373
 - [ ] With **scanning ON** (Settings → scanning enabled): open the My Products `⋮` menu on any product → "Register barcode…" is present. Enter a barcode, Register → success toast; the dialog closes.
 - [ ] Re-open the menu on the same product and register the **same barcode again** → inline error shows the "already registered" conflict (409), no crash.
 - [ ] With **scanning OFF**: the "Register barcode…" `⋮` item is hidden entirely (R-029 hide-don't-nag), leaving the other menu actions intact.
 
-### Stocktake snooze no longer 500s the queue / breaks the bell (SQLite) — origin FU-526
-- [ ] On a SQLite install: with at least one item overdue for stocktake, **snooze** one item from the stocktake queue → the queue still loads (no 500 / error state) and the snoozed item drops off it
-- [ ] While that snooze is active, open the **alerts bell** and the `/alerts` page → both load normally (previously any active snooze took the bell down too)
-- [ ] Let/ set the snooze to expire (or Check the item) → the item reappears in the queue as expected
-
-### Consumption-event recording restored (cook-mode depletion) — origin FU-533
-- [ ] Set a stock item to a full/high level, then **cook a recipe that uses it** (or manually drop its level with a consumption source) so the level DROPS → the depletion is recorded: the item's run-out prediction / "your prices" depletion signal reflects the drop (previously a sourced drop silently recorded nothing)
-- [ ] On a stock item, **re-confirm the SAME level** (tap the current level again) → the level-history timeline does NOT gain a phantom "Stocked → Stocked" entry (only the "last checked" stamp bumps)
-- [ ] PATCH a recipe's cuisine/category/collection to empty (clear it in the edit form) → the link actually clears and stays cleared after refresh
-
-### Rename-to-own-name fix (str/UUID 422) — origin FU-528 family
-- [ ] Open the edit dialog for a **stock item**, change some other field (e.g. notes) but leave the **name** untouched, and save → saves cleanly (previously 422'd "already exists")
-- [ ] Same check on a **recipe** (rename dialog, keep the same name), a **stock location**, a **store**, and (as admin) a **user's username** → all save without a spurious duplicate error
-- [ ] Sanity: renaming one entity to a *genuinely* existing OTHER entity's name still shows the duplicate error (the guard still works)
-
-### Unlinked-ingredients page loads — origin FU-532/fuzz
-- [ ] Navigate to whatever surfaces the "ingredients not linked to stock" review (recipe ingredient linking) → the list loads instead of erroring (the backing `GET /api/recipes/unlinked-ingredients` was 500-ing on every request)
-
-### Reconcile-queue pagination — origin fuzz
-- [ ] With enough unresolved past-day meal entries to paginate (>1 page), open the meal-plan reconcile queue and page through → no error, next page loads (cursor previously 500'd on SQLite the moment the queue paginated)
-
-### Expiry-on-open prompt — origin FU-507
-- [ ] On a stock item's row, tap the **open / lock** icon on a currently-sealed item — a dialog appears titled **Marking "&lt;name&gt;" as open** with the current expiry prefilled in a date picker and the message "Update its effective expiry?"
-- [ ] Pick a new date and tap **Update expiry** → row is marked open AND the new expiry saves (row's expiry chip reflects it)
-- [ ] Repeat but tap **Skip** → row is marked open, expiry is unchanged
-- [ ] On the stock-item **Detail page**, flip the **Opened** toggle → same dialog fires, same behaviour
-- [ ] Toggle a currently-open item back to sealed → **no dialog** (the prompt only fires on open, not on close)
-
 ### StockItem.image feature dropped — origin FU-508
-- [ ] Stock overview: no image thumbnail column on rows; no "Show row images" / "Hide row images" toggle button in the toolbar next to search
-- [ ] Stock-item detail page: no image upload field on the Overview tab (the fact list starts at Name)
-- [ ] Nothing calls `/api/stock-items/&lt;id&gt;/image` — network tab clean on stock pages
 - [ ] Recipes still render their images; user avatars still render; store logos still render (these are separate features and must be untouched)
 
 ### Stocktake redesign — Chunk 3 Settings + Stock Overview surfacing — origin PROPOSAL_STOCKTAKE_MODE
@@ -738,26 +673,12 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 **Settings → Stocktake page**
 - [ ] Navigate to **Settings → Admin → System → Stocktake** — the nav entry appears with the clipboard-check icon, between "Alert thresholds" and "AI assistant"
-- [ ] Page loads with title **"Stocktake"** and a description "How often Dora asks you to check each item…"
-- [ ] **Default check cadence** section: three-button toggle showing **Weekly / Fortnightly / Monthly** with the current setting highlighted (Fortnightly on a fresh install)
-- [ ] Tap **Weekly** → button becomes active, positive toast fires **"Default cadence saved."** — refresh the page and the change persists
-- [ ] Tap **Monthly** → same behaviour, and the previous **Weekly** button de-activates
-- [ ] **Auto self-tuning** section: a `q-toggle` (on by default). Flip off → positive toast **"Auto self-tuning off."** — refresh and it stays off
-- [ ] Flip back on → toast reads **"Auto self-tuning on."**
 - [ ] Non-admin user visits the page → the red admin-permissions banner shows, the sections don't render
 - [ ] With Auto **off**, run stocktake — every item's cadence is the global default (adjusted by Essential = one band faster if flagged)
 - [ ] With Auto **on**, an item with recent frequent level changes moves into a shorter cadence band on next queue rebuild (verify by looking at what the runner shows as "Checked every week/fortnight/month")
 
-**Alert thresholds — clean removal**
-- [ ] Navigate to **Settings → Admin → System → Alert thresholds** — the **"Default stocktake reminder"** section (the numeric-days input) is **gone**; only "Expiring-soon window" remains
-- [ ] Expiring-soon window still edits + saves correctly (regression check)
-
 **Stock Overview — "Needs check" quick-filter**
 - [ ] On **Stock Overview**, expand the filter panel → a new **"Needs check"** chip appears in the chip strip, positioned after "Needs attention", with the clipboard-check icon
-- [ ] With chip **off**: full pantry visible
-- [ ] Toggle chip **on**: view narrows to only the items currently in the stocktake queue (the same set surfaced by the runner)
-- [ ] The count matches: with the filter on, the visible row count equals what the toolbar's Stocktake button says (e.g. "Stocktake (12)")
-- [ ] Toggle chip off: full list returns
 
 **Stock Overview — pulse outline around stock-level button**
 - [ ] An item that IS in the stocktake queue: its **stock-level button** (the small coloured square left of the item name) has a **subtle pulsing outline** — a soft accent-coloured halo that grows and fades on a 2-second cycle
@@ -770,115 +691,42 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ### Stocktake redesign — Chunk 2 SPA runner rebuild — origin PROPOSAL_STOCKTAKE_MODE
 *Verifies the redesigned stocktake mode: new engagement gate + cadence bands + buttons + completion screen. Chunk 3 (Settings + Stock Overview surfacing) is not yet built.*
 
-**Landing gone / empty state**
-- [ ] Tap **Stocktake** from the left nav (or hit `/stocktake` directly) → the runner opens **immediately** on the first item; no intermediate "N items need a check" landing
-- [ ] Legacy bookmark to `/stocktake/run` → redirects to `/stocktake` and behaves identically
-- [ ] With nothing overdue (fresh install / everything Checked): runner shows the **"You're all caught up."** card with a Back-to-Stock button — no crash, no infinite spinner
-- [ ] Close **X** in the runner topbar → returns to `/stock`
-
 **Runner card + buttons**
 - [ ] Item card shows: name (large), location (or "No location"), and a caption line like **"Checked every fortnight · N days overdue"** — plural/singular correct for 1 day vs many
-- [ ] **Row 1 — two big buttons side by side:** **Still correct** (green/positive) and **Change level**
 - [ ] The **Change level** button is **tinted to the current level's colour** (Stocked → positive/green, Low → negative/red, Out → neutral/muted) and shows the level's **name** with a small **"(change)"** underneath
 - [ ] **Row 2 — three smaller ghost buttons:** **Skip** / **Push 3 days** / **Mute**
-- [ ] No **Out of stock** button anywhere (it's a level in the picker now)
 - [ ] No **keyboard shortcuts** shown on the buttons; pressing `1`/`2`/`3`/`s` does **nothing**
 - [ ] No **Add to list** button on the card (it moved to the completion screen)
-
-**Still correct**
-- [ ] Tap **Still correct** → server logs the check, card advances to next item, no visible toast (it's the mainline action, doesn't need one)
-- [ ] After a Still-correct action, refresh the queue → the same item does NOT resurface (its clock reset)
-
-**Change level (picker)**
-- [ ] Tap **Change level** → dialog opens titled **Set level**, listing every configured level with a **coloured dot on the left** (matches Stock Overview colours pixel-for-pixel)
-- [ ] Pick a level → level updates, card advances
-- [ ] Change to **Low** or **Out** during a session → item name gets tracked for the completion-screen batch add-to-list (see below)
-- [ ] Change back to **Stocked** (or any non-Low/Out) on the same item within the session → item is **removed** from the completion-screen list (dedupe / last-write-wins)
-
-**Skip (session-only)**
-- [ ] Tap **Skip** on the first item → card advances, no API call fires (verify in Network tab)
-- [ ] Continue skipping through the whole queue → the skipped items **come back at the end**, in the order you skipped them
-- [ ] Refresh the page → skips are gone (session-only); the original queue rebuilds fresh
-
-**Push 3 days**
-- [ ] Tap **Push 3 days** → `POST /stock-items/<id>/snooze` fires; card advances; item's `last_checked_at` is **unchanged** (verify in DB or via item detail)
-- [ ] Refresh the queue → the pushed item does NOT resurface (its `snoozed_until` is 3 days in the future)
-- [ ] On a pushed item, hit **Still correct** or **Change level** via any surface → the snooze is **cleared** automatically (Check is stronger than Push)
-
-**Mute (with confirmation)**
-- [ ] Tap **Mute** → a confirmation dialog appears with message **"Dora will stop asking about this item entirely. You can un-mute it later from the item's detail page."** and a red **Mute** confirm button
-- [ ] Cancel the dialog → nothing changes; card stays on the same item
-- [ ] Confirm the dialog → `stocktake_alerts_are_enabled` flips to `false` on the item; card advances
-- [ ] Refresh the queue → muted item does NOT resurface (permanent until un-muted from item detail)
-
-**(?) Help affordance**
-- [ ] Tap the **?** icon in the topbar → dialog opens titled **How stocktake works** with a definition list covering all five verbs + a footer note about cadence bands / Auto
-- [ ] Close and re-open — nothing sticky, no state leaked
-
-**Completion screen**
-- [ ] Walk through every item in the queue (any mix of the 5 verbs) → after the last item, the **completion card** replaces the item card
-- [ ] Completion card shows the 5 counters — **checked / changed / skipped / pushed / muted** — with the right totals matching what you did
-- [ ] If you Changed **≥ 1** item to Low or Out during the session, a prompt appears: **"N items went Low or Out. Add them to a shopping list?"** with an **"Add to list…"** button
-- [ ] Tap **Add to list…** → radio dialog listing every active (non-done) shopping list. Pick one, confirm → all tracked items are added; the button shows an **"Added."** confirmation and disables (can't double-fire)
-- [ ] With **0 active lists**, the button surfaces an info toast: "No active lists. Create one first."
-- [ ] With **0 Low/Out items** in the session, the add-to-list prompt does NOT appear
-- [ ] Tap **Done** → returns to `/stock`
 
 ### Bulk "Log waste…" on Stock Overview — origin FU-226 chat
 *Verifies the new bulk waste action in the Stock Overview bulk-select bar.*
 - [ ] Enter bulk-select mode (long-press a row on mobile, or the toolbar toggle on desktop) → select 3 items, at least one with an expiry date set and at least one without → the "Log waste…" button in the bulk bar is enabled and shows the trash icon
-- [ ] Tap "Log waste…" → the MarkAsWastedDialog opens with the header **"Why did this go to waste?"**, subject line reads **"3 items"**, and a subline **"One reason applies to every selected item."**
-- [ ] Tap one of the four primary reason tiles (e.g. **Spoiled**) → dialog closes; bulk-select mode exits; one summary toast fires **"Logged 3 items as wasted."** with an **Undo** action
-- [ ] Open **Reports → waste-insights** (or the Dashboard "recently wasted" surface): the 3 items appear with reason `spoiled` and the same `occurred_at`; the item that had an expiry date now shows expiry cleared on Stock Overview
-- [ ] Repeat the flow with **4 items** → tap **Undo** on the summary toast → *all 4* waste events are removed from insights and any previously-set expiry dates are restored on the affected rows (positive "Undone." toast)
-- [ ] With 0 items selected, the "Log waste…" button is **disabled** (grey, no click) — matches the other bulk actions
-- [ ] "Log waste…" with a single item selected → summary reads **"Logged 1 item as wasted."** (singular)
-- [ ] Sanity — the single-item "Log waste" from the row's expiry menu still works and still shows the per-item toast + Undo (bulk path didn't regress the single path)
+- [ ] After bulk-logging those 3 items as wasted (Spoiled): open **Reports → waste-insights** (or the Dashboard "recently wasted" surface) — the 3 items appear with reason `spoiled` and the same `occurred_at`; the item that had an expiry date now shows expiry cleared on Stock Overview
 
 ### Auto-add-on-low toast + line chip — origin FU-315 (re-verify: FU-464 fixed a Low-transition regression 2026-07-04; FU-511 collapsed the per-item toggle to an install-wide 3-state setting 2026-07-07)
 *Auto-add is now controlled by **Settings → Admin → System → Stock** — three modes:*
 *`Off` never fires. `Essential only` (default) fires only for items with the Essential flag on. `All items` fires on any Stocked → Low/Out transition. Server owns the branching in `update_stock_item._try_auto_add`.*
 
 *For the toast-behaviour checks below, set the install to `Essential only` (default) and use a stock item with the Essential flag on and exactly one open draft shopping list.*
-- [ ] Settings → Admin → System → Stock loads; the three-way toggle reads the current mode; switching between modes saves eagerly (positive toast) and survives a hard refresh
-- [ ] From stock overview, tap the stock-level chip on a Stocked Essential item → set it to **Low** → positive toast fires **"Added *<item>* to *<draft list display_name>*."** with caption "Auto-added because it went low." (not a silent add)
-- [ ] Same setup but set to **Out** on an item that was already Stocked → same toast fires
-- [ ] Open the draft list → the new line renders **without a manual refresh** (the store refreshed itself)
-- [ ] Line shows an `auto: low stock` chip at normal density — visible next to the item name, not crowded out by price / quantity chips
-- [ ] Switch mode to **Off**, then set a Stocked Essential item to Low → **no toast fires**
-- [ ] Switch mode to **All items**, then set a Stocked *non-Essential* item to Low → toast fires (previously it wouldn't have — this is the deliberate 3-state expansion)
-- [ ] Switch mode back to **Essential only**, then set a Stocked *non-Essential* item to Low → **no toast fires**
-- [ ] Set an Essential item to Low when it's already on any active shopping list → no toast (server dedup: "user already knows")
-- [ ] Set an Essential item to Low when the user has **0 draft lists** or **2+ draft lists** → no toast (server only auto-adds when the target is unambiguous)
-- [ ] Item level change on the detail page (Level row) → toast fires the same way (`updateStockItemAsync` path)
+- [ ] Trigger an auto-add (drop a qualifying Stocked item to Low from the overview) → then open the draft list: the new line renders **without a manual refresh** (the store refreshed itself)
+- [ ] Item level change on the detail page (Level row) → the auto-add toast fires the same way (`updateStockItemAsync` path)
 - [ ] Cook mode's per-ingredient level decrement that flips an ingredient to Low → toast fires per triggered item (multiple toasts stack — verify readability)
 - [ ] Offline stock-level flip → queued (blue "Queued: Update stock level" toast); when back online + queue drains → auto-add toast fires *if* the flipped item genuinely transitions on the server side and the mode allows it
-- [ ] Stock overview no longer shows the "Will auto-add on low" filter chip or the "Auto-add" footer count (both retired with the per-item toggle)
-- [ ] Stock-item detail page no longer shows an "Auto-add when low" toggle row (Essential flag remains; the auto-add branching happens off it plus the install-wide mode)
 
 ### ⭐ Zero-Input Pantry — inferred inventory (P8-07) — origin champion plan
-Server-env first (no Python here): `alembic upgrade head` applies `f2a9c4d7e1b8` (ConsumptionEvent) + `a3e8b1f6c2d9` (User.inferred_pantry_enabled) on SQLite **and** Postgres; `verify_mappings()` passes for `ConsumptionEvent`; `pytest tests/test_pantry_belief.py` green.
-- [ ] Preferences → Pantry: "Infer stock levels" toggle is present and defaults ON for a fresh account; flipping it persists across reload
+*(Server side largely test-pinned: the belief engine — bands, cook drift, override-wins, thin-history caution, differs flag — in `test_pantry_belief.py`; the endpoint shape, per-user opt-out gate `{enabled:false, beliefs:{}}`, toggle persistence via PATCH `/auth/me`, and the fresh-level-change→HIGH-confidence pin end-to-end in `test_pantry_beliefs_endpoint.py`, 2026-07-18. The checks below are the remaining UI/loop halves.)*
+- [ ] Preferences → Pantry: "Infer stock levels" toggle is present in the UI; flipping it hides/shows the chips live (the server gate + persistence are backend-pinned)
 - [ ] With inference ON, stock overview rows show a "Dora: ~Band · confidence" chip beside items that have purchase history; tooltip shows the reason (e.g. "~Low — bought 11 days ago; you usually finish in about 14 days")
-- [ ] With inference OFF, no belief chip renders anywhere and `GET /api/stock-items/beliefs` returns `{enabled:false, beliefs:{}}`
-- [ ] Items with no history / freshly-created show either no chip or a low-confidence "not enough history" reason — never a confident wrong band
 - [ ] Buy an item (finish a shop with it ticked + priced), reload → its belief reads Stocked with a recent-purchase reason
 - [ ] Cook a recipe using that item (finish dialog → mark it "down one"/"out") → a ConsumptionEvent is written; the item's belief drifts more depleted than purchase cadence alone would, and the reason mentions "cooked with N× since"
-- [ ] Manually change an item's level (or run a stocktake quick-check) → the chip immediately reflects the recorded level at HIGH confidence with "You confirmed this…"/"Updated…" and no "differs" outline (override wins)
-- [ ] Let an item go well past its usual cadence with no check → belief drifts to ~Out; if the recorded level still says Stocked the chip shows the warning outline ("differs from recorded")
+- [ ] Let an item go well past its usual cadence with no check so the belief drifts while the recorded level still says Stocked → the chip shows the warning outline ("differs from recorded" — the drift itself is engine-pinned; this checks the outline render)
 - [ ] Add an uncertain item to a draft shopping list → a single "Still have X?" quick-check appears in the suggestions inbox (not a bulk prompt); its action opens the item; dismiss/snooze work; capped at 3 across all in-play items
 - [ ] Plan a meal this week whose ingredient is uncertain → same quick-check fires via the cook-decision path
 - [ ] Dark-mode + non-money themes: chip colours ride semantic tokens (positive/warning/negative dots), no hardcoded colour
 - [ ] Backup → restore: ConsumptionEvent is an event log (like CookEvent) and intentionally NOT in the backup sections — confirm restore still succeeds and beliefs recompute from surviving purchases/cooks
 
 ### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
-- [ ] Finishing a shopping list — every ticked item flips to "Stocked" (was "Well-Stocked"). No level-override UI still labels a "Sufficient" middle option
-- [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out)
-- [ ] Alerts "Mark as restocked" action — the item's level becomes "Stocked"
-- [ ] Stocktake "Set all ticked to Stocked" (the shopping-list review-complete flow) — API request body carries `set_stocked: true` (verify in DevTools network); response body reads `{set_stocked: N, checked: N}`
-- [ ] Spreadsheet import (Settings → Data → Import) — items with a blank Level column default to "Stocked" (was "Sufficient Stock"). Items with "Stocked" / "Low" / "Out of stock" in the Level column parse correctly
-- [ ] Assistant chat: say "mark milk as sufficient" — assistant proposes setting milk to **Stocked** (the "sufficient" NLU alias now resolves to STOCKED). Similarly "ok" / "fine" / "well stocked" all resolve to Stocked
-- [ ] Recipe cookability: an ingredient at Low stock still counts the recipe as cookable (Low ≠ missing); at Out of Stock the recipe is not cookable
+- [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out); no level-override UI anywhere still labels a "Sufficient" middle option
 - [ ] Onboarding "Restock" scene copy reads "Finishing the shop bumps what you bought back to stocked — no re-counting" (was "well-stocked")
 - [ ] Buy-verdict popover on a Stocked item: reads "Stocked" as the need-axis label (was "Well stocked")
 

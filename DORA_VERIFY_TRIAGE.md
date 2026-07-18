@@ -15,9 +15,20 @@ deferred to a later session.
    and record pass/fail + evidence in a report to the owner.
 4. **V** items: stage + screenshot, hand to the owner as a walkthrough pack.
 5. **H** items: leave for the matching device pack (Appendix A).
-6. Fails → new `DORA_FOLLOWUPS.md` entries (type=finding). Passes → tell the
-   owner; **he deletes the items from DORA_VERIFY.md** (his file, his delete).
+6. Fails → new `DORA_FOLLOWUPS.md` entries (type=finding). Passes → **delete
+   the lines from DORA_VERIFY.md in the same session** (owner delegation
+   2026-07-18, replacing the old "owner-deletable" marker convention; this doc
+   + the worklog keep the evidence trail). Reword surviving neighbour bullets
+   so they stand alone; failed/partial items stay.
 7. Flip the batch's status here and log the unit in `DORA_WORKLOG.md`.
+
+> **2026-07-18 sweep note:** every line previously marked "owner-deletable"
+> (Batches 0/2/3 — ~85 checkboxes: SettingsFileDrop, BuyVerdictCard, Password
+> policy, Runtime-URL L112, the six backend-pinned Stock fix sections,
+> FU-507/508, stocktake settings dials + alert-threshold removal +
+> "Needs check" behavioural bullets, the full stocktake-runner codified
+> blocks, bulk-waste, auto-add, 3-band collapse) **has now been deleted from
+> DORA_VERIFY.md**. Line refs in the progress notes below pre-date that sweep.
 
 **Classification key:**
 - **A** — agent-verifiable (browser/API/DB/CLI on this box, incl. viewport
@@ -456,6 +467,70 @@ suite **43 passed / 1 failed** — the one failure the same pre-existing unrelat
 `uploads.spec.ts:46` channel flake ([[FU-576]]). New FU-577 logged for the
 untested server-side branching matrix.
 
+**FU-577 backend truth-table CODIFIED (2026-07-18):** new
+`tests/e2e/dora_api/test_update_stock_item_auto_add.py` (12 tests, green; full
+backend suite 1505 passed) pins the whole server-owned matrix directly against
+`PATCH /api/stock-items/<id>`: mode × flagged (Off never; Essential-only iff
+flagged; All regardless), **L845** Stocked→Out fires, transition guard (Low→Out
++ Out→Stocked silent), **L851** dedup (on the target draft AND on a
+SHOPPING-status list), **L852** draft-count (0 and 2+ silent; draft+SHOPPING
+still fires onto the draft). Firing cases assert the 200 `auto_added` body +
+the `added_via=auto_low_stock` line; silent cases 204 + no line.
+→ **owner can also delete L845, L848, L850, L851, L852** (backend-pinned).
+Remaining owner-verify in this section: L846 (refresh timing), L853 (detail
+Level row), L854 (cook-mode multi-toast), L855 (offline queue).
+
+**3-band StockLevel collapse (DORA_VERIFY L874–883) — triaged + gaps codified
+(2026-07-18):** the section is mostly backend-owned; three surfaces had *no*
+server test — now pinned in new `tests/e2e/dora_api/test_stock_level_collapse.py`
+(6 tests) + one test added to `test_data_router.py` (7 new total, green; full
+backend suite **1512 passed**):
+- **L875** — `POST /shopping-lists/<id>/finish` with an empty body flips every
+  *ticked* line's item to Stocked (sequence identity), returns
+  `{items_restocked: N}`; a second test pins that *unticked* lines' items keep
+  their level (finishing only restocks what you bought).
+- **L876 (server half)** — a `level_overrides` entry wins over the Stocked
+  default (part-restock lands on Low, unlisted sibling still Stocked); an
+  override naming an unknown level id is a 422 and nothing mutates (list not
+  done, level untouched).
+- **L877** — alert action `mark_restocked` sets the item to Stocked + bumps
+  `stock_level_last_updated`; contrast test pins `acknowledge_stocktake`
+  bumping the stamp with the level **untouched** (was previously untested —
+  only `reset_expiry` had a test).
+- **L879** — spreadsheet import: a mapped Level column with a **blank cell
+  defaults to Stocked**, and "Stocked"/"Low"/"Out of stock" land on sequences
+  0/1/2 — asserted on the created items' actual levels (the old test only
+  counted rows).
+
+Already pinned elsewhere (verified this session, no new tests needed):
+**L878** `review/complete` → `{set_stocked, checked}` + item flips Stocked in
+`test_stocktake_router.py`; **L880** "sufficient"/"ok"/"fine"/"well stocked" →
+STOCKED aliases in `test_confirm_actions_resolve_level.py` (resolves by
+sequence, rename-proof); **L881** cookability Low-counts-as-have /
+Out-doesn't in `test_recipe_cookability.py`.
+
+→ L875/877/878/879/880/881 **deleted from DORA_VERIFY 2026-07-18**
+(delete-on-pass sweep). Stay one-time eyeballs (V-pack): the modal render
+(3 options, no "Sufficient" label — merged with L875's UI half), onboarding
+"Restock" scene copy, buy-verdict popover "Stocked" need-axis label (adjacent
+to the Batch-0 BuyVerdictCard walk).
+
+**Zero-Input Pantry (P8-07) — HTTP seam codified (2026-07-18):** the belief
+*engine* was already unit-pinned (`test_pantry_belief.py`, 11 tests: bands,
+cook drift, override-wins, thin-history caution, differs flag) but the HTTP
+layer had zero tests. New `tests/e2e/dora_api/test_pantry_beliefs_endpoint.py`
+(3 tests, green; full backend suite **1515 passed**) pins: `GET
+/stock-items/beliefs` default-on shape (enabled:true + per-item
+believed_band/confidence_band/reason contract), the per-user opt-out gate
+(`PATCH /auth/me inferred_pantry_enabled:false` → `{enabled:false,
+beliefs:{}}`, persists, re-enables), and the override-wins pin end-to-end (a
+fresh level PATCH reads back as that band at HIGH confidence). DORA_VERIFY
+section trimmed per delete-on-pass: the OFF-endpoint bullet, thin-history
+bullet, and manual-change bullet deleted (pinned); toggle + drift-outline
+bullets reworded to their remaining UI halves. Remaining owner/e2e checks:
+chip render + tooltip, buy/cook loop reasons, warning-outline render,
+quick-check suggestions (×2), dark-mode tokens, backup/restore recompute.
+
 ---
 
 **Harness lesson (major — shapes every future browser batch):** the in-app
@@ -470,6 +545,13 @@ peek. **Decision: browser A-checks move to a Playwright-driven runner**
 screenshots work → also produces the V-pack artifacts). Claude in Chrome is
 the alternative if the extension gets connected. The pane stays fine for
 API-level checks, single-view cold loads, and DOM instrumentation.
+
+**2026-07-18 — interactive driver now exists:** `web_app/e2e/drive.mjs`
+(JSON-plan steps over headless system Chrome: goto/click/fill/viewport/scheme/
+shot/eval, auto-login, kills the vite-checker overlay — FU-579). This is the
+tool for ad-hoc UX walks and **V-pack screenshot staging** — point the plan's
+`outDir` at a folder, collect the PNGs. See the worklog entry (2026-07-18
+later 5) for setup.
 
 ---
 

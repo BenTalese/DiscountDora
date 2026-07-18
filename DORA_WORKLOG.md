@@ -9,6 +9,337 @@ next.
 
 ---
 
+## 2026-07-18 (later 7) — UX pass 3 (drive.mjs): My Products / item History tab / Dora helper → FU-578 items 32–36
+
+Third screenshot pass: History tab renders 50 repeated "Pushed expiry" cards as
+a 6,500px wall (no grouping/collapse; mixed US/ISO dates per card) (32);
+unexplained fully-dimmed Parmesan row on Stock Overview (33); My Products solid
+with banner/filter-label/cart-glyph nits (34); Dora helper panel is strong —
+context actions + P8-07 quick-check card — with greeting/disabled-AI nits (35);
+peek tab-clipping confirmed peek-specific (36). Doc-only; shots in scratchpad.
+
+---
+
+## 2026-07-18 (later 6) — UX pass 2 (drive.mjs): cook mode / stocktake / reports / alerts → FU-578 items 26–31
+
+Four unvisited surfaces screenshotted via `drive.mjs` and appended to FU-578:
+boot splash >2s on every hard load (26); stocktake current-level button reads
+as an action (27); Alerts page leads with a near-empty dot calendar while the
+actionable list sits below the fold (28); reports Meals-cooked chart is an
+uninformative solid block + dense chart labels (29); recurring half-width
+dead-zone layout (30); Dora tip bubble confirmed overlapping content on 3 more
+surfaces incl. cook mode (31 → reinforces item 6). Cook mode itself is the
+strongest screen in the app (noted as keep-as-is). Shots in the session
+scratchpad. Doc-only unit; no code, no CHANGELOG.
+
+---
+
+## 2026-07-18 (later 5) — Real app-driving capability built: `web_app/e2e/drive.mjs` (Playwright headless-Chrome driver with screenshots) + FU-578 corrected against real pixels
+
+**Why:** owner asked whether the app-driving could be set up properly (the later-4
+review ran in the hidden in-app pane — no paint, no screenshots).
+
+**Built:** `web_app/e2e/drive.mjs` — a JSON-plan driver over Playwright's
+headless system Chrome (same `channel: chrome` fallback as the e2e suite,
+FU-576). Steps: goto/click (text|role|selector)/fill/press/wait/waitFor/
+viewport/scheme/shot/text/eval; auto-login as dora/dora when the login form
+appears; failures log and continue; screenshots land wherever the plan's
+`outDir` points (agent sessions: the session scratchpad, then Read the PNGs to
+actually SEE the app). Usage: `node e2e/drive.mjs <plan.json>` from `web_app/`
+with the dev servers up (backend :5170 + `quasar dev` :5174; see later-4 for
+the `.env`/dev-DB setup). **Gotcha solved in the driver:** `quasar dev`'s
+vite-plugin-checker full-screen error overlay (pre-existing type errors in
+e2e/src-pwa files) intercepts ALL pointer events in a fresh browser — the
+driver injects CSS to `display:none` it per-load. Removal-based zapping loses
+the re-add race; the CSS kill is deterministic.
+
+**FU-578 corrected + enriched against real pixels (screenshots in the session
+scratchpad `shots/`):**
+- RETRACTED: "mobile nav slivers" (mobile properly collapses to a hamburger —
+  the sliver measurement was the hidden strip) and "peek splitter opens at
+  phone width" (real mobile row-tap navigates to the detail page, with
+  skeletons). "Meal plans has no loading skeleton" also retracted (skeletons
+  are textless; the blind DOM probe missed them) — dashboard's literal
+  "Loading…" text cards remain a real nit.
+- UPGRADED: System-theme finding is real and worse than thought — a live OS
+  scheme flip produces a **split render** (header + row cards flip light,
+  page bg/toolbar/footer stay dark; `body--dark` vs raw `prefers-color-scheme`
+  CSS disagree until reload). Now FU-578 item 7b.
+- NEW (visible only with pixels): main nav is icon-only with no labels at any
+  width; the Dora helper bubble/tip toast floats over interactive content on
+  every page (covers the detail Level row, stock rows, footer stats) with an
+  unexplained "6" badge; open-toggle renders as a padlock (security metaphor);
+  mobile rows truncate names hard ("Barilla Pa…") under three trailing icons;
+  peek tab strip clips ("Substitu…"); dashboard leaves half-width dead zones.
+
+**Verification:** two plans run end-to-end green (17 steps + 9 screenshots);
+mobile/desktop × dark/light captures read back with the Read tool.
+
+**Standards close-gate:** tooling-only (new driver script; no product code).
+The vite-checker overlay's underlying type errors (bulk-waste.spec.ts
+noUncheckedIndexedAccess ×12, src-pwa workbox types ×5 — visible in `quasar
+dev` watch, NOT in the tree's `vue-tsc` task config apparently) are a
+pre-existing finding — logged as [[FU-579]] rather than fixed here (R-008
+scope discipline). No ADR.
+
+**Ledgers:** FU-578 corrected in place (retractions marked, not deleted —
+the trail matters); new FU-579; this entry. No CHANGELOG.
+
+**Next up:** owner reviews the corrected FU-578. Future UX walks / V-pack
+screenshot batches should use `drive.mjs` from the start.
+
+---
+
+## 2026-07-18 (later 4) — Owner-requested critical UX/UI drive → FU-578 findings bundle (25 items)
+
+**Why:** owner paused the verify campaign and asked for a critical hands-on UX/UI
+review of the running app.
+
+**How:** stood up a live dev environment (backend `python -m dora_api.startup` on
+:5170 against a fresh `data/dora.dev.db` copied from the e2e seed snapshot, new
+`.env` with `DORA_DB_PATH`; fixed `.claude/launch.json`'s stale `.venv` python;
+`quasar dev` SPA on :5174). Drove it in the in-app browser pane — which runs
+hidden (no paint), so the audit was DOM/geometry/computed-style/network based
+(tap-target sizes, WCAG contrast ratios computed numerically, overflow probes,
+server-state checks) plus the Appendix-D rAF/zero-anim recipe; no pixel
+screenshots. Claude-in-Chrome extension not connected on this box.
+
+**Output:** [[FU-578]] — 25 itemised findings: 7 concrete bugs (the
+"expires expired" suggestion copy at `generators.py:113`; open-toggle instant
+mutation with no cancel path + unlabelled button; 375px shopping-list toolbar
+overflowing 255px; header nav strip collapsing to 24px slivers on mobile;
+desktop peek splitter opening at phone width; broad light-theme AA contrast
+fails), 15 friction/polish items (US dates on AU install, "day(s)" plurals,
+belief-chip "~Low · low" ambiguity, raw UUID on Account page, blank meal-plans
+load, etc.), 3 needs-real-browser checks (paint-gated splash dismissal, System
+theme mode not tracking live scheme changes, an AuthShell renderSlot console
+error). Full detail + recommended fix groupings in the FU. Report delivered to
+owner in-chat.
+
+**State touched during the walk (all restored):** Barilla Pasta `is_open`
+flipped true by the open-toggle trap → PATCHed back false; theme mode Light →
+back to System. Servers left running for the owner. The dev DB is disposable.
+
+**Standards close-gate:** assessment-only, no product code (env files:
+`.claude/launch.json` python fix + new root `.env` pointing at the dev DB —
+local-env plumbing, no rules triggered). No ADR.
+
+**Ledgers:** FU-578 added. No CHANGELOG (no product change). No verify items
+added (the three uncertain findings live inside FU-578 pending triage).
+
+**Next up:** owner triages FU-578 (quick-win copy/a11y fixes vs the mobile
+layout unit vs the light-theme contrast pass). Verify campaign resumes at the
+P8-05 buy-verdict bullets when he says go.
+
+---
+
+## 2026-07-18 (later 3) — Verify Batch 3: Zero-Input Pantry HTTP seam codified (test_pantry_beliefs_endpoint.py 3/3 green) + section trimmed
+
+**Why:** "continue." Next Batch-3 target from earlier today.
+
+**Triage finding:** the P8-07 belief *engine* is thoroughly unit-pinned
+(`test_pantry_belief.py`, 11 tests — bands, cook drift, override-wins,
+thin-history caution, differs flag), but the HTTP layer had **zero** tests:
+`GET /stock-items/beliefs` (shape + the per-user `inferred_pantry_enabled`
+gate) and the toggle's `PATCH /auth/me` persistence.
+
+**Codified → green (`tests/e2e/dora_api/test_pantry_beliefs_endpoint.py`, 3
+tests):**
+- Default-on shape: `enabled:true`, populated map, every entry carries the
+  `believed_band`/`confidence_band`/`reason` contract with valid band values.
+- Opt-out gate + persistence: PATCH `/auth/me inferred_pantry_enabled:false` →
+  endpoint short-circuits to `{enabled:false, beliefs:{}}`, GET `/auth/me`
+  confirms persistence, re-enable restores the map.
+- Override-wins end-to-end: create item → PATCH level to Low (counts as a
+  fresh check) → the endpoint reads back `believed_band:"low"` at
+  `confidence_band:"high"`, no differs flag.
+
+**Verification:** 3/3 first run; **full backend suite 1515 passed**, 1
+skipped (PG-gated), 1 xfailed (known).
+
+**DORA_VERIFY (delete-on-pass applied):** deleted the OFF-endpoint bullet,
+the thin-history/never-confident-wrong bullet, and the manual-change→HIGH-
+confidence bullet (all now pinned); reworded the toggle bullet (UI presence +
+live hide/show remain; gate + persistence pinned) and the drift bullet (only
+the warning-outline *render* remains); replaced the stale "no Python here"
+server-env intro with a test-pinned summary line. Remaining in the section:
+chip render/tooltip, buy/cook loop reasons, outline render, quick-check
+suggestions ×2, dark-mode tokens, backup/restore recompute — Playwright/
+V-pack material.
+
+**Standards close-gate:** test-only + checklist edits; no violations, no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-3 progress subsection added; no new FU;
+PROJECT_STATE note. No CHANGELOG.
+
+**Next up:** Batch 3 — the P8-05 buy-verdict oracle bullets (engine partly
+pinned by `test_buy_verdict.py` + the Batch-0 card walk; triage which HTTP/UI
+halves remain), then the remaining Stock B long tail (history tab, pickers);
+P8-02 barcode stays device-pack. The Zero-Input UI bullets (chips, quick-
+checks) are Playwright-codifiable next e2e session.
+
+---
+
+## 2026-07-18 (later 2) — DORA_VERIFY delete-on-pass sweep: ~85 verified lines deleted; convention changed (owner delegation)
+
+**Why:** owner asked whether verified-passed items can be deleted from
+DORA_VERIFY directly — "not sure this has been getting done." It hadn't: every
+session since the campaign opened marked lines "owner-deletable" and left them.
+
+**Convention change (recorded in CLAUDE.md + agent memory):** from now on a
+verify session **deletes passed lines from DORA_VERIFY.md at its own
+close-gate** — evidence trail stays in DORA_VERIFY_TRIAGE.md + this worklog;
+survivors get reworded to stand alone; failed/partial items stay. The old
+"owner-deletable" marker is retired.
+
+**Backlog sweep executed (matched by text, not line number — Batch-0 refs had
+drifted):** deleted every line previously assessed passed/pinned:
+- **Batch 0:** SettingsFileDrop section (5/5 walked live), BuyVerdictCard
+  section (6/6 walked, FU-572 fixed mid-walk), Password policy section (8/8 —
+  incl. the L91 stale-example bullet, whose *check* passed with a non-breached
+  letters-only password), Runtime-URL first bullet (About endpoint + Change
+  prompt). Kept: the bogus-URL/recovery bullets (FU-574 still open), PWA
+  section (device/build-gated).
+- **Batch 2:** the six backend-pinned fix sections (product unlink, stocktake
+  snooze 500, consumption events, rename-to-own-name, unlinked-ingredients,
+  reconcile pagination), FU-507 expiry-on-open section, FU-508 image-dropped
+  bullets (kept the separate-features render cross-check), stocktake settings
+  dials, alert-thresholds-removal block, "Needs check" behavioural bullets
+  (kept the icon/position visual), and all codified stocktake-runner blocks
+  (landing/empty, Still-correct, Change, Skip, Push, Mute, help, completion +
+  add-to-list). Kept: runner visual bullets (caption copy, tint, ghost-button
+  layout, no-shortcuts, no-card-button), pulse-outline block, non-admin
+  banner, auto→runner cadence-effect bullets.
+- **Batch 3:** bulk-waste codified bullets (kept trash-icon + a reworded
+  Reports-insights eyeball), auto-add codified bullets incl. the FU-577
+  backend-pinned negatives (kept refresh-timing, detail Level row — reworded
+  for standalone context — cook-mode multi-toast, offline queue), 3-band
+  collapse backend-pinned bullets (kept modal-options visual — merged with
+  the no-"Sufficient"-label check — onboarding copy, buy-verdict label).
+
+**Ledgers:** DORA_VERIFY_TRIAGE — step 6 of the session recipe rewritten to
+delete-on-pass + a sweep note (line refs in older progress notes pre-date the
+sweep); CLAUDE.md DORA_VERIFY bullet updated; memory file
+`dora-verify-delete-on-pass.md` saved. No FU, no CHANGELOG (doc-only).
+
+**Standards close-gate:** docs/process only, no code; no violations, no ADR.
+
+**Next up:** unchanged — Zero-Input Pantry beliefs (P8-07), then buy-verdict
+oracle bullets, per the earlier entry today.
+
+---
+
+## 2026-07-18 (later) — Verify Batch 3: 3-band StockLevel collapse triaged + server gaps codified (test_stock_level_collapse.py 6 + 1 import test, green)
+
+**Why:** "continue." Next-up from the FU-577 unit earlier today — the 3-band
+collapse section (DORA_VERIFY L874–883, Sufficient axed 2026-07-02).
+
+**Triage finding:** the section is indeed mostly backend-owned, but three of its
+restock-to-Stocked surfaces had **no server test at all**:
+- the `/finish` restock flip (L875) and its `level_overrides` restock-review
+  contract (L876's server half) — `test_shopping_list_lifecycle.py` only checked
+  the status transition, never the level writes;
+- the `mark_restocked` alert action (L877) — `test_alerts.py` only tested
+  `reset_expiry`;
+- the import blank-Level→Stocked default (L879) — `test_data_router.py` counted
+  created rows but never asserted the created items' levels.
+
+**Codified → green:** new `tests/e2e/dora_api/test_stock_level_collapse.py`
+(6 tests) + one test added to `test_data_router.py`:
+- Finish default: ticked Out+Low items both land on Stocked, response
+  `{items_restocked: 2}`; unticked lines' items keep their level.
+- `level_overrides`: part-restock override lands on Low while the unlisted
+  sibling defaults to Stocked; an unknown override level id → 422 with nothing
+  mutated (list not done, level untouched).
+- `mark_restocked` → Stocked + `stock_level_last_updated` bumped (ridden on an
+  `expired` alert, item seeded at Out); contrast test: `acknowledge_stocktake`
+  bumps the stamp with the level untouched.
+- Import: blank Level cell → Stocked; "Stocked"/"Low"/"Out of stock" → sequences
+  0/1/2, asserted on the created items via `/stock-items?filter=name:eq:`.
+
+**Already pinned elsewhere (no new tests):** L878 (`review/complete`
+`{set_stocked, checked}` — `test_stocktake_router.py`), L880 (assistant
+"sufficient"→STOCKED aliases — `test_confirm_actions_resolve_level.py`), L881
+(cookability Low/Out — `test_recipe_cookability.py`).
+
+**Verification:** 7 new tests green first run; **full backend suite 1512
+passed**, 1 skipped (PG-gated), 1 xfailed (known), ~2:42.
+
+**DORA_VERIFY lines now owner-deletable:** **L875, L877, L878, L879, L880,
+L881**. Stay V-pack one-time eyeballs: L876 (modal render — 3 options, no
+"Sufficient" label), L882 (onboarding Restock copy), L883 (buy-verdict popover
+"Stocked" label).
+
+**Standards close-gate:** test-only; tests resolve bands via the
+`stock_status` sequence constants (R-003-aligned, rename-proof); no violations,
+no new R-rule, no ADR.
+
+**Ledgers:** DORA_VERIFY_TRIAGE Batch-3 progress subsection added; no new FU;
+PROJECT_STATE Regenerated-line note. No CHANGELOG (no product change).
+
+**Next up:** Batch 3 continues with **Zero-Input Pantry** belief chips (P8-07,
+DORA_VERIFY L859–872) — server-env bullets (migrations + `test_pantry_belief.py`)
+are already test-pinned; triage the chip-render/quick-check bullets for e2e
+codifiability against the Playwright seed. After that, P8-05 buy-verdict oracle
+bullets (L885–896; partly pinned by `test_buy_verdict.py` + Batch-0 card walk)
+and P8-02 barcode (device pack).
+
+---
+
+## 2026-07-18 — Verify Batch 3: FU-577 RESOLVED — auto-add branching matrix backend-pinned (test_update_stock_item_auto_add.py 12/12 green)
+
+**Why:** "continue the verification efforts." Later 9's Next-up said the remaining
+auto-add negatives were FU-577's backend job — did that first, before the 3-band
+collapse section.
+
+**Codified → green (`tests/e2e/dora_api/test_update_stock_item_auto_add.py`, 12
+tests):** the whole server-owned decision in `update_stock_item`
+(`_auto_add_enabled_for` + transition guard + `_try_auto_add`), driven directly
+through `PATCH /api/stock-items/<id>` in the in-process e2e harness (per-test DB
+restore; a `fresh_state` fixture deletes all active lists so each test controls
+the draft count — same pattern as `test_primary_target_inference.py`):
+- **Mode × flagged:** Off + flagged → silent (L848); Essential-only + flagged →
+  fires; Essential-only + unflagged → silent (L850); All + unflagged → fires
+  (L849's backend twin).
+- **L845:** Stocked→Out fires like Stocked→Low (same `needs_restock` predicate).
+- **Transition guard:** Low→Out silent (previous level already in the band — no
+  double-fire while worsening); Out→Stocked (rise) silent.
+- **Dedup (L851):** already on the target draft → 204 and the manual line stays
+  the *only* line; already on a **SHOPPING-status** list (active ≠ draft) → the
+  sole draft stays untouched.
+- **Draft-count (L852):** 0 drafts silent; 2 drafts silent on both; one draft +
+  one SHOPPING list still resolves single and fires **onto the draft**.
+- Firing cases assert the 200 `{auto_added:{line_id, shopping_list_id}}` body AND
+  the list-detail line tagged `added_via=auto_low_stock` with matching `line_id`;
+  silent cases assert 204 + no line.
+- Not testable over HTTP: the unknown-mode→essential_only degrade (app-settings
+  PATCH validates the enum) — noted in the module docstring, deliberately untested.
+
+**Verification:** new file 12/12 first run; **full backend suite 1505 passed**,
+1 skipped (PG-gated), 1 xfailed (known SQLite downgrade pin), ~2:12.
+
+**DORA_VERIFY lines now owner-deletable:** **L845, L848, L850, L851, L852**
+(backend-pinned). With later 9's L843/844/847/849/856/857, the auto-add section's
+remaining owner-verify is just L846 (refresh timing), L853 (detail Level row),
+L854 (cook-mode multi-toast), L855 (offline queue).
+
+**Standards close-gate:** test-only (no product code); checked against
+`ENGINEERING_STANDARDS.md` — the test consumes the R-003 authority via the
+`stock_status` sequence constants rather than re-hardcoding band literals; no
+violations, no new R-rule, no ADR.
+
+**Ledgers:** FU-577 moved to `DORA_FOLLOWUPS_RESOLVED.md` (mechanism note added);
+DORA_VERIFY_TRIAGE Batch-3 auto-add subsection updated with the codified matrix +
+new owner-deletable lines; PROJECT_STATE Regenerated-line note. No CHANGELOG (no
+product change).
+
+**Next up:** Batch 3 continues per later 9's plan — **3-band StockLevel collapse**
+copy/behaviour (DORA_VERIFY L874–883, mostly backend-owned; triage which bullets
+are UI-codifiable vs already backend-pinned vs V-pack), then **Zero-Input Pantry**
+belief chips (P8-07, L859–872).
+
+---
+
 ## 2026-07-17 (later 9) — Verify Batch 3: Auto-add-on-low first slice codified (auto-add-on-low.spec.ts 2 tests green)
 
 **Why:** "continue." Took the next Batch-3 section from later 8's Next-up list —

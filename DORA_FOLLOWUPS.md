@@ -52,26 +52,163 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-577 — Auto-add-on-low branching matrix has no direct backend test
-- **Raised:** 2026-07-17 (verify-campaign Batch 3, auto-add-on-low codification)
+## [OPEN] FU-579 — `quasar dev` vite-checker overlay: pre-existing type errors block fresh-browser interaction
+- **Raised:** 2026-07-18 (building the drive.mjs app driver)
 - **Type:** finding
-- **What:** `update_stock_item._auto_add_enabled_for` + `_try_auto_add` (the server-owned
-  auto-add decision: `off`/`essential_only`/`all` × `is_flagged` × active-list dedup ×
-  `resolve_primary_target` draft-count of 0/1/2+) is **not** directly unit/integration
-  tested. Only `test_app_settings_router.py` validates the `auto_add_mode` enum; nothing
-  asserts the *branching* — that Off never fires, Essential-only fires iff flagged, All
-  fires for any Stocked→Low/Out, that an item already on an active list is skipped, and
-  that 0 or 2+ drafts suppress the add. The e2e (`auto-add-on-low.spec.ts`) pins only the
-  `all`-mode happy-path UI seam (toast + `auto: low stock` chip) — the negative/branch
-  cases (DORA_VERIFY L848/850/851/852) are impractical to drive e2e against the shared
-  seed and belong in backend tests per R-003 (server owns the rule).
-- **Why deferred:** the e2e slice deliberately scoped to the deterministic UI seam; the
-  matrix is pure server logic better covered by a focused backend test than by
-  state-heavy browser setup.
-- **Recommended resolution:** opportunistic — add a `test_update_stock_item_auto_add.py`
-  (or extend the stock-items feature tests) exercising the 3 modes × flagged × dedup ×
-  draft-count truth table directly against the handler. Then DORA_VERIFY L848/850/851/852
-  become owner-deletable (backend-pinned) rather than manual browser checks.
+- **What:** `quasar dev` runs vue-tsc in watch mode via vite-plugin-checker, and its
+  full-screen error overlay intercepts ALL pointer events in any fresh browser session.
+  The errors are pre-existing: `e2e/bulk-waste.spec.ts` ×12 `noUncheckedIndexedAccess`
+  ("Object is possibly 'undefined'" on `items[name]` index access) + `src-pwa/*` ×5
+  (workbox module types / `ServiceWorkerGlobalScope` not in the SPA-mode tsconfig lib).
+  The tree's standalone `vue-tsc` task has been reported clean in past sessions, so the
+  dev-watch config evidently checks a wider file set than the CI task — worth aligning.
+  `drive.mjs` works around it by CSS-hiding the overlay; a human dev opening `quasar
+  dev` fresh sees the overlay too.
+- **Why deferred:** driver-tooling unit; fixing spec types + tsconfig scoping is its own
+  small change (R-008).
+- **Recommended resolution:** opportunistic — null-guard the index accesses in
+  bulk-waste.spec.ts, exclude `src-pwa` from the SPA-mode checker (or add webworker lib),
+  and confirm dev-watch and the `vue-tsc` task check the same set.
+
+## [OPEN] FU-578 — UX/UI review findings (owner-requested critical drive, 2026-07-18)
+- **Raised:** 2026-07-18 (owner asked for a critical UX/UI pass; app driven live via the
+  in-app browser pane — DOM/geometry/computed-style audit, no pixel rendering available)
+- **Type:** finding (bundle — split into fix units as the owner prioritises)
+- **What (bugs — concrete, verified in DOM/server):**
+  1. **Copy bug:** "Vanilla Ice Cream expires expired 3 days ago." — `generators.py:113`
+     composes `"{name} expires {window}"` but the past branch (line 98) already reads
+     "expired N days ago". Only the `days < 0` branch is wrong.
+  2. **Open-toggle click is an instant mutation with no cancel:** the stock-row
+     open/sealed icon button PATCHes `is_open=true` immediately; the "Marking as open"
+     dialog only governs expiry (Skip / Update — no Cancel), Escape doesn't close it,
+     and backdrop-dismiss leaves the item open silently (server-verified). No undo toast.
+  3. **Same button is unlabelled:** no aria-label, no tooltip (every other row action
+     has one) — a11y + discoverability.
+  4. **Mobile (375px) shopping-list detail overflows horizontally by ~255px** — the
+     `page-toolbar-actions` row (Quick add / grouping / Store / Refresh deals / More)
+     is 930px and never wraps. Confirmed visually (headless-Chrome screenshot): the
+     grouping control clips at "Store", Refresh deals/More unreachable without
+     horizontal scroll, page title truncates to "Shoppin…".
+  5. **Main nav is icon-only with no labels at every width** (desktop included) —
+     six ambiguous glyphs (box/bag/book/calendar/cart/chart) with no text, no
+     active-page label. Discoverability cost for anyone who hasn't memorised them.
+     [Corrected 2026-07-18 with real rendering: mobile properly collapses to a
+     hamburger — the original "24px sliver" reading was the hidden strip.]
+  6. **Dora helper bubble + tip toast float OVER page content on every page** —
+     screenshots show the tip covering stock rows and sitting directly on top of the
+     item-detail Level controls; the mascot overlaps the dashboard attention card and
+     the footer stats. Carries an unexplained "6" badge. Needs safe-area placement
+     (and the tip should auto-dismiss). [Replaces the retracted peek-at-phone-width
+     item — real mobile row-tap correctly navigates to the detail page.]
+  7. **Light-theme contrast fails broadly (WCAG AA):** muted secondary text
+     rgb(117,138,134) at 12px ≈3.0–3.7:1 (footer stats, chips, captions); ghost toolbar
+     buttons green 3.5:1; BUY badge 2.5:1@11px; brand-yellow titlebar text 2.8:1; count
+     digits 2.9:1. Dark theme also: alerts badge 3.0:1, "New item" button 3.6:1,
+     Essential stat 2.3:1 (visually confirmed barely legible in the footer).
+  7b. **Split-theme render under System mode (REAL, screenshot evidence):** with the
+     app booted dark and the OS scheme flipping to light (no reload), the header and
+     row cards flip light while the page background, toolbar, and footer stay dark —
+     `body--dark` (Quasar Dark plugin) and raw `prefers-color-scheme` CSS are two
+     sources of theme truth that disagree until a full reload. R-002/R-003-adjacent.
+- **What (friction / polish):**
+  8. Belief chip copy "Dora: ~Low · low" — band and confidence both read "low"
+     with different meanings; confidence needs a label or icon.
+  9. US date format everywhere ("7/17/2026", "7/13 – 7/19") for an AU-market install —
+     check default locale derivation (FU-043 surface).
+  10. Alert copy "Expired 3 day(s) ago" / "Expires in 1 day(s)" — "(s)" pluralisation
+     in the bell/alerts, while other surfaces pluralise properly.
+  11. Recipe detail "Available meals: 0 unallocated of 1 cooked" next to "Last cooked:
+     Never" — adjacent widgets disagree (seed data or display rule).
+  12. "Add (file)" button label (recipe image + profile picture) is cryptic.
+  13. Account page displays the user's raw UUID under their email.
+  14. Cookbook card chips can duplicate ("Dessert · Dessert" when cuisine = category).
+  15. ~~Meal-plans renders blank with no skeleton~~ RETRACTED — real rendering shows
+     proper skeletons (they're textless, so the blind DOM probe missed them). Still
+     true on the **dashboard**: async cards show literal "Loading totals…" /
+     "Loading…" text instead of skeletons, so the page settles piecemeal.
+  15b. Stock rows on mobile truncate names hard ("Barilla Pa…", "Brown O…",
+     "Chicken …") — three always-visible 36px trailing icons (expiry, open-toggle,
+     cart) eat the name column; consider collapsing to an overflow menu on phones.
+     Also the belief chip crowds/overlaps the location line on rows that have one,
+     and page titles truncate in the mobile header ("Stock it…", "Meal pla…").
+  15c. The open/sealed toggle renders as a **padlock** (locked = sealed, green
+     unlocked = open) — reads as security/permissions, not food state.
+  15d. Item-peek tab strip clips off-screen at desktop width ("Substitu…" cut, no
+     scroll affordance); Location breadcrumb truncates mid-word ("Middle shel…").
+  15e. Dashboard desktop layout leaves large dead zones — several rows render a
+     lone half-width card with empty space beside it (Next to cook, Best deals).
+  16. Meal-plans header stats confusing: "1 planned / fully stocked" vs the sidebar's
+     "0 / fully stocked for this week"; week shows 6 planned slots.
+  17. Bell suggestion text/action mismatch: "Add it to your shopping list —
+     flagged essential" but the only offered action is "Mark restocked".
+  18. Stock rows aren't real links (no href) — no middle-click/new-tab on desktop.
+  19. Tap targets 32–36px across stock rows/toolbars (guideline 44–48px); in-store
+     tick checkboxes are properly 50×50.
+  20. Kitchen-health "Stocktake 0/100" punishes an account that simply hasn't used
+     stocktake yet — drags the overall score before first use (Effortless-charter rub).
+  21. Dashboard greeting "Good afternoon, dora" — raw lowercase username.
+  22. "$1 saves vs rrp" stat grammar ("saved"/"savings"; "RRP").
+- **Second pass (2026-07-18, drive.mjs screenshots — cook mode / stocktake / reports / alerts):**
+  26. **Full page load sits on the boot splash 2+ seconds** (warm dev reload): every
+     hard navigation shows "Waking up Dora…" full-screen well past 2s before any
+     content. Check what the splash is actually waiting on (and against a prod build).
+  27. Stocktake runner's current-level button (e.g. red "Low Stock (change)") reads as
+     an *action* ("set it to Low") next to the green "Still correct" — it's actually a
+     state display that opens the picker. The "(change)" subscript carries all the
+     disambiguation; consider "Change level" wording or a dropdown affordance.
+  28. Alerts page leads with the 14-day "Upcoming" calendar — a huge, mostly-empty
+     grid with unlabeled ~4px dots — while the 7 actionable alerts are below the
+     fold. On a page named Alerts, the list should come first; the calendar dots
+     need labels/counts on the day cells.
+  29. Reports "Meals cooked" chart renders as one solid filled block (binary 0/1
+     y-axis over the whole range) — adds no information next to the per-recipe list;
+     the stock-value chart's dense 2-day x-labels are near-unreadable at 10px muted.
+  30. Reports/dashboard share the lone-half-width-card dead-zone layout pattern
+     ("Savings captured", "You keep running out of these" mostly empty at 2×768px).
+  31. The Dora tip bubble confirmed overlapping content on cook mode (ingredient
+     list), reports (Top-10 rows), and the alerts calendar — reinforces item 6; in
+     cook mode it collides with the surface's whole big-text hands-free purpose.
+  32. **History tab has no grouping/collapsing for repetitive events:** the chatty
+     seed item renders 50 consecutive "Pushed expiry +N days" cards as a 6,500px
+     monotonous wall (cap + footer work, but a "×50 over 3 months" collapse or
+     per-kind filter chips are needed for it to be readable). Each card also mixes
+     date formats — US timestamp header ("7/16/2026, 12:15:37 PM") over an ISO body
+     ("2026-10-08 → 2026-10-10").
+  33. **Unexplained dimmed row state on Stock Overview:** Parmesan Cheese renders
+     fully greyed (muted name, grey level square, ghost icons) with no tooltip or
+     legend saying why, while its BUY-badged neighbour Sourdough is normal. Whatever
+     the state is (inactive? unknown level?), it needs to say so.
+  34. My Products: solid surface (price + strikethrough + % off + store + linked-item
+     chip + Link… affordance). Nits: the permanent "Select products to add them to a
+     list, unlink, or mark inactive" instruction banner spends a full-width row on a
+     rare mode; "Stock items without products (15)" reads as data, not as the filter
+     button it is; two different cart glyphs (filled vs plus-variant) carry meaning
+     (on-list vs add) with no cue.
+  35. Dora helper panel is genuinely good (context "On this page" actions, the P8-07
+     quick-check card with Why?/Snooze/Dismiss, Basic/AI toggle). Nits: "Hi, dora!
+     Burger online. What's the move?" — lowercase raw username again + "Burger
+     online" is cute but cryptic; the disabled "AI" segment shows only a hammer
+     glyph with no hint why it's off (no LLM configured).
+  36. Item detail's standalone page tabs fit fine — the tab-strip clipping (15d) is
+     peek-pane-specific.
+  (Positives worth keeping as-is: cook mode's step layout — big type, progress,
+  location-grouped scaled ingredients, per-ingredient swap, tools chips — is the
+  strongest screen in the app; stocktake's focused card flow; reports' friendly
+  empty states and wastage-reason tiles.)
+- **Needs a real-browser check (pane is hidden → paint/rAF-gated, may be harness-only):**
+  23. Splash "Waking up Dora..." dismissal is transition-gated (`splash-fade-leave-active`
+      wedged at opacity 1, z-9000, pointer-events auto — it ate clicks). Check a
+      backgrounded/throttled first load on a real device.
+  24. UPGRADED to 7b (confirmed real in headless Chrome — split-theme render).
+  25. One Vue render error in console during login→dashboard: `AuthShell.vue:114`
+      renderSlot "Cannot read properties of null ('ce')" (twice, also captured by the
+      client-log channel). Reproduce cleanly before chasing.
+- **Why deferred:** review unit was assessment-only per owner instruction; no code
+  changed.
+- **Recommended resolution:** owner triages this list; quick wins (1, 3, 10, 12, 13, 21,
+  22, 14) are one-line-ish fixes; 2 needs a design call (defer mutation until dialog
+  resolution, or add Cancel+undo); 4–6 are a mobile-layout unit; 7 is a theme-token
+  contrast pass (R-002 territory); 23–25 go to DORA_VERIFY after triage.
 
 ## [OPEN] FU-576 — uploads.spec.ts L79 pin fails under the system-Chrome e2e channel
 - **Raised:** 2026-07-17 (verify-campaign Batch 2, running the e2e suite)

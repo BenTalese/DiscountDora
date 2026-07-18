@@ -444,6 +444,53 @@ def test__spreadsheet_import__bad_level_value__per_row_error(api):
     assert "isn't recognised" in (bad_row["reason"] or "")
 
 
+def test__spreadsheet_import__blank_level_defaults_to_stocked(api):
+    # 3-band collapse (DORA_VERIFY L879) — a mapped Level column with a blank
+    # cell defaults the item to Stocked (was "Sufficient Stock" pre-2026-07-02),
+    # and the three canonical labels land on their own bands. Asserts the
+    # *created items' actual levels*, not just the row summary.
+    csv = (
+        "Item,Status\n"
+        "TestImport-BlankLevel,\n"
+        "TestImport-LevelStocked,Stocked\n"
+        "TestImport-LevelLow,Low\n"
+        "TestImport-LevelOut,Out of stock\n"
+    ).encode("utf-8")
+    upload_id = _stage_bytes(csv)
+    inspect = requests.post(IMPORT_INSPECT_URL, json={
+        "upload_id": upload_id, "filename": "levels.csv",
+    }).json()
+
+    commit = requests.post(IMPORT_COMMIT_URL, json={
+        "upload_id": upload_id,
+        "filename": "levels.csv",
+        "sheet": "levels.csv",
+        "column_map": inspect["auto_mapping"]["levels.csv"],
+        "options": {
+            "skip_duplicates": True,
+            "create_missing_locations": False,
+            "create_missing_groups": False,
+            "halt_on_error": False,
+        },
+    })
+    assert commit.status_code == 200, commit.text
+    summary = commit.json()["summary"]
+    assert summary["created"] == 4
+    assert summary["errors"] == 0
+
+    def _sequence_of(name: str) -> int:
+        items = requests.get(
+            f"http://localhost:5170/api/stock-items?filter=name:eq:{name}"
+        ).json()["items"]
+        assert len(items) == 1, name
+        return items[0]["stock_level_sequence"]
+
+    assert _sequence_of("TestImport-BlankLevel") == 0    # blank → Stocked
+    assert _sequence_of("TestImport-LevelStocked") == 0
+    assert _sequence_of("TestImport-LevelLow") == 1
+    assert _sequence_of("TestImport-LevelOut") == 2
+
+
 def test__spreadsheet_import__halt_on_error__rolls_everything_back(api):
     csv = (
         "Item,Status\n"

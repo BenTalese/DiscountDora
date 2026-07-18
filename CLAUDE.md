@@ -207,7 +207,14 @@ The logs, each with one purpose — keep them separate:
 - **`DORA_VERIFY.md`** = the user's browser-verify checklist, grouped by
   surface. The user walks it and deletes items as he confirms them — there
   is no archive. **Not** scanned at session start. New verify checks land
-  here, not in `DORA_FOLLOWUPS.md`.
+  here, not in `DORA_FOLLOWUPS.md`. **Delete-on-pass (owner delegation
+  2026-07-18):** when a session verifies an item itself — codified as a green
+  e2e/backend test, or walked live and passed — **delete the line from this
+  file in the same session** (rewording neighbouring bullets so survivors
+  still stand alone), rather than marking it "owner-deletable" and leaving it
+  to pile up. Record what was verified + the evidence in
+  `DORA_VERIFY_TRIAGE.md` and the worklog (they're the audit trail; this file
+  stays a pure to-walk pile). Failed or partially-covered items stay.
 
 ## Governing documents (read on demand, not every session)
 

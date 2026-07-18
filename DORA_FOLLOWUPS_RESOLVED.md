@@ -10,6 +10,42 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-577 — Auto-add-on-low branching matrix has no direct backend test
+- **Resolved:** 2026-07-18 — added `tests/e2e/dora_api/test_update_stock_item_auto_add.py`
+  (12 tests, all green first run; full backend suite 1505 passed). Pins the whole
+  server-owned decision directly against `PATCH /api/stock-items/<id>`: mode × flagged
+  matrix (Off never fires even flagged; Essential-only fires iff flagged; All fires
+  unflagged), Stocked→Out fires like Stocked→Low, the transition guard (Low→Out and
+  Out→Stocked both silent — previous level already/never in the needs-restock band),
+  dedup (already on the target draft → manual line stays the only line; already on a
+  SHOPPING-status list → the sole draft stays untouched), and the draft-count guard
+  (0 drafts silent, 2 drafts silent on both, draft+SHOPPING still resolves to the
+  draft and fires). Each firing case asserts the 200 `{auto_added:{line_id,
+  shopping_list_id}}` body AND the list-detail line tagged `added_via=auto_low_stock`
+  with a matching `line_id`; each silent case asserts 204 + no line. The
+  unknown-mode→essential_only degrade is unreachable over HTTP (enum validated at the
+  app-settings PATCH) — left untested, noted in the module docstring.
+  **DORA_VERIFY L845/848/850/851/852 are now backend-pinned → owner-deletable.**
+- **Raised:** 2026-07-17 (verify-campaign Batch 3, auto-add-on-low codification)
+- **Type:** finding
+- **What:** `update_stock_item._auto_add_enabled_for` + `_try_auto_add` (the server-owned
+  auto-add decision: `off`/`essential_only`/`all` × `is_flagged` × active-list dedup ×
+  `resolve_primary_target` draft-count of 0/1/2+) is **not** directly unit/integration
+  tested. Only `test_app_settings_router.py` validates the `auto_add_mode` enum; nothing
+  asserts the *branching* — that Off never fires, Essential-only fires iff flagged, All
+  fires for any Stocked→Low/Out, that an item already on an active list is skipped, and
+  that 0 or 2+ drafts suppress the add. The e2e (`auto-add-on-low.spec.ts`) pins only the
+  `all`-mode happy-path UI seam (toast + `auto: low stock` chip) — the negative/branch
+  cases (DORA_VERIFY L848/850/851/852) are impractical to drive e2e against the shared
+  seed and belong in backend tests per R-003 (server owns the rule).
+- **Why deferred:** the e2e slice deliberately scoped to the deterministic UI seam; the
+  matrix is pure server logic better covered by a focused backend test than by
+  state-heavy browser setup.
+- **Recommended resolution:** opportunistic — add a `test_update_stock_item_auto_add.py`
+  (or extend the stock-items feature tests) exercising the 3 modes × flagged × dedup ×
+  draft-count truth table directly against the handler. Then DORA_VERIFY L848/850/851/852
+  become owner-deletable (backend-pinned) rather than manual browser checks.
+
 ## [RESOLVED] FU-572 — Buy-verdict client cache: mounted cards stayed stale after mutations (invalidate never refetched; cart quick-add never invalidated)
 - **Resolved:** 2026-07-17 (found and fixed same session, verify-campaign Batch 0 BuyVerdictCard walk).
   Two related gaps, one root: (a) `invalidateBuyVerdict` only zeroed the cache

@@ -724,6 +724,98 @@ DORA_VERIFY section trimmed per delete-on-pass (8 bullets deleted/absorbed;
 survivors: trend-chip both-direction render, bar traffic-light colours,
 fresh-install empty state, week-long trend flip, kitchen-zone drag-reorder).
 
+**Log-price quick action (FU-300) + budget money-gate (FU-297) codified
+(2026-07-19):** new `web_app/e2e/dashboard-log-price.spec.ts` (4 tests + a
+beforeAll/afterAll that flips BOTH money layers on — the e2e seed ships money
+OFF at install AND user level — and restores seed state after). Pinned: the
+three-button quick-action bar; the LogPriceSheet picker (≤12-row low/out-first
+shortlist asserted against stock-items/stock-levels server truth, live "milk"
+filtering, selection → "Log a price · <name>" title, prefill seeded from the
+detail DTO's `price_entry_prefill` — exercised, the seed harvests Milk
+observations); submit happy path ($6.40 / 2 L → toast, sheet closes, exactly
+one new observation with the folded shape in the detail DTO, and the
+Your-Prices widget rendering the server-derived "$3.20 / L" on a fresh
+single-goto page — FU-584 dodge); dismiss-means-cancel (zero POSTs) + fresh
+reopen; money OFF hiding Log price AND the budget card (dashboard + Cards
+menu, zero `GET /api/budget/status`). **Two findings en route:** [[FU-585]] —
+the back arrow keeps the search query (code) vs the verify bullet expecting it
+cleared (spec pins current behaviour, not blind-patched); [[FU-586]] — the
+dashboard money loaders race the one-shot /api/health flags probe on a cold
+mount and never re-run when flags land (reproduced: money ON, hard reload,
+zero budget-status requests), so the spec deliberately does NOT pin the
+money-ON request. FU-300 section deleted (fully covered); FU-297 keeps one
+FU-586-blocked walk bullet. Full e2e suite **73 passed / 0 failed** (the
+FU-584 flakes stayed quiet this run). Box note: this machine needed
+`npx playwright install chromium` (headless-shell v1228 missing).
+
+**Donut deep-links (FU-299) + "Next to cook" (FU-298) codified (2026-07-19):**
+new `web_app/e2e/dashboard-donut.spec.ts` (3 tests, read-only on seed):
+legend low/out rows + "View →" hrefs pinned against `/stock-levels` server
+truth and the in-stock legend row + whole card proven inert; the donut's
+exactly-two link segments (role/tabindex/class + "View low items"/"View out
+items" aria-labels) with the green arc inert even to a dispatched click; a
+**real pointer click on the low arc** (point computed from the
+`/dashboard/summary` proportions — pins that the rotated SVG stroke is
+actually hittable, needed a `scrollIntoViewIfNeeded` since `page.mouse`
+doesn't scroll) landing `/stock?level_id=<low>` with the FilterBar level
+select showing the level name and `.stock-row` count matching server truth;
+Enter on the out arc and Space on the low arc both navigating. Whole
+DORA_VERIFY FU-299 section deleted. New `web_app/e2e/dashboard-next-cook.spec.ts`
+(2 tests) on a throwaway universe (Stocked + Out items; ready / missing-one /
+no-ingredients recipes planned TODAY in "Breakfast" — sorts ahead of the
+seed's Dinner/Lunch so the trio owns the card's top-3 deterministically; the
+ready recipe planned twice to pin the recipe-dedupe): rows mirror the DTO's
+order with "Today breakfast · serves N" meta and Ready / Missing 1 /
+No ingredients badges backed by explicitly asserted DTO truths
+(missing_count 0 / 1 / null); name → `/cookbook/{id}`, Cook →
+`/cookbook/{id}/cook`. FU-298 section trimmed to the one plan-free-install
+empty-state bullet. **FU-584 addendum found en route:** the hash-router race
+also fires on a *warm* `goBack()` → `router.push` sequence (deterministic
+blank-document wedge in the next-cook spec; both new specs route around it
+via reload → fresh goto). Full e2e suite **78 passed / 0 failed**.
+
+**Price-drops widget (FU-296) codified → real bug found + fixed
+(2026-07-19):** backend (`test_reports_router.py` +4): ranking pinned
+(%-desc, dollar-amount tie-break, filtered to the test's own products),
+`is_active=false` exclusion, limit clamp (0/−3→1 row, 999→≤20, missing and
+`abc`→exactly 5 against six seeded drops). **The ranking test's second
+price-PATCH 500'd — real bug:** `update_product.py` appended the archived
+`ProductHistoricOffer` to the relationship without `repo.add()`, so the
+cascaded insert carried `EMPTY_UUID` and the second-ever price change in an
+install collided on the PK (the ingest path and seed both `add()`; this was
+the odd one out). One-line fix + comment; the new tests are the regression
+pin; CHANGELOG entry added. Backend suite **1528 passed**. UI
+(`dashboard-price-drops.spec.ts`, 2 tests): defaultHidden honoured, Cards-
+menu enable → honest empty state on seed truth (rows==0 asserted first),
+engineered drop (create product $10 → PATCH to $8, link to a throwaway
+item) renders name/store/deep-link/"was $10.00"/"20% off" + "My products →",
+deactivate → empty state returns, toggle restored to defaultHidden. Specs
+**warm-navigate** (land `/#/stock`, then in-app goto `/#/`) because the
+products-gated loaders lose the same cold-mount flags race as FU-586
+(addendum added there). No DELETE /products exists — cleanup is
+deactivation, which the report excludes (itself backend-pinned). Full e2e
+suite **80 passed / 0 failed**.
+
+**Cards-menu reorder (FU-294) + `dashboard_layout` backend (FU-292)
+codified (2026-07-19):** new `web_app/e2e/dashboard-cards-reorder.spec.ts`
+(4 tests + a beforeAll/afterAll capturing and restoring the user's
+`dashboard_layout`): tap down/up arrows reorder within the Today zone
+(first-row up + last-row down disabled — note the zone's true last menu row
+is the defaultHidden "This fortnight", which still lists), asserted against
+menu render + the `/auth/me` layout JSON + a full reload; native HTML5
+drag (`dragTo` on the `.dora-dnd-handle`) lands drop-on semantics and the
+order follows the user to a second browser context (FU-292's cross-device
+contract); cross-zone drag (Pantry → Today) leaves both the menu and the
+server layout byte-identical; an iPhone-UA run (Quasar's platform.is.mobile
+is UA-based, not viewport) pins the handle column hidden with tap arrows +
+toggle remaining. FU-292's other halves were already covered (migration
+applies on every suite boot; `test__dashboard_layout__set_and_clear` green).
+Spec note: the up/down arrows are icon-only BaseButtons with tooltips but
+no aria-label → no accessible name, so the spec targets them positionally
+(pre-existing, FU-578's unlabelled-buttons bucket — not re-logged). FU-292
+section deleted; FU-294 down to the one mid-drag transient-visuals bullet.
+Full e2e suite **84 passed / 0 failed**.
+
 ---
 
 **Harness lesson (major — shapes every future browser batch):** the in-app

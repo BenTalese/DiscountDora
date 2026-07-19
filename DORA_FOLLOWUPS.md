@@ -52,6 +52,51 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
+- **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297)
+- **Type:** finding
+- **What:** `DashboardPage.loadAll()` fires all card loaders on mount, and each
+  money loader (`loadBudget`, `loadSavings`, `loadSpendByStore`,
+  `loadPantryValue`, `loadSwapSummary`, …) early-returns when
+  `moneyEnabled.value` is false. On a cold page load the `useFeatureFlags`
+  `/api/health` probe usually hasn't resolved by mount, so `installEnabled` is
+  still false, the loaders skip, and **nothing re-runs them when the flags
+  land** (no `watch(moneyEnabled)`, no await on `flagsLoaded`). Reproduced
+  deterministically in e2e: with money ON at both layers, a hard reload of
+  `/#/` fires zero `GET /api/budget/status`. The reactive template bits (Log
+  price button) recover; the fetched card bodies don't until the user
+  navigates away and back.
+- **Why deferred:** product fix out of scope for a test-codify unit; needs a
+  small design call (await `flagsLoaded` in `loadAll` vs a one-shot
+  `watch(moneyEnabled)` re-trigger). `dashboard-log-price.spec.ts` deliberately
+  does NOT pin the money-ON budget-status request — add that assertion when
+  this is fixed.
+- **Recommended resolution:** now — it's user-visible (money cards missing
+  after a hard reload / PWA cold start until a second navigation).
+- **2026-07-19 addendum:** same race, same fix needed for the
+  **products-gated** loaders (`loadPriceDrops`, `loadBestDeals` gate on
+  `productsEnabled` from the same one-shot probe). The
+  `dashboard-price-drops.spec.ts` spec works around it by warm-navigating
+  (land on `/#/stock`, then in-app goto `/#/`) — un-warm those specs when
+  this is fixed.
+
+## [OPEN] FU-585 — LogPriceSheet back arrow keeps the search query; FU-300 verify bullet expected it cleared
+- **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300)
+- **Type:** finding
+- **What:** in `LogPriceSheet.vue`, the step-2 back arrow calls
+  `clearSelection()` which drops only the selected item — the search query
+  survives, so the user returns to their filtered shortlist. The DORA_VERIFY
+  FU-300 bullet said "Back arrow returns to the picker with the search input
+  cleared". The full reset (query + selection) happens on dialog dismiss
+  (`onHide`), which IS pinned. Preserved-query-on-back is arguably the better
+  UX (picked the wrong milk → back → still see milks), so this wasn't
+  blind-patched to match the checklist.
+- **Why deferred:** behaviour-vs-checklist design call, not a clear defect.
+  `dashboard-log-price.spec.ts` pins the current behaviour with a comment
+  naming this FU — flip the assertion if the call goes the other way.
+- **Recommended resolution:** opportunistic — one-word decision; likely
+  "keep code behaviour, checklist was aspirational".
+
 ## [OPEN] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
 - **Raised:** 2026-07-19 (verify Batch 10, running the full Playwright suite)
 - **Type:** finding
@@ -79,6 +124,14 @@ long session summary. Distinct from the other logs:
   URL (or a `waitForURL` + explicit router-ready wait) across the affected specs;
   a shared `gotoDetail(page, path)` helper is the clean fix. Re-run the full
   suite to confirm the pass count returns to the ~65 the campaign reported.
+- **2026-07-19 addendum:** the race also reproduces on a *warm* history
+  sequence, not just cold double-gotos — in `dashboard-next-cook.spec.ts` a
+  `page.goBack()` to the dashboard followed by a click that `router.push`ed to
+  cook mode wedged the router on a blank document (deterministically, even in
+  isolation), while the visually identical sequence in `dashboard-donut.spec.ts`
+  passed. Both specs now avoid it (reload → fresh hash-goto before the second
+  navigation); fold "no history-back followed by another navigation" into the
+  same sweep/helper.
 
 ## [OPEN] FU-583 — Kitchen-health action links carry query params StockOverview ignores (`?expiring=1`, `?stocktake=1`)
 - **Raised:** 2026-07-19 (verify-campaign Batch 10, Dora Score codification)

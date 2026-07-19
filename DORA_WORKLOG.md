@@ -18,6 +18,220 @@ next.
 
 ---
 
+## 2026-07-19 (later 5) — Verify Batch 10: Cards-menu reorder (FU-294) + dashboard_layout backend (FU-292) codified
+
+**Why:** "continue" — next per the Batch 10 plan.
+
+**Built (tests only, no product code):**
+- **New `web_app/e2e/dashboard-cards-reorder.spec.ts` (4 tests, serial;
+  beforeAll/afterAll capture + restore the user's `dashboard_layout`).**
+  (1) Tap reorder: Today-zone first-row up-arrow and last-row down-arrow
+  disabled (the zone's true last menu row is the defaultHidden
+  "This fortnight" — hidden cards still list); down-arrow swap asserted
+  against the rendered menu order AND the `/auth/me` `dashboard_layout`
+  JSON, survives a full reload, up-arrow undoes it. (2) Native HTML5 drag:
+  `dragTo` on the `.dora-dnd-handle` → drop-on semantics (dragged row takes
+  the target's slot), server truth updated, and a second browser context —
+  FU-292's "another device" — renders the dragged order. (3) Cross-zone
+  drag (Pantry → Today row): menu order AND the stored layout both
+  byte-identical after. (4) iPhone-UA block (`platform.is.mobile` is
+  UA-based, not viewport): handle column absent, tap arrows + q-toggle
+  remain.
+- **FU-292 closed out entirely:** migration applies on every suite boot,
+  `test__dashboard_layout__set_and_clear` already green in the backend
+  suite, and the browser-walk half is the new spec.
+
+**Spec note (pre-existing, not re-logged):** the up/down arrows are
+icon-only BaseButtons with q-tooltips but no aria-label → no accessible
+name; the spec targets them positionally with a comment. Belongs to
+FU-578's unlabelled-buttons bucket.
+
+**Verification:** spec 5/5 in isolation; **full e2e 84 passed / 0 failed**.
+
+**Ledgers:** DORA_VERIFY FU-292 section deleted; FU-294 trimmed to one
+mid-drag transient-visuals bullet; triage note appended.
+
+**Standards close-gate:** test-only, established idioms (state captured +
+restored, server-truth assertions, delete-on-pass). No product code, no
+CHANGELOG, no new R/D-rule.
+
+**Next up:** Batch 10 tail — FU-301 full-walk Phases 0–7 + FU-293 card
+extraction (mostly owner-walk visuals; triage what's automatable, e.g.
+Phase-2 zone order/persistence overlaps what's now pinned), then the
+Alerts & notifications batch. FU-586 product fix still recommended "now".
+
+---
+## 2026-07-19 (later 4) — Verify Batch 10: price-drops (FU-296) codified → REAL BUG fixed (second-ever product price update 500'd)
+
+**Why:** "continue" — next per the Batch 10 plan.
+
+**Real bug found + fixed (product code, one line):** the new ranking test's
+second price PATCH in one test blew up with
+`UNIQUE constraint failed: ProductHistoricOffer.id`. Root cause:
+`update_product.py` archived the outgoing offer by appending to
+`Product.historic_offers` **without `repo.add()`** — the repository is what
+assigns entity ids (`uuid4()`), so the cascaded insert carried `EMPTY_UUID`.
+First archived offer in a DB: fine. **Second price update anywhere in the
+install's lifetime: PK collision → 500.** The ingest path
+(`offer_mapping.py`) and the seed builders both `repo.add()` — this manual
+PATCH path was the only outlier. Fix: `self.repository.add(_HistoricOffer)`
++ a comment naming the failure; the new tests double as the regression pin.
+CHANGELOG entry added.
+
+**Built:**
+- **Backend (`test_reports_router.py` +4, region price-drops):** ranking
+  (50% beats 20%; between equal 20%s the $4 drop beats the $2 drop — rows
+  filtered to the test's own product ids), `is_active=false` flips a listed
+  product out of the report, and the limit clamp (`0`/`-3` → exactly 1 row,
+  `999` → ≤20, missing/`abc` → exactly 5, proven against six seeded drops).
+  Shared `_seed_drop()` helper over `seed_purchase` + price-PATCH. Suite
+  **1528 passed** (up from 1525).
+- **New `web_app/e2e/dashboard-price-drops.spec.ts` (2 tests, serial):**
+  (1) card hidden by default; Cards-menu q-toggle enables it; honest empty
+  state on seed truth (asserts `/reports/price-drops` rows==0 first — every
+  seeded product sits AT its historic low, deliberately) and no
+  "My products →" action while empty. (2) engineered drop: store+product at
+  $10 → PATCH to $8 (exercises the fixed path through the API) → linked to a
+  throwaway stock item → card renders name, store, the linked-item
+  deep-link (`#/stock/<id>`), $8.00 + "was $10.00", the "20% off" badge and
+  the "My products →" action; deactivate → empty state returns; toggle
+  restored to defaultHidden. **Warm-navigation workaround:** cold `/#/`
+  loads lose the FU-586 flags race for the products-gated loaders too
+  (`loadPriceDrops`/`loadBestDeals`) — specs land on `/#/stock` first, then
+  in-app goto; FU-586 addendum records it (un-warm when fixed). Cleanup is
+  `is_active=false` (no DELETE /products; e2e DB is per-run anyway).
+
+**Verification:** reports suite 18/18; **full backend 1528 passed**; spec
+3/3 in isolation; **full e2e 80 passed / 0 failed**.
+
+**Ledgers:** DORA_VERIFY FU-296 section rewritten (three walk bullets left:
+products-OFF install, has_image row, dark-mode tokens); triage note;
+FU-586 products-loader addendum; CHANGELOG Fixed entry (product code).
+
+**Standards close-gate:** the fix follows the repository-owns-ids idiom the
+other two writers already use (R-003-adjacent single-path discipline);
+comment names the failure mode in place. Tests follow established idioms.
+No new R/D-rule — the "always `repo.add()` inline-constructed children"
+rule is already enforced by the repository's PersistenceError guard for
+*direct* fields (this was a list-relationship append, which the guard can't
+see; noted here for the record, not promoted — one occurrence).
+
+**Next up:** Batch 10 remainder — Cards-menu drag-reorder (FU-294,
+desktop DnD synthesis), `dashboard_layout` backend (FU-292 — migration walk
+likely already covered by suite runs; check), FU-301 full-walk phases +
+FU-293 visual extraction (mostly owner-walk). Then Alerts batch. FU-586 fix
+now unblocks un-warming three specs when done.
+
+---
+## 2026-07-19 (later 3) — Verify Batch 10: donut deep-links (FU-299) + "Next to cook" (FU-298) codified; FU-584 warm-history addendum
+
+**Why:** "continue" — next per the Batch 10 plan after the Log-price unit.
+
+**Built (tests only, no product code):**
+- **New `web_app/e2e/dashboard-donut.spec.ts` (3 tests, read-only).** (1) Only
+  the low/out legend rows + "View →" are links (hrefs = `/stock?level_id=<id>`
+  from `/stock-levels` server truth; unfiltered `/stock` for View); the
+  in-stock legend row and the whole card are inert; the donut renders exactly
+  two link arcs (role/tabindex/class + "View low items"/"View out items"
+  aria-labels) and the green arc ignores even a dispatched click. (2) A real
+  pointer click on the low arc — point computed from `/dashboard/summary`
+  proportions on the rotated SVG (needs `scrollIntoViewIfNeeded`; `page.mouse`
+  doesn't scroll) — lands the filtered stock view: level select shows the
+  level name, `.stock-row` count = server truth. (3) Keyboard: Enter on the
+  out arc, Space on the low arc, both navigate to their filtered views.
+- **New `web_app/e2e/dashboard-next-cook.spec.ts` (2 tests).** Throwaway
+  universe: Stocked + Out items; ready (1 stocked ing) / missing-one
+  (stocked + out) / no-ingredients recipes planned TODAY in "Breakfast" (sorts
+  before the seed's Dinner/Lunch on the earliest date → the trio owns the
+  card's top-3 deterministically), ready planned twice for the dedupe. Rows
+  mirror the DTO's deduped order with "Today breakfast · serves N" meta and
+  Ready / Missing 1 / No ingredients badges, each backed by an explicit DTO
+  assertion (missing_count 0/1/null); name → `/cookbook/{id}`, Cook →
+  `/cookbook/{id}/cook`. Torn down in afterAll. Empty state stays a
+  plan-free-install walk bullet.
+
+**Found → FU-584 addendum:** the hash-router race isn't only cold
+double-gotos — a warm `page.goBack()` to the dashboard followed by a
+`router.push` (the Cook click) wedged the router on a blank document,
+deterministically, in isolation. Both new specs route around it (reload →
+fresh goto between navigations); folded into FU-584's entry as a
+"no history-back before another navigation" rule for the coming sweep.
+
+**Verification:** donut 4/4 and next-cook 3/3 in isolation (incl. auth
+setup); **full e2e suite 78 passed / 0 failed**.
+
+**Ledgers:** DORA_VERIFY FU-299 section deleted (fully covered); FU-298
+trimmed to the empty-state bullet; triage note appended; FU-584 addendum.
+
+**Standards close-gate:** test-only, established idioms (server-truth
+assertions, throwaway universes torn down in afterAll, delete-on-pass). No
+product code, no CHANGELOG, no new R/D-rule.
+
+**Next up:** Batch 10 remainder — price-drops widget (FU-296: ranking/clamp
+halves are backend-testable, UI needs the products flag which the e2e seed
+ships ON), Cards-menu drag-reorder (FU-294, desktop DnD — may need
+drag-and-drop synthesis), `dashboard_layout` backend walk (FU-292), and the
+FU-301 full-walk phases. FU-586 (money-loader race) still wants its product
+fix; FU-584's sweep now has two trigger shapes to kill.
+
+---
+## 2026-07-19 (later 2) — Verify Batch 10: Log-price quick action (FU-300) + budget money-gate (FU-297) codified → FU-585 + FU-586 found
+
+**Why:** "continue verification work." Next behavioural Dashboard chunk after
+Dora Score: the FU-300 Log-price quick action, with FU-297's money-gate folded
+in (same `useMoneyEnabled` seam, one toggle exercises both).
+
+**Built (tests only, no product code):**
+- **New `web_app/e2e/dashboard-log-price.spec.ts` (4 tests, serial).**
+  beforeAll/afterAll flip BOTH money layers (install `money_enabled`
+  AppSetting via PATCH `/app-settings` + user flag via PATCH `/auth/me`) —
+  the e2e seed ships money OFF at both — and restore seed state after.
+  (1) Picker: three-button quick-action bar; ≤12-row low/out-first shortlist
+  (first row's level = max sequence per server truth); live filtering;
+  selection → title + PriceEntry with the detail-DTO prefill (exercised —
+  the seed harvests Milk observations); back arrow. (2) Submit: $6.40/2 L →
+  toast, sheet closes, exactly one new observation (folded shape) in the
+  detail DTO, Your-Prices widget renders the server-derived "$3.20 / L"
+  (fresh page, single goto — FU-584 dodge); observation deleted in a
+  finally. (3) Dismiss-means-cancel: zero POSTs; reopen starts fresh.
+  (4) Money OFF: Log price hidden, budget card gone from dashboard + Cards
+  menu, zero `GET /api/budget/status`; ON restores the button.
+
+**Found:**
+- **[[FU-585]]** — the step-2 back arrow keeps the search query
+  (`clearSelection()` drops only the selection; full reset is on dialog
+  dismiss) but the FU-300 verify bullet said "search input cleared".
+  Defensible UX either way → design call logged, spec pins current behaviour.
+- **[[FU-586]]** — `DashboardPage.loadAll()`'s money loaders (`loadBudget`
+  et al.) early-return while the one-shot `/api/health` flags probe is still
+  in flight on a cold mount, and nothing re-runs them when flags land.
+  Reproduced: money ON both layers, hard reload → zero budget-status
+  requests. User-visible (money cards missing after cold start until a
+  second navigation) — recommended resolution "now". The spec deliberately
+  does not pin the money-ON request until fixed.
+
+**Verification:** spec 5/5 in isolation; **full e2e suite 73 passed / 0
+failed** (FU-584 flakes quiet this run; FU-576 uploads flake didn't fire).
+Backend untouched. Box note: needed `npx playwright install chromium`
+(headless-shell v1228 was missing on this machine).
+
+**Ledgers:** DORA_VERIFY FU-300 section deleted (fully covered); FU-297
+section rewritten to one FU-586-blocked walk bullet; DORA_VERIFY_TRIAGE
+Batch-10 note appended; FU-585 + FU-586 opened.
+
+**Standards close-gate:** test-only, established idioms (serial specs,
+server-truth assertions, seed-state restore in afterAll/finally, delete-on-
+pass). No product code, no CHANGELOG entry, no new R/D-rule. R-003 respected
+in-spec (asserts the server-derived per-unit render, never divides
+client-side beyond documenting the expectation).
+
+**Next up:** Batch 10 remainder — donut deep-links (FU-299) and "Next to
+cook" (FU-298) are the next e2e-friendly sections; price-drops (FU-296) has
+backend-testable ranking/clamp halves. FU-586 wants a quick product fix
+before the money-ON dashboard render can be pinned. FU-584's single-full-goto
+sweep still open.
+
+---
 ## 2026-07-19 — Verify Batch 10 (Dashboard): Dora Score / Kitchen health (P8-08) codified → FU-583 found; full-suite build/flake notes
 
 **Why:** "continue verification work." Batch 10's next behavioural chunk after

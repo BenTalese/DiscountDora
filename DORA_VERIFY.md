@@ -917,39 +917,24 @@ the defer change (it always passes `merge_into_list_id` — code-visible at
 - [ ] Trend arrow reflects `score - (score computed on the 30d window ending 7 days ago)` — logging a waste event shifts the composite down over the next week, and the arrow should flip from up/flat to down (background refresh happens 5 min after mutation; a full reload picks it up sooner)
 - [ ] Drag-reorder within the kitchen zone still works with the Kitchen health card present
 
-### Log-price quick action — origin FU-300
-- [ ] Money features ON: dashboard quick-action bar shows three buttons — Add item · Add to list · Log price
-- [ ] Money features OFF: Log price button is hidden (matches row-level Log-a-price posture)
-- [ ] Click Log price → bottom sheet titled "Log a price" opens with a search input and a shortlist of stock items (low/out first)
-- [ ] Type a partial item name → results filter in real time
-- [ ] Pick an item → the sheet title updates to "Log a price · {name}"; PriceEntry form renders in shelf mode with the item's `price_entry_prefill` seeded (if any)
-- [ ] Back arrow returns to the picker with the search input cleared
-- [ ] Submit a valid entry → success toast ("Logged a price for X."); sheet closes; the observation appears on the stock item's detail Your-Prices widget
-- [ ] Cancel from within PriceEntry → sheet closes without a request
-- [ ] Sheet dismissed via backdrop / close-X → next open starts fresh (no stale selection or query)
-
-### Dashboard stock donut deep-links — origin FU-299
-- [ ] Pantry card no longer navigates as a whole card on click — only the "View →" action link, donut low/out segments, and legend low/out rows are clickable
-- [ ] Click the yellow low segment (SVG) → routes to `/stock?level_id=<low>`; the Level filter chip in the FilterBar shows Low Stock and only low items render
-- [ ] Click the red out segment → routes to `/stock?level_id=<out>`; only out-of-stock items render
-- [ ] Click the "running low" legend row → same low-filtered view
-- [ ] Click the "out" legend row → same out-filtered view
-- [ ] Click the green in-stock segment or legend row → nothing happens (no filter for the residual bucket)
-- [ ] "View →" action still opens the unfiltered `/stock`
-- [ ] Keyboard: Tab focuses the low/out segments; Enter/Space navigates to the filtered view
-- [ ] Screen reader announces "View low items" / "View out items" for the linkable segments
-
 ### Dashboard price-drops widget — origin FU-296
-- [ ] Products feature ON: "Price drops" appears in the Cards menu under the Money zone (defaultHidden — enable it from there)
-- [ ] Products feature OFF: card is absent from both the dashboard and the Cards menu
-- [ ] With no historic offers on any product → card shows the empty state ("Nothing at a new low right now…")
-- [ ] Seed a product where `current_offer.price_now` < `min(historic_offers.price_now)` → card lists it with store name, "was $X" from the previous low, "−N%" badge, and a link to the linked stock item when one exists
-- [ ] Product with `is_active=false` or with a `null` current offer → excluded from the list
-- [ ] Product with no historic offers → excluded (Honesty — the first-ever price isn't a "drop")
-- [ ] Rank order: highest drop-% first (ties broken by drop-amount)
-- [ ] `/api/reports/price-drops?limit=N` clamps to `[1, 20]`; default is 5
-- [ ] Product images: `has_image=true` rows fetch `/api/products/{id}/image`; otherwise show the shopping_bag placeholder
-- [ ] Dark-mode + non-money theme themes: colours ride semantic tokens (no hardcoded red/green)
+*(Test-pinned 2026-07-19. Server halves in `test_reports_router.py`: new-low
+honesty + no-history exclusion were already pinned; added ranking (% desc,
+amount tie-break), the `is_active=false` exclusion, and the limit clamp
+(1/−3→1, 999→≤20, missing/`abc`→5) — which flushed out a real bug, fixed
+inline: PATCH price-update inserted the archived historic offer without an
+id, so the second-ever price change 500'd (see CHANGELOG). The null-current-
+offer exclusion has no API path to engineer and stays code-visible
+(`current_offer is not None` in `PriceDropsHandler`). UI halves in new
+`web_app/e2e/dashboard-price-drops.spec.ts`: hidden by default → Cards-menu
+enable → honest empty state on seed (every seeded product sits AT its low),
+an engineered 20% drop rendering name · store · linked-item deep-link ·
+$8.00/"was $10.00" · "20% off" badge + the "My products →" action, deactivate
+→ empty state returns, toggle restored. Specs warm-navigate around the
+FU-586 flags race.)*
+- [ ] Products feature OFF: card absent from both the dashboard and the Cards menu (needs a productless install)
+- [ ] Product images: `has_image=true` rows fetch `/api/products/{id}/image` (needs a product with an image; the placeholder half renders in the e2e run)
+- [ ] Dark-mode: row colours/badge ride semantic tokens (no hardcoded red/green)
 
 ### Dashboard rebuild — full walk Phases 0–7 — origin FU-301
 - [ ] **Phase 0** — cards keyboard-focus + middle-click; the dark-mode question reads correctly
@@ -962,29 +947,36 @@ the defer change (it always passes `merge_into_list_id` — code-visible at
 - [ ] **FU-293 extraction:** every card looks identical after DashboardCard extraction — shell border/padding/shadow, header icon/title, hover lift on clickable cards (Pantry/week-ahead/budget), header action link/text styling + hover
 
 ### Dashboard "Next to cook" card (meal-plan-driven) — origin FU-298
-- [ ] Plan a meal in the next 7 days → it appears in the card with the relative day + slot ("Tomorrow dinner") and a green "Ready" badge when nothing is missing
-- [ ] Remove one of that recipe's ingredients from stock → reload → badge flips to amber "Missing 1" (or N)
-- [ ] Plan the same recipe twice in the week → it appears once in the card (deduped by recipe_id, earliest slot wins)
-- [ ] Recipe with no ingredients planned → grey "No ingredients" badge (the card still surfaces it; "Cook" still navigates)
-- [ ] Click recipe name → deep links to `/cookbook/{recipe_id}`; click "Cook" → `/cookbook/{recipe_id}/cook`
-- [ ] Empty state when nothing is planned for the next week → "Nothing planned for the next week" + "Plan a meal →" link to `/meal-plans`
+*(Test-pinned 2026-07-19 in `web_app/e2e/dashboard-next-cook.spec.ts` on a
+throwaway recipes+plan universe: rows mirror the summary DTO's dedupe/order,
+"Today breakfast · serves N" meta, Ready / Missing 1 / No ingredients badges
+against engineered stock truth, recipe-name → `/cookbook/{id}` and Cook →
+`/cookbook/{id}/cook`. The FU-299 donut section was fully codified the same
+day in `dashboard-donut.spec.ts` — incl. a real pointer click on the SVG low
+arc — and deleted.)*
+- [ ] Empty state when nothing is planned for the next week → "Nothing planned for the next week" + "Plan a meal →" link to `/meal-plans` (needs a plan-free install — the seed always has a current-week plan)
 
 ### Dashboard budget money-gate — origin FU-297
-- [ ] Money features OFF: budget card is hidden from the dashboard AND from the Cards menu (same posture as savings / spend / pantry)
-- [ ] DevTools network: with money OFF, no `GET /api/budget/status` request fires on dashboard load
-- [ ] Money features ON: budget card renders as before — both the "set a target" empty state and the live spend/progress body
+*(Test-pinned 2026-07-19 in `web_app/e2e/dashboard-log-price.spec.ts` — which also
+codified the whole FU-300 Log-price quick action, section deleted: money OFF hides
+the budget card from the dashboard AND the Cards menu with zero
+`GET /api/budget/status` fired, and hides the Log price quick action; ON restores
+the button. The back-arrow-keeps-query behaviour call is FU-585.)*
+- [ ] Money features ON: budget card renders — both the "set a target" empty state and the live spend/progress body. **Blocked by FU-586:** on a cold dashboard load the money loaders race the /api/health flags probe and can silently skip, so the card may only appear after a second navigation — verify (and codify the request assertion) once FU-586 is fixed
 
 ### Dashboard Cards menu drag-and-drop reorder — origin FU-294
-- [ ] **Desktop** (Cards menu open): grab a card row by the left-side drag handle → row dims, drop-target row gets a primary ring, drop reorders within the zone, layout persists across reload
-- [ ] **Cross-zone drop is rejected**: drag a Today-zone card over a Money-zone row → no drop-target ring, no drop accepted
-- [ ] **Tap up/down still works** alongside drag (mobile and keyboard mandate, C13)
-- [ ] **Mobile** (or touch-emulated): drag handle column is hidden — only tap arrows + visibility toggle visible
-- [ ] **Reload + cross-device** persistence (same backend as `dashboard_layout` — exercises FU-292 too): drag-reordered layout follows the user
-
-### Dashboard `dashboard_layout` backend — origin FU-292
-- [ ] Run the migration on a Python-capable machine
-- [ ] Run the e2e suite (incl. `test__dashboard_layout__set_and_clear`)
-- [ ] Browser-walk: reorder/hide cards, reload, confirm layout persists and follows the user to another device/browser
+*(Test-pinned 2026-07-19 in `web_app/e2e/dashboard-cards-reorder.spec.ts`,
+which also closed out the FU-292 `dashboard_layout` section — migration
+applied on every suite boot, `test__dashboard_layout__set_and_clear` green
+in the backend suite, and the browser-walk halves now automated: tap up/down
+reorders within the zone with first/last arrows disabled and both directions
+working; native HTML5 drag-handle drop reorders with drop-on semantics;
+cross-zone drop rejected with the server layout untouched; every reorder
+asserted against menu render + the `/auth/me` `dashboard_layout` JSON +
+reload persistence + a second browser context ["another device"]; iPhone-UA
+run pins handle hidden with arrows + toggle remaining. The arrows are
+unlabelled icon-buttons — FU-578's a11y bucket.)*
+- [ ] Mid-drag visuals: the grabbed row dims and the valid drop-target row shows the primary ring; a cross-zone target shows no ring (transient states — eyeball on a real drag)
 
 ---
 

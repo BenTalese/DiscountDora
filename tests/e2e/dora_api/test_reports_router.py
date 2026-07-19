@@ -245,6 +245,58 @@ def test__price_drops__ProductWithNoHistory__NeverANewLow(api):
     assert seeded["product_id"] not in {r["product_id"] for r in rows}
 
 
+def _seed_drop(price_from: float, price_to: float) -> str:
+    """One tracked product whose current offer is a new low: created at
+    ``price_from`` (archived to history by the PATCH), now ``price_to``.
+    Returns the product id."""
+    seeded = seed_purchase(price_now=price_from, price_was=price_from + 2.0,
+                           finish=False, tick=False)
+    patch = requests.patch(f"{BASE}/products/{seeded['product_id']}", json={
+        "price_now": price_to, "price_was": price_from + 2.0,
+    })
+    assert patch.status_code in (200, 204), patch.text
+    return seeded["product_id"]
+
+
+def test__price_drops__Ranking__PercentDescThenAmountDesc(api):
+    # 50% off ranks over 20% off; between the two 20%s, the bigger dollar
+    # drop ($4 on 20→16) ranks over the smaller ($2 on 10→8).
+    big_pct = _seed_drop(10.0, 5.0)      # 50%, $5
+    tie_small = _seed_drop(10.0, 8.0)    # 20%, $2
+    tie_big = _seed_drop(20.0, 16.0)     # 20%, $4
+
+    rows = requests.get(f"{REPORTS}/price-drops", params={"limit": 20}).json()["rows"]
+
+    ours = [r["product_id"] for r in rows
+            if r["product_id"] in {big_pct, tie_small, tie_big}]
+    assert ours == [big_pct, tie_big, tie_small]
+
+
+def test__price_drops__InactiveProduct__Excluded(api):
+    product_id = _seed_drop(10.0, 8.0)
+    rows = requests.get(f"{REPORTS}/price-drops", params={"limit": 20}).json()["rows"]
+    assert product_id in {r["product_id"] for r in rows}
+
+    patch = requests.patch(f"{BASE}/products/{product_id}", json={"is_active": False})
+    assert patch.status_code in (200, 204), patch.text
+
+    rows = requests.get(f"{REPORTS}/price-drops", params={"limit": 20}).json()["rows"]
+    assert product_id not in {r["product_id"] for r in rows}
+
+
+def test__price_drops__LimitClampsToOneThroughTwenty__DefaultFive(api):
+    # Six genuine drops on the board so the default-5 slice is observable.
+    for i in range(6):
+        _seed_drop(10.0 + i, 5.0)
+
+    assert len(requests.get(f"{REPORTS}/price-drops", params={"limit": "0"}).json()["rows"]) == 1
+    assert len(requests.get(f"{REPORTS}/price-drops", params={"limit": "-3"}).json()["rows"]) == 1
+    assert len(requests.get(f"{REPORTS}/price-drops", params={"limit": "999"}).json()["rows"]) <= 20
+    # Missing or unparseable limit → the default 5.
+    assert len(requests.get(f"{REPORTS}/price-drops").json()["rows"]) == 5
+    assert len(requests.get(f"{REPORTS}/price-drops", params={"limit": "abc"}).json()["rows"]) == 5
+
+
 #endregion price drops
 
 #region ---------------- meals cooked ----------------

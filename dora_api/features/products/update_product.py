@@ -66,6 +66,10 @@ class UpdateProductHandler:
                 price_was = _Product.current_offer.price_was)
 
             _Product.historic_offers.append(_HistoricOffer)
+            # Without repo.add() the cascaded insert carries EMPTY_UUID, so
+            # the SECOND archived offer in an install's lifetime collides on
+            # the primary key and 500s (the ingest path and seed both add()).
+            self.repository.add(_HistoricOffer)
 
             _Product.current_offer.offered_on = datetime.now(UTC)
             _Product.current_offer.price_now = request.price_now

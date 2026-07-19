@@ -910,17 +910,12 @@ the defer change (it always passes `merge_into_list_id` — code-visible at
   only written by the reconcile job)
 
 ### ⭐ P8-08 Dora Score — Kitchen health card — origin champion-plan §P8-08
-- [ ] Dashboard renders a new **Kitchen health** card in the "Your kitchen" zone above the Pantry donut card (icon ♥ heart)
-- [ ] Card header shows title + a small trend chip on the right when the direction is `up` or `down` (green up-arrow with `+N`, red down-arrow with `-N`); no chip when direction is `flat` or unavailable
-- [ ] Big composite number (0–100) renders next to `out of 100 · last 30 days` caption
-- [ ] Below the number, five component rows in order: **Waste · Budget · Freshness · Run-outs · Stocktake**. Each row shows the component score, a mini bar filled to that percent (green ≥80, amber 50–79, red <50), a one-sentence server-authored reason, and (when applicable) a right-side action link
-- [ ] Component with no data (e.g. no budget set → Budget; no items track expiry → Freshness; no stock items → Stocktake) shows a dashed `—` in place of the score and dims the row; the mini-bar hides. The composite number does **not** drop as a result — dormant components are excluded, not zeroed
-- [ ] Brand-new install (no data anywhere): card shows the calm "appears once you've been using Dora for a bit" empty state, not a 0 score
+*(Behavioural halves test-pinned 2026-07-19: engine in `test_dora_score.py`; endpoint shape/401/log-line in `test_dashboard_router.py` + route-auth sweep; card render vs server truth, ordered rows, dormant-Budget contract, action links incl. the deliberate no-Waste-link, and the Cards-menu toggle in `web_app/e2e/dora-score.spec.ts`. The `?expiring=1`/`?stocktake=1` params being ignored by StockOverview is FU-583. Remaining below = visuals/gated.)*
+- [ ] Trend chip render: green up-arrow with `+N` when direction is `up`, red down-arrow with `-N` when `down`, and **no chip** when `flat`/unavailable (needs score history in both directions — eyeball when the trend is live)
+- [ ] Mini-bar traffic-light thresholds read right in both themes: green ≥80, amber 50–79, red <50
+- [ ] Brand-new install (no data anywhere): card shows the calm "appears once you've been using Dora for a bit" empty state, not a 0 score (fresh-install gated)
 - [ ] Trend arrow reflects `score - (score computed on the 30d window ending 7 days ago)` — logging a waste event shifts the composite down over the next week, and the arrow should flip from up/flat to down (background refresh happens 5 min after mutation; a full reload picks it up sooner)
-- [ ] Component action links resolve — Waste → `/waste`, Budget → `/settings/preferences`, Freshness → `/stock?expiring=1`, Run-outs → `/shopping-lists`, Stocktake → `/stock?stocktake=1`. Any that 404 or land on the wrong surface is a bug (some rely on query params the target page needs to honour — flag which ones don't)
-- [ ] Dashboard Cards menu lists **Kitchen health** under the "Your kitchen" group; hiding it removes the card, showing it puts it back at the top of the kitchen zone; drag-reorder within the zone still works
-- [ ] `GET /api/dashboard/dora-score` returns 401 when signed out; 200 with a valid DTO when signed in
-- [ ] Server logs show `Dora Score user=… composite=… trend=… (delta=…)` on each request — no exceptions, no NaN, no negatives
+- [ ] Drag-reorder within the kitchen zone still works with the Kitchen health card present
 
 ### Log-price quick action — origin FU-300
 - [ ] Money features ON: dashboard quick-action bar shows three buttons — Add item · Add to list · Log price

@@ -702,6 +702,28 @@ consumed-entry guard (consumed_at only written by the cook-reconcile job —
 code-visible at `auto_generate.py:418`). Full e2e **65 pass / 1 FU-576
 flake**.
 
+**Dora Score / Kitchen health (P8-08) codified (2026-07-19):** the engine was
+already unit-pinned (`test_dora_score.py`, 8 suites) and the endpoint
+shape/anonymous-401 backend-pinned (dashboard router + DTO snapshot +
+route-auth sweep). Added: the L923 log-line contract as a backend test
+(`test_dashboard_router.py::test__dora_score__EveryRequestLogsTheScoreLine…` —
+one "Dora Score user=… composite=… trend=… (delta=…)" record per request, no
+NaN/negatives/exceptions; backend suite **1525 passed**) and new
+`web_app/e2e/dora-score.spec.ts` (3 tests): hero + five ordered component rows
+asserted against `/dashboard/dora-score` server truth (labels, reasons,
+bar-per-scored-row), the **dormant contract on real data** (seed has no budget
+→ Budget row renders "—", dormant class, no mini-bar, composite still a
+number), card-above-Pantry placement, the action links (Budget/Freshness/
+Run-outs/Stocktake navigate, none 404; **Waste deliberately has no link** —
+D10 dissolved `/waste`, pinned as an absence; the old L920 `/waste`
+expectation was stale), and the Cards-menu q-toggle hide/restore. **Found
+[[FU-583]]** en route: `?expiring=1`/`?stocktake=1` on the Freshness/Stocktake
+links are silently ignored by `StockOverview.applyQueryFilters()` (honours
+only location_id/attention/level_id) — exactly what L920 asked to flag.
+DORA_VERIFY section trimmed per delete-on-pass (8 bullets deleted/absorbed;
+survivors: trend-chip both-direction render, bar traffic-light colours,
+fresh-install empty state, week-long trend flip, kitchen-zone drag-reorder).
+
 ---
 
 **Harness lesson (major — shapes every future browser batch):** the in-app

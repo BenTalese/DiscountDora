@@ -52,6 +52,56 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
+- **Raised:** 2026-07-19 (verify Batch 10, running the full Playwright suite)
+- **Type:** finding
+- **What:** on a clean full-suite run on this box (fresh `dist/spa` build, system
+  Chrome channel), ~12 detail-page specs fail — `history-tab.spec.ts`,
+  `detail-recipes-tab.spec.ts`, `detail-products-tab.spec.ts`,
+  `recipe-deeplink.spec.ts`, `stock-pickers.spec.ts`, one `buy-verdict.spec.ts`.
+  **Different** tests fail across runs (flaky, not consistent), and every failure
+  snapshot shows the **dashboard still mounted**, not the detail page. Common
+  pattern: the spec does `page.goto('/#/')` then `page.goto('/#/stock/<id>')` —
+  a same-document hash change that Playwright treats as an anchor navigation, so
+  vue-router only routes if it catches the `hashchange`; under load it doesn't,
+  the detail page never mounts, and the `getByRole('tab'/'button')` wait times
+  out at 30s. This is the exact gotcha the verify-runner notes already document
+  ("same-document hash-goto doesn't drive vue-router — engineer state via
+  `page.request`, then one full-document goto").
+- **Why deferred:** these are the parallel verify session's specs, not the
+  Dora Score unit that surfaced the flake; fixing them is a cross-cutting spec
+  change. The specs pass individually often enough that the parallel session's
+  per-file runs went green — it's the full-suite + machine-load combination that
+  trips them here.
+- **Recommended resolution:** opportunistic but soon (the full suite can't be a
+  reliable green gate until then) — replace the two-step `goto('/#/')` +
+  `goto('/#/stock/<id>')` with a single full-document navigation to the detail
+  URL (or a `waitForURL` + explicit router-ready wait) across the affected specs;
+  a shared `gotoDetail(page, path)` helper is the clean fix. Re-run the full
+  suite to confirm the pass count returns to the ~65 the campaign reported.
+
+## [OPEN] FU-583 — Kitchen-health action links carry query params StockOverview ignores (`?expiring=1`, `?stocktake=1`)
+- **Raised:** 2026-07-19 (verify-campaign Batch 10, Dora Score codification)
+- **Type:** finding
+- **What:** `DoraScoreCard.vue`'s Freshness link navigates to `/stock?expiring=1`
+  and Stocktake to `/stock?stocktake=1`, but `StockOverview.vue`'s
+  `applyQueryFilters()` only honours `location_id` / `attention` / `level_id`
+  (plus `create` and `recipe` handled separately) — both params are silently
+  dropped, so the user lands on the full unfiltered pantry instead of "expiring
+  items" / stocktake mode. Exactly the failure DORA_VERIFY's P8-08 L920 asked to
+  flag. The other links are fine (Budget → preferences, Run-outs →
+  shopping-lists); Waste deliberately has no link (D10 dissolved `/waste` — the
+  e2e spec pins that absence, and the DORA_VERIFY bullet's `/waste` expectation
+  was stale).
+- **Why deferred:** codification unit (test-only); the fix is a small
+  StockOverview change + choosing what `expiring=1` maps to (the expiring-soon
+  filter chip) and whether `stocktake=1` opens the Needs-check filter or routes
+  to `/stocktake`.
+- **Recommended resolution:** opportunistic — extend `applyQueryFilters()` (or
+  repoint the card links at params that exist); then extend
+  `web_app/e2e/dora-score.spec.ts`'s link test to assert the filtered result,
+  not just navigation.
+
 ## [OPEN] FU-581 — Stale `/product-search` links: three surfaces route to the retired route and land on the 404
 - **Raised:** 2026-07-18 (verify Batch 3 — codifying the C-1b.3 Products-tab checks)
 - **Type:** finding (real bug, needs a design call)
@@ -96,6 +146,28 @@ long session summary. Distinct from the other logs:
   the enabled-flag composables are touched, wire the toggle handlers to refresh the
   probes (and extend the e2e test to drop its reload).
 
+## [OPEN] FU-582 — Finish & restock modal has NO per-item level pickers (server `level_overrides` contract has no UI)
+- *(Renumbered from FU-580 on 2026-07-18 — a parallel session independently issued
+  FU-580 for the Features-page reload finding; that one keeps the number.)*
+- **Raised:** 2026-07-18 (UX round 5, driving the finish flow live)
+- **Type:** finding
+- **What:** the "Finish & restock" modal on a SHOPPING list shows only a flat list of
+  ticked item names + Cancel / "Restock & finish" — no per-item level choice at all
+  (screenshot `30-restock-review-modal.png`). But the UX-v2 M12 restock-review design
+  (DORA_VERIFY 3-band bullet: "only 3 options per item — Stocked / Low / Out") and the
+  server contract both expect per-item overrides: `FinishShoppingListRequest.level_overrides`
+  exists, is documented "per-item level choices from the finish modal", and was
+  backend-pinned green this morning (`test_stock_level_collapse.py` — override wins,
+  unknown-level 422). The SPA evidently never sends it — a part-restocked item ("bought
+  milk but it's still half-empty → Low") can't be expressed at finish time; everything
+  ticked flips to Stocked.
+- **Why it matters:** the DORA_VERIFY eyeball check for the modal can never pass as
+  written; dead server surface (R-003 seam built, client half missing).
+- **Recommended resolution:** owner decides — either build the per-item 3-option picker
+  into the modal (the designed behaviour), or explicitly cut the override UI and note the
+  carve-out (then simplify/keep the server contract for API users). Check git history for
+  whether the picker UI was built and lost in a rebuild (C-19-style) before writing new UI.
+
 ## [OPEN] FU-579 — `quasar dev` vite-checker overlay: pre-existing type errors block fresh-browser interaction
 - **Raised:** 2026-07-18 (building the drive.mjs app driver)
 - **Type:** finding
@@ -127,6 +199,13 @@ long session summary. Distinct from the other logs:
 - **Raised:** 2026-07-18 (owner asked for a critical UX/UI pass; app driven live via the
   in-app browser pane — DOM/geometry/computed-style audit, no pixel rendering available)
 - **Type:** finding (bundle — split into fix units as the owner prioritises)
+- **ACTIONING (2026-07-18):** every item below is mapped to a work unit in
+  `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md` (DR-1..DR-16 — see its coverage
+  table; three units flagged for owner sign-off: DR-6 scope, DR-10, DR-16). The
+  standing rules extracted from this audit are now
+  `docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-001..D-015, enforced via R-035/ADR-031).
+  This FU stays open as the finding-of-record until the DR units close; resolve
+  items by DR unit, not piecemeal.
 - **What (bugs — concrete, verified in DOM/server):**
   1. **Copy bug:** "Vanilla Ice Cream expires expired 3 days ago." — `generators.py:113`
      composes `"{name} expires {window}"` but the past branch (line 98) already reads
@@ -244,6 +323,73 @@ long session summary. Distinct from the other logs:
      glyph with no hint why it's off (no LLM configured).
   36. Item detail's standalone page tabs fit fine — the tab-strip clipping (15d) is
      peek-pane-specific.
+- **Fourth pass (2026-07-18, onboarding via fresh `qa-ux-walk` account + draft-shop + add-item):**
+  37. Register form shows **"Username is required" before the user has typed anything**
+     (eager validation on a pristine form).
+  38. Onboarding STORY scenes are excellent copy ("The weekly shop is detective
+     work.", "every part of Dora is a toggle."); nit: the final scene's CTA renames
+     Next → "Set up in about a minute", fine for humans. SETUP step 1's "I batch-cook"
+     explainer is jargon-heavy for a first run ("cook-pool controls", "'N free' chip",
+     "shortfall warning") — the Preferences page says the same thing more simply.
+  39. The "You're all set!" hub offers **Price history as a first destination** — on a
+     brand-new account that page is empty by definition (data-gated); dead-end risk.
+     No guided "add your first items / import" step in SETUP — pantry seeding is just
+     one of eight equal cards, yet it's the activation make-or-break for this app.
+  40. Shopping-lists page at 1280px: the page title wraps ("Shopping / lists") with
+     the Quick-add button colliding beside it — toolbar spacing is off even at
+     desktop (same toolbar that overflows on mobile, item 4).
+  41. Bottom-right congestion: success toasts, the Dora tip toast, and the mascot all
+     stack in the same corner; the "Drafted 10 items." toast also **persists across
+     route changes** well past its read time.
+  42. "Draft my shop" flow itself is great (10 items, lands on the review list, clear
+     toast copy) and the Add-a-stock-item dialog is exemplary (4 fields, optionals
+     marked, Essential info hint) — keep both as-is.
+- **Fifth pass (2026-07-18, light theme + finish flow + cook-mode end):**
+  43. Light theme seen with real pixels: broadly pleasant (white cards read well);
+     the faint bits match the earlier AA numbers — belief-chip "· low" suffix and
+     footer stats are visibly weak; the yellow-on-green wordmark is loud/borderline.
+     Theme save is eager with a "Theme updated." toast ✓.
+  44. **Row state visual language is undocumented and inconsistently signalled:**
+     rows carry meaningful edge/tint codes (blue edge = on a list, amber = attention,
+     red = out, cream tint = ?) with no legend anywhere; Canned Tomatoes shows a
+     cream tint with NO matching icon signal, and the dimmed Parmesan (33) is still
+     unexplained. One legend (or tooltips on the edge) would pay for itself.
+  45. The missing restock-review pickers are FU-582 (functional gap, split out; renumbered from FU-580).
+  46. Cook mode end-state: "Finish ✓" swaps in for Next, and the step's ingredient
+     row highlights as you advance — excellent detail, keep.
+- **Sixth pass (2026-07-18, plan wizard / kitchen-setup + admin settings / search / tablet):**
+  47. Plan step-by-step wizard: the same recipe appears in multiple groups
+     (Favourites AND All recipes) **each with its own checkbox** — duplicate
+     selectable rows in one pick list (same duplication in the meal-plans left
+     rail). Dedupe or visually link the instances.
+  48. **Locale/timezone root cause of the US dates (item 9):** household timezone
+     ships as UTC and locale is never asked — onboarding SETUP has no region step,
+     while Admin → System → Timezone even has a "Use this device" one-click
+     derivation that nothing invokes at first run. Money/date formats are wrong
+     until an admin finds that page. Recommend: derive tz/locale from the browser
+     at first boot (or a one-line SETUP step), keep admin override.
+  49. Trivial: `/settings/stores` has no legacy alias (404s) while sibling
+     `/settings/stock-locations` redirects — uneven alias coverage; real nav is fine.
+  50. Meal-plans' mini month calendar (right rail) shares the alerts-calendar
+     problem (28): a big grid of featureless cells with one outline + one dot.
+  Keep-as-is positives this pass: Stock-locations settings page (tree + counts +
+  explainer copy is the best settings page in the app); Admin → System sidebar
+  organisation; stock search (instant substring filter, footer stats re-scope to
+  the matches, clear-X affordance).
+- **Seventh pass (2026-07-18, reconcile queue / bulk mode / export):**
+  51. Reconcile queue reuses the stocktake card-runner pattern (progress bar, one
+     card, verb buttons incl. red "Didn't cook" + "Skip for now") — consistency
+     keep-as-is. But its date reads "Mon, Jul 13" while the meal-plans grid shows
+     "7/13/2026" for the same slot — one more face of the locale/format family
+     (9/48): the app has no single date-format authority.
+  52. **Belief chips pop in late and shift row layout:** consecutive shots of the
+     same stock list show rows first without, then with "Dora: ~Low" chips — the
+     async beliefs fetch reflows the name/location line after paint. Reserve the
+     space or fade in without reflow.
+  53. Bulk-select bar at 0 selected: disabled actions ("Add to list…", "Log
+     waste…" — functionally disabled, e2e-pinned) render in the same white as
+     enabled ones; only "Deselect all" greys. Style the disabled state.
+  54. Export menu (CSV / Print-PDF) is clean — keep.
   (Positives worth keeping as-is: cook mode's step layout — big type, progress,
   location-grouped scaled ingredients, per-ingredient swap, tools chips — is the
   strongest screen in the app; stocktake's focused card flow; reports' friendly

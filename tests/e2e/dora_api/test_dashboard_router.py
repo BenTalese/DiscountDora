@@ -246,4 +246,32 @@ def test__dora_score__AuthenticatedRequest__ReturnsCompositeAndComponentBreakdow
         assert _Component["score"] is None or 0 <= _Component["score"] <= 100
         assert isinstance(_Component["reason"], str) and _Component["reason"]
 
+
+def test__dora_score__EveryRequestLogsTheScoreLine__NoNaNNoNegatives(api, caplog):
+    # DORA_VERIFY P8-08: each request logs
+    # "Dora Score user=… composite=… trend=… (delta=…)" — one line, no
+    # exceptions, no NaN, and the composite is never negative.
+    import logging
+    import re
+
+    with caplog.at_level(logging.INFO, logger="dora_api.features.dashboard.get_dora_score"):
+        _Response = requests.get(DORA_SCORE)
+
+    assert _Response.status_code == 200, _Response.text
+    _Lines = [r.getMessage() for r in caplog.records if "Dora Score" in r.getMessage()]
+    assert len(_Lines) == 1, _Lines
+    _Match = re.fullmatch(
+        r"Dora Score user=[0-9a-f-]+ composite=(\S+) trend=(up|down|flat|None) \(delta=(\S+)\)",
+        _Lines[0],
+    )
+    assert _Match, _Lines[0]
+    _Composite, _, _Delta = _Match.groups()
+    assert "nan" not in _Lines[0].lower()
+    if _Composite != "None":
+        assert 0 <= int(_Composite) <= 100
+    # delta may be negative (a falling score) — but never NaN/garbage.
+    if _Delta != "None":
+        int(_Delta)
+    assert not any(r.exc_info for r in caplog.records)
+
 #endregion dora score

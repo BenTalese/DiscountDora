@@ -103,7 +103,7 @@ function target(step) {
 
 const results = [];
 let failed = 0;
-await ensureLoggedIn();
+if (!plan.skipLogin) await ensureLoggedIn(); // skipLogin: drive the auth/register screens themselves
 
 for (const [i, step] of (plan.steps ?? []).entries()) {
     const label = `${i}:${step.do}`;

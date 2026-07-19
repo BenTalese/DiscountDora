@@ -1325,6 +1325,33 @@ exceptions, which still must be commented) · **Source** (where it was establish
   index; the schema-match test flipping red without an allowlist entry explaining why.
 - **Source:** ADR-030; FU-563 (from the FU-393 data-model sanity sweep).
 
+### R-035 — UI-affecting work is checked against the Design Style Guide (D-rules)
+- **Rule:** Any task that adds or changes something a user sees is checked against
+  `docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-001..D-015: colour semantics &
+  contrast floors, type floor, tap targets, icon naming/metaphors, one
+  date/number formatter, skeleton loading, button/dialog conventions, toast &
+  floating-chrome placement, motion-token micro-feedback, page composition,
+  data-density, state legends, copy voice, pattern reuse) exactly like the
+  R-rules: fix, explain in place (`// D-00N carve-out: …`), or log a
+  `DORA_FOLLOWUPS.md` finding. R-002 owns the tokens-only *mechanics*; the
+  D-rules own *usage* — which token, when, and what the result must look like.
+- **Why:** the 2026-07-18 UX audit (FU-578, 54 findings +
+  `docs/05_investigations/UX_DESIGN_CRITIQUE_2026-07-18.md`) showed a strong
+  token architecture leaking Quasar defaults and drifting per-surface (three
+  date formats, casing drift, semantically-inverted level colours, sub-AA muted
+  text) precisely because no usage-level rubric existed for the close-gate to
+  check. Same failure mode ADR-001 fixed for engineering — rules that live only
+  in finished audit docs get re-violated by the next session that never read them.
+- **Apply:** existing-screen violations are backlog, not licence —
+  `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md` tracks them (DR-1..DR-16); new
+  work complies from the start. New recurring design decisions get promoted to a
+  new D-rule at close-gate, same lifecycle as R-rules/ADRs.
+- **Violation signal:** literal `ms` durations / `toLocaleDateString` /
+  "Loading…" strings / default-caps `q-btn` in dialogs / icon-only buttons
+  without `aria-label` in a diff; any new colour-to-meaning mapping not derived
+  from the semantic tokens.
+- **Source:** ADR-031; FU-578 audit + owner directive 2026-07-18.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -2195,6 +2222,33 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   double-render trap) was navigated with `batch.f(...)`-wrapped constraint names; the
   rebuilds preserved all other FKs + the covering indexes.
 - **Promotes rule:** R-034.
+
+### ADR-031 — Adopt a Design Style Guide (D-rules) as a standing usage rubric beside the R-rules
+- **Date / task:** 2026-07-18 (owner directive after the FU-578 UX audit + design critique)
+- **Status:** accepted
+- **Context:** Seven real-pixel UX passes (FU-578, 54 findings;
+  `docs/05_investigations/UX_DESIGN_CRITIQUE_2026-07-18.md`) found the token/theme
+  architecture strong but per-surface execution drifting: three simultaneous date
+  formats, dialog-casing drift (Quasar uppercase defaults), a semantically inverted
+  stock-level colour scale (Out = grey reading calmer than Low = red), sub-AA muted
+  text in light mode, unlabelled icon-only controls, and inconsistent loading
+  treatments. R-002 policed token *mechanics* but nothing policed token *usage*, so
+  each surface re-decided visual questions locally — the exact rules-only-in-
+  finished-docs failure ADR-001 fixed for engineering.
+- **Decision:** Author `docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-001..D-015) as the
+  authoritative look-and-feel rubric — colour semantics, contrast floors, type/tap
+  minimums, icon naming/metaphors, single format authority, loading/skeleton rules,
+  dialog/toast conventions, motion usage, composition, legends, copy voice, pattern
+  reuse — and promote **R-035** so UI-affecting tasks check D-rules at the same
+  close-gate as R-rules (fix / explain-in-place / log). Existing violations are
+  backlog in `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md` (DR-1..DR-16), not
+  licence to copy. D-rules share the R-rule lifecycle (propose at close-gate).
+- **Consequences:** UI diffs carry a second, cheap rubric check; design decisions
+  get recorded as D-rules instead of re-argued per surface; the remediation plan
+  gives the backlog a home so new work is never blocked on old debt. Rules out
+  surface-local conventions (per-page date formats, ad-hoc status colours) without
+  a commented carve-out.
+- **Promotes rule:** R-035.
 
 ---
 

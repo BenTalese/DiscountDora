@@ -34,7 +34,10 @@ To keep handoffs clean:
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
      `ENGINEERING_STANDARDS.md` — the code/architecture rules
-     `R-001..` + ADR log; checked on **every** task, see section below).
+     `R-001..` + ADR log; checked on **every** task, see section below —
+     and `DESIGN_STYLE_GUIDE.md` — the look-&-feel rules `D-001..D-015`,
+     checked on every **UI-affecting** task via R-035; its remediation
+     backlog is `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md`).
      The old `STATUS.md` audit was retired to `06_legacy_prompt_plans/`
      on 2026-06-12; for "what's built right now?" use the **top entry
      of `DORA_WORKLOG.md`** + `CHANGELOG.md` instead.
@@ -347,7 +350,10 @@ On **every** task (feature, fix, *or tidy-up*):
 
 The two sections below (state-ownership, distribution posture) are `R-003` / `R-005`
 expanded — they remain authoritative for their detail; the standards doc indexes
-them.
+them. **UI-affecting tasks additionally check
+`docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-rules, enforced via R-035)** — colour
+semantics, contrast floors, tap targets, formatting authority, dialog/toast
+conventions, copy voice. Same explain-or-flag discipline as the R-rules.
 
 ## State-ownership principle (check new work against it)
 

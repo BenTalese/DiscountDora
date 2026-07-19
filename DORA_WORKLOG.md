@@ -9,6 +9,82 @@ next.
 
 ---
 
+> **2026-07-18 numbering reconciliation:** two sessions ran in parallel this day —
+> the verify campaign (its entries: "later 8..15" above/below) and the UX/design
+> audit (its entries: "later 4..13", sitting lower in the file). "later N" labels
+> therefore repeat between 8–13; read each entry's title, not its number. One FU
+> collision was resolved: the finish-modal-pickers finding is **FU-582**
+> (renumbered); FU-580 = the Features-page reload finding (verify session).
+
+---
+
+## 2026-07-19 — Verify Batch 10 (Dashboard): Dora Score / Kitchen health (P8-08) codified → FU-583 found; full-suite build/flake notes
+
+**Why:** "continue verification work." Batch 10's next behavioural chunk after
+Draft-my-shop was the Dora Score card (P8-08).
+
+**Built (tests only, no product code):**
+- **`tests/e2e/dora_api/test_dashboard_router.py` +1** — the L923 log-line
+  contract: each `GET /dashboard/dora-score` emits exactly one
+  `Dora Score user=… composite=… trend=(up|down|flat|None) (delta=…)` record,
+  no NaN, composite in 0–100 (or None), no exception records. Uses `caplog`.
+- **`web_app/e2e/dora-score.spec.ts` (3 tests, serial, read-only on seed)** —
+  (1) hero number + `out of 100`/`last N days` caption + the five component
+  rows in server order (waste·budget·freshness·runouts·stocktake), each row's
+  label/reason/bar asserted against the `/dashboard/dora-score` DTO; the
+  **dormant contract on real seed data** (no budget configured → Budget row
+  shows `—`, dormant class, no mini-bar, while the composite stays a number —
+  excluded, not zeroed); card-above-Pantry placement. (2) action links:
+  Budget/Freshness/Run-outs/Stocktake all navigate without hitting the 404,
+  and Waste **deliberately has no link** (D10 dissolved `/waste`) — pinned as
+  an absence so a dead button can't creep back (the DORA_VERIFY L920 `/waste`
+  expectation was stale). (3) Cards-menu q-toggle hide/restore.
+
+**Found → [[FU-583]]:** the Freshness/Stocktake links carry `?expiring=1` /
+`?stocktake=1`, but `StockOverview.applyQueryFilters()` honours only
+`location_id`/`attention`/`level_id` — both params are silently dropped, so
+the user lands on the full pantry instead of the filtered view. Exactly what
+DORA_VERIFY L920 asked to flag. The spec asserts navigation only (not
+filtering) with a comment pointing at the FU.
+
+**Verification:** backend suite **1525 passed** (1 skip PG-gated, 1 known
+xfail). `dora-score.spec.ts` **4/4** in isolation (incl. auth setup); in the
+full-suite run its tests all passed (absent from every failure list).
+
+**Full-suite build/env notes (cost me time — worth recording):**
+- `npx playwright test` raw fails wholesale against a **stale `dist/spa`** (the
+  committed one was Jul-12; smoke test → "Couldn't load that page"). The suite
+  needs a fresh SPA build; `npm run test:e2e` does this, a raw `playwright test`
+  does not.
+- `npx quasar build` was **hard-failing on this box** (exit 2, no dist) on the
+  `src-pwa/*` workbox imports — because node_modules was **missing the workbox /
+  register-service-worker packages** (declared in package.json, not installed).
+  `npm install` fixed it (lockfile only deduped 45 lines, no upgrades — reverted
+  to avoid churn). This is the box-specific root of FU-579's build half; the
+  parallel session's node_modules already had them.
+- After a fresh build the full suite is green **except ~12 flaky detail-page
+  specs** (history-tab / detail-*-tab / recipe-deeplink / stock-pickers /
+  buy-verdict) — **different** tests fail across runs, and the failure snapshots
+  show the **dashboard still mounted** instead of the detail page. Root cause:
+  those specs navigate `page.goto('/#/')` then `page.goto('/#/stock/<id>')`, a
+  same-document hash change that races vue-router (the exact gotcha the verify
+  runner's own notes document). **Not** caused by this unit (my specs pass;
+  lockfile change reverted). Logged as [[FU-584]].
+
+**Ledgers:** DORA_VERIFY P8-08 section trimmed (8 bullets deleted/absorbed;
+survivors are trend-chip both-direction render, bar traffic-light colours,
+fresh-install empty state, week-long trend flip, kitchen-zone drag-reorder);
+DORA_VERIFY_TRIAGE Batch-10 progress note added; FU-583 + FU-584 opened.
+
+**Standards close-gate:** test-only, established idioms (backend `caplog`;
+e2e server-truth assertions, delete-on-pass). No product code, no CHANGELOG,
+no new R/D-rule.
+
+**Next up:** Batch 10 remainder — the other Dashboard cards' walk-vs-codify
+triage. The FU-584 detail-page flakes want the single-full-goto fix before the
+full suite can be a reliable green gate again.
+
+---
 ## 2026-07-18 (later 15) — Verify Batch 10 (Dashboard) opened: Draft-my-shop (FU-351) codified; Batch 3 flipped ➗
 
 **Why:** Batch 3's agent-verifiable work finished last unit (remainder is
@@ -411,6 +487,124 @@ resetModules singleton pattern from `useOfflineQueue.spec.ts`). No new ADR.
 **Next up:** rest of Batch 3 (Stock B remainder, DORA_VERIFY L746+ — P8-02
 barcode/OFF is device-gated, so next codifiable chunks are the History-tab
 sections and the stock pickers / recipe-deep-link sections).
+
+---
+
+## 2026-07-18 (later 13) — Design audit ACTIONED: DESIGN_REMEDIATION_PLAN (DR-1..16) + authoritative DESIGN_STYLE_GUIDE (D-001..15) + R-035/ADR-031
+
+**Why:** owner: "add all this to a report to be actioned, and also help me make
+an authoritative style guide so future agent sessions can ensure consistency."
+
+**Shipped (docs/governance, no code):**
+- **`docs/01_charter/DESIGN_STYLE_GUIDE.md`** — 15 D-rules in R-rule shape
+  (Rule/Why/Check): D-001 level-colour semantics (green→amber→red; grey =
+  unknown only) · D-002 contrast floors · D-003 type floor · D-004 44px touch
+  targets · D-005 icon naming + domain metaphors · D-006 single date/number
+  authority · D-007 skeletons + reserved space · D-008 button/dialog
+  conventions (no-caps, Escape, mutate-on-confirm) · D-009 toast/floating-chrome
+  placement budget · D-010 motion-token micro-feedback + no paint-gated
+  dismissal · D-011 page composition · D-012 data-density · D-013 state legends
+  · D-014 copy voice · D-015 pattern reuse. Ends with protected exemplars +
+  the D-rule promotion lifecycle.
+- **`ENGINEERING_STANDARDS.md`**: new **R-035** (UI-affecting work checks the
+  D-rules at the close-gate, same explain-or-flag discipline) + **ADR-031**
+  (rationale: R-002 policed token mechanics, nothing policed usage — the
+  ADR-001 failure mode for design). CLAUDE.md updated in both places (charter
+  folder listing + the standards-mandate section) so every session loads it.
+- **`docs/04_proposals/DESIGN_REMEDIATION_PLAN.md`** — the actionable report:
+  16 work units in 4 waves (W1 token/convention passes DR-1..4; W2 interaction
+  correctness DR-5..8 incl. FU-582; W3 layout DR-9..10; W4 redesigns DR-11..16),
+  each with scope/accept criteria/refs, a full coverage table mapping all 54
+  FU-578 items + critique sections → units (or protected-exemplar status),
+  owner sign-off flags on DR-6/10/16, and the drive.mjs screenshot-plan
+  verification vehicle. Open-decisions closed per the proposal rule (flagged
+  inline, block only their own units).
+- FU-578 body now carries an ACTIONING header (resolve by DR unit, not
+  piecemeal); the critique doc cross-refs the two operative docs.
+
+**Standards close-gate:** doc-only; ADR evaluation performed — produced
+ADR-031/R-035 (that was the task). Coverage-table mandate satisfied in the plan.
+
+**Next up:** owner sign-offs on DR-6 (build vs cut finish pickers), DR-10 (nav
+labels), DR-16 (activation step) — then Wave 1 (DR-1 contrast pass is the
+recommended first unit). Verify campaign (buy-verdict bullets) still queued.
+
+---
+
+## 2026-07-18 (later 12) — Design-level critique synthesised → docs/05_investigations/UX_DESIGN_CRITIQUE_2026-07-18.md
+
+Owner asked for a look-&-feel design analysis on top of the FU-578 passes.
+Wrote the synthesis doc (palette analysis against `themes.scss`/`tokens.scss`/
+`motion.scss` + the ~40 session screenshots): verdict = strong token/theme
+architecture, execution leaks Quasar defaults; key calls — stock-level scale
+semantically inverted (Out = grey reads calmer than Low = red → green/amber/red
+fix), muted-text ramp below AA in light mode (one-token fix), accent yellow
+underused while primary green does five jobs, motion tokens excellent but
+unused for micro-feedback, three date formats, dialog-casing drift, redesign
+list (recipe detail read-mode first, alerts order-flip, history grouping,
+helper-bubble docking). Full priority order in the doc §11. Delivered in-chat
+too. Doc-only unit.
+
+---
+
+## 2026-07-18 (later 11) — UX pass 7 (drive.mjs): reconcile queue / bulk mode / export → FU-578 items 51–54
+
+Seventh pass. Reconcile queue = stocktake's card-runner pattern reused
+(keep-as-is), but "Mon, Jul 13" vs the grid's "7/13/2026" adds a
+no-single-date-authority face to the locale family (51). Belief chips load
+async and reflow rows after paint (52 — visible across consecutive shots).
+Bulk bar's disabled actions aren't visually distinct at 0 selected (53).
+Export menu clean (54). Cook-mode swap click missed its selector (retry next
+pass if wanted). Doc-only; shots 38–41 in scratchpad.
+
+---
+
+## 2026-07-18 (later 10) — UX pass 6 (drive.mjs): plan wizard / kitchen-setup + admin settings / search → FU-578 items 47–50
+
+Sixth pass. Key find: **the US-date/locale issue's root cause** — seed ships
+UTC household tz, onboarding never asks region, and Admin → System → Timezone's
+"Use this device" helper is never invoked at first run (48). Also: plan-wizard
+duplicate recipe rows with independent checkboxes across groups (47);
+`/settings/stores` missing the legacy alias its siblings have (49);
+meal-plans mini-calendar shares the alerts-calendar low-density problem (50).
+Keep-as-is: Stock-locations settings page (best settings page in the app),
+admin System sidebar, instant stock search with re-scoping footer stats.
+Escape correctly closes the plan wizard. Doc-only; shots 32–37 in scratchpad.
+
+---
+
+## 2026-07-18 (later 9) — UX pass 5 (drive.mjs): light theme / Finish & restock modal / cook-mode end → FU-578 items 43–46 + **FU-582** (renumbered from FU-580 after a parallel-session collision)
+
+Fifth pass. **Big catch → FU-582:** the Finish & restock modal renders NO
+per-item level pickers — flat ticked-item list + Cancel/"Restock & finish"
+only — while the server's `FinishShoppingListRequest.level_overrides` (UX-v2
+M12 restock review, backend-pinned green this morning in
+`test_stock_level_collapse.py`) has no UI sending it. The DORA_VERIFY 3-band
+modal bullet can never pass as written; owner call: build the picker or cut +
+carve out. Escape/Cancel do work; list stayed `shopping` (verified via API).
+Also: light theme walked with real pixels (pleasant overall; faint secondary
+text matches the earlier AA numbers; eager "Theme updated." toast) →
+item 43; undocumented row edge/tint colour language + unexplained cream-tint
+row → 44; cook-mode Finish ✓ + per-step ingredient highlight = keep-as-is →
+46. Theme restored to System (verified `body--dark` under dark emulation).
+Doc-only; shots 27–31 in scratchpad.
+
+---
+
+## 2026-07-18 (later 8) — UX pass 4 (drive.mjs): onboarding (fresh account) / draft-shop / add-item → FU-578 items 37–42
+
+Registered `qa-ux-walk` ("passphrase please") and walked the full onboarding:
+STORY scenes have excellent copy; SETUP is 2 steps → "You're all set!" hub.
+Findings: register form validates-before-input (37); batch-cook explainer
+jargon (38); no guided pantry-seeding step + Price-history offered to a
+data-empty account (39); shopping-lists title/toolbar collision at 1280px
+(40); bottom-right toast/mascot congestion + toast persisting across routes
+(41); draft-shop flow + add-item dialog explicitly keep-as-is (42). drive.mjs
+gained a `skipLogin` plan option (to drive the auth screens) — plan-level
+`username`/`password` already existed for the fresh-account walk. State:
+drafted list deleted via API; `qa-ux-walk` account left in the dev DB
+(disposable). Servers restarted this session (they'd stopped). Doc/tooling
+only; shots 17–26 in scratchpad.
 
 ---
 

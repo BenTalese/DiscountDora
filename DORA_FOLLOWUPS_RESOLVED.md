@@ -10,6 +10,32 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-587 — Auto-generate recipe/meal-plan sources added zero linked ingredients + mis-reported all as unlinked (R-032 noload)
+- **Raised + resolved:** 2026-07-19 (verify-campaign Batch 7, codifying the FU-505
+  unlinked-ingredient warning — found by the new test, fixed same session).
+- **Type:** finding → real bug (product code).
+- **What:** `auto_generate._collect_recipes` and `_collect_meal_plan_week` read
+  `ingredient.stock_item` (a `lazy="noload"` relationship) off a
+  `by_id().include(INGREDIENTS)` load that never included the nested relationship,
+  so it **always** resolved to `None` (R-032). Two symptoms at once: (1) every
+  linked recipe ingredient was skipped — `stock_item_ids` came out empty, so the
+  recipe **and** meal-plan sources of `POST /shopping-lists/auto-generate` added
+  nothing; (2) every ingredient (linked or not) was appended to `unlinked_skipped`,
+  so the FU-505 "Add these manually" dialog listed ingredients that were actually
+  linked (often as "(unnamed ingredient)" since a linked ingredient carries no
+  raw_text). Net: "Generate shopping list for this week" and the meal-plan slice of
+  "Draft my shop" added none of their recipe items while spamming a bogus warning.
+- **Why it hid:** the recipe/meal-plan sources' write path was never reached (empty
+  `stock_item_ids` → early `continue`), so no test exercised it, and Draft-my-shop's
+  visible "10 items" all came from the low/flagged/essential sources that add stock
+  items directly (no recipe-ingredient hop) — masking the dead recipe/meal-plan legs.
+- **Fix:** read the loaded FK column `ingredient._stock_item_id` (the codebase's
+  underscore-bound noload-FK convention) for both the unlinked check and the
+  stock-item-id collection, in both collectors; commented naming R-032. New
+  `tests/e2e/dora_api/test_auto_generate_unlinked.py` (3 tests) is the regression
+  pin; CHANGELOG updated. Full backend suite **1533 passed** (incl. the parallel
+  session's draft-shop + priority suites, unaffected).
+
 ## [RESOLVED] FU-577 — Auto-add-on-low branching matrix has no direct backend test
 - **Resolved:** 2026-07-18 — added `tests/e2e/dora_api/test_update_stock_item_auto_add.py`
   (12 tests, all green first run; full backend suite 1505 passed). Pins the whole

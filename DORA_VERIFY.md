@@ -374,20 +374,17 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Apply a swap, then (in another tab / after editing the week) apply the *same stale* card → server returns a 409 "out of date" and the toast surfaces it; refreshing re-fetches.
 
 ### Unlinked-ingredient warning after meal-plan → shopping list — origin FU-505
-- [ ] Build a meal plan for the week where at least one planned recipe has an ingredient with **no linked stock item** (either a paste-imported recipe that never got linked, or one you added a "Use as free text" ingredient to per FU-506)
-- [ ] Trigger **Generate shopping list for this week** from the meal-plan surface
-- [ ] Success toast fires normally (added-count line)
-- [ ] **Immediately after**, a dialog titled **Add these manually** appears listing each unlinked ingredient as `• <ingredient> (<recipe>)`, with a single **Got it** button
-- [ ] Tap **Got it** → dialog closes; navigation to the new shopping list still happens
-- [ ] Repeat with a meal plan whose recipes are **all fully linked** → success toast, no dialog
+*(Server contract pinned 2026-07-19 in `test_auto_generate_unlinked.py`: the auto-generate `unlinked_skipped` payload lists ONLY genuinely-unlinked (free-text) ingredients tagged with their recipe, a fully-linked recipe yields none, and linked ingredients still become lines. **Fixed a real bug in the same unit — FU-587: the recipe + meal-plan sources added zero linked ingredients and mis-reported all as unlinked (R-032 noload).** The dialog render + navigation below stay owner-walk.)*
+- [ ] Build a meal plan for the week where at least one planned recipe has an ingredient with **no linked stock item** (either a paste-imported recipe that never got linked, or one you added a "Use as free text" ingredient to per FU-506); trigger **Generate shopping list for this week** → success toast, then a dialog titled **Add these manually** listing each unlinked ingredient as `• <ingredient> (<recipe>)` with a single **Got it** button → tap **Got it** → dialog closes, navigation to the new list still happens
+- [ ] Repeat with a meal plan whose recipes are **all fully linked** → success toast, no dialog; **and confirm the recipe's non-stocked ingredients actually landed on the new list** (the FU-587 fix — previously nothing from recipes was added)
 
 ### Meals-per-week preference — origin FU-181
-- [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`, min 1 / max 21
+*(Server bounds guard `ge=1, le=21` pinned 2026-07-19 in `test_patch_semantics.py`: raw PATCH of 0/-3/22/100/3.7 → 400 with no write; inclusive edges 1 and 21 accepted. The client-side clamp/round + toast/builder behaviours below stay owner-walk.)*
+- [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`
 - [ ] With the field blank, open the sequential builder on `/meal-plans` → the header count still reads `/ 7`, matching the fallback *(FU-304 closed 2026-07-07: `/meal-plans/board` is retired and now redirects to `/meal-plans`; only the surviving planner needs checking.)*
 - [ ] Set the input to **5** → save toast reads "Meals per week set to 5." → **without reloading**, reopen the sequential builder → header count now reads `/ 5`
 - [ ] Clear the input (or type a value outside 1–21) → save toast reads "Meals per week reset to the default (7)." → builder count returns to `/ 7`; the field snaps to blank (placeholder shows again)
-- [ ] Type a decimal (e.g. `3.7`) → server rounds it, saved value is the rounded integer; a value <1 or >21 collapses to null (reset toast)
-- [ ] `PATCH /auth/me { meals_per_week: 22 }` from DevTools returns 400 (server-side bounds guard)
+- [ ] Type a decimal (e.g. `3.7`) → the **input rounds it client-side** before saving (the server rejects a raw fractional value — pinned above); a value <1 or >21 the input collapses to null (reset toast)
 
 ### In-context Print on the meal planner — origin FU-338 (Board page portion retired with FU-304, 2026-07-07)
 - [ ] `MealPlansOverview` (`/meal-plans`) still has its existing Print icon in the week header — no regression there

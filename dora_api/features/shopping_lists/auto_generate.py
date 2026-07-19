@@ -371,12 +371,20 @@ class AutoGenerateHandler:
                 continue
             ingredients = recipe.ingredients or []
             for ing in ingredients:
-                if ing.stock_item is None:
+                # R-032 — `stock_item` is lazy="noload" and is NOT included on
+                # this `by_id().include(INGREDIENTS)` load, so reading the
+                # relationship always returned None: every linked ingredient was
+                # mis-reported as unlinked AND never added as a line (the recipe
+                # + meal-plan sources silently added nothing). Read the loaded FK
+                # column (`_stock_item_id`, the codebase's underscore-bound FK
+                # convention) instead — FU-587 fix; the separate StockItem fetch
+                # below already resolves the real rows.
+                if ing._stock_item_id is None:
                     unlinked_skipped.append(_UnlinkedSkip(
                         recipe_name=recipe.name,
                         ingredient_name=(ing.raw_text or "").strip() or "(unnamed ingredient)",
                     ))
-            stock_item_ids = [ing.stock_item.id for ing in ingredients if ing.stock_item]
+            stock_item_ids = [ing._stock_item_id for ing in ingredients if ing._stock_item_id is not None]
             if not stock_item_ids:
                 continue
             items: List[StockItem] = (
@@ -437,12 +445,20 @@ class AutoGenerateHandler:
                 continue
             ingredients = recipe.ingredients or []
             for ing in ingredients:
-                if ing.stock_item is None:
+                # R-032 — `stock_item` is lazy="noload" and is NOT included on
+                # this `by_id().include(INGREDIENTS)` load, so reading the
+                # relationship always returned None: every linked ingredient was
+                # mis-reported as unlinked AND never added as a line (the recipe
+                # + meal-plan sources silently added nothing). Read the loaded FK
+                # column (`_stock_item_id`, the codebase's underscore-bound FK
+                # convention) instead — FU-587 fix; the separate StockItem fetch
+                # below already resolves the real rows.
+                if ing._stock_item_id is None:
                     unlinked_skipped.append(_UnlinkedSkip(
                         recipe_name=recipe.name,
                         ingredient_name=(ing.raw_text or "").strip() or "(unnamed ingredient)",
                     ))
-            stock_item_ids = [ing.stock_item.id for ing in ingredients if ing.stock_item]
+            stock_item_ids = [ing._stock_item_id for ing in ingredients if ing._stock_item_id is not None]
             if not stock_item_ids:
                 continue
             items: List[StockItem] = (

@@ -18,6 +18,141 @@ next.
 
 ---
 
+## 2026-07-19 (Batch 7 cont.) — FU-505 unlinked-warning codified → REAL BUG fixed (FU-587: recipe/meal-plan auto-generate added NOTHING + mis-reported all ingredients as unlinked)
+
+**Why:** "continue." FU-505 (the "Add these manually" warning after meal-plan →
+shopping list) was the next backend-ownable Batch-7 slice, and its
+`unlinked_skipped` payload had zero coverage.
+
+**Real bug found + fixed (product code, R-032):** writing the first test — a
+recipe with one linked out-of-stock ingredient + one free-text ingredient,
+run through `POST /shopping-lists/auto-generate {sources:{recipes:[id]}}` —
+showed `added_count: 0` and the **linked** ingredient reported as unlinked
+("(unnamed ingredient)"). Root cause: `_collect_recipes` **and**
+`_collect_meal_plan_week` read `ingredient.stock_item` (a `lazy="noload"`
+relationship) off a `by_id().include(INGREDIENTS)` load that never included the
+nested relationship → always `None`. So both the recipe source AND the
+meal-plan source of auto-generate (i.e. "Generate shopping list for this week"
+and the meal-plan slice of Draft-my-shop) **added none of their recipe
+ingredients** while **spamming the FU-505 dialog with ingredients that were
+actually linked.** Hid because the write path was never reached (empty
+`stock_item_ids` → early `continue`) and Draft-my-shop's visible items all come
+from the low/flagged/essential sources (no recipe hop). **Fix:** read the
+loaded FK column `ingredient._stock_item_id` (the codebase's underscore-bound
+noload-FK convention) in both collectors, commented naming R-032. First fix
+attempt used `.stock_item_id` (500 — the entity binds the FK to
+`_stock_item_id`); corrected. CHANGELOG + [[FU-587]] (resolved) logged.
+
+**Built (`tests/e2e/dora_api/test_auto_generate_unlinked.py`, 3 tests — the
+regression pin):** linked out-of-stock ingredient becomes a line while only the
+free-text ingredient appears in `unlinked_skipped` (tagged with its recipe);
+fully-linked recipe → empty `unlinked_skipped` + the line still added; two
+free-text ingredients → both reported in order against their recipe,
+`added_count: 0`.
+
+**Verification:** new tests 3/3; auto-generate priority/draft-shop/UoW suites
+**13/13** (the fix touches their shared path — unaffected); full backend suite
+**1533 passed** (1 skip PG-gated, 1 known xfail).
+
+**Ledgers:** DORA_VERIFY FU-505 section trimmed (server contract pinned; walk
+bullets keep the dialog render + a NEW check that recipe ingredients actually
+land — the FU-587 fix); CHANGELOG Fixed entry; FU-587 in `_RESOLVED`. No new FU.
+
+**Standards close-gate:** product fix + tests. Violated rule was R-032 (noload
+read) — **fixed** and named in-comment, not carved out. No new R/D-rule (R-032
+already exists); no ADR. drive.mjs/design docs untouched.
+
+**Next up:** Batch 7 is now well-pinned on its backend-ownable slices (FU-181
+bounds, FU-505 warning + the FU-587 fix). Remaining meal-plans is DnD/carousel
+owner-walk. Cookbook (Batch 4) or Cook mode (Batch 6) are the next untouched ⚪
+surfaces clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-19 (Batch 7 sliver) — Meals-per-week server bounds guard (FU-181) codified
+
+**Why:** "continue verification." The parallel session owns Batch 10
+(Dashboard) → Alerts; picked an independent surface to avoid ledger collision.
+Batch 7 (Meal plans) is mostly DnD/carousel owner-walk, but FU-181's server
+bounds guard is a tight backend slice with no product-code change.
+
+**Gap found:** `test_patch_semantics.py` only pinned meals_per_week set-to-10 +
+null-out. The field is `int | None, ge=1, le=21` and DORA_VERIFY L385/L390 ask
+to verify the guard — untested.
+
+**Built (`test_patch_semantics.py` +2):**
+- out-of-bounds rejected + no write: raw `PATCH /auth/me` of 0/-3/22/100 **and
+  a fractional 3.7** all → 400, and `_me()` is unchanged (a rejected value never
+  persists). The 3.7 case pins that the server is **strict** — it doesn't
+  silently truncate; rounding is the client's job.
+- inclusive edges 1 and 21 → 200 and round-trip.
+
+**Client cross-check (no bug):** `PreferencesSettings.onMealsPerWeekChange`
+does `raw >= 1 && raw <= 21 ? Math.round(raw) : null` before PATCH — so a
+decimal in range is rounded and an out-of-range value collapses to null client
+-side; the server never receives a value it would 400. The old DORA_VERIFY
+bullet said "server rounds it" (wrong layer) — corrected to "input rounds it
+client-side".
+
+**Verification:** meals_per_week tests **3/3**; full backend suite **1530
+passed** (1 skip PG-gated, 1 known xfail).
+
+**Ledgers:** DORA_VERIFY FU-181 section — L385 bounds half + L390 deleted
+(pinned), L389 attribution corrected, pinned-note added; the client
+clamp/round/toast/builder bullets stay owner-walk. Batch-7 row stays ⚪ (only a
+sliver codified). No new FU.
+
+**Standards close-gate:** test-only, established idioms (server-truth, per-test
+DB rollback handles cleanup). No product code, no CHANGELOG, no new R/D-rule.
+
+**Next up:** Batch 7 has no further big backend-ownable slices (FU-505
+unlinked-ingredient warning is the next candidate — the generate-list payload's
+unlinked list; rest is DnD/carousel owner-walk). Otherwise Cookbook (Batch 4)
+or Cook mode (Batch 6) are untouched ⚪ and clear of the parallel session.
+
+---
+
+## 2026-07-19 (design session) — DESIGN_STYLE_GUIDE strengthened to a prescriptive spec (Part A tokens + Part B components + D-016..D-018)
+
+**Why:** owner: "strengthen the style guide — make it more well-defined and leave
+less guess-work. It should dictate clearly how the app should look to make it
+polished and professional." (Runs in parallel with the verify campaign's
+"later N" entries below — this is the design-audit thread.)
+
+**Done (docs/governance, no code):** rewrote
+`docs/01_charter/DESIGN_STYLE_GUIDE.md` from principle-level rules into a
+prescriptive lookup, all values grounded in the real
+`tokens.scss`/`motion.scss` (each cited token verified to exist):
+- **Part A — Foundations** (8 role→token tables): A1 colour role map
+  (text/surface/brand/semantic/severity/border/focus + soft-token =
+  background-only), A2 typography role table (role → `--font-size-*` + px@16 +
+  weight + colour; hard 12px floor), A3 spacing context→token, A4 radius
+  element→token, A5 elevation+surface layering, A6 borders + mandatory visible
+  focus, A7 iconography (`ICONS` map, sizes, domain metaphors), A8
+  breakpoints/44px targets/density.
+- **Part B — Component specs** B1..B12 (buttons, chips, inputs, cards, list rows,
+  dialogs, toasts, menus, empty states, skeletons, tables, floating layer) with
+  exact tokens/dimensions/states.
+- **Part C — D-rules:** D-001..D-015 numbering kept **stable** (R-035/ADR-031 +
+  remediation-plan coverage table reference them), each strengthened with
+  concrete tokens/numbers; added **D-016** (all interactive states + visible
+  focus), **D-017** (snap to scales; no off-token literals), **D-018**
+  (alignment/density/rhythm). Front matter now declares the doc prescriptive:
+  stated value → use exactly; deviation = commented carve-out.
+
+**Wired in:** R-035 reworded (points at Part A/B/C) with expanded
+violation-signals (off-scale literals, `outline:none` w/o ring, soft-token text
+mis-colour); CLAUDE.md front-door line → "Part A tables + Part B specs +
+D-001..D-018". No renumbering → no downstream refs broke.
+
+**Standards close-gate:** doc-only; ADR-031 already covers the guide's
+existence → in-place strengthening, no new ADR.
+
+**Next up:** DR-1 (contrast pass) is the recommended first remediation unit —
+now with concrete D-002 + A1/A2 targets to hit.
+
+---
+
 ## 2026-07-19 (later 5) — Verify Batch 10: Cards-menu reorder (FU-294) + dashboard_layout backend (FU-292) codified
 
 **Why:** "continue" — next per the Batch 10 plan.

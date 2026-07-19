@@ -1327,14 +1327,21 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ### R-035 — UI-affecting work is checked against the Design Style Guide (D-rules)
 - **Rule:** Any task that adds or changes something a user sees is checked against
-  `docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-001..D-015: colour semantics &
-  contrast floors, type floor, tap targets, icon naming/metaphors, one
-  date/number formatter, skeleton loading, button/dialog conventions, toast &
-  floating-chrome placement, motion-token micro-feedback, page composition,
-  data-density, state legends, copy voice, pattern reuse) exactly like the
-  R-rules: fix, explain in place (`// D-00N carve-out: …`), or log a
-  `DORA_FOLLOWUPS.md` finding. R-002 owns the tokens-only *mechanics*; the
-  D-rules own *usage* — which token, when, and what the result must look like.
+  `docs/01_charter/DESIGN_STYLE_GUIDE.md` exactly like the R-rules: fix, explain
+  in place (`// D-00N carve-out: …`), or log a `DORA_FOLLOWUPS.md` finding. R-002
+  owns the tokens-only *mechanics*; the Design Style Guide owns *usage* — which
+  token, what size, how much space, what shape, and what the finished thing must
+  look like. It is **prescriptive**: **Part A** (Foundations) maps every role to
+  an exact token (colour/type/spacing/radius/elevation/border/icon/breakpoint),
+  **Part B** gives per-component specs (buttons, chips, inputs, cards, list rows,
+  dialogs, toasts, menus, empty states, skeletons, tables, the floating layer),
+  and **Part C** is the enforceable checklist **D-001..D-018** (level-colour
+  semantics, contrast floors, type floor, tap targets, icon naming, one
+  date/number formatter, skeleton loading, dialog conventions, toast/floating
+  placement, micro-feedback, page composition, data-density, state legends, copy
+  voice, pattern reuse, full interactive-state coverage, snap-to-scale/no-off-token
+  values, alignment/rhythm consistency). When Part A/B states a value, use it
+  exactly — an off-token literal is a carve-out, not a judgement call.
 - **Why:** the 2026-07-18 UX audit (FU-578, 54 findings +
   `docs/05_investigations/UX_DESIGN_CRITIQUE_2026-07-18.md`) showed a strong
   token architecture leaking Quasar defaults and drifting per-surface (three
@@ -1346,11 +1353,17 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md` tracks them (DR-1..DR-16); new
   work complies from the start. New recurring design decisions get promoted to a
   new D-rule at close-gate, same lifecycle as R-rules/ADRs.
-- **Violation signal:** literal `ms` durations / `toLocaleDateString` /
-  "Loading…" strings / default-caps `q-btn` in dialogs / icon-only buttons
-  without `aria-label` in a diff; any new colour-to-meaning mapping not derived
-  from the semantic tokens.
-- **Source:** ADR-031; FU-578 audit + owner directive 2026-07-18.
+- **Violation signal:** off-scale spatial/type literals in a component
+  (`padding: 5px`, `border-radius: 8px`, `font-size: 13px`, hand-mixed
+  `box-shadow`) instead of `--space-*`/`--radius-*`/`--font-size-*`/`--elevation-*`
+  (D-017); literal `ms` durations; `toLocaleDateString`/hand-formatted dates
+  (D-006); "Loading…" strings instead of skeletons (D-007); default-caps `q-btn`
+  in dialogs (D-008); icon-only buttons without `aria-label`+tooltip (D-005);
+  `outline: none` without a replacement focus ring (A6/D-016); text on a `-soft`
+  token using the soft (not full-strength) colour (A1/D-002); any new
+  colour-to-meaning mapping not derived from the semantic/severity tokens.
+- **Source:** ADR-031; FU-578 audit + owner directive 2026-07-18; strengthened to
+  the prescriptive Part A/B spec 2026-07-19 (owner: "leave less guess-work").
 
 ---
 

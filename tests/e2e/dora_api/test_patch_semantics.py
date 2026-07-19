@@ -823,6 +823,27 @@ def test__patch_me__null_meals_per_week__clears_it(api):
     assert _me()["meals_per_week"] is None
 
 
+def test__patch_me__meals_per_week_out_of_bounds__rejected_and_no_write(api):
+    # FU-181 server bounds guard (DORA_VERIFY L385/L390): the field is
+    # `int | None, ge=1, le=21`. The SPA clamps/rounds before sending, but a raw
+    # PATCH past the bounds (DevTools, a stale client) must be rejected, not
+    # silently stored. A fractional value is rejected too — rounding is the
+    # client's job, the server never truncates one silently.
+    before = _me()["meals_per_week"]
+    for bad in (0, -3, 22, 100, 3.7):
+        resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": bad})
+        assert resp.status_code == 400, f"{bad}: {resp.status_code} {resp.text}"
+    assert _me()["meals_per_week"] == before, "a rejected value must not persist"
+
+
+def test__patch_me__meals_per_week_inclusive_bounds__accepted(api):
+    # Both inclusive edges (1 and 21) are valid and round-trip.
+    for good in (1, 21):
+        resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": good})
+        assert resp.status_code == 200, f"{good}: {resp.text}"
+        assert _me()["meals_per_week"] == good
+
+
 def test__patch_me__null_household_headcount__clears_it(api):
     set_resp = requests.patch(f"{BASE}/auth/me", json={"household_headcount": 4})
     assert set_resp.status_code == 200, set_resp.text

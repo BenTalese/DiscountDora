@@ -35,7 +35,8 @@ To keep handoffs clean:
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
      `ENGINEERING_STANDARDS.md` — the code/architecture rules
      `R-001..` + ADR log; checked on **every** task, see section below —
-     and `DESIGN_STYLE_GUIDE.md` — the look-&-feel rules `D-001..D-015`,
+     and `DESIGN_STYLE_GUIDE.md` — the prescriptive look-&-feel spec
+     (Part A token/role tables + Part B component specs + rules `D-001..D-018`),
      checked on every **UI-affecting** task via R-035; its remediation
      backlog is `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md`).
      The old `STATUS.md` audit was retired to `06_legacy_prompt_plans/`

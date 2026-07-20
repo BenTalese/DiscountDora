@@ -104,36 +104,31 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Cookbook & recipes
 
 ### Cookbook cookability + expiring filters actually filter (identity-map bug fixed 2026-07-10)
-- [ ] Have at least one recipe whose every required ingredient is stocked, one with a required ingredient out of stock, and one with a free-text (unlinked) ingredient
-- [ ] Apply the **Cookable** filter → only the fully-stocked recipe shows (before the fix this kept *everything*)
-- [ ] Apply the **Not cookable** filter → only the out-of-stock recipe shows; the unlinked one appears in neither (before the fix this returned an *empty* page)
-- [ ] Apply a max-missing / "almost cookable" filter if the UI exposes one → recipes over the threshold drop out
-- [ ] With a stocked ingredient expiring within a few days, apply the **Uses expiring ingredients** filter → only recipes using that item show, with the expiring count badge
+*(Server contract fully pinned: `Cookable`/`Not cookable`/`max_missing`/`expiring_within_days` all filter correctly and exclude unlinked recipes from the cookability axes — `test_recipe_filters.py` (14 tests) + `test_recipe_router.py` `CookableTrueFilter`/`CookableFalseFilter`/`MaxMissingFilter`/`ExpiringWithinDaysFilter` [`expiring_ingredient_count` asserted]. The identity-map regression can't recur silently. Only the card-render eyeball stays.)*
 - [ ] While filtered, spot-check a recipe card: its ingredients list and cookability badge render correctly (the fix also touched what filtered pages eager-load)
 
 ### Free-text ingredient path in the recipe editor — origin FU-506
+*(Tri-state cookability server contract pinned: a required unlinked ingredient makes cookability `null`/Unknown [not True/False], multiple unlinked still null, an unlinked *optional* ingredient doesn't gate — `test_recipe_cookability.py` + `test_recipe_router.py` `UnlinkedRequiredIngredient__CookableIsTriStateNull`. The editor UI interactions below stay owner-walk.)*
 - [ ] Open any recipe → **Add ingredient** → in the picker, type a name that matches nothing (e.g. "star anise" on a fresh install)
 - [ ] Two options appear under the option list: **Create "star anise"** and **Use "star anise" as free text (no pantry link)** (the second option, secondary-coloured with a pencil icon)
 - [ ] Tap **Use as free text** → row's picker field label flips to **Free-text ingredient**, and the string `"star anise"` appears as a muted italic caption beneath the picker
 - [ ] Save the recipe → refresh → the row still shows as unlinked with the same caption
-- [ ] The recipe's cookability badge is **Unknown** (not "In stock" / "Missing") because a required ingredient is unlinked (tri-state)
+- [ ] The recipe's cookability badge renders as **Unknown** (not "In stock" / "Missing") — the tri-state *value* is pinned above; this checks the badge render
 - [ ] Later, on the same row, type in the picker and pick an actual stock item → row flips back to linked; caption disappears
 
 ### RecipeEditDialog stub-creator reshape — origin FU-095
+*(Server stub-defaults pinned 2026-07-20 in `test_recipe_router.py` `create_recipe__NameOnly__CreatesFreeformEmptyStub`: a name-only create → `steps_mode='freeform'`, `instructions=null`, `ingredients=[]`, `steps=[]`, and the shape survives a fresh GET. The modal-field/button/navigation UI below stays owner-walk.)*
 - [ ] Cookbook → **New Recipe**: the modal now shows exactly four fields — Name, Cuisine, Category, Collection — and nothing else (no ingredients repeater, no image upload, no instructions textarea, no dietary tags / tools multi-selects, no times / servings / difficulty / time-of-day).
 - [ ] Primary button reads **Create & open** (not "Save").
 - [ ] Fill only Name → click **Create & open** → dialog closes and the URL changes to `/cookbook/<new-id>`; the detail page loads with the new (mostly empty) recipe. All the flesh-out editors (ingredients, structured/freeform/image steps, image, tools, dietary tags, times, servings) live on the detail page as before.
 - [ ] Cancel from an empty form → nothing created; grid unchanged.
 - [ ] Edit an existing recipe from the overview (the pencil / edit action on a card, if any surface exposes it) → modal opens with the recipe's current Name / Cuisine / Category / Collection populated; button reads **Save**; changing Name and saving → dialog closes, list refreshes with the new name, URL stays on `/cookbook` (no navigation on edit — the deep edit happens on the detail page anyway).
-- [ ] Server-side: the created recipe has `steps_mode='freeform'` and `instructions=null` / `ingredients=[]` (defaults) — verify via GET `/api/recipes/<id>` shows an empty stub.
 
 ### Recipe importer — bulk-linker + PWA share target (Chunk 6) — origin IMPL_PLAN_RECIPE_IMPORTER
 - [ ] Settings → Admin → Data → **Unlinked ingredients** appears in the sidebar under the Data subheader beside Backup & restore and Import
 - [ ] With no unlinked rows in the DB, the page shows the empty-state ("Every recipe ingredient is linked to a stock item.")
-- [ ] Import a recipe with 2–3 unlinked ingredients → open the bulk-linker → each unlinked ingredient shows as a group row with `raw_text • Used in N recipes`; count matches the number of distinct recipes using that text
-- [ ] Two recipes that both paste-imported the same ingredient (e.g. one from AllRecipes, one from HBH — same base name but different casing/whitespace) collapse into ONE group row, count = 2
-- [ ] Groups sort by count desc, then alphabetically by display text (case-insensitive)
-- [ ] Pick a stock item from the autocomplete → click **Link** → toast confirms "Linked '<raw_text>' in N recipe(s)"; the group disappears from the page
+- [ ] Import a recipe with 2–3 unlinked ingredients → open the bulk-linker → each unlinked ingredient shows as a group row with `raw_text • Used in N recipes` *(grouping correctness — normalisation, count over **real persisted rows**, cross-site casing/whitespace collapse into one row, sort, recipe-id dedupe — is pinned in `tests/test_unlinked_ingredients.py` (pure) **+ `tests/e2e/dora_api/test_unlinked_ingredients_bulk_link.py` (endpoint)**; the latter caught **FU-588**, where every group read "Used in 0 recipes"; this bullet is just the page render)*
+- [ ] Pick a stock item from the autocomplete → click **Link** → toast confirms "Linked '<raw_text>' in N recipe(s)"; the group disappears from the page *(the `bulk-link` endpoint — matching-rows linked, `linked_count`, cookability re-derive, only the matching group, not-found/empty-key errors — is pinned in `test_unlinked_ingredients_bulk_link.py`; this bullet is the toast/UI)*
 - [ ] Open each affected recipe → the row that was unlinked is now linked to the picked stock item; cookability chip flips from neutral to a real True/False if that recipe had no other unlinked rows
 - [ ] Click **Create new** on a group → a new stock item is created (defaulted to the most-stocked level) with `name = raw_text`, and the group's rows link to it in the same tap; toast names the created item
 - [ ] Auto-complete typing filters to matches; empty search shows the top of the alphabetical list (capped at 50)
@@ -142,14 +137,13 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Recipe-detail edit mode → Freeform steps → textarea shows the hint *"Paste the recipe text or type freeform — Ctrl+V works."* below the box
 
 ### Recipe importer — paste-based rebuild (Chunk 5) — origin IMPL_PLAN_RECIPE_IMPORTER
+*(Pinned server-side: `import-from-url` is deleted → 404 and `import-from-content` is the only import path (`test_recipe_import_routes.py`); the whole paste corpus parses to a minimum shape (`test_parse_recipe_from_text.py`, parametrized over every fixture); and the **taste.com.au2 video-carousel + Coles price chrome is stripped** — no "Estimate based on"/"Fulfilled by"/"coles-logo"/"Show ingredient quantity" in ingredients, no "Next video thumbnail"/"more" steps, step count fenced (`taste_video_carousel_cruft_stripped`, added 2026-07-20). The browser paste/preview/navigation flow below stays owner-walk.)*
 - [ ] Open Cookbook overview → "Import" button opens the paste dialog. Caption names the paste flow (Ctrl+A / Ctrl+C on the source, Ctrl+V into Dora)
 - [ ] Copy a RecipeTin Eats page (Ctrl+A → Ctrl+C in the browser) → paste into the textarea → optionally type the source URL → "Import" → new recipe lands with name + servings + ingredients + steps; navigator lands on detail
 - [ ] Repeat with an AllRecipes page and a Half Baked Harvest page — verify each imports without the "couldn't auto-structure" degraded banner
-- [ ] Paste a **taste.com.au recipe that has an embedded how-to video** (e.g. the *Thai massaman beef curry* used for the `taste.com.au2` corpus fixture) → the preview shows exactly the real ingredients (no "Estimate based on…" / "Fulfilled by coles-logo" rows) and exactly the real method steps (no "Show ingredient quantity", no "Next video thumbnail" spam, no video title / "more" tail, no per-step photo captions)
 - [ ] Import a recipe with several ingredients that DON'T match existing stock items → open the new recipe → **each unlinked ingredient row shows its original text** (picker label reads "Free-text ingredient" and the quoted text — e.g. "1/3 cup (100g) massaman curry paste" — appears under the picker), not a blank "Stock item" dropdown. Reload the page and confirm the text survives the round-trip. Link one row to a real stock item → its label/caption switch back to the plain "Stock item" picker with no leftover quote
 - [ ] Paste a page that fuzzy-matches < all ingredients → save works with unlinked rows present; recipe detail shows a neutral cookability chip (not True/False) until every row is linked
 - [ ] Confirm `Recipe.source` on the imported recipe carries the URL you typed (if any) and is blank when omitted — nothing was fetched server-side
-- [ ] Old `POST /api/recipes/import-from-url` returns 404 (route deleted); the new `POST /api/recipes/import-from-content` is the only import path
 - [ ] From RecipeDetailPage → kebab → "Import over this recipe" → paste flow, confirm-overwrite dialog, fields patched
 
 ### Ingredient DnD — reorder + cross-section move — origin FU-118 (partner-fix from FU-161 2026-07-07)
@@ -176,8 +170,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] URL importer: import a recipe with schema.org `HowToStep` → editor auto-fills Structured. Import a `recipeInstructions`-only string → editor stays in Freeform with textarea filled
 - [ ] `HowToSection` import produces top-level "section" steps with sub-steps
 - [ ] Delete an ingredient referenced by a step → the chip disappears + save round-trips without errors
-- [ ] Save a step with empty text → server returns 400 with "Every step must have non-empty text."
 - [ ] Backup → restore round-trips `RecipeStep` / `RecipeStepIngredient` / `RecipeStepTool` in FK-correct order
+
+*(Step-text validation pinned 2026-07-20 in `test_recipe_router.py`: a whitespace-only step text → 400 "Every step must have non-empty text." (`WhitespaceOnlyStepText`), a truly empty string → 422 validation (`EmptyStepText`). The structure round-trip + importer + backup bullets above stay owner-walk.)*
 
 ### Cookbook Chunk 7 — source URL + URL importer — origin FU-103
 - [ ] `alembic upgrade head` applies `d0e5f1a3b8c7` on SQLite + Postgres; `verify_mappings()` passes for the reshaped Recipe
@@ -191,14 +186,12 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Backup → restore round-trips `source` column
 
 ### Cookbook Chunk 8 — recipe versions + detail-endpoint fix — origin FU-105
+*(Server contract pinned 2026-07-20 in `tests/e2e/dora_api/test_new_recipe_version_numbering.py`: **numbering** (singleton → v2, then v3, and a version off a copy → v4 = next-by-sibling-count, not parent — fixed **FU-589**, was skipping v2); **group allocation** (singleton allocates `version_group_id`, back-fills the source, peers share it; a grouped source reuses it); **inheritance** (linked + unlinked + optional ingredients, cuisine, category, servings, instructions, source, kcal, notes; copy starts un-favourited with a fresh id); **independence** (editing the copy leaves the source untouched). **Fixed a production-severity bug in the same unit — FU-590: new-version of any recipe WITH ingredients 500'd** (autoflush of unparented clones) and silently unlinked linked ingredients (R-032 noload clone). The tools/steps/tags/collection/image inheritance + the version-card UI below stay owner-walk.)*
 - [ ] `alembic upgrade head` applies `e1f6a2b4c8d9` on SQLite + Postgres; `verify_mappings()` passes
 - [ ] Open a recipe with structured steps → editor's Structured/Freeform toggle populates correctly (latent bug from Chunk 6 / cook-mode Chunk 5)
-- [ ] Open recipe → kebab → "New version". Singleton source allocates a `version_group_id` + back-fills source. Both share the id
-- [ ] Already-grouped source: copy reuses the group
-- [ ] "Other versions" card lists siblings on both source and copy; singletons hide the card
-- [ ] Naming: first "New version" → "(v2)"; second click on source → "(v3)"; click on copy → also next number (server counts siblings, not parent)
-- [ ] New version inherits ingredients, tools, structured steps (with sub-step + ingredient refs remapped), tags, cuisine, category, collection, source URL, image — image shows without re-upload
-- [ ] Edit copy → save → source unchanged. Same the other way
+- [ ] "Other versions" card lists siblings on both source and copy; singletons hide the card *(the shared `version_group_id` is pinned above; this is the card render)*
+- [ ] New version also inherits **tools, structured steps (with sub-step + ingredient refs remapped), dietary tags, collection, and image** (image shows without re-upload) — *the ingredient/cuisine/category/scalar inheritance is pinned above; these richer clones stay owner-walk*
+- [ ] Edit the **source** → save → the copy is unchanged (the copy→source direction is pinned above)
 - [ ] Delete one version → siblings stay; "Other versions" card updates
 - [ ] Meal-plan picker + cookable filter see both siblings; allocations stay per-recipe
 - [ ] Backup → restore round-trips `version_group_id`
@@ -210,10 +203,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Nutrition card appears in detail sidebar when a kcal value is set
 - [ ] Cookbook overview: Sort by → Kcal option; flip direction toggles label between "Highest kcal first" / "Lowest kcal first"; recipes with no kcal sink to the bottom
 - [ ] Kcal ≤ filter narrows the list; recipes with no kcal value remain visible
-- [ ] Turn on Money (install layer on): recipes with linked products + offers show "Estimated cost" card with $, help tooltip, "(N / M ingredients priced)" badge
-- [ ] Cost math: pick a 3-ingredient recipe with linked products. Compute expected `Σ qty × current offer price ÷ size_value`. Card matches to 2dp
-- [ ] No linked products: cost card hidden
-- [ ] Partial coverage: card renders with "(2 / 5 ingredients priced)"
+- [ ] Turn on Money (install layer on): recipes with linked products + offers show "Estimated cost" card with $, help tooltip, "(N / M ingredients priced)" badge *(the server cost math is pinned — see note below; this checks the card + tooltip + badge render)*
+
+*(Cost math pinned 2026-07-20 in `test_recipe_router.py` estimated_cost tests, exercising the real `StockItemProduct → Product → ProductOffer` join: `estimated_cost = Σ qty × (offer.price_now / size_value)` rounded to 2dp; **partial coverage** returns `estimated_cost_priced_count`/`estimated_cost_total_count` counting only priced ingredients; **no priced ingredient → `estimated_cost` is None** (card hidden client-side). Guards the FU-463 SQLite-uuid-binding regression. The card/badge render + the money/nutrition flag matrix below stay owner-walk.)*
 - [ ] Old freeform Nutrition expansion gone from detail page; an existing recipe with a `nutrition` text value still saves cleanly
 - [ ] Money OFF + Nutrition ON: cost hidden, kcal surfaces visible
 - [ ] Money ON + Nutrition OFF: cost visible, no kcal surfaces
@@ -299,10 +291,10 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Cook mode
 
 ### Recipe personal notes in cook mode — origin FU-432 (RD-29)
-- [ ] Edit a recipe on the detail page → the new **Personal notes** field (below Source URL) saves and round-trips (reload shows it); distinct from the instructions/steps field.
-- [ ] Enter cook mode for that recipe → a **"Your notes"** card renders under the step navigation (above the ingredients panel), preserving line breaks.
+*(Server contract pinned in `tests/e2e/dora_api/test_recipe_notes.py`: create/read/update/clear round-trip [existing 2 tests] + **new-version carry-over** [added 2026-07-20 — a noted recipe's note carries onto its new version; a note-free source stays note-free]. The detail-field placement + cook-mode card render below stay owner-walk.)*
+- [ ] Detail page: the **Personal notes** field renders **below Source URL**, visibly distinct from the instructions/steps field (the save+round-trip contract is pinned above).
+- [ ] Enter cook mode for a noted recipe → a **"Your notes"** card renders under the step navigation (above the ingredients panel), preserving line breaks.
 - [ ] A recipe with **no** note → no notes card in cook mode (not an empty box).
-- [ ] Make a **new version** of a recipe that has a note → the note carries onto the new version.
 
 ### Cook Mode Chunks 1–3 — origin FU-096
 - [ ] Chunk 3 ingredient grouping: open cook mode for a recipe with ingredients across several locations → one card per *base* location (sub-areas collapse); no-location ingredients land in "No location" group
@@ -310,7 +302,8 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Quantity spacing: `unit="g"` reads `"250g"`; `unit="tbsp"` reads `"1 tbsp"`; `unit=null` reads just qty
 - [ ] Chunk 2 — voice button reads **Sous Chef** with a tooltip; (?) opens popover listing 8 commands
 - [ ] Chunk 2 timer: detect a "10 minutes" step → fill-bar below MM:SS → empties as time runs → at 0 turns negative colour, toast fires, short beep plays (no-ops on iOS/PWA without gesture); reset clears
-- [ ] Chunk 1 finish flow: mark ingredients used, finish → dialog shows one row per used ingredient with current level chip, action chips (Down one / Out / Unchanged, default Down one), override dropdown, per-row Add-to-list
+*(An e2e driver for the finish flow exists but is **deferred/flaky** — `web_app/e2e/cook-mode-finish.wip.ts` (NOT in the active `*.spec.ts` run; see FU-591): it drives Finish → per-row Down-one/Out/Unchanged → server-verified level drops + "You saved N meals"/"All eaten" + Cancel-fires-nothing and passes cleanly in a fresh env, but flakes under load/repeat [cook-mode loads the stock store async, so a fast "Finish" click can race ahead and the decrement no-ops]. Revive once the e2e infra is stabilised. Until then the whole finish flow below stays owner-walk.)*
+- [ ] Chunk 1 finish flow: finish → dialog "Finished cooking?" shows one row per used ingredient with current level chip, action chips (Down one / Out / Unchanged, default Down one), override dropdown, per-row Add-to-list
 - [ ] `meals_cooked` defaults to **0**; Done with 0 → toast "All eaten — hope it was good."; N>0 → "You saved N meals — enjoy." (with pluralisation)
 - [ ] Per-row override beats action: pick explicit level for one row → Done flips that row's stock_level_id to the override; `Unchanged` rows leave stock alone
 - [ ] Fail-soft: a row pointing at a deleted stock item shouldn't stop the others (Promise.allSettled)
@@ -330,17 +323,11 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — highlight tint reads in dark mode
 
 ### Cook Mode Chunk 6 — cooking-for headcount rescale — origin FU-101
-- [ ] Default: recipe with `servings=4` shows 4 in "Cooking for" input; `servings=null` shows 1
-- [ ] Rescale up: 4→6 multiplies ingredient quantities by 1.5× (200g → 300g; 2 eggs → 3)
-- [ ] Rescale down: 4→2 halves them (200g → 100g; 4 eggs → 2)
-- [ ] Fraction snap: 4-serving with `1 cup`, scaled to 3 → `¾ cup`; scaled to 6 → `1½ cup`
-- [ ] Countable rounding: 4-serving with `1 egg`, scaled to 3 → `1 egg` (0.75 rounds up, floored at 1); scaled to 6 → `2 eggs`
-- [ ] Floor at 1: countable that would round to 0 stays at 1
-- [ ] Sub-tolerance fractions: `0.5 cups` × 1.0 shows `½ cup`
+*(The `scaleQuantity` rounding contract is fully pinned in `web_app/test/unit/scaleQuantity.spec.ts` (23 tests) — a dedicated describe block added 2026-07-20 pins the literal checklist cases: rescale up/down 1.5×/0.5× [200g→300/100, eggs], fraction snap 1 cup→¾/1½, countable 1 egg→1/2 [0.75 up, floored at 1], floor-at-1, sub-tolerance ½, and the 7.5g→7½ gram edge. The component input-clamp + session-only bits below stay owner-walk.)*
+- [ ] Default: recipe with `servings=4` shows 4 in "Cooking for" input; `servings=null` shows 1. *(Precedence note for the walker: the input actually seeds from the user's onboarding `household_headcount` when set, else the recipe's `servings`, else 1 — the seed user has no headcount, so a seed recipe defaults to its `servings`.)*
 - [ ] Blur clamp: clear input → blur → re-clamps to 1; quantities don't NaN
 - [ ] Min=1: typing 0 + blur → re-clamps to 1
 - [ ] Session-only: rescale, exit, come back → input shows original `servings`; saved recipe unchanged
-- [ ] Gram fraction edge: `7.5g` renders `7½ g`. If that reads weird in practice, flip g/kg/ml/l/mg to integer rounding in `scaleQuantity.ts`
 
 ---
 
@@ -518,9 +505,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Assistant intent when the user has no budget → replies "You haven't set a grocery budget yet — Settings → Money is the place to turn it on"; when already under budget → replies "…is already inside your $Y remaining — nothing to trim"
 
 ### Shopping list UX v2 — origin FU-165
+*(Server-owned `display_name` self-labelling pinned 2026-07-20 in `test_shopping_list_planned_shop_date.py`: custom name wins → clearing it labels from the planned shop date → changing the shop day re-labels → clearing the date too falls back to a non-empty creation-date label. The rail/mobile/tones/doughnut UI below stay owner-walk.)*
 - [ ] Rail order + auto-scroll + next-up marker works
 - [ ] Mobile dropdown opens + picks
-- [ ] Rename → clear name → list self-labels (and re-labels when shop day changes)
 - [ ] Shop-day button tones (today/overdue) correct
 - [ ] Doughnut + totals render correctly
 - [ ] Start shopping → sticky footer → restock-review modal (incl. per-item level tweak) → Reopen reverses it
@@ -543,10 +530,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] **Known repro (2026-06-14):** picker modal NOT popping up when adding to a list with 2+ linked products (silent-add path firing instead). Likely candidates: `linked_product_count` not hydrating, `shouldUseCombinedModal.value` false from store mismatch, or `selected-product-id` short-circuit firing on wrong surface. Capture which screen + which item it fails on
 
 ### Cart Button Chunk 3 — standalone product lines + rules 1–3 — origin FU-132
+*(Rules 1–3 pinned 2026-07-20 in `tests/e2e/dora_api/test_shopping_list_product_lines.py`: **Rule 1** a `product_id`-only POST creates a line (product_id + null stock_item_id); a no-anchor body → **422** business-rule violation "A line needs at least one of stock_item_id or product_id" [the checklist guessed 400 — 422 is correct for a domain rule; the DB CHECK is the backstop]. **Rule 2** linking the product to a stock item converts the orphan in place (gains stock_item_id, keeps product_id) OR folds into an existing stock-item line + drops the orphan. **Rule 3** deleting the stock-item line (by line-id) cascade-removes the nested product line. The migration, the by-stock-item remove variant, and the TS-compile check below stay owner-walk.)*
 - [ ] Migration `d7c9e4a8c2b1` applies on SQLite + Postgres; `verify_mappings()` passes for the now-nullable `stock_item_id` + new `product_id` FK
-- [ ] Rule 1: POST `/api/shopping-lists/<id>/lines` with only `product_id` creates a line; DTO carries `product_id` + null `stock_item_id`. CHECK constraint rejects body with neither (400 before DB)
-- [ ] Rule 2: draft list has product-only line for P, P not yet linked. POST `/api/stock-items/<S>/products` with `product_id=P` → orphan line upgrades (`stock_item_id` becomes S, or folded into existing stock-item line with P set)
-- [ ] Rule 3: stock-item line for S + separate product-only line for P (P linked to S). DELETE stock-item line by line-id → nested product line gone. Same for cart-button remove-by-stock-item
+- [ ] Rule 3 variant: **cart-button remove-by-stock-item** (`DELETE …/lines/by-stock-item/<S>`) also removes the nested product line (the by-line-id path is pinned above)
 - [ ] No regressions on stock-item-only adds — existing dedupe by `stock_item_id` still wins
 - [ ] TS compile: `ShoppingListLine.stock_item_id: string | null` doesn't break consumers
 
@@ -1058,22 +1044,21 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] `/settings/admin/system/hosting`: public URL + audit retention days inputs. Try `javascript:alert(1)` in Public URL → inline red error "Must start with http:// or https://.", nothing saved. `https://dora.example.com` → toast, reload survives.
 
 ### Users admin — Add / Delete (2026-07-06) — origin FU-461
-*Requires admin login. Second admin account handy for the last-admin + can't-delete-self checks.*
+*Requires admin login.*
+*(Server contract pinned 2026-07-20 in `tests/e2e/dora_api/test_users_admin.py`: create → 200 + a one-time password (≥12 chars) in the body + the user is listed (admin flag honoured); create with a **taken username** / **taken email** / **malformed email** → 422; **delete your own account → 403** ("your own account"); delete another user → 204 and they leave the list; delete unknown → 404. The PATCH last-admin-demotion guard is pinned in `test_patch_semantics.py`. The dialog/result/copy/badge/tooltip renders below stay owner-walk.)*
 - [ ] Settings → Admin → Users: the header now has **Add user** (primary button, account-plus icon) alongside the refresh button.
 - [ ] Click **Add user** → dialog opens with Username / Email (optional) / Admin toggle. Cancel closes without side effects.
-- [ ] Submit with only a username filled → dialog closes → "User created" result dialog appears with a 12-char one-time password + Copy button. User list refreshes and the new user appears.
+- [ ] Submit with only a username filled → dialog closes → "User created" result dialog appears with the one-time password + Copy button (the server contract is pinned above; this checks the dialog render).
 - [ ] Copy button copies the password; toast "Copied to clipboard." Close the dialog — password is gone (no way to retrieve it; admin must reset if lost).
 - [ ] Log in as the new user with the copied password → login succeeds → normal onboarding path.
-- [ ] Try Add with a **taken username** → inline field error appears under Username; nothing created.
-- [ ] Try Add with a **malformed email** ("nope") → inline field error under Email; nothing created.
-- [ ] Try Add with a **taken email** (belongs to another user) → inline field error under Email; nothing created.
+- [ ] Taken-username / malformed-email / taken-email adds render the error **inline** under the offending field (the 422s are pinned above; this checks the inline render, not the status).
 - [ ] Try Add with the Admin toggle on → new user appears in the list with the yellow "admin" badge.
 - [ ] Each row now has a **Delete** button (red text, trash icon).
-- [ ] Delete on **your own row**: disabled + tooltip "You can't delete your own account."
+- [ ] Delete on **your own row**: the button is **disabled** + tooltip "You can't delete your own account." (the server also refuses it — 403, pinned above).
 - [ ] Delete on another user → confirm dialog appears with negative-coloured Delete CTA + honest scope copy ("sessions, alert prefs, push subs removed; household-shared things survive"). Cancel closes with no change.
-- [ ] Confirm delete → toast "Deleted 'X'." → user disappears from the list. Their historical audit events still exist (audit-log page keeps the row with the now-orphan actor_user_id).
+- [ ] Confirm delete → toast "Deleted 'X'." → user disappears (the delete itself is pinned above); their historical audit events still exist (audit-log page keeps the row with the now-orphan actor_user_id).
 - [ ] Recipes / shopping lists that the deleted user authored / cooked survive with a null author (RecipeCookEvent.cooked_by_user_id and ShoppingList.created_by_user_id are SET NULL).
-- [ ] With only one admin remaining, attempt to delete that admin → toast "Delete failed." with caption "Refusing to delete the last admin — promote someone else first." No deletion happens.
+- [ ] With only one admin remaining, attempt to delete that admin → toast "Delete failed." with caption "Refusing to delete the last admin — promote someone else first." No deletion happens. *(Delete-guard hard to reach in tests — self-delete precedence; the symmetric PATCH-demotion guard is pinned.)*
 
 ### Admin cache-race safety net — origin FU-016
 *Requires at least two admins in the system (the backend blocks removing the last admin).*
@@ -1361,17 +1346,16 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] Error toast on failure
 
 ### PreferredBuy — origin FU-211
-- [ ] Stock item detail: add / rename / reorder (up-down) / remove preferred-buy entries
-- [ ] CASCADE on item delete (preferred buys go too)
+*(Backend fully pinned: add / rename / delete, alphabetical detail listing, blank-label reject, wrong-item-scope 404 (`test_preferred_buys.py`) + CASCADE-on-item-delete → 0 rows (`test_delete_integrity.py`). **"reorder (up-down)" is stale** — the manual reorder UI + `position` column + `reorder` endpoint were retired by FU-225 (2026-06-18); the SPA now sorts alphabetically client-side. Only the add/rename/remove detail render stays owner-walk.)*
+- [ ] Stock item detail: add / rename / remove preferred-buy entries renders correctly (server contract + cascade pinned above)
 
 ### Shopping line preferred-buy hint — origin FU-215
 - [ ] Pick a preferred-buy hint on a shopping line → persists across reload
 - [ ] Clear the hint → persists across reload
 
 ### Stock-item Prices section — origin FU-213
-- [ ] Log a price observation → derived unit_cost shows correctly
-- [ ] Remove a price observation
-- [ ] Section is hidden when money features are off
+*(Backend fully pinned in `test_price_observations.py`: logging an observation derives `unit_cost` (latest-wins), removing it clears `unit_cost`, plus dimension/unit-alias/store-resolution + non-positive/unknown-store rejects. The money-off gating below is client-side.)*
+- [ ] Section is hidden when money features are off (the log/remove/unit_cost contract is pinned above)
 
 ### Cost consumers rebased to unit-cost helper — origin FU-216
 - [ ] Stock-value report numbers look right (observation-only items now contribute, where previously they didn't)
@@ -1549,14 +1533,13 @@ machine at this session close-time; walked opportunistically.*
 
 ### Security response headers — origin FU-459 (2026-07-07)
 *Confirms the app-wide CSP + framing / referrer / sniff headers land on every response and don't break any page. Do this walk with DevTools **Console + Network** panels open — a CSP violation logs a red console error naming the blocked directive.*
-- [ ] Any request in DevTools → Network → Headers → **Response Headers** shows `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; …frame-ancestors 'none'; …`
+*(Header **presence + values** pinned 2026-07-20 in `tests/e2e/dora_api/test_security_headers.py`: all four headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`, CSP with `default-src 'self'` / `frame-ancestors 'none'` / `img-src … data: blob: https:` / `base-uri` / `form-action`) land on a 200, a 404, AND a domain-error response. The `curl -I` operator check and the browser CSP-violation walk below stay owner-walk.)*
 - [ ] Cold-load the SPA → no CSP violations in Console
 - [ ] Walk Dashboard, Stock overview, Stock item detail, Cookbook overview, Recipe detail (with an image), Cook mode, Meal plans, Shopping list detail, Settings → each page renders normally, no red CSP errors on any surface
 - [ ] Recipe / product / store images render (base64 `data:` blobs + external `https:` sources both work under `img-src`)
 - [ ] Upload a recipe/user image (data-URL / blob path) → preview renders (blob: is allowed)
 - [ ] Print view opens and renders (if any style-src / script-src violation would clobber it, it'd be visible here)
 - [ ] Piper TTS synthesis + assistant chat still work end-to-end (connect-src covers the `/api` calls; anything to an external LLM URL relies on `https:` allowance)
-- [ ] `curl -I` any endpoint → same four headers present on the plain HTTP response
 
 ### Recipe-picker inline-create toast — origin FU-319 (2026-07-06)
 - [ ] Open any recipe in the cookbook, edit ingredients, add a new ingredient row → type a name that doesn't match any existing stock item → tap the "Create '<typed>'" no-option row in the picker → **positive toast reads `Added "<name>" to your pantry.`** (not the old "Created stock item …" copy)

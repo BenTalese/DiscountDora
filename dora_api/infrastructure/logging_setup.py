@@ -28,6 +28,7 @@ Noise control:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -61,7 +62,7 @@ def configure_logging(
         - desktop build: `platformdirs.user_log_dir(...)`, the OS-standard
           per-user log location (survives reinstall, no root needed). On
           Linux that's `~/.local/state/dashy-dora/logs`, on macOS
-          `~/Library/Logs/dashy-dora`, on Windows `%LOCALAPPDATA%\dashy-dora\logs`.
+          `~/Library/Logs/dashy-dora`, on Windows `%LOCALAPPDATA%\\dashy-dora\\logs`.
         The split is intentional (FU-509): OS convention on packaged
         distributions, developer convenience on unpackaged runs. Both are
         correct for their runtime; this function doesn't care which.
@@ -86,7 +87,19 @@ def configure_logging(
     for handler in list(root.handlers):
         root.removeHandler(handler)
 
-    root.setLevel(logging.DEBUG if debug else logging.INFO)
+    # `DORA_LOG_LEVEL` (e.g. WARNING) overrides the debug→level default so a
+    # runtime can stay in debug/seed MODE while logging quietly — the e2e
+    # backend needs debug mode (create_all + seed) but the per-request DEBUG
+    # body-dumps + INFO request lines, each written to the rotating FILE
+    # handler, dominate its latency and degrade the long single-worker run
+    # (FU-591). Unset → the historical debug/INFO default.
+    _level_override = os.environ.get("DORA_LOG_LEVEL", "").strip().upper()
+    _resolved_level = getattr(logging, _level_override, None) if _level_override else None
+    root.setLevel(
+        _resolved_level
+        if isinstance(_resolved_level, int)
+        else (logging.DEBUG if debug else logging.INFO)
+    )
 
     formatter = logging.Formatter(_FORMAT)
     context_filter = LogContextFilter()

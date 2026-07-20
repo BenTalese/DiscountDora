@@ -10,6 +10,74 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-590 — New-version of a recipe WITH ingredients 500'd + silently unlinked linked ingredients (autoflush + R-032 noload clone)
+- **Raised + resolved:** 2026-07-20 (verify-campaign Batch 5, codifying the
+  Chunk-8 recipe-versions checks — found by the new numbering/inheritance test,
+  fixed same session).
+- **Type:** finding → real bug (product code), production-severity.
+- **What:** `POST /recipes/<id>/new-version` crashed with a 500 for **any**
+  source recipe that had ingredients (the common case — only an ingredient-less
+  stub versioned cleanly). Two compounding faults in `NewRecipeVersionHandler`:
+  (1) the cloned `RecipeIngredient` rows were `add()`ed to the session before the
+  parent `new_recipe` existed to own them, and constructing `new_recipe` read the
+  deferred `source.image` — its lazy load issued a SELECT that autoflushed the
+  unparented rows → `NOT NULL constraint failed: RecipeIngredient.recipe_id`;
+  (2) the clone read `ing.stock_item` (a `lazy="noload"` relationship → always
+  None), so a **linked** ingredient was cloned unlinked, and with `raw_text` also
+  not copied it violated the anchor CHECK (`stock_item_id OR raw_text`) → the
+  save failed even once (1) was fixed.
+- **Why it hid:** the only existing new-version test
+  (`test_new_recipe_version_unit_of_work.py`) versioned an **ingredient-less**
+  recipe, so neither fault fired. Same R-032 noload family as FU-587/FU-588.
+- **Fix:** wrap the clone+build in `db.session.no_autoflush`; clone each
+  ingredient from the loaded FK (`ing._stock_item_id` → resolved StockItem) and
+  carry `raw_text` + `is_optional`. New
+  `tests/e2e/dora_api/test_new_recipe_version_numbering.py` pins versioning with
+  linked, unlinked, and optional ingredients + inheritance + independence.
+- **Verified:** version suites 11 green; full backend **1547 passed**.
+
+## [RESOLVED] FU-589 — Recipe version numbering skipped v2 (v1, v3, v4…) — pre-flush sibling count
+- **Raised + resolved:** 2026-07-20 (verify-campaign Batch 5, same unit as FU-590).
+- **Type:** finding → real bug (product code, cosmetic).
+- **What:** the first "New version" of a singleton recipe was named "(v1)" and the
+  second jumped to "(v3)". `_sibling_count` (a Core SELECT) ran **before** the
+  source's freshly-assigned `version_group_id` was flushed, so the first version
+  counted 0 group members → v1; the second (source now visibly grouped) counted 1
+  → v3. The `+1` and pre-count group back-fill show the author intended v2.
+- **Fix:** flush the back-fill before counting → v2, v3, v4… consistently.
+  "Counts siblings not parent" (a version off a copy takes the next number) still
+  holds. Pinned in `test_new_recipe_version_numbering.py`.
+- **Verified:** numbering test green; full backend **1547 passed**.
+
+## [RESOLVED] FU-588 — Bulk-linker groups all reported "Used in 0 recipes" (R-032 underscore-FK read)
+- **Raised + resolved:** 2026-07-20 (verify-campaign Batch 4, codifying the
+  bulk-linker Link endpoint — found by the new e2e test, fixed same session).
+- **Type:** finding → real bug (product code).
+- **What:** `GetUnlinkedIngredientsHandler.handle` (`unlinked_ingredients.py`)
+  grouped every unlinked `RecipeIngredient` and counted the recipes using each
+  by reading `getattr(row, "recipe_id", None)`. The ORM binds that FK to the
+  underscore-prefixed `_recipe_id` property (hidden from `verify_mappings`
+  alongside `_stock_item_id`), so the un-prefixed name isn't a mapped attribute
+  and `getattr` silently returned `None`. Result: **every** group on Settings →
+  Admin → Data → Unlinked ingredients reported `count: 0` with an empty
+  `used_in_recipe_ids` — the "Used in N recipes" label always read 0.
+- **Blast radius:** cosmetic-but-misleading, not blocking. The one-tap **Link**
+  action (`BulkLinkHandler`) matches rows by normalised `raw_text`, not by the
+  count, so linking still worked and re-derived cookability correctly.
+- **Why it hid:** the endpoint had **no** e2e test (its own unit-test docstring
+  said "exercised via the SPA browser walk"), and the unit test that *did* exist
+  hand-built stub rows with the wrong attribute name (`recipe_id`), so it passed
+  against a shape the real entity never has — a false-confidence test masking the
+  bug. Same R-032 family as the `_stock_item_id` fix already in that file.
+- **Fix:** read the mapped `_recipe_id` property (comment names R-032). Unit-test
+  stub corrected to `_recipe_id` so it mirrors the mapping; new
+  `tests/e2e/dora_api/test_unlinked_ingredients_bulk_link.py` (4 tests) pins the
+  real count/recipe-ids over persisted rows + the bulk-link mutation +
+  cookability re-derive + only-matching-rows + not-found/empty-key errors.
+- **Verified:** bulk-link + unit suites 16 green; full backend suite green.
+
+---
+
 ## [RESOLVED] FU-587 — Auto-generate recipe/meal-plan sources added zero linked ingredients + mis-reported all as unlinked (R-032 noload)
 - **Raised + resolved:** 2026-07-19 (verify-campaign Batch 7, codifying the FU-505
   unlinked-ingredient warning — found by the new test, fixed same session).

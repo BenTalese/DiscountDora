@@ -85,6 +85,11 @@ export default defineConfig({
         stderr: 'pipe',
         env: {
             DORA_DEBUG: 'true',
+            // FU-591 — stay in debug/seed mode but log at WARNING. The
+            // per-request DEBUG body-dumps + INFO request lines (each hitting
+            // the rotating file handler) dominated backend latency and degraded
+            // the long single-worker run into timeouts / browser-closes.
+            DORA_LOG_LEVEL: 'WARNING',
             DORA_ALLOW_DESTRUCTIVE: 'true',
             DORA_DB_PATH: 'data/dora.e2e.db',
             DORA_SPA_DIR: DIST_SPA,

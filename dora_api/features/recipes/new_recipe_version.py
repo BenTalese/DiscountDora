@@ -23,6 +23,7 @@ from sqlalchemy import select
 from dora_api.app import db
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, get_steps_for_recipe, replace_steps_for_recipe,
@@ -76,6 +77,12 @@ class NewRecipeVersionHandler:
         if group_id is None:
             group_id = uuid4()
             source.version_group_id = group_id
+            # Flush the back-fill so `_sibling_count` (a Core SELECT) counts
+            # the source as a group member. Without it the first version of a
+            # singleton counted 0 siblings → "(v1)", while the second (source
+            # now visibly grouped) counted 1 → "(v3)": the sequence skipped v2
+            # entirely. Flushing makes it v2, v3, v4… (FU-589).
+            self.repository.flush()
 
         sibling_count = self._sibling_count(group_id)
         copy_name = f"{source.name} (v{sibling_count + 1})"
@@ -84,49 +91,74 @@ class NewRecipeVersionHandler:
         # them inserted before the recipe save, so build them, add() each
         # (the repo assigns ids), and remember the old→new id map for
         # step linkage below.
+        #
+        # FU-590 — the whole clone-and-build runs inside `no_autoflush`. The
+        # cloned RecipeIngredient rows are add()ed to the session BEFORE the
+        # parent `new_recipe` exists to link them (recipe_id still NULL), and
+        # constructing `new_recipe` reads `source.image` — a deferred column,
+        # so its lazy load issues a SELECT that would otherwise autoflush the
+        # unparented ingredients → `NOT NULL constraint failed:
+        # RecipeIngredient.recipe_id` → 500 on new-version of ANY recipe that
+        # has ingredients. Suppressing autoflush here lets the explicit flush
+        # below persist Recipe-then-ingredients in FK-correct order.
         old_to_new_ing: dict[UUID, UUID] = {}
-        cloned_ingredients: list[RecipeIngredient] = []
-        for ing in (source.ingredients or []):
-            cloned = RecipeIngredient(
-                notes=ing.notes,
-                quantity=ing.quantity,
-                stock_item=ing.stock_item,
-                unit=ing.unit,
-            )
-            cloned_ingredients.append(cloned)
-        for ing in cloned_ingredients:
-            self.repository.add(ing)
-        for original, copy in zip(source.ingredients or [], cloned_ingredients):
-            old_to_new_ing[original.id] = copy.id
+        with db.session.no_autoflush:
+            cloned_ingredients: list[RecipeIngredient] = []
+            for ing in (source.ingredients or []):
+                # R-032 — `ing.stock_item` is a `lazy="noload"` relationship
+                # (always None), so cloning off it silently DROPPED the link:
+                # a linked ingredient came out unlinked, and — with no
+                # raw_text copied either — violated the anchor CHECK
+                # (stock_item_id OR raw_text) → 500. Resolve the real
+                # StockItem from the loaded FK, and carry raw_text +
+                # is_optional so both anchor kinds and the optional flag
+                # survive the copy.
+                linked = (
+                    self.repository.get(StockItem).by_id(ing._stock_item_id)
+                    if ing._stock_item_id is not None else None
+                )
+                cloned = RecipeIngredient(
+                    notes=ing.notes,
+                    quantity=ing.quantity,
+                    stock_item=linked,
+                    unit=ing.unit,
+                    is_optional=ing.is_optional,
+                    raw_text=ing.raw_text,
+                )
+                cloned_ingredients.append(cloned)
+            for ing in cloned_ingredients:
+                self.repository.add(ing)
+            for original, copy in zip(source.ingredients or [], cloned_ingredients):
+                old_to_new_ing[original.id] = copy.id
 
-        new_recipe = Recipe(
-            available_meals=0,
-            category=source.category,
-            cook_time_minutes=source.cook_time_minutes,
-            cuisine=source.cuisine,
-            difficulty=source.difficulty,
-            image=source.image,
-            ingredients=cloned_ingredients,
-            instructions=source.instructions,
-            is_favourite=False,
-            last_made_on=None,
-            name=copy_name,
-            prep_time_minutes=source.prep_time_minutes,
-            recipe_collection=source.recipe_collection,
-            servings=source.servings,
-            source=source.source,
-            time_of_day=source.time_of_day,
-            version_group_id=group_id,
-            kcal=source.kcal,
-            steps_mode=source.steps_mode,
-            notes=source.notes,  # RD-29 — carry personal notes across versions
-            # a new version is a fresh row in the household; stamp
-            # at write time rather than carrying the source's created_at,
-            # so the "Recently added" axis surfaces the version when it
-            # was actually added here.
-            created_at=datetime.now(timezone.utc),
-        )
-        self.repository.add(new_recipe)
+            new_recipe = Recipe(
+                available_meals=0,
+                category=source.category,
+                cook_time_minutes=source.cook_time_minutes,
+                cuisine=source.cuisine,
+                difficulty=source.difficulty,
+                image=source.image,
+                ingredients=cloned_ingredients,
+                instructions=source.instructions,
+                is_favourite=False,
+                last_made_on=None,
+                name=copy_name,
+                prep_time_minutes=source.prep_time_minutes,
+                recipe_collection=source.recipe_collection,
+                servings=source.servings,
+                source=source.source,
+                time_of_day=source.time_of_day,
+                version_group_id=group_id,
+                kcal=source.kcal,
+                steps_mode=source.steps_mode,
+                notes=source.notes,  # RD-29 — carry personal notes across versions
+                # a new version is a fresh row in the household; stamp
+                # at write time rather than carrying the source's created_at,
+                # so the "Recently added" axis surfaces the version when it
+                # was actually added here.
+                created_at=datetime.now(timezone.utc),
+            )
+            self.repository.add(new_recipe)
         # FU-512 unit-of-work: same shape as CreateRecipe (FU-456). Access
         # helpers below use `db.session.execute(insert(...))` at Core level,
         # so the new-recipe FK must be visible before their inserts — flush,

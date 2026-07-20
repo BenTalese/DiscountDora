@@ -120,9 +120,14 @@ class GetUnlinkedIngredientsHandler:
                 key,
                 {"display": raw.strip(), "recipe_ids": []},
             )
-            # The mapper hands us the recipe FK via the mapped column
-            # attribute; we don't need the full Recipe entity here.
-            recipe_id = getattr(row, "recipe_id", None)
+            # R-032 — the recipe FK is bound to the underscore-prefixed
+            # property in table_mappings (`_recipe_id`, hidden from
+            # verify_mappings alongside `_stock_item_id`); the un-prefixed
+            # `recipe_id` isn't a mapped property, so `getattr(row,
+            # "recipe_id")` silently returned None and EVERY group reported
+            # count 0 / empty `used_in_recipe_ids` ("Used in 0 recipes" on the
+            # bulk-linker page). Read the mapped FK property.
+            recipe_id = getattr(row, "_recipe_id", None)
             if recipe_id is not None:
                 bucket["recipe_ids"].append(recipe_id)
 

@@ -48,3 +48,36 @@ def test__recipe_notes__absent_defaults_to_null(api):
     created = requests.post(RECIPES, json={"name": name})
     assert created.status_code in (200, 201), created.text
     assert _find(name)["notes"] is None
+
+
+def test__recipe_notes__carry_onto_new_version(api):
+    """DORA_VERIFY Cook-mode L305 — making a new version of a noted recipe
+    carries the personal note onto the copy (`new_recipe_version.py:122`).
+    A version that started life without a note stays note-free."""
+    # Source with a note.
+    name = f"notes-version-{uuid4()}"
+    created = requests.post(RECIPES, json={
+        "name": name,
+        "notes": "Double the garlic; rest 10 min.",
+    })
+    assert created.status_code in (200, 201), created.text
+    source_id = _find(name)["recipe_id"]
+
+    resp = requests.post(f"{RECIPES}/{source_id}/new-version")
+    assert resp.status_code in (200, 201), resp.text
+    new_id = resp.json()["recipe_id"]
+    assert new_id != source_id
+
+    detail = requests.get(f"{RECIPES}/{new_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["notes"] == "Double the garlic; rest 10 min."
+
+    # A note-free source produces a note-free version (no phantom note).
+    bare_name = f"notes-version-bare-{uuid4()}"
+    bare = requests.post(RECIPES, json={"name": bare_name})
+    assert bare.status_code in (200, 201), bare.text
+    bare_id = _find(bare_name)["recipe_id"]
+    bare_version = requests.post(f"{RECIPES}/{bare_id}/new-version")
+    assert bare_version.status_code in (200, 201), bare_version.text
+    bare_new_id = bare_version.json()["recipe_id"]
+    assert requests.get(f"{RECIPES}/{bare_new_id}").json()["notes"] is None

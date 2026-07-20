@@ -18,6 +18,622 @@ next.
 
 ---
 
+## 2026-07-20 (FU-591 mitigation) — quiet the e2e backend logging (`DORA_LOG_LEVEL` override); measuring impact on suite stability
+
+**Why:** "continue" → tackle the e2e-infra blocker (FU-591) that gates the whole
+UI-codification path. The suspected root cause of the long-run degradation was
+the e2e backend running at DEBUG (it's in debug/seed mode) — dumping per-request
+body logs + INFO request lines to a rotating **file** on every call.
+
+**Change (product code, config-driven — §7.5):** added a `DORA_LOG_LEVEL` env
+override in `logging_setup.py` — when set, it overrides the debug→DEBUG/INFO
+default so a runtime can stay in debug/seed *mode* while logging quietly. Unset →
+unchanged. Set `DORA_LOG_LEVEL=WARNING` in the e2e webServer env
+(`playwright.config.ts`). Also fixed a pre-existing docstring `SyntaxWarning`
+(`\d`/`\l` escape) in the same file. CHANGELOG "Added" entry (operator-facing
+knob). `test_logging.py` 6/6 green; override verified (WARNING+debug→WARNING;
+unset+debug→DEBUG).
+
+**Confirmed at the log layer:** the re-run's raw log dropped from **~5 MB** of
+per-request DEBUG spam to a **few KB** of just test-result lines — the backend is
+genuinely quiet now.
+
+**Workers stay at 1 (deliberate):** the specs share ONE seeded backend + DB with
+no per-test rollback, so `workers>1` would collide on shared fixtures — it needs
+per-worker DB isolation first (noted in FU-591).
+
+**Re-measurement result — the logging fix DID NOT fix it:** full run came back
+**16 failed / 59 passed / 19.2 min — WORSE than the prior 14**, with failures
+appearing *early* (fresh box) too. So backend log volume wasn't the main cause.
+The `DORA_LOG_LEVEL` knob is kept as a genuine ops improvement but is NOT the
+FU-591 fix. **Stopped the re-run loop here** — the suite doesn't converge; FU-591
+is re-scoped to a dedicated e2e-infra hardening project (per-worker DB isolation
+so `workers>1` is safe, browser recycling, per-spec wait hardening) — see the
+updated FU-591. Lesson: each full run is ~20 min and flaky, so chasing it with
+repeated full runs is a bad loop; codify via backend/Vitest where possible and
+treat e2e as best-effort smoke until the infra is designed properly.
+
+**Standards close-gate:** `DORA_LOG_LEVEL` is a config-driven env difference (the
+§7.5-endorsed posture), no rule violation; general operator value, so no new
+R-rule/ADR. Docstring warning fixed. `cook-mode-finish.wip.ts` stays deactivated.
+
+**Next up:** read the re-measurement; if the logging fix removed the cumulative
+degradation (failures ≪ 14), FU-591's core is addressed and per-spec flaky
+toasts (auto-add:110 etc.) become individual hardening items; if not, the browser
+memory over 84 single-worker tests is the next lever (periodic browser recycling
+or worker+DB isolation).
+
+---
+
+## 2026-07-20 (Batch 6 → Playwright) — Cook-mode finish flow e2e ATTEMPTED, DEFERRED as flaky; e2e full-suite infra instability found (FU-591)
+
+**Honest outcome:** I pivoted to Playwright e2e (owner steer; the "parallel
+Dashboard/Alerts session" is retired — all surfaces fair game). The harness runs
+on this box (chromium-1228, venv backend on :5171; `smoke`+`login` 9-pass gate),
+and I wrote `cook-mode-finish.spec.ts` (3 tests) driving the real loop: Finish →
+per-row Down-one/Out/Unchanged → **server-verified** level drops (Stocked→Low,
+→Out) + "You saved 2 meals"/"All eaten" toast + pool bump + Cancel-fires-nothing.
+**It passed 4/4 in a fresh env** — but does NOT hold up:
+
+- **Full-suite run:** `npx playwright test` (87 tests, 1 worker, ~20 min) came
+  back **65–67 passed / 14 failed** twice. The 14 are environment degradation —
+  browser-closed, 30s element-timeouts, null boundingBoxes — on ~13 specs that
+  are individually green (buy-verdict, detail-*, dora-score, history-tab ×4,
+  recipe-deeplink ×3, stock-pickers, stock, + mine). Several fail *before* my
+  spec runs → not data pollution; it's the long-lived debug SQLite backend +
+  browser degrading over the grind. Logged as **[[FU-591]]**.
+- **My spec specifically:** `--repeat-each=2` → ~1/3 pass. Root cause diagnosed:
+  cook-mode loads the stock store **async** on mount, so a fast "Finish" click
+  races ahead and the "Down one" decrement no-ops against an unloaded
+  current-level. A `/#/stock` warm-up + `expect.poll` mitigated but didn't fully
+  close it under load.
+
+**Decision (do-no-harm):** a flaky test is worse than none — it breaks
+`npm run test:e2e` for everyone. So I **deactivated** the spec by renaming it
+`web_app/e2e/cook-mode-finish.wip.ts` (off the `*.spec.ts` glob), with a header
+explaining the flakiness + revival conditions; kept as a **driver blueprint**.
+**Reverted** the DORA_VERIFY delete-on-pass — the finish-flow bullets are back to
+owner-walk with a note pointing at the .wip spec + FU-591.
+
+**What's genuinely proven:** the finish flow *works* (server-verified in the
+fresh-env passes) — this is real evidence for the owner, just not a durable
+regression pin yet. The blocker to pinning it (and the other deferred UI items)
+is the **e2e infra instability (FU-591)**, which must be fixed first
+(parallelism/sharding + quieting the debug backend are the candidate fixes).
+
+**Standards close-gate:** no product code touched (test-only, now deactivated).
+The stock-store-load race is a *latent, low-probability* app fragility (stock
+loads in ms; users cook for minutes) — noted in the .wip header, not logged as a
+bug. No R/D-rule violation, no ADR.
+
+**Next up (recommend owner decision):** stabilise the e2e infra (FU-591) before
+more UI e2e specs — otherwise the "run test:e2e to re-verify for UAT" premise
+doesn't hold. Meanwhile the reliable progress remains the **backend-slice
+codification** (this session's earlier units, incl. 3 real bugs FU-588/589/590),
+which don't depend on the flaky browser layer.
+
+---
+
+## 2026-07-20 (Batch 6 → Playwright) — [SUPERSEDED by the entry above — cook-mode e2e deferred as flaky] Cook-mode finish flow codified as e2e; harness confirmed running on this box
+
+**Why:** owner steered the campaign toward **Playwright e2e specs** (the parallel
+Dashboard/Alerts session was retired — no collision risk, all surfaces now fair
+game) to clear deferred UI verify tasks and lighten UAT. First target: the
+**cook-mode finish flow** — the highest-confidence journey (the loop's depletion
+leg), which every prior session had to leave owner-walk for lack of a harness.
+
+**Harness confirmed working here first:** `npm`/`npx playwright test` runs on this
+box — chromium-1228 is installed, the config auto-uses the repo venv to boot the
+seeded throwaway backend on :5171, `dist/spa` is built. Ran `smoke` + `login` →
+**9 passed (1.4 min)** as the gate before writing new specs. (The FU-576/FU-584
+"bundled Chromium not installable / needs a fresh build" blockers are resolved.)
+
+**Built (`web_app/e2e/cook-mode-finish.spec.ts`, 3 tests, green in isolation —
+`4 passed` incl. auth setup, 54s):** each test builds its own throwaway universe
+(2 Stocked items + a **1-structured-step** recipe, so cook mode opens on the last
+step and the nav button reads "Finish") and drives the real SPA:
+- **actions + meals toast + server truth** — Finish → dialog "Finished cooking?"
+  lists a row per ingredient; leave A "Down one", set B "Out", meals=2 → "You
+  saved 2 meals — enjoy." + exits to `/cookbook/<id>`; server-verified A dropped
+  Stocked→Low, B → Out, recipe pool = 2.
+- **Unchanged + meals=0** — both rows "Unchanged", meals left 0 → "All eaten —
+  hope it was good."; both items still Stocked (no level write fired).
+- **Cancel fires nothing** — arm an "Out", click Cancel → dialog hidden, both
+  items still Stocked, pool still 0.
+
+**Verification:** spec **4 passed in isolation** (the codification proof). The
+first full-suite run came back **67 passed / 14 failed / 6 did-not-run** in a
+**20.5-min** run (vs the historical ~2.6-min/19-test baseline) — the long runtime
++ the failure spread points at resource contention/timeout flakes rather than
+data pollution (my items are all Stocked / non-flagged / non-planned, so the
+count-sensitive specs — donut/log-price count low/out, draft-shop counts
+low/flagged, next-cook is meal-plan-driven — shouldn't see them). **NOT yet
+confirmed** — the lossy `tail`-piped log lost the failure list; a clean
+`--reporter=list` re-run is diagnosing which 14 and whether `cook-mode-finish` is
+among them. Do not treat the suite as green until that lands. No product change,
+no new FU.
+
+**Ledgers:** DORA_VERIFY Cook-mode Chunks-1–3 finish-flow bullets
+delete-on-passed with a pinned-note (action chips + meals copy + Unchanged +
+Cancel pinned; override-dropdown/add-to-list, fail-soft, session-swap stay
+owner-walk). DORA_VERIFY_TRIAGE Batch-6 updated — **the "no cook-mode harness
+exists" blocker is cleared**; the Playwright suite is now the vehicle for the
+remaining deferred UI items.
+
+**Standards close-gate:** test-only; the spec asserts server truth (level ids by
+sequence, recipe pool) not just DOM, per the suite's convention. No product code,
+no R/D-rule violation, no ADR due.
+
+**Next up:** more Playwright specs for the deferred UI piles now that the harness
+is proven — cart-button / put-away modals (Shopping lists), quick-add toasts, the
+meal-reconcile runner, or onboarding wizard. Each is a discrete owner-walk pile
+that e2e can retire.
+
+---
+
+## 2026-07-20 (Batch 15 opened) — Security response headers (FU-459) codified clean
+
+**Why:** "continue." The clean per-surface backend slices are thinning, so
+checked **Cross-cutting (Batch 15)** for anything server-ownable. Most of it is
+V-pack (text-scale, base-component sweep, auth-shell visuals, help chips) or
+device (iOS audio), but the **security response headers (FU-459)** had **zero
+tests** — a clean, high-value security regression pin.
+
+**Built (`tests/e2e/dora_api/test_security_headers.py`, 3 tests):** all four
+app-wide headers land with their expected values — `X-Content-Type-Options:
+nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer-when-downgrade`,
+and a CSP carrying `default-src 'self'` / `frame-ancestors 'none'` / `img-src …
+data: blob: https:` / `base-uri 'self'` / `form-action 'self'` — on a **200**, a
+**404**, and a **domain-error (400)** response (the `after_app_request` hook runs
+for every response, so error paths must be covered too). CSP asserted by
+key-directive substrings, not the exact joined string, so a harmless reorder
+won't break the pin. No bugs — clean codify.
+
+**Verification:** 3 new tests green; full backend suite **1568 passed** (1 skip
+PG-gated, 1 known xfail). No product change, no new FU.
+
+**Ledgers:** DORA_VERIFY FU-459 header-presence + `curl -I` bullets
+delete-on-passed with a pinned-note; the browser CSP-violation walk + image/print
+render checks stay owner-walk. DORA_VERIFY_TRIAGE Batch-15 row ⚪→🟡.
+
+**Standards close-gate:** test-only, established idioms (in-process client asserts
+response headers directly). No product code, no R/D-rule violation, no ADR due.
+
+**Next up:** the verify campaign's server-ownable slices are now largely
+exhausted across every non-parallel surface (Cook mode, Cookbook, Shopping lists,
+Settings, Products, Cross-cutting). What remains campaign-wide is predominantly
+**UI/component** (onboarding wizard, cart-button/cook-mode/put-away modals, text-
+scale, auth-shell, help chips), **device-pack** (iOS/Android/Mac hardware), and
+**owner-walk V-pack** eyeball items. The next high-leverage move is standing up a
+**component/e2e harness** (Playwright or Vitest-component) for the deferred UI
+codify-next items, or handing the owner the staged walk/device packs — a good
+point to check in with the owner on direction.
+
+---
+
+## 2026-07-20 (Batch 14 opened) — Products sub-slices delete-on-passed + stale FU-211 reorder bullet corrected
+
+**Why:** "continue." Moved to **Products (Batch 14)**. This surface's
+backend-ownable slices turned out to be **already fully pinned** — so this is a
+delete-on-pass + stale-correction unit, not a codify (no new tests; the relevant
+suites are green in the current 1565-pass run).
+
+**Confirmed pinned → delete-on-passed:**
+- **PreferredBuy (FU-211)** — add / rename / delete, alphabetical listing,
+  blank-label reject, wrong-item-scope 404 (`test_preferred_buys.py`, 5 tests) +
+  CASCADE-on-item-delete → 0 rows (`test_delete_integrity.py`).
+- **Price observations (FU-213)** — log derives `unit_cost` (latest-wins),
+  remove clears it, dimension/alias/store-resolution + reject paths
+  (`test_price_observations.py`).
+
+**Stale bullet corrected (no bug):** FU-211's DORA_VERIFY bullet still asked to
+verify "reorder (up-down)" of preferred-buys — that UI, the `position` column,
+and the `reorder` endpoint were **retired by FU-225** (2026-06-18); the SPA sorts
+alphabetically client-side now. Reworded the bullet to drop the retired verb and
+name FU-225, rather than leave a walk step for a feature that no longer exists.
+
+**Ledgers:** DORA_VERIFY FU-211 + FU-213 sections reworded to pinned-notes
+(money-off gating + detail renders stay owner-walk; reorder correction recorded).
+DORA_VERIFY_TRIAGE Batch-14 row ⚪→🟡. No code, no CHANGELOG, no new FU.
+
+**Standards close-gate:** docs/ledger only — no code touched, no rule surface.
+
+**Next up:** Batch-14 remainder is onboarding wizard walk (persona/seed/demo
+toggle — UI + integration) + My Products UI (FU-214/208) + assistant
+expiring-window (FU-187, assistant path). The verify campaign's clean
+backend-ownable slices are now largely exhausted across the non-parallel
+surfaces; remaining work is predominantly UI/component (needs a Playwright/Vitest
+harness) or owner-walk. A good point to consolidate: the next high-leverage move
+is standing up a **cook-mode / shopping-list component harness** for the deferred
+UI codify-next items, or handing the owner the walk packs.
+
+---
+
+## 2026-07-20 (Batch 12 opened) — Users admin add/delete behaviour (FU-461) codified clean
+
+**Why:** "continue." Moved to **Settings A (Batch 12)**. Survey: SMTP/VAPID
+secret-never-leaks (`test_app_settings_router.py SecretsNeverRideTheDto` +
+`test_bucket_c_secrets.py`), the admin gate on data endpoints
+(`test_route_auth_enforcement.py`), and user-PATCH guards incl. last-admin
+demotion (`test_patch_semantics.py`) are already pinned → delete-on-pass for the
+walk. The clean untested slice was the **Users admin create-validation + delete
+guards** (FU-461) — only auth-gating and the create happy-path (as a helper) were
+covered; the security-relevant guards weren't.
+
+**Built (`tests/e2e/dora_api/test_users_admin.py`, 7 tests):** create → 200 + a
+one-time password (≥12 chars) in the body + the user is listed with its admin
+flag; create with a **taken username** → 422 "already taken", **taken email** →
+422 "already registered", **malformed email** → 422 "valid email" (field=email);
+**delete your own account → 403** ("your own account", user survives); delete
+another user → 204 and they leave the list; delete unknown → 404. No bugs — clean
+codify.
+
+**Not pinned (noted):** the **delete-last-admin** guard is hard to reach in the
+harness (self-delete precedence + single seeded admin); its symmetric
+PATCH-demotion guard is already pinned, so it stays owner-walk.
+
+**Verification:** 7 new tests green; full backend suite **1565 passed** (1 skip
+PG-gated, 1 known xfail). No product change, no new FU.
+
+**Ledgers:** DORA_VERIFY FU-461 section — create-validation + self-delete + delete
+behaviour delete-on-passed with a pinned-note; the dialog/result/copy/badge/
+tooltip renders + the last-admin-delete walk stay owner-walk.
+DORA_VERIFY_TRIAGE Batch-12 row ⚪→🟡.
+
+**Standards close-gate:** test-only, established idioms (server-truth via
+in-process client + per-test rollback; self-delete uses the logged-in seed
+admin). No product code, no R/D-rule violation, no ADR due.
+
+**Next up:** Batch-12 remainder is admin-page UI (import/backup drag-drop,
+backup-library, image-compression, template download) → owner-walk / file-op
+device checks. **Settings B (Batch 13)** — account/assistant/misc — or
+**Onboarding/Products (Batch 14)** are the next untouched surfaces with possible
+backend slices, clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-20 (Batch 8 opened) — Shopping-list `display_name` self-labelling (FU-165) codified clean
+
+**Why:** "continue." Moved to **Shopping lists A (Batch 8)**. Survey: receipts
+(FU-334 `test_shopping_list_attachments.py`, 8 tests), substitute-swap gating
+(`has_substitutes`), and trim-to-budget (FU-448) already have backend tests →
+delete-on-pass for the walk. The clean untested slice was the **server-owned
+`display_name` self-labelling** (FU-165 L509) — `test_shopping_list_planned_shop_date.py`
+pinned the date round-trip but not the label ladder; `test_patch_semantics.py`
+only checked the fallback is truthy.
+
+**Built (`test_shopping_list_planned_shop_date.py` +1 test):** the R-003
+`display_name` ladder — a custom name wins; clearing it self-labels from the
+planned shop date (asserted against the imported `format_list_date`); **changing
+the shop day re-labels**; clearing the date too falls back to a non-empty
+creation-date label. Dates use a far year (2030) so `format_list_date` yields a
+stable absolute string regardless of the run day (timezone-flake rule).
+
+**Verification:** 5 tests green (4 existing + new); full backend suite **1558
+passed** (1 skip PG-gated, 1 known xfail). No product change, no new FU.
+
+**Ledgers:** DORA_VERIFY FU-165 self-label bullet delete-on-passed with a
+pinned-note (rail/mobile/tones/doughnut UI stay owner-walk).
+DORA_VERIFY_TRIAGE Batch-8 row ⚪→🟡.
+
+**Standards close-gate:** test-only, established idioms; the domain formatter is
+imported (not re-implemented) so the assertion can't drift from the server.
+No product code, no R/D-rule violation, no ADR due.
+
+**Next up:** Batch-8 remainder is UI/device-pack (put-away dialog, quick-add
+toast/always-ask, receipt camera, image-source sweep) — needs a component/e2e
+harness. The verify campaign's backend-ownable slices across Cook mode / Cookbook
+/ Shopping lists are now largely codified; the biggest remaining untouched
+surfaces are **Settings A/B (Batch 12/13)** and **Onboarding/Products (Batch 14)**,
+clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-20 (Batch 9 opened) — Cart Button Chunk 3 product-line rules 1–3 (FU-132) codified clean
+
+**Why:** "continue." Moved to **Shopping lists (Batch 9)**. Surveyed coverage:
+`has_substitutes` (FU-407), trim-to-budget (FU-448), and `linked_product_count`
+(FU-130) already have backend tests → delete-on-pass candidates for the walk. The
+clear gap was **Cart Button Chunk 3 — standalone product lines + rules 1–3
+(FU-132)** — no test file. Codified it. No bugs — clean codify.
+
+**Built (`tests/e2e/dora_api/test_shopping_list_product_lines.py`, 5 tests):**
+- **Rule 1** — a `product_id`-only `POST /shopping-lists/<id>/lines` creates a
+  line (product_id set, stock_item_id null); a no-anchor body → **422**
+  business-rule violation "A line needs at least one of stock_item_id or
+  product_id" (the checklist L533 guessed "400 before DB"; 422 is the correct
+  surfaced status for a domain rule — the DB CHECK is the backstop, not the
+  error path; test comment records the correction).
+- **Rule 2** — linking the product to a stock item upgrades the orphan line:
+  convert-in-place (orphan gains stock_item_id, keeps product_id → one nested
+  row) when there's no stock-item line yet, OR fold into the existing stock-item
+  line + drop the orphan when there is.
+- **Rule 3** — deleting the stock-item line (by line-id) cascade-removes the
+  nested product line.
+
+**Verification:** 5 new tests green; full backend suite **1557 passed** (1 skip
+PG-gated, 1 known xfail). No product change, no new FU.
+
+**Ledgers:** DORA_VERIFY Cart-Chunk-3 rules 1–3 delete-on-passed with a
+pinned-note (checklist 400→422 correction recorded); migration + by-stock-item
+remove variant + TS-compile stay owner-walk. DORA_VERIFY_TRIAGE Batch-9 row
+⚪→🟡.
+
+**Standards close-gate:** test-only, established idioms (server-truth via
+in-process client + per-test rollback; product/link built through the HTTP
+boundary per R-005). No product code, no R/D-rule violation, no ADR due.
+
+**Next up:** Batch-9 remainder is cart-button UI (Chunk 2/3-UI/4 modals — need a
+component/e2e harness) + the by-stock-item remove variant. **Batch 8 (Shopping
+lists A)** has backend slices too — put-away grouping (FU-452), quick-add
+dedupe/destination (FU-316) — clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-20 (Batch 5 cont.) — Recipe cost math (Chunk 9) + step-text validation (Chunk 6) codified clean
+
+**Why:** "continue." My prior entry flagged recipe **cost math** and **step
+empty-text 400** as the cleanest remaining backend-ownable slices in Batch 5.
+Took both. No bugs this time — a clean codify (delete-on-pass).
+
+**Cost math (Chunk 9 / DEC-5, L214–216):** the endpoint only asserted
+`"estimated_cost" in detail` (key presence); the actual Σ formula, partial
+coverage, and None-when-unpriced were untested — and this is exactly the path
+that regressed under FU-463 (raw-SQL never matched UUIDs on SQLite → cost always
+None). Added 3 tests to `test_recipe_router.py` exercising the **real**
+`StockItemProduct → Product → ProductOffer` join (new `_link_priced_item`
+helper: creates a product with a priced offer + size, links it via `POST
+/stock-items/<id>/products`): `estimated_cost = Σ qty × (price_now/size_value)`
+to 2dp (6.00/2.0 × 2 → 6.0); partial coverage → `priced_count`/`total_count`
+count only priced ingredients (1 of 2); no priced ingredient → `estimated_cost`
+is None. Guards the FU-463 regression from returning.
+
+**Step-text validation (Chunk 6, L179):** 2 tests — a whitespace-only step text
+slips past Pydantic `min_length=1` but trips the domain validator → 400 "Every
+step must have non-empty text." (`WhitespaceOnlyStepText`); a truly empty string
+→ 422 (`EmptyStepText`). Pins the exact error contract + no half-built recipe.
+
+**Verification:** 5 new tests green; full backend suite **1552 passed** (1 skip
+PG-gated, 1 known xfail). No product change, no CHANGELOG, no new FU.
+
+**Ledgers:** DORA_VERIFY Chunk-9 cost bullets (math/None/partial) + Chunk-6
+empty-text deleted with pinned-notes; card/badge render + money-nutrition flag
+matrix stay owner-walk. DORA_VERIFY_TRIAGE Batch-5 progress note appended.
+
+**Standards close-gate:** test-only, established idioms (server-truth via
+in-process client + per-test rollback; product/offer/link built through the HTTP
+boundary per R-005). No product code, no R/D-rule violation, no ADR due.
+
+**Next up:** Batch-5 remainder is now pure UI (cards/tags/images/nutrition-flag
+matrix/kcal wire) → owner-walk / component. **Shopping lists (Batch 8/9)** is the
+next untouched ⚪ surface with backend-ownable slices, clear of the parallel
+Dashboard/Alerts session; or Batch 2's tail (non-admin banner / auto→runner
+cadence).
+
+---
+
+## 2026-07-20 (Batch 5 opened) — Recipe versions codified → 2 REAL BUGS fixed (FU-590 versioning-with-ingredients 500; FU-589 numbering skipped v2)
+
+**Why:** "continue." Moved to **Cookbook B (Batch 5)** and took the Chunk-8
+recipe-versions slice — the most substantive backend behaviour there and a
+follow-on to today's `new_recipe_version` notes-carryover work. Codifying the
+numbering + inheritance the browser checklist (L199–L201) calls out uncovered
+**two real bugs**.
+
+**FU-590 (production-severity, fixed):** writing the inheritance test showed
+`POST /recipes/<id>/new-version` **500s for any recipe that has ingredients** —
+i.e. essentially every real recipe; only an ingredient-less stub versioned. Two
+compounding faults in `NewRecipeVersionHandler`: (1) the cloned `RecipeIngredient`
+rows are `add()`ed unparented, then constructing `new_recipe` reads the deferred
+`source.image` — its lazy load autoflushed the unparented rows → `NOT NULL
+constraint failed: RecipeIngredient.recipe_id`; (2) the clone read
+`ing.stock_item` (a `lazy="noload"` relationship → always None), so a **linked**
+ingredient cloned unlinked and — with `raw_text` also not copied — violated the
+anchor CHECK (`stock_item_id OR raw_text`). **Fix:** wrap the clone+build in
+`db.session.no_autoflush`; clone each ingredient from the loaded FK
+(`ing._stock_item_id` → resolved StockItem) + carry `raw_text`/`is_optional`.
+**Why it hid:** the only existing new-version test versioned an *ingredient-less*
+recipe. Same R-032 noload family as FU-587/FU-588.
+
+**FU-589 (cosmetic, fixed):** version numbering skipped v2 — first version "(v1)",
+second "(v3)". `_sibling_count` (a Core SELECT) ran before the source's
+freshly-assigned `version_group_id` was flushed, so the first version counted 0
+group members. **Fix:** flush the back-fill before counting → v2, v3, v4…
+consistently; "counts siblings not parent" (version off a copy → next number)
+still holds.
+
+**Built (`tests/e2e/dora_api/test_new_recipe_version_numbering.py`, 4 tests):**
+numbering-counts-siblings-not-parent (v2/v3/v4 + shared `version_group_id`);
+inheritance (linked ingredient + scalars + cuisine/category carry, copy
+un-favourited, fresh id); unlinked + optional ingredient clone (both anchor
+kinds + `is_optional` survive — the FU-590 pin); editing-the-copy-leaves-source.
+
+**Verification:** version suites 11 green (4 new + UoW + notes); full backend
+suite **1547 passed** (1 skip PG-gated, 1 known xfail). CHANGELOG (2 Fixed
+entries); FU-589 + FU-590 in `_RESOLVED`.
+
+**Ledgers:** DORA_VERIFY Chunk-8 numbering/group-alloc/inheritance/independence
+delete-on-passed with a pinned-note (tools/steps/tags/collection/image
+inheritance + version-card UI stay owner-walk). DORA_VERIFY_TRIAGE Batch-5 row
+⚪→🟡.
+
+**Standards close-gate:** product fixes; violated rules were R-032 (noload read)
++ premature-autoflush — both **fixed** and named in-comment (FU-589/FU-590), not
+carved out. R-032 already exists; no new R/D-rule, no ADR. drive.mjs/design docs
+untouched.
+
+**Next up:** Batch-5 remainder is mostly UI (cards/tags/images) with a few
+backend-ownable slices — recipe **cost math** (Chunk 9: Σ qty × offer ÷
+size_value, partial-coverage badge) and structured-**step empty-text 400**
+(Chunk 6) are the cleanest. Otherwise **Shopping lists (Batch 8/9)** is untouched
+and clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-20 (Batch 4 cont.) — Bulk-linker Link endpoint codified → REAL BUG fixed (FU-588: every group showed "Used in 0 recipes")
+
+**Why:** "continue." My prior entry flagged the **Link / Create-new bulk
+endpoints (L136/137)** as the clean unpinned backend slice. Took the Link
+endpoint.
+
+**Real bug found + fixed (product code, R-032):** writing the first e2e test —
+two recipes pinning the same unlinked ingredient, run through `GET
+/recipes/unlinked-ingredients` — showed the group with `count: 0` and an empty
+`used_in_recipe_ids` ("1 group across 0 rows" in the server log). Root cause:
+`GetUnlinkedIngredientsHandler.handle` read the recipe FK via `getattr(row,
+"recipe_id", None)`, but the ORM binds that FK to the underscore-prefixed
+`_recipe_id` property (hidden from `verify_mappings`, exactly like
+`_stock_item_id` two lines up in the same file) — so the un-prefixed name isn't
+a mapped attribute and `getattr` silently returned `None`. **Every group on the
+Settings → Admin → Data → Unlinked ingredients page reported "Used in 0
+recipes"** with an empty recipe set. Cosmetic-but-misleading, not blocking: the
+one-tap **Link** matches by normalised `raw_text`, not the count, so linking
+still worked. **Fix:** read the mapped `_recipe_id` (comment names R-032).
+CHANGELOG + [[FU-588]] (resolved) logged.
+
+**Why it hid:** the endpoints had **no** e2e test (the unit test's own docstring
+said "exercised via the SPA browser walk"), and the existing unit test hand-built
+stub rows with the wrong attribute name (`recipe_id`) — so it passed against a
+shape the real entity never has, masking the bug. Corrected the stub to
+`_recipe_id` so it mirrors the mapping and can never re-mask this.
+
+**Built (`tests/e2e/dora_api/test_unlinked_ingredients_bulk_link.py`, 4 tests —
+the regression pin + endpoint coverage):** cross-recipe bulk-link over real
+persisted rows (group count/recipe-ids correct, `linked_count`, raw_text
+preserved, cookability re-derives Unknown→True on a Stocked link, group leaves
+the list); only the matching group is linked (bystander stays unlinked);
+unknown `stock_item_id` → 422 entity-existence; whitespace-only `raw_text`
+(normalises to empty) → 400 (never silently links the whole install).
+
+**Verification:** new e2e 4/4 + unit 12/12 = 16 green; full backend suite
+**1543 passed** (1 skip PG-gated, 1 known xfail). CHANGELOG Fixed entry; FU-588
+in `_RESOLVED`.
+
+**Standards close-gate:** product fix; violated rule was R-032 (underscore-FK
+read) — **fixed** and named in-comment, not carved out. R-032 already exists;
+no new R/D-rule, no ADR. drive.mjs/design docs untouched.
+
+**Next up:** Batch-4 tail — **Create-new bulk action (L137)** is client
+orchestration (POST /stock-items → bulk-link), so it's an e2e/component job, not
+a backend slice; ingredient DnD (FU-118/161) needs a harness. Otherwise **Batch 5
+(Cookbook B — chunk sections + image-steps)** or **Shopping lists (Batch 8/9)**
+are clear of the parallel Dashboard/Alerts session.
+
+---
+
+## 2026-07-20 (Batch 4 opened) — Cookbook server-slices delete-on-passed + 2 gap-fills (stub defaults FU-095, taste2 video-cruft L148)
+
+**Why:** "continue." Batch 6 (Cook mode) codify-next needs a harness that
+doesn't exist, so moved to **Cookbook (Batch 4)** — the next untouched ⚪ surface
+clear of the parallel Dashboard/Alerts session.
+
+**Approach:** most of Batch 4's server-ownable behaviour was *already* pinned by
+existing tests — the campaign disposition there is delete-on-pass (verify green,
+delete the manual bullet), not write duplicates. Confirmed green and
+delete-on-passed:
+- cookability + expiring filters (the identity-map-bug fix): `test_recipe_filters.py`
+  (14) + `test_recipe_router.py` `CookableTrueFilter`/`CookableFalseFilter`/
+  `MaxMissingFilter`/`ExpiringWithinDaysFilter` (`expiring_ingredient_count`
+  asserted) → deleted the 4 filter bullets, kept the card-render eyeball.
+- tri-state cookability (unlinked → Unknown): `test_recipe_cookability.py` +
+  `test_recipe_router.py UnlinkedRequiredIngredient` → deleted the value bullet,
+  kept the badge-render eyeball.
+- import routes: `import-from-url`→404, `import-from-content`-only
+  (`test_recipe_import_routes.py`) → deleted.
+- bulk-linker grouping/collapse/sort/dedupe: `test_unlinked_ingredients.py` (12)
+  → deleted the count/collapse/sort bullets, kept the page-render + Link +
+  Create-new bullets.
+
+**Two gap-fills (behaviour the existing tests DIDN'T cover):**
+- **L128 stub-creator server defaults (FU-095)** — new
+  `test_recipe_router.py create_recipe__NameOnly__CreatesFreeformEmptyStub`: a
+  name-only `POST /recipes` → `steps_mode='freeform'`, `instructions=null`,
+  `ingredients=[]`, `steps=[]`, shape surviving a fresh GET.
+- **L148 taste.com.au2 video-carousel + Coles price chrome (importer)** — new
+  `test_parse_recipe_from_text.py taste_video_carousel_cruft_stripped`. The
+  parametrized corpus test only checks *lower* bounds (min ingredients/steps),
+  so it can't catch cruft creeping back; this pins the exact negatives — no
+  "Estimate based on"/"Fulfilled by"/"coles-logo"/"Show ingredient quantity" in
+  ingredients, no "Next video thumbnail"/bare-"more" steps, step count ≤ 10
+  (the fixture built to exercise this parses clean: 19 ingredients, 3 steps).
+
+**Verification:** Batch-4 relevant files **100 passed**; full backend suite
+**1539 passed** (1 skip PG-gated, 1 known xfail). No product change, no
+CHANGELOG, no new FU.
+
+**Ledgers:** DORA_VERIFY — filter/tri-state/import-route/grouping bullets
+deleted with pinned-notes added to each section; survivors reworded to UI/
+endpoint/hardware owner-walks. DORA_VERIFY_TRIAGE Batch-4 row ⚪→🟡 with the
+codify-next list.
+
+**Standards close-gate:** test-only, established idioms (server-truth e2e via
+in-process client + per-test rollback; pure-function corpus unit test). No
+product code, no R/D-rule violation, no ADR due.
+
+**Next up:** Batch-4 codify-next — the **Link / Create-new bulk endpoints
+(L136/137)** are a clean backend slice not yet pinned (link an unlinked
+ingredient across N recipes; create-new stock item + link in one tap); ingredient
+DnD (FU-118/161) needs a component/e2e harness. Otherwise **Batch 5 (Cookbook B —
+chunk sections + image-steps)** continues the same surface, or **Shopping lists
+(Batch 8/9)** is untouched and clear of the parallel session.
+
+---
+
+## 2026-07-20 (Batch 6 opened) — Cook-mode rescale (FU-101) + personal-notes new-version carry (FU-432) codified
+
+**Why:** "continue verification work." The last two entries closed the
+backend-ownable Batch-7 slices and pointed at Cookbook (Batch 4) or Cook mode
+(Batch 6) as the next untouched ⚪ surfaces, clear of the parallel
+Dashboard/Alerts session. Took **Cook mode (Batch 6)** and codified its two
+cleanly-ownable slices (pure rescale math + the notes server contract),
+leaving the finish-flow/voice/timer/highlight items — which need a cook-mode
+e2e/component harness that doesn't exist yet — as clearly-labelled codify-next.
+
+**Codified — rescale (Chunk 6, FU-101):** `web_app/test/unit/scaleQuantity.spec.ts`
+already pinned the DEC-4 rounding buckets; added a dedicated describe block for
+the **literal DORA_VERIFY checklist cases** so a tolerance regression trips a
+named test, not an eyeball walk: rescale up/down 1.5×/0.5× (200g→300/100,
+2 eggs→3, 4 eggs→2), fraction snap 1 cup→¾ at 3 / 1½ at 6, countable 1 egg→1 at 3
+(0.75 up, floored at 1) / 2 at 6, sub-tolerance 0.5 cups→½, and the 7.5g→7½ gram
+edge. **+6 → 23 tests; full Vitest 408/32 green.**
+
+**Codified — personal notes (FU-432, RD-29):** the create/read/update/clear
+round-trip was already pinned (`tests/e2e/dora_api/test_recipe_notes.py`, 2
+tests); the **new-version carry-over** (`new_recipe_version.py:122`,
+DORA_VERIFY L305) had no test. Added a 3rd test: a noted recipe's note carries
+onto its new version, and a note-free source produces a note-free version (no
+phantom note). **+1 → 3 tests; touched file green; no product change.**
+
+**Checklist reconciliation (no bug):** DORA_VERIFY L333 said the "Cooking for"
+input defaults to the recipe's `servings`. The code actually seeds from the
+user's onboarding `household_headcount` when set, else `servings`, else 1
+(`RecipeCookMode.vue:642`). The seed user has **no** `household_headcount`
+(absent from seed builders; nullable column), so a seed recipe still defaults
+to its `servings` — the checklist holds for the seed. Reworded the bullet with
+the real precedence for the walker rather than logging drift as a bug.
+
+**Ledgers:** DORA_VERIFY — personal-notes section: L305 deleted (pinned),
+pinned-note added, the two survivors reworded to UI-render owner-walks +
+detail-field placement. Chunk-6 section: the 7 pure-math bullets
+(rescale/snap/countable/floor/sub-tolerance/gram-edge) deleted, pinned-note
+added; the 4 component bullets (default/clamp/min/session-only) stay owner-walk.
+DORA_VERIFY_TRIAGE Batch-6 row flipped ⚪→🟡 with the codify-next list. No
+CHANGELOG (behaviour unchanged), no new FU.
+
+**Standards close-gate:** test-only additions using established idioms
+(pure-function Vitest; backend server-truth via the in-process test client with
+per-test rollback). No product code, no R/D-rule violation introduced, no ADR
+due. drive.mjs/design docs untouched.
+
+**Next up:** Batch 6 codify-next needs a **cook-mode e2e or component harness**
+(none exists) to pin the finish-flow dialog (override-beats-action,
+Promise.allSettled fail-soft, click-out cancel, session-swap → substitute level),
+the input clamp/default/session-only, and voice/timer (audio → device-pack);
+Chunk 5 highlight/tools/hints is mostly V-pack. Otherwise **Cookbook (Batch 4/5)**
+is the next untouched ⚪ surface clear of the parallel Dashboard/Alerts session.
+
+---
+
 ## 2026-07-19 (Batch 7 cont.) — FU-505 unlinked-warning codified → REAL BUG fixed (FU-587: recipe/meal-plan auto-generate added NOTHING + mis-reported all ingredients as unlinked)
 
 **Why:** "continue." FU-505 (the "Add these manually" warning after meal-plan →

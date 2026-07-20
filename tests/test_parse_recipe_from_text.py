@@ -124,3 +124,41 @@ def test__parse_recipe_from_text__meets_minimum_shape(fixture_name: str) -> None
         assert len(result.steps) >= expected["min_steps"], (
             f"expected ≥{expected['min_steps']} steps, got {len(result.steps)}"
         )
+
+
+@pytest.mark.unit
+def test__parse_recipe_from_text__taste_video_carousel_cruft_stripped() -> None:
+    """DORA_VERIFY Cookbook L148 — the taste.com.au2 fixture wraps its method
+    in a video carousel (an '01:01' timecode, 11× 'Next video thumbnail', a
+    video title + 'more' link) that a naive collector grabs as ~16 junk steps,
+    and leaks Coles price-estimate chrome into the ingredient block ('Estimate
+    based on…', 'Fulfilled by coles-logo', 'Show ingredient quantity').
+
+    The parametrized shape test above only checks *lower* bounds, so it can't
+    catch cruft creeping back in. Pin the exact negatives against the one
+    fixture built to exercise them."""
+    text = (_FIXTURE_DIR / "taste.com.au2.txt").read_text(encoding="utf-8")
+    result = parse_recipe_from_text(text)
+
+    # Coles price chrome must never land as (or inside) an ingredient row.
+    for ing in result.ingredients:
+        raw = (ing.raw_text or "").lower()
+        for junk in ("estimate based on", "fulfilled by", "coles-logo",
+                     "show ingredient quantity"):
+            assert junk not in raw, f"ingredient carried price chrome: {ing.raw_text!r}"
+
+    # The video carousel must not survive as steps.
+    step_texts = [s.text for s in result.steps]
+    for t in step_texts:
+        assert "next video thumbnail" not in t.lower(), (
+            f"video-carousel thumbnail leaked as a step: {t!r}"
+        )
+    assert not any(t.strip().lower() == "more" for t in step_texts), (
+        "the video carousel's trailing 'more' link leaked as a step"
+    )
+    # 11 thumbnails + title + 'more' would roughly quadruple the real ~3-step
+    # method; fence the count so the carousel can't return as bulk junk even
+    # if the exact strings change.
+    assert len(result.steps) <= 10, (
+        f"expected the real method only, got {len(result.steps)} steps: {step_texts}"
+    )

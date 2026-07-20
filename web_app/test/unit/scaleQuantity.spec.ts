@@ -92,6 +92,41 @@ describe('scaleQuantity — continuous units snap to kitchen fractions', () => {
     });
 });
 
+describe('scaleQuantity — DORA_VERIFY Cook-mode Chunk 6 (FU-101) checklist cases', () => {
+    // These pin the literal examples the manual verify checklist calls out, so
+    // a rounding/tolerance regression trips a named test instead of an
+    // eyeball walk.
+
+    it('rescale up 4→6 (1.5×): 200g → 300, 2 eggs → 3', () => {
+        expect(scaleQuantity(200, 4, 6, 'g')).toBe('300');
+        expect(scaleQuantity(2, 4, 6, 'eggs')).toBe(3);
+    });
+
+    it('rescale down 4→2 (0.5×): 200g → 100, 4 eggs → 2', () => {
+        expect(scaleQuantity(200, 4, 2, 'g')).toBe('100');
+        expect(scaleQuantity(4, 4, 2, 'eggs')).toBe(2);
+    });
+
+    it('fraction snap: 4-serving 1 cup → ¾ at 3, → 1½ at 6', () => {
+        expect(scaleQuantity(1, 4, 3, 'cups')).toBe('¾');
+        expect(scaleQuantity(1, 4, 6, 'cups')).toBe('1½');
+    });
+
+    it('countable rounding: 4-serving 1 egg → 1 at 3 (0.75 up, floored at 1), → 2 at 6', () => {
+        expect(scaleQuantity(1, 4, 3, 'eggs')).toBe(1);
+        expect(scaleQuantity(1, 4, 6, 'eggs')).toBe(2);
+    });
+
+    it('sub-tolerance fractions: 0.5 cups × 1.0 → ½', () => {
+        expect(scaleQuantity(0.5, 1, 1, 'cups')).toBe('½');
+    });
+
+    it('gram fraction edge: 7.5 g × 1.0 → 7½', () => {
+        // Continuous unit, so 0.5 snaps to the ½ glyph rather than rounding.
+        expect(scaleQuantity(7.5, 1, 1, 'g')).toBe('7½');
+    });
+});
+
 describe('scaleQuantity — defaulting rules', () => {
     it('returns null for a null quantity so unit-only rows can render', () => {
         expect(scaleQuantity(null, 4, 6, 'g')).toBeNull();

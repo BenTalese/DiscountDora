@@ -51,9 +51,15 @@ class TestNormaliseRawText:
 
 def _row(raw_text: str, recipe_id: UUID) -> SimpleNamespace:
     """A stub RecipeIngredient row — only the two attrs the handler
-    reads (``raw_text`` + ``recipe_id``). Using SimpleNamespace keeps
-    the test off the ORM mapping registry entirely."""
-    return SimpleNamespace(raw_text=raw_text, recipe_id=recipe_id)
+    reads: ``raw_text`` + the recipe FK. The ORM binds that FK to the
+    underscore-prefixed ``_recipe_id`` property (hidden from
+    verify_mappings), and the handler reads *that* name — so the stub
+    must expose it under ``_recipe_id`` too. Binding it to the plain
+    ``recipe_id`` here is what let this suite pass while the real
+    endpoint reported "Used in 0 recipes" for every group (R-032; fixed
+    2026-07-20). Using SimpleNamespace keeps the test off the ORM
+    mapping registry entirely."""
+    return SimpleNamespace(raw_text=raw_text, _recipe_id=recipe_id)
 
 
 @pytest.mark.unit

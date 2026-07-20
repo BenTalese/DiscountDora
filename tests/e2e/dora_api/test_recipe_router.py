@@ -136,6 +136,55 @@ def test__create_recipe__AllCoreAttributes__RecipeCreatedAndDetailDtoEchoed(api)
     assert _Body["ingredients"][0]["unit"] == "cup"
 
 
+def test__create_recipe__NameOnly__CreatesFreeformEmptyStub(api):
+    """DORA_VERIFY Cookbook L128 (FU-095) — the "New Recipe" modal now only
+    collects Name/Cuisine/Category/Collection and creates a stub the user
+    fleshes out on the detail page. Pin the server contract: a name-only
+    create defaults to a freeform, instruction-less, ingredient-less stub."""
+    _Name = f"Router Stub Recipe {uuid4().hex[:8]}"
+    _Response = requests.post(RECIPES, json={"name": _Name})
+
+    assert _Response.status_code == 201, _Response.text
+    _Body = _Response.json()
+    assert _Body["name"] == _Name
+    assert _Body["steps_mode"] == "freeform"
+    assert _Body["instructions"] is None
+    assert _Body["ingredients"] == []
+    assert _Body["steps"] == []
+
+    # And the same shape survives a fresh GET (not just the create echo).
+    detail = requests.get(f"{RECIPES}/{_Body['recipe_id']}")
+    assert detail.status_code == 200, detail.text
+    _Detail = detail.json()
+    assert _Detail["steps_mode"] == "freeform"
+    assert _Detail["instructions"] is None
+    assert _Detail["ingredients"] == []
+
+
+def test__create_recipe__WhitespaceOnlyStepText__IsBadRequestWithDomainMessage(api):
+    """DORA_VERIFY Cookbook Chunk-6 L179 — a structured step whose text is
+    whitespace-only slips past the Pydantic `min_length=1` (it's 3 chars) but
+    is rejected by the step validator with a 400 and the exact domain message,
+    so no half-built recipe is left behind."""
+    _Response = requests.post(RECIPES, json={
+        "name": f"Router Blank Step {uuid4().hex[:8]}",
+        "steps_mode": "structured",
+        "steps": [{"client_id": "s1", "sequence": 0, "text": "   "}],
+    })
+    assert_problem(_Response, 400, title="Every step must have non-empty text.")
+
+
+def test__create_recipe__EmptyStepText__IsValidationFailure(api):
+    """The Pydantic floor: a truly empty string is a 422 validation error
+    (distinct from the whitespace-only domain-400 above)."""
+    _Response = requests.post(RECIPES, json={
+        "name": f"Router Empty Step {uuid4().hex[:8]}",
+        "steps_mode": "structured",
+        "steps": [{"client_id": "s1", "sequence": 0, "text": ""}],
+    })
+    assert_problem(_Response, 400, title="Malformed request.")
+
+
 def test__create_recipe__EmptyRequest__IsRequiredInputsValidationFailure(api):
     _Response = requests.post(RECIPES, json={})
 
@@ -218,6 +267,85 @@ def test__create_recipe__ExtraAttributes__IsBadRequest(api):
     ]
 
 #endregion create
+
+#region ---------------- estimated cost (Chunk 9 / DEC-5) ----------------
+
+
+def _link_priced_item(*, price_now: float, size_value: float, level: int = 0) -> dict:
+    """A Stocked item linked to an active product whose current offer gives a
+    unit price of `price_now / size_value`. Exercises the real cost join
+    (StockItemProduct → Product → ProductOffer)."""
+    _Item = _make_item("Cost Item", level)
+    _Suffix = uuid4().hex[:8]
+    _ProductResp = requests.post(f"{BASE}/products", json={
+        "name": f"CostProduct-{_Suffix}",
+        "store_name": "Woolworths",
+        "merchant_stockcode": f"COST-{_Suffix}",
+        "brand": "Test",
+        "price_now": price_now,
+        "price_was": price_now + 5,
+        "is_active": True,
+        "is_available": True,
+        "size": f"{size_value}L",
+        "size_unit": "L",
+        "size_value": size_value,
+    })
+    assert _ProductResp.status_code == 201, _ProductResp.text
+    _ProductId = _ProductResp.headers["location"].rsplit(":", 1)[-1]
+    _Link = requests.post(
+        f"{BASE}/stock-items/{_Item['stock_item_id']}/products",
+        json={"product_id": _ProductId},
+    )
+    assert _Link.status_code in (200, 204), _Link.text
+    return _Item
+
+
+def _detail(recipe_id: str) -> dict:
+    resp = requests.get(f"{RECIPES}/{recipe_id}")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test__estimated_cost__sums_quantity_times_offer_unit_price(api):
+    # unit price = 6.00 / 2.0 = 3.00; two of them → 6.00 (DORA_VERIFY Chunk-9 L214).
+    _Priced = _link_priced_item(price_now=6.0, size_value=2.0)
+    _Recipe = _make_recipe("Cost Full", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 2, "unit": "cup"},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] == 6.0
+    assert _Detail["estimated_cost_priced_count"] == 1
+    assert _Detail["estimated_cost_total_count"] == 1
+
+
+def test__estimated_cost__partial_coverage_prices_only_linked_products(api):
+    # One priced ingredient (3.00 unit × 1) + one linked-but-unpriced ingredient
+    # → cost counts only the priced one; the ratio surfaces "1 of 2" (L216).
+    _Priced = _link_priced_item(price_now=3.0, size_value=1.0)
+    _Unpriced = _make_item("Cost Unpriced", 0)  # linked to no product / no offers
+    _Recipe = _make_recipe("Cost Partial", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 1},
+        {"stock_item_id": _Unpriced["stock_item_id"], "quantity": 5},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] == 3.0
+    assert _Detail["estimated_cost_priced_count"] == 1
+    assert _Detail["estimated_cost_total_count"] == 2
+
+
+def test__estimated_cost__none_when_no_ingredient_is_priced(api):
+    # No linked products and no price observations → estimate is None, not 0
+    # (the card is hidden client-side — L215).
+    _Bare = _make_item("Cost Bare", 0)
+    _Recipe = _make_recipe("Cost None", ingredients=[
+        {"stock_item_id": _Bare["stock_item_id"], "quantity": 1},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] is None
+    assert _Detail["estimated_cost_priced_count"] == 0
+
+
+#endregion estimated cost
 
 #region ---------------- read: detail + list shape ----------------
 

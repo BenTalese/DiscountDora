@@ -52,6 +52,53 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-591 — Playwright e2e suite doesn't run green in one long single-worker pass (14 failures; degrades over the 20-min run)
+- **Raised:** 2026-07-20 (verify campaign — pivoting to e2e specs)
+- **Type:** finding (test-infra).
+- **What:** a full `npx playwright test` run (87 tests, **1 worker**, ~20 min)
+  came back **65–67 passed / 14 failed / 6–8 did-not-run** across two runs. The
+  14 failures are dominated by environment degradation, not logic: `Target
+  page, context or browser has been closed` (browser crash), 30s "waiting for
+  element" timeouts, null `boundingBox`es — on ~13 specs that were individually
+  green (buy-verdict, detail-products, detail-recipes, dora-score, history-tab
+  ×4, recipe-deeplink ×3, stock-pickers, stock, cook-mode-finish). Several fail
+  *before* any new spec runs, so it isn't data pollution — it's the long-lived
+  debug-mode SQLite backend + browser degrading under a 20-min single-worker
+  grind (verbose per-request DEBUG logging is a prime suspect for backend
+  slowdown).
+- **Why it matters:** the verify campaign's premise is "a UAT round re-verifies
+  everything by running `npm run test:e2e`" — that only holds if the suite runs
+  green. Right now a single long run is unreliable on this box, which also
+  blocks pinning new UI flows via e2e (see the cook-mode-finish.wip.ts casualty).
+- **Candidate fixes:** raise `workers` (parallel shards finish faster, each
+  browser context shorter-lived); quiet the e2e backend logging
+  (`serve.py` debug → INFO/WARN, or disable per-request DEBUG) to cut backend
+  latency; split the suite into batches in CI; add per-spec browser-context
+  recycling. NOTE: `workers>1` is NOT a drop-in — the specs share ONE seeded
+  backend + DB (no per-test rollback in e2e), so parallel workers would collide
+  on shared fixtures; it needs per-worker DB isolation first.
+- **Mitigation attempted 2026-07-20 — DID NOT FIX IT (kept anyway):** added a
+  `DORA_LOG_LEVEL` env override (`logging_setup.py`) + `DORA_LOG_LEVEL=WARNING`
+  in the e2e webServer env. Confirmed effective at the log layer (raw run log
+  dropped ~5 MB → a few KB). BUT the re-measured full run came back **16 failed /
+  59 passed / 19.2 min — WORSE than the prior 14**, and some failures are *early*
+  (e.g. `auto-add-on-low:110`, test 5, 30s toast timeout) so they aren't
+  cumulative-degradation at all. Conclusion: **backend log volume was not the
+  (main) cause.** The `DORA_LOG_LEVEL` knob is kept as a real operator/ops
+  improvement, but it is NOT the FU-591 fix.
+- **Revised read:** the suite has (a) a set of *inherently flaky* specs
+  (toast/element-timing 30s timeouts that trip even on a fresh box) and (b)
+  single-worker fragility / browser-process degradation over 87 tests. This is a
+  **real infra project**, not a quick inline fix — candidate work: give each
+  worker its own seeded backend+DB so `workers>1` is safe (parallel = shorter
+  browser lifetimes + faster), recycle the browser context/process periodically,
+  and separately harden the individual flaky specs' waits (await the specific
+  toast/row, not `networkidle`). **Do NOT keep re-running the full 20-min suite
+  to chase this** — it doesn't converge; it needs a dedicated, designed fix.
+- **Recommended resolution:** owner decision — schedule as a dedicated e2e-infra
+  hardening task; until then, treat e2e as a best-effort smoke layer, not a
+  clean UAT gate, and codify via backend/Vitest where possible instead.
+
 ## [OPEN] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
 - **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297)
 - **Type:** finding

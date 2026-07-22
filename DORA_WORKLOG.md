@@ -18,6 +18,185 @@ next.
 
 ---
 
+## 2026-07-22 (lean verify, cont.) — Cookbook DETAIL page (Chunk 4 / FU-089) walked live + delete-on-pass
+
+Continued the manual-first verify campaign. Picked up the worklog's "next up"
+(the per-item Cookbook sub-surface walk) and drove the **recipe detail page**
+(Chunk 4, FU-089) — the next sub-surface after the overview walked earlier today.
+
+**Setup:** reused `dora-verify-backend` (:5170, re-seeded on `preview_start`).
+Recipe confirmed the rAF-shim recipe still works — **note a refinement banked
+this session:** the in-place `form.requestSubmit()` login alone didn't flip auth,
+but a direct `fetch('/api/auth/login', {dora/dora})` (no reload) set the cookie
+and the SPA picked it up **without wiping the shim** (title → Dashboard). Then
+hash-nav only. Also banked: each `javascript_tool` call shares one JS context, so
+re-declared `const`s collide — wrap throwaway helpers in a `{ }` block.
+
+**Verified live + deleted (delete-on-pass), driving Veggie Stir Fry (cookable)
++ Cheesy Garlic Bread (2 missing):**
+- Sticky toolbar = Mark cooked / Cook mode / Log cook… / Print / Save + kebab
+  (**New version · Delete recipe**); **no CSV** anywhere.
+- **Mark cooked** → server `available_meals` 2→3, `last_made_on` null→today
+  (2026-07-22), toast "Marked as cooked."
+- **Blank name blocks save** with inline "Give the recipe a name."; server name
+  unchanged. Save is dirty-gated (disabled on a clean form).
+- Ingredient rows: **single chip, Missing (`bg-negative`) wins**; **missing rows
+  red-tinted (`.miss`)**, stocked transparent — legible in the dark theme.
+- **Cook-mode guard (not-cookable)**: "Start cook mode? This recipe isn't cookable
+  now — 2 ingredients missing." / Cancel / Start anyway; **Cancel** closes, no nav.
+- **Cook mode → Exit returns to detail** (`/cookbook/<id>`), not overview.
+- "Available meals" label renders.
+
+DORA_VERIFY Chunk-4 section rewritten with a verified-note; 4 fully-covered
+bullets removed, survivors reworded to standalone owner-walks. Evidence recorded
+in `DORA_VERIFY_TRIAGE.md` (new dated entry + register row ⚪→➗).
+
+**Left owner-walk (survivors):** sticky-pinned-at-phone-width (layout), Log-cook
+N-meal dialog + Print-view render, ingredient-row-without-a-stock-item save block
+(needs an engineered unlinked row), cook-mode guard's outside-click + unsaved-edits
+"Save & start" variant, meal-± cursor-flash (subjective).
+
+**Engineering-standards close-gate:** verification-only unit — no product code
+touched, no R-rule surface. No new ADR. No new FUs (nothing failed; no reported
+defect to log). Preview left running (`dora-verify-backend` :5170).
+
+**Next up:** the remaining Cookbook detail sub-surfaces (edit-dialog / structured
++ image steps / Chunk 5 tools) and the cook-mode sub-surface (Chunks 1–6) — each
+its own walk unit, same recipe.
+
+---
+
+## 2026-07-20 (lean verify) — agent browser-driving UNLOCKED; FU-500 nav-hide verified live + deleted
+
+**Method proven:** under the new manual-first stance, the agent CAN drive the real
+app via the Browser pane after all. Setup that works reliably on this box:
+- New `.claude/launch.json` config **`dora-verify-backend`** — venv python,
+  `-m dora_api.startup`, port 5170, env `DORA_DEBUG=true` +
+  `DORA_ALLOW_DESTRUCTIVE=true` + `DORA_SEED_BULK_ITEMS=40` + `DORA_LOG_LEVEL=WARNING`.
+  On `preview_start` it self-seeds (drop_all+create_all+seed) and serves BOTH the
+  API and the built SPA single-origin on :5170 (dist/spa already built). `/api/health`
+  200; `/` serves the SPA shell.
+- The Browser pane **renders the Vue SPA** (the old "hidden pane / no paint"
+  worry doesn't block standard pages — login page, dashboard, nav all render;
+  `read_page`/`navigate`/`computer` all work).
+- **Login gotcha (worked around):** Quasar `q-input` doesn't pick up
+  `form_input`/synthetic-type values (no `input` event → v-model stays empty →
+  no POST). Use an in-page `fetch('/api/auth/login', …)` to set the session
+  cookie, then a **full reload** to `/#/` (hash-nav alone doesn't re-probe auth).
+  App boots past "Waking up Dora…" → Dashboard.
+
+**Verified live + deleted (delete-on-pass):** **FU-500 / R-029** — seed is
+products-on + `product_search_url` blank, and the main nav renders Stock / My
+Products / Cookbook / Meal plans / Shopping lists / Reports with **no Product
+Search entry** and no disabled tooltip (the "hide, don't nag" behaviour).
+DORA_VERIFY line replaced with a verified-note; products-off + valid-URL states
+stay owner-walk (need a Settings toggle).
+
+**Left running:** the `dora-verify-backend` preview (:5170, serverId in this
+session) — reuse it to keep driving; `preview_stop` when done.
+
+**Full-surface-walk attempt (Cookbook) FIRST looked blocked, THEN diagnosed +
+FIXED (2026-07-22):** initially `/#/cookbook` rendered the toolbar + stat row but
+0 recipe cards with a stuck AuthShell splash — looked like the "hidden pane" wall.
+**Root-caused it:** the mcp Browser pane runs the document **hidden**
+(`visibilityState:'hidden'`, `hasFocus:false`) → the browser suspends
+`requestAnimationFrame` (confirmed: native rAF callback never fired in 500ms) →
+the app's rAF-gated splash-dismiss + Vue `<transition>`s never complete →
+data-driven card/grid/dialog content never paints. **Worked around it** (verified:
+**11 recipe cards + 2 collection groups + media tiles + dietary chips paint**):
+shim `requestAnimationFrame` → `setTimeout`, log in **in-place** via native
+`input`-event dispatch (no reload, so the shim survives — Quasar ignores
+`form_input`/synthetic typing), and navigate ONLY via `location.hash` (never a
+full reload / the `navigate` tool, which wipes the shim + re-stucks the splash).
+Full recipe recorded in `DORA_VERIFY_TRIAGE.md` banner. It's the same init-script
+rAF-stub trick the deleted `drive.mjs` used, reproduced inside the mcp pane.
+
+**Conclusion (corrected):** agent browser-driving of card/grid/dialog/flow
+content **IS viable** with the rAF-shim + no-reload recipe — NOT a dead end.
+
+**Cookbook OVERVIEW surface walked (2026-07-22) — verified live + recorded:**
+- Recipe cards render: **placeholder media tile** (initial letter, no image),
+  emphasised name, time/servings/difficulty, **cuisine·category·time-of-day**
+  chip line, **dietary chips**, and the **`[♥][chef-hat][add-to-list]` footer**.
+- **Collection groups collapse** on header click (cards → hidden — checked by
+  visibility, not DOM count).
+- **Search narrows** the grid by name+ingredient (11 → 2 on "egg").
+- **Main-nav label** reads "Cookbook".
+- **Filters panel** renders every control (Cuisine/Category/Time-of-day/
+  Difficulty single-selects + Meals≥/Missing≤/#ingredients≤/Collection); the
+  filter *logic* is already backend-pinned (`test_recipe_filters.py`).
+- **Corrected 1 stale item:** the "command palette 'Go to Cookbook'" clause —
+  the Ctrl/Cmd-K palette was retired.
+DORA_VERIFY Chunk-3 / Chunk-3+ / FU-085-item-5 sections annotated with
+verified-notes; the verified render bullets removed.
+
+**Left owner-walk / deeper-driving (NOT done):** MealStepper ± interaction,
+allocated-badge colour logic, kebab actions + card→detail nav, image hide/show
+persistence (needs a reload → wipes the shim), dietary tri-state cycle, and the
+Cookbook **detail / edit-dialog / cook-mode** sub-surfaces (Chunks 4–10:
+structured steps, source URL, versions, cost/nutrition, sections) — each a
+separate view = a separate walk unit.
+
+**Recipe lesson banked:** per-item behaviour checks need the RIGHT DOM signal —
+collapse hides via CSS, so check **visibility** (`getBoundingClientRect().height`
+/ `offsetParent`), not element count (my first collapse check wrongly read
+"doesn't collapse").
+
+**Preview left running** (`dora-verify-backend` :5170) for continued walking.
+
+---
+
+## 2026-07-20 (STANCE CHANGE) — Playwright descoped to smoke-only; verification is now manual-first + lean; FU-591 closed by descoping
+
+**Owner directive:** "only keep playwright tests that would not be subject to
+change… keep verification to manually driving the app as once-off checks. keep
+it lean. only the most valuable tests should be kept… originally we were writing
+tests for everything that COULD have a test, but now I see that's foolish."
+
+**What this reverses:** the FU-540/verify-campaign ambition of codifying every
+regression-worthy check as an automated test (esp. the Playwright "durable
+regression suite"). For a solo-maintained, manually-UAT'd app that was a
+maintenance millstone — the 84-test single-worker Playwright suite was slow
+(~20 min) and flaky (FU-591), and most specs tested things "subject to change".
+
+**Done — Playwright leaned to a smoke layer:**
+- **Kept** (low-churn architecture only): `auth.setup.ts`, `login.spec.ts`,
+  `smoke.spec.ts` + the harness (`fixtures`/`helpers`/`env`/`serve.py`). This is
+  the one thing Vitest (jsdom) + pytest (API) structurally can't do: prove the
+  **built SPA boots, hash-routes, and authenticates**. Collection green: **9
+  tests in 3 files** (it passed 9/9 earlier today; only deletions since).
+- **Deleted** (feature-behaviour, churn-prone): the ~22 verify-campaign specs
+  (`stock`, `buy-verdict`, `dashboard-*`, `history-tab`, `stocktake*`,
+  `detail-*`, `recipe-deeplink`, `auto-add-on-low`, `bulk-waste`,
+  `alert-thresholds`, `password-policy`, `uploads`, `stock-pickers`,
+  `dora-score`), plus `drive.mjs` and `cook-mode-finish.wip.ts`. Their behaviour
+  is mostly also covered by backend/Vitest; deleting the flaky browser copies
+  loses little real coverage.
+
+**Stance codified** in: `DORA_VERIFY_TRIAGE.md` (top banner + rewritten close-out
+rule — "verified-once → delete" is now the DEFAULT; "codify" is rare + backend/
+Vitest-only + low-churn-only; no feature-flow Playwright specs), CLAUDE.md
+(DORA_VERIFY section), `DORA_VERIFY.md` (top banner), `web_app/e2e/README.md`
+(rescoped to smoke-only). **Backend/Vitest tests already written are kept** —
+fast, reliable, low-churn, several caught real bugs (FU-588/589/590); the change
+is go-forward: default to a manual once-off drive, add a test only when it clears
+the "valuable + low-churn" bar.
+
+**FU-591 → RESOLVED by descoping** (moved to `_RESOLVED`): with no big suite,
+there's nothing to be unstable. The `DORA_LOG_LEVEL=WARNING` knob from the failed
+mitigation is **kept** (genuine ops improvement, CHANGELOG'd) but was NOT the fix.
+
+**Standards close-gate:** deletions + docs only; the `DORA_LOG_LEVEL` product
+change (prior entry) stands. No new rule; the lean-testing stance is now the
+governing convention (CLAUDE.md).
+
+**Next up:** verification proceeds by **manual once-off drives** (agent or owner)
+per surface, deleting DORA_VERIFY lines as confirmed. Any remaining
+backend-ownable low-churn contract can still be pinned, but that's the exception
+now, not the goal.
+
+---
+
 ## 2026-07-20 (FU-591 mitigation) — quiet the e2e backend logging (`DORA_LOG_LEVEL` override); measuring impact on suite stability
 
 **Why:** "continue" → tackle the e2e-infra blocker (FU-591) that gates the whole

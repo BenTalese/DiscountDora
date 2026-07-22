@@ -1,14 +1,20 @@
-# Browser E2E (Playwright) — FU-540 + the verify-campaign regression layer
+# Browser E2E (Playwright) — minimal smoke layer (FU-540)
 
-Drives the real, built SPA against a real Flask backend in a headless
-browser. Since 2026-07-17 this layer has a second job beyond the FU-540
-smoke: it is **where verified behaviour gets pinned**. The DORA_VERIFY
-campaign's close-out rule (see `DORA_VERIFY_TRIAGE.md`) sends every
-regression-worthy manual check here once it has passed a live walk — so a
-UAT round re-verifies everything previously proven by running this suite,
-and human/agent time goes only to *new* checks. One-time confirmations
-(copy, layout, subjective calls) are still verified manually and deleted;
-this suite stays a curated set of journeys, not a dump of every checkbox.
+Drives the real, built SPA against a real Flask backend in a headless browser.
+
+> **SCOPE (owner, 2026-07-20): SMOKE ONLY.** This layer's one job is to catch
+> the catastrophic breaks that unit (Vitest, jsdom) and API (pytest) tests
+> structurally can't: *does the built SPA bundle boot, route (hash-mode), and
+> authenticate?* That's `auth.setup` + `login` + `smoke` — full stop.
+>
+> The ~22 feature-behaviour specs that briefly lived here (the "verify-campaign
+> regression layer") were **deleted 2026-07-20**. They tested things *subject to
+> change* and, as an 84-test single-worker suite, were slow (~20 min) and flaky
+> (see the retired FU-591) — a maintenance millstone that outweighed their value
+> for a solo-maintained, manually-UAT'd app. **Do NOT re-add feature-flow specs
+> here.** Verification of features is a **manual once-off drive** (agent or
+> owner); durable pins go to backend/Vitest only when they're stable, low-churn
+> contracts. See `DORA_VERIFY_TRIAGE.md` (top banner) for the full stance.
 
 ## What it covers
 
@@ -16,36 +22,22 @@ this suite stays a curated set of journeys, not a dump of every checkbox.
   runtime backend-URL override (P8-10) so the SPA targets the e2e backend
   (`e2e/env.ts`), never the dev one on :5170. **Import from here, not
   '@playwright/test'.**
-- **`helpers.ts`** — CSRF-aware `apiMutate`/`apiGet` (for engineering test
-  state the UI can't create) + the `toast` locator.
+- **`helpers.ts`** — CSRF-aware `apiMutate`/`apiGet` + `toast` locator. Not
+  imported by the current smoke specs; kept as the reference for the CSRF-header
+  pattern (FU-197/FU-571) if the smoke layer ever needs to engineer API state.
 - **`auth.setup.ts`** — logs in once as the seeded `dora`/`dora` admin and
-  saves the session (`e2e/.auth/user.json`) for the other specs. (Also the
-  standing pin that pre-policy 4-char passwords still log in — FU-442.)
+  saves the session (`e2e/.auth/user.json`) for `smoke`. (Also the standing pin
+  that pre-policy 4-char passwords still log in — FU-442.)
 - **`login.spec.ts`** — the login form itself, fresh: good creds → dashboard;
   bad creds → visible error.
 - **`smoke.spec.ts`** — authenticated navigation to the key routes (via
   `/#/...` — the router is hash-mode; plain paths silently fall back to the
   dashboard): lazy chunk loads, shell renders, title mounts, no uncaught
   errors, no error boundary — plus a real authenticated `/api` handshake.
-- **`password-policy.spec.ts`** — FU-442 policy + FU-568 hint-copy pins:
-  passphrase hint on register + reset forms, ≥8 length rule, breach-list
-  rejection (case-insensitive), letters-only passphrase accepted.
-- **`uploads.spec.ts`** — FU-571 pin (chunked upload + inspect with zero
-  CSRF 403s — the bug every non-browser suite missed) + FU-545 FileDrop
-  behaviour (filled state holds; Remove doesn't reopen the picker).
-- **`buy-verdict.spec.ts`** — FU-454 one-tap actions on the overview
-  popover + detail card, and the FU-572 pin (the card repaints in place
-  after an action, not stale-until-remount). Asserts against the seeded
-  QA fixture (below).
 
-## Deterministic QA fixtures
-
-`playwright.config.ts` sets `DORA_SEED_QA_FIXTURES=true`, which makes the
-dev seed (`seed_dev_data(qa_fixtures=True)`) create states the specs assert
-against but no API can produce — currently **"QA Verdict Cheese"**
-(backdated purchases + waste → the oracle's skip/high + mark_stocked
-answer). Add new engineered states there, and keep the spec's expected
-numbers in sync with the seed block.
+That's the whole layer. (The seed still creates a "QA Verdict Cheese" fixture
+via `DORA_SEED_QA_FIXTURES=true` in the config — a leftover of the deleted
+buy-verdict spec; harmless, removable whenever the seed is next touched.)
 
 ## Architecture
 

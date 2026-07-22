@@ -9,6 +9,16 @@ top-to-bottom.
 > **Campaign in progress (2026-07-16):** this pile is being cleared via
 > agent-verified evidence reports — see `DORA_VERIFY_TRIAGE.md` (repo root)
 > for the batch plan, per-section classification, and session protocol.
+>
+> **⚠️ STANCE (owner, 2026-07-20) — verify by driving the app once, don't
+> auto-test everything.** Clear an item by **driving the running app** (agent or
+> owner) to confirm it works, then delete the line — that's the default. Write an
+> automated test only for a **stable, low-churn contract** that's costly to
+> re-check by hand (prefer backend/Vitest). **Playwright is smoke-only now**
+> (`auth.setup`+`login`+`smoke`); the feature-flow specs were deleted 2026-07-20.
+> Some pinned-notes below cite a now-deleted Playwright spec — those items are
+> just manual once-off checks under this stance; backend/Vitest pin-notes remain
+> valid. Full rationale: `DORA_VERIFY_TRIAGE.md` top banner.
 
 ---
 
@@ -221,23 +231,19 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Rename a section without touching rows → rows stay pinned (editor sends ingredients[] + sections[] together)
 
 ### Cookbook Chunk 4 — detail page cleanup — origin FU-089
-- [ ] Sticky top toolbar: Mark cooked (prominent) / Cook mode / Log cook / Print / Save / kebab(Delete) — stays at the top on narrow window
-- [ ] Mark cooked bumps pool +1 + last-cooked; Log cook... logs N; Print opens print view; no CSV
-- [ ] Name editable; blank blocks save with inline error
-- [ ] Ingredient row without a stock item blocks save (prompt); unchanged name save succeeds
-- [ ] Ingredient rows show a single chip (Missing wins) + tinted when missing
-- [ ] Cookable/missing box readable in dark themes
-- [ ] Cook-mode guard: unsaved edits OR not cookable → confirm dialog with working Cancel; outside click doesn't navigate; "Save & start" only proceeds on save success
-- [ ] Cook mode exit returns to recipe detail page (not overview)
-- [ ] "Available meals" label; meal ± shows no not-allowed cursor flash
+*(Verified live 2026-07-22 (browser drive, seeded, dark theme): **sticky toolbar composition** — Mark cooked / Cook mode / Log cook… / Print / Save + kebab (New version · Delete recipe), with **no CSV** anywhere; **Mark cooked** bumps the pool +1 (available 2→3) + stamps last-cooked to today + fires a "Marked as cooked." toast; the **name field is editable**, and a **blank name blocks save** with the inline error **"Give the recipe a name."** while the server name stays unchanged (Save is dirty-gated — disabled on a clean form); **each ingredient row shows a single chip** (Missing `bg-negative` wins over Stocked `bg-positive`) and **missing rows carry a red `.miss` tint** (stocked rows transparent) — the box was legible in dark theme; the **cook-mode guard on a not-cookable recipe** shows *"Start cook mode? This recipe isn't cookable now — 2 ingredients missing."* with Cancel / Start anyway, and **Cancel closes it without navigating**; **Cook mode → Exit returns to the recipe detail page** (not overview); the **"Available meals"** label renders. Remaining below = layout/visual/dialog-flow owner-walks.)*
+- [ ] Sticky toolbar **stays pinned at the top on a narrow window** (layout at phone width)
+- [ ] **Log cook…** logs N meals (dialog flow); **Print** opens the print view
+- [ ] Ingredient row **without a stock item** blocks save with a prompt *(the unchanged-name-save-succeeds half is backend-pinned — the rename-to-own-name 422 fix)*
+- [ ] Cook-mode guard: **outside click doesn't navigate**, and the **unsaved-edits variant** shows "Save & start" which only proceeds on save success
+- [ ] meal ± shows no not-allowed cursor flash (subjective)
 
 ### Cookbook Chunk 3 — card redesign + naming — origin FU-088
-- [ ] Cards render with placeholder media tile, emphasised name, chips, dietary chips, meals box; equal-height in grid row
+*(Verified live 2026-07-22 (browser drive, seeded): recipe cards render the **placeholder media tile** (initial letter when no image), **emphasised name**, time/servings/difficulty, the **cuisine·category·time-of-day chip line**, and **dietary chips**; **collection groups collapse** on header click (cards → hidden); the **main-nav label reads "Cookbook"**; and the **search box narrows** the grid by name+ingredient (11 → 2 on "egg"). The `g r` keyboard nav is untested; the old "command palette 'Go to Cookbook'" clause is **stale** — the Ctrl/Cmd-K palette was retired. Remaining below = interaction/badge/subjective.)*
 - [ ] MealStepper ± adjusts cooked pool live (decrement disabled at 0); also on recipe detail page and stock-item detail's recipe cards
 - [ ] Allocated badge appears only when `committed_meals > 0`; **red** when `available_meals < committed_meals`, neutral otherwise — API must return `committed_meals` field
-- [ ] Card has only Cook as primary; kebab = add-all-to-list + add-to-meal-plan (no Edit/Duplicate/Delete); clicking the card opens detail
-- [ ] Collection groups are collapsible rounded boxes (header toggles, chevron flips)
-- [ ] Naming: menu reads "Cookbook"; `g r` + command palette "Go to Cookbook"; detail breadcrumb "Cookbook"
+- [ ] Card has only Cook as primary; kebab = add-all-to-list + add-to-meal-plan (no Edit/Duplicate/Delete); clicking the card opens detail *(the [♥][chef-hat][add-to-list] footer render is verified above; the kebab actions + card→detail nav stay owner-walk)*
+- [ ] "meals box" on the card + equal-height within a grid row (V-pack eyeball — the meals box hides at 0 meals; equal-height is per-row layout)
 
 ### Cookbook Chunk 3+ revision (FU-088 → cookbook card revision) — origin FU-088 (revision)
 - [ ] Image hide/show toggle works (per-user, persists across sessions)
@@ -248,10 +254,11 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Cookable signalled via cook-button colour (no separate dim)
 - [ ] Difficulty filter + sort axis works
 - [ ] Picker modal opens with per-ingredient checkboxes + Optional separator
-- [ ] New footer layout `[♥][chef-hat][add-to-list]`
 - [ ] Time-of-day vocabulary in edit dialog
 - [ ] Per-row Optional checkbox in both editors
 - [ ] Cookability still server-derived
+
+*(Verified live 2026-07-22: the **`[♥][chef-hat][add-to-list]` footer layout** (3 icon buttons per card) and the **meta-line** (cuisine·category·time-of-day + time/servings/difficulty) render correctly on the seeded cards. Image hide/show persistence, allocated-badge drop, optional-ingredient dimming, difficulty filter, and picker modal stay owner-walk.)*
 
 ### Cookbook Chunk 5 — images + tools — origin FU-091
 - [ ] `alembic upgrade head` applies `b8e3f1a6d2c4` on SQLite + Postgres; `verify_mappings()` passes for `Tool`
@@ -263,7 +270,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ### Cookbook Chunk 2 — tag taxonomy — remaining items — origin FU-085
 - [ ] Item 3: `repository.get(Recipe).all()` selectin-loads `recipe.cuisine`/`.category` (no null cuisine/category in assistant + global_search)
-- [ ] Item 5: overview cuisine/category single-selects filter end-to-end; tri-state DietaryTagFilter cycles +/−/neutral and stays open; RecipeCard shows names + tag chips
+- [ ] Item 5: overview cuisine/category single-selects filter end-to-end; tri-state DietaryTagFilter cycles +/−/neutral and stays open; RecipeCard shows names + tag chips *(Verified live 2026-07-22: the Filters panel renders Cuisine/Category/Time-of-day/Difficulty single-selects + Meals≥/Missing≤/#ingredients≤/Collection; RecipeCard shows names + dietary chips; and the filter narrowing works (search 11→2, and the cookability/cuisine/max-missing logic is backend-pinned in `test_recipe_filters.py`). The dietary tri-state **cycle** interaction (+/−/neutral, stays open) is the only unwalked half.)*
 - [ ] Item 6 (FU-147): on seeded "egg fried rice", two dietary tags pre-populate the picker; saving with no edit doesn't clear them; adding/removing tags + saving round-trips
 - [ ] Item 8: backup → restore round-trips Cuisine/Category/DietaryTag/RecipeTag in FK-correct order
 - [ ] Item 9 (FU-150): assistant `search_recipes`/`suggest_recipes` filter by cuisine + dietary tags (Python-side / name-resolved)
@@ -1495,6 +1502,7 @@ machine at this session close-time; walked opportunistically.*
 
 ### Support / "Report an issue" channel — origin FU-370 (2026-07-14)
 *Shipped **dormant**: with no channel configured (`support_channel.py` constants blank + no `DORA_SUPPORT_*` env) nothing new should render. Verify both states — dormant, then configured (easiest: boot the API with `DORA_SUPPORT_URL=https://example.com/new?template=bug_report.yml`, or `DORA_SUPPORT_EMAIL=you@example.com` to check the mailto path).*
+*(Server contract confirmed 2026-07-20 by a once-off in-process check: dormant default → `GET /api/health` `support: {url:'', email:''}` (client self-gates → no button); `DORA_SUPPORT_URL` set → resolver returns it with URL winning over a set email; `DORA_SUPPORT_EMAIL`-only → `{url:'', email:…}` (mailto path). So the `/health` value that drives every button below is verified — the remaining bullets are just the **UI renders** for each state, which stay owner-walk.)*
 - [ ] **Dormant (default):** Help page header shows **no** "Report an issue" button; the About tab reads the honest one-person copy ending "…pass it to whoever runs this Dora instance"; DoraBot "this is broken" reply points at Help with no external link; a forced full-page error shows no "Report this" button
 - [ ] **With `DORA_SUPPORT_URL` set:** Help header shows a **Report an issue** button that opens the URL in a new tab with `?title=…&body=…` appended (and the existing `?template=` preserved via `&`); About tab's last paragraph now points at "the **Report an issue** button at the top of this page"
 - [ ] DoraBot: type "something's broken" → the reply offers a **Report it** button that opens the same URL in a new tab
@@ -1516,8 +1524,8 @@ machine at this session close-time; walked opportunistically.*
 
 ### R-029 hide-don't-nag sweep — Product Search nav entry — origin FU-500 (2026-07-08)
 *The one behavioural change from the R-029 sweep: when `features.products` is on but no `product_search_url` is configured, the Product Search entry disappears from the nav instead of rendering disabled-with-tooltip. Quick eye-check to confirm the three states.*
+*(Verified live 2026-07-20 (browser drive): seed state is products-on + url-blank, and the main nav renders Stock / My Products / Cookbook / Meal plans / Shopping lists / Reports with **no Product Search entry** and no disabled tooltip — the R-029 "hide, don't nag" behaviour. The products-off and valid-URL states below need a Settings toggle to walk.)*
 - [ ] With **products off** in Settings → System → Features → Products: no Product Search entry in the main navigation (unchanged behaviour)
-- [ ] With **products on** but `product_search_url` **blank**: no Product Search entry in the main navigation (the new behaviour — was previously visible but disabled with a "Not set up yet …" tooltip)
 - [ ] With **products on** and a **valid URL** configured: Product Search entry visible, clicking opens the URL in a new tab (unchanged behaviour)
 - [ ] Side menu (narrow viewport) mirrors the above: entry appears/disappears in lockstep with the main menu
 - [ ] Confirm no other surface still advertises "Product search not set up" — should be silent everywhere except the config row on Settings → System → Features

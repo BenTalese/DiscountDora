@@ -10,6 +10,30 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-591 — Playwright e2e full-suite instability → RESOLVED BY DESCOPING (Playwright is now smoke-only)
+- **Raised + resolved:** 2026-07-20 (verify campaign — e2e pivot, then owner
+  stance change).
+- **Type:** finding (test-infra) → won't-fix-as-stated / descoped.
+- **What it was:** the full `npx playwright test` run (87 tests, 1 worker,
+  ~20 min) came back **14–16 failed** across three runs — browser-closed / 30s
+  element-timeouts / null layouts from single-worker degradation + inherently
+  flaky toast-timing specs. A `DORA_LOG_LEVEL=WARNING` mitigation (kept — it's a
+  real ops knob, CHANGELOG'd) quieted the backend logs but did NOT fix it (run
+  went 14→16 failures), proving log volume wasn't the cause.
+- **Resolution (owner, 2026-07-20):** rather than invest in the e2e-infra
+  hardening project (per-worker DB isolation for `workers>1`, browser recycling,
+  per-spec wait hardening), the owner **descoped Playwright to a minimal smoke
+  layer** — `auth.setup` + `login` + `smoke` only (does the built SPA
+  boot/route/authenticate). The ~22 feature-behaviour specs + `drive.mjs` +
+  `cook-mode-finish.wip.ts` were **deleted**. With no big suite, there's no big
+  suite to be unstable — the 9-test smoke layer runs fast + reliably.
+- **Stance codified:** verification is now manual-first (drive the app once);
+  automated tests only for stable low-churn contracts (prefer backend/Vitest).
+  See `DORA_VERIFY_TRIAGE.md` top banner + CLAUDE.md's DORA_VERIFY section.
+- **State note:** if a comprehensive browser regression suite is ever wanted
+  again, the infra work above is the prerequisite — but it's explicitly NOT on
+  the roadmap.
+
 ## [RESOLVED] FU-590 — New-version of a recipe WITH ingredients 500'd + silently unlinked linked ingredients (autoflush + R-032 noload clone)
 - **Raised + resolved:** 2026-07-20 (verify-campaign Batch 5, codifying the
   Chunk-8 recipe-versions checks — found by the new numbering/inheritance test,

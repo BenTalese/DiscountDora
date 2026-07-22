@@ -212,13 +212,23 @@ The logs, each with one purpose — keep them separate:
   surface. The user walks it and deletes items as he confirms them — there
   is no archive. **Not** scanned at session start. New verify checks land
   here, not in `DORA_FOLLOWUPS.md`. **Delete-on-pass (owner delegation
-  2026-07-18):** when a session verifies an item itself — codified as a green
-  e2e/backend test, or walked live and passed — **delete the line from this
-  file in the same session** (rewording neighbouring bullets so survivors
-  still stand alone), rather than marking it "owner-deletable" and leaving it
-  to pile up. Record what was verified + the evidence in
-  `DORA_VERIFY_TRIAGE.md` and the worklog (they're the audit trail; this file
-  stays a pure to-walk pile). Failed or partially-covered items stay.
+  2026-07-18):** when a session verifies an item itself — walked live in the
+  running app and passed (the default), or covered by an existing green test —
+  **delete the line from this file in the same session** (rewording
+  neighbouring bullets so survivors still stand alone). Record what was
+  verified + the evidence in `DORA_VERIFY_TRIAGE.md` and the worklog. Failed or
+  partially-covered items stay.
+  **⚠️ VERIFICATION STANCE (owner, 2026-07-20) — LEAN, manual-first.** Do NOT
+  try to convert checks into automated tests wholesale ("test everything that
+  COULD have a test" was reversed as foolish for this app). Verify by **driving
+  the running app once** (agent or owner) and deleting the line. Write an
+  automated test ONLY when it pins a **stable, low-churn contract** that's
+  expensive to re-check by hand (prefer backend/Vitest — fast + reliable).
+  **Playwright is a minimal smoke layer only** (`auth.setup`+`login`+`smoke`:
+  does the built SPA boot/route/authenticate) — the feature-flow specs were
+  deleted 2026-07-20 (slow + flaky; things "subject to change"). Do NOT add
+  feature-flow Playwright specs. Full rationale + the disposition rule:
+  `DORA_VERIFY_TRIAGE.md` top banner.
 
 ## Governing documents (read on demand, not every session)
 

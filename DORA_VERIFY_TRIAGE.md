@@ -1,11 +1,62 @@
 # DORA_VERIFY triage & campaign tracker
 
-**What this is:** the working plan for clearing the QA pile in `DORA_VERIFY.md`
-(1,406 unchecked items as of 2026-07-16) without the owner hand-walking all of it.
-Agreed approach (owner, 2026-07-16): **triage → agent-verified evidence reports per
-surface → guided-walkthrough packs for eyeball items → device packs for hardware
-items**. Playwright E2E conversion (the durable-tests option) is deliberately
-deferred to a later session.
+> ## ⚠️ STANCE CHANGE (owner, 2026-07-20) — LEAN testing, manual-first verification
+>
+> The original campaign aimed to **codify every regression-worthy check as an
+> automated test** ("test everything that COULD have a test"). The owner has
+> reversed that: **that ambition was foolish for this app.** The new stance:
+>
+> - **Verification is primarily MANUAL once-off drives** — the agent or the
+>   owner drives the running app to confirm a thing works, once, and moves on.
+>   We do NOT convert each check into a durable test.
+> - **Automated tests are kept LEAN — only the most valuable, LOW-CHURN
+>   contracts.** A test earns its place only if it pins something stable that
+>   would be expensive to re-check by hand *and* is unlikely to change as
+>   features evolve. Feature-behaviour/UI-flow tests (which churn) are NOT worth
+>   maintaining.
+> - **Playwright is now a minimal smoke layer only** — `auth.setup` + `login` +
+>   `smoke` (does the built SPA boot, route, and authenticate). The ~22
+>   feature-behaviour specs were **deleted 2026-07-20** (they were slow + flaky
+>   as an 84-test single-worker suite — see the retired FU-591; and they tested
+>   things "subject to change"). Do NOT add feature-flow Playwright specs.
+> - **Backend/Vitest tests already written are kept** (they're fast, reliable,
+>   low-churn, and several caught real bugs — FU-588/589/590). But going forward,
+>   only add one when it clears the "valuable + low-churn" bar; default to a
+>   manual once-off check instead.
+> - **DORA_VERIFY.md items** that were previously "pinned by <a now-deleted
+>   Playwright spec>" revert to manual once-off checks — which is the new default
+>   anyway. Backend/Vitest pin-notes remain valid.
+>
+> **Agent browser-driving — DIAGNOSED + WORKING RECIPE (2026-07-22).** Earlier
+> it looked like a dead end (data-driven cards never painted); root cause found
+> and worked around. **Why it half-mounted:** the mcp Browser pane runs the doc
+> **hidden** (`visibilityState:'hidden'`, `hasFocus:false`), so the browser
+> suspends `requestAnimationFrame`; the app's AuthShell splash-dismiss + all Vue
+> `<transition>`s are rAF-gated → never complete → cards/dialogs/lists never
+> enter the DOM (shells render because they have no rAF-gated transition).
+> **THE RECIPE (verified: 11 Cookbook cards + collection groups + chips paint):**
+> 1. `preview_start` `dora-verify-backend` (seeded API+SPA on :5170).
+> 2. On the login page, in ONE `javascript_tool` call: shim
+>    `window.requestAnimationFrame = cb => setTimeout(()=>cb(performance.now()),0)`
+>    (+ `cancelAnimationFrame → clearTimeout`), THEN log in **in-place** — set
+>    the username/password via the native value-setter + dispatch a bubbling
+>    `input` event (Quasar `q-input` ignores `form_input`/synthetic typing), then
+>    `form.requestSubmit()`. The app authenticates WITHOUT a reload, so the shim
+>    survives.
+> 3. Navigate ONLY in-app via `location.hash='#/cookbook'` (NOT the `navigate`
+>    tool / never `location.reload()` — a full load wipes the shim + re-triggers
+>    the stuck splash).
+> 4. Then `read_page` / DOM queries see the painted content. (A leftover
+>    `[class*=splash]` node stays in the DOM but doesn't block — cards render
+>    underneath.)
+> So card/grid/dialog/flow verification IS agent-doable now — this is the same
+> init-script rAF-stub trick the deleted `drive.mjs` used, reproduced in-pane.
+
+**What this is (historical framing, superseded by the banner above):** the
+working plan for clearing the QA pile in `DORA_VERIFY.md` (1,406 unchecked items
+as of 2026-07-16). Original approach (owner, 2026-07-16): triage → agent-verified
+evidence reports per surface → guided-walkthrough packs for eyeball items →
+device packs for hardware items.
 
 **How a verify session uses this doc:**
 1. Pick the next ⚪ batch from the batch plan below (or the one the owner names).
@@ -91,25 +142,28 @@ surfaces, then the long tail, then env-gated batches.
 | 19 | **Env-gated: Postgres leg** — alembic-on-PG halves of every migration item (compose.dev PG; `DORA_TEST_DB=postgres`) | scattered | ~12 | ⚪ |
 | 20 | **Operator migrations on populated DB** — FU-563/564/565 (1576–1591), Windows desktop build (1517–1528), fresh-install boots (1542–1552, 1613) | 1517–1614 | ~26 | ⚪ |
 
-### Close-out rule — every batch, every check gets a disposition (2026-07-17)
+### Close-out rule — every batch, every check gets a disposition (REVISED 2026-07-20)
 
-The campaign's durable artifact is the **Playwright regression suite**
-(`web_app/e2e/`, see its README), not the walk itself. On closing a batch,
-classify each check:
+*(Superseded the 2026-07-17 "codify → Playwright spec" rule per the stance-change
+banner at the top of this file.)* The durable artifact is **NOT** a big Playwright
+suite. Verification is manual-first; automated tests are lean and low-churn. On
+closing a batch, classify each check:
 
-1. **`verified-once → delete`** — one-time confirmations (copy, layout,
-   subjective calls, migration ran). Verified live, owner deletes from
-   DORA_VERIFY, no code.
-2. **`codified → spec + delete`** — behaviour that could regress under
-   future change (flows, gates, integration seams). Verify live FIRST, then
-   pin it as a Playwright spec (or push it down to Vitest/backend tests when
-   a browser isn't needed). The manual check is then deleted *permanently* —
-   a UAT round re-verifies it by running `npm run test:e2e`.
+1. **`verified-once → delete`** — the DEFAULT. One-time confirmation by driving
+   the running app (agent or owner): copy, layout, a flow works, a gate holds,
+   subjective calls, a migration ran. Verify live, delete the line from
+   DORA_VERIFY, record the evidence in the worklog/triage. **No test written.**
+2. **`codify (RARELY) → backend/Vitest`** — ONLY when the behaviour is a
+   **stable, low-churn contract** that's expensive to re-check by hand (e.g. a
+   server truth-table, a pure calc, a security invariant) AND unlikely to change
+   as features evolve. Prefer backend/Vitest (fast, reliable). **Do NOT write
+   feature-flow Playwright specs** — they churn and were retired (FU-591). If in
+   doubt, do a manual once-off check instead.
 3. **`env-gated → device pack`** — hardware/host-bound checks; stay manual.
 
-Every real bug the campaign finds gets a pinned regression test where
-feasible (FU-571/FU-572 are the reference shape). Keep the suite curated —
-core journeys + bug pins, not a checkbox dump.
+A real bug found while verifying still gets a pinned regression test **when it's
+a low-churn contract** (the backend bug-pins FU-588/589/590 are the reference
+shape) — but a flaky/UI-churn pin is worse than none.
 
 **Batch 0 retro-codified (2026-07-17):** password-policy (5 specs, FU-442 +
 FU-568 pins), uploads/FileDrop (2 specs, FU-571 + FU-545 pins), buy-verdict
@@ -840,6 +894,43 @@ later 5) for setup.
 
 ---
 
+### Cookbook detail page — Chunk 4 (FU-089) walked live (2026-07-22)
+
+Followed the rAF-shim recipe (in-place login, hash-nav) on the seeded
+`dora-verify-backend` (:5170). Drove **Veggie Stir Fry** (cookable) and
+**Cheesy Garlic Bread** (2 missing) recipe-detail pages. Verified + deleted the
+covered DORA_VERIFY bullets:
+
+- **Sticky toolbar composition** — Mark cooked / Cook mode / Log cook… / Print /
+  Save, plus the kebab (`mdi-dots-vertical`) → **New version · Delete recipe**;
+  **no "CSV"** anywhere in the page.
+- **Mark cooked** — server truth before/after: `available_meals` 2→3,
+  `unallocated_meals` 2→3, `last_made_on` null→`2026-07-22` (today); toast
+  "Marked as cooked."
+- **Name validation** — name field editable; blanking it + Save shows the inline
+  field error **"Give the recipe a name."** and the server name stays
+  "Veggie Stir Fry" (save blocked). Save is **dirty-gated** (`aria-disabled` on a
+  clean form) — so an unchanged-only Save is a no-op (the rename-to-own-name 422
+  regression is separately backend-pinned).
+- **Ingredient chips** — one chip per row, **Missing (`bg-negative`) wins** over
+  Stocked (`bg-positive`); **missing rows carry a `.miss` red tint**
+  (`rgba` ≈ salmon @ 0.09), stocked rows transparent. Legible in dark theme.
+- **Cook-mode guard (not-cookable)** — Cook mode on Cheesy → dialog *"Start cook
+  mode? This recipe isn't cookable now — 2 ingredients missing."* / Cancel /
+  Start anyway; **Cancel closes without navigating** (stayed on detail).
+- **Cook mode exit** — entering cook mode on the cookable recipe routes to
+  `…/cook`; **Exit returns to the recipe detail page** (`/cookbook/<id>`), not
+  the overview.
+- **"Available meals"** label renders (`Available meals 2 unallocated of 2 cooked`).
+
+**Left owner-walk** (survivors kept in DORA_VERIFY): sticky-stays-pinned at phone
+width (layout), Log cook… N-meal dialog + Print-view render, ingredient-row-
+without-a-stock-item save block (needs an engineered unlinked row), the cook-mode
+guard's outside-click + unsaved-edits "Save & start" variant, and the meal-±
+no-cursor-flash subjective check. Register row flipped ⚪→➗.
+
+---
+
 ## Section register
 
 Status per section. Lines are the 2026-07-16 snapshot. "Env" lists only hard
@@ -876,7 +967,7 @@ already has regression tests (low-risk re-confirm, per CHANGELOG/worklog).
 | Chunk 8 recipe versions (FU-105) | 219–230 | 11 | 11/0/0 | 0 | SQLite+PG alembic | ⚪ |
 | Chunk 9 cost + nutrition (FU-116) | 232–247 | 15 | 14/1/0 | 0 | Money+Nutrition flags; priced products | ⚪ |
 | Chunk 10 multi-part sections (FU-119) | 249–255 | 6 | 6/0/0 | 0 | SQLite+PG alembic | ⚪ |
-| Chunk 4 detail cleanup (FU-089) | 257–266 | 9 | 8/1/0 | 0 | | ⚪ |
+| Chunk 4 detail cleanup (FU-089) | 257–266 | 9 | 8/1/0 | 0 | detail walk 2026-07-22: toolbar+kebab / Mark-cooked / name-validation / chip-Missing-wins+tint / not-cookable guard+Cancel / cook-mode exit→detail verified; layout+dialog-flow survivors | ➗ |
 | Chunk 3 card redesign (FU-088) | 268–274 | 6 | 6/0/0 | 1 | command-palette half of L274 stale | ⚪ |
 | Chunk 3+ revision (FU-088r) | 276–288 | 12 | 12/0/0 | 0 | 2 sessions for per-user persistence | ⚪ |
 | Chunk 5 images + tools (FU-091) | 290–296 | 6 | 6/0/0 | 0 | image files incl. >4MB | ⚪ |

@@ -18,6 +18,329 @@ next.
 
 ---
 
+## 2026-07-22 (lean verify, BIG ROUND #2) — money/nutrition ON-state attempted → harness wall diagnosed → FU-592 spawned
+
+Went after the money/nutrition-gated Cookbook surfaces (Chunk 9 cost card + kcal
+input/nutrition card + Kcal sort/filter) — and by extension buy-verdict/budget.
+**Hit a genuine agent-harness wall; diagnosed it fully and spawned the fix.**
+
+**What blocks it:** the surfaces gate on **both** the install flags
+(`AppSetting.money_enabled`/`nutrition_enabled`) **and** the per-user prefs
+(`User.money_features_enabled`/`nutrition_mode` — the seed `dora` user has them
+**off/"off"**), and **all are read once at cold mount** (health probe + authStore
+currentUser; FU-586/FU-580). I PATCHed the install flags on (`/api/health` then
+reports money+nutrition true, even unauthenticated) and the user prefs on
+(`/api/auth/me` → money:true, nutrition:"simple"), but:
+- mid-session API PATCHes don't re-render (stores are stale, no re-probe);
+- a full reload boots the app authed → rAF-gated content **sticks** (the shim
+  can't be injected pre-boot, and can't retroactively un-suspend the already-
+  scheduled splash-dismiss rAF — the nav shell paints, the cards/detail don't);
+- the login-form path to force a fresh **in-place** authed mount is blocked by the
+  **q-input synthetic-injection limitation** (DOM value sets, Quasar v-model stays
+  empty → login handler no-ops).
+So there's no in-session way to get an authed + shimmed + flags-on + prefs-on pane.
+
+**The fix (spawned as FU-592):** boot the verify seed with money+nutrition already
+on — a `DORA_SEED_MONEY_ON` env knob (env→param like `DORA_SEED_BULK_ITEMS`) that
+sets the dev user's prefs + `get_or_create_app_setting` install flags, plus a
+`dora-verify-backend-money` launch variant. Deliberately **not** implemented this
+turn: it's product-seed + startup code across two files + a launch variant + a
+restart + the verification — too much to land correctly at the tail of a long turn
+without risking the shared dev seed. Env-gated/off-by-default → safe, clean unit
+for a fresh session (do the knob first, then verify Chunk 9 ON-state + buy-verdict
++ budget in one go). Full impl sketch in the FU.
+
+**Recovery + cleanliness:** a fresh `preview_start` **re-seeds** (drop_all+
+create_all), reverting ALL my DB drift this session (install flags + user prefs
+back to default-off — confirmed `/api/health` money/nutrition false; also clears
+the earlier Mark-cooked / version-group-backfill drift). Preview left freshly
+re-seeded on :5170. Note: after a fresh `preview_start`, the login recovery
+(shim → fetch-login racing the initial auth probe) works; once the probe has
+resolved logged-out, re-auth needs the form (q-input-blocked) — so the next
+session should shim+fetch-login **promptly** after `preview_start`.
+
+**Verification delta this round:** re-confirmed item 201's **off-state** post-reset
+(no kcal/cost/nutrition surfaces, no Kcal sort/filter). ON-state stays owner-walk
+pending FU-592.
+
+**Engineering-standards close-gate:** no product code changed (the seed edit was
+deliberately deferred to FU-592 rather than rushed). DB-state changes all reverted
+by the re-seed. New FU-592 logged (deferred job). No R-rule violations.
+
+**Next up:** implement FU-592, then the money/nutrition/buy-verdict/budget
+verification. Or, without the knob, a fresh non-flag-gated surface (Stock / Meal
+plans / Shopping lists interactive items).
+
+---
+
+## 2026-07-22 (lean verify, BIG ROUND) — recipe versions + MealStepper + cost/nutrition off-state
+
+Three Cookbook sub-surfaces in one pass, all on Veggie Stir Fry (5 ingredients).
+
+**A. Recipe versions (Chunk 8, FU-105) → section ➗.** Singleton **hides** the
+"Other versions" card. Kebab → **New version** created **"Veggie Stir Fry (v2)"**
+**with no 500** — a **live confirmation of the FU-590 fix** (new-version of a
+recipe *with* ingredients used to 500 in prod) — navigated to the copy, which
+**shares a back-filled `version_group_id`** with the source (both list 1 sibling),
+**inherited all 5 ingredients + cuisine (Asian) + servings (3)**, and **started
+un-favourited**. The **"Other versions" card + "v2" label** render on the copy,
+and the **source shows the card** once it has a sibling. **Deleting v2** (→204)
+returned the source to a singleton and the **card disappeared**. (Source left with
+a harmless orphan group-of-1 id; seed disposable.)
+
+**B. MealStepper (Chunk 3 item 233) → 🟡.** Detail-page ± **live-adjusts the pool**
+3→2→1→0; **"Remove one meal" disables at 0**; restoring via + persisted (server
+`available_meals`=3). Allocated badge (needs a meal-plan allocation) + the
+card/stock-item-detail instances remain owner-walk.
+
+**C. Cost/nutrition (Chunk 9 item 201) → 🟡.** `/api/health` shows
+`features.money=false`, `nutrition=false`; in that state the detail page has **no
+kcal input / no cost card / no nutrition card** and the overview has **no Kcal sort
+or filter** — the flags-OFF assertions all hold. The **flags-ON** items are
+**harness-blocked**: flags are read once at cold mount (FU-586); flipping them
+needs a reload, which re-sticks the hidden-pane splash (the rAF shim can't
+retroactively un-suspend the already-scheduled splash-dismiss rAF). Left
+owner-walk; cost math is backend-pinned anyway.
+
+DORA_VERIFY: Chunk 8 / Chunk 3 / Chunk 9 sections updated with verified-notes.
+TRIAGE: Chunk 8 ⚪→➗, Chunk 3 ⚪→🟡, Chunk 9 ⚪→🟡, + a BIG ROUND evidence entry.
+
+**Harness limit banked (important):** any surface gated behind an **install flag
+read at cold mount** (money, nutrition — and likely other `/api/health` features)
+**can't be flipped mid-session** in this agent-driven pane, because turning it on
+needs a reload and a reload re-sticks the rAF-suspended splash. So flag-ON UI
+verification stays owner-walk unless a seed can be booted with the flag already on
+(a `dora-verify-backend` env var would be the clean fix — future tooling note).
+
+**Engineering-standards close-gate:** verification-only; writes were a new-version
+create + delete + MealStepper ± (self-restored), all via public API/UI. No product
+code, no R-rule surface, no ADR, no new FUs. Preview left running.
+
+**Next up:** a money+nutrition-ON seed variant (new launch.json env) would unblock
+Chunk 9's ON-state + the buy-verdict/budget money surfaces; otherwise move to a
+fresh surface (Stock / Meal plans / Shopping lists interactive items).
+
+---
+
+## 2026-07-22 (lean verify, cont.) — Recipe importer paste flow + bulk-linker (two rounds, chained)
+
+Two chained rounds: the paste importer produced a recipe with unlinked
+ingredients, which then fed the bulk-linker walk.
+
+**Round 1 — paste-based rebuild (C5, items 151–155):** Cookbook → **Import**
+opens the paste dialog (textarea + "Where's this from?" URL + caption naming the
+Ctrl+A/Ctrl+C flow + supported sites). Pasted a synthetic "Zesty Quinoa Salad"
+page + source URL → **Import → new recipe on the detail page, no degraded
+banner**. Server parse: name, `servings=4`, source stored, **3 freeform steps**,
+**5 ingredients** (`raw_text` preserved). The **fuzzy matcher linked "extra virgin
+olive oil" → Olive Oil**; the other 4 stayed unlinked, rendered as **"Free-text
+ingredient"** rows with the quoted text (confirmed on fresh GET). `cookable=null`
+(neutral) while unlinked (item 155).
+
+**Round 2 — bulk-linker (C6, items 138/140/142/143):** sidebar **Unlinked
+ingredients** entry present; page lists each as **`raw_text · Used in 1 recipe`**
+(the **FU-588** "Used in 0" regression is gone) with autocomplete / Link /
+Create-new. **Create new** on "1 lemon, juiced" → toast **"Created "1 lemon,
+juiced" and linked in 1 recipe."** (item = raw_text), group count 4→3, and the
+source recipe's lemon row became **linked** (`unlinked_ingredient_count` 4→3,
+cookability still `null`). Cleaned up (deleted created item + recipe, 204/204;
+count back to 11).
+
+**Owner-walk left:** the Link-existing autocomplete + toast (Quasar q-select **not
+synthetically drivable** — same limitation as the numeric q-input; the bulk-link
+endpoint is pinned in `test_unlinked_ingredients_bulk_link.py`), the empty-state,
+the multi-site parse corpus (backend-pinned in `test_parse_recipe_from_text.py`),
+the "link-one-row-switches-back" caption swap, and the Android PWA share target.
+
+DORA_VERIFY: both importer sections rewritten with verified-notes (covered bullets
+removed; owner-walk survivors kept). TRIAGE: both registers ⚪→➗ + evidence entry.
+
+**Method banked:** the paste `textarea` + source `input` take native
+setter+`input`-event fine (unlike q-select/q-input numeric); "Create new" is a
+plain button (drivable) whereas the "Link" path hangs off the q-select autocomplete
+(not drivable). Chaining an import → bulk-linker is a clean way to contrive
+unlinked-ingredient state.
+
+**Engineering-standards close-gate:** verification-only; writes were a
+create-recipe (paste) + create-stock-item (Create new) + two deletes, all
+self-restored via the public API/UI. No product code, no R-rule surface, no ADR,
+no new FUs. Preview left running.
+
+**Next up:** image-mode editor specifics (292–297, needs file uploads), the
+overview dietary tri-state picker cycle (Chunk 2 remainder), or the freeform-hint
+line (item 147) — small.
+
+---
+
+## 2026-07-22 (lean verify, cont.) — RecipeEditDialog stub-creator (FU-095) walked live
+
+Walked the "New recipe" stub-creator flow on the Cookbook overview.
+
+**Verified live (items 131–135 → section done ✅):**
+- **New recipe modal** shows **exactly four fields** — Name* / Cuisine / Category /
+  Collection — with **none** of the heavy fields (ingredients/image/instructions/
+  dietary/tools/times).
+- Primary button reads **"Create & open"**.
+- **Cancel** on an empty form → nothing created (recipe count 11→11).
+- Fill Name "QA Stub Recipe" + **Create & open** → dialog closed, **navigated to
+  `/cookbook/<new-id>`**, detail page shows the name. Stub deleted after (204).
+- **Edit-from-overview → N/A by design:** recipe cards expose only ♥ / chef-hat /
+  add-to-list footer icons; **no edit/pencil action anywhere on the overview** —
+  deep edit lives on the detail page, so the RecipeEditDialog edit-mode isn't
+  surfaced from the overview. (Item 135 hedged "if any surface exposes it" — none
+  does.)
+
+**Minor observation (not logged as a bug):** item 248's "card kebab = add-all-to-
+list + add-to-meal-plan" framing looks stale — the current cards use direct footer
+icons (♥ / chef-hat / cart), not a `⋮` menu. Left item 248 as-is (owner-walk).
+
+DORA_VERIFY stub-creator section replaced with a verified-note (5 bullets gone).
+TRIAGE: register ⚪→✅ + evidence entry.
+
+**Engineering-standards close-gate:** verification-only; only a create+delete of a
+throwaway stub via the public API/UI (self-restored). No product code, no R-rule
+surface, no ADR, no new FUs. Preview left running.
+
+**Next up:** the recipe **importer** paste flow (items 149–155 — server side is
+pinned, the paste/preview/navigation UI is owner-walk) or the image-mode editor
+specifics (292–297). Both need contrived data / clipboard, so heavier.
+
+---
+
+## 2026-07-22 (lean verify, cont.) — Cookbook detail edit-mode + personal-notes cook-mode card walked live
+
+Walked the recipe-**detail editor** sub-surfaces on Veggie Stir Fry, plus the
+FU-432 personal-notes cook-mode render.
+
+**Verified live:**
+- **Personal notes (FU-432, items 302–304 → all done):** the **Personal notes
+  (optional)** field sits **below Source URL** (field tops 1691 vs 1601) and is a
+  **distinct textarea** from the freeform instructions field. PATCHed a two-line
+  note on → cook mode showed a **"Your notes" card** with **the line break
+  preserved**; note-free recipes show **no** card. Cleared the note after (204).
+- **Mode toggle (image-steps items 290/291):** **Structured / Freeform / Image**
+  each render their own editor; the freeform 199-char payload **survived a
+  Structured → Image → Freeform cycle** (non-destructive, freeform half).
+- **Tools multiselect (Chunk 5 item 269):** populates on the detail page ("Wok");
+  `tool_ids` round-trips on create.
+
+**Banked (harness/behaviour):** the detail page has an **unsaved-changes route
+guard** ("Discard unsaved changes? … / Cancel / Discard"), and the `…/cook` route
+**nests under** the detail route — so a *dirty* detail form's guard fires when you
+hash-navigate to cook mode and silently keeps you on detail. Fix: discard first,
+or hop to a non-recipe route (`#/`) to unmount the detail form before the cook nav.
+(Cost me several nav round-trips before I spotted the open discard dialog.)
+
+DORA_VERIFY: personal-notes section replaced with a verified-note (3 bullets
+gone); image-steps mode-toggle + tools items annotated. TRIAGE: Personal notes
+⚪→✅, image-steps ⚪→🟡, evidence entry added.
+
+**Engineering-standards close-gate:** verification-only; the only writes were a
+PATCH note on + PATCH note off (self-restored) through the public API. No product
+code, no R-rule surface, no ADR, no new FUs. Preview left running.
+
+**Next up:** the image-mode editor specifics (pick/reorder/remove/cap-at-20 —
+DORA_VERIFY 292–297), or the RecipeEditDialog stub-creator (overview "Create &
+open" / edit-from-card, items 133–135), or the overview dietary tri-state picker
+cycle (Chunk 2 remainder).
+
+---
+
+## 2026-07-22 (lean verify, cont.) — Cook mode Chunk 5 structured visuals + Chunk 10 sections finished (contrived structured recipe)
+
+Closed the Chunk-5 gap the prior unit left open (structured-recipe visuals). No
+seed recipe had structured steps — all 11 are freeform — so **contrived one via
+the API** rather than leave it owner-walk.
+
+**Method (banked for reuse):** `POST /api/recipes` with
+`steps_mode:"structured"`, 3 steps (one sub-step via `parent_client_id`, `hint`s,
+`ingredient_client_ids` + per-step `tool_ids`), 3 **stocked** ingredients (→
+cookable, no guard), 2 recipe tools, 2 named `sections[]` (referenced by
+`section_client_id`). Payload contract read from
+`dora_api/features/recipes/create_recipe.py`. **Raw mutating fetch needs the
+`dora_csrf` cookie echoed as `X-CSRF-Token`** (else 403 — FU-197/571 double-submit).
+
+**Verified live in the contrived recipe's cook mode:**
+- **Step-referenced ingredient row** → `highlight` + **3px left accent** + blue
+  @0.16 tint; unreferenced rows flat (item 321).
+- **Step-referenced tool lights** (Frypan, opacity 1) vs **unreferenced tool
+  dims** (Saucepan, `.dim`, opacity 0.55) (item 321).
+- **"Sub-step" chip** on the sub-step card + **indented in "All steps"** (32px vs
+  16px top-level) (items 322 + 329 remainder).
+- **Hint line + lightbulb icon** (item 323).
+- **Chunk 10 sections** — step card carries its **section chip**; ingredient panel
+  + All-steps list **group by section name** (Sauce/Assembly) → DORA_VERIFY
+  Chunk-10 "cook-mode section rendering" bullet ticked.
+
+Deleted the throwaway recipe afterward (`DELETE` → 204; count back to 11).
+
+**Gotcha banked:** a `location.hash` swap between two `…/cook` routes reuses the
+mounted component without re-fetching the recipe — hop via the detail route (or
+another page) first to force a fresh mount.
+
+DORA_VERIFY Chunk-5 rewritten (structured visuals now verified; survivors =
+no-tools case, deferred finish flow, cross-theme tint); Chunk-10 item ticked.
+TRIAGE: Chunk 5 register 🟡→➗ + evidence follow-on.
+
+**Engineering-standards close-gate:** verification-only unit; the only writes were
+a create+delete of a throwaway recipe through the public API (no product code, no
+schema, no R-rule surface). No new ADR, no new FUs (nothing failed). Preview left
+running.
+
+**Next up:** the Cookbook **detail edit-mode** sub-surfaces — Structured/Freeform/
+Image mode toggle (non-destructive round-trip), tools multiselect, source URL +
+personal-notes field placement, dietary-tag tri-state picker — all walkable on the
+existing seed via the detail page.
+
+---
+
+## 2026-07-22 (lean verify, cont.) — Cook mode surface (Chunks 1–3 / 5 / 6) walked live + delete-on-pass
+
+Continued straight into the next Cookbook sub-surface — **cook mode**. Drove
+**Veggie Stir Fry** cook mode (cookable, freeform 3-step, 1 tool) on the running
+seeded backend (`dora-verify-backend` :5170, shim still live from the prior unit).
+
+**Verified live + deleted (delete-on-pass):**
+- **Chunk 3 grouping** — ingredients group by base location: Pantry / Fridge /
+  Freezer, correctly bucketed.
+- **No mid-cook stock-level chip** on rows (only substitute `mdi-swap-horizontal`
+  buttons); **no checkboxes** (tick state gone).
+- **Quantity spacing** — `300g`/`30ml` attach vs `2 cloves`/`1 head` spaced.
+- **Sous Chef** voice button + **(?) commands popover** (Next / Prev·Back /
+  Repeat / Start·Pause·Reset-timer / Exit); **"Done" absent** (Chunk-5).
+- **Timer** auto-detects "2 minutes" → 02:00 + fill-bar; Start → countdown
+  (→01:58) + PAUSE/Reset; Reset → 02:00.
+- **Unstructured fallback highlight** — "Jasmine Rice" in step 1 tints its row.
+- **"All steps"** expands → click step 3 → jumps to Step 3 of 3.
+- **Tools panel** shows ("Tools 1 total · Wok") when the recipe lists a tool.
+- **Chunk 6** — "Cooking for" input defaults to `servings` (3).
+
+**Harness notes banked (not bugs):** (1) Quasar's numeric q-input ignores
+synthetic value injection, so the Chunk-6 blur-clamp (0/empty→1) + session-only
+reset weren't drivable — but `onCookingForBlur` (`RecipeCookMode.vue:670`) is
+correct by inspection, so left owner-walk with no finding. (2) `Escape` in cook
+mode exits to the recipe detail page.
+
+DORA_VERIFY updated: Chunks 1–3 + Chunk 5 + Chunk 6 sections rewritten with
+verified-notes, covered bullets removed. TRIAGE: evidence entry + register rows
+(1–3 ⚪→➗, 5 ⚪→🟡, 6 ⚪→➗).
+
+**Left owner-walk (survivors):** timer expiry (colour/toast/beep — timing+audio),
+the structured-recipe visuals (tint/left-accent/sub-step chip/hint lightbulb/
+tools-referenced dim — need a *structured* seed recipe), no-tools-panel case,
+dark-theme tint, the deferred finish flow (FU-591), the no-location fallback
+group, and the Chunk-6 clamp/session-reset.
+
+**Engineering-standards close-gate:** verification-only unit — no product code
+touched, no R-rule surface, no new ADR, no new FUs. Preview left running.
+
+**Next up:** to finish Cook Mode Chunk 5's structured visuals a **structured-step
+seed recipe** is needed (the seed's named recipes are freeform; "Load recipe NNN"
+may have structured steps — check `has_structured_steps`). Otherwise the Cookbook
+**edit-dialog / image-steps** sub-surfaces are the next detail walk.
+
+---
+
 ## 2026-07-22 (lean verify, cont.) — Cookbook DETAIL page (Chunk 4 / FU-089) walked live + delete-on-pass
 
 Continued the manual-first verify campaign. Picked up the worklog's "next up"

@@ -52,6 +52,40 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-592 — Add a `DORA_SEED_MONEY_ON` verify-seed knob (boots money + nutrition on) to unblock agent verification of the money/nutrition/buy-verdict/budget surfaces
+- **Raised:** 2026-07-22 (lean-verify big round — Cookbook Chunk 9)
+- **Type:** deferred job (verify tooling)
+- **What:** The money/nutrition-gated UI (Chunk 9 cost card + kcal input/nutrition
+  card + Kcal sort/filter; also buy-verdict, budget) can't be agent-verified in
+  the running app because the surfaces gate on **both** the install-layer flags
+  (`AppSetting.money_enabled`/`nutrition_enabled`) **and** the per-user prefs
+  (`User.money_features_enabled` / `nutrition_mode`), and **all of these are read
+  once at cold mount** (health probe + authStore currentUser — see [[FU-586]] /
+  FU-580). Flipping them mid-session via API doesn't re-render (stores are stale),
+  and the only clean cold-mount path in the agent pane is the login-page rAF-shim
+  recipe, whose fresh mount reads whatever the DB holds. So the fix is to let the
+  **seed boot with these already on**. Implementation sketch (env→param pattern,
+  mirrors `DORA_SEED_BULK_ITEMS`): add a `money_on: bool = False` param to
+  `seed_dev_data()` (`dora_api/persistence/seed.py`); read `DORA_SEED_MONEY_ON` in
+  the startup caller and pass it through; when true, set the dev `User(...)`
+  (capture it in a var) `money_features_enabled=True` + `nutrition_mode="simple"`,
+  and `get_or_create_app_setting(repo)` (helper at
+  `dora_api/features/app_settings/access.py`) with `money_enabled=True` +
+  `nutrition_enabled=True`, saving before finish. Add a `dora-verify-backend-money`
+  variant to `.claude/launch.json` (same env as `dora-verify-backend` + this knob).
+  For the **cost card** specifically, also confirm at least one seed recipe has a
+  priced ingredient (linked product with a `ProductOffer`) — Veggie Stir Fry has
+  0/5 priced, so `estimated_cost=null` and the card correctly hides; the seed has
+  priced products, so pick/verify a recipe whose ingredients link to them, or add
+  one under the same knob.
+- **Why deferred:** it's product-seed + startup code spanning two files + a launch
+  variant + a preview restart + the actual verification — too much to do correctly
+  at the tail of a long turn without risking the shared dev seed. Env-gated,
+  defaults off → zero blast radius on existing tests/dev, so it's a safe, clean,
+  self-contained unit for a fresh session.
+- **Recommended resolution:** when next verifying the money/nutrition/buy-verdict/
+  budget surfaces (do this knob first, then the verification in the same session).
+
 ## [OPEN] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
 - **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297)
 - **Type:** finding

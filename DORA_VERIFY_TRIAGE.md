@@ -929,6 +929,181 @@ without-a-stock-item save block (needs an engineered unlinked row), the cook-mod
 guard's outside-click + unsaved-edits "Save & start" variant, and the meal-±
 no-cursor-flash subjective check. Register row flipped ⚪→➗.
 
+### Cook mode surface — Chunks 1–3 / 5 / 6 walked live (2026-07-22)
+
+Drove **Veggie Stir Fry** cook mode (`…/cook`; cookable, freeform 3-step, 1 tool)
+on the seeded backend. Verified + delete-on-pass:
+
+- **Chunk 3 ingredient grouping** — one card per base location: Pantry (Jasmine
+  Rice / Soy Sauce / Garlic), Fridge (Broccoli), Freezer (Chicken Breast).
+- **No mid-cook stock-level chip** on rows (only substitute `mdi-swap-horizontal`
+  buttons); **no checkboxes** anywhere (tick state gone).
+- **Quantity spacing** — `300g` / `30ml` (mass/volume attach) vs `2 cloves` /
+  `1 head` (word units spaced).
+- **Sous Chef** voice button (`mdi-microphone-message`) + a **(?) "Sous Chef
+  commands"** popover: Next / Previous·Back / Repeat / Start·Pause·Reset-timer /
+  Exit. **"Done" is absent** (Chunk-5 item). The literal "8 commands" badge count
+  is loose (7 lines / 8 if the Back alias counts) — matches the register's
+  "8 commands count stale" note.
+- **Step timer** auto-detected the "toss for 2 minutes" step → 02:00 + fill-bar;
+  Start → live countdown (→01:58) + PAUSE/Reset; Reset → 02:00.
+- **Unstructured fallback highlight** — step-1 text "Jasmine Rice" tinted its
+  ingredient row (freeform recipe, so this is the text-match path, not structured).
+- **"All steps"** (a `q-expansion` item) reveals the numbered step list; clicking
+  step 3 jumps to **Step 3 of 3**.
+- **Tools panel** renders ("Tools 1 total · Wok") because the recipe lists a tool.
+- **Chunk 6** — "Cooking for" input defaults to the recipe `servings` (3); seed
+  user has no `household_headcount`, so `servings` wins.
+
+**Notable harness limits (not bugs):** (1) Quasar's numeric q-input ignores
+synthetically-injected values, so the Chunk-6 blur-clamp (0/empty→1) and
+session-only reset couldn't be driven — but `onCookingForBlur`
+(`RecipeCookMode.vue:670`) is correct by inspection (`<1`/non-finite → 1, else
+floor); left owner-walk, no finding logged. (2) `Escape` in cook mode exits to the
+detail page (observed while dismissing an overlay). **Left owner-walk:** timer
+expiry (negative colour + toast + beep — timing/audio), the structured-recipe
+visuals (tint/left-accent/sub-step chip/hint lightbulb/tools-referenced dim — need
+a structured seed recipe), no-tools-panel case, dark-theme tint, the deferred
+finish flow (FU-591), and the no-location fallback group. Registers: Chunks 1–3
+⚪→➗, Chunk 5 ⚪→🟡, Chunk 6 ⚪→➗.
+
+**Chunk-5 structured visuals + Chunk-10 sections — finished same session
+(2026-07-22):** no seed recipe had structured steps (all 11 freeform), so
+**contrived one via the API** — `POST /api/recipes` `steps_mode:"structured"` with
+3 steps (one sub-step via `parent_client_id`, hints, `ingredient_client_ids` +
+per-step `tool_ids`), 3 stocked ingredients (→ cookable), 2 recipe tools, and 2
+named sections (`sections[]` + `section_client_id`). Needed the `dora_csrf`
+cookie echoed as `X-CSRF-Token` (raw fetch 403s otherwise — FU-197/571). Drove its
+cook mode and confirmed: **step-referenced ingredient row** `highlight` + 3px left
+accent + blue @0.16 tint (unreferenced flat); **referenced tool `highlight`
+opacity 1 vs unreferenced tool `.dim` opacity 0.55**; **"Sub-step" chip** on the
+sub-step card + **indent in All-steps** (32px vs 16px); **hint line + lightbulb
+icon**; and (Chunk 10) **section chip on the step card** + **ingredient panel /
+All-steps grouped by section**. Deleted the recipe afterward (`DELETE` → 204).
+Chunk 5 ➗ (survivors: no-tools case, deferred finish flow, cross-theme tint);
+Chunk 10 item "cook-mode section rendering" ticked in DORA_VERIFY. **Gotcha
+banked:** a `location.hash` swap between two `…/cook` routes reuses the mounted
+component without re-fetching — hop via the detail route (or another page) first
+to force a fresh mount.
+
+### Cookbook detail edit-mode + personal notes walked live (2026-07-22)
+
+Drove Veggie Stir Fry's recipe-detail editor. Verified:
+
+- **Personal notes (FU-432)** — the **Personal notes (optional)** field sits
+  **below Source URL** (field tops 1691 vs 1601) and is a **distinct textarea**
+  from the freeform instructions field (own placeholder). PATCHed a two-line note
+  on → cook mode rendered a **"Your notes" card** with **the line break preserved**
+  ("Line one… ⏎ Line two…"); note-free recipes show **no** card. Cleared the note
+  after (PATCH `notes:null` → 204). Register ✅.
+- **Mode toggle (image-steps)** — **Structured / Freeform / Image** each render
+  their own editor; the freeform 199-char payload **survived a Structured → Image
+  → Freeform cycle** (non-destructive, freeform half). Register 🟡 (image-editor
+  specifics + structured/image preservation + camera/voice packs remain).
+- **Tools multiselect** populates on the detail page ("Wok"); `tool_ids`
+  round-trips on create (the contrived structured recipe's 2 tools rendered).
+
+**Banked:** the detail page has an **unsaved-changes route guard** — "Discard
+unsaved changes? Your edits will be lost. / Cancel / Discard" — and the
+`…/cook` route **nests under** the detail route, so a dirty detail form's guard
+fires (and can silently keep you on detail) when you navigate hash→cook. To reach
+cook mode cleanly after editing, discard first or unmount the detail form by
+hopping to a non-recipe route (`#/` dashboard) before the cook nav.
+
+### RecipeEditDialog stub-creator (FU-095) walked live (2026-07-22)
+
+Cookbook overview → **New recipe**: the modal shows **exactly four fields**
+(Name* / Cuisine / Category / Collection) with **no** ingredients/image/
+instructions/dietary/tools/times; primary button **"Create & open"**; **Cancel**
+on an empty form created nothing (count 11→11); filling Name "QA Stub Recipe" +
+Create & open **closed the dialog and navigated to `/cookbook/<new-id>`** (detail
+page, name populated). Deleted the stub after (`DELETE` → 204). **Edit-from-
+overview is N/A by design** — recipe cards expose only ♥ / chef-hat / add-to-list
+footer icons and there is **no edit/pencil action anywhere on the overview** (deep
+edit is on the detail page); the RecipeEditDialog edit-mode isn't surfaced from the
+overview. (Minor: item 248's "card kebab" framing looks stale — the card actions
+are direct footer icons, not a `⋮` menu. Left as-is; item 248 stays owner-walk.)
+Register ✅.
+
+### Recipe importer paste flow + bulk-linker walked live (2026-07-22, two rounds)
+
+**Round 1 — paste-based rebuild (C5):** Cookbook → **Import** opens the paste
+dialog (textarea + "Where's this from?" URL + caption naming the Ctrl+A/Ctrl+C
+flow & supported sites). Pasted a synthetic "Zesty Quinoa Salad" page + source URL
+→ **Import → new recipe on the detail page, no degraded banner.** Server parse:
+`name`, `servings=4`, source stored, **3 freeform steps**, **5 ingredients** with
+`raw_text` preserved. **Fuzzy matcher linked "extra virgin olive oil" → Olive Oil**;
+the other 4 stayed unlinked and render as **"Free-text ingredient"** rows with the
+quoted text (confirmed on fresh GET). `cookable=null` (neutral) with unlinked rows.
+
+**Round 2 — bulk-linker (C6), fed by round 1's 4 unlinked rows:** sidebar entry
+present; page lists each as **`raw_text · Used in 1 recipe`** (FU-588 "0" bug gone)
+with autocomplete / Link / Create-new. **Create new** on "1 lemon, juiced" →
+toast **"Created "1 lemon, juiced" and linked in 1 recipe."** (item = raw_text),
+group count 4→3, and the source recipe's lemon row became linked
+(`unlinked_ingredient_count` 4→3, cookability still `null`). Cleaned up: deleted
+the created stock item + the imported recipe (204/204; recipe count back to 11).
+
+**Owner-walk left:** the Link-existing autocomplete + toast (Quasar q-select not
+synthetically drivable — same limitation as the numeric input; endpoint pinned in
+`test_unlinked_ingredients_bulk_link.py`), the empty-state, the multi-site parse
+corpus (backend-pinned), and the Android PWA share target. Both registers ⚪→➗.
+
+### BIG ROUND — recipe versions + MealStepper + cost/nutrition off-state (2026-07-22)
+
+Three Cookbook sub-surfaces in one pass on Veggie Stir Fry (has 5 ingredients).
+
+**A. Recipe versions (Chunk 8, FU-105) → ➗.** Singleton **hides** the "Other
+versions" card. Kebab → **New version** created **"Veggie Stir Fry (v2)"** with
+**no 500** — a live confirmation of the **FU-590** fix (new-version of a recipe
+*with* ingredients used to 500) — navigated to the copy, which **shares a
+back-filled `version_group_id`** with the source (both list 1 sibling), **inherited
+all 5 ingredients + cuisine + servings**, and **started un-favourited**. The
+**"Other versions" card + "v2" label** render on the copy; the **source shows the
+card too** once it has a sibling. **Deleting v2** (→204) returned the source to a
+singleton and the **card disappeared** (delete→card-updates). Source left with an
+orphan group-of-1 id (harmless; seed disposable).
+
+**B. MealStepper (Chunk 3 item 233) → 🟡.** On the detail page the ± **live-adjusts
+the cooked pool** 3→2→1→0; **"Remove one meal" disables at 0**; restoring via +
+persisted (server `available_meals`=3). Allocated badge (needs a meal-plan
+allocation for `committed_meals>0`) + the card/stock-item-detail instances remain.
+
+**C. Cost/nutrition (Chunk 9 item 201) → 🟡.** `/api/health` `features.money=false`
++ `nutrition=false`; in that state the detail page has **no kcal input / no cost
+card / no nutrition card** and the overview has **no Kcal sort or filter**. The
+**flags-ON** items are **harness-blocked**: flags are read once at cold mount
+(FU-586) and flipping them needs a reload, which re-sticks the hidden-pane splash
+(the rAF shim can't retroactively un-suspend the already-scheduled splash-dismiss).
+Left owner-walk; cost math is backend-pinned regardless.
+
+### Money/nutrition ON-state — attempted, hit a harness wall → FU-592 (2026-07-22)
+
+Tried to unblock the Chunk 9 flags-ON items (+ buy-verdict/budget by extension).
+PATCHed the install flags on (`/api/app-settings money_enabled+nutrition_enabled`
+→ `/api/health` reflects true, even unauthenticated) — but the SPA didn't render
+the surfaces. **Root cause (fully diagnosed):** the surfaces gate on **both** the
+install flags **and** the **per-user prefs** (`/api/auth/me`
+`money_features_enabled:false`, `nutrition_mode:"off"` for the seed `dora` user),
+and **all of these are read once at cold mount** (health probe + authStore
+currentUser). Mid-session API PATCHes don't re-render (stores stale); a reload
+re-sticks the rAF splash; and the login-form path to force a fresh authed mount is
+blocked by the **q-input synthetic-injection limitation** (values set in the DOM
+but Quasar's v-model stays empty, so the login handler no-ops).
+
+**Also learned:** logout does NOT reset the DB install flags/prefs; and a fresh
+`preview_start` **re-seeds** (drop_all+create_all), reverting all of it — which I
+used to restore a clean default state (`/api/health` money/nutrition back to
+false, confirmed). Chained recovery `logout → reload-to-login → shim →
+fetch-login → in-app nav` re-paints content only when the fetch-login **races**
+the initial auth probe (works right after a fresh `preview_start`; not after the
+probe has resolved logged-out).
+
+**Outcome:** no new verification beyond re-confirming item 201's off-state; the
+ON-state remains owner-walk pending **FU-592** (a `DORA_SEED_MONEY_ON` seed knob
+that boots money+nutrition on for a clean authed cold mount). Preview left
+freshly re-seeded (flags default-off).
+
 ---
 
 ## Section register
@@ -958,26 +1133,26 @@ already has regression tests (low-risk re-confirm, per CHANGELOG/worklog).
 |---|---|---|---|---|---|---|
 | Cookability + expiring filters | 132–138 | 6 | 6/0/0 | 0 | test-pinned (4 filter tests) | ⚪ |
 | Free-text ingredient path (FU-506) | 140–146 | 6 | 6/0/0 | 0 | | ⚪ |
-| RecipeEditDialog stub-creator (FU-095) | 148–154 | 6 | 6/0/0 | 0 | | ⚪ |
-| Importer bulk-linker + share target (C6) | 156–168 | 12 | 11/0/1 | 0 | share-sheet item → Android pack | ⚪ |
-| Importer paste-based rebuild (C5) | 170–179 | 9 | 9/0/0 | 0 | corpus pages; taste.com.au2 fixture exists | ⚪ |
+| RecipeEditDialog stub-creator (FU-095) | 148–154 | 6 | 6/0/0 | 0 | walk 2026-07-22: 4-fields-only modal / "Create & open" / Name→navigates-to-detail / Cancel-creates-nothing verified; edit-from-overview N/A (no edit surface on cards — by design) | ✅ |
+| Importer bulk-linker + share target (C6) | 156–168 | 12 | 11/0/1 | 0 | walk 2026-07-22: sidebar entry / group-rows "raw_text·Used in N" (FU-588 count OK) / Create-new (item=raw_text, links, toast) / recipe-row-linked+count-drop verified; survivors = empty-state, autocomplete+Link UI (q-select not synthetic-drivable, endpoint pinned), Android share | ➗ |
+| Importer paste-based rebuild (C5) | 170–179 | 9 | 9/0/0 | 0 | walk 2026-07-22: Import dialog / paste→parse (name/servings/source/3 steps/5 ingredients) / fuzzy-link olive-oil + 4 free-text raw_text preserved / neutral cookable=null; survivors = multi-site corpus (backend-pinned), link-one-row-switches-back | ➗ |
 | Ingredient DnD (FU-118/161) | 181–195 | 14 | 14/0/0 | 0 | drag automation | ⚪ |
 | Chunk 6 structured steps (FU-093) | 197–206 | 9 | 9/0/0 | 2 | SQLite+PG alembic | ⚪ |
 | Chunk 7 source URL + URL importer (FU-103) | 208–217 | 9 | 9/0/0 | 4 | mostly stale — URL importer deleted | ⚪ |
-| Chunk 8 recipe versions (FU-105) | 219–230 | 11 | 11/0/0 | 0 | SQLite+PG alembic | ⚪ |
-| Chunk 9 cost + nutrition (FU-116) | 232–247 | 15 | 14/1/0 | 0 | Money+Nutrition flags; priced products | ⚪ |
+| Chunk 8 recipe versions (FU-105) | 219–230 | 11 | 11/0/0 | 0 | walk 2026-07-22: New-version (v2 numbering, shared back-filled group, siblings, un-favourited copy, ingredient/cuisine/servings inherit, no-500 live=FU-590) + "Other versions" card on both + delete→card-updates verified; alembic/structured-toggle/richer-clones/backup remain | ➗ |
+| Chunk 9 cost + nutrition (FU-116) | 232–247 | 15 | 14/1/0 | 0 | walk 2026-07-22: flags-OFF state verified (no kcal input/cost card/nutrition card/Kcal sort+filter); flags-ON items HARNESS-BLOCKED (flags read once at cold mount, reload re-sticks splash) → owner-walk | 🟡 |
 | Chunk 10 multi-part sections (FU-119) | 249–255 | 6 | 6/0/0 | 0 | SQLite+PG alembic | ⚪ |
 | Chunk 4 detail cleanup (FU-089) | 257–266 | 9 | 8/1/0 | 0 | detail walk 2026-07-22: toolbar+kebab / Mark-cooked / name-validation / chip-Missing-wins+tint / not-cookable guard+Cancel / cook-mode exit→detail verified; layout+dialog-flow survivors | ➗ |
-| Chunk 3 card redesign (FU-088) | 268–274 | 6 | 6/0/0 | 1 | command-palette half of L274 stale | ⚪ |
+| Chunk 3 card redesign (FU-088) | 268–274 | 6 | 6/0/0 | 1 | walk 2026-07-22: MealStepper ± live-adjust + decrement-disabled-at-0 + server-persist verified (detail page); allocated badge (needs meal-plan alloc), card kebab (cards have footer icons not a ⋮), meals-box eyeball remain | 🟡 |
 | Chunk 3+ revision (FU-088r) | 276–288 | 12 | 12/0/0 | 0 | 2 sessions for per-user persistence | ⚪ |
 | Chunk 5 images + tools (FU-091) | 290–296 | 6 | 6/0/0 | 0 | image files incl. >4MB | ⚪ |
 | Chunk 2 tag taxonomy (FU-085) | 298–303 | 5 | 5/0/0 | 0 | | ⚪ |
 | FU-085 second round (FU-151) | 305–311 | 6 | 6/0/0 | 0 | assistant enabled | ⚪ |
-| Recipe image-steps mode | 313–321 | 8 | 6/0/2 | 0 | camera + voice items → packs | ⚪ |
-| Personal notes in cook mode (FU-432) | 327–331 | 4 | 4/0/0 | 0 | | ⚪ |
-| Cook Mode Chunks 1–3 (FU-096) | 333–344 | 11 | 10/0/1 | 0 | audible-beep item → audio pack | ⚪ |
-| Cook Mode Chunk 5 (FU-100) | 346–356 | 10 | 8/1/1 | 1 | voice verbs → mic pack; "8 commands" count stale | ⚪ |
-| Cook Mode Chunk 6 rescale (FU-101) | 358–369 | 11 | 10/1/0 | 0 | | ⚪ |
+| Recipe image-steps mode | 313–321 | 8 | 6/0/2 | 0 | walk 2026-07-22: mode toggle (Structured/Freeform/Image each render own editor) + freeform-payload non-destructive flip verified; image-editor specifics + structured/image preservation + camera/voice → packs remain | 🟡 |
+| Personal notes in cook mode (FU-432) | 327–331 | 4 | 4/0/0 | 0 | walk 2026-07-22: server contract pinned + detail-field placement (below Source URL, distinct textarea) + cook-mode "Your notes" card w/ line breaks + no-card-when-noteless all verified | ✅ |
+| Cook Mode Chunks 1–3 (FU-096) | 333–344 | 11 | 10/0/1 | 0 | walk 2026-07-22: location grouping / no-level-chip / qty spacing / Sous Chef popover / timer detect+countdown+reset verified; survivors = timer expiry + no-location fallback | ➗ |
+| Cook Mode Chunk 5 (FU-100) | 346–356 | 10 | 8/1/1 | 1 | walk 2026-07-22: freeform path + structured visuals (tint+3px-accent / tool light-vs-dim / Sub-step chip+indent / hint+lightbulb) via a contrived structured recipe; survivors = no-tools case, deferred finish flow, cross-theme tint | ➗ |
+| Cook Mode Chunk 6 rescale (FU-101) | 358–369 | 11 | 10/1/0 | 0 | walk 2026-07-22: "Cooking for" defaults to servings verified; clamp code-correct (RecipeCookMode.vue:670) but not synthetically drivable → clamp+session-reset owner-walk | ➗ |
 
 ### Meal plans + Shopping lists
 

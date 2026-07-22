@@ -58,12 +58,15 @@ that reverts + an Undo toast. Pick the defer option unless code archaeology
 shows a reason. **Accept:** backdrop/Escape dismissal leaves server state
 untouched (extend the FU-507 e2e spec to pin). **Refs:** FU-578 #2.
 
-### DR-6 · Finish-modal restock review (FU-582) — P1, needs owner sign-off on scope
-Either build the per-item 3-option level picker into "Finish & restock" (the
-designed UX-v2 M12 behaviour; server `level_overrides` is live + backend-pinned)
-or formally cut it (comment the carve-out, simplify the modal copy). Check git
-history for a lost implementation first. **Accept:** DORA_VERIFY 3-band modal
-bullet passes as written, or is rewritten to the cut scope. **Refs:** FU-582.
+### DR-6 · Finish-modal restock review (FU-582) — ✅ CLOSED 2026-07-22, cut confirmed
+**Do not build the per-item level picker.** Owner cut it deliberately in commit
+`a3b82644` (2026-07-13); FU-582 only existed because that removal went
+undocumented. Rationale: someone who just bought an item would never mark it
+anything but Stocked, so the picker was ceremony over a foregone conclusion (a
+part-used item is corrected on the stock item itself). The `level_overrides`
+contract has since been removed server-side too, and a test now pins that a
+stale override body is rejected rather than ignored. **Refs:** FU-582 (resolved,
+see `DORA_FOLLOWUPS_RESOLVED.md`).
 
 ### DR-7 · Toast & helper-bubble placement budget (D-009) — P2
 Single toast column; toasts die on route change; dock the mascot/tip bubble so
@@ -158,7 +161,7 @@ along. **Refs:** FU-578 #37/39.
 | 37, 39 (register validation, activation) | DR-16 | |
 | 47 (wizard dupes) | DR-15 | |
 | 49 (missing route alias) | DR-4 | one-line ride-along |
-| FU-582 (finish pickers) | DR-6 | owner sign-off |
+| FU-582 (finish pickers) | DR-6 | ✅ closed — cut confirmed, do not build |
 | Critique §6 (micro-motion) | DR-15 | |
 | Critique §8.1 (recipe detail) | DR-11 | |
 

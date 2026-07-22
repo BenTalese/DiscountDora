@@ -10,6 +10,39 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-582 — Finish & restock per-item level pickers → RESOLVED AS "WORKING AS INTENDED, NOW FULLY CUT"
+- *(Renumbered from FU-580 on 2026-07-18 — a parallel session independently issued
+  FU-580 for the Features-page reload finding; that one keeps the number.)*
+- **Raised:** 2026-07-18 (UX round 5, driving the finish flow live)
+- **Type:** finding
+- **What was reported:** the "Finish & restock" modal shows only a flat list of ticked
+  item names + Cancel / "Restock & finish" — no per-item level choice — while the UX-v2
+  M12 design and the server's `FinishShoppingListRequest.level_overrides` contract both
+  expected per-item overrides. Read at the time as a half-built seam (client half missing).
+- **Resolution (2026-07-22): not a gap — a deliberate removal the raising session couldn't see.**
+  Git archaeology found commit `a3b82644` ("Feedback and bugs", 2026-07-13, owner-authored)
+  removed the picker on purpose: the `<StockLevelDot>` + `levelOptions` / `stockedLevelId`
+  picker in `ShoppingListDetail.vue`, the `overrides` mapping in `confirmFinish`, and the
+  whole `StockLevelDot.vue` component. FU-582 was raised 5 days later because that commit's
+  CHANGELOG/worklog entries never mentioned the removal — **the real defect was an
+  undocumented cut, not missing UI.**
+- **Owner's rationale:** someone who has just bought an item at the shops would never
+  intentionally mark it as anything other than Stocked. The picker was ceremony over a
+  foregone conclusion. A part-used item is corrected on the stock item itself, not at
+  finish time.
+- **Follow-through this session** — since the rationale is a domain fact, not a UI
+  preference, the contract was cut at the API boundary too rather than kept "for API
+  users" (an option no correct caller would set is a trap, not a feature — R-003):
+  removed `FinishLevelOverride`, `level_overrides`, `FinishShoppingListResponse.invalid_level`
+  and the override 422 branch from `manage_shopping_list.py`; removed the dead
+  `FinishLevelOverride` type from `shoppingListApiService.ts`; replaced the two override
+  tests in `test_stock_level_collapse.py` with one pinning all-ticked→Stocked and one
+  pinning that a stale `level_overrides` body is **rejected** (400 `extra_forbidden` via
+  `extra="forbid"` — not silently ignored). Suite green (11 passed); `vue-tsc` clean over
+  the touched scope. Stale DORA_VERIFY bullets reworded; `PROPOSAL_SHOPPING_LIST_UX_V2.md`
+  M12 marked SUPERSEDED with the rationale recorded in-place so this isn't re-raised a
+  third time.
+
 ## [RESOLVED] FU-591 — Playwright e2e full-suite instability → RESOLVED BY DESCOPING (Playwright is now smoke-only)
 - **Raised + resolved:** 2026-07-20 (verify campaign — e2e pivot, then owner
   stance change).

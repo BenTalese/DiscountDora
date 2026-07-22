@@ -199,6 +199,18 @@ export function kindTheme(kind: AlertKind): string {
     return ALERT_KIND_META[kind]?.theme ?? '';
 }
 
+// Same mapping, for callers holding a bare `string` rather than an `AlertKind`
+// — history rows carry the kind as text because a stored row can outlive its
+// kind (a dismissed alert of a kind since removed from the union). Falls back
+// to humanising the raw key so an unrecognised kind still reads as words
+// instead of vanishing. One authority for kind labels either way: a hand-rolled
+// `kind.replace('_', ' ')` in AlertsPage printed "out of_stock" (replace only
+// swaps the first underscore) while the manage panel two blocks up read
+// "out of stock" from the meta.
+export function kindLabel(kind: string): string {
+    return ALERT_KIND_META[kind as AlertKind]?.theme ?? kind.replace(/_/g, ' ');
+}
+
 // The two count tiers (C-9.2). Actionable drives the badge; FYI is shown but
 // uncounted. Used for the hub's tier group headers + the manage panel.
 export function tierLabel(tier: AlertTier): string {

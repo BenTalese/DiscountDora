@@ -116,47 +116,40 @@ def test__finish__unticked_items_keep_their_level(levels_by_sequence, api):
     assert _item_dto(skipped)["stock_level_sequence"] == OUT_OF_STOCK_SEQUENCE
 
 
-def test__finish__level_override_wins_over_stocked_default(levels_by_sequence, api):
-    # L876 (server half) — the restock-review modal's per-item pick: a
-    # part-restocked item lands on Low while its unlisted sibling still
-    # defaults to Stocked.
-    list_id = _create_list(f"finish-override-{uuid4()}")
-    partial = _create_item(levels_by_sequence[OUT_OF_STOCK_SEQUENCE])
-    full = _create_item(levels_by_sequence[OUT_OF_STOCK_SEQUENCE])
-    _add_ticked_line(list_id, partial)
-    _add_ticked_line(list_id, full)
+def test__finish__every_ticked_item_restocks_to_stocked(levels_by_sequence, api):
+    # Buying something means it's Stocked — there is no per-item choice at
+    # finish time. Both items land on Stocked regardless of where they were.
+    list_id = _create_list(f"finish-all-stocked-{uuid4()}")
+    was_out = _create_item(levels_by_sequence[OUT_OF_STOCK_SEQUENCE])
+    was_low = _create_item(levels_by_sequence[LOW_STOCK_SEQUENCE])
+    _add_ticked_line(list_id, was_out)
+    _add_ticked_line(list_id, was_low)
 
-    resp = requests.post(f"{SHOPPING_LISTS}/{list_id}/finish", json={
-        "level_overrides": [{
-            "stock_item_id": partial,
-            "stock_level_id": levels_by_sequence[LOW_STOCK_SEQUENCE],
-        }],
-    })
+    resp = requests.post(f"{SHOPPING_LISTS}/{list_id}/finish", json={})
 
     assert resp.status_code == 200, resp.text
     assert resp.json() == {"items_restocked": 2}
-    assert _item_dto(partial)["stock_level_sequence"] == LOW_STOCK_SEQUENCE
-    assert _item_dto(full)["stock_level_sequence"] == STOCKED_SEQUENCE
+    assert _item_dto(was_out)["stock_level_sequence"] == STOCKED_SEQUENCE
+    assert _item_dto(was_low)["stock_level_sequence"] == STOCKED_SEQUENCE
 
 
-def test__finish__unknown_override_level__rejected_and_nothing_restocks(
-    levels_by_sequence, api
-):
-    # An override pointing at a nonexistent level is a business-rule
-    # violation and the handler bails before mutating anything — the list
-    # stays undone and the item keeps its level.
-    list_id = _create_list(f"finish-bad-override-{uuid4()}")
+def test__finish__level_overrides_are_rejected(levels_by_sequence, api):
+    # FU-582: the per-item level picker was cut on purpose. The finish body
+    # takes no options, so a caller still sending the old `level_overrides`
+    # is refused outright rather than silently ignored.
+    list_id = _create_list(f"finish-no-overrides-{uuid4()}")
     item = _create_item(levels_by_sequence[OUT_OF_STOCK_SEQUENCE])
     _add_ticked_line(list_id, item)
 
     resp = requests.post(f"{SHOPPING_LISTS}/{list_id}/finish", json={
         "level_overrides": [{
             "stock_item_id": item,
-            "stock_level_id": str(uuid4()),
+            "stock_level_id": levels_by_sequence[LOW_STOCK_SEQUENCE],
         }],
     })
 
-    assert resp.status_code == 422, resp.text
+    assert resp.status_code == 400, resp.text
+    assert "level_overrides" in resp.json()["errors"]
     detail = requests.get(f"{SHOPPING_LISTS}/{list_id}").json()
     assert detail["status"] != "done"
     assert _item_dto(item)["stock_level_sequence"] == OUT_OF_STOCK_SEQUENCE

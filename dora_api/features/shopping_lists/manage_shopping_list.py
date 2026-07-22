@@ -197,34 +197,24 @@ def delete_shopping_list(shopping_list_id: UUID):
 
 # ───── Finish (restock review) ────────────────────────────────────────────
 
-class FinishLevelOverride(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    stock_item_id: UUID
-    stock_level_id: UUID
-
-
 class FinishShoppingListRequest(BaseModel):
+    # Finishing a list means you bought the items, so every ticked line
+    # restocks to Stocked. There is deliberately nothing to configure —
+    # the per-item level picker (UX-v2 M12) was cut, see FU-582.
     model_config = ConfigDict(extra="forbid")
-    # UX-v2 restock review: per-item level choices from the finish modal.
-    # Items not listed here restock to Stocked (the default). Empty /
-    # absent body = restock everything to Stocked, the one-click path.
-    level_overrides: list[FinishLevelOverride] = Field(default_factory=list)
 
 
 @dataclass(slots=True)
 class FinishShoppingListResponse:
     not_found: bool = False
-    invalid_level: bool = False
     ticked_lines: int = 0
 
 
 class FinishShoppingListHandler:
     """Marks the list as done. For every ticked line, set the linked stock
-    item's stock level — Stocked by default (you just bought it), or the
-    level the user picked in the restock-review modal (UX-v2 M12: e.g.
-    knock a part-restocked item down to Low). Untouched lines are left on
-    the now-done list — the caller can copy them to a new list or use the
-    "move unchecked" flow.
+    item's stock level to Stocked — you just bought it. Untouched lines are
+    left on the now-done list — the caller can copy them to a new list or
+    use the "move unchecked" flow.
     """
 
     def __init__(self, repository: Repository) -> None:
@@ -251,32 +241,19 @@ class FinishShoppingListHandler:
             if line.picked_offer_price is None:
                 snapshot_offer_price(self.repository, line)
 
-        # Resolve all levels once: Stocked is the default target (by status
-        # identity, not name), and the UX-v2 restock-review overrides are
-        # validated against the same set.
+        # Resolve the restock target once, by status identity, not name.
         all_levels = self.repository.get(StockLevel).all()
-        levels_by_id = {level.id: level for level in all_levels}
         stocked = level_for_status(all_levels, StockStatus.STOCKED)
 
-        overrides: dict[UUID, UUID] = {
-            o.stock_item_id: o.stock_level_id for o in request.level_overrides
-        }
-        if any(level_id not in levels_by_id for level_id in overrides.values()):
-            return FinishShoppingListResponse(invalid_level=True)
-
         updated = 0
-        if ticked_lines:
+        if ticked_lines and stocked is not None:
             stock_item_ids = [l.stock_item_id for l in ticked_lines if l.stock_item_id]
             stock_items = self.repository.get(StockItem).all(
                 EntityField(StockItem, "id").in_(stock_item_ids)
             ) if stock_item_ids else []
             now = datetime.now(timezone.utc)
             for item in stock_items:
-                override_id = overrides.get(item.id)
-                target = levels_by_id.get(override_id) if override_id else stocked
-                if target is None:
-                    continue
-                item.stock_level = target
+                item.stock_level = stocked
                 item.stock_level_last_updated = now
                 updated += 1
 
@@ -371,10 +348,6 @@ def finish_shopping_list(shopping_list_id: UUID):
     _Response = FinishShoppingListHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
-    if _Response.invalid_level:
-        return business_rule_violation(
-            "One or more `level_overrides` reference an unknown stock level."
-        )
     _Logger.info(
         f"Finished shopping list {shopping_list_id}: "
         f"{_Response.ticked_lines} items restocked"

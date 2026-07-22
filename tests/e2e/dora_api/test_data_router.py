@@ -1074,6 +1074,29 @@ def test__meal_plan_print_view__returns_html(api):
     assert response.headers["Content-Type"].startswith("text/html")
 
 
+def test__meal_plan_print_view__nameless_plan__titles_by_week_not_none(api):
+    # C-2.E — the planner creates *nameless* week-plans, so an unnamed plan is
+    # the normal case for anything built in the UI, not an edge case. The
+    # template rendered `plan.name` raw, so Jinja printed the literal string
+    # "None" as both the page <title> and the <h1> on every planner print.
+    # Create the nameless plan explicitly: the seeded plans all carry a name,
+    # so keying off seed data silently skips this.
+    created = requests.post(
+        "http://localhost:5170/api/meal-plans",
+        json={"start_date": "2027-03-01", "entries": []},
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["meal_plan_id"]
+
+    response = requests.get(
+        f"http://localhost:5170/api/meal-plans/{plan_id}/print-view",
+    )
+    assert response.status_code == 200, response.text
+    assert "None ·" not in response.text
+    assert "<h1>None</h1>" not in response.text
+    assert "Week of 2027-03-01" in response.text
+
+
 # the library now owns "when was
 # the last backup" via `MAX(Backup.created_at)`. The old test that
 # stamped this column on every download lived here; deleted.

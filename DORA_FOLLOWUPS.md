@@ -52,6 +52,210 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-599 — Endpoints with an explicit `audit_emit` also get an auto-audit row, so security-relevant actions are logged twice under two different names
+- **Raised:** 2026-07-22 (lean-verify big round #4 — Batch 13, FU-197 audit check)
+- **Type:** finding (audit integrity)
+- **What:** `auto_audit_after_request` (`dora_api/infrastructure/audit.py:222-255`)
+  writes one row per successful mutating `/api/*` request, named after the
+  endpoint function. Handlers that *also* call `audit_emit` therefore produce
+  **two rows for one operation**. `_NO_AUDIT_ENDPOINTS` exists precisely to
+  suppress the generic row in that case — but it only lists `login` and `logout`
+  (plus `submit_client_log` / `health_check`).
+- **Observed live:** one email-change request produced both
+  `request_email_change` (generic, bare endpoint name) **and**
+  `auth.email_change.requested` (explicit, dotted domain name) in
+  `/api/audit/events`. Confirmed against a full dump of 31 events: it is the only
+  action present under both conventions, because it's the only explicitly-audited
+  endpoint I exercised.
+- **Not a one-off — it's every explicit emitter that isn't on the list.** Grep
+  shows `audit_emit` in `register_user`, `change_password`, `bootstrap_admin`,
+  `create_user_as_admin`, `delete_user_as_admin`, and five more paths in
+  `email_flows.py`. None are in `_NO_AUDIT_ENDPOINTS`, so each will double-log
+  when driven. These are exactly the account-security actions an operator reads
+  the audit log to review.
+- **Why deferred (and why I didn't just add names to the frozenset):** the fix
+  direction is obvious, but the risk is asymmetric — suppressing the generic row
+  for an endpoint whose explicit emit carries *less* information (entity id,
+  payload, actor) silently **loses** audit coverage, which is worse than a
+  duplicate. Each endpoint needs its explicit emit checked against what the
+  generic row provides before it's added. For `request_email_change` specifically
+  the explicit emit is strictly richer (actor + entity + `new_email` payload), so
+  that one is safe to suppress today.
+- **Worth deciding alongside:** the log currently mixes two naming conventions —
+  dotted domain names (`auth.login.success`, `meal_plan.created`) and bare
+  endpoint names (`snooze_alert`, `finish_shopping_list`). Picking one would make
+  the log readable as a whole rather than per-row.
+- **Recommended resolution:** opportunistic, but **before any audit-log UI work**
+  — a duplicated, dual-convention feed will look like a rendering bug to whoever
+  builds that surface next.
+
+## [OPEN] FU-598 — `--brand-primary` and `--semantic-positive` are the same colour in Pesto (the default theme), so any primary-vs-positive coding is undecodable
+- **Raised:** 2026-07-22 (lean-verify big round #3 — Batch 11, C-9.6 Upcoming timeline)
+- **Type:** finding (design / theming)
+- **What:** measured the two tokens across all five themes (dark variants):
+
+  | Theme | `--brand-primary` | `--semantic-positive` | distinguishable? |
+  |---|---|---|---|
+  | **Pesto (default)** | `#359766` | `#359766` | **identical** |
+  | Lemon Tart | `#ffc400` | `#62bb44` | yes |
+  | Blueberry | `#93b5be` | `#66cc99` | yes |
+  | **Cherry Cola** | `#a6e085` | `#89d65c` | **near-identical** (two pale greens) |
+  | Sourdough | `#eba147` | `#61d186` | yes |
+
+  So in 2 of 5 themes — including the **default** — a surface that distinguishes
+  two meanings by primary-vs-positive alone conveys nothing.
+- **Concrete instance found:** the Alerts hub's **Upcoming fortnight timeline**
+  (`UpcomingTimeline.vue:295-303`) colours its per-category dots
+  `expiry → --semantic-warning`, `shopping → --brand-primary`,
+  `meal → --semantic-positive`. The component is doing the *right* thing — three
+  distinct tokens — but on Pesto the shopping and meal dots render as the same
+  `rgb(53,151,102)`, so a day with a shop and a day with a meal look identical.
+  The legend above the grid (D-013 is satisfied — a legend exists) doesn't
+  rescue it, because the legend's own swatches are those same two colours.
+- **Scope:** I only walked the timeline, but this is a *token-level* collision,
+  so any other surface that pairs primary with positive is affected. Worth a grep
+  for `--semantic-positive` alongside `--brand-primary` in the same component.
+- **Why deferred:** the fix is a palette decision (nudge Pesto's positive off the
+  brand green? give the timeline a dedicated categorical ramp rather than reusing
+  brand/semantic roles? add a second channel — shape or glyph — so colour isn't
+  load-bearing, which is also the more accessible answer). All three are the
+  owner's call, and the last one is arguably what D-013's spirit wants.
+- **Recommended resolution:** opportunistic — fold into the next design pass, or
+  into the `DESIGN_REMEDIATION_PLAN` backlog. Cite alongside D-013 (colour-coded
+  states get a legend) — the deeper rule this suggests is "colour alone is never
+  the only channel", which may deserve its own D-rule.
+
+## [OPEN] FU-597 — The Alerts page shows a stale feed for the rest of the session: it only refetches when the store is empty
+- **Raised:** 2026-07-22 (lean-verify big round #3 — Batch 11 Alerts)
+- **Type:** finding
+- **What:** `AlertsPage.vue:435-438` refetches on mount **only** when
+  `alerts.value.items.length === 0`. Once the store has been populated (e.g. by
+  opening the bell peek), every later navigation to `/alerts` renders whatever
+  the store last held. Observed live: planned a meal for next week → the server
+  correctly dropped `no_planned_meals` (`/api/alerts` FYI 18 → 17, kind absent) →
+  navigated to `/alerts`, which still showed the **"No meals planned for next
+  week"** row, the **"1 meals to plan"** summary tile, and the header **"18 FYI"**.
+  Clicking **Refresh** corrected all three at once.
+- **Why it matters:** alerts are derived server-side from state that other
+  surfaces change constantly (stock levels, expiries, meal plans, shopping
+  lists). The store *does* re-refresh after mutations made **on** the alerts
+  surface (`refreshAsync()` after each row action, lines ~381/395), so the gap is
+  specifically **changes made elsewhere in the app** — which is the majority of
+  what actually resolves an alert. The user-visible result is Dora nagging you to
+  do a thing you just did.
+- **Scope check:** the bell peek's counts came from the same store, so the badge
+  is stale in the same way (it read 18 FYI while the server said 17). The
+  actionable count happened to match because nothing actionable had changed.
+- **Why deferred:** the fix is a caching-policy decision, not a one-liner —
+  refetch on every mount (simple, an extra request per navigation), or invalidate
+  the alert store from the mutations that can resolve an alert (meal-plan write,
+  stock level change, list finish), which is more correct but touches several
+  stores. R-016's `ensureLoadedAsync` convention is the thing being applied here,
+  so the call is really "is an alert feed the kind of data that convention
+  should cover?" — I'd argue no, but that's the owner's to set.
+- **Recommended resolution:** now-ish — it's cheap to fix either way and it
+  undermines the nudges' credibility. Fold into the next alerts pass.
+
+## [OPEN] FU-596 — The step-by-step builder puts every meal in **Breakfast**
+- **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7, C-2.J walk)
+- **Type:** finding (UX)
+- **What:** Built a week through **Plan step-by-step** with four recipes (Cheesy
+  Garlic Bread, Egg Fried Rice, Veggie Stir Fry, Tomato Pasta). The day spread is
+  correct — one per day across Wed/Thu/Fri/Sat, skipping past days — but **all
+  four landed in the `Breakfast` slot**, apparently the first entry of the
+  household slot vocabulary rather than a considered default. A user who asks
+  Dora to plan their week gets a week of breakfasts.
+- **Note:** this is *not* the F35 tap-add defect — tap-add correctly honours the
+  slot you picked (verified the same session: chose Breakfast explicitly and the
+  entry landed in Breakfast, not Dinner).
+- **Why deferred:** the right default is a product call — `Dinner` is the obvious
+  candidate, but it could equally be "spread across the slots the user actually
+  uses" or a slot picker in the builder's Build step. Not a safe drive-by.
+- **Recommended resolution:** opportunistic — fold into the next meal-planner
+  pass. Low severity (entries are trivially moved), but it makes the flagship
+  "plan my week" flow look unconsidered.
+
+## [OPEN] FU-595 — A past-day meal you didn't cook FREEZES the whole week: every add 400s and hard-crashes the planner screen
+- **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7 Meal plans, C-2 walk)
+- **Type:** finding (real bug, production severity)
+- **What:** Adding any meal to a week that contains a **past-dated entry with
+  `consumed_at IS NULL`** fails with `400 "Meal plan entries cannot be scheduled
+  in the past."`, and the error escapes to the ErrorBoundary — the entire planner
+  is replaced by "Something went wrong on this screen." Reproduced live: tap
+  **Plan Thu → Breakfast → Veggie Stir Fry** on 2026-07-22 with an unconsumed
+  2026-07-21 entry present → crash. Marking that one entry consumed and repeating
+  the *identical* sequence succeeds, which isolates the cause exactly.
+- **Mechanism — an unrepresentable state.** `UpdateMealPlanHandler`
+  (`dora_api/features/meal_plans/update_meal_plan.py:93-124`) preserves history by
+  `consumed_at is not None` (`_ConsumedExisting`) but rejects submissions by
+  `scheduled_for < today`. An entry that is **past-dated but not consumed** falls
+  in the gap: the server won't preserve it, so the client must resend it or lose
+  it — but resending it trips the past-date guard. The client does resend it
+  (observed PATCH body carries `2026-07-21` alongside the new `2026-07-23`), so
+  the week is frozen: no adds, no edits, until that entry is consumed or deleted.
+- **Why it's reachable, not exotic:** two first-class flows produce exactly this
+  state. (1) **auto-drain OFF** — the sweep deliberately leaves `consumed_at`
+  NULL (`unresolved_manual`), so *every* past-day entry qualifies. (2) **Reconcile
+  → "Didn't cook"** — explicitly clears `consumed_at` (and see [[FU-594]]: **Skip**
+  clears it too). So a user who turns auto-drain off, or who honestly answers
+  "didn't cook" mid-week, loses the ability to plan for the rest of that week.
+- **Two defects, worth separating:** (a) the contract gap above — likely fixes are
+  to preserve past-dated entries regardless of `consumed_at`, or to have the
+  server ignore (rather than reject) past entries that already exist unchanged,
+  or to have the client stop sending them; (b) **the failure hard-crashes the
+  screen** — a 400 from the add path should be a toast, not an ErrorBoundary
+  takedown. (b) is worth fixing even if (a) is redesigned, and may well affect
+  other planner mutations.
+- **Why deferred:** (a) is a contract decision across client + server with three
+  viable shapes, and picking one needs the owner. Not a safe drive-by during a
+  verify walk.
+- **Recommended resolution:** **now** — this is production-severity and sits on
+  the main weekly loop.
+
+## [OPEN] FU-594 — Reconcile `skip` reverses the pool drain, contradicting the module's own documented contract
+- **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk)
+- **Type:** finding
+- **What:** `dora_api/features/meal_plans/reconcile.py`'s module docstring says
+  `skip` → `resolved_deferred` is a "session hint; small side effect, keeps the
+  entry in the queue on next visit — **no consumed_at / pool change**" (lines
+  ~25-28). The implementation does the opposite: `_target_drained()` returns 0
+  for `VERB_SKIP`, so `pool_delta = current_drained - 0` and the drain is fully
+  **reversed**; the same branch also clears `consumed_at`. Observed live: a
+  planned-4 entry the sweep had already drained, pool at 10 → tapping
+  **Skip for now** moved the pool to **14**. (Tapping Cooked afterwards
+  correctly re-drained to 10, so the code is internally self-consistent —
+  `_effective_drained()` treats `resolved_deferred` as drained=0. Only the
+  documented contract and the behaviour disagree.)
+- **Why deferred:** which side is wrong is a **domain call, not a code call**.
+  Either (a) skip should be neutral (fix `_target_drained` + the `consumed_at`
+  branch to leave a deferred entry exactly as the sweep left it), or (b) skip
+  legitimately means "un-assume until I confirm" and the docstring is stale.
+  (b) has a real cost: between the skip and the eventual confirm, the pool
+  over-states available meals for an entry the user has *not* said didn't
+  happen. The DORA_VERIFY checklist only asserted the queue behaviour (which
+  passes), so this was never caught.
+- **Recommended resolution:** now — it's a one-line semantic decision, and
+  whichever way it goes, the docstring and code should be made to agree.
+
+## [OPEN] FU-593 — `reconcile_meals_pending` is invisible on a busy pantry: severity `low` + the hard 8-suggestion cap
+- **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk)
+- **Type:** finding
+- **What:** `/api/suggestions` sorts by severity DESC then title and truncates at
+  `_MAX_SUGGESTIONS = 8` (`dora_api/features/suggestions/suggestions.py:42,120-135`).
+  `generate_reconcile_meals_pending` emits `SEVERITY_LOW`, so on the seeded verify
+  DB it was crowded out entirely by 8 `use_soon` (high) cards — the suggestion
+  never reached the SPA even though its signal was firing. Confirmed by pushing
+  the expiring stock dates out: the reconcile card then appeared immediately with
+  the right payload (`unresolved_count: 3`, `oldest_days_back: 5`). The
+  **`meal_reconcile_overdue` alert is unaffected** and did surface, so the nudge
+  isn't lost outright — but the suggestions surface silently drops it exactly
+  when the kitchen is busiest, which is when reconciling matters most.
+- **Why deferred:** the fix is a product judgement (raise the severity? reserve a
+  slot per kind? de-duplicate `use_soon` so one noisy category can't fill the
+  feed?), not an obvious defect — the cap is working as written.
+- **Recommended resolution:** opportunistic — fold into the next suggestions /
+  dashboard-feed pass.
+
 ## [OPEN] FU-592 — Add a `DORA_SEED_MONEY_ON` verify-seed knob (boots money + nutrition on) to unblock agent verification of the money/nutrition/buy-verdict/budget surfaces
 - **Raised:** 2026-07-22 (lean-verify big round — Cookbook Chunk 9)
 - **Type:** deferred job (verify tooling)
@@ -232,28 +436,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time the Features settings page or
   the enabled-flag composables are touched, wire the toggle handlers to refresh the
   probes (and extend the e2e test to drop its reload).
-
-## [OPEN] FU-582 — Finish & restock modal has NO per-item level pickers (server `level_overrides` contract has no UI)
-- *(Renumbered from FU-580 on 2026-07-18 — a parallel session independently issued
-  FU-580 for the Features-page reload finding; that one keeps the number.)*
-- **Raised:** 2026-07-18 (UX round 5, driving the finish flow live)
-- **Type:** finding
-- **What:** the "Finish & restock" modal on a SHOPPING list shows only a flat list of
-  ticked item names + Cancel / "Restock & finish" — no per-item level choice at all
-  (screenshot `30-restock-review-modal.png`). But the UX-v2 M12 restock-review design
-  (DORA_VERIFY 3-band bullet: "only 3 options per item — Stocked / Low / Out") and the
-  server contract both expect per-item overrides: `FinishShoppingListRequest.level_overrides`
-  exists, is documented "per-item level choices from the finish modal", and was
-  backend-pinned green this morning (`test_stock_level_collapse.py` — override wins,
-  unknown-level 422). The SPA evidently never sends it — a part-restocked item ("bought
-  milk but it's still half-empty → Low") can't be expressed at finish time; everything
-  ticked flips to Stocked.
-- **Why it matters:** the DORA_VERIFY eyeball check for the modal can never pass as
-  written; dead server surface (R-003 seam built, client half missing).
-- **Recommended resolution:** owner decides — either build the per-item 3-option picker
-  into the modal (the designed behaviour), or explicitly cut the override UI and note the
-  carve-out (then simplify/keep the server contract for API users). Check git history for
-  whether the picker UI was built and lost in a rebuild (C-19-style) before writing new UI.
 
 ## [OPEN] FU-579 — `quasar dev` vite-checker overlay: pre-existing type errors block fresh-browser interaction
 - **Raised:** 2026-07-18 (building the drive.mjs app driver)
@@ -441,7 +623,7 @@ long session summary. Distinct from the other logs:
      red = out, cream tint = ?) with no legend anywhere; Canned Tomatoes shows a
      cream tint with NO matching icon signal, and the dimmed Parmesan (33) is still
      unexplained. One legend (or tooltips on the edge) would pay for itself.
-  45. The missing restock-review pickers are FU-582 (functional gap, split out; renumbered from FU-580).
+  45. The missing restock-review pickers were FU-582 — **resolved 2026-07-22 as not-a-gap**: the picker was cut on purpose in `a3b82644`; the contract has now been removed server-side too. Not a finding.
   46. Cook mode end-state: "Finish ✓" swaps in for Next, and the step's ingredient
      row highlights as you advance — excellent detail, keep.
 - **Sixth pass (2026-07-18, plan wizard / kitchen-setup + admin settings / search / tablet):**

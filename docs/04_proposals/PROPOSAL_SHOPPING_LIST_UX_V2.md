@@ -102,7 +102,7 @@ piece lands in the merged single page. Nothing falls on the floor silently.
 | M9 | Substitute picker | Radio list of the line's *offers* | **Merged.** Offer chips on the row already do this; the row keeps the "swap with substitute" action for stock-item-level subs (L418). |
 | M10 | Progress bar + picked count | Linear progress in header | **Merged → doughnut** + counts in the top info area (S8), plus the sticky shopping footer (§7). |
 | M11 | Estimated remaining cost | Footer total | **Merged.** Server-owned `totals.remaining_price` shown in info area + shopping footer. |
-| M12 | Finish & restock / finish early | POST /finish → DONE + restock ticked + snapshot | **Merged + upgraded** *(revised on review)*: Finish opens a **restock review modal** — a summary of the ticked items, each with a stock-level button defaulting to Well-Stocked and tappable to any level (Sufficient, Low, …), above a single primary **Restock & finish** button. One click if the defaults are right; per-item tweaks without extra navigation if not. Product-only lines (no stock item) are listed as not stock-tracked. Endpoint gains optional `level_overrides`. |
+| M12 | Finish & restock / finish early | POST /finish → DONE + restock ticked + snapshot | **Merged + upgraded** *(revised on review; per-item pickers **SUPERSEDED 2026-07-22, FU-582**)*: Finish opens a **finish review modal** — a summary of the ticked items above a single primary **Restock & finish** button. Every ticked item restocks to Stocked; there is no per-item level choice and the endpoint takes no options (the `level_overrides` field was removed). Product-only lines (no stock item) are listed as not stock-tracked. |
 | M13 | Exit (back) → stop shopping | POST /stop → back to draft | **Cut** *(revised on review)*: no Pause. Lifecycle is Start shopping → Finish & restock (→ Reopen if needed). The orphaned `/stop` endpoint is deleted with the page. |
 | M14 | Keyboard shortcuts (space/enter pick, s skip, u undo, esc exit) | Shop-mode-scoped | **Partially merged.** Detail already has space-tick + arrow focus + `n` add; add `u` = untick last ticked. `s`/`esc` die with M1/M4. |
 | M15 | Status guard (bounces non-shopping lists) | onMounted redirect | **Obsolete** — route deleted. |
@@ -295,12 +295,17 @@ Row anatomy (one row, no kebab):
   (today it's hidden — but realising you need milk *in the store* is exactly
   when you add it). Ticked lines sink to the bottom of their group with
   strikethrough.
-- **Finish & restock → restock review modal** (M12 revised): ticked items
-  listed with per-item stock-level buttons (default Well-Stocked), one primary
-  "Restock & finish" button, a muted note for unticked leftovers ("N unticked
-  items stay on the list") and for product-only lines (not stock-tracked).
-  This also answers the cook-mode-finish-shaped feedback (L336 pattern:
-  individual level marking instead of an all-or-nothing toggle).
+- **Finish & restock → finish review modal** (M12 revised; **per-item pickers
+  SUPERSEDED 2026-07-22 — see FU-582**): ticked items listed for review, one
+  primary "Restock & finish" button, a muted note for unticked leftovers ("N
+  unticked items stay on the list") and for product-only lines (not
+  stock-tracked). The per-item stock-level buttons this section originally
+  specified were **cut** — owner's call: someone who has just bought an item
+  would never mark it as anything other than Stocked, so the choice was
+  ceremony over a foregone conclusion. A part-used item is corrected on the
+  stock item itself, not at finish time. The L336 "individual level marking"
+  read does not transfer: cook mode consumes stock (level genuinely varies),
+  shopping replenishes it (level does not).
 - FU-097: rows adopt `formatQuantity()` while being rebuilt.
 
 ## 8. Toolbar (S5) + quick fixes

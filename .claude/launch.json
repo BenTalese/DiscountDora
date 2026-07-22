@@ -20,6 +20,18 @@
             }
         },
         {
+            "name": "dora-verify-backend-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": ["-m", "dora_api.startup"],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING"
+            }
+        },
+        {
             "name": "dora-spa",
             "runtimeExecutable": "npm",
             "runtimeArgs": ["--prefix", "web_app", "run", "dev"],

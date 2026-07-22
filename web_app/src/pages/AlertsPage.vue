@@ -201,7 +201,7 @@
                     >
                         <q-item-section>
                             <q-item-label>{{ entry.label }}</q-item-label>
-                            <q-item-label caption>{{ entry.kind.replace('_', ' ') }}</q-item-label>
+                            <q-item-label caption>{{ kindLabel(entry.kind) }}</q-item-label>
                         </q-item-section>
                         <q-item-section side class="items-end">
                             <q-chip dense size="sm" :color="historyChipColor(entry.state)" text-color="white">
@@ -230,6 +230,7 @@
         colorFor,
         colorForKind,
         iconFor,
+        kindLabel,
         kindTheme,
         linkFor,
         tierLabel,

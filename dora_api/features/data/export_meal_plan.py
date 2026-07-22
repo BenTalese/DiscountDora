@@ -30,7 +30,7 @@ _PRINT_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>{{ plan.name }} · meal plan</title>
+  <title>{{ plan_title }} · meal plan</title>
   {{ css | safe }}
   <style>
     table.calendar { border-collapse: separate; border-spacing: 0; width: 100%; }
@@ -50,7 +50,7 @@ _PRINT_TEMPLATE = """<!doctype html>
 <body>
   {{ toolbar | safe }}
   <div class="page">
-    <h1>{{ plan.name }}</h1>
+    <h1>{{ plan_title }}</h1>
     <div class="meta">
       Generated {{ generated_at }} · starts {{ plan.start_date }} ·
       {{ plan.entries | length }} entr(y/ies)
@@ -112,9 +112,15 @@ def _render_print_view(plan: MealPlanDto) -> str:
     days = sorted(days_map.items(), key=lambda kv: kv[0])
 
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    # C-2.E — the planner creates *nameless* week-plans on purpose, so
+    # `plan.name` is normally None here. Rendering it raw printed the literal
+    # string "None" as the page's title + heading; fall back to the week the
+    # plan starts, which is what the sheet is actually identified by.
+    plan_title = plan.name or f"Week of {plan.start_date}"
     return render_template_string(
         _PRINT_TEMPLATE,
         plan=plan,
+        plan_title=plan_title,
         days=days,
         slot_order=slot_order,
         generated_at=generated_at,

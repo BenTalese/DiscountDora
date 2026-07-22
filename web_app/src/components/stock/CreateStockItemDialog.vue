@@ -117,33 +117,23 @@
                         @update:model-value="clearField('stock_location_id')"
                     />
 
-                    <!-- Help promises "location, expiry, or flag" at add time,
-                         and the API supports them on create — surface expiry +
-                         Essential here so the dialog matches that contract
-                         (Codex P2). Both optional; blank = unset. -->
-                    <q-input
-                        v-model="form.expiry_date"
-                        outlined
+                    <!-- The create dialog only carries fields that are
+                         permanent properties of the item. Expiry is a
+                         per-batch fact that changes over the item's life,
+                         so it lives on the detail page / stocktake, not
+                         here. Stock group takes its place. -->
+                    <q-select
+                        v-model="form.stock_group_id"
+                        :options="groupOptions"
+                        emit-value
+                        map-options
                         clearable
-                        mask="####-##-##"
-                        label="Expiry (optional)"
-                        placeholder="YYYY-MM-DD"
-                        :error="!!fieldErrors.expiry_date"
-                        :error-message="fieldErrors.expiry_date"
-                        @update:model-value="clearField('expiry_date')"
-                    >
-                        <template #append>
-                            <q-icon :name="ICONS.event" class="cursor-pointer">
-                                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                                    <q-date v-model="form.expiry_date" mask="YYYY-MM-DD">
-                                        <div class="row items-center justify-end">
-                                            <BaseButton variant="ghost" label="Close" v-close-popup />
-                                        </div>
-                                    </q-date>
-                                </q-popup-proxy>
-                            </q-icon>
-                        </template>
-                    </q-input>
+                        outlined
+                        label="Stock group (optional)"
+                        :error="!!fieldErrors.stock_group_id"
+                        :error-message="fieldErrors.stock_group_id"
+                        @update:model-value="clearField('stock_group_id')"
+                    />
 
                     <div class="row items-center q-gutter-sm">
                         <q-toggle v-model="form.is_flagged" label="Essential" />
@@ -176,7 +166,9 @@
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
+    import type { StockGroup } from 'src/models/stockGroup';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
+    import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { useFormErrors } from 'src/composables/useFormErrors';
     import { useLocationStore } from 'src/stores/locationStore';
@@ -200,6 +192,7 @@
 
     const $q = useQuasar();
     const barcodeApi = new BarcodeApiService();
+    const stockGroupApi = new StockGroupApiService();
 
     const dialogTitle = computed(() =>
         props.prefill?.barcode ? 'Add a stock item from scan' : 'Add a stock item',
@@ -237,11 +230,19 @@
         });
     }
 
+    // Stock groups — fetched straight from the API like the detail-page
+    // picker does; there's no store for them and this dialog is the only
+    // other consumer.
+    const stockGroups = ref<StockGroup[]>([]);
+    const groupOptions = computed(() =>
+        stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
+    );
+
     const defaultForm = (): CreateStockItemCommand => ({
         name: props.prefill?.name?.trim() || '',
         stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
         stock_location_id: null,
-        expiry_date: null,
+        stock_group_id: null,
         is_flagged: false,
     });
 
@@ -285,9 +286,14 @@
             if (open) {
                 resetForm();
                 void locationStore.ensureLoadedAsync();
+                void loadStockGroupsAsync();
             }
         },
     );
+
+    async function loadStockGroupsAsync() {
+        stockGroups.value = await stockGroupApi.getAllAsync();
+    }
 
     function onDialogUpdate(value: boolean) {
         emit('update:modelValue', value);
@@ -301,7 +307,7 @@
                 name: form.name.trim(),
                 stock_level_id: form.stock_level_id,
                 stock_location_id: form.stock_location_id,
-                expiry_date: form.expiry_date || null,
+                stock_group_id: form.stock_group_id || null,
                 is_flagged: form.is_flagged ?? false,
             });
             // if the dialog was opened from a scan flow with a

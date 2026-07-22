@@ -108,16 +108,8 @@ export type FinishResult = {
     items_restocked: number;
 };
 
-/** UX-v2 restock review — per-item level choice from the finish modal.
- *  Items without an override restock to Stocked (server default). */
-export type FinishLevelOverride = {
-    stock_item_id: string;
-    stock_level_id: string;
-};
-
-export type FinishShoppingListCommand = {
-    level_overrides?: FinishLevelOverride[];
-};
+/** Finishing takes no options — every ticked line restocks to Stocked. */
+export type FinishShoppingListCommand = Record<string, never>;
 
 export type QuickAddCandidate = {
     shopping_list_id: string;

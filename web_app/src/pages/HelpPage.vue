@@ -286,7 +286,7 @@
                 {
                     title: 'Add a stock item',
                     summary:
-                        'On the Stock page, click "+ New stock item". Set the name, stock level, and optionally a location, expiry, or flag.',
+                        'On the Stock page, click "New item". Set the name and stock level, and optionally a location, stock group, or the Essential flag. Expiry is set on the item itself once it\'s added.',
                     path: '/stock',
                 },
                 {

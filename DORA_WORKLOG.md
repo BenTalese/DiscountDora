@@ -18,6 +18,422 @@ next.
 
 ---
 
+## 2026-07-22 (later 5) — Verify campaign Batch 13 (Settings B) opened: CSRF/account block cleared, assistant contracts pinned, FU-599
+
+Opened **Batch 13 — Settings B (account / assistant / misc)**, previously
+untouched. No code changes this unit — everything either passed or became a
+finding.
+
+**Account + CSRF defence (FU-197) — 8 of 11 cleared.** The security half is the
+valuable part and it all holds:
+- `dora_csrf` cookie: `Path=/; SameSite=Lax`, **no HttpOnly** (so JS can read it,
+  which the double-submit design requires). No `Secure` — correct, since
+  `DORA_SECURE_COOKIES` isn't set here; that leg stays an env check.
+- `PATCH /api/auth/me {"email": …}` → **400 `extra_forbidden`**, "This field
+  isn't supported here." The field really is off the schema.
+- Mutation without the header → **403** "Missing or invalid CSRF token."; the
+  same call with the header → **200**. Verified from a cold curl jar, so the
+  gate is proven in both directions rather than just observed failing.
+- Public endpoints exempt: a cold login with no CSRF cookie or header → **200**.
+- Instrumented `fetch` + `XMLHttpRequest` and drove four real mutations across
+  three surfaces (2× alert POST, 2× `auth/me` PATCH): every one carried
+  `X-CSRF-Token` and every value matched the cookie.
+- Email-change UI: "Send confirmation" stays disabled with only a new address and
+  enables once Current password is filled; wrong password → "Could not request
+  email change. **Current password is incorrect.** · ref: …" with the address
+  unchanged; right password → "Confirmation link sent…", password field cleared,
+  `/auth/me` still on the old address.
+- Audit: both `auth.email_change.requested` (audit) and
+  `auth.email_change.password_failed` (**warn**) present with correct severities.
+
+**[[FU-599]] logged — audit double-logging.** Chasing that last item turned up a
+real problem: `auto_audit_after_request` writes a row per successful mutating
+`/api/*` call, and handlers with an explicit `audit_emit` therefore log **twice**
+under two different names. One email-change produced both `request_email_change`
+(generic) and `auth.email_change.requested` (explicit). `_NO_AUDIT_ENDPOINTS`
+exists to suppress exactly this but lists only `login`/`logout` — so
+`register_user`, `change_password`, `bootstrap_admin`,
+`create_user_as_admin`, `delete_user_as_admin` and five more `email_flows` paths
+all double-log too. **Not fixed deliberately:** suppressing the generic row for an
+endpoint whose explicit emit carries less context would silently *lose* audit
+coverage, which is the worse failure. Each needs checking first.
+
+**Assistant contracts (FU-153) — cleared at the API level.** `/auth/me` exposes
+`has_llm_api_key` and never the plaintext key; PATCH `{llm_enabled, llm_provider:
+'openai'}` without a key → **422** with the exact specced message;
+`/api/health features.assistant` tracks `master_llm_enabled`; the hygiene grep is
+clean (only per-user `llm_*` identifiers in the SPA, and the sole `AppSetting.llm_*`
+mention anywhere is a comment in `user.py` recording the replacement). Master
+kill-switch driven both ways: off → health flips true→false, toast "AI mode
+disabled install-wide.", the user's Assistant page shows the install-wide banner
+and force-disables the per-user toggle; on → banner clears, health true.
+
+**Two near-misses worth recording (both self-inflicted, both caught):**
+1. Navigation to the admin pages kept silently landing on Account. I was about to
+   treat it as a routing bug — it was the Account page's **unsaved-changes guard**
+   firing on the dirty email field I'd left from the email-change test, stacking
+   six "Discard unsaved changes?" dialogs behind the scenes.
+2. I grepped `emptyAction` (camelCase) across the taxonomy pages, found nothing on
+   the meal-slots page, and nearly filed FU-285 as regressed. Vue templates use
+   the **kebab-case** attribute — `empty-action="Create one to schedule meals
+   against."` is there and correct, and the other four pages correctly pass
+   nothing so they inherit the "…tagging recipes" default. **Grep both cases for a
+   Vue prop.**
+
+**Also re-confirmed live:** the "Add (file)" button label on Account (D-014's
+own example of dev leakage) — already tracked as FU-578 item 12, so no duplicate
+raised.
+
+**Close-gate.** No code changed; nothing to check against the standing rules
+beyond the findings raised. No ADR warranted.
+
+**Environment:** the FU-595 freeze state from the previous unit is **cleared**
+(the three backdated entries are now consumed). Master LLM switch and all
+thresholds restored. One residue: the account has a **pending email change** to
+`newaddr@example.com` — harmless (it only applies when the emailed link is
+clicked, and SMTP is off), but worth knowing if a later session sees it.
+
+**Next up:** Batch 13 survivors are mostly env/inbox-gated (SMTP round-trip,
+paid-provider keys, per-user isolation) plus the API-access admin page and the
+profile-picture upload, both still drivable. Untouched batches: **1** (top block)
+and **16** (Cross-cutting B).
+
+---
+
+## 2026-07-22 (later 4) — Verify campaign Batch 11 (Alerts) opened and largely cleared; 3 findings; history copy bug fixed
+
+Moved off Batch 7 (its survivors now need drag-and-drop automation or are blocked
+on FU-592/FU-595) onto **Batch 11 — Alerts**, previously untouched. Most of the
+C-9.1/9.2/9.3/9.4/9.6 spine is now walked.
+
+**Bug found + fixed — "out of_stock" in Alerts history.** `AlertsPage.vue:204`
+labelled history rows with `entry.kind.replace('_', ' ')`. `String.replace` with a
+string pattern swaps only the **first** match, so `out_of_stock` rendered as
+"out of_stock" — while the Manage panel two blocks up read the same kind from
+`ALERT_KIND_META` and correctly showed "out of stock". Replaced the hand-rolled
+munging with a new `kindLabel(kind: string)` in `models/alert.ts` that reads the
+shared meta and falls back to humanising *every* underscore (history rows type
+`kind` as a bare string because a stored row can outlive its kind). This also
+removes a duplicated display mapping — the meta is now the single authority.
+`vue-tsc` + eslint clean, Vitest **408 → 411**, and I confirmed the 3 new tests
+fail against the old `replace('_', ' ')` before restoring the fix.
+
+**Three findings logged, none fixed:**
+- **FU-597** — the Alerts page only refetches when the store is empty
+  (`AlertsPage.vue:435-438`), so after the first load it can show a stale feed for
+  the whole session. Caught live: planned a meal → the server dropped
+  `no_planned_meals` (FYI 18→17) → navigating to `/alerts` still showed the "No
+  meals planned for next week" row, the "1 meals to plan" tile, and "18 FYI".
+  Refresh fixed all three. The store *does* re-refresh after actions taken on the
+  alerts surface, so the gap is changes made elsewhere — which is most of what
+  resolves an alert. Fix is a caching-policy call (refetch per mount vs. invalidate
+  from the mutations), so it's the owner's.
+- **FU-598** — `--brand-primary` and `--semantic-positive` are the **same hex**
+  in Pesto (the default theme) and near-identical in Cherry Cola. The Upcoming
+  timeline correctly uses three distinct tokens for its expiry/shopping/meal dots,
+  but on Pesto shopping and meal render identically, so the categorical coding
+  conveys nothing — and the legend can't rescue it, since its swatches are the
+  same two colours. Token-level, so likely not the only affected surface.
+- **FU-596/595** from the previous unit remain open; FU-595 still blocks planner
+  add-verification.
+
+**Care point — I nearly filed a fourth, bogus, finding.** The Upcoming timeline
+showed no shopping dot after I set a `planned_shop_date`, and I started down the
+path of "the shopping category is broken". It wasn't: I'd read a **truncated**
+JSON response (sliced at 900 chars) and concluded `shopping: []` for a date whose
+entry simply hadn't been in the visible portion. Re-fetching the specific date
+showed the server was correct all along; the UI just hadn't refreshed (FU-597
+again). Truncating a payload then reasoning about what's absent is how you invent
+bugs — query the specific key instead.
+
+**Walked green:** bell badge == actionable count (36, tier-verified); snooze
+persists server-side across reload (36→35, and correctly scoped — another kind on
+the same item survived); dismiss hides on page + peek + dashboard with the badge
+consistent; C-9.2 threshold round-trip (7→2→7, expiring_soon 13→2, badge follows)
+plus disable-a-kind (11 rows gone) and demote/promote (`expired`: actionable
+34↔23, FYI 18↔29) with exact accounting and a clean restore; C-9.3 hub structure
++ slim bell peek + History with names resolved; C-9.4 **both** nudges end-to-end
+(`no_planned_meals` shows → deep-links → clears when a meal is planned;
+`shopping_day` shows for a date 2 days out → deep-links → clears when the list is
+finished); C-9.6 timeline (dots, out-of-window at opacity 0.35, today ringed,
+click-to-expand, and all three link targets); the `meal_reconcile_overdue` row
+(FU-357) rendering with the checklist icon and navigating without an ErrorBoundary;
+and the SMTP + VAPID **off**-gating captions, health flags, and the
+`/api/alerts/push/vapid-public-key` → 404.
+
+**Doc drift noted:** the checklist puts the "Alerts email digest" card on Settings
+→ **Preferences**; it actually lives on Settings → **Notifications**.
+
+**Close-gate.** Three files: a template expression, a new exported helper with its
+rationale comment, and a spec. The helper *satisfies* the single-source-of-truth
+rule rather than bending it. No new violations, no ADR warranted.
+
+**Environment:** `expiring_soon_window_days` and `auto_drain_past_meals` restored
+to 7 / true. `data/dora.dev.db` still carries three backdated unconsumed entries
+(2026-07-15/16/17) contrived for the reconcile-overdue alert — which means the
+current week is in the **FU-595** freeze state; clear them before walking planner
+adds.
+
+**Next up:** Batch 11 survivors are money-gated (C-9.5 price watch → FU-592) or
+env-gated (SMTP send, VAPID push, multi-device). Fully untouched batches remain:
+**1** (top block), **13** (Settings B), **16** (Cross-cutting B).
+
+---
+
+## 2026-07-22 (later 3) — Verify campaign Batch 7 cont.: C-2 planner walk, a production-severity freeze bug found, print-view "None" fixed
+
+Second Batch-7 chunk, same running environment. Cleared the meals-per-week
+section (5/5), in-context Print (3/4), the useListState remainder (3/4), and the
+bulk of the C-2 / R-Phase planner walk.
+
+**PRODUCTION-SEVERITY BUG FOUND — [[FU-595]], logged not fixed.** Tap-add of any
+meal 400s and **hard-crashes the planner to the ErrorBoundary** whenever the week
+contains a past-dated entry with `consumed_at IS NULL`. Mechanism is an
+unrepresentable state: `UpdateMealPlanHandler` preserves history by
+`consumed_at is not None` but rejects submissions by `scheduled_for < today`, so
+a past-but-unconsumed entry can neither be preserved by the server nor resent by
+the client — and the client does resend it. Isolated by marking the one offending
+entry consumed and replaying the identical click sequence, which succeeds. It is
+reachable through two first-class flows: **auto-drain OFF** (the sweep leaves
+`consumed_at` NULL by design) and **reconcile → "Didn't cook"** (explicitly clears
+it). Left as an FU because the repair is a contract decision across client and
+server with three viable shapes — not a safe drive-by. The second half (a 400
+taking down the whole screen instead of raising a toast) is called out separately
+in the FU and is worth fixing regardless.
+
+**Bug found + fixed — print-view titled "None".** `export_meal_plan.py`'s template
+rendered `{{ plan.name }}` raw; since the planner creates nameless week-plans by
+design (C-2.E), *every* print from the planner came out with the literal string
+"None" as the `<title>` and `<h1>`. Now falls back to `Week of <start_date>`.
+
+**Care point on the test — my first attempt was vacuous.** I added the assertion
+to the existing `test__meal_plan_print_view__returns_html`, guarded on
+`plans[0].get("name") is None`. It passed — and still passed with the fix
+reverted, because the *seeded* plans all carry names, so the guard never fired.
+Rewrote it as its own test that POSTs a nameless plan explicitly, then confirmed
+it fails with the fix reverted and passes with it restored. Worth remembering:
+seed-data-conditional assertions silently skip. Data+meal-plan slice 80 passed.
+
+**Also logged:** [[FU-596]] — the step-by-step builder spreads meals correctly
+across upcoming days but puts every one of them in **Breakfast** (first slot in
+the vocabulary rather than a considered default). Low severity, product call.
+
+**Coverage this chunk.** Meals-per-week 5/5 (incl. `3.7` rounding to 4 and `99`
+collapsing to the reset toast) — section deleted. Print: desktop icon, mobile
+week-nav placement + the ≥1-meal condition, `/meal-plans/board` redirect.
+useListState: shopping-list groupBy persists across navigation, carries across a
+list switch (per-page scope confirmed), and sign-out clears both. C-2: tap-add
+honours the chosen slot (F35 holds — chose Breakfast, got Breakfast), ± stepper
+live-adjusts and removes at 0, past days dimmed with zero clickable rows, implicit
+create on an unplanned week, Clear-week, the full calendar (6 weeks, today dot,
+focused outline, week-click jump, `?monday=` across reload), sidebar list-status
+rows, and the 3-step builder end-to-end.
+
+**Close-gate.** Two files changed: a Jinja template fallback + its comment
+(`export_meal_plan.py`) and one new backend test. No R-rule violations introduced;
+the print-view change is a display fallback in the presentation layer, which is
+where it belongs (R-003 — no domain constant duplicated). No ADR warranted.
+
+**Environment note:** the backend was restarted to pick up the Python change,
+which re-seeds (drop_all), so the contrived past-dated entries from the earlier
+chunk are gone. Any further reconcile work needs them rebuilt (the API rejects
+past-dated entries at create; backdate rows in `data/dora.dev.db` and re-fire
+`GET /api/meal-plans/today`).
+
+**Next up:** Batch 7 survivors are now mostly drag-and-drop (needs DnD
+automation), C-2.F/G template apply + recurring, the unlinked-ingredient dialog,
+and budget-defense swaps (still blocked on **FU-592**). **FU-595 wants a decision
+before more planner walking** — it makes any week with an unreconciled past meal
+untestable for adds.
+
+---
+
+## 2026-07-22 (later 2) — Verify campaign Batch 7 (Meal plans): reconcile section cleared, a real 404 fixed, browser recipe v2
+
+First verify session run from the **Linux** checkout. Two environment fixes up
+front: `.claude/launch.json`'s `dora-verify-backend` hard-codes the Windows
+`.venv\Scripts\python.exe`, so a `dora-verify-backend-linux` sibling was added
+(the Windows entry is left alone — the owner runs both machines); and
+`web_app/dist/spa` was 4 days stale, so the SPA was rebuilt before walking
+anything.
+
+**Browser-driving recipe v2** (recorded in `DORA_VERIFY_TRIAGE.md`'s top banner).
+Recipe v1's "never reload" rule is too strong and was costing coverage:
+`location.reload()` while the session cookie is live re-mounts authenticated with
+the stuck splash rendering *behind* the content, so re-installing the rAF shim in
+the next call gets a fully painted page — which is what unlocks every
+"hard-reload and check it persisted" item. Also newly documented: Quasar's
+`$q.screen` is frozen at boot width (so `resize_window` must precede the reload
+or `/meal-plans` renders `mobile-focus` even at 1600px); `computer{screenshot}`
+times out in this pane; page-driven mutations need the `dora_csrf` cookie echoed
+as `X-CSRF-Token`; and **never rebuild the SPA mid-walk** — swapped chunk hashes
+make the loaded bundle fail every lazy route import while the router *silently
+keeps the previous view*, which reads exactly like a navigation bug. I lost ~20
+minutes to that one and briefly mis-called "Manage rotating sets" as broken
+before catching it in the console.
+
+**Real bug found + fixed.** `MealReconcilePage.vue:153` used
+`:to="'/dashboard'"` — no such route (the dashboard is `/`), so the recap card's
+**Done** button, the literal last tap of the reconcile flow, landed on the 404
+page. Grep confirmed it was the only `/dashboard` navigation in the SPA. Fixed to
+`'/'`, rebuilt, re-walked green. `vue-tsc --noEmit` clean. CHANGELOG under Fixed.
+
+**Coverage.** Meal reconcile 14/15 (all five verbs, both auto-drain modes, with
+pool math checked against the DB/API at every step rather than inferred from the
+UI — an early miss where I read `unallocated_meals` instead of the real pool
+column `available_meals` is why every subsequent claim was re-run against a known
+baseline). Also cleared: Templates drawer (FU-308) 7/7 — section deleted;
+Show-all-slots (FU-306) 5/6, including driving the storage-disabled path for real
+by redefining `window.localStorage` to throw; useListState 4/8; C-2.I trays
+partial. Deletions made in `DORA_VERIFY.md`, survivors reworded to stand alone.
+
+**Two findings opened, deliberately not fixed.**
+- **FU-594** — reconcile `skip` fully *reverses* the pool drain and clears
+  `consumed_at`, while the module's own docstring says skip makes "no consumed_at
+  / pool change". Observed live: pool 10 → Skip → 14 on a planned-4 entry. The
+  code is internally consistent (`_effective_drained` treats `resolved_deferred`
+  as 0), so this is a domain call about which side is wrong, not a code call —
+  the owner's to make. Recommended "now": it's a one-liner either way.
+- **FU-593** — `reconcile_meals_pending` is `SEVERITY_LOW` and the suggestions
+  feed hard-caps at 8 sorted by severity, so on the seeded pantry it was crowded
+  out entirely by `use_soon` cards. Proved by clearing the noise, at which point
+  it appeared with the right payload. The alert surface is unaffected.
+
+**Care point on scope.** The 404 was fixed in-line (matching the Batch-0
+precedent of fixing what the walk finds); the two findings were *not*, because
+both need a product decision rather than a repair.
+
+**Close-gate.** Change is a single template string literal — no R-rule surface
+touched, no new violation, no ADR warranted. Environment left seeded and running;
+`data/dora.dev.db` was mutated freely to contrive past-dated entries (the API
+rejects them at create) and to unmask the reconcile suggestion — it is a
+throwaway seed DB that `preview_start` rebuilds with drop_all.
+
+**Next up:** Batch 7 remainder. Budget-defense swaps are still blocked on
+**FU-592** (money-on seed knob). Untouched and unblocked: unlinked-ingredient
+dialog, meals-per-week client clamp, in-context Print, R-Phase palette + DnD, and
+the C-2 walk (tap-add, drag, calendar, template apply, sequential builder).
+
+---
+
+## 2026-07-22 (later) — FU-582 closed as not-a-gap: finish-modal level pickers were an intentional cut, contract now removed
+
+Owner challenged FU-582 ("Finish & restock modal has NO per-item level pickers")
+on the grounds that he'd removed it deliberately. He was right.
+
+**Archaeology.** Commit `a3b82644` ("Feedback and bugs", 2026-07-13,
+owner-authored) removed the picker on purpose: the `<StockLevelDot>` +
+`levelOptions` / `stockedLevelId` picker in `ShoppingListDetail.vue`, the
+`overrides` mapping in `confirmFinish`, and the whole `StockLevelDot.vue`
+component (96 lines). FU-582 was raised 5 days later by the UX-round-5 session,
+which saw an empty modal and read it as a half-built seam. **The real defect was
+that the removal shipped undocumented** — that commit's CHANGELOG/worklog
+entries cover onboarding, text-size, ingestion and the Dora bubble, and never
+mention the cut. Worth noting as a pattern: an undocumented removal reads as a
+bug to the next session and costs a full investigation to re-derive.
+
+**Owner's rationale (recorded so this isn't re-raised a third time):** someone
+who has just bought an item at the shops would never intentionally mark it as
+anything other than Stocked. The picker was ceremony over a foregone conclusion.
+A part-used item is corrected on the stock item itself, not at finish time.
+
+**Decision — cut the server contract too.** My first suggestion was to keep
+`level_overrides` "for API users"; I withdrew it. The rationale is a domain fact,
+not a UI preference — if no correct caller would ever set the option, it's a trap
+rather than a feature, and it's exactly the half-wired seam R-003 exists to
+prevent. Removed:
+- `FinishLevelOverride`, `FinishShoppingListRequest.level_overrides`,
+  `FinishShoppingListResponse.invalid_level`, the override-resolution block and
+  the 422 route branch — `manage_shopping_list.py`. `FinishShoppingListRequest`
+  survives as an empty `extra="forbid"` model (the route's `@has_request_body`
+  needs it, and forbidding extras is what makes a stale body loud).
+- The dead `FinishLevelOverride` type — `shoppingListApiService.ts`. Both
+  `finishAsync` callers already passed no command, so zero call-site churn.
+- The two override cases in `test_stock_level_collapse.py`, replaced by one
+  pinning all-ticked→Stocked-regardless-of-prior-level and one pinning that a
+  stale `level_overrides` body is **rejected**, not ignored.
+
+**Care point:** my first pass at the handler introduced an early
+`return FinishShoppingListResponse()` when Stocked couldn't be resolved, which
+would have skipped marking the list done — a behaviour change the old
+`continue`-per-item shape didn't have. Caught and reverted to a
+`ticked_lines and stocked is not None` loop guard before running anything.
+
+**Verification.** `test_stock_level_collapse.py` 6/6, plus the shopping/
+stock-level/data-router slice 128/128 green. My assumed 422 for a stale body was
+wrong — schema rejection returns **400 `extra_forbidden`** via the
+`has_request_body` path; test corrected to assert the real contract rather than
+bending the code to my assumption. `vue-tsc --noEmit` clean over the touched
+scope. Not walked in the browser: the frontend delta is a type-only deletion
+(erased at runtime) and the server path is covered at HTTP level by the e2e
+suite — the finish flow's user-visible behaviour is unchanged by this unit.
+
+**Docs swept** so the picker isn't re-specced: `PROPOSAL_SHOPPING_LIST_UX_V2.md`
+M12 (table row + §detail) marked SUPERSEDED with the rationale inline;
+`DESIGN_REMEDIATION_PLAN.md` **DR-6 closed** with an explicit "do not build this"
+(it was a live P1 backlog item that would have sent the next session straight
+into building the picker) + its traceability row updated; two stale DORA_VERIFY
+bullets reworded so survivors stand alone; FU-578 item 45 cross-ref annotated.
+FU-582 moved to `DORA_FOLLOWUPS_RESOLVED.md`. CHANGELOG entry under Changed.
+
+**Close-gate.** R-003 (state ownership) is the rule this unit *satisfies* — the
+dead server half is gone, no domain constant now lives in two places. No new
+violations introduced. No ADR warranted: this is an application of R-003, not a
+new recurring decision. **Left for the owner to confirm:** that a part-used item
+is comfortably correctable on the stock item's own page — the cut assumes that
+path carries the case, and I didn't drive it.
+
+**Next up:** nothing blocking from this unit. Note the tree still carries the
+uncommitted create-stock-item-dialog work from the entry below.
+
+---
+
+## 2026-07-22 — Create-stock-item dialog: expiry field swapped for stock group
+
+Owner request: the add-a-stock-item dialog should only carry fields that are
+**permanent** properties of the item. Expiry is per-batch (changes on every
+restock), so it was removed; **Stock group (optional)** replaces it.
+
+**Changed** — `web_app/src/components/stock/CreateStockItemDialog.vue` only:
+- Removed the `q-input` expiry field + its `q-date` popup; dropped `expiry_date`
+  from the default form and from the create payload.
+- Added a clearable `q-select` group picker (`stock_group_id`), positioned where
+  expiry was (under Location, above the Essential toggle).
+- Options come from `StockGroupApiService.getAllAsync()` held in a local ref —
+  same approach as `StockItemDetailPage.vue`, which is the only other consumer;
+  there is no stock-group store, so no `ensureLoadedAsync` (R-016) applies.
+  Fetched on each dialog open alongside the existing location-tree hydration, so
+  a group created in Settings appears without a page reload.
+
+**Help copy corrected** (owner follow-up in the same session) —
+`web_app/src/pages/HelpPage.vue:289`, the Stock → "Add a stock item" entry. It
+was the line that motivated adding expiry to this dialog on 2026-07-17
+("optionally a location, expiry, or flag"), so leaving it would have re-created
+the same mismatch in the other direction. Two staleness bugs fixed at once: it
+promised add-time expiry, and it named a **"+ New stock item"** button that has
+actually been labelled **"New item"** (`StockOverview.vue:6`/`:433`). Now names
+the stock group and points expiry at the item's own page. Swept the rest of the
+help/onboarding copy for the same promise — the other expiry mentions
+(`onboardingContent.ts`, `WelcomeWizard.vue`, `DoraHelpPage.vue`, and
+HelpPage's own "Track expiry" entry at :293) all describe expiry on the detail
+page or as a general capability, which stays true; none needed edits.
+
+**No backend change** — `CreateStockItemRequest` already had `stock_group_id`
+(`dora_api/features/stock_items/create_stock_item.py:38`), including the
+not-found warning path; the frontend `CreateStockItemCommand` already declared it.
+
+**Close-gate:** `vue-tsc --noEmit` clean. Checked against ENGINEERING_STANDARDS —
+no new violations; no new rule/ADR warranted (this reuses the established
+local-fetch-for-groups pattern rather than establishing one). Not driven in the
+browser this session — the swap is logged in `DORA_VERIFY.md` → Stock, where the
+now-stale 2026-07-17 expiry checklist was rewritten in place rather than left to
+contradict the shipped dialog. CHANGELOG `[Unreleased] → Changed` notes that it
+supersedes the 2026-07-17 entry that added expiry here.
+
+**Next up:** nothing spun off. Resume the lean verify campaign (entry below).
+
+---
+
 ## 2026-07-22 (lean verify, BIG ROUND #2) — money/nutrition ON-state attempted → harness wall diagnosed → FU-592 spawned
 
 Went after the money/nutrition-gated Cookbook surfaces (Chunk 9 cost card + kcal

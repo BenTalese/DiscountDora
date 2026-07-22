@@ -97,8 +97,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Save a bogus URL → toast "Instance URL saved", full reload, network banner drops (server unreachable) — confirm the app doesn't hard-crash and the About page still lets you re-open the prompt to fix it
 - [ ] Re-save the original URL → app recovers cleanly on reload; API traffic goes back to normal
 
-
-
 **Workflow:**
 - Newest within each surface is at the top.
 - Delete items as you verify them — no archive needed, the end-of-pre-release
@@ -320,21 +318,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Meal plans
 
 ### Meal reconcile — page + dashboard chip + header nudge — origin FU-317 Chunk 5 (2026-07-09)
-- [ ] With `AppSetting.auto_drain_past_meals` on the default (TRUE) and a fresh install, create a meal plan for **today - 2 days** with one entry, then hit `GET /api/meal-plans/today` (or open the dashboard) to fire the sweep. Confirm the dashboard now shows a **Reconcile 1 past meal** chip in the *Your kitchen* zone; the meal-plans page shows a **1 past-day meal needs confirming →** link above the planner.
-- [ ] Tap the dashboard chip → lands on `/meal-plans/reconcile`. Runner shows the entry: recipe name, scheduled date + slot, planned servings. Five verb buttons: **Cooked** (big primary), **Different portions** + **Cooked later** (secondary pair), **Didn't cook** (danger-ghost), **Skip for now** (small ghost).
-- [ ] Tap **Cooked** → the recap card appears with 1 cooked / 0 others; **Done** returns to `/dashboard`. Both the chip and the header link have disappeared (queue empty). Recipe pool unchanged from what the sweep already decremented.
-- [ ] Under auto-drain OFF (`PATCH /api/app-settings {auto_drain_past_meals: false}` first), repeat: sweep leaves the pool untouched → Cooked verb applies the drain now. Recipe pool drops by the entry's servings.
-- [ ] Try **Different portions** → dialog asks for actual servings; picking 5 for a 2-planned entry drops the pool by an extra 3.
-- [ ] Try **Cooked later** → dialog picks a date; the receipt shows a `cooked_on` value (verifiable via DevTools `GET /api/meal-plans/reconcile-queue?include_resolved=true` — currently returns empty in MVP, so a direct DB peek is fine).
-- [ ] Try **Didn't cook** on an entry that was already drained → the pool goes back up by the entry's servings; the entry drops out of the queue.
-- [ ] Try **Skip for now** → the entry stays in the queue on refresh (drops to a `resolved_deferred` receipt state).
-- [ ] Threshold check — build **3 unresolved entries** stretching **5 days back**, trigger the sweep, then check `/alerts` for the `meal_reconcile_overdue` alert kind (message like "3 past meals need confirming") + `/api/suggestions` for the `reconcile_meals_pending` suggestion.
-- [ ] `/meal-plans/reconcile` empty state — with zero unresolved entries, the runner renders "Nothing to reconcile" + a Back-to-Meal-plans button. No chip, no header link.
-- [ ] Text-size preference (Preferences → Display): flip to XL — the runner card, buttons, and help dialog all scale.
-- [ ] Themes: check the runner on Pesto light + Pesto dark + one other family — no hardcoded colours.
-- [ ] `(?)` help icon in the top-right of the runner opens the "How reconcile works" dialog listing every verb.
-- [ ] **Settings → Admin → System → Meal reconciliation** (FU-317 Chunk 6): the page renders with an *Assume past-day meals were cooked* toggle and a *Go to reconcile* deep-link button. Flipping the toggle fires a success toast and persists across reload. As a non-admin user, the page shows the "You don't have admin permissions" banner instead.
-- [ ] Settings left nav shows a **Meal reconciliation** row under **System** with the event-note icon (admins only).
+- [ ] **Settings → Admin → System → Meal reconciliation** (FU-317 Chunk 6): as a **non-admin** user, the page shows the "You don't have admin permissions" banner instead of the settings. (Admin half verified 2026-07-22: page renders with the *Assume past-day meals were cooked* toggle + *Go to reconcile* deep-link; flipping fires a success toast and persists across reload.)
 
 ### Budget-defense recipe swaps (Suggestions panel) — origin FU-451
 - [ ] With **money features on** and a **budget set**, build a meal-plan week that's projected over budget (priced recipes summing past the budget). A **Suggestions** panel renders below the week grid: "Over budget by $X", Est. week cost + Budget figures, "N swaps could bring it back to $Y".
@@ -351,73 +335,39 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Build a meal plan for the week where at least one planned recipe has an ingredient with **no linked stock item** (either a paste-imported recipe that never got linked, or one you added a "Use as free text" ingredient to per FU-506); trigger **Generate shopping list for this week** → success toast, then a dialog titled **Add these manually** listing each unlinked ingredient as `• <ingredient> (<recipe>)` with a single **Got it** button → tap **Got it** → dialog closes, navigation to the new list still happens
 - [ ] Repeat with a meal plan whose recipes are **all fully linked** → success toast, no dialog; **and confirm the recipe's non-stocked ingredients actually landed on the new list** (the FU-587 fix — previously nothing from recipes was added)
 
-### Meals-per-week preference — origin FU-181
-*(Server bounds guard `ge=1, le=21` pinned 2026-07-19 in `test_patch_semantics.py`: raw PATCH of 0/-3/22/100/3.7 → 400 with no write; inclusive edges 1 and 21 accepted. The client-side clamp/round + toast/builder behaviours below stay owner-walk.)*
-- [ ] Preferences → Meal planning shows a **Meals per week** number input under **Cooking style**; placeholder text reads `7`
-- [ ] With the field blank, open the sequential builder on `/meal-plans` → the header count still reads `/ 7`, matching the fallback *(FU-304 closed 2026-07-07: `/meal-plans/board` is retired and now redirects to `/meal-plans`; only the surviving planner needs checking.)*
-- [ ] Set the input to **5** → save toast reads "Meals per week set to 5." → **without reloading**, reopen the sequential builder → header count now reads `/ 5`
-- [ ] Clear the input (or type a value outside 1–21) → save toast reads "Meals per week reset to the default (7)." → builder count returns to `/ 7`; the field snaps to blank (placeholder shows again)
-- [ ] Type a decimal (e.g. `3.7`) → the **input rounds it client-side** before saving (the server rejects a raw fractional value — pinned above); a value <1 or >21 the input collapses to null (reset toast)
-
 ### In-context Print on the meal planner — origin FU-338 (Board page portion retired with FU-304, 2026-07-07)
-- [ ] `MealPlansOverview` (`/meal-plans`) still has its existing Print icon in the week header — no regression there
-- [ ] Resize to mobile (<md) → the mobile focus renders. The Print icon lives in the week-nav row, right of the "Next week" arrow. Only shown when the focused week has ≥1 planned meal
-- [ ] Tap Print on mobile → new tab opens the meal-plan print view for the focused week
-- [ ] Direct-navigate to `/meal-plans/board` (or any stale bookmark from the old Direction-B page) → clean redirect to `/meal-plans`; the surviving planner's Print icon works as above
+- [ ] Tap Print on mobile → a **new tab** actually opens (the popup itself). (Verified 2026-07-22: the button is wired to `openPrintView` → `/api/meal-plans/<id>/print-view`, and that endpoint renders the week's day×slot grid correctly; only the tab-opening half is unwalked.)
 
 ### useListState — full sweep across meal planner + shopping list detail — origin FU-354 + FU-355 (2026-07-07)
-- [ ] Open `/meal-plans` → type a distinctive search string (e.g. "spag") into the recipe picker's search input → the picker filters to matching recipes
-- [ ] Navigate to a recipe from the picker (or any other page, e.g. `/cookbook`) → hit browser back → return to `/meal-plans` → the picker search still reads "spag" (was blank in the pre-FU-354 behaviour)
-- [ ] Open any `/shopping-lists/<id>` detail → set the top-right group toggle to **Location** (or **Store**) → navigate away (dashboard or another list) → return → the toggle is still **Location** (was reset to **None** before)
-- [ ] Switch to a different shopping list → the group toggle carries over (the scope is per-page, not per-list — verify this matches the intent; the FU note explains why per-list would silently reset on switch-list)
-- [ ] **Sign-out clears both**: on `/meal-plans` with a picker search set + on `/shopping-lists/<id>` with a groupBy set → open the account menu → **Sign out** → log back in → the picker search is empty, the group toggle is None again (FU-355's `clearAllListState()` fires in `logoutAsync`)
 - [ ] **Silent 401 recovery clears both too**: with the same setup, force a session expiry (server restart, or hand-clear the session cookie in DevTools) → make any API call → the 401 interceptor's `handleSessionExpired` fires → SPA lands on the login page → after re-auth, both list-state values are empty
-- [ ] Hard-reload (Ctrl-Shift-R) on either page → both list-state values reset (module-scope Map wipes with the fresh bundle) — this is by A8 §3 design ("a full reload should feel like a clean slate")
-- [ ] Grep-verify (`web_app/src/composables/useListState.ts`) the `CACHE` Map is still module-scope (not localStorage) — the persistence contract is session-only
 
 ### Show-all-slots persistence — origin FU-306 (2026-07-07)
-- [ ] Open `/meal-plans` on desktop. The "Show all slots" toggle above the carousel is **off** by default (only used slots render per day)
-- [ ] Flip it **on** → every household slot renders per day → hard-reload the page → toggle stays **on**, all slots still render
-- [ ] Flip it **off** → hard-reload → toggle stays **off**, used-slots-only again
-- [ ] DevTools → Application → Local Storage → `mealPlanShowAllSlots` is `'1'` when on, `'0'` when off
-- [ ] Private-window / storage-disabled sanity: open the page in a private window with storage blocked — the toggle still works within the session; reload reverts to off (no error toast, no console throw)
 - [ ] The setting is per-device — flip on in browser A, open in browser B on the same account → browser B is off (this is a device-scoped preference, not a household one)
 
-### Templates drawer owns per-template CRUD; page is Sets-only — origin FU-308 (2026-07-07)
-- [ ] Planner (`/meal-plans`) → open the Templates drawer from the right rail's Templates card. Each template row shows **Apply · Rename · Clone · Delete** actions (Clone is a document-copy icon between Rename and Delete)
-- [ ] Click Clone on a template → row shows a brief loading spin → positive toast "Cloned." → the drawer's list refreshes and shows the new template (usually named "Copy of …" depending on server behaviour)
-- [ ] Click **Manage rotating sets →** at the drawer footer → the drawer closes and the SPA navigates to `/meal-plans/templates`
-- [ ] The page header now reads **Rotating template sets** with a caption ending "Manage individual templates from the planner's **Templates** drawer." No **Templates** card is visible on the page anymore — Rotating sets is the only management surface here
-- [ ] From the sets page, create a new rotating set → the "Add a template" picker still lists every template (the page still loads the template store for that dropdown, even though it doesn't render its own template list)
-- [ ] Direct-navigate to `/meal-plans/templates` (deep-link / bookmark) → lands cleanly on the sets-only page; browser tab title reads **Rotating template sets**
-- [ ] Grep-verify (`useMealPlanner.ts`) no longer exports `goToManageTemplates` and nothing in the app tries to call it — no console error, no dead menu item
-
 ### Meal Planner R-Phase 1 extraction + Phases 2–6 — origin FU-305
-- [ ] Left palette: search filters trays; click-add into a focused slot; drag-and-drop from a recipe row to a day-slot (mouse only); pool ± / log-cook dialog; "Cancel" clears focused-target banner
-- [ ] Middle column: ↑/↓ arrows, top/bottom buttons, vertical-swipe on mobile, calendar click all move the focused week; URL `?monday=` persists across reload (F29)
-- [ ] Per-day slot rows render entries, drop targets accept dragged recipes, "Other" row appears for off-vocabulary historical entries
-- [ ] Today badge + past-day dim still render; entry chip view/cook/remove/adjust wires through
-- [ ] Clear-week + print buttons in header work
-- [ ] Right column: calendar, this-week-shopping count, ingredient list with hover-highlights, AddToList button, cook-by warning, "Full ingredient demand" expansion, generate-list + C-7 target picker
+- [ ] Left palette: **drag-and-drop** from a recipe row to a day-slot (mouse only); pool ± / log-cook dialog; "Cancel" clears focused-target banner. (Verified 2026-07-22: search filters trays; click-add into a focused slot lands in the chosen slot; the focused-target banner reads "Adding to <Slot>, <date> — pick a recipe.")
+- [ ] Middle column: ↑/↓ arrows, top/bottom buttons, vertical-swipe on mobile move the focused week. (Verified 2026-07-22: calendar click moves it, and `?monday=` persists across a hard reload — F29.)
+- [ ] Drop targets accept dragged recipes; "Other" row appears for off-vocabulary historical entries. (Verified 2026-07-22: per-day slot rows render entries.)
+- [ ] Entry chip **view / cook** actions wire through. (Verified 2026-07-22: Today badge renders on the right day; past days carry `day-card--past` at opacity 0.6 with zero clickable slot rows; the chip popover's ± adjust and remove-at-zero work.)
+- [ ] Right column: ingredient-row **hover-highlights**, AddToList button, cook-by warning, "Full ingredient demand" expansion, generate-list + C-7 target picker. (Verified 2026-07-22: calendar, this-week-shopping count and the ingredient list with per-row list status + stock chips all render.)
 - [ ] Templates card: save / apply / apply-recurring / manage-templates flows
-- [ ] Sequential-builder dialog opens, lists recipes, builds + generates the list
+- [ ] Sequential builder: the **generate-list** hand-off from the done screen. (Verified 2026-07-22: the dialog opens, lists recipes, and builds — 4 picks spread one-per-day across the upcoming days.)
 
 ### Meal Plans C-2 — full surface walk — origin FU-179
 - [ ] Carousel nav — ↑/↓ arrows + keys + mobile swipe move weeks with slide animation; `prefers-reduced-motion` disables; `weekRangeLabel` updates
-- [ ] Tap-add — tap a day's slot (highlights + banner shows target), tap a recipe → entry lands in **that** slot (NOT always "Dinner", F35). Re-adding to same slot increments servings
+- [ ] Tap-add — **re-adding to the same slot increments servings**. (Verified 2026-07-22: tapping a day's slot shows the target banner and the entry lands in **that** slot — chose Breakfast, got Breakfast, F35 holds.)
 - [ ] Drag — desktop drag onto slot adds; touch disables drag, tap-add works (no scroll-jank)
-- [ ] Implicit create — first add to an unplanned week silently creates the plan; sidebar switches from "no meals planned" to shopping summary
-- [ ] Inline servings — ± stepper adjusts live, removes at 0; view/cook/remove work
-- [ ] Past days dimmed + reject taps/drops; Today badge on right day; Thu-8am-AEST drop repro (F29) no longer 400s (ties to C-2.K)
-- [ ] Left list — search filters; "N free" + inline ± pool stepper + log-cook work; no cookable colour/check
+- [ ] Inline servings — **view / cook** actions work. (Verified 2026-07-22: ± adjusts live ×1→×2→×1, and 0 removes the entry.)
+- [ ] Thu-8am-AEST drop repro (F29) no longer 400s (ties to C-2.K). (Verified 2026-07-22: past days dimmed + non-interactive; Today badge on the right day.)
+- [ ] Left list — "N free" + inline ± pool stepper + log-cook work; no cookable colour/check. (Verified 2026-07-22: search filters the list.)
 - [ ] Off-vocab — entry with deleted/legacy slot renders under "Other"
-- [ ] Sidebar/generate work bound to focused week; "Jump to a plan" focuses chosen week; "Clear this week" empties it
-- [ ] **C-2.D calendar** — right column ~6 weeks; status underlines (green planned / amber short / dotted-grey all-consumed / none empty); today has a dot; focused week outlined; clicking a week jumps carousel (and back); month banner + arrows page the window; `?monday=YYYY-MM-DD` resumes on that week; old "Jump to a plan" dropdown is gone
-- [ ] **C-2.H sidebar** — each needed-ingredient row shows list status ("on <list>" / "not on a list") + add-to-list button (multi-list opens picker); hovering (desktop) outlines using meals; per-item stock chips use **app-wide colours**; membership loads on the planner
-- [ ] **C-2.I trays** — left column groups into Favourites · Haven't-had (oldest/never first) · Frequently-planned · All recipes; curated trays hide when empty; searching collapses to "Results"; 21-day "haven't had" window spot-check; "frequently planned" ranks by plan frequency
+- [ ] Sidebar/generate work bound to focused week. (Verified 2026-07-22: "Clear this week" confirms then empties it; the old "Jump to a plan" dropdown is gone, replaced by the calendar.)
+- [ ] **C-2.D calendar** — the **amber "short"** underline state specifically; month **arrows** page the window. (Verified 2026-07-22: 6 weeks render; planned / consumed / empty day states; today carries the 5px primary dot; focused week outlined; clicking a week jumps the carousel and back; month banner reads the focused month; `?monday=` resumes across a hard reload; the old dropdown is gone.)
+- [ ] **C-2.H sidebar** — the add-to-list button (multi-list opens picker); hover (desktop) outlines the using meals. (Verified 2026-07-22: each needed-ingredient row shows list status — e.g. "needs 15g · on This week" — with a stock chip, and membership loads on the planner.)
+- [ ] **C-2.I trays** — curated trays hide when empty; 21-day "haven't had" window spot-check. (Verified 2026-07-22: the four tray groups render, searching collapses to "Results (N)", and "Frequently planned" ranks by plan frequency.)
 - [ ] **C-2.F templates** — right column "Save this week as a template" (only with meals) → name + description; "Apply a template…" forks onto focused week (past skipped; toast shows added/skipped); confirm before replacing existing future meals; editing/deleting a template leaves a week forked from it untouched
 - [ ] **C-2.G sets + recurring + manage** — `/meal-plans/templates` (via Manage templates) lists templates (rename/clone/delete) + sets (new/edit-with-↑↓-reorder/delete); "Apply recurring…" applies a template or rotating set over ≤26 weeks; set rotates templates week-by-week; 26-week cap + "pick exactly one source" surface as toasts
-- [ ] **C-2.J sequential builder** — planner's "Plan step-by-step" opens 3-step flow (pick → preview → build & generate) ending on done with Print (Email shown disabled). Cancel writes nothing; preview's buy/in-stock matches sidebar; build spreads meals across upcoming days + generate-list modal fires; Print opens the week's print view
+- [ ] **C-2.J sequential builder** — **Cancel writes nothing**; the generate-list modal fires from the done screen; Print opens the week's print view. (Verified 2026-07-22: the 3-step flow runs pick → "What you'll need" → Build; the preview's buy/in-stock matches the sidebar; 4 picks built one-per-day across upcoming days, skipping past days; the done screen offers Generate shopping list / Print this week / Done. **Note:** there is no Email button at all — the checklist expected one "shown disabled". **Every built meal lands in Breakfast — see FU-596.**)
 
 ---
 
@@ -496,7 +446,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Mobile dropdown opens + picks
 - [ ] Shop-day button tones (today/overdue) correct
 - [ ] Doughnut + totals render correctly
-- [ ] Start shopping → sticky footer → restock-review modal (incl. per-item level tweak) → Reopen reverses it
+- [ ] Start shopping → sticky footer → finish-review modal (ticked-item summary, no per-item level picker — cut, FU-582) → Reopen reverses it
 - [ ] Quick-add mid-shop works
 - [ ] Row actions: price button, swap, remove
 - [ ] Group-by toggle works
@@ -608,10 +558,12 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ## Stock
 
-### Add-a-stock-item dialog — expiry + Essential + name trim (Codex review, 2026-07-17)
+### Add-a-stock-item dialog — stock group + Essential + name trim (Codex review, 2026-07-17; expiry→group swap 2026-07-22)
 *(Backend fully unit-tested — 6 green incl. over-long/whitespace/trim-dedup; these are the visual/UX confirmations. Dialog opens from Stock Overview "Add".)*
-- [ ] The Add dialog now shows, under Location: an **Expiry (optional)** field with a calendar icon that opens a date picker, and an **Essential** toggle with an info tooltip
-- [ ] Add an item with an expiry set + Essential on → open the new item's detail page: the expiry date and the Essential toggle both reflect what you chose
+- [ ] The Add dialog shows, under Location: a **Stock group (optional)** picker listing the configured groups (clearable), and an **Essential** toggle with an info tooltip. There is **no Expiry field** — expiry is per-batch and lives on the detail page only
+- [ ] Add an item with a group picked + Essential on → open the new item's detail page: the stock group and the Essential toggle both reflect what you chose
+- [ ] Add a group in Settings → Stock groups, then reopen the Add dialog → the new group appears in the picker (options refetch on each open)
+- [ ] Help → Stock → "Add a stock item" reads "click **New item** … a location, stock group, or the Essential flag. Expiry is set on the item itself once it's added." — button name and field list both match the real dialog
 - [ ] Type a name with leading/trailing spaces (e.g. "  Milk  ") → it's stored trimmed ("Milk"); a name that's only spaces is rejected by the form ("Name is required")
 - [ ] Adding "  Milk  " when a "Milk" already exists shows the "already exists" error (trim + case-insensitive dedup), not a second row
 
@@ -695,7 +647,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Backup → restore: ConsumptionEvent is an event log (like CookEvent) and intentionally NOT in the backup sections — confirm restore still succeeds and beliefs recompute from surviving purchases/cooks
 
 ### 3-band StockLevel collapse (Sufficient axed, 2026-07-02)
-- [ ] Restock-review modal on shopping-list finish: only 3 options per item (Stocked / Low / Out); no level-override UI anywhere still labels a "Sufficient" middle option
+- [ ] No stock-level picker anywhere still offers a "Sufficient" middle option — only Stocked / Low / Out. (The shopping-list finish modal is out of scope: its per-item picker was cut, FU-582.)
 - [ ] Onboarding "Restock" scene copy reads "Finishing the shop bumps what you bought back to stocked — no re-counting" (was "well-stocked")
 - [ ] Buy-verdict popover on a Stocked item: reads "Stocked" as the need-axis label (was "Well stocked")
 
@@ -952,19 +904,13 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 ## Alerts & notifications
 
 ### Alerts C-9.1 — spine — remaining browser smoke — origin FU-183
-- [ ] Bell badge equals actionable list count
-- [ ] Snooze persists across a reload (server-side)
-- [ ] Dismiss hides everywhere
-- [ ] Existing inline actions work with the new scoped key
-- [ ] **C-9.2:** admin System-settings threshold fields save + round-trip; disabling a kind removes it from list + drops badge; promoting/demoting moves a kind between badge/FYI
-- [ ] **C-9.3:** Alerts hub page (summary tiles + tiered active list + Manage panel + collapsible History) renders; bell is now a slim peek (top rows + bulk-add + "Open Alerts"); shared `AlertRow` actions work from both; History lists past dismiss/snooze/read with stock name resolved; dark-mode clean; no bell/page divergence
-- [ ] **C-9.4 forward-looking nudges:** with next week's plan empty, `no_planned_meals` FYI row shows and deep-links to `/meal-plans`; planning a meal clears it. `shopping_day` FYI row shows for a list with `planned_shop_date` within 3 days, deep-links; marking list done clears it. Both render through shared `AlertRow` (icon/colour/theme), no stock name, snooze/dismiss work
+- [ ] **C-9.2:** the admin **Expiring-soon window** field's own save path (type a value + Save in the UI). (Verified 2026-07-22: the setting round-trips server-side 7→2→7 and reshapes the feed — expiring_soon 13→2, badge follows; **disabling a kind** removes its 11 rows from the list; **demote/promote** moved `expired` between tiers with exact accounting — actionable 34↔23, FYI 18↔29, badge tracking. UI-typing half is blocked by the Quasar synthetic-input limitation, not by a defect.)
+- [ ] **C-9.3:** dark-mode sweep of the hub. (Verified 2026-07-22: hub renders — summary tiles, tiered active list, Manage panel, collapsible History; bell is a slim peek with top rows + bulk-add + "Open Alerts"; shared `AlertRow` actions work from both; History lists dismiss/snooze/read with stock name resolved — **found + fixed a copy bug there: `out_of_stock` rendered "out of_stock"**. **Bell/page DO diverge — see [[FU-597]]:** the page only refetches when the store is empty, so it can show a stale feed all session.)
 - [ ] **C-9.5 subscriptions / price-watch tier:** money flag ON + armed price alert → Price watch region lists it (product · merchant · "notify below $X" · last-alerted); View opens price-history explorer with that product; Remove deletes (row gone + toast); empty-state clean; hidden when money flag OFF
-- [ ] **C-9.6 Upcoming fortnight timeline (Phase A):** Upcoming mini-calendar renders on hub; days with events show correct per-category dots (warning expiry, primary shopping, positive meal); out-of-window dimmed, today ringed; clicking a day expands its detail list + links navigate (expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`); refresh works; empty-state clean; dark-mode clean (token dots survive theme switch)
+- [ ] **C-9.6:** empty-state; "refresh works". (Verified 2026-07-22: mini-calendar renders; per-category dots for expiry/shopping/meal; out-of-window at opacity 0.35; today ringed in primary; clicking a day selects it and expands the detail list; all three link targets navigate — expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`. **Dots survive theme switch but shopping and meal are the SAME colour in Pesto — [[FU-598]]**.)
 
 ### Cross-app undo after push-expiry (fixes 2026-07-10) — origin FU-357
 - [ ] From the **Dashboard's dashboard-card push-expiry action** (i.e. the push-expiry rendered on the Dashboard alerts card, not just the bell) → toast now reads **"Done."** (this used to be silent — fixed 2026-07-10). Confirm the toast fires on Dashboard, Bell peek, and `/alerts` page — all three surfaces should behave identically.
-- [ ] With a **`meal_reconcile_overdue`** alert present (e.g. leave a past-day meal-plan entry unresolved so it fires — see FU-317 Chunk 4) → the bell + `/alerts` page render the row cleanly, use the checklist icon, theme text "meals to reconcile", tapping the row navigates to `/meal-plans/reconcile`, no ErrorBoundary. Regression from FU-317 Chunk 4 fixed 2026-07-10 (SPA `AlertKind` union + five kind-switches extended; defensive `?? []` in AlertRow).
 - [ ] Push expiry via bell/dashboard/`/alerts`, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
 
 ### good_deal alerts + fake-markdown buy verdict — origin FU-450
@@ -974,8 +920,8 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] **Money off** → no Deal-alerts settings section, no `good_deal` alerts, no fake-markdown demotion.
 
 ### C-9.7 alerts email digest — origin FU-205
-- [ ] Settings → Preferences shows new "Alerts email digest" card after Weekly deals; heading + caption read across all themes
-- [ ] **SMTP-gating (R-014):** without `DORA_SMTP_USERNAME`, master toggle disabled, caption "Email isn't set up on this install yet — ask an admin…". With env set + restart: toggle enabled, caption hides; `GET /api/health` shows `features.email_smtp_configured: true`
+- [ ] Heading + caption of the "Alerts email digest" card read cleanly across all themes. (Verified 2026-07-22: the card renders directly after Weekly deals — **note the checklist says Settings → Preferences; it actually lives on Settings → Notifications**, doc drift from a settings-tree reorganisation.)
+- [ ] **SMTP-gating (R-014), the ON half:** with `DORA_SMTP_USERNAME` set + restart the toggle enables, the caption hides, and `GET /api/health` shows `features.email_smtp_configured: true`. (Verified 2026-07-22: the OFF half — toggle disabled with "Email isn't set up on this install yet — ask an admin to configure SMTP and this toggle will unlock." and health `false`.)
 - [ ] Opt-in round-trip: master toggle on → toast → cadence select appears (Daily default); switch Weekly → day select; pick a day; reload survives. Network panel: master sends `{alerts_email_enabled, alerts_email_cadence}` together; later edits send single changed field
 - [ ] `GET /api/auth/me` returns `alerts_email_enabled`, `alerts_email_cadence`, `alerts_email_day` on user payload
 - [ ] Real SMTP send: real env + opted-in + an expired stock item → trigger job → inbox receives digest with actionable item in "Needs action", "Open Alerts" button linking to `<DORA_PUBLIC_URL>/alerts`, plain-text fallback
@@ -985,7 +931,6 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 
 ### C-9.8 web-push channel — origin FU-206
 *Prereq: generate VAPID keys per FU-207*
-- [ ] **VAPID gating (R-014):** no `DORA_VAPID_*` → Push card toggle disabled, caption "Push isn't set up on this install yet — ask an admin…"; `GET /api/health` shows `features.push_vapid_configured: false`; `GET /api/alerts/push/vapid-public-key` → 404
 - [ ] Set VAPID env, restart → toggle enabled, caption hides; health flag true; key endpoint returns the public key
 - [ ] Subscribe flow: toggle on → browser permission prompt → allow → toast → toggle stays on, caption "This device is subscribed…". DevTools → Application → Service Workers: SW at `/push-sw.js` registered + activated
 - [ ] Receive: create expired stock item → trigger `send_alerts_push()` → OS notification "Dashy Dora — <name> has expired". Click → focuses an existing Dora tab on `/alerts` (or opens new one)
@@ -1122,17 +1067,9 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] Toggle back on → the entry reappears without a full reload (may require a reload if `useScanningEnabled` cached — this is expected)
 
 ### Account — verified email change + CSRF defence — origin FU-197
-- [ ] Settings → Account → Email row: enter a new address; the "Send confirmation" button stays disabled until you also fill the **Current password** input
-- [ ] Wrong current password → toast "Could not request email change." with the API's 422 reason caption ("Current password is incorrect.")
-- [ ] Right current password → toast "Confirmation link sent. Check your new inbox to finish the change.", the password field clears, the address shown above (currentUser) does **not** update yet
 - [ ] **Inbox A (new address):** "Confirm your new Dashy Dora email" with the confirmation link — click → /confirm-email-change → success → the next /auth/me probe surfaces the new address in the menu
 - [ ] **Inbox B (old address):** "An email change was requested on your Dashy Dora account" notice rendered from `email_change_notice.html` arrives **before** the confirmation in inbox A (same task; best-effort, but expected when SMTP is up). Old address never loses anything until the confirmation link is clicked
-- [ ] DevTools network: `PATCH /api/auth/me` with `{"email": "x@y.z"}` returns **400** (the field is now forbidden by the schema). The SPA never sends this — Settings always uses `POST /auth/me/email`
-- [ ] DevTools application → Cookies: a `dora_csrf` cookie is set after the first request, non-HttpOnly (so `document.cookie` shows it), SameSite=Lax. When `DORA_SECURE_COOKIES=1` is set on the server it's also Secure
-- [ ] DevTools network: every mutating SPA call carries an `X-CSRF-Token` request header whose value matches the `dora_csrf` cookie
-- [ ] DevTools console — paste `fetch('/api/auth/me', {method:'PATCH', credentials:'include', headers:{'Content-Type':'application/json'}, body:'{}'})` without the CSRF header → 403 with "Missing or invalid CSRF token."
-- [ ] Audit log: a successful change-email request emits `auth.email_change.requested`; a wrong-password attempt emits `auth.email_change.password_failed` (warn severity)
-- [ ] Login / register / forgot-password / reset-password / verify-email / bootstrap-admin still work cold (no CSRF cookie yet) — public endpoints are intentionally exempt
+- [ ] With `DORA_SECURE_COOKIES=1` set on the server, the `dora_csrf` cookie also carries **Secure**. (Verified 2026-07-22 without that env: `Set-Cookie: dora_csrf=…; Path=/; SameSite=Lax`, no HttpOnly — so `document.cookie` can read it, which the double-submit design requires.)
 
 ### Assistant — banner, Test connection, docs (PR2 finalisation) — origin FU-330 + FU-331 + FU-332
 - [ ] **AI-unavailable banner (FU-330):**
@@ -1162,7 +1099,6 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] **Ollama path** (no env-var needed):
   - [ ] Pick `Ollama (local)`. Save base URL + model. AI toggle stays disabled until both are present; once saved, toggle enables AI mode → assistant replies route through the configured Ollama.
   - [ ] Old `AdminSystemAssistantSettings.vue` (now stripped) only shows the master kill-switch + a pointer to per-user settings.
-- [ ] **Master kill-switch (admin)**: System → AI assistant. Toggle off → every user's Settings → Assistant page shows the "AI mode is disabled install-wide" banner + the per-user toggle is forced off / disabled. Toggle back on → user toggles re-enable.
 - [ ] **Paid-provider flow (OpenAI / Anthropic / Gemini)** without `DORA_LLM_KEY_ENCRYPTION_KEY` set:
   - [ ] Try to save an API key → 422 with caption "`DORA_LLM_KEY_ENCRYPTION_KEY` isn't configured — paid-provider API keys can't be saved." (Or the friendly form via the error toast.)
   - [ ] Ollama saves still work.
@@ -1171,12 +1107,8 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
   - [ ] Save model name. Toggle AI on. Send a chat message → routes to the chosen paid provider (verify via outbound network log or by using a deliberately-wrong key and seeing the LlmUnavailable fallback fire).
   - [ ] "Remove saved key" button clears the key (server: `has_llm_api_key` flips false). AI toggle disables again with "Save an API key first" hint.
 - [ ] **Per-user isolation**: User A configures Ollama + enables. User B configures OpenAI + enables. Both can chat at once; A's request hits Ollama, B's hits OpenAI. (Logs or outbound network confirm.)
-- [ ] **GET /auth/me** never returns the plaintext API key — `has_llm_api_key: true|false` is what the SPA sees. (Browser DevTools → /auth/me response → no `llm_api_key` field.)
-- [ ] **Cross-field validation**: try to PATCH `/auth/me` with `{llm_enabled: true, llm_provider: 'openai'}` without a saved key → 422 with "openai needs an API key — save the key before enabling AI mode."
-- [ ] **Health endpoint** `/api/health` — `features.assistant` reflects `master_llm_enabled` (not per-user).
 - [ ] **Anthropic + Gemini smoke**: configure one of each with a valid key, send a chat that triggers a tool call (e.g. "what's low?"). The response shows the data — confirming the tool-call adapter round-tripped through `ask_assistant`.
 - [ ] **Backup → restore** round-trips the new User columns + `master_llm_enabled` (the api-key ciphertext should survive a backup/restore — it's stored as a `LargeBinary` blob like `User.image`).
-- [ ] **Engineering hygiene**: grep for old field references — `grep -rn "llm_enabled\|llm_base_url\|llm_model" web_app/src` should only hit per-user identifiers (User.llm_*, UpdateMe, AuthenticatedUser); no `AppSetting.llm_*` references anywhere except migrations / comments.
 
 ### Visual rebuild Phase 3 — cross-theme walk — origin FU-283
 - [ ] Walk every settings page in Pesto Light + Pesto Dark + Cherry Cola Dark
@@ -1186,10 +1118,6 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] `flask db upgrade` applies `a4f7c2e9b6d1` up **and** down, single head
 - [ ] `pytest tests/e2e/dora_api/test_auth_flows.py` green (two new tests + no regressions)
 - [ ] Browser: upload picture on Account → appears immediately on menu bar (cache-bust), Account header, admin Users row; clear → all revert to icon/initials; hard-refresh both states survive; >4.5MB image rejected with a usable message
-
-### VocabListEditor empty-state copy — origin FU-285
-- [ ] Settings → Kitchen setup → Meal slots: with no slots configured, empty-state row reads "No meal slots yet. Create one to schedule meals against." (not "…tagging recipes")
-- [ ] Settings → Kitchen setup → Cuisines / Categories / Tools / Dietary tags: with the taxonomy emptied, empty-state row still reads "No {plural} yet. Create one to start tagging recipes." (default unchanged)
 
 ### Speech-output toggle on browser without SpeechSynthesis — origin FU-289
 - [ ] In a browser lacking `window.speechSynthesis` (or with it stubbed to undefined via DevTools), Settings → Voice's "Let Dora speak her replies" toggle is **visible** (not hidden) when `GET /api/tts/voices` returns `configured: true`

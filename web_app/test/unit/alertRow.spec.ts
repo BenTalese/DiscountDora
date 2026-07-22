@@ -18,6 +18,7 @@ import type { Alert, AlertKind } from 'src/models/alert';
 import { describe, expect, it } from 'vitest';
 
 import AlertRow from 'src/components/AlertRow.vue';
+import { kindLabel } from 'src/models/alert';
 import { expectAccessible } from './_axe';
 
 // Slotless stub — the snooze/dismiss tooltips would otherwise leak their
@@ -227,5 +228,33 @@ describe('AlertRow — chrome emits and read state', () => {
     it('has no accessibility violations (unread, read-toggle present)', async () => {
         const wrapper = mountRow({ kind: 'expiring_soon', read: false });
         await expectAccessible(wrapper.element, { wrapRole: 'list' });
+    });
+});
+
+/**
+ * `kindLabel` — the prose label for an alert kind, used by the hub's History
+ * rows (which hold the kind as a bare string, since a stored row can outlive
+ * its kind). Regression anchor: 2026-07-22 the History caption used a
+ * hand-rolled `kind.replace('_', ' ')`, and `String.replace` with a string
+ * pattern swaps only the FIRST match — so `out_of_stock` rendered as
+ * "out of_stock" while the manage panel, reading the same kind from
+ * ALERT_KIND_META, correctly showed "out of stock".
+ */
+describe('kindLabel', () => {
+    it('reads known kinds from the shared meta, not by munging the key', () => {
+        expect(kindLabel('out_of_stock')).toBe('out of stock');
+        expect(kindLabel('essential_low')).toBe('essential low');
+        expect(kindLabel('meal_reconcile_overdue')).toBe('meals to reconcile');
+        expect(kindLabel('no_planned_meals')).toBe('meals to plan');
+    });
+
+    it('humanises EVERY underscore of an unknown kind, not just the first', () => {
+        // A kind retired from the union can still sit in stored history.
+        expect(kindLabel('some_retired_kind')).toBe('some retired kind');
+    });
+
+    it('never leaves a raw snake_case key on screen', () => {
+        const kinds = ['out_of_stock', 'low_stock', 'stocktake_overdue', 'shopping_day', 'a_b_c_d'];
+        for (const k of kinds) expect(kindLabel(k)).not.toContain('_');
     });
 });

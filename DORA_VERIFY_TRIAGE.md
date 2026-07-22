@@ -51,6 +51,43 @@
 >    underneath.)
 > So card/grid/dialog/flow verification IS agent-doable now — this is the same
 > init-script rAF-stub trick the deleted `drive.mjs` used, reproduced in-pane.
+>
+> **RECIPE v2 (2026-07-22, Batch-7 session) — RELOAD IS FINE, AND YOU NEED IT.**
+> Two corrections to the above, both found the hard way:
+> 1. **`location.reload()` does NOT strand you.** Step 3's "never reload" is too
+>    strong. Reloading while the session cookie is live re-mounts the app
+>    authenticated, and the stuck splash overlay renders *behind* the content —
+>    a fresh `javascript_tool` call that re-installs the rAF shim right after the
+>    reload gets a fully painted page. This unlocks every "hard-reload and check
+>    it persisted" verify item (localStorage prefs, admin toggles), which recipe
+>    v1 had no way to walk. Re-install the shim on **every** reload — first line
+>    of the next call.
+> 2. **Resize BEFORE the mount that matters, or you get the mobile layout.**
+>    Quasar's `$q.screen` is frozen at whatever the pane's width was when the app
+>    booted; synthetic `resize` events and the `resize_window` tool do **not**
+>    move it afterwards (media queries update, `$q.screen` doesn't — its listener
+>    is rAF-gated behind the pre-shim native rAF). The pane boots narrow, so
+>    `$q.screen.lt.md` sticks TRUE and `/meal-plans` renders `mobile-focus` even
+>    at 1600px. Order that works: `resize_window` → `location.reload()` →
+>    re-install shim. Desktop three-column planner then renders.
+> 3. **`computer{action:"screenshot"}` times out** in this pane (renderer is
+>    hidden) — do not budget for screenshots. Verify via `read_page` /
+>    `document.body.innerText` / `getComputedStyle`, which is enough for layout,
+>    type-scale and theme-token checks (measure computed `fontSize` /
+>    `backgroundColor` across settings changes).
+> 4. **Mutating API calls need the CSRF header** when driven from the page:
+>    read the `dora_csrf` cookie and echo it as `X-CSRF-Token`, or every
+>    POST/PATCH silently 403s.
+> 5. **Do not rebuild the SPA mid-walk.** A `quasar build` swaps the hashed
+>    chunk filenames under the running page; the still-loaded old bundle then
+>    fails every lazy route import ("Failed to fetch dynamically imported
+>    module") and the router *silently keeps the previous view* — which reads
+>    exactly like a broken navigation bug. Cost this session ~20 minutes chasing
+>    a phantom. Rebuild, then reload, then re-test.
+> 6. **Quasar `q-input` still can't be driven synthetically** (v1's finding
+>    holds) — but the **native-value-setter + bubbling `input` event** trick
+>    works on plain `<input>`s inside dialogs (`type=number`, `type=date`),
+>    which is enough for the reconcile verb dialogs.
 
 **What this is (historical framing, superseded by the banner above):** the
 working plan for clearing the QA pile in `DORA_VERIFY.md` (1,406 unchecked items
@@ -127,13 +164,13 @@ surfaces, then the long tail, then env-gated batches.
 | 4 | Cookbook A — filters, free-text, importer, DnD (132–195) | 132–195 | ~53 | 🟡 (2026-07-20: **server-ownable slices codified/verified** — cookability+expiring filters (`test_recipe_filters.py` 14 + `test_recipe_router.py` Cookable/MaxMissing/ExpiringWithinDays), tri-state cookability (`test_recipe_cookability.py`), import routes 404/content-only (`test_recipe_import_routes.py`), and bulk-linker grouping/collapse/sort/dedupe (`test_unlinked_ingredients.py`) all confirmed green → delete-on-passed. **2 gap-fills added:** `create_recipe__NameOnly__CreatesFreeformEmptyStub` (L128 stub defaults) + `taste_video_carousel_cruft_stripped` (L148 taste2 Coles/video cruft — the loose corpus test can't catch it). 100 tests green. **Remaining owner-walk/codify-next:** editor free-text picker UI, stub-creator modal (4 fields/buttons/nav), importer paste/preview flow, **Create-new bulk action (L137 — client orchestration over POST /stock-items + bulk-link)**, ingredient DnD (FU-118/161 — needs a component/e2e harness), PWA share-target (Android device-pack). **Later 2 (same day):** the **Link bulk endpoint (L136) codified → found + fixed REAL BUG FU-588** — new `test_unlinked_ingredients_bulk_link.py` (4 tests: cross-recipe link + cookability re-derive, only-matching-group, unknown-item 422, empty-key 400) caught that `GetUnlinkedIngredientsHandler` read the recipe FK off the un-prefixed `recipe_id` (ORM binds `_recipe_id`), so every bulk-linker group showed "Used in 0 recipes"; fixed (R-032) + the false-confidence unit stub corrected to `_recipe_id`. Backend **1543 passed**.) |
 | 5 | Cookbook B — chunk sections + image-steps (197–321) | 197–321 | ~120 | 🟡 (2026-07-20: **Chunk-8 recipe versions codified → 2 REAL BUGS found + fixed** — new `test_new_recipe_version_numbering.py` (4 tests: numbering, inheritance [linked/unlinked/optional ingredients + scalars + cuisine/category], independence) caught **FU-589** (numbering skipped v2 → v1,v3,v4 from a pre-flush sibling count) and **FU-590** (production-severity: new-version of ANY recipe with ingredients 500'd — autoflush of unparented clones + R-032 noload clone silently unlinked linked ingredients → anchor CHECK fail). Both fixed; Chunk-8 numbering/group-alloc/inheritance/independence delete-on-passed. Full backend **1547 passed**. **Remaining Batch-5 (untouched):** Chunks 3/4/9 cards+cost+nutrition (cost math, kcal wire), Chunk 5 images+tools, Chunk 2 tag taxonomy, image-steps mode, tools/steps/tags/collection/image version inheritance — mostly UI. **Later 2 (same day): cost math (Chunk 9) + step validation (Chunk 6) codified clean** — `test_recipe_router.py` +5 tests: `estimated_cost = Σ qty × offer.price_now/size_value` over the real StockItemProduct→Product→ProductOffer join (guards the FU-463 SQLite-uuid regression), partial-coverage priced/total counts, None-when-unpriced; whitespace-step→400 domain message + empty-step→422. No bugs. Full backend **1552 passed**. Batch-5 remainder now pure UI [cards/tags/images/nutrition-flag matrix/kcal wire].) |
 | 6 | Cook mode (327–369) | 327–369 | ~36 | 🟡 (2026-07-20: **rescale (FU-101) + personal-notes (FU-432) codified** — `scaleQuantity.spec.ts` grew a Chunk-6 checklist describe block [+6 → 23 tests: up/down 1.5×/0.5×, ¾/1½ snap, egg 0.75→1 floor, 7.5g→7½] and `test_recipe_notes.py` gained the new-version note carry-over [+1 test]; DORA_VERIFY pure-math bullets + L305 deleted, survivors reworded to component-clamp/UI-render owner-walks. **Codify-next (needs a cook-mode e2e/component harness, none exists yet):** Chunks 1–3 finish-flow dialog [override-beats-action, Promise.allSettled fail-soft, click-out cancel, session-swap], voice/timer [+ audio=device-pack], Chunk 5 highlight/tools/hints [mostly V-pack]. Input clamp/default/session-only [L333/340/341/342] also codify-next. **Later 2 (same day): finish-flow e2e ATTEMPTED, DEFERRED as flaky** — `cook-mode-finish` drives the real loop (Finish → Down-one/Out/Unchanged → server-verified level drops + meals toast + Cancel-fires-nothing) and passes 4/4 in a FRESH env, but `--repeat-each=2` → ~1/3 (cook-mode loads the stock store async → a fast Finish click races it → decrement no-ops). Deactivated to `cook-mode-finish.wip.ts` (off the `*.spec.ts` glob) as a driver blueprint; DORA_VERIFY bullets reverted to owner-walk. **Deeper blocker: the full e2e suite doesn't run green in one long single-worker pass — 14 failures from env degradation on ~13 unrelated specs → [[FU-591]].** The e2e infra must be stabilised (parallelism/sharding + quiet the debug backend) before it's a reliable codification vehicle.) |
-| 7 | Meal plans (375–476) | 375–476 | ~83 | ⚪ |
+| 7 | Meal plans (375–476) | 375–476 | ~83 | 🟡 (2026-07-22: **reconcile section cleared 14/15 + 3 adjacent sections** — full runner walk (all 5 verbs, both auto-drain modes, pool math server-verified at every step), threshold alert+suggestion, empty state, help dialog, XL type-scale, 3 theme families, admin settings page; **found + fixed a real bug** (recap **Done** → `/dashboard` 404 → now `/`); **2 findings opened** ([[FU-594]] skip reverses the pool drain vs. its own docstring, [[FU-593]] reconcile suggestion crowded out by the 8-item cap). Also cleared: Templates drawer (FU-308) **7/7**, Show-all-slots (FU-306) 5/6, useListState (FU-354/355) 4/8, C-2.I trays partial. **Remaining Batch-7:** budget-defense swaps (money-gated → blocked on [[FU-592]]), meal reconcile non-admin banner (needs a 2nd account), unlinked-ingredient dialog, meals-per-week client clamp, Print (mobile/print-view), R-Phase palette + DnD, C-2 tap-add/drag/calendar/templates-apply/sequential-builder. **Later 2 (same day):** meals-per-week **5/5** (deleted), Print 3/4, useListState remainder 3/4, and most of C-2/R-Phase walked (tap-add slot correctness F35, ± stepper, past-day inertness, implicit create, Clear-week, full calendar incl. `?monday=` across reload, sidebar list-status, 3-step builder end-to-end). **Found [[FU-595]] — production severity:** a past-day entry with `consumed_at IS NULL` makes every add 400 and hard-crash the planner; reachable via auto-drain-OFF and via reconcile → "Didn't cook". **Fixed:** print-view titled every nameless planner week "None" → now `Week of <date>`, pinned by a new backend test (the first attempt at that test was vacuous — seed-conditional — and was rewritten to create the nameless plan itself). **[[FU-596]]** opened: the builder files every meal under Breakfast. **Survivors:** drag-and-drop, C-2.F/G templates apply/recurring, carousel arrows/keys, off-vocab row, unlinked-ingredient dialog, budget swaps ([[FU-592]]).) |
 | 8 | Shopping lists A — recent (482–563) | 482–563 | ~69 | 🟡 (2026-07-20: **display_name self-labelling (FU-165 L509) codified clean** — `test_shopping_list_planned_shop_date.py` +1 test: name→planned-date→re-label→created-fallback ladder via server-owned `display_name` (R-003). Also confirmed already backend-tested (delete-on-pass for the walk): receipts (FU-334 `test_shopping_list_attachments.py`, 8 tests), substitute-swap gating (`has_substitutes`), trim-to-budget (FU-448). Full backend **1558 passed**. Remaining Batch-8: put-away dialog UI (FU-452, grouping/tick/collapse is client; assign=move-item endpoint), quick-add toast/always-ask UI (FU-316; resolver exercised via auto-add), receipt mobile-camera/desktop-picker (device-pack), image-source picker sweep (UI).) |
 | 9 | Shopping lists B — cart button + P6-01 chunks (565–662) | 565–662 | ~75 | 🟡 (2026-07-20: **Cart Button Chunk 3 rules 1–3 (FU-132) codified clean** — new `test_shopping_list_product_lines.py` (5 tests): product-only line create + no-anchor→422 (checklist guessed 400; 422 is correct for the domain rule), Rule-2 orphan upgrade [convert-in-place + fold-into-existing], Rule-3 delete-line cascade to the nested product line. No bugs. Full backend **1557 passed**. Also confirmed already-backend-tested (delete-on-pass candidates for the walk): `has_substitutes` (FU-407 `test_line_has_substitutes.py`), trim-to-budget (FU-448 `test_trim_to_budget.py`), `linked_product_count` (FU-130 `test_stock_item_router.py`). Remaining Batch-9: cart-button UI (Chunk 2/3-UI/4 modals), by-stock-item remove variant, migration/TS checks, snapshot-at-add UI.) |
 | 10 | Dashboard (1015–1108) | 1015–1108 | ~75 | 🟡 (2026-07-18: **Draft-my-shop (FU-351) codified** — new backend `test_auto_generate_draft_shop.py` (no-phantom-list defer + explicit name) + new `dashboard-draft-shop.spec.ts` (happy path toast→navigate→chips; Cards-menu toggle); section down to empty-case/error/consumed walk bullets. Rest of batch untriaged) |
-| 11 | Alerts (1114–1157) | 1114–1157 | ~34 | ⚪ |
+| 11 | Alerts (1114–1157) | 1114–1157 | ~34 | 🟡 (2026-07-22: **opened and largely cleared** — bell badge == actionable count (tier-verified); snooze persists server-side + correctly kind-scoped; dismiss hides on page/peek/dashboard; **C-9.2** threshold round-trip 7→2→7 (expiring_soon 13→2, badge follows) + disable-a-kind + demote/promote with exact accounting (actionable 34↔23, FYI 18↔29) and clean restore; **C-9.3** hub + slim peek + History-with-names; **C-9.4** BOTH nudges end-to-end (`no_planned_meals` and `shopping_day` show → deep-link → clear); **C-9.6** timeline (dots, out-of-window 0.35, today ringed, click-expand, all 3 link targets); reconcile-overdue row (FU-357) renders + navigates, no ErrorBoundary; SMTP/VAPID off-gating + vapid-key 404. **Fixed:** History labelled `out_of_stock` as "out of_stock" (hand-rolled `replace('_',' ')` swaps only the first underscore) → now reads the shared kind meta via a new `kindLabel`; 3 Vitest tests, 411 green. **Findings:** [[FU-597]] (page only refetches when the store is empty → stale feed all session), [[FU-598]] (`--brand-primary` == `--semantic-positive` in Pesto, so the timeline's shopping and meal dots are the same colour). **Survivors:** money-gated C-9.5 ([[FU-592]]), SMTP-send/VAPID-push/multi-device env packs, dark-mode sweep, admin threshold UI-typing (Quasar synthetic-input limit).) |
 | 12 | Settings A — data/admin pages (1163–1283) | 1163–1283 | ~86 | 🟡 (2026-07-20: **Users admin add/delete behaviour (FU-461) codified clean** — new `test_users_admin.py` (7 tests): create→200+one-time-pw+listed, taken-username/taken-email/malformed-email→422, self-delete→403, delete-another→204+gone, unknown→404. No bugs. Also confirmed already backend-tested (delete-on-pass for the walk): SMTP/VAPID secrets never leak in `/app-settings` (`test_app_settings_router.py SecretsNeverRideTheDto` + `test_bucket_c_secrets.py`), admin-gate on data endpoints (`test_route_auth_enforcement.py`), user PATCH guards + last-admin demotion (`test_patch_semantics.py`). Full backend **1565 passed**. Remaining Batch-12: data-page UI revamps (import/backup drag-drop), backup-library UI, image-compression settings, template download — mostly UI/admin-walk + a couple of file-op device checks.) |
-| 13 | Settings B — account/assistant/misc (1285–1375) | 1285–1375 | ~72 | ⚪ |
+| 13 | Settings B — account/assistant/misc (1285–1375) | 1285–1375 | ~72 | 🟡 (2026-07-22: **opened** — **Account + CSRF (FU-197) 8/11**: cookie `Path=/; SameSite=Lax`, non-HttpOnly by design; `PATCH /auth/me {email}` → 400 `extra_forbidden`; no-header mutation → 403 **and** with-header → 200 (proved both directions from a cold curl jar); cold login exempt → 200; instrumented fetch+XHR over 4 real mutations — all carried `X-CSRF-Token` matching the cookie; email-change UI enable-gate + wrong/right-password toasts + address-unchanged; both audit events with correct severities. **Assistant (FU-153)**: `has_llm_api_key` with no plaintext leak, cross-field 422, health tracks `master_llm_enabled`, hygiene grep clean, kill-switch driven both ways (banner + force-disabled per-user toggle). **FU-285** both copy items confirmed at source. **Finding [[FU-599]]**: explicit `audit_emit` handlers ALSO get an auto-audit row → security actions logged twice under two naming conventions; `_NO_AUDIT_ENDPOINTS` only covers login/logout. Not fixed — suppressing a row whose explicit emit is thinner would lose audit coverage. **Survivors:** SMTP inbox legs, paid-provider keys, per-user isolation, API-access page, profile-picture upload.) |
 | 14 | Onboarding (1381–1471, **after stale cleanup**) + Products (1477–1511) | 1381–1511 | ~66 | 🟡 (2026-07-20: **Products sub-slices delete-on-passed** (no new tests — already backend-pinned, confirmed green in the 1565-pass run): PreferredBuy CRUD/sort/scope + cascade (FU-211, `test_preferred_buys.py` + `test_delete_integrity.py`) — and **corrected a stale bullet**: FU-211 "reorder (up-down)" was retired by FU-225, SPA sorts alphabetically now; price observations log→unit_cost/remove (FU-213, `test_price_observations.py`). Money-off gating + detail renders stay owner-walk. **Remaining Batch-14:** onboarding wizard walk (persona/seed/demo-toggle steps — mostly UI + integration walk), My Products UI (FU-214/208), assistant expiring-window (FU-187 — assistant path). Onboarding not yet triaged.) |
 | 15 | Cross-cutting A (1639–1780) | 1639–1780 | ~100 | 🟡 (2026-07-20: **security response headers (FU-459) codified clean** — new `test_security_headers.py` (3 tests): all four headers (nosniff / X-Frame-Options DENY / Referrer-Policy / CSP with default-src/frame-ancestors/img-src/base-uri/form-action) present on a 200, a 404, and a domain-error response. Was completely untested. No bugs. Full backend **1568 passed**. Remaining Cross-cutting A is overwhelmingly V-pack (text-scale, base-component sweep, C-19 auth-shell visuals, help chips, filters alignment) + device (iOS audio) + the support-channel dormant/configured walk — mostly owner eyeball / device-pack.) |
 | 16 | Cross-cutting B (1782–1945) | 1782–1945 | ~95 | ⚪ |
@@ -1077,6 +1114,229 @@ card / no nutrition card** and the overview has **no Kcal sort or filter**. The
 (the rAF shim can't retroactively un-suspend the already-scheduled splash-dismiss).
 Left owner-walk; cost math is backend-pinned regardless.
 
+### BIG ROUND #4 — Batch 13 (Settings B) opened: CSRF/account + assistant contracts; FU-599 (2026-07-22)
+
+No code changed this round — everything passed or became a finding.
+
+**Account + CSRF defence (FU-197), 8/11 cleared.** Cookie is `Path=/; SameSite=Lax`
+and deliberately **not** HttpOnly (double-submit needs JS to read it); no `Secure`
+because `DORA_SECURE_COOKIES` is unset, so that leg stays an env check.
+`PATCH /auth/me {email}` → 400 `extra_forbidden`. The CSRF gate was proved in
+**both** directions from a cold curl jar: no header → 403, same call with the
+header → 200, and a cold login with neither cookie nor header → 200 (public
+endpoints exempt). Instrumented `fetch` + `XMLHttpRequest` and drove four real
+mutations across three surfaces — every one carried `X-CSRF-Token` matching the
+cookie. Email-change UI: enable-gate, wrong-password toast with the 422 reason,
+right-password toast + cleared field + address unchanged. Audit emitted
+`auth.email_change.requested` (audit) and `auth.email_change.password_failed`
+(warn).
+
+**[[FU-599]] — audit double-logging.** `auto_audit_after_request` writes a row per
+successful mutating `/api/*` call; handlers that also call `audit_emit` log twice
+under two different names (`request_email_change` + `auth.email_change.requested`
+for one operation). `_NO_AUDIT_ENDPOINTS` exists for exactly this but lists only
+`login`/`logout`, so ~10 other explicit emitters double-log. Left unfixed on
+purpose: suppressing the generic row where the explicit emit is thinner would
+*lose* audit coverage, which is worse than a duplicate — each endpoint needs
+checking first.
+
+**Assistant (FU-153) API contracts cleared:** `has_llm_api_key` present with no
+plaintext key; cross-field PATCH → 422 with the exact message; health tracks
+`master_llm_enabled`; hygiene grep clean; kill-switch driven both ways (health
+flips, install-wide banner appears/clears, per-user toggle force-disabled).
+
+**FU-285** both copy items confirmed at source (meal slots overrides
+`empty-action`; the other four inherit the default).
+
+**Two self-inflicted near-misses, both caught before filing:**
+1. Admin routes kept landing on Account — not a routing bug, the **Account page's
+   unsaved-changes guard** firing on a dirty email field left from the
+   email-change test, stacking six hidden "Discard unsaved changes?" dialogs.
+2. Grepped `emptyAction` (camelCase) and nearly filed FU-285 as regressed. Vue
+   templates use kebab-case: `empty-action="…"` was present and correct.
+   **Grep both cases for a Vue prop.**
+
+**Environment:** FU-595 freeze state cleared; settings restored. Residue: a
+**pending email change** to `newaddr@example.com` on the account (inert — needs a
+click on an email that SMTP can't send).
+
+---
+
+### BIG ROUND #3 — Batch 11 (Alerts) opened; history copy bug fixed; FU-597/598 (2026-07-22)
+
+Batch 7's remaining items need DnD automation or are blocked ([[FU-592]]/[[FU-595]]),
+so this round opened **Batch 11 — Alerts**, previously untouched.
+
+**Fixed — "out of_stock" in the hub's History.** `AlertsPage.vue:204` used
+`entry.kind.replace('_', ' ')`; a string pattern replaces only the FIRST match, so
+`out_of_stock` printed as "out of_stock" while the Manage panel two blocks above,
+reading `ALERT_KIND_META`, said "out of stock". Added `kindLabel(kind: string)` to
+`models/alert.ts` (meta lookup + humanise-every-underscore fallback, because
+history rows type `kind` as a bare string — a stored row can outlive its kind) and
+used it. Kills a duplicated display mapping as a side effect. 3 Vitest tests added
+and confirmed red against the old expression; suite 408 → 411; vue-tsc + eslint
+clean; verified live after a rebuild.
+
+**[[FU-597]] — the Alerts page serves a stale feed.** `AlertsPage.vue:435-438`
+refetches on mount **only** when the store is empty. Planned a meal → server
+dropped `no_planned_meals` (FYI 18→17) → `/alerts` still showed the row, the
+"1 meals to plan" tile and "18 FYI" until Refresh. The store self-refreshes after
+actions taken *on* the alerts surface, so the gap is changes made elsewhere —
+i.e. most of what actually resolves an alert.
+
+**[[FU-598]] — primary and positive collide in the default theme.** Measured both
+tokens across all five themes: Pesto `#359766`/`#359766` (identical), Cherry Cola
+`#a6e085`/`#89d65c` (near-identical). The Upcoming timeline uses three correct
+distinct tokens, but its shopping and meal dots therefore render the same on
+Pesto; the legend doesn't help because its swatches are those same colours.
+
+**Method note — a bogus finding I caught before filing.** The timeline showed no
+shopping dot after I set a `planned_shop_date`, and I started writing it up as a
+broken category. It wasn't: I'd sliced the JSON response at 900 chars and read
+`shopping: []` off dates that weren't the one I'd set. Querying the specific date
+showed the server correct. **Don't reason about absence from a truncated payload.**
+
+**Walked green:** badge == actionable count (36, tier-verified); snooze persists
+across reload and is correctly kind-scoped (another kind on the same item
+survived); dismiss hides on page + peek + dashboard with badge consistent; C-9.2
+threshold round-trip 7→2→7 (expiring_soon 13→2) + disable-a-kind (11 rows) +
+demote/promote (`expired`: actionable 34↔23, FYI 18↔29) with a clean restore to
+34/18; C-9.3 hub structure, slim peek, History with stock names resolved; C-9.4
+both nudges end-to-end; C-9.6 timeline dots / opacity-0.35 out-of-window / today
+ring / click-expand / all three link targets; FU-357 reconcile row renders +
+navigates with no ErrorBoundary; SMTP + VAPID off-gating captions, health flags,
+and `/api/alerts/push/vapid-public-key` → 404.
+
+**Doc drift:** the "Alerts email digest" card is on Settings → **Notifications**,
+not Preferences as the checklist says.
+
+**Environment left:** thresholds restored (window 7, auto-drain on), but
+`data/dora.dev.db` carries three backdated unconsumed entries (07-15/16/17) from
+the reconcile-overdue setup — the current week is therefore in the **FU-595**
+freeze state. Clear them before walking planner adds.
+
+---
+
+### BIG ROUND #2 — Batch 7 cont.: C-2 planner walk; FU-595 freeze bug; print-view "None" fixed (2026-07-22)
+
+Same environment, second chunk. Sections cleared: **meals-per-week 5/5** (deleted),
+**in-context Print 3/4**, **useListState remainder 3/4**, plus most of the C-2 /
+R-Phase planner walk.
+
+**FU-595 — production-severity, logged not fixed.** Adding any meal to a week that
+holds a **past-dated entry with `consumed_at IS NULL`** returns
+`400 "Meal plan entries cannot be scheduled in the past."` and the error escapes to
+the ErrorBoundary — the whole planner is replaced by "Something went wrong on this
+screen." `UpdateMealPlanHandler` preserves history by `consumed_at is not None` but
+validates submissions by `scheduled_for < today`, so a past-but-unconsumed entry is
+unrepresentable: the server won't keep it, the client must resend it, and resending
+it is rejected. Isolated by consuming the single offending entry and replaying the
+identical clicks (succeeds). Reachable via **auto-drain OFF** and via **reconcile →
+"Didn't cook"**. Left as an FU — three viable contract fixes, owner's call.
+
+**Print-view "None" — found + fixed.** `export_meal_plan.py` rendered
+`{{ plan.name }}` raw; the planner makes nameless week-plans by design (C-2.E), so
+every planner print was titled "None" in both `<title>` and `<h1>`. Now falls back
+to `Week of <start_date>`; verified live after a backend restart.
+
+**Test-writing care point.** The first version of the pin was **vacuous** — it hung
+off `if plans[0].get("name") is None`, and the seeded plans all have names, so it
+passed identically with the fix reverted. Rewrote as a standalone test that POSTs a
+nameless plan, then proved it red-without / green-with. Seed-conditional assertions
+silently skip; don't write them.
+
+**FU-596** opened: the step-by-step builder spreads meals one-per-day correctly but
+files every one under **Breakfast**.
+
+**Walked green:** meals-per-week (blank→/7, 5→/5 without reload, `3.7`→4 rounded,
+`99`→reset toast + blank field); Print (desktop header icon, mobile week-nav
+placement right of Next-week, hidden on meal-less weeks, `/meal-plans/board`
+redirect); useListState (groupBy persists across nav, carries across a list switch,
+sign-out clears both); C-2 (tap-add honours the chosen slot — F35 holds; ± live
+adjust + remove-at-0; past days `--past` opacity 0.6 with zero clickable rows;
+implicit create on an unplanned week + sidebar flip; Clear-week confirm→empty;
+calendar 6 weeks / today dot / focused outline / week-click jump + back / `?monday=`
+across reload / old dropdown gone; sidebar list-status rows; builder 3-step
+end-to-end with preview matching the sidebar).
+
+**Survivors** are now mostly drag-and-drop (needs DnD automation), C-2.F/G template
+apply + recurring, carousel arrows/keys, off-vocab "Other" row, the unlinked-
+ingredient dialog, and the money-gated budget swaps ([[FU-592]]).
+
+---
+
+### BIG ROUND — Batch 7 Meal plans: reconcile cleared, real 404 bug fixed (2026-07-22, Linux box)
+
+First verify session driven from the **Linux** checkout (`.venv/bin/python`; added a
+`dora-verify-backend-linux` entry to `.claude/launch.json` — the existing one hard-codes
+the Windows `.venv\Scripts\python.exe`). SPA rebuilt (`quasar build -m spa`) first;
+`dist/spa` had been 4 days stale. Browser-driving recipe extended — see **RECIPE v2**
+in the top banner (reload is safe and necessary; resize must precede the mount).
+
+**REAL BUG FOUND + FIXED — reconcile recap "Done" → 404.**
+`MealReconcilePage.vue:153` had `:to="'/dashboard'"`; there is no `/dashboard` route
+(the dashboard is `/`), so the final tap of the reconcile flow landed on the "This page
+wandered off" 404. Grep confirmed it was the **only** `/dashboard` navigation in the SPA
+(the same file's other two `:to`s were already correct). Fixed to `'/'`, rebuilt,
+re-walked: Done → `#/` → "Dashboard | Dashy Dora", no 404, chip gone. `vue-tsc --noEmit`
+clean. CHANGELOG entry under Fixed.
+
+**Meal reconcile (FU-317 C5/C6) — 14 of 15 walked, all pass.** Pool math was verified
+against the DB/API at every step, not just the UI:
+- Chip lives in the **Your kitchen** zone — proved via computed CSS `order` (chip 315
+  sits between the `YOUR KITCHEN` label at 299 and the next card), since the dashboard
+  grid's DOM order is not its visual order.
+- Verb hierarchy measured: Cooked 430px filled `bg-primary`; Different portions +
+  Cooked later 211px each on one row; Didn't cook full-width `text-negative`; Skip
+  116px ghost.
+- **Cooked** (auto-drain ON) → pool unchanged (sweep already drained). **Different
+  portions** 5-on-planned-2 → 10→7. **Cooked later** → `resolved_confirmed` +
+  `cooked_on=2026-07-20`, pool unchanged. **Didn't cook** → 9→sweep 5→restored 9,
+  entry leaves queue. **Skip** → stays queued as `resolved_deferred` (→ [[FU-594]]).
+  Deferred→Cooked correctly re-drained 14→10 (corrective-receipt math is sound;
+  receipts are append-only, never mutated).
+- **Auto-drain OFF**: sweep wrote `unresolved_manual` and left the pool at 10; the
+  Cooked verb then applied the drain → 6.
+- **Threshold** (3 entries, oldest 5 days back): alert `meal_reconcile_overdue`
+  fired with the exact copy; the `reconcile_meals_pending` suggestion only appeared
+  after clearing the high-severity noise → [[FU-593]].
+- Empty state, help dialog (lists all five verbs), XL text-scale (root 16.5→23px;
+  card/buttons/name/dialog all tracked it), themes (Pesto dark/light + Cherry Cola
+  light — page, card bg+fg, primary and negative all move; no hardcoded colours),
+  admin settings page (toggle + toasts + persists across reload) + nav row.
+- **Survivor:** the non-admin "You don't have admin permissions" banner (needs a
+  second account). Nav-row icon is `mdi-calendar-edit`, not the "event-note" the
+  checklist names — cosmetic doc drift, not a defect.
+
+**Templates drawer (FU-308) — 7/7, section deleted.** Row actions are
+Apply + pencil + `content-copy` + `delete-outline` (clone icon between rename and
+delete, as specced); Clone → toast "Cloned." → "Verify Week (copy)" appears;
+Manage rotating sets → drawer closes + navigates; sets page header/caption correct
+with no Templates card; the New-set picker still lists every template; deep-link
+title "Rotating template sets"; `goToManageTemplates` is gone from `useMealPlanner.ts`.
+
+**Show-all-slots (FU-306) — 5/6.** Off by default, on → all five slots per day,
+survives hard reload both ways, `mealPlanShowAllSlots` `'1'`/`'0'`. Storage-disabled
+case driven for real (redefined `window.localStorage` to throw): toggle still works
+in-session, no toast, no console throw. Survivor: the cross-browser per-device item.
+
+**useListState (FU-354/355) — 4/8.** Picker search filters + survives
+nav-away-and-back; hard reload resets it; `CACHE` is still a module-scope `Map`.
+Survivors are the shopping-list groupBy half + sign-out/401 clearing.
+
+**C-2.I trays — partial.** Four groups render; search collapses to "Results (N)";
+"Frequently planned" ranks by plan frequency (Spaghetti 3 > Egg Fried Rice 2 >
+Tomato Pasta 1, matching the week). Survivors: hide-when-empty, 21-day window.
+
+**Environment note:** past-dated entries can't be created through the API
+(`CreateMealPlanHandler` rejects `has_past_entry`), so the queue was contrived by
+backdating rows in `data/dora.dev.db` and re-firing the sweep via
+`GET /api/meal-plans/today`. That DB also had 23 stock expiries pushed to
+2026-12-01 to unmask the reconcile suggestion — it is a throwaway seed DB
+(`preview_start` re-seeds with drop_all), so no restore was attempted.
+
+---
+
 ### Money/nutrition ON-state — attempted, hit a harness wall → FU-592 (2026-07-22)
 
 Tried to unblock the Chunk 9 flags-ON items (+ buy-verdict/budget by extension).
@@ -1158,14 +1418,14 @@ already has regression tests (low-risk re-confirm, per CHANGELOG/worklog).
 
 | Section | Lines | Items | A/V/H | Stale | Env / notes | Status |
 |---|---|---|---|---|---|---|
-| Meal reconcile (FU-317 C5) | 375–390 | 15 | 13/2/0 | 0 | past-dated plans; auto-drain both ways | ⚪ |
+| Meal reconcile (FU-317 C5) | 375–390 | 15 | 13/2/0 | 0 | walk 2026-07-22: all 5 verbs + both auto-drain modes with server-verified pool math / chip+header nudge / threshold alert+suggestion / empty state / help dialog / XL type-scale / 3 themes / admin page; **404 bug found+fixed** (Done→`/dashboard`); [[FU-593]] + [[FU-594]] opened; survivor = non-admin banner | ➗ |
 | Budget-defense swaps (FU-451) | 392–400 | 8 | 8/0/0 | 0 | money on; budget; over-budget week | ⚪ |
 | Unlinked-ingredient warning (FU-505) | 402–408 | 6 | 6/0/0 | 0 | | ⚪ |
-| Meals-per-week pref (FU-181) | 410–416 | 6 | 6/0/0 | 0 | | ⚪ |
-| In-context Print (FU-338) | 418–422 | 4 | 4/0/0 | 0 | print VIEW opens = A | ⚪ |
-| useListState sweep (FU-354/355) | 424–432 | 8 | 8/0/0 | 0 | Vitest spec exists; browser walks not pinned | ⚪ |
-| Show-all-slots persistence (FU-306) | 434–440 | 6 | 6/0/0 | 0 | | ⚪ |
-| Templates drawer (FU-308) | 442–449 | 7 | 7/0/0 | 0 | | ⚪ |
+| Meals-per-week pref (FU-181) | 410–416 | 6 | 6/0/0 | 0 | walk 2026-07-22: input+placeholder / blank→builder `/7` / 5→toast+`/5` without reload / clear+out-of-range→reset toast+blank / `3.7`→rounds to 4 — **section deleted** | ✅ |
+| In-context Print (FU-338) | 418–422 | 4 | 4/0/0 | 0 | walk 2026-07-22: desktop header icon / mobile week-nav placement + hidden on meal-less weeks / `/meal-plans/board` redirect; survivor = the popup tab itself (endpoint renders correctly) | ➗ |
+| useListState sweep (FU-354/355) | 424–432 | 8 | 8/0/0 | 0 | walk 2026-07-22: picker search filters + survives nav-away/back, hard-reload resets, `CACHE` still module-scope `Map`; survivors = shopping-list groupBy half + sign-out/401 clearing | 🟡 |
+| Show-all-slots persistence (FU-306) | 434–440 | 6 | 6/0/0 | 0 | walk 2026-07-22: default-off / on→all 5 slots / persists both ways across hard reload / `mealPlanShowAllSlots` `'1'`‑`'0'` / storage-throw drive (works in-session, no toast, no throw); survivor = cross-browser per-device | ➗ |
+| Templates drawer (FU-308) | 442–449 | 7 | 7/0/0 | 0 | walk 2026-07-22: Apply/pencil/content-copy/delete-outline row / Clone→"Cloned."+copy appears / Manage-sets closes+navigates / sets-page header+caption, no Templates card / New-set picker lists all / deep-link title / `goToManageTemplates` gone — **section deleted** | ✅ |
 | Planner R-Phases 1–6 (FU-305) | 451–459 | 8 | 8/0/0 | 0 | | ⚪ |
 | Meal Plans C-2 full walk (FU-179) | 461–476 | 15 | 15/0/0 | 2 | | ⚪ |
 | Substitute-swap gating (FU-407) | 482–486 | 4 | 4/0/0 | 0 | | ⚪ |

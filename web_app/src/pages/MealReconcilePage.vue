@@ -150,7 +150,7 @@
                     </div>
                 </q-card-section>
                 <q-card-actions align="center" class="q-pb-md">
-                    <BaseButton label="Done" :to="'/dashboard'" />
+                    <BaseButton label="Done" :to="'/'" />
                 </q-card-actions>
             </q-card>
         </div>

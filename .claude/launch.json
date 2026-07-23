@@ -45,6 +45,19 @@
             }
         },
         {
+            "name": "dora-verify-backend-money-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": ["-m", "dora_api.startup"],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_MONEY_ON": "true"
+            }
+        },
+        {
             "name": "dora-spa",
             "runtimeExecutable": "npm",
             "runtimeArgs": ["--prefix", "web_app", "run", "dev"],

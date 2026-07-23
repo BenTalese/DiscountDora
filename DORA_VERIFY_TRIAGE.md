@@ -166,9 +166,9 @@ surfaces, then the long tail, then env-gated batches.
 | 6 | Cook mode (327–369) | 327–369 | ~36 | 🟡 (2026-07-20: **rescale (FU-101) + personal-notes (FU-432) codified** — `scaleQuantity.spec.ts` grew a Chunk-6 checklist describe block [+6 → 23 tests: up/down 1.5×/0.5×, ¾/1½ snap, egg 0.75→1 floor, 7.5g→7½] and `test_recipe_notes.py` gained the new-version note carry-over [+1 test]; DORA_VERIFY pure-math bullets + L305 deleted, survivors reworded to component-clamp/UI-render owner-walks. **Codify-next (needs a cook-mode e2e/component harness, none exists yet):** Chunks 1–3 finish-flow dialog [override-beats-action, Promise.allSettled fail-soft, click-out cancel, session-swap], voice/timer [+ audio=device-pack], Chunk 5 highlight/tools/hints [mostly V-pack]. Input clamp/default/session-only [L333/340/341/342] also codify-next. **Later 2 (same day): finish-flow e2e ATTEMPTED, DEFERRED as flaky** — `cook-mode-finish` drives the real loop (Finish → Down-one/Out/Unchanged → server-verified level drops + meals toast + Cancel-fires-nothing) and passes 4/4 in a FRESH env, but `--repeat-each=2` → ~1/3 (cook-mode loads the stock store async → a fast Finish click races it → decrement no-ops). Deactivated to `cook-mode-finish.wip.ts` (off the `*.spec.ts` glob) as a driver blueprint; DORA_VERIFY bullets reverted to owner-walk. **Deeper blocker: the full e2e suite doesn't run green in one long single-worker pass — 14 failures from env degradation on ~13 unrelated specs → [[FU-591]].** The e2e infra must be stabilised (parallelism/sharding + quiet the debug backend) before it's a reliable codification vehicle.) |
 | 7 | Meal plans (375–476) | 375–476 | ~83 | 🟡 (2026-07-22: **reconcile section cleared 14/15 + 3 adjacent sections** — full runner walk (all 5 verbs, both auto-drain modes, pool math server-verified at every step), threshold alert+suggestion, empty state, help dialog, XL type-scale, 3 theme families, admin settings page; **found + fixed a real bug** (recap **Done** → `/dashboard` 404 → now `/`); **2 findings opened** ([[FU-594]] skip reverses the pool drain vs. its own docstring, [[FU-593]] reconcile suggestion crowded out by the 8-item cap). Also cleared: Templates drawer (FU-308) **7/7**, Show-all-slots (FU-306) 5/6, useListState (FU-354/355) 4/8, C-2.I trays partial. **Remaining Batch-7:** budget-defense swaps (money-gated → blocked on [[FU-592]]), meal reconcile non-admin banner (needs a 2nd account), unlinked-ingredient dialog, meals-per-week client clamp, Print (mobile/print-view), R-Phase palette + DnD, C-2 tap-add/drag/calendar/templates-apply/sequential-builder. **Later 2 (same day):** meals-per-week **5/5** (deleted), Print 3/4, useListState remainder 3/4, and most of C-2/R-Phase walked (tap-add slot correctness F35, ± stepper, past-day inertness, implicit create, Clear-week, full calendar incl. `?monday=` across reload, sidebar list-status, 3-step builder end-to-end). **Found [[FU-595]] — production severity:** a past-day entry with `consumed_at IS NULL` makes every add 400 and hard-crash the planner; reachable via auto-drain-OFF and via reconcile → "Didn't cook". **Fixed:** print-view titled every nameless planner week "None" → now `Week of <date>`, pinned by a new backend test (the first attempt at that test was vacuous — seed-conditional — and was rewritten to create the nameless plan itself). **[[FU-596]]** opened: the builder files every meal under Breakfast. **Survivors:** drag-and-drop, C-2.F/G templates apply/recurring, carousel arrows/keys, off-vocab row, unlinked-ingredient dialog, budget swaps ([[FU-592]]). **2026-07-23 (later):** budget swaps cleared (money sweep — FU-592). **Templates save/apply/manage cleared** — dialog (Save/Apply-recurring/Manage-sets/empty-state), Save→toast+server-created+listed, Apply→"Added 6 meals" fork onto focused empty week, `/meal-plans/templates` = rotating-sets manager (template rename/delete inline in dialog). Survivors now: apply-recurring + set CRUD, confirm-before-replace, edit/delete-leaves-fork, drag-and-drop, off-vocab, unlinked-ingredient dialog, carousel arrows (calendar is the nav).) |
 | 8 | Shopping lists A — recent (482–563) | 482–563 | ~69 | 🟡 (2026-07-20: **display_name self-labelling (FU-165 L509) codified clean** — `test_shopping_list_planned_shop_date.py` +1 test: name→planned-date→re-label→created-fallback ladder via server-owned `display_name` (R-003). Also confirmed already backend-tested (delete-on-pass for the walk): receipts (FU-334 `test_shopping_list_attachments.py`, 8 tests), substitute-swap gating (`has_substitutes`), trim-to-budget (FU-448). Full backend **1558 passed**. Remaining Batch-8: put-away dialog UI (FU-452, grouping/tick/collapse is client; assign=move-item endpoint), quick-add toast/always-ask UI (FU-316; resolver exercised via auto-add), receipt mobile-camera/desktop-picker (device-pack), image-source picker sweep (UI).) |
-| 9 | Shopping lists B — cart button + P6-01 chunks (565–662) | 565–662 | ~75 | 🟡 (2026-07-20: **Cart Button Chunk 3 rules 1–3 (FU-132) codified clean** — new `test_shopping_list_product_lines.py` (5 tests): product-only line create + no-anchor→422 (checklist guessed 400; 422 is correct for the domain rule), Rule-2 orphan upgrade [convert-in-place + fold-into-existing], Rule-3 delete-line cascade to the nested product line. No bugs. Full backend **1557 passed**. Also confirmed already-backend-tested (delete-on-pass candidates for the walk): `has_substitutes` (FU-407 `test_line_has_substitutes.py`), trim-to-budget (FU-448 `test_trim_to_budget.py`), `linked_product_count` (FU-130 `test_stock_item_router.py`). Remaining Batch-9: cart-button UI (Chunk 2/3-UI/4 modals), by-stock-item remove variant, migration/TS checks, snapshot-at-add UI.) |
+| 9 | Shopping lists B — cart button + P6-01 chunks (565–662) | 565–662 | ~75 | 🟡 (2026-07-20: **Cart Button Chunk 3 rules 1–3 (FU-132) codified clean** — new `test_shopping_list_product_lines.py` (5 tests): product-only line create + no-anchor→422 (checklist guessed 400; 422 is correct for the domain rule), Rule-2 orphan upgrade [convert-in-place + fold-into-existing], Rule-3 delete-line cascade to the nested product line. No bugs. Full backend **1557 passed**. Also confirmed already-backend-tested (delete-on-pass candidates for the walk): `has_substitutes` (FU-407 `test_line_has_substitutes.py`), trim-to-budget (FU-448 `test_trim_to_budget.py`), `linked_product_count` (FU-130 `test_stock_item_router.py`). Remaining Batch-9: cart-button UI (Chunk 2/3-UI/4 modals), by-stock-item remove variant, migration/TS checks, snapshot-at-add UI. **Later (2026-07-23, money seed):** Cart Button **C2 fully** (2+→QuickAddSheet one-surface, 0/1 silent, toggle-remove, lpc shape, 2026-06-14 repro gone), **C3-UI** product-only line (tint + product chip, `product_id`/null), **C4** Axis-B generate picker (cancel/merge/create-new "Meals: …"); [[FU-603]] tooltip-vs-target. Survivors: bulk toast, rule-2/4 nesting, C4 0/1-draft + nothing_to_add.) |
 | 10 | Dashboard (1015–1108) | 1015–1108 | ~75 | 🟡 (2026-07-18: **Draft-my-shop (FU-351) codified** — new backend `test_auto_generate_draft_shop.py` (no-phantom-list defer + explicit name) + new `dashboard-draft-shop.spec.ts` (happy path toast→navigate→chips; Cards-menu toggle); section down to empty-case/error/consumed walk bullets. Rest of batch untriaged) |
-| 11 | Alerts (1114–1157) | 1114–1157 | ~34 | 🟡 (2026-07-22: **opened and largely cleared** — bell badge == actionable count (tier-verified); snooze persists server-side + correctly kind-scoped; dismiss hides on page/peek/dashboard; **C-9.2** threshold round-trip 7→2→7 (expiring_soon 13→2, badge follows) + disable-a-kind + demote/promote with exact accounting (actionable 34↔23, FYI 18↔29) and clean restore; **C-9.3** hub + slim peek + History-with-names; **C-9.4** BOTH nudges end-to-end (`no_planned_meals` and `shopping_day` show → deep-link → clear); **C-9.6** timeline (dots, out-of-window 0.35, today ringed, click-expand, all 3 link targets); reconcile-overdue row (FU-357) renders + navigates, no ErrorBoundary; SMTP/VAPID off-gating + vapid-key 404. **Fixed:** History labelled `out_of_stock` as "out of_stock" (hand-rolled `replace('_',' ')` swaps only the first underscore) → now reads the shared kind meta via a new `kindLabel`; 3 Vitest tests, 411 green. **Findings:** [[FU-597]] (page only refetches when the store is empty → stale feed all session), [[FU-598]] (`--brand-primary` == `--semantic-positive` in Pesto, so the timeline's shopping and meal dots are the same colour). **Survivors:** money-gated C-9.5 ([[FU-592]]), SMTP-send/VAPID-push/multi-device env packs, dark-mode sweep, admin threshold UI-typing (Quasar synthetic-input limit).) |
+| 11 | Alerts (1114–1157) | 1114–1157 | ~34 | 🟡 (2026-07-22: **opened and largely cleared** — bell badge == actionable count (tier-verified); snooze persists server-side + correctly kind-scoped; dismiss hides on page/peek/dashboard; **C-9.2** threshold round-trip 7→2→7 (expiring_soon 13→2, badge follows) + disable-a-kind + demote/promote with exact accounting (actionable 34↔23, FYI 18↔29) and clean restore; **C-9.3** hub + slim peek + History-with-names; **C-9.4** BOTH nudges end-to-end (`no_planned_meals` and `shopping_day` show → deep-link → clear); **C-9.6** timeline (dots, out-of-window 0.35, today ringed, click-expand, all 3 link targets); reconcile-overdue row (FU-357) renders + navigates, no ErrorBoundary; SMTP/VAPID off-gating + vapid-key 404. **Fixed:** History labelled `out_of_stock` as "out of_stock" (hand-rolled `replace('_',' ')` swaps only the first underscore) → now reads the shared kind meta via a new `kindLabel`; 3 Vitest tests, 411 green. **Findings:** [[FU-597]] (page only refetches when the store is empty → stale feed all session), [[FU-598]] (`--brand-primary` == `--semantic-positive` in Pesto, so the timeline's shopping and meal dots are the same colour). **Survivors:** SMTP-send/VAPID-push/multi-device env packs, dark-mode sweep, admin threshold UI-typing (Quasar synthetic-input limit). **Later (2026-07-23, money seed): C-9.5 price watch cleared** — empty-state; armed (via API — the arm q-input didn't render in-pane)→panel lists product·merchant·"notify below $2.50"; View→explorer deep-link; Remove→gone+toast; hidden when INSTALL money off. [[FU-604]] (panel gates on install money, not per-user opt-out). Residuals: last-alerted timestamp (needs a fired watch), arm-UI drive.) |
 | 12 | Settings A — data/admin pages (1163–1283) | 1163–1283 | ~86 | 🟡 (2026-07-20: **Users admin add/delete behaviour (FU-461) codified clean** — new `test_users_admin.py` (7 tests): create→200+one-time-pw+listed, taken-username/taken-email/malformed-email→422, self-delete→403, delete-another→204+gone, unknown→404. No bugs. Also confirmed already backend-tested (delete-on-pass for the walk): SMTP/VAPID secrets never leak in `/app-settings` (`test_app_settings_router.py SecretsNeverRideTheDto` + `test_bucket_c_secrets.py`), admin-gate on data endpoints (`test_route_auth_enforcement.py`), user PATCH guards + last-admin demotion (`test_patch_semantics.py`). Full backend **1565 passed**. Remaining Batch-12: data-page UI revamps (import/backup drag-drop), backup-library UI, image-compression settings, template download — mostly UI/admin-walk + a couple of file-op device checks.) |
 | 13 | Settings B — account/assistant/misc (1285–1375) | 1285–1375 | ~72 | 🟡 (2026-07-22: **opened** — **Account + CSRF (FU-197) 8/11**: cookie `Path=/; SameSite=Lax`, non-HttpOnly by design; `PATCH /auth/me {email}` → 400 `extra_forbidden`; no-header mutation → 403 **and** with-header → 200 (proved both directions from a cold curl jar); cold login exempt → 200; instrumented fetch+XHR over 4 real mutations — all carried `X-CSRF-Token` matching the cookie; email-change UI enable-gate + wrong/right-password toasts + address-unchanged; both audit events with correct severities. **Assistant (FU-153)**: `has_llm_api_key` with no plaintext leak, cross-field 422, health tracks `master_llm_enabled`, hygiene grep clean, kill-switch driven both ways (banner + force-disabled per-user toggle). **FU-285** both copy items confirmed at source. **Finding [[FU-599]]**: explicit `audit_emit` handlers ALSO get an auto-audit row → security actions logged twice under two naming conventions; `_NO_AUDIT_ENDPOINTS` only covers login/logout. Not fixed — suppressing a row whose explicit emit is thinner would lose audit coverage. **Survivors:** SMTP inbox legs, paid-provider keys, per-user isolation, API-access page, profile-picture upload.) |
 | 14 | Onboarding (1381–1471, **after stale cleanup**) + Products (1477–1511) | 1381–1511 | ~66 | 🟡 (2026-07-20: **Products sub-slices delete-on-passed** (no new tests — already backend-pinned, confirmed green in the 1565-pass run): PreferredBuy CRUD/sort/scope + cascade (FU-211, `test_preferred_buys.py` + `test_delete_integrity.py`) — and **corrected a stale bullet**: FU-211 "reorder (up-down)" was retired by FU-225, SPA sorts alphabetically now; price observations log→unit_cost/remove (FU-213, `test_price_observations.py`). Money-off gating + detail renders stay owner-walk. **Remaining Batch-14:** onboarding wizard walk (persona/seed/demo-toggle steps — mostly UI + integration walk), My Products UI (FU-214/208), assistant expiring-window (FU-187 — assistant path). Onboarding not yet triaged.) |
@@ -1114,6 +1114,96 @@ card / no nutrition card** and the overview has **no Kcal sort or filter**. The
 (the rAF shim can't retroactively un-suspend the already-scheduled splash-dismiss).
 Left owner-walk; cost math is backend-pinned regardless.
 
+### BIG ROUND #6 — Batch 11 C-9.5 price watch cleared (money seed) (2026-07-23)
+
+Continued on the money-on seed (no reboot). Cleared the previously money-blocked
+**C-9.5 price-watch tier** end-to-end. No code changed.
+
+**Arming.** The explorer's arm control is a per-product "Notify me below ($)"
+q-input + "Set alert" (`PriceHistoryPage.vue:200-217`); the card didn't render in
+the hidden pane (chart svg present, 0 number inputs — a rAF/render quirk), so I
+armed via `POST /price-history/alerts {product_id, threshold_unit_price}` — exactly
+what "Set alert" calls (line 380). Armed Coles Full Cream Milk 2L @ $2.50
+(current $2.90).
+
+**Panel (SubscriptionsPanel on the Alerts hub) — all verified:**
+- Empty-state: "No price watches armed." + explorer hint.
+- Armed → panel lists "Coles Full Cream Milk 2L" · "Coles · notify below $2.50"
+  (product · merchant · notify-below, money-formatted) + View + Remove.
+- **View** → `#/price-history?product_id=…`, product pre-selected.
+- **Remove** → toast "Price watch removed.", server list → 0, panel back to empty.
+- **Money-off gating:** `SubscriptionsPanel v-if="money"` where `money` =
+  `useFeatureFlags()` = `/api/health features.money` = **install**
+  `money_enabled`. Turning off the *per-user* `money_features_enabled` did NOT
+  hide it (correct — wrong level); turning off the *install* flag (PATCH
+  `/app-settings money_enabled=false` + reload) DID hide it while the hub still
+  rendered. Restored both flags after.
+
+**[[FU-604]] logged:** the panel gates on install money, but the trim-to-budget
+banner (FU-448) gates on the per-user `money_features_enabled` — a split gate. A
+user who opts out of money features still sees the price-watch panel. Confirm-intent
+(either the panel should also check the per-user flag, or trim is the odd one out).
+
+**Residuals:** the **last-alerted** timestamp (needs a watch that has actually
+fired) and driving the **arm** q-input in-pane (didn't render).
+
+**Data hygiene:** the armed alert was removed during the Remove test (server 0);
+both money flags restored to on. Clean.
+
+---
+
+### BIG ROUND #5 — Batch 9 Cart Button (C2/C3-UI/C4) on the money seed (2026-07-23)
+
+First round using the **money-on** seed knob (FU-592). Added a
+`dora-verify-backend-money-linux` launch entry (the existing `-money` config is
+Windows-pathed). Booted it, confirmed `/api/health` money+nutrition+buy_verdict
+true and the seed user `money_features_enabled:true` / `nutrition_mode:simple`.
+No code changed this round.
+
+**Cart Button Chunk 2 (FU-130) — fully walked.** `AddToListButton` is a toggle:
+carting an item already on a draft REMOVES it (FU-454), which explained a 5→4
+line count I first mis-read as data loss — it was my own toggle-off of Full Cream
+Milk. With milk then off all lists (2 products): cart → **QuickAddSheet** with the
+target-list dropdown + offer radios (No offer / Coles $2.90 / Woolworths $3.10) +
+quantity, all in ONE surface (no stacked modal even with 2 drafts) → Add →
+"1 added." 0-product item → a "Which list?" picker (2 drafts) → pick → silent add
+"Added to This week." (no product modal). Source confirms `shouldUseCombinedModal
+= linked_product_count >= 2`, so 0 and 1 share the same direct `addToList` branch;
+verified 0 empirically. `linked_product_count` present on `/stock-items`
+(milk=2, 0-default). The **2026-06-14 "picker not popping" repro does NOT
+reproduce**. Survivor: bulk-add summary toast.
+
+**Chunk 3 UI (FU-145) — product-only line verified.** "Add as product" on an
+unlinked product (Cadbury Freddo Cake) → 2+-drafts "Which list?" picker → line
+lands with `product_id` set + `stock_item_id:null` (Rule-1 backend), toast "Added
+as product line.", and renders with the `.shopping-line-product-only` class,
+a distinct tint (`rgb(22,39,36)` vs a normal line's transparent bg) and a product
+chip. Survivors: rule-2 later-link nesting, rule-4 nested-remove modal, the
+no-modal removal case, onAddSingle on already-linked rows.
+
+**Chunk 4 (FU-135) — the Axis-B generate picker.** 2+ drafts → "Add to which
+list?" lists all drafts + "+ Create new list". **Cancel** → no list, no toast, no
+nav. **Merge into existing draft** (This week preselected) → "Added N items to
+your list" + routes to it (0 new items — the well-stocked seed plan had nothing
+unstocked). **+ Create new list** → creates "Meals: week of 20/07/2026" + "Shopping
+list created with 1 item." + routes to the new list. Survivors: the 0-draft and
+1-draft *count-specific* cases (need the draft count changed) and `nothing_to_add`
+(the seed plan always carried ≥1 shortfall item, so I couldn't force the
+empty-add path).
+
+**[[FU-603]] logged** — the cart tooltip says "Add to a **draft** list" but the
+QuickAddSheet targets any non-done list (incl. in-progress shops) and defaulted to
+"Saturday shop". Low-priority copy/default nuance, not a bug.
+
+**Data hygiene:** every mutation reverted — the create-new "Meals:" list deleted,
+the Freddo product-only line deleted, Butter (added during a 0-product test)
+deleted; all five seed lists back to their original counts. **One residual drift:**
+Full Cream Milk on "This week" is now qty-1 at the last position (I re-added it via
+the modal after the toggle-off test) vs the seed's qty-2 first line — cosmetic, in
+a throwaway DB.
+
+---
+
 ### BIG ROUND #4 — Batch 13 (Settings B) opened: CSRF/account + assistant contracts; FU-599 (2026-07-22)
 
 No code changed this round — everything passed or became a finding.
@@ -1435,10 +1525,10 @@ already has regression tests (low-risk re-confirm, per CHANGELOG/worklog).
 | Image-source picker sweep (R-024) | 526–531 | 5 | 4/0/1 | 0 | camera item → device pack | ⚪ |
 | Trim-to-budget + Deferred (FU-448) | 533–547 | 14 | 14/0/0 | 0 | money on; rich line mix | ⚪ |
 | Shopping list UX v2 (FU-165) | 549–563 | 14 | 14/0/0 | 0 | | ⚪ |
-| Cart Button C2 (FU-130) | 565–572 | 7 | 7/0/0 | 0 | | ⚪ |
+| Cart Button C2 (FU-130) | 565–572 | 7 | 7/0/0 | 0 | walk 2026-07-23 (money-on): 2+-products→QuickAddSheet (in-sheet target dropdown + offer radios + qty, ONE surface no stacked modals) → Add→"1 added."; 0-product→"Which list?" picker→silent add "Added to This week."; 1-product shares the same `addToList` branch (`shouldUseCombinedModal = lpc>=2`, src); `linked_product_count` present (milk=2, 0-default); the 2026-06-14 no-pop repro does NOT reproduce. Also confirmed the button is a toggle (on-list→remove, FU-454). Survivor: bulk variant. [[FU-603]] opened (tooltip "draft" vs any-active target) | ➗ |
 | Cart Button C3 API (FU-132) | 574–580 | 6 | 6/0/0 | 0 | SQLite+PG | ⚪ |
-| Cart Button C3 UI (FU-145) | 582–588 | 6 | 6/0/0 | 0 | | ⚪ |
-| Cart Button C4 (FU-135) | 590–595 | 5 | 5/0/0 | 0 | | ⚪ |
+| Cart Button C3 UI (FU-145) | 582–588 | 6 | 6/0/0 | 0 | walk 2026-07-23: "Add as product" on an unlinked product (Freddo) → 2+-drafts "Which list?" picker → product-only line lands (`product_id` set, `stock_item_id:null`), toast "Added as product line.", renders with `.shopping-line-product-only` tint (`rgb(22,39,36)` vs transparent) + product chip. Survivors: rule-2 later-link nesting, rule-4 nested-remove modal, no-modal removal, onAddSingle on linked rows | ➗ |
+| Cart Button C4 (FU-135) | 590–595 | 5 | 5/0/0 | 0 | walk 2026-07-23 (money-on, desktop): 2+-drafts "Add to which list?" picker lists all drafts + "+ Create new list"; **Cancel** → no list/toast/nav; **merge into existing draft** → "Added N items to your list" + routes (This week, 0 new since already stocked); **+ Create new list** → "Meals: week of 20/07/2026" created + "Shopping list created with 1 item." + routes. Survivors: 0-draft + 1-draft count-specific cases, nothing_to_add (seed plan always had ≥1 shortfall) | ➗ |
 | Snapshot-at-add (FU-142) | 597–603 | 6 | 6/0/0 | 0 | DB seed for NULL legacy line | ⚪ |
 | P6-01 C3 lifecycle (FU-066) | 605–611 | 6 | 5/1/0 | 1 | finish flow superseded by UX v2 | ⚪ |
 | P6-01 C4 new-list dialog (FU-068) | 613–623 | 10 | 9/1/0 | 0 | | ⚪ |
@@ -1498,7 +1588,7 @@ already has regression tests (low-risk re-confirm, per CHANGELOG/worklog).
 | Budget money-gate (FU-297) | 1093–1096 | 3 | 3/0/0 | 0 | | ⚪ |
 | Cards DnD reorder (FU-294) | 1098–1103 | 5 | 5/0/0 | 0 | | ⚪ |
 | dashboard_layout backend (FU-292) | 1105–1108 | 3 | 3/0/0 | 0 | test-pinned | ⚪ |
-| Alerts C-9.1 spine (FU-183) | 1114–1123 | 9 | 9/0/0 | 0 | | ⚪ |
+| Alerts C-9.1 spine (FU-183) | 1114–1123 | 9 | 9/0/0 | 0 | C-9.5 price watch walked 2026-07-23 (money seed): empty-state / armed→list(product·merchant·notify-below) / View→explorer / Remove→gone+toast / install-money-off hides it; [[FU-604]] gating; residuals = last-alerted + arm-UI | ➗ |
 | Cross-app undo push-expiry (FU-357) | 1125–1128 | 3 | 3/0/0 | 0 | | ⚪ |
 | good_deal + fake-markdown (FU-450) | 1130–1134 | 4 | 4/0/0 | 0 | offers + observations | ⚪ |
 | C-9.7 email digest (FU-205) | 1136–1144 | 8 | 6/1/1 | 2 | SMTP via admin page now (not env) | ⚪ |

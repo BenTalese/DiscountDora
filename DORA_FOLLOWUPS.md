@@ -52,6 +52,56 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-604 — Alerts-hub Price-watch panel gates on the INSTALL money flag, not the per-user money opt-out (unlike trim-to-budget)
+- **Raised:** 2026-07-23 (lean-verify big round #6 — Batch 11 C-9.5 price watch)
+- **Type:** finding (gating consistency), low priority — confirm intent
+- **What:** `AlertsPage.vue:128` renders `<SubscriptionsPanel v-if="money" />`,
+  where `money` comes from `useFeatureFlags()` → `/api/health features.money` —
+  i.e. the **install-level** `AppSetting.money_enabled`. Verified live: with the
+  per-user `money_features_enabled=false` but the install flag still on, the Price
+  watch panel **stays visible**; only turning off the *install* flag hides it.
+- **Why it may be inconsistent:** the **trim-to-budget** banner (FU-448) gates on
+  the **per-user** flag — its checklist item reads "with `money_features_enabled=
+  false` on the user, the banner never appears." So two money surfaces use two
+  different gates. A user who opts out of money features for their own account
+  still sees the armed-price-watch management panel on their alerts hub.
+- **Either reading is defensible:** (a) `money_features_enabled` is meant to hide
+  *all* money UI for that user → the panel should also check it (bug); (b) the
+  per-user flag only governs budget/spend features and armed price-watches are an
+  install-level capability → current behaviour is correct, and it's the *trim*
+  surface that's the odd one out. Needs the owner's intended semantics for the
+  per-user money opt-out.
+- **Not urgent:** the install-level gate (the canonical money off-switch) works
+  correctly — panel hides when the install disables money (C-9.5 verified).
+- **Recommended resolution:** opportunistic — decide the per-user opt-out's scope
+  once, then make the money surfaces consistent with it (grep `useFeatureFlags`
+  `.money` vs `money_features_enabled` across the SPA).
+
+## [OPEN] FU-603 — Add-to-list cart tooltip says "draft list" but the picker targets any active (non-done) list, and defaults to the in-progress shop
+- **Raised:** 2026-07-23 (lean-verify big round #5 — Batch 9, Cart Button)
+- **Type:** finding (copy / minor UX), low priority
+- **What:** The stock-overview / My-Products cart button tooltips read "Add to a
+  **draft** list" and "On your **draft** list — click to remove"
+  (`AddToListButton.vue:246-257`). But the QuickAddSheet's target picker is built
+  from `summaries.filter(s => s.status !== 'done')`
+  (`QuickAddSheet.vue:175-182`) — i.e. **every non-done list, including
+  `shopping`-status (mid-shop) lists**. Observed live: with drafts "This week" /
+  "Big load list" plus in-progress "Saturday shop", carting a 2-product item
+  opened the sheet with **"Saturday shop" preselected** and all three offered.
+- **Two small things, both real:** (a) the word "draft" in the tooltips is
+  inaccurate — the real rule is "any active list" (D-014, copy precision); (b)
+  the **default** target is `listOptions[0]` (`QuickAddSheet.vue:317`), the first
+  non-done summary, which put an *in-progress shop* ahead of the planning drafts.
+  A cart-add from the pantry defaulting into the shop you're mid-way through is a
+  mild surprise; the primary/inferred draft feels like the more natural default.
+- **Not a bug:** adding to an in-progress shop is legitimate, and
+  `quick_add_target_list_id` correctly takes precedence when the target is
+  unambiguous (1 draft). This only surfaces with 2+ active lists of mixed status.
+- **Why deferred:** (a) is a one-word copy fix but wants the owner's word choice
+  ("active"? "shopping"?); (b) is a default-ordering preference call.
+- **Recommended resolution:** opportunistic — fold into the next shopping-list or
+  copy pass.
+
 ## [OPEN] FU-602 — FU-450's `good_deal` alert kind + "Good & great / Great only" deal-band settings control appear absent from the app (deal-quality band feeds buy-verdict only)
 - **Raised:** 2026-07-23 (money-sweep verify — FU-450, with money features ON via FU-592)
 - **Type:** finding (feature/checklist drift — confirm intended)

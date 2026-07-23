@@ -437,13 +437,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Dashboard card + Dora-chat add-to-list still work (both touched)
 
 ### Cart Button Chunk 2 — combined modal for 2+ products — origin FU-130
-- [ ] 0 linked products → row cart click adds silently. No modal. One toast
-- [ ] 1 linked product → same silent add. No modal
-- [ ] 2+ linked products → row cart click opens `QuickAddSheet` pre-populated with stock item; target-list dropdown + offer radio + quantity editable; Add → one toast
-- [ ] 2+ products AND 2+ drafts → still one surface, no stacked modals
-- [ ] `linked_product_count` on `/stock-items` JSON; 0 with no rows; increments as products linked
-- [ ] Bulk variant unaffected — resolves target once + one summary toast regardless of per-item counts
-- [ ] **Known repro (2026-06-14):** picker modal NOT popping up when adding to a list with 2+ linked products (silent-add path firing instead). Likely candidates: `linked_product_count` not hydrating, `shouldUseCombinedModal.value` false from store mismatch, or `selected-product-id` short-circuit firing on wrong surface. Capture which screen + which item it fails on
+- [ ] Bulk variant — resolves target once + one summary toast regardless of per-item counts
 
 ### Cart Button Chunk 3 — standalone product lines + rules 1–3 — origin FU-132
 *(Rules 1–3 pinned 2026-07-20 in `tests/e2e/dora_api/test_shopping_list_product_lines.py`: **Rule 1** a `product_id`-only POST creates a line (product_id + null stock_item_id); a no-anchor body → **422** business-rule violation "A line needs at least one of stock_item_id or product_id" [the checklist guessed 400 — 422 is correct for a domain rule; the DB CHECK is the backstop]. **Rule 2** linking the product to a stock item converts the orphan in place (gains stock_item_id, keeps product_id) OR folds into an existing stock-item line + drops the orphan. **Rule 3** deleting the stock-item line (by line-id) cascade-removes the nested product line. The migration, the by-stock-item remove variant, and the TS-compile check below stay owner-walk.)*
@@ -453,18 +447,14 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] TS compile: `ShoppingListLine.stock_item_id: string | null` doesn't break consumers
 
 ### Cart Button Chunk 3 UI — origin FU-145
-- [ ] Add a product-only line via My Products row ("Add as product") on unlinked product → line lands with product chip + tinted "product only" background
 - [ ] Link the product to a stock item later → parent stock-item line appears (rule 2 backend) AND product nests visually under it (rule 2 frontend)
 - [ ] Remove nested product → rule-4 modal fires; "Yes" removes both, "No" leaves the parent
 - [ ] Remove product-only line whose linked stock item is NOT on the list → no modal
-- [ ] Inline-product Axis B with 0 / 1 / 2+ drafts: 0 → "create a draft first" toast; 1 → silent add; 2+ → radio picker, both picks work
 - [ ] Linked products on My Products row still hit `onAddSingle` (stock-item path); ticking nested children works; bulk mode handles parents + children
 
 ### Cart Button Chunk 4 — meal-plan generate via Axis B — origin FU-135
-- [ ] 0 draft lists: no picker; creates new list named `Meals: <plan>`; toast "Shopping list created with N items."; routes to new list
-- [ ] 1 draft list: picker opens with that draft preselected + "+ Create new list" row; OK on draft → backend merges, toast "Added N items to your list.", routes to that list
-- [ ] 2+ draft lists: lists all drafts (first preselected) + "+ Create new list"; both picks work
-- [ ] Cancel/dismiss: no list, no toast, no nav
+- [ ] **0 draft lists**: no picker; creates new list named `Meals: <plan>`; toast; routes *(1-draft preselect + 2+ picker/cancel/create-new/merge verified 2026-07-23)*
+- [ ] **1 draft list**: picker preselects that draft + "+ Create new list"; OK on draft → merges + routes
 - [ ] `nothing_to_add` path still emits info toast and doesn't navigate
 
 ### State Ownership Chunk 6 — snapshot-at-add — origin FU-142
@@ -878,7 +868,7 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 ### Alerts C-9.1 — spine — remaining browser smoke — origin FU-183
 - [ ] **C-9.2:** the admin **Expiring-soon window** field's own save path (type a value + Save in the UI). (Verified 2026-07-22: the setting round-trips server-side 7→2→7 and reshapes the feed — expiring_soon 13→2, badge follows; **disabling a kind** removes its 11 rows from the list; **demote/promote** moved `expired` between tiers with exact accounting — actionable 34↔23, FYI 18↔29, badge tracking. UI-typing half is blocked by the Quasar synthetic-input limitation, not by a defect.)
 - [ ] **C-9.3:** dark-mode sweep of the hub. (Verified 2026-07-22: hub renders — summary tiles, tiered active list, Manage panel, collapsible History; bell is a slim peek with top rows + bulk-add + "Open Alerts"; shared `AlertRow` actions work from both; History lists dismiss/snooze/read with stock name resolved — **found + fixed a copy bug there: `out_of_stock` rendered "out of_stock"**. **Bell/page DO diverge — see [[FU-597]]:** the page only refetches when the store is empty, so it can show a stale feed all session.)
-- [ ] **C-9.5 subscriptions / price-watch tier:** money flag ON + armed price alert → Price watch region lists it (product · merchant · "notify below $X" · last-alerted); View opens price-history explorer with that product; Remove deletes (row gone + toast); empty-state clean; hidden when money flag OFF
+- [ ] **C-9.5 price watch — residuals:** the **last-alerted** timestamp on a watch that has actually *fired* (armed one never fired); and driving the **arm** UI itself (per-product "Notify me below" q-input didn't render/take in the hidden pane — armed via the API the button calls). *(Verified live 2026-07-23: empty-state; armed→panel lists product·merchant·"notify below $2.50"; View→explorer deep-linked to the product; Remove→gone+"Price watch removed."; hidden when the INSTALL money flag is off. Per-user-vs-install gating → [[FU-604]].)*
 - [ ] **C-9.6:** empty-state; "refresh works". (Verified 2026-07-22: mini-calendar renders; per-category dots for expiry/shopping/meal; out-of-window at opacity 0.35; today ringed in primary; clicking a day selects it and expands the detail list; all three link targets navigate — expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`. **Dots survive theme switch but shopping and meal are the SAME colour in Pesto — [[FU-598]]**.)
 
 ### Cross-app undo after push-expiry (fixes 2026-07-10) — origin FU-357

@@ -18,6 +18,110 @@ next.
 
 ---
 
+## 2026-07-23 (later 3) — Verify Batch 11 C-9.5 price watch (money seed); FU-604
+
+Continued on the money-on seed (no reboot from the previous unit). Cleared the
+previously money-blocked **C-9.5 price-watch tier** — a clean, self-contained
+money CRUD surface. **No code changed.**
+
+**Arming path.** The explorer's arm control is a per-product "Notify me below ($)"
+q-input + "Set alert" button (source-confirmed, `PriceHistoryPage.vue:200-217`,
+`onSetAlert` → `createAlertAsync` → `POST /price-history/alerts`). That card
+didn't render in the hidden pane (chart svg present but 0 number inputs — a
+rAF/render quirk), so I armed via the same POST the button calls. Noted as a
+harness limit, not a defect.
+
+**SubscriptionsPanel (Alerts hub) — fully walked:**
+- Empty-state "No price watches armed." + explorer hint.
+- Armed (Coles Full Cream Milk 2L @ $2.50) → panel lists product · "Coles · notify
+  below $2.50" (merchant + money-formatted threshold) + View + Remove.
+- View → `#/price-history?product_id=…` with the product pre-selected.
+- Remove → toast "Price watch removed.", server list → 0, panel back to empty.
+- **Money-off gating** — took care to test the right level: the panel is
+  `v-if="money"` where `money` = `useFeatureFlags` = `/api/health features.money`
+  = **install** `money_enabled`. Toggling the *per-user* flag off did NOT hide it
+  (correct); toggling the *install* flag off DID, while the hub still rendered.
+
+**[[FU-604]] logged** — the panel gates on install money, whereas the
+trim-to-budget banner (FU-448) gates on the *per-user* `money_features_enabled`.
+So a user who opts out of money features still sees the price-watch panel.
+Confirm-intent: either the panel should also honour the per-user flag, or trim is
+the outlier. Low priority; the canonical install off-switch works.
+
+**Data hygiene:** the armed alert was removed as part of the Remove test (server
+0); both money flags restored to on. Environment clean.
+
+**Close-gate:** verification + one FU. No R-rule surface, no ADR.
+
+**Environment:** `dora-verify-backend-money-linux` on :5170 (money on), desktop
+1400×900, authenticated. No armed alerts; flags on.
+
+**Next up:** Batch 11 residuals are env/timing-gated (last-alerted needs a fired
+watch; SMTP/VAPID). Remaining money-gated veins: trim-to-budget happy path
+(needs a contrived cuttable list), My-Products money gating (Batch 14). Untouched:
+Batch 16 (Cross-cutting B).
+
+---
+
+## 2026-07-23 (later 2) — Verify Batch 9 (Cart Button C2/C3-UI/C4) on the money seed; FU-603
+
+Picked up from the other agent's handoff. First round exploiting the **money-on
+seed knob** (FU-592, built since my last unit). Added a
+`dora-verify-backend-money-linux` entry to `.claude/launch.json` (the `-money`
+config is Windows-pathed) and booted it — health money/nutrition/buy_verdict true,
+seed user money-enabled. Chose Batch 9's Cart Button vein: genuinely untouched
+(4 ⚪ sections) and the earlier handoff flagged it. **No code changed.**
+
+**Harness note worth carrying forward:** the Quasar cart/`Add`/radio controls need
+a **full pointer-event sequence** (pointerdown→mousedown→pointerup→mouseup→click at
+the element's real coords), not a bare `.click()` — a plain click silently no-ops
+on these. Once I switched, every modal/radio/button drove cleanly, including
+q-radio selection (verified aria-checked flips before acting).
+
+**Chunk 2 (FU-130) fully cleared.** `AddToListButton` is a toggle — carting an
+already-listed item REMOVES it (FU-454). That bit me first: a 5→4 line count I
+briefly read as data loss was my own toggle-off of Full Cream Milk. Recovered,
+then walked cleanly: 2-product item → QuickAddSheet with target dropdown + offer
+radios + qty in ONE surface (no stacked modal even with 2 drafts) → Add "1 added.";
+0-product → "Which list?" picker → silent add (no product modal). Source confirms
+`shouldUseCombinedModal = linked_product_count >= 2`, so 0 and 1 share one branch
+(0 verified empirically). `linked_product_count` present + correct. The
+2026-06-14 "picker not popping" repro does NOT reproduce.
+
+**Chunk 3 UI (FU-145) — product-only line.** "Add as product" on the unlinked
+Freddo → 2+-drafts picker → line with `product_id` set / `stock_item_id:null`,
+toast "Added as product line.", rendered with `.shopping-line-product-only` (tint
+`rgb(22,39,36)` vs transparent) + product chip. Rule-2/4 nesting survivors remain.
+
+**Chunk 4 (FU-135) — Axis-B generate picker.** Cancel → nothing; merge-into-draft
+→ "Added N items" + routes (0 new, seed plan fully stocked); "+ Create new list" →
+"Meals: week of 20/07/2026" + "created with 1 item." + routes. Count-specific
+0/1-draft cases + nothing_to_add remain (seed plan always had ≥1 shortfall).
+
+**[[FU-603]]** logged: cart tooltip says "draft list" but the picker targets any
+non-done list and defaulted to the in-progress "Saturday shop" — low-priority
+copy/default nuance (`QuickAddSheet.vue:175-182,317`), not a bug.
+
+**Data hygiene — all reverted:** deleted the create-new "Meals:" list, the Freddo
+product-only line, and the Butter I added during a 0-product test; all five seed
+lists back to original counts. **One residual cosmetic drift:** Full Cream Milk on
+"This week" is now qty-1 / last position (re-added via the modal after the
+toggle-off test) vs seed qty-2 / first — harmless in a throwaway DB.
+
+**Close-gate:** verification + one launch.json entry + one FU. No R-rule surface,
+no ADR.
+
+**Environment:** `dora-verify-backend-money-linux` on :5170 (money on), desktop
+1400×900, authenticated. Lists restored.
+
+**Next up:** Batch 9 survivors (bulk toast, rule-2/4 nesting, C4 count cases);
+other untouched veins — Batch 16 (Cross-cutting B), and the money-gated tails now
+unblocked (C-9.5 price watch in Batch 11, My-Products money gating in Batch 14).
+Note the seed plan is fully stocked, so "generate adds N" / unlinked-ingredient
+flows need a contrived unstocked ingredient.
+
+---
+
 ## 2026-07-23 (later) — Verify Batch 7 (Meal plans): templates save/apply/manage cleared; DORA_VERIFY bloat cleaned up
 
 **DORA_VERIFY delete-on-pass correction (owner callout).** I'd been replacing each

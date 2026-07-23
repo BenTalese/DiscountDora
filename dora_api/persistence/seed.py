@@ -19,14 +19,27 @@ from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
     StockLocation)
-from dora_api.domain.entities.user import User
+from dora_api.domain.entities.user import NUTRITION_MODE_SIMPLE, User
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.infrastructure.auth_helpers import hash_password
 from dora_api.persistence.seed_builders import SeedBuilders
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-def seed_dev_data(bulk_stock_items: int = 0, qa_fixtures: bool = False):
+def seed_dev_data(
+    bulk_stock_items: int = 0, qa_fixtures: bool = False, money_on: bool = False,
+):
     """Populate a rich dev dataset that exercises every screen.
+
+    ``money_on`` (FU-592 — verify tooling) boots the dataset with the money +
+    nutrition features already enabled at **both** layers they gate on: the
+    install flags (``AppSetting.money_enabled`` / ``nutrition_enabled``) and the
+    dev user's per-user opt-ins (``money_features_enabled`` /
+    ``nutrition_mode="simple"``). Those surfaces (Chunk 9 cost/kcal cards,
+    buy-verdict, budget) read both layers once at cold mount, so an agent
+    verifying them in the hidden browser pane needs them on from boot — flipping
+    mid-session doesn't re-render. Off by default (env ``DORA_SEED_MONEY_ON``; the
+    ``dora-verify-backend-money`` launch profile sets it).
 
     Covers: multiple stores and products (with current + historic offers
     for sparklines), product↔stock-item links, a deep
@@ -141,14 +154,15 @@ def seed_dev_data(bulk_stock_items: int = 0, qa_fixtures: bool = False):
     # marked complete — this dataset is an established household, and a
     # fresh-seed boot shouldn't trap dev/e2e sessions in the first-run
     # wizard (the wizard itself is exercised by registering a new user).
-    repo.add(User(
+    dev_user = User(
         email="ben.talese@gmail.com",
         password_hash=hash_password("dora"),
         send_deals_on_day=6,
         username="dora",
         is_admin=True,
         onboarding_completed_at=now,
-    ))
+    )
+    repo.add(dev_user)
 
     # ---------------- LOCATION HIERARCHY ---------------- #
     pantry = StockLocation(name="Pantry", kind=LOCATION_KIND_ZONE, sequence=0)
@@ -857,6 +871,18 @@ def seed_dev_data(bulk_stock_items: int = 0, qa_fixtures: bool = False):
         repo.save_changes()
         for s in range(min(bulk_stock_items // 10, 60)):
             line(big_list.id, bulk_items[(s * 3) % bulk_stock_items], s, qty=1 + (s % 3))
+        repo.save_changes()
+
+    # FU-592 — verify-seed knob: turn money + nutrition on at both gating layers
+    # (install flags + the dev user's per-user opt-ins) so the flag-gated UI
+    # (Chunk 9 cost/kcal cards, buy-verdict, budget) is agent-verifiable in a
+    # cold-mount browser pane, where mid-session flips don't re-render.
+    if money_on:
+        dev_user.money_features_enabled = True
+        dev_user.nutrition_mode = NUTRITION_MODE_SIMPLE
+        app_setting = get_or_create_app_setting(repo)
+        app_setting.money_enabled = True
+        app_setting.nutrition_enabled = True
         repo.save_changes()
 
     db.session.autoflush = True

@@ -204,6 +204,13 @@
                 localeDraft.value = s.locale;
                 lastSavedLocale = s.locale;
             }
+            // FU-600: the Preview renders through `formatMoney`, which reads the
+            // module-level money policy. Nothing else on this page calls
+            // `useMoney()`/`load()`, and with money features OFF no money surface
+            // mounts to trigger it lazily — so without this the preview would show
+            // the AUD/en-AU defaults regardless of the saved policy. Force a fresh
+            // read so the preview reflects the true saved currency/locale on load.
+            await refreshMoneyPolicy();
         } catch {
             // Leave the AU defaults.
         } finally {

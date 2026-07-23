@@ -18,6 +18,246 @@ next.
 
 ---
 
+## 2026-07-23 (later) — Verify Batch 7 (Meal plans): templates save/apply/manage cleared; DORA_VERIFY bloat cleaned up
+
+**DORA_VERIFY delete-on-pass correction (owner callout).** I'd been replacing each
+verified checkbox with a fat "here's what I saw" note, so the file wasn't shrinking.
+Reverted to the actual convention: **delete the passed line; evidence lives here +
+in DORA_VERIFY_TRIAGE, not inline.** Stripped this session's inline notes — fully-
+verified sections deleted (e.g. FU-297), the rest compressed to one-line
+survivor-context. DORA_VERIFY 1714 → ~1660 lines despite the session's verifications.
+Going forward: delete-on-pass, no evidence essays.
+
+**Meal-plan templates (Batch 7 / C-2.F/G, FU-179/305) verified live** (money-on
+backend, desktop planner layout):
+- Templates dialog ("Browse + apply templates…") → Save-this-week / Apply-recurring /
+  Manage-rotating-sets + "No templates yet" empty state.
+- **Save:** "Save this week as a template" → name/description form → "Save template" →
+  toast "Saved this week as a template."; `/api/meal-plan-templates` shows it, and the
+  dialog then lists "QA Week Template · 6 meals · Apply".
+- **Apply:** focused an empty week (27/07) → Apply → toast "Added 6 meals." (forked the
+  6 template meals onto the focused week).
+- **Manage:** `/meal-plans/templates` is the **rotating-sets** manager ("Rotating
+  template sets" + New set); individual-template rename/delete is inline in the dialog
+  ("no page hop") — a minor evolution from the checklist's "lists templates" wording.
+- **Cleanup:** deleted the test template (204) + the forked 27/07 plan (204); confirmed
+  only the original "This Week" plan remains, 0 templates. No drift.
+- **Not a finding:** "Clear this week" threw a generic "Oops…" toast under my synthetic
+  confirm-click, but clear-week was verified working 2026-07-22 → treated as a driving
+  artifact, not logged.
+- **Survivors (owner-walk/contrivance):** apply-recurring + rotating-set CRUD
+  (new/edit/reorder/delete), confirm-before-replace, edit/delete-leaves-fork-untouched;
+  carousel ↑/↓ arrow buttons weren't surfaced (the calendar IS the week-nav now, already
+  verified).
+
+**Close-gate:** no code changes (verification + doc cleanup only). No ADR.
+
+**Environment:** `dora-verify-backend-money` on :5170 (money on), desktop 1400×900,
+authenticated. Meal-plan + template state restored to seed.
+
+**Next up:** remaining non-money veins — Batch 9 (cart-button modals), Batch 12/14
+(data-page + My-Products UI), and the Batch-7 template contrivances above.
+
+---
+
+## 2026-07-23 — Verify campaign Batch 1 (Top block) opened: FU-429 fully verified live, Currency & locale cleared, 1 real bug found+fixed (FU-600), 1 dead-code/retailer-name-drop removed
+
+Picked up the verification effort on **Batch 1 (Top block)** — one of the two
+fully-untouched batches the previous handoff named (the other is Batch 16).
+
+**Dora bubble — Basic-mode add-to-list (FU-429): fully verified live.** Key
+harness win: the **DoraChat message box is a `v-model` textarea and IS
+synthetically drivable** (native-value-setter + bubbling `input` + Enter
+keydown) — unlike the one-way `:model-value` q-inputs (currency page, admin
+thresholds) that the recipe flags as undrivable. So Basic-mode chat flows are
+now agent-verifiable. Seed user is Basic (`llm_enabled:false`,
+`/assistant/status ai_available:false`; `/assistant/ask` returns
+`defer_to_local:true` so resolution is client-side in `onAddToListByText`). Drove
+all six paths and checked each against real server list state:
+- **happy** "add butter" → "Added Butter to your list. 🛒" + "Open shopping
+  lists" button + Butter on the "This week" draft (5→6);
+- **multi** "add garlic and olive oil" → both added (oxford-join + multi-word
+  "olive oil" resolved);
+- **not-found** "buy fnordwidgetxyz" → "I couldn't find…" + nothing added;
+- **ambiguous** "add cream" (Full Cream Milk + Vanilla Ice Cream) → «matched more
+  than one…open Stock» + nothing added;
+- **no-primary** "add milk" (seed has 2 drafts → server infers no target) → "You
+  don't have a primary shopping list set yet…" + button + nothing added;
+- **bare** "add to my list" → "Sure — what should I add?…".
+Note: to exercise the happy path I temporarily PATCHed "Big load list" draft→
+shopping (so "This week" was the sole draft → quick-add target) and reloaded so
+the client picked up fresh membership. **All drift reverted** — the 3 added lines
+deleted, "Big load list" back to draft, "This week" back to its 5 seed items. The
+parser (`extractAddToListItems`, comma/"and"/"&"/"some"/"a loaf of"/trailing) is
+already Vitest-pinned in `doraIntents.spec.ts` — no test added. Only the
+AI-mode-ON path stays owner-walk.
+
+**Currency & locale (FU-043): cleared the core contract + found/fixed a real bug.**
+- Page loads with two inputs (AUD/en-AU), the live preview, and "Use this device".
+- **[[FU-600]] found + fixed (real bug):** the preview showed the AUD/en-AU
+  **defaults** on cold load regardless of the saved policy — `formatMoney` reads
+  the module `policy` ref in `useMoney.ts`, which loads lazily only when
+  `useMoney()`/`load()` runs; the locale page imported only `formatMoney`/
+  `refreshMoneyPolicy` and never triggered a load, and with money OFF (default) no
+  other surface did either. Confirmed live: server EUR/de-DE, both inputs + health
+  agreed, preview stuck at "$12.50". Fixed by calling `refreshMoneyPolicy()` in the
+  page's `onMounted`. **Re-verified after `quasar build -m spa`:** EUR/de-DE →
+  "12,50 € · 1.234,56 €", reset → "$12.50 · $1,234.56". Moved to RESOLVED.
+- **Item 8 resolved (dead code + retailer name-drop):** the only place Dora
+  *asserted* specific retailers ("Coles, Woolies, IGA, Aldi…") was the page-help
+  summary in `doraIntents.ts` for the **retired** `/product-search` route
+  (FU-186) — it can never fire. Removed. `DoraHelpPage` descriptions already say
+  "across the configured stores".
+- Residuals owner-walk: keystroke→save→toast + inline validation (the currency/
+  locale q-inputs are one-way `:model-value` → not synthetically drivable), the
+  money-gated input-prefix flips (money OFF, FU-592), speech-recog locale (device).
+
+**Stores logo (FU-335): structure source-confirmed, interactions owner/device.**
+The Add/Edit-store **dialog body would not paint in the hidden pane** (shell +
+Cancel/Add render, field section stays empty despite the rAF shim — a harness
+limit for this `BaseDialog`). Source confirms the two-button `ImageSourcePicker`
+with `pickerVerb` flipping "Add logo"↔"Change logo" (camera)/(file) + `StoreLogo`
+swatch + "Remove existing logo". Stores page itself renders live (4 seeded stores,
+hash-swatch fallbacks). File-pick/PDF-reject/camera are OS-picker/device anyway.
+
+**Onboarding story:** V-pack (visual scenes/animation/reduced-motion/timing,
+needs an unonboarded user) → owner-walk, not driven this session.
+
+**Follow-on — knocked out more Dora-bubble (FU-360) leftovers in the same open
+section (no code changes, all live drives + reverts):**
+- **Hide Dora (FU-360.6):** Settings → Assistant → "Show Dora on every page" OFF →
+  toast "Dora helper hidden." + bubble gone + **persisted across reload**
+  (`show_assistant:false`); ON → "Dora helper shown." + bubble back. Restored.
+- **Mode-slider disabled state (FU-360.3, no-LLM half):** Basic seed user →
+  `dora-mode-slider--disabled` (`opacity:0.55`, `cursor:not-allowed`,
+  `aria-disabled=true`, `tabindex=-1`), click no-ops (`aria-checked` stays false);
+  tooltip reason source-confirmed. Master-OFF half is the same mechanism (+ Batch
+  13 kill-switch). Deleted.
+- **Text size (FU-360.1):** md→xl scaled root 16.5→23px and Dora chat text
+  13.28→18.52px, **exactly proportional (1.394×)** — rem-based, confirmed.
+  Reverted to md.
+- **Cookable chip (FU-386):** left — couldn't surface the rotating chip on the
+  dashboard this session; already carries a prior "confirmed live" note + the
+  `?cookable=true` filter is backend-pinned. Not deleted.
+- **[[FU-601]] found (copy defect, logged):** the `update(label, run)` settings
+  helper reuses the success sentence as the error noun → save-failure toasts read
+  "Could not save dora helper shown.." (double period, sentence-as-noun). **Copied
+  verbatim into SIX settings pages** (Assistant/Preferences/Nutrition/Money/
+  Notifications/Voice) — also an R-003 duplication smell; recommended fix extracts
+  one shared save helper. Error-path/cosmetic → opportunistic.
+
+**Then did the last fully-untouched batch — Batch 16 (Cross-cutting B).** Cleared
+the agent-verifiable items; no code changes (all read-only verification):
+- **P8-01 rename:** grep for `Discount Dora`/`DiscountDora` across `web_app/src`
+  **and** `dora_api` → zero hits; DOM has none; tab titles all `… | Dashy Dora`;
+  mascot `alt="Dashy Dora"`; About renders "Dashy Dora"; assistant version replies
+  source-confirmed ("You're on Dashy Dora …" / "I'm Dashy Dora …").
+- **D.O.R.A. bot rename:** chat-header "D.O.R.A." label renders live; acronym
+  tooltip + "Meet D.O.R.A." Help button + `/help/dora` header/caption
+  source-confirmed.
+- **Route retirements:** `#/data/barcodes` (+`?action=scan`) → `qr-labels`
+  verified; **`#/data/export` and `#/data` → `#/settings/admin/data/backup`** — the
+  checklist's "→ 404 / two-or-three cards" is **stale**, superseded by FU-341
+  (data pages relocated under Admin → Data); the redirect (no dead-end) satisfies
+  the retirement intent. Annotated, not filed as a bug.
+- **Health feature flags:** all present and **exactly match the Features panel**.
+- **R-016 lazy hydration (FU-221 + extension):** instrumented `XMLHttpRequest.open`
+  and counted `/api/*` over a no-reload nav sweep — `/api/stock-items`, the recipe
+  **list**, and all vocab/meal-slot stores fire **once**, **0 on revisit**. The
+  apparent recipe "+1" was `/api/recipes/tags` (per-mount dietary-filter
+  disclaimer, intentionally uncached) — confirmed by capturing full URLs. No
+  regression.
+- **Feature-flag panel (FU-110):** 7 toggles (grown from the checklist's 5 —
+  Scanning + buy-verdict added) render with captions; every state matches
+  `/api/health`.
+- **formatQuantity (FU-321):** pure util is unit-pinned (`formatQuantity.spec.ts`);
+  render bullets owner-walk. **Unsaved-changes guard (FU-322):** the AccountSettings
+  guard was observed firing live in the prior Batch-13 session; re-drive blocked
+  (Account form inputs didn't paint in the hidden pane).
+
+**Batch 16 deferred to the harder second pass** (per owner's plan): C-cross
+per-user **money/nutrition opt-ins** (FU-111/112 — flags OFF, blocked on
+[[FU-592]]), image-display opt-in, **DnD-affordance parity** (needs drag
+automation), the **visual/viewport** sections (settings-shell dual-scroll, mobile
+header, main-menu indicator colour, header-button rings, reduced-motion),
+error-handling rollout (needs induced errors), nav-state filter-survives-back, and
+Chunks 3–5 render. **No harness limits newly hit** beyond the known
+settings-page-dialog/form paint gap.
+
+**Then built [[FU-592]] (the `DORA_SEED_MONEY_ON` seed knob) and used it to clear
+the money/nutrition-gated UI — the highest-leverage second-pass unblocker.**
+- **Code (env-gated, defaults off → zero blast radius):** added a `money_on` param
+  to `seed_dev_data()` (`seed.py`) that turns on `AppSetting.money_enabled` +
+  `nutrition_enabled` **and** the dev user's `money_features_enabled` +
+  `nutrition_mode="simple"` (captured the dev `User` in a var); wired
+  `is_seed_money_on()` (`DORA_SEED_MONEY_ON`) through `configuration_manager.py`
+  and the `startup.py` seed caller; added the `dora-verify-backend-money` launch
+  profile. **Backend suite green (exit 0)** — default seed/tests unaffected.
+- **Verified live end-to-end** (booted `dora-verify-backend-money`): `/api/health`
+  money+nutrition true; `/auth/me` `money_features_enabled:true` +
+  `nutrition_mode:"simple"`; **cookbook overview** Sort-by gained **Kcal**, filters
+  gained **Kcal ≤** (both absent when off); **recipe detail** rendered the **kcal
+  input** and, on Cheesy Garlic Bread (3/4 priced), the **"$6.96 (3 / 4 ingredients
+  priced)" cost card**; `PATCH {kcal:350}` → **"Nutrition (per serving) 350kcal"**
+  card, `{kcal:null}` cleared it (wire shape); **dashboard budget money-gate card**
+  rendered ("$12.40 spent so far…"). The seed already has priced
+  recipe→product→offer chains, so no extra seed data was needed. FU-592 **RESOLVED**;
+  DORA_VERIFY Chunk 9 ON-state block cleared. This unblocks the flag-gated items
+  across Batches 5/7/9/11/16.
+
+**Then ran the money-gated sweep across batches (money-on backend live) — no code
+changes, all live drives + reverts:**
+- **Dashboard budget-target (FU-297):** no-target CTA → after `PATCH {budget_amount:30}`
+  the card shows live tracking "$12.40 of $30.00 · $17.60 left · +$53.29 in active
+  lists". The FU-586 cold-load race didn't manifest (money-on-from-boot).
+- **Budget-defense swaps (FU-451) — comprehensively:** Suggestions panel ("Over
+  budget by $1,184.08 · Est. week cost $1,201.68 · Budget $30 · 2 swaps → $10.47"),
+  candidate row (Recipe swap · Saturday Dinner · Spaghetti→Cheesy Garlic Bread ·
+  same-style · −$953.34), **Preview** dialog (after-cost/saving/missing ingredients),
+  **Apply** → "Swap applied · Undo" banner, **Undo** restores (no drift), **dashboard
+  bullet** "Save $1,191.21 — 2 swaps ready". Needs the **desktop** planner layout
+  (`$q.screen` frozen → resize→reload→re-shim).
+- **Trim-to-budget (FU-448):** banner "Projected $11.80 · budget remaining $2.60 —
+  trim $9.20 to fit" + "Show what would be cut" → the **"Trimmed everything safe.
+  Still $9.20 over"** fallback (all 5 lines are never-cut — Parmesan/Sourdough carry
+  BUY verdict). The cuttable→Keep→Deferred happy path needs a list with safe-to-cut
+  lines → owner-walk.
+- **Buy-verdict:** live — BUY badges on shopping-list lines with money on.
+- **FINDING [[FU-602]]:** FU-450's **`good_deal` alert kind** and the **"Good & great
+  / Great only" deal-band settings control** are **absent** — `good_deal` isn't in the
+  SPA `AlertKind` union or the 54-alert feed, no such control in `web_app/src`;
+  `deal_quality.py` computes the band but it "feeds buy-verdict only" (never surfaced,
+  no `features/alerts` reference). Likely a deliberate descope, unconfirmed → logged
+  per the reported-defect rule.
+
+**Close-gate (ENGINEERING_STANDARDS).** The money sweep made no code changes. Batch 16
+made no code changes. Batch-1's two
+frontend changes: (a) `useMoney` load-on-mount on the locale page — reinforces R-003,
+no violation; (b) dead-code removal of a retired-route help entry — scope-clean; lint
++ `quasar build -m spa` (vue-tsc) clean. **FU-592's backend changes** (seed/config/
+startup/launch) follow the existing `DORA_SEED_BULK_ITEMS`/`DORA_SEED_QA_FIXTURES`
+env→param pattern (R-005 distribution-posture-clean, env-driven), default-off, backend
+suite green. No ADR warranted.
+
+**Environment note:** the running backend is **`dora-verify-backend-money`** on :5170
+(money+nutrition ON, `dist/spa` rebuilt this session). A later session wanting the
+default off-state should restart plain `dora-verify-backend`. Drift during the sweep:
+the dev user has **`budget_amount=15`** set (a `PATCH {budget_amount:null}` returned 200
+but didn't clear it — likely the update_me null-handling carve-out; harmless, resets on
+the next re-seed) and a stale-but-harmless viewport of 1400×900. The kcal test value on
+Cheesy Garlic Bread was cleared. All meal-plan/shopping-list drift reverted.
+
+**Next up:** money-gated items are largely cleared. Remaining owner-walk/contrivance:
+FU-448 cuttable→Keep→Deferred happy path (needs a list with safe-to-cut lines), FU-451
+cooked-excluded/zero-state/stale-409 edges, and **[[FU-602]]** (confirm the good_deal
+alert descope). The richest **non-money** agent-verifiable veins left: **Batch 7**
+(meal-plan C-2 templates apply/recurring, carousel arrows/keys, unlinked-ingredient
+dialog), **Batch 9** (cart-button modals), **Batch 12/14** (data-page + My-Products UI).
+Pure visual/viewport/drag-interaction + device/inbox legs stay owner/device. Both
+previously-untouched batches (1 + 16) are open; every batch has now been touched.
+
+---
+
 ## 2026-07-22 (later 5) — Verify campaign Batch 13 (Settings B) opened: CSRF/account block cleared, assistant contracts pinned, FU-599
 
 Opened **Batch 13 — Settings B (account / assistant / misc)**, previously

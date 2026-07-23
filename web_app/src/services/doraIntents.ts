@@ -185,12 +185,6 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
         mood: 'happy',
     },
     {
-        match: (p) => p === '/product-search',
-        summary:
-            "Hunt for products across Coles, Woolies, IGA, Aldi… link a product to a stock item and its price tracks alongside your pantry. Bargain radar = on.",
-        mood: 'searching',
-    },
-    {
         match: (p) => p === '/shopping-lists',
         summary:
             "Your shopping lists. Set one as primary so I know where to drop new additions, then add items from the pantry, recipes, or just by typing.",

@@ -208,6 +208,9 @@ def init_db(is_test_env: bool):
                 qa_fixtures=(
                     not is_test_env and DORA_CONFIG.is_qa_fixture_seed_enabled()
                 ),
+                money_on=(
+                    not is_test_env and DORA_CONFIG.is_seed_money_on()
+                ),
             )
             return
 

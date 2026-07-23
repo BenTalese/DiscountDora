@@ -279,6 +279,15 @@ class DoraConfig:
         sets DORA_SEED_QA_FIXTURES=true."""
         return _env("DORA_SEED_QA_FIXTURES", "false").lower() in {"1", "true", "yes", "on"}
 
+    def is_seed_money_on(self) -> bool:
+        """FU-592 — whether the dev seed boots with money + nutrition features
+        already enabled at both gating layers (the install flags AND the dev
+        user's per-user opt-ins), so the flag-gated UI (cost/kcal cards,
+        buy-verdict, budget) is verifiable in a cold-mount browser pane where
+        mid-session flips don't re-render. Off by default; the
+        dora-verify-backend-money launch profile sets DORA_SEED_MONEY_ON=true."""
+        return _env("DORA_SEED_MONEY_ON", "false").lower() in {"1", "true", "yes", "on"}
+
     def get_web_app_host(self) -> str:
         return _env("DORA_WEB_APP_HOST", self._config.WEB_APP_HOST) or self._config.WEB_APP_HOST
 

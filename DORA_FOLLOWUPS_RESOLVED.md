@@ -10,6 +10,55 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-592 — `DORA_SEED_MONEY_ON` verify-seed knob (boots money + nutrition on) — built + verified
+- **Raised:** 2026-07-22 · **Resolved:** 2026-07-23
+- **Type:** deferred job (verify tooling)
+- **What:** The money/nutrition-gated UI (Chunk 9 cost/kcal/nutrition cards, Kcal
+  sort/filter, buy-verdict, budget) couldn't be agent-verified because those
+  surfaces gate on **both** the install flags and the per-user prefs, all read once
+  at cold mount — so mid-session flips don't re-render.
+- **Resolution (2026-07-23):** added a `money_on` param to `seed_dev_data()`
+  (`seed.py`) that, when set, turns on `AppSetting.money_enabled` +
+  `nutrition_enabled` **and** the dev user's `money_features_enabled` +
+  `nutrition_mode="simple"`; wired `DORA_CONFIG.is_seed_money_on()`
+  (`DORA_SEED_MONEY_ON` env) through the `startup.py` seed caller; added the
+  `dora-verify-backend-money` launch profile. Env-gated, defaults off — zero blast
+  radius (backend suite green, exit 0).
+- **Verified live end-to-end:** booting the money profile → `/api/health`
+  money+nutrition true, `/auth/me` `money_features_enabled:true` +
+  `nutrition_mode:"simple"`; cookbook overview Sort-by gained **Kcal** + filters
+  gained **Kcal ≤**; recipe detail rendered the **kcal input** and, on a priced
+  recipe, the **"$6.96 (3 / 4 ingredients priced)" cost card**; a `PATCH {kcal:350}`
+  rendered the **"Nutrition (per serving) 350kcal"** card; dashboard showed the
+  **budget money-gate card**. The seed already has priced recipe→product→offer
+  chains (Cheesy Garlic Bread / Tomato Pasta / Egg Fried Rice), so no extra seed
+  data was needed for the cost card.
+- **State note:** 2026-07-23 — knob built (seed/config/startup/launch.json) +
+  money/nutrition UI verified in the same session. Unblocks the flag-gated verify
+  items across Batches 5/7/9/11/16.
+
+## [RESOLVED] FU-600 — Currency & locale preview showed the AUD/en-AU defaults instead of the saved policy on cold load
+- **Raised + resolved:** 2026-07-23 (lean-verify Batch 1 — Currency & locale / FU-043)
+- **Type:** finding (real bug — misleading UI)
+- **What:** `AdminSystemLocaleSettings.vue` renders its live preview via
+  `formatMoney(12.5)`/`formatMoney(1234.56)`, which read the module-level `policy`
+  ref in `composables/useMoney.ts`. That ref starts at `DEFAULTS` (`AUD`/`en-AU`)
+  and is only populated when `useMoney()` (→ `load()`) runs — but the locale page
+  imported only `formatMoney` + `refreshMoneyPolicy`, never calling
+  `useMoney()`/`load()` on mount. With **money features OFF** (the default install),
+  no other surface triggered the load either, so the preview showed the AUD default
+  regardless of the saved policy until an in-session save fired `refreshMoneyPolicy`.
+- **Observed live:** server set to `EUR`/`de-DE` (both inputs + `/api/health`
+  `locale_policy` agreed), yet the cold-load preview stayed `$12.50 · $1,234.56`.
+  `Intl.NumberFormat` itself was correct (proven in-page).
+- **Resolution:** added `await refreshMoneyPolicy()` to the page's `onMounted`
+  (after loading settings) so the preview reflects the true saved policy on first
+  paint. Lint clean, `quasar build -m spa` (vue-tsc) clean. **Re-verified live
+  after the rebuild:** EUR/de-DE cold-load preview now reads `12,50 € · 1.234,56 €`;
+  reset to AUD/en-AU reads `$12.50 · $1,234.56`.
+- **State note:** 2026-07-23 — fixed in `AdminSystemLocaleSettings.vue` + verified
+  live in the running app.
+
 ## [RESOLVED] FU-582 — Finish & restock per-item level pickers → RESOLVED AS "WORKING AS INTENDED, NOW FULLY CUT"
 - *(Renumbered from FU-580 on 2026-07-18 — a parallel session independently issued
   FU-580 for the Features-page reload finding; that one keeps the number.)*

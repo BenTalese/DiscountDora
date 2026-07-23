@@ -20,6 +20,19 @@
             }
         },
         {
+            "name": "dora-verify-backend-money",
+            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeArgs": ["-m", "dora_api.startup"],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_MONEY_ON": "true"
+            }
+        },
+        {
             "name": "dora-verify-backend-linux",
             "runtimeExecutable": ".venv/bin/python",
             "runtimeArgs": ["-m", "dora_api.startup"],

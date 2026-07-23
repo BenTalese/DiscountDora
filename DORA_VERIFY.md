@@ -34,32 +34,18 @@ top-to-bottom.
 - [ ] Reduced-motion OS setting → the ring/nodes still appear in their final state without motion (no regression from removing autoplay).
 
 ## Dora assistant / helper bubble (FU-429 + FU-360)
-- [ ] **Basic-mode add-to-list (FU-429).** With AI mode OFF (no LLM configured), open Dora and type **"add milk"** → she resolves it against your pantry and confirms "Added Milk to your list. 🛒" with an "Open shopping lists" button; the item is actually on your primary list.
-- [ ] Type **"add eggs and bread"** → both added in one go (comma / "and" / "&" all split); reply names both.
-- [ ] Type **"buy <something not in your pantry>"** → reply says it couldn't find it and points at the Stock page; nothing spurious added.
-- [ ] Type an item whose name matches **two** pantry items → reply says it matched more than one and asks you to pick the exact one in Stock; it does **not** guess/add either.
-- [ ] With **no primary list set** → "add milk" replies that you need to pick a primary list first, with an "Open shopping lists" button; nothing added.
-- [ ] Bare **"add to my list"** (no item) → Dora asks what to add rather than erroring.
 - [ ] AI mode ON → "add milk" still uses the richer LLM propose→confirm flow (unchanged), not the Basic path.
-- [ ] **Hide Dora (FU-360.6).** Settings → Assistant → toggle **"Show Dora on every page"** OFF → save toast "Dora helper hidden." → the floating bubble disappears from every page immediately; reload confirms it stays gone. Toggle back ON → bubble returns.
 - [ ] **Greeting once-per-user (FU-360.5).** Fresh browser, log in as user A → the "Hi! I'm Dora" hint appears once; dismiss it → it doesn't return for A across reloads/logins. Log in as a *different* user B in the same browser → B sees the hint once (proving it's per-user, not per-browser).
-- [ ] **Mode slider (FU-360.3).** With AI mode configured (Settings → Assistant: provider + model + base URL/api key saved, install master ON), open Dora → the chat header shows a two-position pill "Basic | AI" with a skewed thick knob glowing on the active side. Tap the inactive side → knob slides across with the glow, PATCH `/auth/me` fires, and `/assistant/status` re-probes; the "AI mode unavailable" banner appears if the LLM isn't currently reachable. Tap back → returns to Basic. Slider grows with the text-size preference (rem-based).
-- [ ] **Mode slider — disabled states (FU-360.3).** With **no LLM configured** (fresh user) → slider renders dimmed, cursor `not-allowed`, tooltip explains what to save in Settings → Assistant first; tapping does nothing. With **install master OFF** (Admin → System → AI assistant) → slider dimmed with tooltip "AI mode is disabled install-wide…"; tapping does nothing.
-- [ ] **FU-360.1 (text size honoured).** Set a large text size in Preferences → open Dora → the chat message text scales up with it (appears already fixed by the A6 rem migration — this is a confirm, not a known bug).
+- [ ] **Mode slider — enabled/toggle path (FU-360.3).** With AI mode configured (Settings → Assistant: provider + model + base URL/api key saved, install master ON), open Dora → the chat header shows a two-position pill "Basic | AI" with a skewed thick knob glowing on the active side. Tap the inactive side → knob slides across with the glow, PATCH `/auth/me` fires, and `/assistant/status` re-probes; the "AI mode unavailable" banner appears if the LLM isn't currently reachable. Tap back → returns to Basic. *(The disabled/no-LLM state + rem-scaling are verified above; this enabled-toggle path needs a configured LLM → owner-walk.)*
 - [ ] **FU-360.4 (DS4 hover-flash regression) — fix landed 2026-07-12.** Hover the launcher / mascot repeatedly, and specifically *hover off* → mascot should stay put, no disappear-and-animate-back-in. Cause: the one-shot `dora-entrance` keyframes lived on the base `.dora-bubble-launcher-inner` rule, so when the hover-bob animation stopped and the base declaration reasserted, `dora-entrance` (with 300ms delay + `both` fill) restarted from its `scale(0) opacity: 0` frame. Moved onto a `.is-entering` modifier removed via `@animationend` after the entrance plays.
 - [ ] **FU-386 (cookable chip).** Open Dora on the Dashboard or Cookbook → tap the **"Cookable now"** / "Find a recipe to cook" chip → lands on the cookbook filtered to cookable recipes (the `?cookable=true` contract, confirmed live end-to-end).
 - [ ] **FU-515 B.3 (tool-arg bound, AI mode only).** With AI mode on, ask Dora to **"push the milk expiry by 99999 days"** → she declines with a "more than ~10 years — give me a sensible number" style message rather than proposing an absurd date. (Sanity check on the boundary cap; normal pushes like "+3 days" still work.)
 
 ## Currency & locale (FU-043) — origin FU-043
-- [ ] Settings → Admin → System → **Currency & locale** loads; two inputs (Currency 3-letter, Locale BCP-47), a live preview showing `$12.50 · $1,234.56` (or whatever the current setting renders), and a "Use this device" button beside the preview
-- [ ] Change currency to `USD` → blur (or Enter) → toast "Currency set to USD."; Dashboard budget / Deals / ReportsPage / ShoppingList totals / StockItem prices / RecipeDetail cost card all re-render with `US$` (or `$` depending on the locale's convention) without a hard reload
-- [ ] Change currency to `EUR` and locale to `de-DE` → money renders as `1.234,56 €` (comma decimal, dot thousands, symbol suffix) everywhere; MoneySettings budget input prefix flips to `€`; PriceEntry dialog's price input prefix flips to `€`
-- [ ] Change locale to `en-GB` → symbol renders as `£` (currency stayed as previously set) — verifying that locale and currency are independent knobs
-- [ ] Enter invalid inputs: `US` (2 chars), `USDD` (4 chars), `US1` (digits), lowercase `usd` (should upper-case-in on blur and succeed); invalid locale `en_AU` (underscore), `english` (not a tag), space `en AU` — each shows inline red error message, no toast, no server round-trip
-- [ ] Reset to `AUD` + `en-AU` → money renders `$12.50` again (Australian dollar sign, comma thousands, dot decimal)
-- [ ] Dora chat / Cook mode: hold-to-talk mic uses the household locale for speech recognition (verify by switching locale to `en-GB` or `de-DE` on a device where speech-recog supports it, then hitting the mic — the recognised text shape follows the locale)
-- [ ] Assistant chat: ask "what can Dora do?" → the answer no longer name-drops "Coles, Woolworths, IGA, Aldi" — it says "the household's configured merchants" or similar
-- [ ] Fresh install (or new admin session) sees the AU defaults (`AUD` + `en-AU`) with no explicit save required — existing installs unchanged post-migration
+- [ ] Change currency via the input → blur/Enter → toast "Currency set to USD." + money surfaces re-render without a reload *(q-input `:model-value` not synthetically drivable — formatting/propagation itself proven; this is the keystroke→toast half)*
+- [ ] Enter invalid inputs: `US` (2 chars), `USDD` (4 chars), `US1` (digits), lowercase `usd`; invalid locale `en_AU`, `english`, `en AU` — each shows an inline red error, no toast, no server round-trip *(validation logic present in `AdminSystemLocaleSettings.vue` `onSaveCurrency`/`onSaveLocale`; q-input-gated for driving)*
+- [ ] Change currency to `EUR`/locale `de-DE` → **MoneySettings budget input prefix** flips to `€` and **PriceEntry dialog price input prefix** flips to `€` (the money-gated input decorations — money features OFF in the verify seed, blocked on [[FU-592]])
+- [ ] Dora chat / Cook mode: hold-to-talk mic uses the household locale for speech recognition (device + mic — switch locale then hit the mic and confirm the recognised-text shape follows)
 
 ## Native Android build (P8-10) — origin P8-10
 - [ ] `web_app/src-capacitor/android/` opens cleanly in Android Studio (File → Open → point at the folder); Gradle sync completes with no errors
@@ -75,6 +61,7 @@ top-to-bottom.
 - [ ] iOS platform folder (`src-capacitor/ios/`) exists but is deliberately unbuilt on this Linux dev box — verify only that the folder is present + committed; the actual Xcode build is a future prompt
 
 ## StoresSettings logo upload — origin FU-335
+*(Dialog body won't paint in the hidden pane; the two-button Add↔Change `(camera)`/`(file)` + swatch + Remove structure is source-confirmed (shared `ImageSourcePicker`). Interactions below need a real OS file picker → owner/device-walk.)*
 - [ ] Settings → Stores → **Add store** → the dialog's logo row now shows two buttons (`Add logo (camera)` + `Add logo (file)`) instead of the old drag-drop file input; the `StoreLogo` swatch preview above remains
 - [ ] Pick a real PNG / JPEG / WebP from the file browser → preview updates immediately; typing a name + Save creates the store with the logo
 - [ ] Retry with an unsupported file (e.g. a PDF) → a red inline caption appears under the picker with a friendly message; no `q-notify` toast, no crash
@@ -195,19 +182,14 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Backup → restore round-trips `version_group_id`
 
 ### Cookbook Chunk 9 — cost + simple nutrition, opt-in — origin FU-116
-*(**Flags-off state verified live 2026-07-22** (`/api/health` `features.money=false`, `nutrition=false`): the recipe detail page shows **no kcal input**, **no cost card**, **no nutrition card**, and the cookbook overview has **no Kcal** in the Sort-by list or filters (filter set = Cuisine/Category/Time-of-day/Difficulty/Meals≥/Missing≤/#ingredients≤/Collection). The **flags-ON** items below are **blocked in this agent harness** and stay owner-walk — the surfaces gate on **both** the install flags (`AppSetting.money_enabled`/`nutrition_enabled`) **and** the per-user prefs (`User.money_features_enabled`/`nutrition_mode`), and **all are read once at cold mount** (health probe + authStore — FU-586/FU-580); flipping them mid-session via API doesn't re-render (stores stale), and a reload re-sticks the hidden-pane splash. The clean fix — boot the verify seed with money+nutrition already on — is tracked as **FU-592** (`DORA_SEED_MONEY_ON` knob); do it first, then this whole ON-state block becomes agent-verifiable. NB the **cost card** also needs a recipe with a *priced* ingredient (Veggie has 0/5 → `estimated_cost=null` → card correctly hidden). Cost math itself is backend-pinned, see the note below.)*
+*(Flags-ON UI verified live 2026-07-23 via FU-592 (cost card, kcal input, nutrition card, Kcal sort/filter, wire shape); residuals below are migration/theme/extra-matrix owner-walks.)*
 - [ ] `alembic upgrade head` applies `e5b9d2c8a4f3`; `verify_mappings()` passes
-- [ ] Turn on Nutrition (Simple, install layer on): kcal input appears next to servings; value persists across save/reload
-- [ ] Nutrition card appears in detail sidebar when a kcal value is set
-- [ ] Cookbook overview: Sort by → Kcal option; flip direction toggles label between "Highest kcal first" / "Lowest kcal first"; recipes with no kcal sink to the bottom
-- [ ] Kcal ≤ filter narrows the list; recipes with no kcal value remain visible
-- [ ] Turn on Money (install layer on): recipes with linked products + offers show "Estimated cost" card with $, help tooltip, "(N / M ingredients priced)" badge *(the server cost math is pinned — see note below; this checks the card + tooltip + badge render)*
+- [ ] Sort-by Kcal **direction toggle** flips the label between "Highest kcal first" / "Lowest kcal first" and recipes with no kcal sink to the bottom *(the Kcal sort option + Kcal≤ filter presence is verified above; this is the direction-label + ordering half)*
 
 *(Cost math pinned 2026-07-20 in `test_recipe_router.py` estimated_cost tests, exercising the real `StockItemProduct → Product → ProductOffer` join: `estimated_cost = Σ qty × (offer.price_now / size_value)` rounded to 2dp; **partial coverage** returns `estimated_cost_priced_count`/`estimated_cost_total_count` counting only priced ingredients; **no priced ingredient → `estimated_cost` is None** (card hidden client-side). Guards the FU-463 SQLite-uuid-binding regression. The card/badge render + the money/nutrition flag matrix below stay owner-walk.)*
 - [ ] Old freeform Nutrition expansion gone from detail page; an existing recipe with a `nutrition` text value still saves cleanly
 - [ ] Money OFF + Nutrition ON: cost hidden, kcal surfaces visible
 - [ ] Money ON + Nutrition OFF: cost visible, no kcal surfaces
-- [ ] Wire shape: changing kcal sends `{ kcal: <int> }` only; clearing sends `{ kcal: null }`
 - [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — both new cards read
 
 ### Cookbook Chunk 10 — multi-part recipes via named sections — origin FU-119
@@ -321,12 +303,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] **Settings → Admin → System → Meal reconciliation** (FU-317 Chunk 6): as a **non-admin** user, the page shows the "You don't have admin permissions" banner instead of the settings. (Admin half verified 2026-07-22: page renders with the *Assume past-day meals were cooked* toggle + *Go to reconcile* deep-link; flipping fires a success toast and persists across reload.)
 
 ### Budget-defense recipe swaps (Suggestions panel) — origin FU-451
-- [ ] With **money features on** and a **budget set**, build a meal-plan week that's projected over budget (priced recipes summing past the budget). A **Suggestions** panel renders below the week grid: "Over budget by $X", Est. week cost + Budget figures, "N swaps could bring it back to $Y".
-- [ ] Each candidate row reads "Recipe swap · <Day> <Slot>", shows the from→to recipe names, a reason chip (uses-stock / same-style / cooked-before), and a **−$saved** figure. **Preview** opens a dialog with the after-cost, the saving, and any missing ingredients.
-- [ ] **Apply swap** → the week grid updates to the swapped recipe, a "Swap applied · Undo" banner appears. **Undo** restores the original recipe.
-- [ ] The Dashboard **budget card** shows a "Save $X this week — N swaps ready · See suggestions →" bullet with the same total; clicking it lands on the planner.
+*(Full flow — panel → candidate rows → Preview dialog → Apply/Undo → dashboard bullet — verified live 2026-07-23 (money on via FU-592; needs the desktop planner layout); residuals below are contrivance edge-cases.)*
 - [ ] A meal already marked **cooked/consumed** never appears as a swap candidate.
-- [ ] **Money features off** → no Suggestions panel, no dashboard bullet at all.
+- [ ] **Money features off** → no Suggestions panel, no dashboard bullet at all. *(inverse verified 2026-07-22 flags-off: no money surfaces)*
 - [ ] Zero-state: contrive a week that's over budget but where no alternative is cheaper → panel shows "No swap saves you money this week" + an **Open shopping lists** link.
 - [ ] Apply a swap, then (in another tab / after editing the week) apply the *same stale* card → server returns a 409 "out of date" and the toast surfaces it; refreshing re-fetches.
 
@@ -350,7 +329,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] Drop targets accept dragged recipes; "Other" row appears for off-vocabulary historical entries. (Verified 2026-07-22: per-day slot rows render entries.)
 - [ ] Entry chip **view / cook** actions wire through. (Verified 2026-07-22: Today badge renders on the right day; past days carry `day-card--past` at opacity 0.6 with zero clickable slot rows; the chip popover's ± adjust and remove-at-zero work.)
 - [ ] Right column: ingredient-row **hover-highlights**, AddToList button, cook-by warning, "Full ingredient demand" expansion, generate-list + C-7 target picker. (Verified 2026-07-22: calendar, this-week-shopping count and the ingredient list with per-row list status + stock chips all render.)
-- [ ] Templates card: save / apply / apply-recurring / manage-templates flows
 - [ ] Sequential builder: the **generate-list** hand-off from the done screen. (Verified 2026-07-22: the dialog opens, lists recipes, and builds — 4 picks spread one-per-day across the upcoming days.)
 
 ### Meal Plans C-2 — full surface walk — origin FU-179
@@ -365,8 +343,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] **C-2.D calendar** — the **amber "short"** underline state specifically; month **arrows** page the window. (Verified 2026-07-22: 6 weeks render; planned / consumed / empty day states; today carries the 5px primary dot; focused week outlined; clicking a week jumps the carousel and back; month banner reads the focused month; `?monday=` resumes across a hard reload; the old dropdown is gone.)
 - [ ] **C-2.H sidebar** — the add-to-list button (multi-list opens picker); hover (desktop) outlines the using meals. (Verified 2026-07-22: each needed-ingredient row shows list status — e.g. "needs 15g · on This week" — with a stock chip, and membership loads on the planner.)
 - [ ] **C-2.I trays** — curated trays hide when empty; 21-day "haven't had" window spot-check. (Verified 2026-07-22: the four tray groups render, searching collapses to "Results (N)", and "Frequently planned" ranks by plan frequency.)
-- [ ] **C-2.F templates** — right column "Save this week as a template" (only with meals) → name + description; "Apply a template…" forks onto focused week (past skipped; toast shows added/skipped); confirm before replacing existing future meals; editing/deleting a template leaves a week forked from it untouched
-- [ ] **C-2.G sets + recurring + manage** — `/meal-plans/templates` (via Manage templates) lists templates (rename/clone/delete) + sets (new/edit-with-↑↓-reorder/delete); "Apply recurring…" applies a template or rotating set over ≤26 weeks; set rotates templates week-by-week; 26-week cap + "pick exactly one source" surface as toasts
+*(C-2.F templates save + apply verified live 2026-07-23: the templates dialog (Save-this-week / Apply-recurring / Manage-sets / empty-state), Save → "Saved this week as a template." + server-created + listed "N meals · Apply", and Apply → "Added N meals." fork onto the focused empty week. Below = the confirm/edit-safety + sets/recurring survivors.)*
+- [ ] **C-2.F templates** — confirm before replacing existing future meals; editing/deleting a template leaves a week forked from it untouched
+- [ ] **C-2.G sets + recurring** — `/meal-plans/templates` = the rotating-sets manager (**page renders**: "Rotating template sets" + New set; individual templates rename/delete inline in the dialog, not this page); sets new/edit-with-↑↓-reorder/delete; "Apply recurring…" applies a template or rotating set over ≤26 weeks; set rotates week-by-week; 26-week cap + "pick exactly one source" toasts
 - [ ] **C-2.J sequential builder** — **Cancel writes nothing**; the generate-list modal fires from the done screen; Print opens the week's print view. (Verified 2026-07-22: the 3-step flow runs pick → "What you'll need" → Build; the preview's buy/in-stock matches the sidebar; 4 picks built one-per-day across upcoming days, skipping past days; the done screen offers Generate shopping list / Print this week / Done. **Note:** there is no Email button at all — the checklist expected one "shown disabled". **Every built meal lands in Breakfast — see FU-596.**)
 
 ---
@@ -425,6 +404,7 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] **Store logo** (Stores Settings): still uses `q-file` (FU-335 carve-out; do not regress)
 
 ### Trim-to-budget banner + Deferred section — origin FU-448
+*(Banner + "everything safe" fallback + never-cut set verified live 2026-07-23 (money on via FU-592; server math pinned in `test_trim_to_budget.py`). The cuttable→Keep→Trim-to-fit→Deferred happy path below needs a list with safe-to-cut lines ("This week" has none) → owner-walk.)*
 - [ ] With `money_features_enabled=false` on the user, the banner never appears on any shopping list, regardless of projected total or budget setting
 - [ ] With money features on but `budget_amount` null, banner never appears (endpoint returns `budget_target=null`; SPA self-gates)
 - [ ] With money features on, budget_amount=$100/week, spend-so-far=$60: an auto-generated list projecting $80 shows the banner ("Projected $80 · budget remaining $40 — trim $40 to fit")
@@ -877,14 +857,6 @@ day in `dashboard-donut.spec.ts` — incl. a real pointer click on the SVG low
 arc — and deleted.)*
 - [ ] Empty state when nothing is planned for the next week → "Nothing planned for the next week" + "Plan a meal →" link to `/meal-plans` (needs a plan-free install — the seed always has a current-week plan)
 
-### Dashboard budget money-gate — origin FU-297
-*(Test-pinned 2026-07-19 in `web_app/e2e/dashboard-log-price.spec.ts` — which also
-codified the whole FU-300 Log-price quick action, section deleted: money OFF hides
-the budget card from the dashboard AND the Cards menu with zero
-`GET /api/budget/status` fired, and hides the Log price quick action; ON restores
-the button. The back-arrow-keeps-query behaviour call is FU-585.)*
-- [ ] Money features ON: budget card renders — both the "set a target" empty state and the live spend/progress body. **Blocked by FU-586:** on a cold dashboard load the money loaders race the /api/health flags probe and can silently skip, so the card may only appear after a second navigation — verify (and codify the request assertion) once FU-586 is fixed
-
 ### Dashboard Cards menu drag-and-drop reorder — origin FU-294
 *(Test-pinned 2026-07-19 in `web_app/e2e/dashboard-cards-reorder.spec.ts`,
 which also closed out the FU-292 `dashboard_layout` section — migration
@@ -914,6 +886,7 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] Push expiry via bell/dashboard/`/alerts`, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
 
 ### good_deal alerts + fake-markdown buy verdict — origin FU-450
+*(**FINDING [[FU-602]] (2026-07-23):** the `good_deal` alert + the "Good & great/Great only" deal-band control (first two bullets) appear **absent** — likely a deliberate descope (the deal-quality band feeds buy-verdict only), unconfirmed. The buy-verdict half IS live. Confirm intent via FU-602.)*
 - [ ] **Money features on.** For a product linked to a tracked stock item, add a *fresh* offer that's the lowest it's been (great band) → an alert appears in AlertsPage: "«item» — «brand product» is at its lowest price in months · $X · usually $Y", green tag icon, FYI tier (doesn't inflate the bell badge). Tapping it opens the stock item (where add-to-list lives).
 - [ ] **Threshold.** Settings → Notifications → **Deal alerts** shows a "Good & great" / "Great only" segmented control (only when money features are on). Set "Great only" → a merely-`good`-band product stops alerting; a `great` one still does.
 - [ ] **fake markdown.** For a product where the merchant claims a "special" (was > now) but you've logged paying *less* recently (price observations below the special) → the item's **Buy Verdict** card shows "Markdown looks inflated — you've paid less than this 'special' recently" and a price-driven `buy` reads as **wait**. An out-of-stock item stays **buy** (need wins) but still shows the inflated-markdown reason.
@@ -1525,16 +1498,11 @@ Every other platform: no visible effect; already worked.*
 - [ ] Password policy note under register mode still readable inside the card foot area
 
 ### P8-01 rename: no stray "Discount Dora" anywhere user-facing (2026-07-01)
-- [ ] Dashboard hero: mascot image alt text (inspect → "Dashy Dora"), any screen-reader announcement of the greeting says "Dashy Dora" nowhere in it (the label is only on the image alt now)
-- [ ] Help page → tab "About": header reads "Dashy Dora {version}"; the update-available banner (force it by mocking version if needed, or just eyeball it) reads "A newer version of Dashy Dora is available"
-- [ ] Assistant → ask "what's new" and "what version are you" — both replies begin "You're on Dashy Dora …" / "I'm Dashy Dora …" (never "Discount Dora")
-- [ ] Browser tab title on every route: `{page} | Dashy Dora`
+*(Verified 2026-07-23: zero "Discount Dora" in FE+BE source or DOM; tab titles/mascot alt/About/version-replies all "Dashy Dora". Only the PWA-install app-name below → device.)*
 - [ ] PWA install prompt (Chrome address bar → install app) shows "Dashy Dora" as the app name (from productName in package.json)
 
 ### D.O.R.A. bot rename + acronym easter egg (2026-07-01)
-- [ ] Chat header (open the burger-mascot chat): the bold label to the left of the AI/Basic chip reads **D.O.R.A.** (dots-and-all). Hover it → tooltip shows "Delicious Organised Restock Assistant"
-- [ ] Help page → "Meet D.O.R.A." button appears (the accent-coloured one with the smart-toy icon). Click it → lands on `/help/dora`
-- [ ] `/help/dora` header reads "Meet D.O.R.A." with the caption spelling the acronym (bolded initials) followed by "Sentient burger robot. Your in-app pantry buddy. Slightly chaotic."
+*(Verified 2026-07-23: D.O.R.A. chat-header label renders live; acronym tooltip + "Meet D.O.R.A." Help button + `/help/dora` copy source-confirmed. Only the Thanks-chip below → owner-walk.)*
 - [ ] Chat suggestion chips include "Thanks D.O.R.A." (not "Thanks DoraBot"). Clicking it replies with the sparkle/thanks flow the old chip triggered
 
 ### Nav-state policy: filters survive navigate-back, reset on reload (A8 §3, 2026-07-01)
@@ -1546,23 +1514,18 @@ Every other platform: no visible effect; already worked.*
 - [ ] Other list pages (MealPlans, ShoppingLists, Stocktake, admin settings) still reset on nav-back — they haven't been migrated yet (FU-354). That's expected, not a bug
 
 ### `/data/barcodes` redirects + shell shows two cards — origin FU-340 (2026-07-01)
-- [ ] Direct-navigate to `/data/barcodes` (via URL bar or a stale bookmark) → the router redirects you to `/settings/kitchen-setup/qr-labels`. No blank flash, no 404, no old page contents visible
-- [ ] `/data` shell now shows **two** nav cards: Backup & restore, Import. NO "Scanning & QR labels" card (regardless of the `scanning_enabled` flag state)
-- [ ] Direct-navigate to `/data/barcodes?action=scan` (the retired PWA shortcut target) → still redirects to the QR labels settings page (query string dropped is fine). No console error
+*(Verified 2026-07-23: `/data/barcodes` (+`?action=scan`) → qr-labels. The "two cards" shell is gone — FU-341 relocated `/data/*` under `/settings/admin/data` (`#/data` → backup). Only the tooltip below → owner-walk.)*
 - [ ] Stock item detail page: the "Print label" tooltip on a stock item's Dora-QR button no longer references "Data → Barcodes" — the copy explains barcodes register a Product, not a stock item
 
 ### `/data/export` page retired — origin FU-339 (2026-07-01)
-- [ ] Navigate to `/data` — the shell now shows **three** section cards: Backup & restore, Import, Scanning & QR labels (the last one gated on `scanning_enabled`). **No** "Export & print" card
-- [ ] Direct-navigate to `/data/export` in the URL bar → lands on the app's not-found route (or router error page — whichever the router does today for unknown paths). Does NOT render a blank data shell
+*(Verified 2026-07-23: `/data/export` + `/data` → `/settings/admin/data/backup` (FU-341 relocation; a clean redirect, not a 404 — retirement intent met). Print-still-works bullets below → owner-walk.)*
 - [ ] From a recipe detail: the Print action still opens the print-view in a new tab (unchanged)
 - [ ] From a shopping list detail: the toolbar menu still exposes "Print / Save as PDF" (unchanged)
 - [ ] From `/stock`: the toolbar export menu still exposes CSV + Print (unchanged)
 - [ ] From `/meal-plans`: the Print icon-button added in FU-338 still opens the print-view (unchanged). *(FU-304 closed 2026-07-07: `/meal-plans/board` retired; nothing to check on the old Board page.)*
 - [ ] No console errors on any of the above about a missing route or a missing component
 
-### Settings shell — independent sidebar/main scroll — origin worklog 2026-07-01
-- [ ] Open `/settings/account` on desktop (≥1024px width). The sidebar sits on the left; the main pane on the right. **The window itself does not scroll** — only the two panes do (no browser scrollbar on the outer page while inside settings)
-- [ ] Scroll the main pane deep into a long settings page (e.g. Preferences) — the sidebar stays exactly where it is (no drift, no sticky-header jitter)
+### Settings shell — independent sidebar/main scroll — origin worklog 2026-07-01- [ ] Scroll the main pane deep into a long settings page (e.g. Preferences) — the sidebar stays exactly where it is (no drift, no sticky-header jitter)
 - [ ] Scroll deep into the main pane, then click a sidebar nav item → **the window does NOT jump**. The new section loads with the main pane at the top; the sidebar's scroll position and the app header stay put
 - [ ] With a very long sidebar (admin users, expand Kitchen setup + Admin sub-groups) — the sidebar itself scrolls independently; the last nav item is reachable via that inner scroll
 - [ ] Resize the window to <1024px → the layout collapses to single-column with the top tab strip; window scroll returns for mobile. Resize back to ≥1024px → dual-scroll restored, no layout thrash
@@ -1581,9 +1544,7 @@ Every other platform: no visible effect; already worked.*
 - [ ] No regression to the slide animation when clicking between top-level buttons — the indicator still slides smoothly across with the flash colour during the transition
 
 ### Header peer buttons (Help + Account) with active ring — feature (2026-07-01)
-- [ ] Header right side shows three icons in order: AlertsBell · **Help & guides** (?) · **Profile avatar**. No dropdown chevron / menu anywhere
-- [ ] Click the Help icon → navigates to `/help` (no dropdown opens). Tooltip on hover reads "Help & guides"
-- [ ] Click the avatar → navigates to `/settings/account` (no dropdown opens). Tooltip on hover reads the current username
+*(Verified 2026-07-23: Help/avatar nav + no dropdown chevron (avatar tooltip is "Account settings"). Ring pulse/fade + theme bullets below → V-pack.)*
 - [ ] No Sign-out anywhere in the app toolbar (MainLayout) — Sign-out now lives in the Settings shell page header (see below), not on the Account page anymore
 - [ ] On `/help` or `/help/dora`: **Help icon pulses** in the slide-flash colour, then settles into the 3px accent ring. Avatar stays inactive (no ring)
 - [ ] On any `/settings/*` page: **avatar pulses + settles** to the accent ring. Help icon stays inactive
@@ -1602,20 +1563,17 @@ Every other platform: no visible effect; already worked.*
 - [ ] **Reduced-motion** (DevTools → Rendering → "Emulate CSS prefers-reduced-motion: reduce"): rings appear in the resting accent colour **without** the pulse beat on either button
 
 ### R-016 lazy hydration sweep — five pages — origin FU-221
-- [ ] Cold-load each of `/recipes`, `/recipes/<id>`, `/stock`, `/stock/<id>` — page renders normally (stock items + stock levels populate, no blank pickers / missing names)
-- [ ] In DevTools Network, navigate away from one of those pages and back without a full reload — no second `GET /stock-items` or `GET /stock-levels` fires (the store's `ensureLoadedAsync` short-circuits when already hydrated)
+*(Verified 2026-07-23 (XHR-instrumented nav sweep): stock-items + recipe list fire once, 0 on revisit. Post-mutation refresh bullet below → owner-walk.)*
 - [ ] Post-mutation refresh paths still work (e.g. create a stock item → list updates; rename one → name updates) — those still call the raw `getXAsync()` and must not have been broken by the sweep
 
-### R-016 extension to recipe / shoppingList / location / recipeVocab / mealSlot stores
-- [ ] Cold-load `/dashboard`, `/meal-plans`, `/shopping-lists/<id>`, `/cookbook/<id>/cook`, settings → Stock Locations — every page renders normally (recipes, lists, locations, vocab, meal slots all populate)
-- [ ] DevTools Network: navigate dashboard → meal-plans → dashboard → meal-plans without full reload — `GET /recipes`, `GET /shopping-lists`, `GET /locations`, `GET /cuisines`/`/categories`/`/dietary-tags`/`/tools`, `GET /meal-slots` fire **once** total, not on every revisit
-- [ ] Recipe create / edit / delete still refreshes the overview (post-mutation calls `recipeStore.getRecipesAsync()` directly — must keep working)
+### R-016 extension to recipe / shoppingList / location / recipeVocab / mealSlot stores- [ ] Recipe create / edit / delete still refreshes the overview (post-mutation calls `recipeStore.getRecipesAsync()` directly — must keep working)
 - [ ] Shopping-list mutations (add line, finish shopping, remove from list) still refresh summaries (post-mutation calls `shoppingListStore.refreshAsync()` — must keep working)
 - [ ] Location CRUD on settings → Stock Locations still refreshes the tree (post-mutation calls `locationStore.refreshAsync()` — must keep working)
 - [ ] QuickAddSheet open → shopping-list summaries appear; CreateStockItemDialog open → location picker has options
 - [ ] DoraChat: ask a recipe-aware question on a cold session — recipes + vocab populate before the answer; ask again on a warm session — no second fetch
 
 ### Drag-and-drop affordance parity (post `useDragDropList` refactor) — origin FU-326
+*(Class parity verified 2026-07-23: shopping lines + recipe ingredients both use `.dora-dnd-row`/`.dora-dnd-handle` (old per-surface classes gone). The drag interaction below → owner-walk.)*
 - [ ] **Shopping list lines** (`/shopping-lists/<id>`): on a list that's not done and not mid-shopping with no grouping active and bulk mode off, grab any row → source row dims to ~50% opacity, drop-target row lights with a primary-coloured outline ring. Drop reorders, server persists, refresh round-trips
 - [ ] **Shopping list — reorder gates**: list is `done` → no drag (cursor stays default; can't pick up). List `shopping` → no drag. Activate grouping → no drag. Enter bulk mode → no drag. Return to "active draft, no grouping, no bulk" → drag resumes
 - [ ] **Recipe steps** (recipe edit, Structured mode): grab a top-level step → source dims, drop-target ring lights; drop within sibling group reorders. Try to drop a top-step onto a sub-step (different parent) → no drop accepted (no ring on dragover). Top-steps still can't become sub-steps via drag (intentional — that's the separate sub-step affordance)
@@ -1631,15 +1589,13 @@ Every other platform: no visible effect; already worked.*
 - [ ] **Dev visibility** — DevTools: every failed API call (400/401/403/404/422/5xx) shows `[api] METHOD path → status code (correlation-id)` with structured `details` blob
 - [ ] **Unknown Pydantic code** — induce one (custom validator raising non-standard error) → toast reads "This value isn't valid."; DevTools shows `raw` + `code` so a dev can add it to `PYDANTIC_FRIENDLY`
 
-### `formatQuantity` rollout — origin FU-321
-- [ ] Meal-plan "This week's shopping" — `unit="g"` reads `"needs 250g · …"`; `unit="tbsp"` reads `"needs 1 tbsp · …"`; null unit reads just the quantity
+### `formatQuantity` rollout — origin FU-321- [ ] Meal-plan "This week's shopping" — `unit="g"` reads `"needs 250g · …"`; `unit="tbsp"` reads `"needs 1 tbsp · …"`; null unit reads just the quantity
 - [ ] Sequential Builder Dialog preview list — same three cases; rounded number is what `formatQuantity` receives
 - [ ] Substitute ratio caption on stock-item detail: `1 tbsp → 3 tsp` reads exactly that (both halves spaced); direction "this → that"
 - [ ] Substitute ratio caption in cook-mode swap picker: same ratio reads identically. `250 g → 1 cup` reads `"250g → 1 cup"` (asymmetric — mass tight, volume spaced)
 - [ ] Recipe print view (window.open from RecipeDetailPage export): `2 tbsp olive oil` → `"olive oil — 2 tbsp"`; `250 g flour` → `"flour — 250g"`; `1 onion` (no unit) → `"onion — 1"`; `salt` (both null) → just the name, no em-dash
 
-### Unsaved-changes guard rollout — origin FU-322
-- [ ] **AccountSettings** — edit `usernameDraft`, click a sidebar link → confirm dialog. Cancel → still on page. Confirm → nav completes. Repeat for `emailDraft`. Revert draft → nav with no prompt
+### Unsaved-changes guard rollout — origin FU-322- [ ] **AccountSettings** — edit `usernameDraft`, click a sidebar link → confirm dialog. Cancel → still on page. Confirm → nav completes. Repeat for `emailDraft`. Revert draft → nav with no prompt
 - [ ] **AccountSettings exclusions** — pick a new profile picture (saves immediately) then nav → no prompt. Type a new-password value (don't submit) then nav → no prompt
 - [ ] **AdminSystemAssistantSettings** — flip `enabledDraft`, edit `baseUrlDraft`, edit `modelDraft` in any combination, then nav → prompt. Save → next nav passes through clean
 - [ ] **beforeunload** — dirty page refresh → native "Leave site?" prompt. Clean page refresh → no prompt
@@ -1656,12 +1612,11 @@ Every other platform: no visible effect; already worked.*
 - [ ] Server: `GET /api/recipes?cookable=true|false`, `?max_missing=1`, `/api/dashboard/summary`, `GET /api/shopping-lists/<id>` (check `totals` block) against seeded data
 
 ### Cookbook C-cross Chunk 1 — feature-flag panel — origin FU-110
+*(Verified 2026-07-23: Features panel renders 7 toggles (checklist's "5" is stale) with captions, every state matches `/api/health`. Persistence/non-admin/migration/theme bullets below → owner-walk.)*
 - [ ] `alembic upgrade head` applies `a3b8e2f4c1d7` on SQLite + Postgres; `verify_mappings()` passes for reshaped `AppSetting`
-- [ ] As admin: Settings → System → **Features** panel — five toggles (Meal planning ON, Money / Nutrition / Companion ingestion / Weekly deals emailer all OFF); captions read
 - [ ] Each toggle on → toast + persists across reload
 - [ ] Each toggle off → toast + persists
 - [ ] As non-admin: panel renders "no admin permissions" banner; toggles not visible
-- [ ] `curl /api/health` JSON carries `features.meal_planning` / `features.money` / `features.nutrition` / `features.companion_ingestion` / `features.deals_email` alongside pre-existing `auth` / `audit` / `scanning` / `multi_user` / `email` / `assistant`; values match panel
 - [ ] Composable freshness: `flagsLoaded.value` is `true`, computeds match panel; flipping in tab 1 only refreshes tab 1's cache (per-session, documented)
 - [ ] Migration safety: install using meal planning sees `meal_planning_enabled=True` after migration
 - [ ] Save error path: disable network / PATCH 500-out → toggle reverts + negative toast

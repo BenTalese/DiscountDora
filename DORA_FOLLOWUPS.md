@@ -52,6 +52,64 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-602 — FU-450's `good_deal` alert kind + "Good & great / Great only" deal-band settings control appear absent from the app (deal-quality band feeds buy-verdict only)
+- **Raised:** 2026-07-23 (money-sweep verify — FU-450, with money features ON via FU-592)
+- **Type:** finding (feature/checklist drift — confirm intended)
+- **What:** The FU-450 checklist (`DORA_VERIFY.md` "good_deal alerts + fake-markdown
+  buy verdict") describes (item 902) a **`good_deal` alert** ("«item» is at its
+  lowest price in months…", green tag, FYI tier) and (item 903) a **Settings →
+  Notifications "Deal alerts" segmented control "Good & great / Great only"**. With
+  money features ON (FU-592 seed), **neither exists in the running app**:
+  - `good_deal` is **not** in the SPA `AlertKind` union (`models/alert.ts` — no
+    match) and **not** in the live 54-alert feed (kinds present: essential_low,
+    expired, expiring_soon, out_of_stock, stocktake_overdue, low_stock,
+    no_planned_meals).
+  - No "Good & great"/"Great only" control anywhere in `web_app/src` (grep clean);
+    the Notifications page has only Weekly-deals-email / Alerts-email-digest / Push.
+  - Backend `deals/deal_quality.py` **does** compute a `poor/fair/good/great` band,
+    but its docstring says the band is "an internal enum, never [surfaced]", and
+    **no `features/alerts` code references it** — it feeds **buy-verdict** only.
+- **Most likely a deliberate descope** (band → buy-verdict, no separate naggy
+  good_deal alert — consistent with the R-029 hide-don't-nag / anti-creep line),
+  but it isn't recorded anywhere, so the FU-450 checklist reads as unverifiable.
+  **The buy-verdict half (item 904) IS live** — BUY badges render on shopping-list
+  lines with money on, and `deal_quality` drives them.
+- **Recommended resolution:** confirm intent — if descoped, mark FU-450 items
+  902/903/905 (alert + settings halves) retired in DORA_VERIFY and note the band is
+  buy-verdict-only; if not, the `good_deal` kind was dropped from the SPA union (same
+  failure family as FU-357). Opportunistic / product-owner call.
+
+## [OPEN] FU-601 — AssistantSettings save-failure toasts are grammatically broken ("Could not save dora helper shown..")
+- **Raised:** 2026-07-23 (lean-verify Batch 1 — FU-360.6 Hide-Dora walk)
+- **Type:** finding (copy defect — D-rule copy voice)
+- **What:** `AssistantSettings.vue`'s `update(label, run)` helper (lines ~404-416)
+  uses the **same `label`** for both the success toast (`notifySuccess(label)`)
+  and the error toast (`notifyError(\`Could not save ${label.toLowerCase()}.\`)`).
+  Every caller passes a success-phrased *sentence* as the label — "Dora helper
+  shown.", "AI mode turned on.", etc. — so any save failure renders a broken
+  string: **"Could not save dora helper shown.."** (double period + a sentence
+  used as a noun; "AI mode turned on." → "Could not save ai mode turned on..").
+- **Observed live:** hit accidentally when a PATCH failed transiently (a race from
+  fast reload+navigate+click); the toast read *"Could not save dora helper shown..
+  Can't reach the server… · ref: 9afdfe0b"*. On a clean retry the save succeeds,
+  so the underlying toggle is fine — this is purely the error-copy path.
+- **Scope — systemic, SIX settings pages.** The identical `update(label, run)`
+  helper + `notifyError(\`Could not save ${label.toLowerCase()}.\`)` line is copied
+  verbatim into `AssistantSettings.vue:411`, `PreferencesSettings.vue:391`,
+  `NutritionSettings.vue:95`, `MoneySettings.vue:147`,
+  `NotificationsSettings.vue:246`, `VoiceSettings.vue:151`. Every save-failure on
+  any of them produces a broken string (e.g. "Could not save text size updated..",
+  "Could not save ai mode turned on.."). Two problems in one: (a) the copy bug, and
+  (b) the helper itself is duplicated six times — an **R-003 single-source-of-truth
+  smell**; the clean fix extracts one shared `useSettingsSave()` (or similar) with a
+  correct error path, killing both at once.
+- **Recommended fix:** give the error path its own noun or a generic message —
+  e.g. `notifyError('Could not save your change.', err)` (the `toastCaption(err)`
+  already carries the specifics), or pass callers a separate `noun` label. Low
+  risk; error-path only, so **opportunistic** (not blocking).
+- **Recommended resolution:** opportunistic (bundle with the next AssistantSettings
+  or copy-voice pass).
+
 ## [OPEN] FU-599 — Endpoints with an explicit `audit_emit` also get an auto-audit row, so security-relevant actions are logged twice under two different names
 - **Raised:** 2026-07-22 (lean-verify big round #4 — Batch 13, FU-197 audit check)
 - **Type:** finding (audit integrity)
@@ -255,40 +313,6 @@ long session summary. Distinct from the other logs:
   feed?), not an obvious defect — the cap is working as written.
 - **Recommended resolution:** opportunistic — fold into the next suggestions /
   dashboard-feed pass.
-
-## [OPEN] FU-592 — Add a `DORA_SEED_MONEY_ON` verify-seed knob (boots money + nutrition on) to unblock agent verification of the money/nutrition/buy-verdict/budget surfaces
-- **Raised:** 2026-07-22 (lean-verify big round — Cookbook Chunk 9)
-- **Type:** deferred job (verify tooling)
-- **What:** The money/nutrition-gated UI (Chunk 9 cost card + kcal input/nutrition
-  card + Kcal sort/filter; also buy-verdict, budget) can't be agent-verified in
-  the running app because the surfaces gate on **both** the install-layer flags
-  (`AppSetting.money_enabled`/`nutrition_enabled`) **and** the per-user prefs
-  (`User.money_features_enabled` / `nutrition_mode`), and **all of these are read
-  once at cold mount** (health probe + authStore currentUser — see [[FU-586]] /
-  FU-580). Flipping them mid-session via API doesn't re-render (stores are stale),
-  and the only clean cold-mount path in the agent pane is the login-page rAF-shim
-  recipe, whose fresh mount reads whatever the DB holds. So the fix is to let the
-  **seed boot with these already on**. Implementation sketch (env→param pattern,
-  mirrors `DORA_SEED_BULK_ITEMS`): add a `money_on: bool = False` param to
-  `seed_dev_data()` (`dora_api/persistence/seed.py`); read `DORA_SEED_MONEY_ON` in
-  the startup caller and pass it through; when true, set the dev `User(...)`
-  (capture it in a var) `money_features_enabled=True` + `nutrition_mode="simple"`,
-  and `get_or_create_app_setting(repo)` (helper at
-  `dora_api/features/app_settings/access.py`) with `money_enabled=True` +
-  `nutrition_enabled=True`, saving before finish. Add a `dora-verify-backend-money`
-  variant to `.claude/launch.json` (same env as `dora-verify-backend` + this knob).
-  For the **cost card** specifically, also confirm at least one seed recipe has a
-  priced ingredient (linked product with a `ProductOffer`) — Veggie Stir Fry has
-  0/5 priced, so `estimated_cost=null` and the card correctly hides; the seed has
-  priced products, so pick/verify a recipe whose ingredients link to them, or add
-  one under the same knob.
-- **Why deferred:** it's product-seed + startup code spanning two files + a launch
-  variant + a preview restart + the actual verification — too much to do correctly
-  at the tail of a long turn without risking the shared dev seed. Env-gated,
-  defaults off → zero blast radius on existing tests/dev, so it's a safe, clean,
-  self-contained unit for a fresh session.
-- **Recommended resolution:** when next verifying the money/nutrition/buy-verdict/
-  budget surfaces (do this knob first, then the verification in the same session).
 
 ## [OPEN] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
 - **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297)

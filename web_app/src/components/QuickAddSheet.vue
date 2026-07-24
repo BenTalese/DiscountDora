@@ -313,8 +313,16 @@
         );
         await Promise.all(loads);
 
+        // FU-603 — final fallback prefers a planning *draft* over an
+        // in-progress ('shopping') list, so a pantry cart-add doesn't default
+        // into the shop you're mid-way through. An explicit preset or the
+        // remembered per-tab target (quickAddTargetListId) still win first.
+        const fallbackListId =
+            summaries.value.find((s) => s.status === 'draft')?.shopping_list_id
+            ?? listOptions.value[0]?.value
+            ?? null;
         targetListId.value =
-            presetListId.value ?? quickAddTargetListId.value ?? listOptions.value[0]?.value ?? null;
+            presetListId.value ?? quickAddTargetListId.value ?? fallbackListId;
 
         if (presetStockItemId.value) {
             const preset = stockItems.value.find(

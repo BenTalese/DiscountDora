@@ -167,18 +167,16 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { usePushSubscription } from 'src/composables/usePushSubscription';
     import { computed, ref, watch } from 'vue';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
-    const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
@@ -215,7 +213,8 @@
     );
     const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
 
-    const saving = ref(false);
+    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
+    const { saving, notifySuccess, notifyError, update } = useSettingsSave();
 
     watch(currentUser, (u) => {
         if (!u) return;
@@ -223,32 +222,6 @@
         alertsEmailCadenceDraft.value = u.alerts_email_cadence === 'weekly' ? 'weekly' : 'daily';
         alertsEmailDayDraft.value = u.alerts_email_day ?? 0;
     });
-
-    function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
-    }
-    function notifyError(message: string, err?: unknown) {
-        $q.notify({
-            type: 'negative',
-            position: 'bottom-right',
-            message,
-            caption: toastCaption(err)
-        });
-    }
-
-    async function update<T>(label: string, run: () => Promise<T>): Promise<T | null> {
-        saving.value = true;
-        try {
-            const result = await run();
-            notifySuccess(label);
-            return result;
-        } catch (err) {
-            notifyError(`Could not save ${label.toLowerCase()}.`, err);
-            return null;
-        } finally {
-            saving.value = false;
-        }
-    }
 
     async function onSendDealsOnDayChange(value: number) {
         const previous = currentUser.value?.send_deals_on_day ?? 0;

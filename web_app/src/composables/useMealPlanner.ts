@@ -91,6 +91,15 @@ export function useMealPlanner() {
     function isPastDay(iso: string): boolean {
         return iso < currentDayIso.value;
     }
+    // R-003 — the single predicate for "entries the client may resend on a
+    // plan PATCH": forward-looking AND not yet consumed. Past + consumed
+    // entries are immutable history the server preserves on its own (FU-595);
+    // the client must NOT resend a past entry — doing so trips the server's
+    // past-date guard and used to freeze the whole week. Every command builder
+    // below (add / adjust servings / remove) filters through this.
+    function isForwardEditable(entry: MealPlanEntry): boolean {
+        return !entry.consumed_at && !isPastDay(toIso(entry.scheduled_for));
+    }
 
     // ── Focused week (the carousel's source of truth) ──────────────────────
     const focusedMonday = ref<string>(mondayOf(localTodayIso()));
@@ -225,7 +234,7 @@ export function useMealPlanner() {
     // ── Entry mutations ────────────────────────────────────────────────────
     function planEntryCommands(plan: MealPlan): MealPlanEntryCommand[] {
         return plan.entries
-            .filter((e) => !e.consumed_at)
+            .filter(isForwardEditable)
             .map((e) => ({
                 recipe_id: e.recipe_id,
                 scheduled_for: toIso(e.scheduled_for),
@@ -242,16 +251,39 @@ export function useMealPlanner() {
         ]);
     }
 
-    async function persistEntries(planId: string, entries: MealPlanEntryCommand[]) {
+    // FU-595(b) — every plan mutation funnels through here or `addEntry`'s
+    // create branch, and both toast on failure rather than letting a rejected
+    // request escape to the page ErrorBoundary (a stray 400 used to blank the
+    // whole planner). Returns whether the write succeeded so callers can gate
+    // their success toast.
+    function notifyPlanError(err: unknown) {
+        $q.notify({
+            type: 'negative',
+            position: 'bottom-right',
+            message: 'Could not update the plan.',
+            caption: toastCaption(err),
+        });
+    }
+
+    async function persistEntries(
+        planId: string,
+        entries: MealPlanEntryCommand[],
+    ): Promise<boolean> {
         // The planner's edits are explicit, so set the clear flag when an
         // action empties the future-entries list. The backend treats an
         // unflagged [] as a probable bug and refuses.
-        await mealPlanStore.updateMealPlanAsync({
-            meal_plan_id: planId,
-            entries,
-            ...(entries.length === 0 ? { confirm_clear_entries: true } : {}),
-        });
-        await refreshAfterMutation();
+        try {
+            await mealPlanStore.updateMealPlanAsync({
+                meal_plan_id: planId,
+                entries,
+                ...(entries.length === 0 ? { confirm_clear_entries: true } : {}),
+            });
+            await refreshAfterMutation();
+            return true;
+        } catch (err) {
+            notifyPlanError(err);
+            return false;
+        }
     }
 
     async function addEntry(dayIso: string, slot: string, recipeId: string) {
@@ -259,11 +291,16 @@ export function useMealPlanner() {
         // Bridge until C-2.E: the first add to an unplanned week implicitly
         // creates the plan (auto-named) carrying that entry.
         if (!focusedPlan.value) {
-            await mealPlanStore.createMealPlanAsync({
-                start_date: focusedMonday.value,
-                entries: [{ recipe_id: recipeId, scheduled_for: dayIso, servings: 1, slot }],
-            });
-            await refreshAfterMutation();
+            try {
+                await mealPlanStore.createMealPlanAsync({
+                    start_date: focusedMonday.value,
+                    entries: [{ recipe_id: recipeId, scheduled_for: dayIso, servings: 1, slot }],
+                });
+                await refreshAfterMutation();
+            } catch (err) {
+                notifyPlanError(err);
+                return;
+            }
             $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
             return;
         }
@@ -277,8 +314,9 @@ export function useMealPlanner() {
         } else {
             cmds.push({ recipe_id: recipeId, scheduled_for: dayIso, servings: 1, slot });
         }
-        await persistEntries(plan.meal_plan_id, cmds);
-        $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
+        if (await persistEntries(plan.meal_plan_id, cmds)) {
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
+        }
     }
 
     async function adjustEntryServings(entry: MealPlanEntry, delta: number) {
@@ -286,7 +324,7 @@ export function useMealPlanner() {
         if (!plan) return;
         const next = entry.servings + delta;
         const cmds = plan.entries
-            .filter((e) => !e.consumed_at)
+            .filter(isForwardEditable)
             .filter((e) => !(e.meal_plan_entry_id === entry.meal_plan_entry_id && next < 1))
             .map((e) => ({
                 recipe_id: e.recipe_id,
@@ -301,7 +339,7 @@ export function useMealPlanner() {
         const plan = focusedPlan.value;
         if (!plan) return;
         const remaining = plan.entries
-            .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id && !e.consumed_at)
+            .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id && isForwardEditable(e))
             .map((e) => ({
                 recipe_id: e.recipe_id,
                 scheduled_for: toIso(e.scheduled_for),
@@ -668,13 +706,19 @@ export function useMealPlanner() {
             slot: slots[Math.floor(i / futureDays.length) % slots.length]!,
         }));
         if (!focusedPlan.value) {
-            await mealPlanStore.createMealPlanAsync({ start_date: focusedMonday.value, entries: newCmds });
-            await refreshAfterMutation();
+            try {
+                await mealPlanStore.createMealPlanAsync({ start_date: focusedMonday.value, entries: newCmds });
+                await refreshAfterMutation();
+            } catch (err) {
+                notifyPlanError(err);
+                throw err; // let the builder stay on its Build step, not advance to Done
+            }
         } else {
-            await persistEntries(
+            const ok = await persistEntries(
                 focusedPlan.value.meal_plan_id,
                 [...planEntryCommands(focusedPlan.value), ...newCmds],
             );
+            if (!ok) throw new Error('meal-plan build failed'); // toast already shown by persistEntries
         }
         // §9-B — build is decoupled from generate-list. The builder UI exposes
         // an explicit "Generate shopping list" button on its done step.

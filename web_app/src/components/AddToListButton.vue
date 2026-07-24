@@ -244,16 +244,18 @@
         }
     });
     const tooltip = computed(() => {
+        // FU-603 — the picker targets any active (non-done) list, not just
+        // drafts, so the copy says "a list", not "a draft list".
         switch (cartState.value) {
             case 'on_target':
-                return 'On your draft list — click to remove';
+                return 'On your list — click to remove';
             case 'on_other':
-                return 'On a draft list — click to remove';
+                return 'On another list — click to remove';
             case 'on_multiple':
                 return 'On multiple lists — click to manage';
             case 'none':
             default:
-                return 'Add to a draft list';
+                return 'Add to a list';
         }
     });
     const toolbarLabel = computed(() => {

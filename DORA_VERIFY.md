@@ -299,6 +299,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ## Meal plans
 
+### Past-unconsumed entry no longer freezes the week (FU-595 fix) — origin FU-595
+- [ ] With **auto-drain OFF** (or after Reconcile → "Didn't cook" on a past day), add a meal to the current week: it succeeds (no "cannot be scheduled in the past" toast), the planner does **not** blank to "Something went wrong", and the past entry stays visible as history. *(Contract pinned by an e2e test; this is optional eyes-on confirmation.)*
+
 ### Meal reconcile — page + dashboard chip + header nudge — origin FU-317 Chunk 5 (2026-07-09)
 - [ ] **Settings → Admin → System → Meal reconciliation** (FU-317 Chunk 6): as a **non-admin** user, the page shows the "You don't have admin permissions" banner instead of the settings. (Admin half verified 2026-07-22: page renders with the *Assume past-day meals were cooked* toggle + *Go to reconcile* deep-link; flipping fires a success toast and persists across reload.)
 
@@ -358,10 +361,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] The swap affordance reads as distinct from the "store offers" picker on the same line (no "two Substitute labels" confusion).
 - [ ] Product-only line (no stock item) → swap disabled.
 
-### Quick-add toast + "always ask" pref — origin FU-316
-*(Resolver + toast/picker/always-ask/session wiring verified 2026-07-24; only the on-screen picker/toast eyeball remains.)*
-- [ ] With 2+ drafts, quick-add from a stock row → "Which list?" picker → pick → toast names the list → 2nd quick-add same tab skips the picker; with "Always ask" on, every add re-prompts
-
 ### Receipt-photo attachments — origin FU-334 + R-024 follow-on
 *(Section-gating/empty-state/desktop "Choose receipt" verified 2026-07-24; CRUD+cascade backend-pinned. Below = device file/camera.)*
 - [ ] Mobile: *Take photo* → rear camera; capture → thumb in the strip
@@ -402,6 +401,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ### Cart Button Chunk 2 — combined modal for 2+ products — origin FU-130
 - [ ] Bulk variant — resolves target once + one summary toast regardless of per-item counts
+
+### Cart tooltip + default-list fixes (FU-603) — origin FU-603
+- [ ] With both a planning **draft** and an in-progress **shop** open, cart an item from Stock/My-Products: the picker defaults to the *draft*, not the in-progress shop (an explicit/remembered target still wins). Tooltips read "Add to a list" / "On your list — click to remove" (no longer "draft list").
 
 ### Cart Button Chunk 3 — standalone product lines + rules 1–3 — origin FU-132
 *(Rules 1–3 pinned 2026-07-20 in `tests/e2e/dora_api/test_shopping_list_product_lines.py`: **Rule 1** a `product_id`-only POST creates a line (product_id + null stock_item_id); a no-anchor body → **422** business-rule violation "A line needs at least one of stock_item_id or product_id" [the checklist guessed 400 — 422 is correct for a domain rule; the DB CHECK is the backstop]. **Rule 2** linking the product to a stock item converts the orphan in place (gains stock_item_id, keeps product_id) OR folds into an existing stock-item line + drops the orphan. **Rule 3** deleting the stock-item line (by line-id) cascade-removes the nested product line. The migration, the by-stock-item remove variant, and the TS-compile check below stay owner-walk.)*
@@ -493,13 +495,9 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Stock
 
 ### Add-a-stock-item dialog — stock group + Essential + name trim (Codex review, 2026-07-17; expiry→group swap 2026-07-22)
-*(Backend fully unit-tested — 6 green incl. over-long/whitespace/trim-dedup; these are the visual/UX confirmations. Dialog opens from Stock Overview "Add".)*
-- [ ] The Add dialog shows, under Location: a **Stock group (optional)** picker listing the configured groups (clearable), and an **Essential** toggle with an info tooltip. There is **no Expiry field** — expiry is per-batch and lives on the detail page only
-- [ ] Add an item with a group picked + Essential on → open the new item's detail page: the stock group and the Essential toggle both reflect what you chose
-- [ ] Add a group in Settings → Stock groups, then reopen the Add dialog → the new group appears in the picker (options refetch on each open)
-- [ ] Help → Stock → "Add a stock item" reads "click **New item** … a location, stock group, or the Essential flag. Expiry is set on the item itself once it's added." — button name and field list both match the real dialog
-- [ ] Type a name with leading/trailing spaces (e.g. "  Milk  ") → it's stored trimmed ("Milk"); a name that's only spaces is rejected by the form ("Name is required")
-- [ ] Adding "  Milk  " when a "Milk" already exists shows the "already exists" error (trim + case-insensitive dedup), not a second row
+*(Backend unit-tested; fields/no-Expiry + whitespace-reject + trim/case dedup verified live 2026-07-24 (New item → Name/Level/Location/Stock group/Essential, no Expiry; "   "→"Name is required"; "  barilla pasta  "→"already exists"). Residuals below.)*
+- [ ] Add an item with a group picked + Essential on → new item's detail reflects both
+- [ ] Add a group in Settings → Stock groups, then reopen the Add dialog → the new group appears (options refetch on open)
 
 ### Action-first scan mode on Stock Overview — origin FU-378
 *(Needs the install-wide `scanning_enabled` flag ON — Settings → Admin, or `DORA_*`/AppSetting — and a device with a camera. Manual-entry box in the overlay works as a camera stand-in.)*
@@ -684,9 +682,7 @@ with the route.)*
 - [ ] **C-1b.3 products-OFF half (needs a productless install):** with zero Product
   rows the Products tab disappears entirely and a stranded `?section=products` URL
   falls back to Overview — not drivable against the seeded e2e DB
-- [ ] **History extras not yet pinned:** level changes label as "Restocked → X" /
-  "Dropped to X", the synthetic "Opened" entry renders while an item is open, and an
-  empty item shows "Nothing logged for this item yet…"
+- [ ] **History extras:** level changes label "Restocked → X" / "Dropped to X"; empty item shows "Nothing logged for this item yet…" (the synthetic "Opened" entry + the Set/Pushed-expiry trail render verified 2026-07-24)
 
 ### Stock Item Detail + Stock Overview feedback pass — origin FU-222
 - [ ] Stock Overview row — image / level / name have visible breathing room; right cluster (expiry, open, cart) larger; recipe-count chip gone; hover no longer "lifts" — surface tints + border picks up accent; first row's outline doesn't clip under page chrome
@@ -704,12 +700,8 @@ console-clean incl. the dropped-reference errors bullet) + `useStockFilters.spec
 (footer counts reflect the filtered set). The old footer-order bullet listed
 "Flagged / Auto-add" — stale: Auto-add's absence is pinned by
 `auto-add-on-low.spec.ts` and the label is now "Essential".)*
-- [ ] Visual walk: toolbar order New item · (Scan) · Stocktake · Bulk select ·
-  Export · spacer · Search, with Bulk select flipping to "Cancel"; Clear sits LEFT
-  of Filters and appears/disappears without the Filters button shifting; footer
-  count order Shown · Needs attention · Stocked · Low · Out · Essential · On a list
-- [ ] Mobile (< md): filterable pages start with the panel hidden regardless of the
-  desktop-saved state; in-session open works, reload returns to hidden
+- [ ] Clear sits LEFT of Filters and appears/disappears (filter active) without shifting the Filters button (toolbar order · Bulk-select→Cancel · footer order Shown·Needs-attention·Stocked·Low·Out·Essential·On-a-list verified 2026-07-24)
+- [ ] Mobile (< md): filterable pages start with the panel hidden regardless of desktop-saved state; in-session open works, reload returns to hidden
 
 ### Stock Overview Chunk 4 — expiry control — origin FU-123
 *(Partially test-pinned 2026-07-18: the **+X push semantics** — `max(today, current
@@ -718,10 +710,7 @@ falls back to today+N, unparseable degrades safely, toast + failure path — in 
 `test/unit/useStockItemActionsPushExpiry.spec.ts` (8 tests). The
 menu-vs-date-picker split (expiry set → menu; unset → picker) and the Clear-null
 round-trip are exercised by `bulk-waste.spec.ts` test 6 + the FU-507 dialog specs.)*
-- [ ] No expiry set → date picker (popup desktop / dialog mobile); picking a future
-  date PATCHes and the row reflects it; past dates blocked by `dateOptionsFuture`
-- [ ] Expiry-set menu shows exactly **+1 day · +7 days · +14 days · Clear** (no +30);
-  tone outline flips amber `<7d` / red past; right-cluster unaffected
+- [ ] No-expiry date picker: picking a future date PATCHes + row reflects it; past dates blocked by `dateOptionsFuture` (picker opens verified 2026-07-24; menu = +1/+7/+14/Clear, no +30, verified)
 - [ ] Detail-panel peek staleness: with a peek open, drive the row's expiry menu /
   open-toggle / flag-toggle / level dropdown → the peek's matching field updates
   without closing/reopening (same full-screen on mobile via a different surface)
@@ -829,6 +818,12 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 
 ## Alerts & notifications
 
+### Price-watch panel hides on per-user money opt-out (FU-604 fix) — origin FU-604
+- [ ] Install money flag ON, then set your own account's money features **off** (Settings): the Alerts hub's **Price watch** (armed subscriptions) panel disappears — previously it stayed until the whole install disabled money. Turning your money features back on restores it.
+
+### Alerts page refetches on open (FU-597 fix) — origin FU-597
+- [ ] Resolve an alert from elsewhere (plan next week's meals to clear "no meals planned", or restock a low item), then open **Alerts**: the resolved row and its count are gone **without** hitting Refresh (the page used to render a stale feed until manually refreshed).
+
 ### Alerts C-9.1 — spine — remaining browser smoke — origin FU-183
 - [ ] **C-9.2:** the admin **Expiring-soon window** field's own save path (type a value + Save in the UI). (Verified 2026-07-22: the setting round-trips server-side 7→2→7 and reshapes the feed — expiring_soon 13→2, badge follows; **disabling a kind** removes its 11 rows from the list; **demote/promote** moved `expired` between tiers with exact accounting — actionable 34↔23, FYI 18↔29, badge tracking. UI-typing half is blocked by the Quasar synthetic-input limitation, not by a defect.)
 - [ ] **C-9.3:** dark-mode sweep of the hub. (Verified 2026-07-22: hub renders — summary tiles, tiered active list, Manage panel, collapsible History; bell is a slim peek with top rows + bulk-add + "Open Alerts"; shared `AlertRow` actions work from both; History lists dismiss/snooze/read with stock name resolved — **found + fixed a copy bug there: `out_of_stock` rendered "out of_stock"**. **Bell/page DO diverge — see [[FU-597]]:** the page only refetches when the store is empty, so it can show a stale feed all session.)
@@ -839,12 +834,10 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 - [ ] From the **Dashboard's dashboard-card push-expiry action** (i.e. the push-expiry rendered on the Dashboard alerts card, not just the bell) → toast now reads **"Done."** (this used to be silent — fixed 2026-07-10). Confirm the toast fires on Dashboard, Bell peek, and `/alerts` page — all three surfaces should behave identically.
 - [ ] Push expiry via bell/dashboard/`/alerts`, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
 
-### good_deal alerts + fake-markdown buy verdict — origin FU-450
-*(**FINDING [[FU-602]] (2026-07-23):** the `good_deal` alert + the "Good & great/Great only" deal-band control (first two bullets) appear **absent** — likely a deliberate descope (the deal-quality band feeds buy-verdict only), unconfirmed. The buy-verdict half IS live. Confirm intent via FU-602.)*
-- [ ] **Money features on.** For a product linked to a tracked stock item, add a *fresh* offer that's the lowest it's been (great band) → an alert appears in AlertsPage: "«item» — «brand product» is at its lowest price in months · $X · usually $Y", green tag icon, FYI tier (doesn't inflate the bell badge). Tapping it opens the stock item (where add-to-list lives).
-- [ ] **Threshold.** Settings → Notifications → **Deal alerts** shows a "Good & great" / "Great only" segmented control (only when money features are on). Set "Great only" → a merely-`good`-band product stops alerting; a `great` one still does.
+### fake-markdown buy verdict — origin FU-450
+*(FU-602 resolved 2026-07-24 — the `good_deal` alert + "Good & great/Great only" deal-band control were a **deliberate descope**: the deal-quality band feeds the buy-verdict only, no separate naggy alert. Those two bullets deleted; the buy-verdict half below stands.)*
 - [ ] **fake markdown.** For a product where the merchant claims a "special" (was > now) but you've logged paying *less* recently (price observations below the special) → the item's **Buy Verdict** card shows "Markdown looks inflated — you've paid less than this 'special' recently" and a price-driven `buy` reads as **wait**. An out-of-stock item stays **buy** (need wins) but still shows the inflated-markdown reason.
-- [ ] **Money off** → no Deal-alerts settings section, no `good_deal` alerts, no fake-markdown demotion.
+- [ ] **Money off** → no fake-markdown demotion (buy-verdict card absent).
 
 ### C-9.7 alerts email digest — origin FU-205
 - [ ] Heading + caption of the "Alerts email digest" card read cleanly across all themes. (Verified 2026-07-22: the card renders directly after Weekly deals — **note the checklist says Settings → Preferences; it actually lives on Settings → Notifications**, doc drift from a settings-tree reorganisation.)

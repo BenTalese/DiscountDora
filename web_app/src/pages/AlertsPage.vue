@@ -246,7 +246,7 @@
     import { useAlertStore } from 'src/stores/alertStore';
     import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { computed, onMounted, ref } from 'vue';
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
@@ -256,7 +256,12 @@
     const alertStore = useAlertStore();
     const alertPrefsStore = useAlertPrefsStore();
     const api = new AlertApiService();
-    const { money } = useFeatureFlags();
+    // FU-604 — gate the price-watch panel on BOTH layers (install flag +
+    // per-user money opt-out) via the canonical composable, not the
+    // install-only `useFeatureFlags().money`. A user who turns money features
+    // off for their own account should see no money UI here, consistent with
+    // the trim-to-budget banner (FU-448).
+    const { moneyEnabled: money } = useMoneyEnabled();
     const { busyAlertId, applyAction } = useAlertActions();
 
     const alerts = computed(() => alertStore.alerts);
@@ -434,8 +439,18 @@
     }
 
     onMounted(async () => {
+        // FU-597 — always refetch on mount. Alerts are derived server-side from
+        // state other surfaces change constantly (stock levels, expiries, meal
+        // plans, shopping lists), so the store is a live feed, not a memoisable
+        // cache. The old `items.length === 0` guard meant that once the bell
+        // peek / 60s poll had populated the store, navigating here rendered a
+        // stale feed — showing alerts the user had already resolved elsewhere
+        // ("Dora nagging you to do a thing you just did"). Matches the header
+        // bell, which already refreshes unconditionally on mount. The `loading`
+        // guard still avoids a duplicate when a refresh is already in flight
+        // (e.g. racing the bell's poll).
         await Promise.all([
-            alerts.value.items.length === 0 && !loading.value ? alertStore.refreshAsync() : Promise.resolve(),
+            loading.value ? Promise.resolve() : alertStore.refreshAsync(),
             alertPrefsStore.refreshAsync(),
         ]);
     });

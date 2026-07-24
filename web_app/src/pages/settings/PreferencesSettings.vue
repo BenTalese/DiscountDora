@@ -200,6 +200,7 @@
     import { BUILDER_TARGET_MEALS_FALLBACK } from 'src/composables/useMealPlanner';
     import { ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -357,7 +358,11 @@
     );
     const fontSizeDraft = ref<FontSizePreference>(currentUser.value?.font_size ?? 'md');
 
-    const saving = ref(false);
+    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave). This
+    // page also keeps its own bespoke per-toggle handlers (savingAlwaysAsk,
+    // savingInferredPantry, savingMealsPerWeek) which already use correct,
+    // hand-written noun messages via notifySuccess/notifyError.
+    const { notifySuccess, notifyError, update } = useSettingsSave();
 
     watch(currentUser, (u) => {
         if (!u) return;
@@ -369,31 +374,6 @@
         fontSizeDraft.value = u.font_size;
     });
 
-    function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
-    }
-    function notifyError(message: string, err?: unknown) {
-        $q.notify({
-            type: 'negative',
-            position: 'bottom-right',
-            message,
-            caption: toastCaption(err)
-        });
-    }
-
-    async function update<T>(label: string, run: () => Promise<T>): Promise<T | null> {
-        saving.value = true;
-        try {
-            const result = await run();
-            notifySuccess(label);
-            return result;
-        } catch (err) {
-            notifyError(`Could not save ${label.toLowerCase()}.`, err);
-            return null;
-        } finally {
-            saving.value = false;
-        }
-    }
 
     async function onThemeChange(value: ThemePreference) {
         const previous = currentUser.value?.theme ?? 'system';

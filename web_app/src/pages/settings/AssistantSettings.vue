@@ -271,26 +271,26 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import type { LlmProvider } from 'src/models/auth';
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import AssistantApiService from 'src/services/api/assistantApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
-    const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const appSettingsApi = new AppSettingsApiService();
     const assistantApi = new AssistantApiService();
 
     const installEnabled = ref(true);
-    const saving = ref(false);
+    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
+    const { saving, update } = useSettingsSave();
     // Test connection. `probing` gates the button; `probeResult`
     // mirrors the last probe outcome inline next to the button so the
     // user sees the verdict without a toast for the (frequent) "try a
@@ -389,31 +389,6 @@
         if (!u.llm_model) return 'Save a model name first.';
         return '';
     });
-
-    function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
-    }
-    function notifyError(message: string, err?: unknown) {
-        $q.notify({
-            type: 'negative',
-            position: 'bottom-right',
-            message,
-            caption: toastCaption(err),
-        });
-    }
-    async function update<T>(label: string, run: () => Promise<T>): Promise<T | null> {
-        saving.value = true;
-        try {
-            const result = await run();
-            notifySuccess(label);
-            return result;
-        } catch (err) {
-            notifyError(`Could not save ${label.toLowerCase()}.`, err);
-            return null;
-        } finally {
-            saving.value = false;
-        }
-    }
 
     async function onEnabledChange(value: boolean) {
         await update(

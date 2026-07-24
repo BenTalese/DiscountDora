@@ -10,6 +10,62 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-603 — Cart add-to-list tooltip said "draft list" + defaulted to the in-progress shop
+- **Raised:** 2026-07-23 (lean-verify big round #5 — Batch 9, Cart Button) · **Resolved:** 2026-07-24
+- **Type:** finding (copy / minor UX)
+- **What:** The stock / My-Products cart tooltips said "Add to a **draft** list", but the QuickAddSheet picker targets any non-done list (incl. `shopping`-status mid-shop lists), and its fallback default was `listOptions[0]` — the first non-done summary, which could be an in-progress shop ahead of the planning drafts.
+- **Owner decision:** fix both.
+- **Resolution:** (a) `AddToListButton.vue` tooltips reworded "draft list" → "a list" / "another list" (accurate — D-014 copy precision). (b) `QuickAddSheet.vue` mount default now prefers the first `draft`-status summary, falling back to `listOptions[0]`; an explicit preset or the remembered per-tab target (`quickAddTargetListId`) still win first. `vue-tsc` + `eslint` clean. Live-confirm queued in DORA_VERIFY.
+
+## [RESOLVED] FU-604 — Alerts price-watch panel ignored the per-user money opt-out (only gated the install flag)
+- **Raised:** 2026-07-23 (lean-verify big round #6 — Batch 11 C-9.5 price watch) · **Resolved:** 2026-07-24
+- **Type:** finding (gating consistency)
+- **What:** `AlertsPage.vue` gated the `SubscriptionsPanel` (armed price watches) on `useFeatureFlags().money` — the **install** flag only — so a user with `money_features_enabled=false` on their own account still saw the panel, unlike the trim-to-budget banner (FU-448) which gates per-user.
+- **Owner decision:** the per-user opt-out should hide **all** money UI for that account.
+- **Resolution:** `AlertsPage.vue` now gates on `useMoneyEnabled().moneyEnabled` (the canonical both-layers composable: install flag AND per-user flag), aliased to `money` so the template is unchanged. Consistent with every other dollar surface. `vue-tsc` + `eslint` clean. Live-confirm queued in DORA_VERIFY.
+
+## [RESOLVED] FU-606 — My Products stock-level-aware bulk variants — won't-do
+- **Raised:** 2026-07-24 (DORA_VERIFY Batch 14, My Products walk — was L205/L206) · **Resolved:** 2026-07-24
+- **Type:** finding (product decision)
+- **What:** Old feedback (L205/L206) asked whether My Products should grow "select low-stock-on-deal" / "out-of-stock-on-deal" bulk variants. My Products has no stock-level dimension, so they can't be assembled from current filters.
+- **Owner decision:** **won't-do.** The generic "Select on-deal" bulk suffices; the stock-aware "what should I buy" job is already served by Dashboard Draft-my-shop, buy-verdict, and auto-add-on-low. Building stock-aware bulk selection here is scope-creep against anti-creep + the LEAN stance. Reversible if a real need surfaces. No code change.
+
+## [RESOLVED] FU-602 — FU-450's `good_deal` alert kind + deal-band settings control confirmed a deliberate descope (band feeds buy-verdict only)
+- **Raised:** 2026-07-23 (money-sweep verify — FU-450) · **Confirmed absent:** 2026-07-24 · **Resolved:** 2026-07-24
+- **Type:** finding (feature-presence / intent) — *two open entries under this number, consolidated here.*
+- **What:** FU-450 specced a `good_deal` FYI alert + a "Good & great / Great only" deal-band segmented control on Settings → Notifications. Neither exists in the app (not in the SPA `AlertKind` union, not in the live feed, no control in `web_app/src`). `deals/deal_quality.py` computes a `poor/fair/good/great` band but feeds it to **buy-verdict only** (its docstring: "internal enum, never surfaced").
+- **Owner decision:** **deliberate descope** — band → buy-verdict only; no separate naggy `good_deal` alert (consistent with R-029 hide-don't-nag / anti-creep). The buy-verdict half IS live. Not a dropped feature.
+- **Resolution:** no code change. Closed both FU-602 entries; deleted the stale FU-450 alert + settings-control bullets (items 902/903/905) from `DORA_VERIFY.md` and noted the band is buy-verdict-only.
+
+## [RESOLVED] FU-597 — The Alerts page showed a stale feed: it only refetched when the store was empty
+- **Raised:** 2026-07-22 (lean-verify big round #3 — Batch 11 Alerts) · **Resolved:** 2026-07-24
+- **Type:** finding
+- **What:** `AlertsPage.vue` onMounted refetched **only** when `alerts.value.items.length === 0`. Once the header bell (refresh-on-mount + 60s poll) had populated the shared store, navigating to `/alerts` rendered whatever the store last held — so an alert resolved elsewhere (meal planned, item restocked, shop finished) still showed, with a matching stale count, until the user hit Refresh.
+- **Decision (no owner call needed):** the codebase already treats alerts as a *live feed*, not a memoisable cache — `AlertsBell.vue` refreshes unconditionally on mount and polls every 60s, and the store has only `refreshAsync` (no `ensureLoadedAsync`). So the page's `items.length === 0` guard was an inconsistency, not a deliberate convention. Chose the simple, honest fix (refetch-on-mount) over the heavier cross-store invalidation.
+- **Resolution:** `AlertsPage.vue` onMounted now always calls `alertStore.refreshAsync()`, guarded only by `loading` (skip if a refresh is already in flight, e.g. racing the bell's poll). The badge scope-check in the original finding is already covered by the bell's existing poll.
+- **Verified:** `vue-tsc` + `eslint` clean. No test pinned the old guard (alertStore.spec covers the store's refresh/mutation contract, not the page mount). Per LEAN stance no mounted-component/e2e test added (churny UI-lifecycle surface); a live once-off confirmation is queued in DORA_VERIFY.
+- **Standards:** no R-016 concern (the store was never memoised); no new rule/ADR.
+
+## [RESOLVED] FU-601 — Settings save-failure toasts were grammatically broken ("Could not save dora helper shown..") — systemic across 6 pages
+- **Raised:** 2026-07-23 (lean-verify Batch 1 — FU-360.6 Hide-Dora walk) · **Resolved:** 2026-07-24
+- **Type:** finding (copy defect + R-003 duplication smell)
+- **What:** The `update(label, run)` helper reused the *success* sentence as the error noun — `notifyError(\`Could not save ${label.toLowerCase()}.\`)` — so a save failure rendered "Could not save dora helper shown.." / "Could not save ai mode turned on..". The identical helper (+ `saving` ref + `notifySuccess`/`notifyError`) was copy-pasted verbatim into all six settings pages (Assistant, Preferences, Nutrition, Money, Notifications, Voice).
+- **Resolution:** extracted a shared `web_app/src/composables/useSettingsSave.ts` (R-003) exposing `{ saving, notifySuccess, notifyError, update }` with a **fixed** error path — `notifyError('Could not save your change.', err)` (the specific detail already rides in `toastCaption(err)`). All six pages now destructure from it; the six inline trios (and their now-orphaned `useQuasar`/`toastCaption` imports where unused) are gone. Preferences/Assistant keep their own `$q`/`toastCaption` for other bespoke toasts. Success path unchanged.
+- **Verified:** `vue-tsc --noEmit` clean, `eslint` clean on all seven touched files. No behavioural change to test (error-path copy + refactor); per the LEAN stance no automated test added. Grep confirms the broken pattern survives only in the composable's explanatory doc-comment.
+- **Standards:** pure R-003 application — no new rule/ADR warranted.
+
+## [RESOLVED] FU-595 — A past-day meal you didn't cook FROZE the whole week: every add 400'd and hard-crashed the planner screen
+- **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7 Meal plans, C-2 walk) · **Resolved:** 2026-07-24
+- **Type:** finding (real bug, production severity)
+- **What:** Adding any meal to a week containing a **past-dated entry with `consumed_at IS NULL`** failed with `400 "Meal plan entries cannot be scheduled in the past."`, and the error escaped to the ErrorBoundary — the whole planner was replaced by "Something went wrong on this screen." Reachable via **auto-drain OFF** or **Reconcile → "Didn't cook"** (both leave a past entry unconsumed).
+- **Mechanism:** `UpdateMealPlanHandler` preserved history by `consumed_at is not None` only, but the client (`useMealPlanner.planEntryCommands`) resent past-*unconsumed* entries (filtered `!consumed_at`, not past days). So the server wouldn't auto-preserve the past-unconsumed entry, the client resent it, and the resend tripped the past-date guard → freeze.
+- **Resolution (owner chose the strict shape):**
+  - **Server** (`update_meal_plan.py`) — `_ConsumedExisting` → `_PreservedExisting`, predicate now `consumed_at is not None OR scheduled_for < today`, so **all** past entries are preserved as immutable history. The past-date guard on *incoming* entries stays (genuine "can't schedule a new meal in the past" invariant).
+  - **Client** (`useMealPlanner.ts`) — new shared `isForwardEditable(e)` predicate (`!consumed_at && !isPastDay`) drives all three command builders (add / adjust-servings / remove), so the client never resends a past entry.
+  - **Defect (b)** — `persistEntries` + `addEntry` create-branch + `builderBuildPlan` now toast on failure (shared `notifyPlanError`) instead of letting a rejected write escape to the ErrorBoundary. `persistEntries` returns success so callers gate their success toast.
+- **Test:** `test_meal_plan_router.py::test__update_meal_plan__PastUnconsumedEntryPresent__PreservedAndAddSucceeds` — seeds a backdated unconsumed entry (auto-drain OFF), PATCHes forward-only, asserts the past entry is preserved with `consumed_at IS NULL` and the add returns 204. The existing strict-400 test stays green. Full router + reconcile-verbs suites: 36 passed. Frontend `vue-tsc` clean.
+- **Left open (separate FUs, unchanged):** [[FU-594]] (reconcile `skip` semantics), [[FU-596]] (breakfast default). A live browser walk is logged in DORA_VERIFY for optional owner confirmation, but the e2e test reproduces the exact bug+fix deterministically.
+
 ## [RESOLVED] FU-605 — Price History: interactive product picking didn't update the chart/comparison strip (shallow-watch reactivity bug)
 - **Raised:** 2026-07-24 (DORA_VERIFY Batch 14, Price History walk — was DORA_VERIFY L218) · **Resolved:** 2026-07-24
 - **Type:** finding (real bug, production-visible, money-gated surface)

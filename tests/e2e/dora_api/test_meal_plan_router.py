@@ -16,13 +16,22 @@ from uuid import uuid4
 
 import pytest
 import requests
+from sqlalchemy import text
 
+from dora_api.app import app, db
 from tests.e2e.dora_api._error_assertions import domain_err, validation_err
-from tests.support import assert_envelope, assert_problem, is_valid_uuid
+from tests.support import (assert_envelope, assert_problem, is_valid_uuid,
+                           uuid_bind)
 
 BASE = "http://localhost:5170/api"
 MEAL_PLANS = f"{BASE}/meal-plans"
 RECIPES = f"{BASE}/recipes"
+APP_SETTINGS = f"{BASE}/app-settings"
+
+
+def _set_auto_drain(value: bool) -> None:
+    resp = requests.patch(APP_SETTINGS, json={"auto_drain_past_meals": value})
+    assert resp.status_code == 200, resp.text
 
 #region ---------------- setup ----------------
 
@@ -356,6 +365,77 @@ def test__update_meal_plan__EntryScheduledInThePast__IsBadRequest(api):
 
     _Body = assert_problem(_PatchResponse, 400)
     assert _Body["title"] == "Meal plan entries cannot be scheduled in the past."
+
+
+def _backdate_entry(plan_id: str, entry_id: str, to: date) -> None:
+    """Move an existing entry (and its plan's start_date) into the past via
+    raw SQL. The create/update validators refuse a past `scheduled_for`, so
+    this is the only way to seed the past-day state FU-595 concerns. Created
+    for today then backdated, and `/today` is never re-hit afterwards, so the
+    reconcile sweep never sees it — the entry stays past AND unconsumed
+    regardless of the auto-drain setting."""
+    with app.app_context(), db.engine.begin() as conn:
+        conn.execute(
+            text('UPDATE "MealPlanEntry" SET scheduled_for = :d WHERE id = :eid'),
+            {"d": to.isoformat(), "eid": uuid_bind(entry_id)},
+        )
+        conn.execute(
+            text('UPDATE "MealPlan" SET start_date = :d WHERE id = :pid'),
+            {"d": to.isoformat(), "pid": uuid_bind(plan_id)},
+        )
+
+
+def test__update_meal_plan__PastUnconsumedEntryPresent__PreservedAndAddSucceeds(api):
+    """FU-595 regression — a past-dated *unconsumed* entry (auto-drain off, or
+    reconciled "didn't cook") must be preserved as history when the forward
+    plan is replaced, and must NOT freeze the week. The fixed client resends
+    only forward entries; the server preserves the past one on its own, so the
+    add succeeds instead of tripping the past-date guard."""
+    _Today = _household_today()
+    _Slot = _slot_names()[0]
+    _PastRecipe = _make_recipe("FU595 Past")
+    _NewRecipe = _make_recipe("FU595 New")
+
+    # Auto-drain OFF is the reachable path that leaves a past entry *unconsumed*
+    # (the other is reconcile "didn't cook"). With it ON the sweep would stamp
+    # consumed_at and we'd only be exercising the old consumed-preservation path.
+    _Prev = requests.get(APP_SETTINGS).json()["auto_drain_past_meals"]
+    _set_auto_drain(False)
+    try:
+        # Seed a past-day unconsumed entry: create for today, backdate to yesterday.
+        _Plan = _make_plan(entries=[{
+            "recipe_id": _PastRecipe,
+            "scheduled_for": _Today.isoformat(),
+            "slot": _Slot,
+        }])
+        _PastEntryId = _Plan["entries"][0]["meal_plan_entry_id"]
+        _Yesterday = _Today - timedelta(days=1)
+        _backdate_entry(_Plan["meal_plan_id"], _PastEntryId, _Yesterday)
+
+        # The fixed client sends only the forward entry — never the past one.
+        _Tomorrow = _Today + timedelta(days=1)
+        _Patch = requests.patch(
+            f"{MEAL_PLANS}/{_Plan['meal_plan_id']}",
+            json={"entries": [{
+                "recipe_id": _NewRecipe,
+                "scheduled_for": _Tomorrow.isoformat(),
+                "slot": _Slot,
+            }]},
+        )
+        assert _Patch.status_code == 204, _Patch.text
+
+        _After = _by_id(_Plan["meal_plan_id"])
+    finally:
+        _set_auto_drain(_Prev)
+
+    _ByDate = {e["scheduled_for"]: e for e in _After["entries"]}
+    # Past-unconsumed entry preserved as history; new future entry added.
+    assert len(_After["entries"]) == 2
+    assert _Tomorrow.isoformat() in _ByDate
+    _Past = _ByDate.get(_Yesterday.isoformat())
+    assert _Past is not None, "past-unconsumed entry was dropped (FU-595 regression)"
+    assert _Past["recipe_id"] == _PastRecipe
+    assert _Past["consumed_at"] is None
 
 
 def test__update_meal_plan__UnknownRecipeInEntries__IsEntityExistenceFailure(api):

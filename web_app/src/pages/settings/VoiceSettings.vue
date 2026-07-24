@@ -90,12 +90,11 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
     import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
     import type { VoiceEngine } from 'src/models/auth';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -104,12 +103,12 @@
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
     import VoicePicker from 'src/components/settings/VoicePicker.vue';
 
-    const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const ttsApi = new TtsApiService();
 
-    const saving = ref(false);
+    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
+    const { saving, notifySuccess, notifyError, update } = useSettingsSave();
     const loadingVoices = ref(true);
     const voices = ref<TtsVoice[]>([]);
     const piperAvailable = ref(false);
@@ -129,31 +128,6 @@
         { label: 'Browser', value: 'browser' },
     ]);
 
-    function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
-    }
-    function notifyError(message: string, err?: unknown) {
-        $q.notify({
-            type: 'negative',
-            position: 'bottom-right',
-            message,
-            caption: toastCaption(err)
-        });
-    }
-
-    async function update<T>(label: string, run: () => Promise<T>): Promise<T | null> {
-        saving.value = true;
-        try {
-            const result = await run();
-            notifySuccess(label);
-            return result;
-        } catch (err) {
-            notifyError(`Could not save ${label.toLowerCase()}.`, err);
-            return null;
-        } finally {
-            saving.value = false;
-        }
-    }
 
     const voiceProbeInput = useVoiceInput();
     const voiceProbeOutput = useSpeechOutput();

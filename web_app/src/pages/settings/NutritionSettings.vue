@@ -44,20 +44,18 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import {
         useNutritionMode,
         type NutritionMode,
     } from 'src/composables/useNutritionMode';
-    import { computed, ref } from 'vue';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { computed } from 'vue';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
-    const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
@@ -71,33 +69,10 @@
         { label: 'Complex', value: 'complex', disabled: !complexAvailable.value },
     ]);
 
-    const saving = ref(false);
-
-    function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
-    }
-    function notifyError(message: string, err?: unknown) {
-        $q.notify({
-            type: 'negative',
-            position: 'bottom-right',
-            message,
-            caption: toastCaption(err)
-        });
-    }
-
-    async function update<T>(label: string, run: () => Promise<T>): Promise<T | null> {
-        saving.value = true;
-        try {
-            const result = await run();
-            notifySuccess(label);
-            return result;
-        } catch (err) {
-            notifyError(`Could not save ${label.toLowerCase()}.`, err);
-            return null;
-        } finally {
-            saving.value = false;
-        }
-    }
+    // R-003 / FU-601 — shared save-toast helper (fixes the "Could not save
+    // <success sentence>." error-copy bug that was copied across all six
+    // settings pages).
+    const { saving, update } = useSettingsSave();
 
     async function onNutritionModeChange(value: NutritionMode) {
         const labelByMode: Record<NutritionMode, string> = {

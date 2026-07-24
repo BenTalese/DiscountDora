@@ -91,14 +91,25 @@ class UpdateMealPlanHandler:
                 )
 
             _Today = household_today(self.repository)
-            # Don't overwrite already-consumed entries (past days are
-            # locked read-only); keep them as-is and replace only the
-            # forward-looking portion of the plan.
-            _ConsumedExisting = [
+            # Preserve the immutable past. Past days are read-only, so the
+            # client resends only forward-looking entries; anything already
+            # in the plan that is consumed OR scheduled before today is
+            # history we keep as-is, replacing only the forward portion.
+            # FU-595: this must cover past-*unconsumed* entries too, not just
+            # consumed ones. A past day the user didn't cook (auto-drain off,
+            # or "Didn't cook") is unconsumed; if it weren't preserved here the
+            # replace would silently drop it, and the old client's workaround
+            # of resending it tripped the past-date guard below — freezing the
+            # whole week. Preserve it server-side; the client no longer sends it.
+            _PreservedExisting = [
                 _Entry for _Entry in (_Plan.entries or [])
-                if _Entry.consumed_at is not None
+                if _Entry.consumed_at is not None or _Entry.scheduled_for < _Today
             ]
 
+            # A forward entry scheduled before today is a genuine
+            # "can't schedule in the past" error — the client never sends past
+            # entries any more, so this guards against real bad input, not the
+            # FU-595 resend case (which no longer reaches here).
             for _EntryRequest in request.entries:
                 if _EntryRequest.scheduled_for < _Today:
                     return UpdateMealPlanResponse(has_past_entry = True)
@@ -120,7 +131,7 @@ class UpdateMealPlanHandler:
                 return UpdateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
             for _Entry in _NewEntries:
                 self.repository.add(_Entry)
-            _Plan.entries = _ConsumedExisting + _NewEntries
+            _Plan.entries = _PreservedExisting + _NewEntries
 
         self.repository.save_changes()
         return UpdateMealPlanResponse()

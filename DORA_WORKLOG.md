@@ -18,6 +18,95 @@ next.
 
 ---
 
+## 2026-07-24 (later 11) — Owner yes/no batch: FU-602 / FU-606 / FU-604 / FU-603
+
+Cleared the four "confirm intent" FUs in one round of owner decisions. Two pure close-outs, two small code fixes.
+
+- **FU-602 — descope confirmed (no code).** Owner: the `good_deal` alert + "Good & great/Great only" deal-band control were a **deliberate descope** — the deal-quality band feeds buy-verdict only, no separate naggy alert (R-029 hide-don't-nag). Consolidated the two double-numbered FU-602 entries into one RESOLVED; deleted the stale FU-450 alert/settings bullets from DORA_VERIFY (kept the live buy-verdict/fake-markdown bullet), renamed that section.
+- **FU-606 — won't-do (no code).** Owner: the generic "Select on-deal" bulk suffices; **do not** build stock-level-aware bulk variants in My Products (anti-creep; the stock-aware buy job is Dashboard Draft-my-shop / buy-verdict / auto-add-on-low). Closed won't-do.
+- **FU-604 — fixed.** Owner: the per-user money opt-out should hide **all** money UI. `AlertsPage.vue` price-watch panel now gates on `useMoneyEnabled().moneyEnabled` (install AND per-user, the canonical composable) instead of install-only `useFeatureFlags().money`; aliased to `money` so the template is untouched. Consistent with trim-to-budget.
+- **FU-603 — fixed both.** Owner: fix copy + default. `AddToListButton.vue` tooltips reworded "draft list" → "a list"/"another list" (D-014). `QuickAddSheet.vue` mount default now prefers the first `draft`-status list over an in-progress shop (explicit preset / remembered per-tab target still win first).
+
+**Verify:** `vue-tsc` + `eslint` clean on all three touched files (AlertsPage, AddToListButton, QuickAddSheet). Both fixes are small UI-gating/copy/default changes on churny surfaces → no automated tests per LEAN stance; live-confirm lines added to DORA_VERIFY (FU-604 panel-hide, FU-603 default-list). CHANGELOG Fixed entries for 604/603.
+
+**Close-gate:** ENGINEERING_STANDARDS — FU-604 applies R-003 (single money-gate composable); no new rules. No violations introduced.
+
+**Next up:** owner to pick. Remaining open FUs skew to design/product calls (FU-596 breakfast default, FU-594 skip semantics, FU-593 suggestion cap, FU-598 Pesto colour) and small code-with-a-fork (FU-581 dead product-search links, FU-583 kitchen-health params, FU-586 dashboard money-loader race), plus the strategic cluster (FU-567 relicense, FU-562 billing, FU-557 support channel).
+
+---
+
+## 2026-07-24 (later 10) — FU-597: Alerts page rendered a stale feed
+
+Third FU off the backlog. **FU-597 — the Alerts page showed a stale feed.** `AlertsPage.vue` onMounted only refetched when the shared store was empty; once the header bell (refresh-on-mount + 60s poll) had populated it, navigating to `/alerts` rendered whatever the store last held — so an alert resolved elsewhere (meal planned, item restocked, shop finished) still showed until the user hit Refresh.
+
+**No owner call needed** (the FU had flagged it as a caching-policy decision): the codebase already treats alerts as a live feed — `AlertsBell.vue` refreshes unconditionally on mount + polls every 60s, and the store only has `refreshAsync` (no `ensureLoadedAsync`). The page's `items.length === 0` guard was just an inconsistency. Took the simple refetch-on-mount fix over heavier cross-store invalidation.
+
+**Landed:** `AlertsPage.vue` onMounted now always `refreshAsync()`, guarded only by `loading` (skip if a refresh is in flight, e.g. racing the bell poll). `vue-tsc` + `eslint` clean. No test pinned the old guard; per LEAN stance no mounted-component/e2e test added (churny UI-lifecycle) — live confirmation queued in DORA_VERIFY. CHANGELOG Fixed entry; FU-597 → RESOLVED; PROJECT_STATE refreshed.
+
+**Close-gate:** no R-016 concern (store was never memoised); no new rule/ADR. No violations introduced.
+
+**Next up:** owner to pick. Quick-wins largely drained now; the owner yes/no descope batch remains: FU-602/606/604/603.
+
+---
+
+## 2026-07-24 (later 9) — FU-601: broken settings save-failure toasts + R-003 extract
+
+Second FU off the backlog. **FU-601 — settings save-failure toasts were grammatically broken** ("Could not save dora helper shown..") because the shared `update(label, run)` helper reused the success sentence as the error noun. The helper (+ `saving`/`notifySuccess`/`notifyError`) was copy-pasted verbatim across **six** settings pages.
+
+**Fix (the clean R-003 path, not a 6-line patch):** extracted `web_app/src/composables/useSettingsSave.ts` exposing `{ saving, notifySuccess, notifyError, update }` with a fixed error message ("Could not save your change." — detail still in `toastCaption(err)`). Migrated all six pages (Assistant, Preferences, Nutrition, Money, Notifications, Voice), deleting the six inline trios and the now-orphaned `useQuasar`/`toastCaption` imports where they became unused (kept in Preferences/Assistant, which use `$q`/`toastCaption` for other toasts). Only destructured what each page actually uses (Assistant/Nutrition/Money = `{saving, update}`; Notifications/Voice = all four; Preferences = `{notifySuccess, notifyError, update}` — it has its own bespoke per-toggle saving refs).
+
+**Verified:** `vue-tsc` clean, `eslint` clean on all 7 touched files (caught + fixed 2 unused-symbol nits mid-refactor). Error-path copy + mechanical refactor → no automated test per LEAN stance. CHANGELOG Fixed entry; FU-601 → RESOLVED; PROJECT_STATE refreshed.
+
+**Close-gate:** ENGINEERING_STANDARDS — pure R-003 application (single source of truth); no new rule/ADR. No D-rule copy left broken. No violations introduced.
+
+**Next up:** owner to pick. Remaining quick-win: FU-597 (stale alerts feed). Owner yes/no batch still open: FU-602/606/604/603.
+
+---
+
+## 2026-07-24 (later 8) — FU crossing-off begins: FU-595 (planner-freeze crash) fixed
+
+Verification paused; owner wants to start clearing the FU backlog. Surfaced the 30 open FUs, owner picked **FU-595** (the only production-severity bug) first.
+
+**FU-595 — a past meal you didn't cook froze the whole week.** Root cause confirmed in code: `useMealPlanner.planEntryCommands` resent past-*unconsumed* entries (`!consumed_at` only, not past-day), while the server's `UpdateMealPlanHandler` preserved only `consumed_at is not None`. So the past-unconsumed entry wasn't auto-preserved, the client resent it, and the resend hit the past-date guard → 400 → ErrorBoundary blanked the planner. Reachable via auto-drain OFF or Reconcile "Didn't cook".
+
+**Owner decision:** keep the strict 400 guard (recommended) rather than relaxing the server to silently ignore past-in-payload. So the fix is server-preserves-all-past + client-sends-forward-only + toast-hardening — the "three shapes" the FU listed turned out to be complementary, not alternative.
+
+**Landed:**
+- Server `update_meal_plan.py` — `_ConsumedExisting` → `_PreservedExisting` (`consumed_at is not None OR scheduled_for < today`); guard unchanged.
+- Client `useMealPlanner.ts` — shared `isForwardEditable` predicate (R-003) drives add/adjust/remove command builders; `persistEntries`/`addEntry`/`builderBuildPlan` now toast on failure (shared `notifyPlanError`) instead of crashing (defect b).
+- Test `test_meal_plan_router.py` — new regression (backdate-via-SQL seam, auto-drain OFF/restore) pins past-unconsumed preservation + successful add. Router + reconcile-verbs suites: **36 passed**. `vue-tsc` clean.
+- CHANGELOG Fixed entry; FU-595 moved to RESOLVED; DORA_VERIFY optional-confirm line added.
+
+**Close-gate:** ENGINEERING_STANDARDS — no violations introduced; R-003 applied (isForwardEditable, notifyPlanError). State-ownership honoured (server owns history preservation). No new R-rule/ADR warranted (fix is specific, not a recurring pattern). Left open, untouched: [[FU-594]] (skip semantics), [[FU-596]] (breakfast default).
+
+**Next up:** owner to pick the next FU — good candidates are the quick-win code batch (FU-601 toast copy ×6, FU-597 stale alerts feed) or the owner yes/no descope batch (FU-602/606/604/603).
+
+---
+
+## 2026-07-24 (later 7) — Verify batch: History tab, FU-602 confirm, Data pages, Help copy
+
+More verifies on :5170 (pesto-dark). No code, no bug.
+- **Stock detail History tab:** synthetic **"Opened"** entry (item open) + Set/Pushed-expiry trail render ✓ (Sriracha). Level-change labels + empty-state left as residual (item had only expiry events). Bullet trimmed.
+- **FU-602 CONFIRMED absent:** Settings → Notifications with money ON = Weekly-deals / Alerts-digest / Push only — **no Deal-alerts section, no Good&great/Great-only control**. `good_deal` alert + deal-band control don't exist in the UI (buy-verdict half is live). Promoted FU-602 to a confirmed finding; tightened the FU-450 note; two bullets blocked on the owner intent call.
+- **Data pages structure:** Import (Download-template + drop zone) + Backup & restore (New backup + drop zone + Restore) render with wiring present — no regression. Real file-drag/import/restore flows stay device-walk (bullets kept).
+- **Help copy:** Help → Stock "Add a stock item" copy matches the real dialog (New item; location/group/Essential; expiry after) → bullet deleted.
+
+**Note:** the cleanly agent-drivable pile is thinning — most remaining DORA_VERIFY items are owner-walk (visual/dark-mode, viewport/mobile, device/file-upload, fresh-install, DnD, or Quasar synthetic-input-limited). Env clean.
+
+---
+
+## 2026-07-24 (later 6) — Verify batch: Add-item dialog, FU-316 end-to-end, Stock Overview toolbar/expiry
+
+Several verifies on `dora-verify-backend-money` :5170 (pesto-dark). No code, no bug.
+- **Add-a-stock-item dialog (FU Codex):** New item → Name/Level/Location/Stock group/Essential, **no Expiry** ✓; "   " → "Name is required" ✓; "  barilla pasta  " → "already exists" (trim+case dedup) ✓. Deleted those bullets.
+- **FU-316 quick-add — fully driven end-to-end** (stock overview painted this round): row cart → "Which list?" picker (2 drafts, remember-for-tab copy) → pick "This week" → toast "Added to This week." → 2nd add **no picker** (sessionStorage pick set), toast again. Section deleted. Cleanup: removed the 2 items I added (Barilla Pasta + Brazil Nuts), This week back to seed.
+- **Stock Overview Chunk 2:** toolbar order (New item·Bulk select·Export·Filters), **Bulk select→Cancel** flip, footer order (Shown·Needs-attention·Stocked·Low·Out·Essential·On-a-list) ✓. Residual: Clear-position (needs filter active), mobile hidden panel.
+- **Stock Overview Chunk 4:** no-expiry row → q-date picker ✓; expiry-set menu = **+1/+7/+14/Clear** (no +30) + Log waste ✓. Residual: peek staleness.
+
+Env clean.
+
+---
+
 ## 2026-07-24 (later 5) — Verify Shopping-list UX v2 (FU-165): rail/doughnut/group-by/bulk/print
 
 Drove a draft + shopping list on `dora-verify-backend-money` :5170 (pesto-dark). No code.

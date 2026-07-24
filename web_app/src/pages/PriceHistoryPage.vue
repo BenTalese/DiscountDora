@@ -332,7 +332,12 @@
     function toggleSelect(productId: string) {
         const idx = selectedIds.value.indexOf(productId);
         if (idx >= 0) {
-            selectedIds.value.splice(idx, 1);
+            // Reassign (not splice/push) so the `watch([selectedIds, …])`
+            // below fires: it's a shallow ref watch, and an in-place mutation
+            // leaves `.value` identity unchanged, so the series never
+            // refetched on interactive picking (only the deep-link preselect,
+            // which reassigns, worked). FU-605.
+            selectedIds.value = selectedIds.value.filter((id) => id !== productId);
         } else {
             if (selectedIds.value.length >= 5) {
                 $q.notify({
@@ -341,7 +346,7 @@
                 });
                 return;
             }
-            selectedIds.value.push(productId);
+            selectedIds.value = [...selectedIds.value, productId];
         }
     }
 

@@ -10,6 +10,15 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-605 — Price History: interactive product picking didn't update the chart/comparison strip (shallow-watch reactivity bug)
+- **Raised:** 2026-07-24 (DORA_VERIFY Batch 14, Price History walk — was DORA_VERIFY L218) · **Resolved:** 2026-07-24
+- **Type:** finding (real bug, production-visible, money-gated surface)
+- **What:** On `/price-history`, clicking a product in the picker added it to the "Selected" chips but the chart and per-product comparison strip **never updated** — the price series was never refetched. Only the `?product_id=` deep-link (from My Products "View price history" / the Alerts-hub price-watch panel) ever populated the chart.
+- **Root cause:** `PriceHistoryPage.vue` `toggleSelect` mutated `selectedIds.value` **in place** (`.push()`/`.splice()`), while the series fetch was driven by `watch([selectedIds, range], …)` — a **shallow** ref watch. An in-place mutation leaves `.value` identity unchanged, so the watch never fired `refreshSeries`. The template chips still updated because the computeds track the reactive array; only the watch missed. The deep-link worked because `onMounted` **reassigns** `selectedIds.value = [preselect]`.
+- **Resolution:** changed `toggleSelect` to reassign immutably (`selectedIds.value = selectedIds.value.filter(…)` on remove, `[...selectedIds.value, id]` on add) so the shallow watch fires. Idiomatic Vue 3 fix; avoids a heavier `{deep:true}` watcher. Inline comment added citing the FU.
+- **Verified live (money-on seed, pesto-dark, after `quasar build -m spa` + reload):** preselect → 1 comparison card; click a 2nd product → **2 cards + 2 chart lines**; deselect → back to 1. Chart, deal chip, notify input, all-time-low all render.
+- **No test:** the fix is UI-component reactivity (churny surface); per the LEAN verification stance a live once-off drive is the right disposition, not a mounted-component Vitest.
+
 ## [RESOLVED] FU-592 — `DORA_SEED_MONEY_ON` verify-seed knob (boots money + nutrition on) — built + verified
 - **Raised:** 2026-07-22 · **Resolved:** 2026-07-23
 - **Type:** deferred job (verify tooling)

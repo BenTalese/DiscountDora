@@ -358,83 +358,47 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 - [ ] The swap affordance reads as distinct from the "store offers" picker on the same line (no "two Substitute labels" confusion).
 - [ ] Product-only line (no stock item) → swap disabled.
 
-### Put-away dialog on a finished list — origin FU-452
-- [ ] Finish a list with a mix of ticked lines whose stock items live in different locations (Fridge, Pantry, Freezer) plus at least one item with no location set → list transitions to `done` → toolbar shows a primary **Put away** button next to *Copy to new list*.
-- [ ] Click **Put away** → dialog opens titled "Put away" with grouped cards ("Fridge · 3", "Pantry · 2", "Freezer · 4", "(No location) · 1"). Ticked lines only — un-ticked lines never appear.
-- [ ] Click a location group header → group ticks, collapses (items hide), chip flips to positive/green.
-- [ ] Click the same header again → group un-ticks, items re-appear, chip reverts.
-- [ ] "(No location)" group is pinned to the bottom regardless of alphabetical order — its header has no tick affordance (the ✓ icon slot is empty).
-- [ ] Click **Assign** on an unsorted item → small "Assign a location" mini-dialog opens with a searchable location picker → pick a location → **Save** → toast "Sorted *<item>*" → item disappears from "(No location)" and appears in its new group; the mini-dialog closes.
-- [ ] Cancel/close the mini-dialog without saving → nothing changes.
-- [ ] Close the main Put-away dialog → re-open it → **all group ticks are reset** (ephemeral state is the point).
-- [ ] Open the dialog on a list where every ticked line already has a location → no "(No location)" group appears.
-- [ ] Open the dialog on a list where every ticked line is unsorted → only "(No location)" shows, with per-line Assign buttons.
-- [ ] Open the dialog on a `done` list with zero ticked lines → banner "Nothing to put away — no ticked lines on this list."
-- [ ] Put-away button does **not** appear on a non-`done` list (draft or shopping status).
-
 ### Quick-add toast + "always ask" pref — origin FU-316
-- [ ] Have exactly one draft list open → quick-add a stock item (chip / bulk / detail toolbar) → toast reads **"Added to *<display_name>*."** (destination named — not "Added to your list.")
-- [ ] Item already on that list → toast reads **"Already on *<display_name>*."**
-- [ ] Open 2+ draft lists → quick-add → picker fires → pick one → toast still names the picked list
-- [ ] Same tab session, second quick-add → no picker (session-remembered), toast still names the list
-- [ ] **Preferences → Shopping lists → Always ask which list** → toggle on → save toast "Dora will always ask which list."
-- [ ] With "always ask" on and 2+ drafts → every quick-add re-prompts (session pick is not remembered); dialog copy reads "Dora will ask again next time (you can change this in Preferences)."
-- [ ] Bulk-add a batch of items from Stock Overview with 2+ drafts and "always ask" on → picker fires once on the first item → all remaining items land on the *same* picked list (batch doesn't silently drop items 2..N)
-- [ ] Toggle "always ask" back off → save toast "Dora will remember your pick." → next quick-add prompts once, then remembers again
+*(Resolver + toast/picker/always-ask/session wiring verified 2026-07-24; only the on-screen picker/toast eyeball remains.)*
+- [ ] With 2+ drafts, quick-add from a stock row → "Which list?" picker → pick → toast names the list → 2nd quick-add same tab skips the picker; with "Always ask" on, every add re-prompts
 
 ### Receipt-photo attachments — origin FU-334 + R-024 follow-on
-- [ ] Open a `draft` list → no Receipts section visible (correct — must Start shopping first)
-- [ ] Start shopping → Receipts section appears with empty-state copy "No receipts yet…" and the **two-button picker**: *Take photo* + *Choose receipt* (mobile) or just *Choose receipt* (desktop)
-- [ ] On mobile (Android Chrome / iOS Safari): tap *Take photo* → rear camera opens directly; capture → thumb appears in the strip
-- [ ] On mobile: tap *Choose receipt* → OS picker offers Photos / Files / (iOS) Scan Documents — pick an existing photo → thumb appears
-- [ ] On desktop: the *Take photo* button is hidden (no camera affordance); *Choose receipt* opens the file picker
-- [ ] Pick a >12MB image → inline error caption AND toast "Could not read that image…" fires, nothing added
-- [ ] Pick a non-image (e.g. PDF) → same error path, nothing added
-- [ ] Tap a thumbnail → full-screen lightbox opens with the receipt rendered ≤80vh; backdrop click + Esc both close it
-- [ ] Tap the trash icon on a thumb → it disappears optimistically; reload the page → still gone (server confirms)
-- [ ] Add 3+ receipts → they render left-to-right in upload order; reload → same order
-- [ ] Finish & restock the list → list becomes `done` → Receipts section *stays visible* with all attached photos (record-keeping survives finish)
-- [ ] Delete the whole list → no orphaned attachment rows (DB cascade) — the bytes endpoint 404s on a former attachment id
+*(Section-gating/empty-state/desktop "Choose receipt" verified 2026-07-24; CRUD+cascade backend-pinned. Below = device file/camera.)*
+- [ ] Mobile: *Take photo* → rear camera; capture → thumb in the strip
+- [ ] Mobile: *Choose receipt* → OS picker → pick a photo → thumb appears
+- [ ] Desktop: *Choose receipt* → file picker → pick an image → thumb appears
+- [ ] >12MB image → inline error + toast "Could not read that image…", nothing added
+- [ ] Non-image (PDF) → same error path
+- [ ] Tap thumbnail → lightbox ≤80vh; backdrop + Esc close it
+- [ ] Trash a thumb → optimistic remove; reload → still gone
+- [ ] 3+ receipts render left-to-right in upload order; reload → same order
 
 ### Image-source picker — sanity sweep across surfaces — origin R-024
-- [ ] Recipe **hero image** edit (recipe edit dialog): shows *Add (camera)* + *Add (file)* on mobile, just *Add (file)* on desktop. Both routes process via `processImageFile` (resize visible in payload size)
-- [ ] Recipe **step images** editor: *Add images (camera)* + *Add images (files)* — files variant accepts multiple, camera captures one then returns
-- [ ] **Stock item image** edit (stock item detail): same split, *Change* verb when an image is set, *Add* when empty
-- [ ] **User avatar** (Account Settings): same split, behaves like stock item
-- [ ] **Store logo** (Stores Settings): still uses `q-file` (FU-335 carve-out; do not regress)
+*(All surfaces on the shared `ImageSourcePicker`→`processImageFile`; avatar verified live 2026-07-24 (desktop "Add (file)", camera hidden). Stock-item image-edit surface is gone → [[FU-607]]. Below = device file/camera.)*
+- [ ] Each surface (recipe hero, step images, avatar, store logo): pick a real file → resize applied + preview updates; on mobile the camera button captures one photo; step-images accepts multiple
 
 ### Trim-to-budget banner + Deferred section — origin FU-448
-*(Banner + "everything safe" fallback + never-cut set verified live 2026-07-23 (money on via FU-592; server math pinned in `test_trim_to_budget.py`). The cuttable→Keep→Trim-to-fit→Deferred happy path below needs a list with safe-to-cut lines ("This week" has none) → owner-walk.)*
-- [ ] With `money_features_enabled=false` on the user, the banner never appears on any shopping list, regardless of projected total or budget setting
-- [ ] With money features on but `budget_amount` null, banner never appears (endpoint returns `budget_target=null`; SPA self-gates)
-- [ ] With money features on, budget_amount=$100/week, spend-so-far=$60: an auto-generated list projecting $80 shows the banner ("Projected $80 · budget remaining $40 — trim $40 to fit")
-- [ ] **Show what would be cut** expands a preview card with per-line rows, each with a warning-tint reason chip (one of: `Habit — can wait`, `N days' cover left`, `Not urgent`, `Above your usual price`, `Out, but no meal booked`, `For <Recipe> on <Day>`, `Needed for N meals later`) and a `Keep` button
-- [ ] Clicking `Keep` on a preview line re-fires the preview excluding that line; the banner + preview totals update; no mutation until Apply
-- [ ] **Trim to fit** flips `deferred_by_budget=true` on the chosen lines, they move to a collapsible "Deferred to fit budget (N)" section below the active list, and the banner switches to a compact "Trimmed $X to fit — see deferred (N)" confirmation strip
-- [ ] Tapping the link in the confirmation strip scrolls to the Deferred section
-- [ ] Each Deferred line shows the frozen reason chip + line price + an `Add back` button; clicking flips the line back into the active list; if that pushes projected total back over budget, the banner reappears on next load
-- [ ] **Dismiss** hides the banner for the current view; refresh brings it back if still over budget
-- [ ] Tier ordering (highest-price cut first inside a tier): drop a $5 habit item + a $20 low-stock-with-cover item on the same list, both over-budget triggers → the $20 gets cut first inside its tier; the tier-1 habit item only gets cut if the tier-2 cover doesn't close the gap
-- [ ] Never-cut set holds: essentials (`is_flagged=true`), items with a meal booked in next 2 days, verdict=buy on low/out lines, and sub-$2 lines all survive even when we still overshoot after trimming everything else
-- [ ] "Trimmed everything safe. Still $X over" fallback surfaces when the safe-cut tiers exhausted before hitting the target
-- [ ] Assistant intent: **"trim my shopping list to my budget"** proposes the trim with a specific one-line summary (dollar delta + cut count + list name); Confirm applies + returns a "Done — trimmed $X off … (N items moved to Deferred)" message
-- [ ] Assistant intent when the user has no budget → replies "You haven't set a grocery budget yet — Settings → Money is the place to turn it on"; when already under budget → replies "…is already inside your $Y remaining — nothing to trim"
+*(Banner copy + "everything safe" fallback + Dismiss + buy-on-out never-cut verified live 2026-07-24; math pinned in `test_trim_to_budget.py`. Happy path needs a genuinely cuttable line the seed API can't create → owner-walk.)*
+- [ ] `money_features_enabled=false` → banner never appears
+- [ ] money on, `budget_amount` null → banner never appears
+- [ ] **Show what would be cut** → preview card, per-line reason chip + `Keep`
+- [ ] `Keep` re-fires preview excluding that line; totals update; no mutation until Apply
+- [ ] **Trim to fit** → `deferred_by_budget` on cuts → "Deferred to fit budget (N)" section + "Trimmed $X to fit — see deferred (N)" strip
+- [ ] Strip link scrolls to the Deferred section
+- [ ] Deferred line: reason chip + price + **Add back** → returns to active list; if back over budget, banner reappears on reload
+- [ ] Tier ordering: highest-price cut first inside a tier
+- [ ] Never-cut: essentials, meal-in-2-days, sub-$2 all survive (buy-on-low/out verified live)
+- [ ] Assistant "trim my shopping list to my budget" → summary + Confirm applies; no-budget / already-under → the two decline replies
 
 ### Shopping list UX v2 — origin FU-165
-*(Server-owned `display_name` self-labelling pinned 2026-07-20 in `test_shopping_list_planned_shop_date.py`: custom name wins → clearing it labels from the planned shop date → changing the shop day re-labels → clearing the date too falls back to a non-empty creation-date label. The rail/mobile/tones/doughnut UI below stay owner-walk.)*
-- [ ] Rail order + auto-scroll + next-up marker works
-- [ ] Mobile dropdown opens + picks
+*(`display_name` self-labelling backend-pinned. Rail+next-up marker, doughnut+totals, group-by (Location regroups), bulk-select, and Print all verified live 2026-07-24. Residuals below.)*
+- [ ] Mobile dropdown opens + picks (viewport)
 - [ ] Shop-day button tones (today/overdue) correct
-- [ ] Doughnut + totals render correctly
-- [ ] Start shopping → sticky footer → finish-review modal (ticked-item summary, no per-item level picker — cut, FU-582) → Reopen reverses it
+- [ ] Start shopping → sticky footer → finish-review modal (ticked summary, no per-item level picker — FU-582) → Reopen reverses it
 - [ ] Quick-add mid-shop works
 - [ ] Row actions: price button, swap, remove
-- [ ] Group-by toggle works
-- [ ] Bulk select works
-- [ ] Print view works
-- [ ] No empty-state flash on load
-- [ ] Drag-reorder lands on the exact row you drop on (FU-161 root cause was fixed in P6-01 Chunk 6 — confirm it stays fixed)
-- [ ] Dashboard card + Dora-chat add-to-list still work (both touched)
+- [ ] Drag-reorder lands on the exact row you drop on (FU-161 fix stays fixed)
+- [ ] Dashboard card + Dora-chat add-to-list still work
 
 ### Cart Button Chunk 2 — combined modal for 2+ products — origin FU-130
 - [ ] Bulk variant — resolves target once + one summary toast regardless of per-item counts
@@ -1203,24 +1167,6 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 ---
 
 ## Products & pricing
-
-### My Products + Price History — feedback gaps — origin FU-214
-- [ ] **My Products** — L193 "mark inactive: Extra inputs not permitted" is gone
-- [ ] L195 link-icon grey/green styling correct (the handoff itself is FU-208)
-- [ ] L198 inactive-product styling legible
-- [ ] L205/L206 GAP — only a generic "Select on-deal" bulk exists; build "select low-stock-on-deal" / "out-of-stock-on-deal" variants, OR confirm the generic suffices
-- [ ] L197 — only mark-inactive (soft) exists, no hard delete (confirm acceptable under ingestion model)
-- [ ] **Price History** — L218 selecting products updates the chart
-- [ ] L219 card not squished + notify placeholder visible
-- [ ] L220 notify-under formats as a price
-- [ ] L221/L222 %off text size + chip colour consistent (componentised)
-- [ ] L223 hover bubble is theme-aware (today: white-on-white in dark mode)
-- [ ] L225 graph reaches the box edge
-- [ ] L160 — confirm no *other* Dora search bar has the dark-mode white-on-white contrast bug
-
-### My Products → stock-item "Link…" — origin FU-208
-- [ ] From My Products, "Link…" → pick stock item → product links and shows as linked (no bounce)
-- [ ] Error toast on failure
 
 ### PreferredBuy — origin FU-211
 *(Backend fully pinned: add / rename / delete, alphabetical detail listing, blank-label reject, wrong-item-scope 404 (`test_preferred_buys.py`) + CASCADE-on-item-delete → 0 rows (`test_delete_integrity.py`). **"reorder (up-down)" is stale** — the manual reorder UI + `position` column + `reorder` endpoint were retired by FU-225 (2026-06-18); the SPA now sorts alphabetically client-side. Only the add/rename/remove detail render stays owner-walk.)*

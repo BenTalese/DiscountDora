@@ -52,6 +52,21 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-607 — Stock-item image editing appears gone; `ImageUploadField` docstring still cites it as a consumer
+- **Raised:** 2026-07-24 (DORA_VERIFY R-024 image-source-picker sweep)
+- **Type:** finding (code/doc drift; possible dropped feature)
+- **What:** `ImageUploadField.vue`'s docstring says it was "generalised when the stock-item detail surface adopted it (FU-126 / R-001 second-consumer threshold)", but `StockItemDetailPage.vue` has **no image-upload field** now (grep for `ImageUploadField`/`ImageSourcePicker`/`q-file`/image on that page returns nothing). The only image-upload consumers are recipe hero + avatar (via `ImageUploadField`), recipe step images + store logo + shopping-list receipts (direct `ImageSourcePicker`). Stock items still *display* an image (`stockItemStore.imageVersionOf`, `StockItemRow`), but there's no way to set one in the SPA.
+- **Why deferred:** not a user-facing crash; may be an intentional removal (stock items show the linked product's image rather than a user upload). But a docstring naming a consumer that no longer exists is exactly the drift the single-maintainer-legibility goal cares about.
+- **Recommended resolution:** opportunistic — confirm whether stock-item image editing is meant to exist. If yes, it regressed (re-wire `ImageUploadField` on the detail page); if no, drop the stale FU-126 clause from the `ImageUploadField` docstring + the "stock item" mention in `imageService.ts`.
+
+## [OPEN] FU-606 — My Products: confirm the generic "Select on-deal" bulk suffices, or build stock-level-aware variants
+- **Raised:** 2026-07-24 (DORA_VERIFY Batch 14, My Products walk — was DORA_VERIFY L205/L206)
+- **Type:** finding (product decision)
+- **What:** the My Products bulk bar offers "Select all visible" + "Select on-deal" + "Add N on-deal to list" + Unlink + Mark-inactive, and the filters offer On-deal / Store / Linked-stock-item / Show-inactive. The old feedback (L205/L206) asked whether to also build **"select low-stock-on-deal"** / **"out-of-stock-on-deal"** bulk variants. My Products has **no stock-level dimension** (no low/out filter), so those variants can't be assembled from the current filters.
+- **Why deferred:** it's a product call, not a pass/fail verify. Building stock-aware bulk selection here is arguably scope-creep against the anti-creep charter + the owner's LEAN stance — the stock-aware "what should I buy" job is already served by Dashboard Draft-my-shop, buy-verdict, and auto-add-on-low. My Products reads as a catalog/deals browser.
+- **Recommendation:** confirm the generic suffices; **do not build** the variants (won't-do). Reversible later if a real need surfaces.
+- **Recommended resolution:** now (a quick owner yes/no).
+
 ## [OPEN] FU-604 — Alerts-hub Price-watch panel gates on the INSTALL money flag, not the per-user money opt-out (unlike trim-to-budget)
 - **Raised:** 2026-07-23 (lean-verify big round #6 — Batch 11 C-9.5 price watch)
 - **Type:** finding (gating consistency), low priority — confirm intent

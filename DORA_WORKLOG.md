@@ -18,6 +18,259 @@ next.
 
 ---
 
+## 2026-07-24 (later 5) — Verify Shopping-list UX v2 (FU-165): rail/doughnut/group-by/bulk/print
+
+Drove a draft + shopping list on `dora-verify-backend-money` :5170 (pesto-dark). No code.
+Verified live: **rail** (all lists, dates, tick-counts, "next up" marker on Saturday shop);
+**doughnut + totals** (Remaining/Full list/Savings render on the shopping list); **group-by**
+(Location regroups into 5 Pantry/Fridge/Freezer/No-location headers); **bulk-select** ("Select"
+→ "0 selected | Select all | Tick selected | Untick | Done", checkbox → "1 selected"); **Print**
+(More → "Print / Save as PDF"). Deleted those bullets. Residuals (device/flow/DnD): mobile
+dropdown, shop-day tones, start-shopping→finish-review→Reopen, quick-add mid-shop, row price/
+swap/remove, drag-reorder, dashboard/Dora-chat add. No bug, no FU. Env clean.
+
+---
+
+## 2026-07-24 (later 4) — Three cross-cutting sweeps: L160 search-bar contrast, R-024 image-picker, FU-334 receipts gating
+
+Three quick verification rounds in one sitting on `dora-verify-backend-money` :5170
+(pesto-dark, authed `dora`). **No code changed.**
+
+**Round 1 — L160 dark-mode search-bar contrast (CLEAN).** Measured every search input's
+text colour vs. its effective (nearest-opaque-ancestor) background: Cookbook / Stock /
+My Products / Price History "Search…" boxes = white (lum 255) on dark (lum 22–31, Δ≈224–
+233); the Dora chat input "Ask Dora anything…" = white on `rgb(22,39,36)` (Δ221). **No
+white-on-white anywhere.** DORA_VERIFY L160 line deleted (verified-note left).
+
+**Round 2 — R-024 image-source-picker sweep (VERIFIED + 2 stale items corrected).** Every
+image-upload surface routes through the shared `ImageSourcePicker` (recipe hero + avatar
+via `ImageUploadField`; step images + store logo + receipts direct), so the camera/file
+split + the `processImageFile` chokepoint are guaranteed once. Verified live on the avatar
+surface (desktop): single **"Add (file)"** button (camera hidden, `pointer:coarse=false`),
+two hidden `input[type=file] image/*` (one `capture=environment`, one plain). **Two stale
+checklist items corrected:** (1) no stock-item image-upload surface exists any more →
+logged **[[FU-607]]** (ImageUploadField docstring still cites FU-126 stock-item adoption
+that's gone; confirm intent or drop the clause); (2) store logo is **not** a q-file
+carve-out — StoresSettings migrated to the shared picker (FU-335). Neither is a defect.
+
+**Round 3 — FU-334 receipts section-gating (VERIFIED).** Drove a draft / shopping / done
+list: **draft → no Receipts section** (`attachmentSectionVisible = status !== 'draft'`);
+**shopping → Receipts section + empty-state "No receipts yet…" + "Choose receipt"** (no
+"Take photo" on desktop); **done → section stays visible** (record-keeping survives finish).
+Attachment CRUD + delete cascade backend-pinned (`test_shopping_list_attachments.py`).
+File-pick / camera / lightbox / >12MB & non-image errors / delete-persist stay device-walk.
+
+**Data hygiene:** read-only sweeps except the earlier quick-add unit; nothing mutated here.
+Env clean.
+
+**Close-gate:** verification only + one finding ([[FU-607]]). No R-rule violation introduced,
+no ADR.
+
+**Environment:** `dora-verify-backend-money` :5170 (money on), pesto-dark, authed `dora`.
+
+**Next up:** Shopping-list UX v2 rail/doughnut/group-by/bulk (FU-165, some drivable);
+Dashboard empty-case/error/consumed bullets (Batch 10); FU-607 opportunistic.
+
+---
+
+## 2026-07-24 (later 3) — Verify Batch 8 quick-add toast + "always ask" (FU-316) — resolver live, client wiring source-confirmed
+
+Continued (backend rebooted between turns → fresh seed IDs; re-logged in). Took on
+**quick-add toast + "always ask" (FU-316)**. Read the flow across
+`useStockItemActions.addToList`, `useQuickAdd`, `useQuickAddTargetPick`,
+`AddToListButton`, and `PreferencesSettings`. **No code changed.**
+
+**Resolver backbone verified live** (`POST /shopping-lists/primary/lines`, 2 seed
+drafts, throwaway free item):
+- no hint → **`ambiguous`** + candidates `["This week","Big load list"]` (fires the picker)
+- valid draft hint → **`added`**
+- same item again → **`added` + `already_on_list:true`** (drives the "Already on …" toast)
+- done-list hint → **422 hint_invalid** (client re-prompts)
+
+**Client wiring source-confirmed:** toasts `Added to ${listNameFor(id)}.` /
+`Already on ${listNameFor(id)}.` (display_name from the store summary); the ambiguous
+`$q.dialog` radio picker with two copy variants (remember-for-tab vs always-ask "ask
+again next time"); sessionStorage pick round-trip (`useQuickAddTargetPick`
+load/save/clear — clear-on-always-ask so it re-prompts every add); the bulk path
+resolves once then batches items 2..N; Preferences "Always ask which list" toggle →
+PATCH `always_ask_which_shopping_list` → "Dora will always ask which list." /
+"Dora will remember your pick."
+
+**Not driven:** the pure cart-button→picker→toast→remember interaction — the stock-row
+cart affordance doesn't paint in the hidden pane, and the detail-page "Add" button was
+a section control, not the quick-add. The `$q.dialog` picker is the same programmatic-
+dialog pattern driven successfully elsewhere this session, so only the rendered
+dialog/toast eyeball stays as a light owner-walk. Section collapsed to one optional
+owner-eyeball bullet.
+
+**Data hygiene:** the resolver test line was deleted (204); confirmed the item is on no
+draft and no stray session pick. always_ask left false (default). Env clean.
+
+**Close-gate:** verification only. No R-rule surface, no ADR, no FU (no bug).
+
+**Environment:** `dora-verify-backend-money` :5170 (money on), authenticated as `dora`.
+No SPA rebuild (no code change).
+
+**Next up:** L160 dark-mode search-bar sweep; image-source picker sweep (FU R-024);
+receipt-photo attachments (FU-334, mostly device). Trim happy-path + assistant intents
+remain genuinely owner-walk.
+
+---
+
+## 2026-07-24 (later 2) — Verify Batch 8 trim-to-budget (FU-448) — reachable UI cleared; happy path stays owner-walk (documented why)
+
+Continued on the same `dora-verify-backend-money` :5170 session. Took on the
+**trim-to-budget happy path (FU-448)** — the flagged remaining money gap. Read
+the classifier (`trim_to_budget.py`) + budget module (`budget.py`) + the SPA
+banner logic first. **No code changed.**
+
+**Contrived an over-budget list to drive the banner:** set a $20/week budget
+(`PATCH /auth/me`), noted spent-this-week $12.40 → headroom $7.60, created a draft
+"QA Trim Test" with 4 out-of-stock lines ($6/$5/$4/$3 via `actual_unit_price` on
+`PATCH …/lines/{id}`) → projected $18. **Verified live:**
+- Banner copy: **"Projected $18.00 · budget remaining $7.60 — trim $10.40 to fit."**
+- **Show what would be cut** → 0 cuttable (all 4 out lines showed a **BUY** badge and
+  were correctly held by the **verdict=buy-on-out never-cut**) → the fallback
+  **"Trimmed everything safe. Still $10.40 over — this shop needs a hand from you."**
+- **Dismiss** → banner hidden.
+
+**Happy path (Keep → Trim-to-fit → Deferred → Add-back) stays owner-walk — now with
+a precise reason, not "needs a cuttable list".** The running app can't produce a
+cuttable line: every tier needs auto-provenance (`added_via` — the add-line API is
+`extra=forbid`, always writes `manual`) or price-history buy-verdict signals; out
+items are always verdict=buy → never-cut; and the deferred state can't be forced (the
+line PATCH only *clears* `deferred_by_budget`, trim-apply is the sole writer). The
+default DB here is **Postgres**, so DB injection wasn't a clean option either. The
+frontend wiring for the chain is source-confirmed (`previewTrim`/`keepFromTrim`→
+re-preview-with-excluded, `applyTrim`→apply+reload, the deferred section `v-if
+deferredLines` + Add-back PATCH, `scrollToDeferred`) and the classification/apply is
+backend-pinned (`test_trim_to_budget.py`). Deleting the two fully-verified DORA_VERIFY
+boxes (banner-appears, fallback); rest of the section reworded with the reason inline.
+
+**Data hygiene:** QA list deleted (204), budget cleared via `clear_budget_amount:true`
+(disabled, amount null); seed's 5 lists intact, no stock-item mutations. Env clean.
+
+**Close-gate:** verification only. No R-rule surface, no ADR, no FU (no bug).
+
+**Environment:** `dora-verify-backend-money` :5170 (money on), authenticated as
+`dora`, pesto-dark. No SPA rebuild (no code change).
+
+**Next up:** quick-add toast + "always ask" (FU-316); L160 dark-mode search-bar
+sweep; receipt-photo attachments (FU-334, mostly device). Trim happy path + assistant
+intents are genuinely owner-walk (fixture-grade data).
+
+---
+
+## 2026-07-24 (later) — Verify Batch 8 Put-away dialog (FU-452) — cleared, no bugs
+
+Continued the verify campaign (same `dora-verify-backend-money` :5170 session,
+re-booted after the preview closed between turns; rAF-shim + in-place login).
+Walked the **finished-list Put-away dialog (FU-452)** — a money-agnostic, self-
+contained surface. **No code changed.**
+
+Drove the seed's done **"Last week"** list (3 ticked lines: Barilla Pasta/Pantry,
+Super Awesome Pizza/Freezer, Hot Crispy Chippies/no-location):
+- **Toolbar gating:** Put-away button present on the `done` list, **absent** on the
+  draft "This week" (both source-gated on `status==='done'`, confirmed live).
+- **Dialog:** "Put away" with location-grouped cards — Freezer [1] · Pantry › Top
+  shelf [1] · (No location) [1] (breadcrumb label + count chip, ticked lines only).
+- **Group toggle:** header click → `put-away-group--done` dim + items collapse +
+  chip green (`rgb(53,151,102)`); click again reverts. Both directions verified.
+- **(No location):** pinned to bottom, no tick affordance (invisible checkbox
+  slot), per-item **Assign** button.
+- **Assign:** mini-dialog "Assign a location" opens; **Cancel → no mutation**
+  (location stayed null); driving the Save endpoint (`PATCH /stock-items/{id}`
+  `stock_location_id` → 204, the exact `commitAssign` call) moved Hot Crispy
+  Chippies into a new **Fridge** group and **dropped the (No location) group**
+  (also covers "all located → no No-location group"). "Sorted <item>" toast
+  source-confirmed (`PutAwayDialog.vue:277`); the q-select pick is Quasar-synthetic-
+  gated, so the pick step itself wasn't UI-driven.
+- **Ephemeral reset:** tick a group → close via **Done** → reopen → 0 done groups.
+
+Two edge states not contrived from the seed (done lists are fully-ticked, can't be
+un-ticked): **all-unsorted → only (No location) with Assigns** and **zero-ticked →
+"Nothing to put away…" banner** — simple conditional renders, source-confirmed.
+
+**Data hygiene:** Hot Crispy Chippies' location reverted to null (204). Env clean.
+No FU, no bug, no code. DORA_VERIFY FU-452 section deleted (verified-note left).
+
+**Close-gate:** verification only. No R-rule surface, no ADR.
+
+**Environment:** `dora-verify-backend-money` :5170 (money on), authenticated as
+`dora`, pesto-dark. No SPA rebuild this unit (no code change).
+
+**Next up:** quick-add toast + "always ask" (FU-316); trim-to-budget happy path
+(FU-448 — needs a contrived cuttable list); L160 dark-mode search-bar sweep.
+
+---
+
+## 2026-07-24 — Verify Batch 14 My Products + Price History (money seed); FU-605 fixed, FU-606
+
+Continued the verify campaign on the **Windows** `dora-verify-backend-money`
+profile (:5170, money+nutrition+products+buy_verdict all on; seed user
+money-enabled). Walked the previously-untouched **My Products (FU-214/FU-208)**
+and **Price History** surfaces — both money-gated, unblocked by FU-592. Applied
+the rAF-shim + in-place-login recipe; drove via `javascript_tool` + the CSRF
+header for mutations.
+
+**My Products (FU-214) — cleared, all deleted from DORA_VERIFY:**
+- **L193** mark-inactive: `PATCH /products/{id}` `{is_active:false}` → **204, no
+  "Extra inputs not permitted" 422** (bug gone); restore → 204.
+- **L195** linked chip green (`rgb(53,151,102)`)/white; unlinked = grey `link_off`
+  caption + primary "Link…". **L198** inactive card `opacity:0.6` + grey Inactive
+  badge (source-legible). **L197** kebab = Open/Unlink/Link/Mark-inactive/View-
+  price-history — **soft-deactivate only, no hard delete**, correct under ingestion.
+
+**FU-208 Link… — cleared:** clicking "Link…" on the unlinked Freddo opened the
+"Link to a stock item" dialog **in place** (hash unchanged, **no bounce**;
+`confirmLink` has no `router.push`); `POST /stock-items/{id}/products` → 204,
+rendered linked ("Load item 0006"); unlink → 204. Error path = try/catch negative
+toast (source-confirmed).
+
+**Price History (FU-214 L218–L225) — cleared, and found + fixed a real bug:**
+- **[[FU-605]] (production-visible, FIXED + verified live):** interactive product
+  picking updated the "Selected" chips but **never refetched the series** → chart +
+  comparison strip stayed empty. Root cause: `PriceHistoryPage.vue` `toggleSelect`
+  mutated `selectedIds.value` in place (`.push`/`.splice`) under a **shallow**
+  `watch([selectedIds, range])`; only the `?product_id=` deep-link worked (it
+  reassigns). Fix: reassign immutably in `toggleSelect` (filter / spread). Rebuilt
+  `quasar build -m spa`, reloaded → preselect 1 card → add 2nd → **2 cards/lines** →
+  deselect → back to 1. No test (UI reactivity, churny surface; live-drive is the
+  right disposition per the LEAN stance).
+- L219 comparison card + "Notify me below ($)" input; **L220** money-formatted
+  label; **L221/L222** `-N%` shared `positive` chip @10px; **L225** chart svg 914px
+  fills the card w/ axes + line; **L223** hover tooltip uses
+  `--surface-component`/`--text-secondary`/`--border-default` → dark `#162724` on
+  light `#bfc8cf` in pesto-dark, **not white-on-white** (fixed).
+
+**[[FU-606]] opened (product decision):** L205/L206 asked whether to build stock-
+level-aware bulk variants ("low-stock-on-deal" / "out-of-stock-on-deal") on My
+Products. It has no stock-level filter dimension, and stock-aware buying is already
+served by Draft-my-shop / buy-verdict / auto-add-on-low. **Recommend: generic
+"Select on-deal" suffices, don't build (won't-do).** Needs a quick owner yes/no.
+DORA_VERIFY L205/L206 deleted (moved to the FU as a decision, not a browser check).
+
+**Survivor:** DORA_VERIFY L160 (no *other* Dora search bar has the dark-mode
+white-on-white bug) — cross-cutting, not driven this unit.
+
+**Data hygiene:** every mutation reverted (product active-flags restored, Freddo
+unlinked back to null, no armed alerts created). Stray `data-theme` attribute I set
+while sampling dark-mode tokens was cleaned by a reload → app back to pesto-dark.
+
+**Close-gate:** verification + one real fix (R-003/state-ownership-adjacent —
+client presentation reactivity, no domain logic touched; no new rule). No ADR.
+Engineering-standards: the fix is the idiomatic Vue 3 immutable-update; no rule
+violated.
+
+**Environment:** `dora-verify-backend-money` on :5170 (money on), authenticated as
+`dora`, pesto-dark. SPA rebuilt (`-m spa`) with the FU-605 fix.
+
+**Next up:** trim-to-budget happy path (FU-448 — needs a contrived cuttable list);
+Batch 8 put-away dialog (FU-452) / quick-add toast (FU-316); DORA_VERIFY L160 dark-
+mode search-bar sweep. Env-gated batches 17–20 still ⚪.
+
+---
+
 ## 2026-07-23 (later 3) — Verify Batch 11 C-9.5 price watch (money seed); FU-604
 
 Continued on the money-on seed (no reboot from the previous unit). Cleared the

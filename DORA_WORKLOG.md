@@ -18,6 +18,22 @@ next.
 
 ---
 
+## 2026-07-25 — FU-586: dashboard money/deal cards blank on a cold load
+
+Owner picked FU-586 off the backlog (the only "resolution: now" item among the three small code-with-a-fork candidates the last handoff named).
+
+**FU-586 — money/deal cards don't populate on a hard reload.** `DashboardPage.loadAll()` fires every card loader on mount; the money loaders (`loadBudget`/`loadSavings`/`loadSpendByStore`/`loadPantryValue`/`loadSwapSummary`) early-return on `moneyEnabled`, and `loadPriceDrops` on `productsEnabled`. On a cold load (hard reload / PWA cold start) the once-per-document `/api/health` flags probe hasn't resolved by mount, so the gates read false, the loaders skip, and nothing re-ran them when the flags landed — card bodies stayed blank until the user navigated away and back.
+
+**Fix (reactive re-trigger, not await-flagsLoaded).** Added two `watch`es in `DashboardPage.vue` — on `moneyEnabled` and `productsEnabled` — that re-fire exactly the gated loaders when a gate transitions on. Chose this over awaiting `flagsLoaded` in `loadAll` because it also covers money's *second* dependency (`currentUser`'s per-user opt-in, from a different async source) and needs no promise plumbing out of `useFeatureFlags`. Warm navigations (gate already true at mount) never fire the watchers → zero extra requests. Corrected the FU's addendum misread: `loadBestDeals` isn't actually gated on `productsEnabled` in the code, so only `loadPriceDrops` needed re-firing.
+
+**Verify:** `vue-tsc` + `eslint` clean on `DashboardPage.vue`. No automated test added — the FU's "un-warm `dashboard-log-price.spec.ts` / `dashboard-price-drops.spec.ts`" instruction is **moot**: those specs were deleted in the 2026-07-20 smoke-only Playwright pivot, and this is a churny UI-lifecycle fix (LEAN stance). The bug is a *cold-reload* race the hidden preview pane can't reproduce (its agent-drive recipe requires avoiding full reloads, which kill the rAF shim) → owner live-walk queued in DORA_VERIFY (money ON → hard-reload → cards fill in without a second nav). CHANGELOG Fixed entry; FU-586 → RESOLVED (moved to the resolved ledger).
+
+**Close-gate:** ENGINEERING_STANDARDS — no violations introduced; the fix respects R-016 (flags still probed once, not re-fetched) and state-ownership (gates stay server-owned). No new R-rule/ADR warranted (specific fix, not a recurring pattern).
+
+**Next up:** owner to pick. Remaining small code-with-a-fork items: FU-581 (three surfaces link to the retired `/product-search` 404 — needs a per-surface destination call) and FU-583 (StockOverview ignores `?expiring=1`/`?stocktake=1` from the kitchen-health card). Then the design/product calls (FU-596/594/593/598) and the strategic cluster (FU-567 relicense, FU-562 billing, FU-557 support).
+
+---
+
 ## 2026-07-24 (later 11) — Owner yes/no batch: FU-602 / FU-606 / FU-604 / FU-603
 
 Cleared the four "confirm intent" FUs in one round of owner decisions. Two pure close-outs, two small code fixes.

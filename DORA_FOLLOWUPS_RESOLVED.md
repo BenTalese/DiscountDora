@@ -10,6 +10,34 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
+- **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297) · **Resolved:** 2026-07-25
+- **Type:** finding
+- **What:** `DashboardPage.loadAll()` fires all card loaders on mount, and each
+  money loader (`loadBudget`, `loadSavings`, `loadSpendByStore`,
+  `loadPantryValue`, `loadSwapSummary`) early-returns when `moneyEnabled.value`
+  is false; `loadPriceDrops` likewise on `productsEnabled`. On a cold page load
+  the `useFeatureFlags` `/api/health` probe usually hasn't resolved by mount, so
+  the gates are still false, the loaders skip, and **nothing re-ran them when
+  the flags landed**. Result: on a hard reload / PWA cold start the money & deal
+  card bodies stayed blank until the user navigated away and back.
+- **Owner decision (2026-07-25):** fix now (marked "now" — user-visible on every cold load).
+- **Resolution:** `DashboardPage.vue` now has two `watch`es — on `moneyEnabled`
+  and `productsEnabled` — that re-fire exactly the gated loaders when a gate
+  transitions on. Chose the reactive re-trigger over awaiting `flagsLoaded` in
+  `loadAll` because it also naturally covers money's second dependency
+  (`currentUser`'s per-user opt-in) and needs no promise plumbing out of
+  `useFeatureFlags`. Warm navigations (gate already true at mount) never fire
+  the watchers → no extra requests. `vue-tsc` + `eslint` clean.
+- **Note on the "un-warm the specs" instruction:** moot — the referenced
+  `dashboard-log-price.spec.ts` / `dashboard-price-drops.spec.ts` were deleted
+  in the 2026-07-20 smoke-only Playwright pivot, so there are no workaround specs
+  to un-warm and no new automated test warranted for this churny UI-lifecycle
+  fix (LEAN stance). Live-confirm queued in DORA_VERIFY (hard-reload the
+  dashboard with money ON → cards populate without a second navigation). The
+  `loadBestDeals` half of the old addendum was a misread: that loader isn't
+  actually gated on `productsEnabled`, so only `loadPriceDrops` needed re-firing.
+
 ## [RESOLVED] FU-603 — Cart add-to-list tooltip said "draft list" + defaulted to the in-progress shop
 - **Raised:** 2026-07-23 (lean-verify big round #5 — Batch 9, Cart Button) · **Resolved:** 2026-07-24
 - **Type:** finding (copy / minor UX)

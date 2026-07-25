@@ -195,34 +195,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fold into the next suggestions /
   dashboard-feed pass.
 
-## [OPEN] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
-- **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297)
-- **Type:** finding
-- **What:** `DashboardPage.loadAll()` fires all card loaders on mount, and each
-  money loader (`loadBudget`, `loadSavings`, `loadSpendByStore`,
-  `loadPantryValue`, `loadSwapSummary`, …) early-returns when
-  `moneyEnabled.value` is false. On a cold page load the `useFeatureFlags`
-  `/api/health` probe usually hasn't resolved by mount, so `installEnabled` is
-  still false, the loaders skip, and **nothing re-runs them when the flags
-  land** (no `watch(moneyEnabled)`, no await on `flagsLoaded`). Reproduced
-  deterministically in e2e: with money ON at both layers, a hard reload of
-  `/#/` fires zero `GET /api/budget/status`. The reactive template bits (Log
-  price button) recover; the fetched card bodies don't until the user
-  navigates away and back.
-- **Why deferred:** product fix out of scope for a test-codify unit; needs a
-  small design call (await `flagsLoaded` in `loadAll` vs a one-shot
-  `watch(moneyEnabled)` re-trigger). `dashboard-log-price.spec.ts` deliberately
-  does NOT pin the money-ON budget-status request — add that assertion when
-  this is fixed.
-- **Recommended resolution:** now — it's user-visible (money cards missing
-  after a hard reload / PWA cold start until a second navigation).
-- **2026-07-19 addendum:** same race, same fix needed for the
-  **products-gated** loaders (`loadPriceDrops`, `loadBestDeals` gate on
-  `productsEnabled` from the same one-shot probe). The
-  `dashboard-price-drops.spec.ts` spec works around it by warm-navigating
-  (land on `/#/stock`, then in-app goto `/#/`) — un-warm those specs when
-  this is fixed.
-
 ## [OPEN] FU-585 — LogPriceSheet back arrow keeps the search query; FU-300 verify bullet expected it cleared
 - **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300)
 - **Type:** finding

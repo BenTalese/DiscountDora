@@ -2224,6 +2224,28 @@
         await loadPrimaryListDetail();
     }
 
+    // FU-586: the money/products cards gate on the once-per-document
+    // `/api/health` flags probe (and, for money, on `currentUser`'s per-user
+    // opt-in). On a cold load — a hard reload or a PWA cold start — those
+    // usually haven't resolved when the dashboard mounts, so the gated loaders
+    // above early-return and, with nothing re-running them when the flags land,
+    // the money/deal card bodies stay blank until the user navigates away and
+    // back. Re-fire just the gated loaders when a gate transitions on. On a warm
+    // navigation the gate is already true at mount, `loadAll` fetches normally,
+    // and these never fire.
+    watch(moneyEnabled, (on) => {
+        if (!on) return;
+        void loadBudget();
+        void loadSwapSummary();
+        void loadSavings();
+        void loadSpendByStore();
+        void loadPantryValue();
+    });
+    watch(productsEnabled, (on) => {
+        if (!on) return;
+        void loadPriceDrops();
+    });
+
     onMounted(loadAll);
 </script>
 

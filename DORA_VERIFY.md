@@ -730,6 +730,9 @@ round-trip are exercised by `bulk-waste.spec.ts` test 6 + the FU-507 dialog spec
 
 ## Dashboard
 
+### Money/deal cards populate on a cold load — origin FU-586
+- [ ] With money features ON (install flag + your account's money opt-in), open the Dashboard, then **hard-reload** the page (Ctrl/Cmd-R, or cold-start the PWA). The money cards (budget, savings, spend-by-store, pantry value, budget-defense swaps) and the price-drops deal card should fill in on their own within a moment — **without** having to navigate away and back. (Before the FU-586 fix they stayed blank until a second navigation.)
+
 ### Draft my shop — one-click card — origin FU-351
 *(Test-pinned 2026-07-18. UI seams in new `web_app/e2e/dashboard-draft-shop.spec.ts`:
 card renders in the act zone with blurb + button; one-click happy path → "Drafted N

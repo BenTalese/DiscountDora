@@ -652,7 +652,7 @@
                     </ul>
                     <div v-else class="dora-empty">
                         Nothing on special among your saved products right now.
-                        <router-link class="dora-empty-cta" to="/product-search">Hunt for deals →</router-link>
+                        <a class="dora-empty-cta" role="button" tabindex="0" @click="openProductSearch(router)" @keydown.enter="openProductSearch(router)">Hunt for deals →</a>
                     </div>
                 </DashboardCard>
             </div>
@@ -1193,6 +1193,7 @@
     import { computed, onMounted, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
+    import { openProductSearch } from 'src/composables/useProductSearchUrl';
 
     // money renders route through the shared install-currency
     // formatter; the `$` prefix on <AnimatedNumber> reads the same symbol

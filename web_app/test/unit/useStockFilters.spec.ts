@@ -215,6 +215,16 @@ describe('useStockFilters — filtering', () => {
         expect(names(f)).toEqual(['Egg', 'Flour']);
     });
 
+    it('expiring-soon keeps items expiring ≤7d OR already expired (FU-583 freshness deep-link)', () => {
+        const f = makeFilters();
+        f.expiringSoonOnly.value = true;
+        // Dill expires in 3 days (≤7d), Egg is already expired; nothing else
+        // carries an expiry date. Non-essential and stock-level status are
+        // irrelevant to this filter.
+        expect(names(f)).toEqual(['Dill', 'Egg']);
+        expect(f.activeFilterCount.value).toBe(1);
+    });
+
     it('cart filter: on_list keeps items on any unticked list, off_list the rest', () => {
         const f = makeFilters();
         f.cartFilter.value = 'on_list';
@@ -371,6 +381,7 @@ describe('useStockFilters — summaries and helpers', () => {
         f.essentialsOnly.value = true;
         f.openOnly.value = true;
         f.hasAlertOnly.value = true;
+        f.expiringSoonOnly.value = true;
         f.cartFilter.value = 'on_list';
         f.recipeFilter.value = 'rcp-pie';
 

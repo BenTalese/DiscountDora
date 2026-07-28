@@ -75,6 +75,9 @@ export function useStockFilters(sources: {
             hasAlertOnly: ref(false),
             // PROPOSAL_STOCKTAKE_MODE §7 — "in the stocktake queue right now".
             needsCheckOnly: ref(false),
+            // "Expiring soon or already expired" — the Dora Score freshness
+            // action deep-links here via ?expiring=1 (FU-583).
+            expiringSoonOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             // Deep-link from stock-item detail page's "Recipes using this".
             recipeFilter: ref<string | null>(null),
@@ -89,13 +92,14 @@ export function useStockFilters(sources: {
             openOnly: ref(false),
             hasAlertOnly: ref(false),
             needsCheckOnly: ref(false),
+            expiringSoonOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
             sortBy: ref<StockSortKey>('name_asc'),
         };
     const {
         searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
-        openOnly, hasAlertOnly, needsCheckOnly, cartFilter,
+        openOnly, hasAlertOnly, needsCheckOnly, expiringSoonOnly, cartFilter,
         recipeFilter, sortBy,
     } = state;
 
@@ -249,6 +253,8 @@ export function useStockFilters(sources: {
                 const ids = sources.needsCheckIds?.();
                 if (!ids || !ids.has(item.stock_item_id)) return false;
             }
+            if (expiringSoonOnly.value && !isExpiringSoon(item) && !isExpired(item))
+                return false;
             if (tokens.length > 0) {
                 const haystack = item.name.toLowerCase();
                 if (!tokens.some((t) => haystack.includes(t))) return false;
@@ -326,6 +332,7 @@ export function useStockFilters(sources: {
         if (essentialsOnly.value) n++;
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
+        if (expiringSoonOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
         if (recipeFilter.value !== null) n++;
         return n;
@@ -415,6 +422,7 @@ export function useStockFilters(sources: {
         essentialsOnly.value = false;
         openOnly.value = false;
         hasAlertOnly.value = false;
+        expiringSoonOnly.value = false;
         cartFilter.value = 'all';
         recipeFilter.value = null;
     }
@@ -429,6 +437,7 @@ export function useStockFilters(sources: {
         openOnly,
         hasAlertOnly,
         needsCheckOnly,
+        expiringSoonOnly,
         cartFilter,
         recipeFilter,
         recipeFilterContext,

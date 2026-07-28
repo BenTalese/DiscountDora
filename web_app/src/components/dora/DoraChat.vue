@@ -435,6 +435,7 @@
     import type { QScrollArea } from 'quasar';
     import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { openProductSearch } from 'src/composables/useProductSearchUrl';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     type Message = {
@@ -1343,6 +1344,17 @@
                 } else {
                     void router.push(action.path);
                 }
+                emit('close');
+                break;
+            }
+            case 'product_search': {
+                // FU-186/FU-581 — opens the external Product Search companion
+                // (new tab) or the Features setup page when no URL is set.
+                pushDoraMessage({
+                    text: 'Opening Product Search.',
+                    mood: 'happy',
+                });
+                openProductSearch(router);
                 emit('close');
                 break;
             }

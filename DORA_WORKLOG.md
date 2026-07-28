@@ -18,6 +18,66 @@ next.
 
 ---
 
+## 2026-07-26 — Verify walk round 3: cookable route + unlinked empty-state
+
+Same session, 2 more boxes cleared (895 → 893). FU-386 cookable chip: `#/cookbook?cookable=true` narrows the overview 38→8 (route contract; chip→route already noted live) — deleted. Bulk-linker empty-state: `/settings/admin/data/unlinked-ingredients` shows "Every recipe ingredient is linked to a stock item." (seed has no unlinked rows) — deleted; sibling autocomplete/Link boxes need unlinked data, kept. Evidence in DORA_VERIFY_TRIAGE.md. **The agent-drivable pile is now largely exhausted** — remainder needs contrived data, specific install flags, device flows, or visual eyeballs (owner/device walks). No product code changed.
+
+---
+
+## 2026-07-26 — Verify walk round 2: substitute-swap gating + cookbook render
+
+Same seeded session, 3 more DORA_VERIFY boxes cleared (898 → 895). Shopping-list substitute-swap gating (FU-407) both directions — enabled icon opens the chooser ("Swap Olive Oil with… Butter"), disabled maps to `!has_substitutes`, tooltip strings source-confirmed; deleted the two boxes (visual + product-only survive). Cookbook cookability/ingredients render — Cheesy Garlic Bread detail shows all 4 ingredient rows with per-item stock status + a correct "Missing" badge; server filter contract already test-pinned, so the whole section went. Evidence in DORA_VERIFY_TRIAGE.md. No product code changed.
+
+---
+
+## 2026-07-26 — Verify walk: FU-583 cleared, FU-581 partly cleared
+
+Drove the seeded money-on backend + SPA to burn down verify items for the two FUs just shipped (owner wants DORA_VERIFY to *shrink*).
+
+**FU-583 — CLEARED** (block deleted from DORA_VERIFY): `#/stock?expiring=1` → **Expiring soon** chip active (`q-chip--selected`+`text-warning`), badge counts 1, list narrowed (24 shown); `#/stock?stocktake=1` → **Needs check** active (3 shown); chip toggles live. The literal Dora Score card button isn't rendered in this dashboard config, but the card→URL strings are unchanged source and the destination (the only thing the fix touched) is proven. Predicate/clear/count also unit-pinned.
+
+**FU-581 — partly cleared** (block trimmed): verified the key new behaviour — Product Search nav entry present with products on + URL unset, routing to the Features page (no external icon/new-tab). Left in DORA_VERIFY: external-when-set (couldn't flip the setting — Quasar blur-save didn't fire the write; direct PATCH is CSRF-403), products-off-hidden, and the CTA destinations.
+
+Evidence + the browser-driving gotchas recorded in DORA_VERIFY_TRIAGE.md. No product code changed; no state left dirty (no setting write succeeded). **Next up:** owner to pick (design/product calls FU-596/594/593/598, or the strategic cluster).
+
+---
+
+## 2026-07-26 — FU-583: kitchen-health deep-links now filter the pantry
+
+Owner picked FU-583 next (the last small code-with-a-fork item the FU-581 handoff named).
+
+**FU-583 — dropped query params.** `DoraScoreCard`'s Freshness action links to `/stock?expiring=1` and Stocktake to `/stock?stocktake=1`, but `StockOverview.applyQueryFilters()` only honoured `location_id`/`attention`/`level_id` — both params were silently dropped, landing the user on the full unfiltered pantry.
+
+**Fix.** Added an `expiringSoonOnly` filter to `useStockFilters` (predicate reuses the existing `isExpiringSoon`/`isExpired` helpers — expiring ≤7d OR already expired, so **no new domain constant / no R-003 drift**), wired into the filter-state (both persisted + plain branches), `filteredStockItems`, `activeFilterCount`, `clearFilters`, and the return. Surfaced it as an **Expiring soon** FilterChip on the Stock page (`ICONS.expiry`, warning tone, with a help tooltip). `applyQueryFilters()` now maps `?expiring=1` → `expiringSoonOnly` and `?stocktake=1` → the existing `needsCheckOnly` chip; extended the deep-link `watch` to fire on both new params.
+
+**Fork resolved.** `?stocktake=1` → keep it *in the overview* (Needs-check filter) rather than routing to the `/stocktake` runner — matches the card author's inline "stock overview's stocktake mode" comment and reuses an existing chip (zero new surface). The DoraScoreCard comments were already accurate post-fix, so left untouched.
+
+**Verify:** New Vitest cases in `useStockFilters.spec.ts` pin the expiring-soon predicate (Dill @ +3d + Egg expired → `['Dill','Egg']`) and its inclusion in clear/count — 31 green. `vue-tsc` + `eslint` clean. The FU's `web_app/e2e/dora-score.spec.ts` was deleted in the 2026-07-20 smoke-only pivot, so the contract is pinned at the unit level; a short deep-link + chip live-walk queued in DORA_VERIFY (Stock). CHANGELOG Fixed entry; FU-583 → RESOLVED.
+
+**Close-gate:** ENGINEERING_STANDARDS — R-003/state-ownership respected (reused existing client-side expiry helpers, added no new constant; the 7-day window is the pre-existing one). No new R-rule/ADR (a routine filter addition following the established `hasAlertOnly`/`needsCheckOnly` pattern). D-rules: new chip follows the existing FilterChip pattern (icon + active-color + tooltip), no bespoke colour/tap-target.
+
+**Next up:** owner to pick. The small code-with-a-fork queue is now clear (FU-581 + FU-583 done). Remaining: the design/product calls (FU-596/594/593/598) and the strategic cluster (FU-567 relicense, FU-562 billing, FU-557 support).
+
+---
+
+## 2026-07-26 — FU-581: stale `/product-search` links + Product Search nav always visible
+
+Owner picked FU-581 off the backlog and added a design directive: **unhide the Product Search nav entry** — keep it visible when products is on (even before the URL is set) to signal the surface exists and can be set up. (Confirmed the prior behaviour: it *was* shown when products on + URL set, hidden otherwise.)
+
+**FU-581 — dead-route dead-ends.** FU-186 removed the in-app `/product-search` route (Product Search became an external companion opened via `AppSetting.product_search_url`), but multiple in-app entry points still pushed to the dead route → 404: `StockItemDetailPage.onFindAndLink()`, `MyProductsPage` empty-state button (`to="/product-search"`) + `searchForOrphan()`, `DashboardPage` "Hunt for deals →", **plus two the FU didn't enumerate** — the Dora contextual quick-actions "Find cheaper alternatives" and "Hunt for fresh deals" in `doraContextualActions.ts` (the FU said "at least three"; found these while sweeping, fixed them too rather than leaving known 404s).
+
+**Fix (one shared resolver).** Added `openProductSearch(router)` + `PRODUCT_SEARCH_SETTINGS_PATH` + a `configured` computed to `useProductSearchUrl.ts` (single source, R-003): configured URL → `window.open(url, _blank)`; unset → `router.push('/settings/admin/system/features')` so setup is reachable instead of a dead end. Wired every CTA through it. Dropped the stale `?q=`/`?stock_item_id=` seeding (nothing consumed it post-FU-186; auto-link died with the in-app page — products found in the companion are linked back via My Products' per-product "Link to stock item…" dialog). For the two Dora actions, added a new `product_search` `ContextualAction` kind dispatched through the resolver in `DoraChat.vue`.
+
+**Nav change (owner call).** `MainLayout.productSearchEntry` now returns an entry whenever `features.products` is on: `href: url` when configured (external, open_in_new), else `link: PRODUCT_SEARCH_SETTINGS_PATH` (internal, to the Features page). Previously returned `null` when unset. Noted inline that this supersedes R-029's hide-when-unset for this one entry. Also refreshed two stale comments referencing the dead `/product-search` route.
+
+**Verify:** `vue-tsc` + `eslint` clean across all 7 changed files (`useProductSearchUrl.ts`, `MainLayout.vue`, `StockItemDetailPage.vue`, `MyProductsPage.vue`, `DashboardPage.vue`, `doraContextualActions.ts`, `DoraChat.vue`). No frontend unit/e2e test pins these surfaces (the FU's `detail-products-tab.spec.ts` was deleted in the 2026-07-20 smoke-only pivot). Mechanical route→handler swaps; the meaningful check is the products-on × url-set/unset state matrix, which needs a seeded backend + Features-page toggling → owner live-walk queued in DORA_VERIFY (Cross-cutting). CHANGELOG Fixed entry; FU-581 → RESOLVED (moved to the resolved ledger).
+
+**Close-gate:** ENGINEERING_STANDARDS — R-003 respected (one resolver, not per-call-site logic). The nav change deliberately supersedes R-029 (hide-unset-features) for this single entry per the owner's directive; flagged inline in `MainLayout.vue` rather than left as silent drift. D-rules: no colour/contrast/tap-target changes (route/handler swaps + one `<router-link>`→keyboard-accessible `<a role=button tabindex=0>` with Enter handler). No new R-rule/ADR warranted (specific fix reusing the existing composable pattern).
+
+**Next up:** owner to pick. Remaining small code-with-a-fork item: FU-583 (StockOverview ignores `?expiring=1`/`?stocktake=1` from the kitchen-health card). Then the design/product calls (FU-596/594/593/598) and the strategic cluster (FU-567 relicense, FU-562 billing, FU-557 support).
+
+---
+
 ## 2026-07-25 — FU-586: dashboard money/deal cards blank on a cold load
 
 Owner picked FU-586 off the backlog (the only "resolution: now" item among the three small code-with-a-fork candidates the last handoff named).

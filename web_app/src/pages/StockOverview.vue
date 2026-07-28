@@ -150,6 +150,18 @@
             </FilterChip>
 
             <span class="row items-center no-wrap">
+                <FilterChip v-model="filters.expiringSoonOnly.value" :icon="ICONS.expiry" active-color="warning">
+                    Expiring soon
+                </FilterChip>
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                    <q-tooltip>
+                        Items expiring within the next 7 days, or already expired.
+                        The dashboard's freshness score links straight here.
+                    </q-tooltip>
+                </q-icon>
+            </span>
+
+            <span class="row items-center no-wrap">
                 <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="secondary">
                     Essential
                 </FilterChip>
@@ -1371,10 +1383,25 @@
         if (typeof q.level_id === 'string' && q.level_id) {
             filters.levelFilter.value = q.level_id;
         }
+        // FU-583 — the Dora Score freshness/stocktake actions deep-link here.
+        // `expiring=1` narrows to expiring-soon / expired; `stocktake=1` opens
+        // the existing "Needs check" (stocktake-queue) filter.
+        if (q.expiring === 'true' || q.expiring === '1') {
+            filters.expiringSoonOnly.value = true;
+        }
+        if (q.stocktake === 'true' || q.stocktake === '1') {
+            filters.needsCheckOnly.value = true;
+        }
     }
 
     watch(
-        () => [route.query.location_id, route.query.attention, route.query.level_id],
+        () => [
+            route.query.location_id,
+            route.query.attention,
+            route.query.level_id,
+            route.query.expiring,
+            route.query.stocktake,
+        ],
         applyQueryFilters,
     );
 

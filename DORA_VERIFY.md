@@ -38,7 +38,6 @@ top-to-bottom.
 - [ ] **Greeting once-per-user (FU-360.5).** Fresh browser, log in as user A → the "Hi! I'm Dora" hint appears once; dismiss it → it doesn't return for A across reloads/logins. Log in as a *different* user B in the same browser → B sees the hint once (proving it's per-user, not per-browser).
 - [ ] **Mode slider — enabled/toggle path (FU-360.3).** With AI mode configured (Settings → Assistant: provider + model + base URL/api key saved, install master ON), open Dora → the chat header shows a two-position pill "Basic | AI" with a skewed thick knob glowing on the active side. Tap the inactive side → knob slides across with the glow, PATCH `/auth/me` fires, and `/assistant/status` re-probes; the "AI mode unavailable" banner appears if the LLM isn't currently reachable. Tap back → returns to Basic. *(The disabled/no-LLM state + rem-scaling are verified above; this enabled-toggle path needs a configured LLM → owner-walk.)*
 - [ ] **FU-360.4 (DS4 hover-flash regression) — fix landed 2026-07-12.** Hover the launcher / mascot repeatedly, and specifically *hover off* → mascot should stay put, no disappear-and-animate-back-in. Cause: the one-shot `dora-entrance` keyframes lived on the base `.dora-bubble-launcher-inner` rule, so when the hover-bob animation stopped and the base declaration reasserted, `dora-entrance` (with 300ms delay + `both` fill) restarted from its `scale(0) opacity: 0` frame. Moved onto a `.is-entering` modifier removed via `@animationend` after the entrance plays.
-- [ ] **FU-386 (cookable chip).** Open Dora on the Dashboard or Cookbook → tap the **"Cookable now"** / "Find a recipe to cook" chip → lands on the cookbook filtered to cookable recipes (the `?cookable=true` contract, confirmed live end-to-end).
 - [ ] **FU-515 B.3 (tool-arg bound, AI mode only).** With AI mode on, ask Dora to **"push the milk expiry by 99999 days"** → she declines with a "more than ~10 years — give me a sensible number" style message rather than proposing an absurd date. (Sanity check on the boundary cap; normal pushes like "+3 days" still work.)
 
 ## Currency & locale (FU-043) — origin FU-043
@@ -98,10 +97,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ## Cookbook & recipes
 
-### Cookbook cookability + expiring filters actually filter (identity-map bug fixed 2026-07-10)
-*(Server contract fully pinned: `Cookable`/`Not cookable`/`max_missing`/`expiring_within_days` all filter correctly and exclude unlinked recipes from the cookability axes — `test_recipe_filters.py` (14 tests) + `test_recipe_router.py` `CookableTrueFilter`/`CookableFalseFilter`/`MaxMissingFilter`/`ExpiringWithinDaysFilter` [`expiring_ingredient_count` asserted]. The identity-map regression can't recur silently. Only the card-render eyeball stays.)*
-- [ ] While filtered, spot-check a recipe card: its ingredients list and cookability badge render correctly (the fix also touched what filtered pages eager-load)
-
 ### Free-text ingredient path in the recipe editor — origin FU-506
 *(Tri-state cookability server contract pinned: a required unlinked ingredient makes cookability `null`/Unknown [not True/False], multiple unlinked still null, an unlinked *optional* ingredient doesn't gate — `test_recipe_cookability.py` + `test_recipe_router.py` `UnlinkedRequiredIngredient__CookableIsTriStateNull`. The editor UI interactions below stay owner-walk.)*
 - [ ] Open any recipe → **Add ingredient** → in the picker, type a name that matches nothing (e.g. "star anise" on a fresh install)
@@ -116,7 +111,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 
 ### Recipe importer — bulk-linker + PWA share target (Chunk 6) — origin IMPL_PLAN_RECIPE_IMPORTER
 *(Verified live 2026-07-22 (browser drive; fed by an imported recipe with 4 unlinked ingredients): the **Unlinked ingredients** entry renders in the settings sidebar and the page (`/settings/admin/data/unlinked-ingredients`) lists each unlinked ingredient as a group row **`raw_text · Used in N recipes`** with a per-row Link-to-stock-item autocomplete / **Link** / **Create new** — count correct at "Used in 1 recipe" (the **FU-588** "Used in 0" regression is gone). **Create new** on the "1 lemon, juiced" row fired the toast **"Created "1 lemon, juiced" and linked in 1 recipe."** (item = `raw_text`), dropped the group count 4→3, and on the source recipe the lemon row became **linked** (`unlinked_ingredient_count` 4→3) with cookability staying `null` (neutral, still 3 unlinked). Created item + recipe deleted after. Below = the empty-state, the autocomplete/Link-button UI (Quasar q-select not synthetically drivable — endpoint pinned in `test_unlinked_ingredients_bulk_link.py`), and the Android share target.)*
-- [ ] With no unlinked rows in the DB, the page shows the empty-state ("Every recipe ingredient is linked to a stock item.")
 - [ ] Pick a stock item from the autocomplete → click **Link** → toast confirms "Linked '<raw_text>' in N recipe(s)"; the group disappears *(the `bulk-link` endpoint is pinned in `test_unlinked_ingredients_bulk_link.py`; this bullet is the autocomplete + toast UI — the Create-new sibling path was verified live)*
 - [ ] Auto-complete typing filters to matches; empty search shows the top of the alphabetical list (capped at 50)
 - [ ] **PWA share target — Android Chrome only.** After installing Dora as a PWA (from the browser's Install prompt), open a recipe on RecipeTin Eats in Chrome → hit Share → **Dashy Dora** appears in the sheet → tap it → Dora opens on the cookbook overview, the paste dialog pops with the page text pre-filled in the textarea + the recipe URL in "Where's this from?" → hit Import → new recipe lands in the cookbook
@@ -356,8 +350,6 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ## Shopping lists
 
 ### Substitute-swap gating on a line — origin FU-407 (RD-18)
-- [ ] A shopping-list line whose stock item **has** a recorded substitute → the swap (⇄) icon is enabled; tooltip "Swap for a substitute item"; tapping opens the substitute chooser.
-- [ ] A line whose item has **no** substitute → the swap icon is **disabled**; tooltip "No substitutes recorded for this item" (no dead-end tap→toast).
 - [ ] The swap affordance reads as distinct from the "store offers" picker on the same line (no "two Substitute labels" confusion).
 - [ ] Product-only line (no stock item) → swap disabled.
 
@@ -1306,6 +1298,10 @@ machine at this session close-time; walked opportunistically.*
 ---
 
 ## Cross-cutting
+
+### Product Search entry points — FU-581 (nav-present-when-unset→Features verified live 2026-07-26)
+- [ ] Set a URL on Features → nav Product Search entry becomes an external new-tab link (open_in_new); products off → entry hidden.
+- [ ] CTAs route right (unset→Features, set→companion), no 404: stock-detail "Find & link a product"; My Products empty-state + orphan search; Dashboard "Hunt for deals →"; Dora "Find cheaper alternatives" / "Hunt for fresh deals".
 
 ### Main menu bar bottom border removed — origin FU-363 item 6 (2026-07-15)
 *Subjective micro-polish — trivially revertible (re-add `bordered` to the `q-header` in `MainLayout.vue`) if it reads worse.*

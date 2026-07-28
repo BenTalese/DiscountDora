@@ -1022,6 +1022,7 @@
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { openProductSearch } from 'src/composables/useProductSearchUrl';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
@@ -1569,15 +1570,12 @@
         return cheapestProduct.value?.product_id === p.product_id;
     }
 
-    // Find-deals now lives only inside the Products tab
-    // (empty-state CTA + "Link another" when products exist). Both route
-    // to product-search seeded with the item name; that page already owns
-    // the link flow.
+    // Find-deals now lives only inside the Products tab (empty-state CTA +
+    // "Link another" when products exist). FU-186 retired the in-app
+    // `/product-search` route; both entry points now open the external
+    // Product Search companion (or the Features setup page when unset).
     function onFindAndLink() {
-        void router.push({
-            path: '/product-search',
-            query: { q: detail.value?.name ?? '' },
-        });
+        openProductSearch(router);
     }
 
     async function onAddProductToList(productId: string) {
@@ -2046,7 +2044,8 @@
 
     // ── Unlink products ──────────────────────────────────────────────────
     // The saved-products picker dialog was retired; the Find-&-link CTA
-    // on /product-search owns the link flow.
+    // opens the external Product Search companion (FU-186), and products are
+    // linked back from the My Products "Link to stock item…" dialog.
     async function onUnlink(productId: string) {
         await withBusyReload(() => stockItemApi.unlinkProductAsync(stockItemId.value, productId));
     }

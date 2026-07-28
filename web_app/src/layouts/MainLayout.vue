@@ -149,7 +149,7 @@
     import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
     import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
-    import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
+    import { PRODUCT_SEARCH_SETTINGS_PATH, useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
@@ -193,26 +193,32 @@
 
     // Phase D / FU-186 — the "Product Search" entry:
     //   - hidden when products is off (no product data ⇒ no search surface)
-    //   - hidden when products is on but no `product_search_url` is
-    //     configured (R-029: respect the off-state, don't nag). Admins who
-    //     need to set the URL find the row on Settings → System → Features
-    //     — the config screen is the one legitimate place the not-set-up
-    //     state is visible.
-    //   - external link (new tab) when both flags are good. The destination
-    //     (a sibling companion / a static page / whatever the operator runs)
-    //     is **never named** here — it's just "Product Search".
+    //   - shown when products is on: external link (new tab) when a
+    //     `product_search_url` is configured, otherwise an internal link to
+    //     the admin Features page. Keeping the entry visible even when unset
+    //     signals the surface exists and can be set up (owner call, FU-581) —
+    //     this supersedes the earlier R-029 hide-when-unset behaviour for
+    //     this one entry. The external destination (a sibling companion / a
+    //     static page / whatever the operator runs) is **never named** here.
     const features = useFeatureFlags();
     const productSearch = useProductSearchUrl();
 
     const productSearchEntry = computed<MenuButtonProps | null>(() => {
         if (!features.products.value) return null;
         const url = productSearch.url.value.trim();
-        if (!url) return null;
+        if (url) {
+            return {
+                label: 'Product Search',
+                icon: ICONS.search,
+                link: '',
+                href: url
+            };
+        }
+        // Not set up yet — route to the Features page where the URL is set.
         return {
             label: 'Product Search',
             icon: ICONS.search,
-            link: '',
-            href: url
+            link: PRODUCT_SEARCH_SETTINGS_PATH
         };
     });
 

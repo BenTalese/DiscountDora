@@ -28,7 +28,12 @@ export type ContextualAction =
     // computation inline so we don't have to drag the recipe store
     // through this module.
     | { kind: 'whats_missing'; label: string; icon: string; recipeId: string }
-    | { kind: 'add_missing'; label: string; icon: string; recipeId: string };
+    | { kind: 'add_missing'; label: string; icon: string; recipeId: string }
+    // Open the external Product Search companion (FU-186 retired the in-app
+    // `/product-search` route). Carries no path — the destination is the
+    // admin-configured URL, resolved at dispatch time, with a fallback to the
+    // Features setup page when unset. See openProductSearch (FU-581).
+    | { kind: 'product_search'; label: string; icon: string };
 
 // Route-aware contextual action lookup. The function takes the path and
 // the resolved `:id` param (when present) — we don't need the whole
@@ -42,11 +47,9 @@ export function contextualActionsFor(
         const id = params.id;
         return [
             {
-                kind: 'navigate',
+                kind: 'product_search',
                 label: 'Find cheaper alternatives',
                 icon: ICONS.price_check,
-                path: '/product-search',
-                query: { stock_item_id: id },
             },
             {
                 kind: 'add_to_list',
@@ -154,10 +157,9 @@ export function contextualActionsFor(
     if (path === '/my-products') {
         return [
             {
-                kind: 'navigate',
+                kind: 'product_search',
                 label: 'Hunt for fresh deals',
                 icon: ICONS.search,
-                path: '/product-search',
             },
         ];
     }

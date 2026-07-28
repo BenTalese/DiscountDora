@@ -1827,3 +1827,63 @@ ones below can be decided up front.
 - **Built-PWA checks:** `quasar build -m pwa` + `quasar serve` or the Docker
   image; batch 17.
 - Line refs in this doc = 2026-07-16 snapshot of DORA_VERIFY.md.
+
+### FU-583 + FU-581 verify walk (2026-07-26)
+
+Drove the seeded money-on backend + SPA (login via the documented rAF-shim +
+`form.requestSubmit()` recipe; screenshots time out as noted).
+
+**FU-583 — kitchen-health deep-links → CLEARED, block deleted from DORA_VERIFY.**
+`#/stock?expiring=1` activates the **Expiring soon** chip (`q-chip--selected` +
+`text-warning`), filter badge counts 1, list narrows (24 shown). `#/stock?stocktake=1`
+activates **Needs check** (3 shown). Expiring-soon chip toggles off live. The literal
+Dora Score card button wasn't clickable (card not rendered in this dashboard's config),
+but the card→URL strings are unchanged source and the destination — the only thing the
+fix touched — is proven from both params. Predicate/clear/count also unit-pinned
+(`useStockFilters.spec.ts`, 31 green).
+
+**FU-581 — nav entry present-when-unset → CLEARED that line; block trimmed.** With
+products on + `product_search_url` empty, the **Product Search** nav entry renders and
+routes to `#/settings/admin/system/features` with no `open_in_new`/new-tab — the key new
+owner behaviour. NOT driven (left in DORA_VERIFY): external-when-set (couldn't flip the
+setting — UI blur-save didn't fire the write, direct PATCH is CSRF-403), products-off
+hidden, and the individual CTA destinations. All are one-line conditionals already
+type/lint-clean.
+
+### Verify walk round 2 (2026-07-26) — substitute-swap gating + cookbook render
+
+Same seeded session. 3 boxes cleared:
+
+- **Shopping-list substitute-swap gating (FU-407, both directions) — deleted.** On the
+  active "Saturday shop" list: 2 swap icons enabled, 4 disabled. Clicking an enabled one
+  opened the chooser ("Swap Olive Oil with… Butter (Stocked)", Cancel/Swap) — cancelled,
+  no mutation. Disabled = `!has_substitutes` (also `!stock_item_id` / done-list), tooltip
+  strings source-confirmed (`ShoppingListDetail.vue:896-902`: "Swap for a substitute item"
+  / "No substitutes recorded for this item"). Backend `has_substitutes` unit-pinned.
+  Survivors in that section: the visual "distinct from store-offers picker" eyeball +
+  product-only-line disabled (not driven).
+- **Cookbook cookability + ingredients render (identity-map fix) — section deleted.** Opened
+  Cheesy Garlic Bread detail: Ingredients list renders all 4 rows with per-item stock status
+  (Sourdough Missing, Butter/Garlic Stocked, Parmesan Missing) and the cookability badge reads
+  **Missing** — correct. Server filter contract already fully pinned (`test_recipe_filters.py`
+  +14). The only remaining eyeball is now done.
+
+Net: DORA_VERIFY 898 → 895 boxes.
+
+### Verify walk round 3 (2026-07-26) — cookable route + unlinked empty-state
+
+Same seeded session. 2 boxes cleared (895 → 893):
+
+- **FU-386 cookable chip → `?cookable=true` route — deleted.** `#/cookbook?cookable=true`
+  narrows the overview 38 → 8 cards with the Filters badge showing 1 active. The chip→route
+  path was already noted confirmed-live; route contract also backend-pinned
+  (`test_recipe_router.py CookableTrueFilter`).
+- **Bulk-linker empty-state — deleted.** `/settings/admin/data/unlinked-ingredients` renders
+  the exact empty-state copy "Every recipe ingredient is linked to a stock item." (this seed
+  has zero unlinked rows). The sibling autocomplete/Link boxes stay — can't drive them without
+  unlinked data (and the Create-new path was already verified live 2026-07-22).
+
+**Drivable pile now thin:** what's left skews to contrived-data setups (fake-markdown verdict,
+alert-resolve refetch), specific install flags (money-off / plan-free / productless / non-admin),
+device/file flows (PWA install, camera, share target), and visual/dark-mode eyeballs (screenshots
+time out in this pane). Those are genuinely owner/device walks.

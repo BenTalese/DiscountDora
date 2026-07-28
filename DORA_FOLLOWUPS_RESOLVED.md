@@ -10,6 +10,51 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-583 — Kitchen-health action links carry query params StockOverview ignores (`?expiring=1`, `?stocktake=1`)
+- **Raised:** 2026-07-19 (verify-campaign Batch 10, Dora Score codification) · **Resolved:** 2026-07-26
+- **Type:** finding
+- **What:** `DoraScoreCard.vue`'s Freshness link (`/stock?expiring=1`) and Stocktake
+  link (`/stock?stocktake=1`) were silently dropped by `StockOverview.applyQueryFilters()`
+  (which only honoured `location_id`/`attention`/`level_id`), so the user landed on the
+  full unfiltered pantry instead of the items the score pointed at.
+- **Resolution (2026-07-26):** added an `expiringSoonOnly` filter to `useStockFilters`
+  (predicate reuses the existing `isExpiringSoon`/`isExpired` helpers — expiring ≤7d OR
+  already expired; no new domain constant), surfaced as an **Expiring soon** FilterChip on
+  the Stock page, and wired into `activeFilterCount` + `clearFilters`. `applyQueryFilters()`
+  now maps `?expiring=1` → `expiringSoonOnly` and `?stocktake=1` → the existing
+  `needsCheckOnly` (stocktake-queue) filter; the deep-link `watch` was extended to fire on
+  both new params. Chose to keep `stocktake=1` in the overview (Needs-check filter) rather
+  than route to the `/stocktake` runner — matches the card author's "stock overview's
+  stocktake mode" intent and reuses an existing chip. New Vitest cases pin the
+  expiring-soon predicate + its inclusion in clear/count; 31 green. vue-tsc + eslint clean.
+  The FU's `web_app/e2e/dora-score.spec.ts` no longer exists (deleted in the 2026-07-20
+  smoke-only pivot), so the contract is pinned at the unit level instead; a short deep-link
+  live-walk is queued in DORA_VERIFY.
+
+## [RESOLVED] FU-581 — Stale `/product-search` links: several surfaces routed to the retired route and landed on the 404
+- **Raised:** 2026-07-18 (verify Batch 3 — codifying the C-1b.3 Products-tab checks) · **Resolved:** 2026-07-26
+- **Type:** finding (real bug + a small design call)
+- **What:** FU-186 (Phase D) removed the in-app `/product-search` route — Product
+  Search is now an external companion opened via `AppSetting.product_search_url`.
+  Several call sites still `router.push`/linked to the dead route, landing users on
+  the 404: `StockItemDetailPage.onFindAndLink()`, `MyProductsPage` empty-state button
+  (`to="/product-search"`) + `searchForOrphan()`, `DashboardPage` "Hunt for deals →",
+  and two Dora contextual quick-actions ("Find cheaper alternatives",
+  "Hunt for fresh deals" in `doraContextualActions.ts`).
+- **Resolution (2026-07-26):** all entry points now route through one shared resolver
+  `openProductSearch(router)` in `useProductSearchUrl.ts` — configured URL opens the
+  external companion in a new tab; unset routes to `/settings/admin/system/features`
+  so setup is reachable instead of a dead end. Stale `?q=`/`?stock_item_id=` seeding
+  dropped (nothing consumed it after FU-186). Dora's two actions became a new
+  `product_search` `ContextualAction` kind dispatched through the same resolver.
+  **Owner design call:** the **Product Search** nav entry is now shown whenever the
+  products overlay is on (previously hidden until the URL was set) — links externally
+  when configured, else to the Features page; supersedes R-029 hide-when-unset for
+  this one entry (noted inline in `MainLayout.vue`). vue-tsc + eslint clean. No
+  automated test — the FU's `detail-products-tab.spec.ts` was deleted in the
+  2026-07-20 smoke-only Playwright pivot; owner live-walk of the products-on ×
+  url-set/unset matrix queued in DORA_VERIFY.
+
 ## [RESOLVED] FU-586 — Dashboard money loaders race the one-shot /api/health flags probe on a cold mount
 - **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300/FU-297) · **Resolved:** 2026-07-25
 - **Type:** finding

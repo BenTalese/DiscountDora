@@ -181,7 +181,7 @@
                 :icon="ICONS.search"
                 label="Open Product Search"
                 class="q-mt-md"
-                to="/product-search"
+                @click="openProductSearch(router)"
             />
             <BaseButton
                 v-else-if="hasAnyFilter"
@@ -624,6 +624,7 @@
     import ProductApiService from 'src/services/api/productApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { openProductSearch } from 'src/composables/useProductSearchUrl';
     import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -1173,12 +1174,13 @@
         return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
 
-    function searchForOrphan(item: StockItem) {
+    function searchForOrphan(_item: StockItem) {
+        // FU-186/FU-581 — the in-app `/product-search` route (which consumed
+        // the stock_item_id/q seeding to auto-link) is gone; open the external
+        // Product Search companion instead. Products found there are linked
+        // back via the per-product "Link to stock item…" dialog on this page.
         orphansOpen.value = false;
-        void router.push({
-            path: '/product-search',
-            query: { stock_item_id: item.stock_item_id, q: item.name },
-        });
+        openProductSearch(router);
     }
 
     onMounted(loadAll);

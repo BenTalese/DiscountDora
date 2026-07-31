@@ -10,6 +10,29 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-594 — Reconcile `skip` reversed the pool drain, contradicting the module's own documented contract
+- **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk) · **Resolved:** 2026-07-31
+- **Type:** finding
+- **What:** `dora_api/features/meal_plans/reconcile.py`'s docstring said `skip` →
+  `resolved_deferred` is a "session hint … no consumed_at / pool change", but the
+  code did the opposite: `_target_drained()` returned 0 for `VERB_SKIP`, so
+  `pool_delta = current_drained - 0` fully **reversed** the sweep's drain and the
+  same branch cleared `consumed_at`. Observed live: a planned-4 entry the sweep had
+  drained (pool 10) → tapping **Skip for now** moved the pool to **14**.
+- **Resolution (2026-07-31, owner picked Option A — skip is neutral):** the skip
+  path is now genuinely pool-neutral (target drain = current drain → delta 0) and
+  no longer clears `consumed_at`; the module docstring's stated contract is now
+  enforced rather than contradicted. Also fixed the follow-through in
+  `_effective_drained` — a `resolved_deferred` entry now reports its true drain
+  (via `consumed_at`) instead of 0, so a later `cooked` after a skip is a correct
+  no-op (no double drain) and a later `not_cooked` reverses the drain exactly once.
+  Three new backend contract tests in `test_reconcile_verbs.py`
+  (`__verb_skip_on_auto_drain_is_pool_neutral`,
+  `__cooked_after_skip_does_not_double_drain`,
+  `__not_cooked_after_skip_reverses_drain_once`); full reconcile + pool +
+  meal-plan suites green (17 + 38). CHANGELOG Fixed ×1. The state-ownership fix
+  keeps the drain math server-side (no client change).
+
 ## [RESOLVED] FU-596 — The step-by-step builder puts every meal in **Breakfast** (superseded by the "Build my week" auto-planner)
 - **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7, C-2.J walk) · **Resolved:** 2026-07-31
 - **Type:** finding (UX)

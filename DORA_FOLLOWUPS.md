@@ -152,31 +152,6 @@ long session summary. Distinct from the other logs:
   states get a legend) — the deeper rule this suggests is "colour alone is never
   the only channel", which may deserve its own D-rule.
 
-## [OPEN] FU-594 — Reconcile `skip` reverses the pool drain, contradicting the module's own documented contract
-- **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk)
-- **Type:** finding
-- **What:** `dora_api/features/meal_plans/reconcile.py`'s module docstring says
-  `skip` → `resolved_deferred` is a "session hint; small side effect, keeps the
-  entry in the queue on next visit — **no consumed_at / pool change**" (lines
-  ~25-28). The implementation does the opposite: `_target_drained()` returns 0
-  for `VERB_SKIP`, so `pool_delta = current_drained - 0` and the drain is fully
-  **reversed**; the same branch also clears `consumed_at`. Observed live: a
-  planned-4 entry the sweep had already drained, pool at 10 → tapping
-  **Skip for now** moved the pool to **14**. (Tapping Cooked afterwards
-  correctly re-drained to 10, so the code is internally self-consistent —
-  `_effective_drained()` treats `resolved_deferred` as drained=0. Only the
-  documented contract and the behaviour disagree.)
-- **Why deferred:** which side is wrong is a **domain call, not a code call**.
-  Either (a) skip should be neutral (fix `_target_drained` + the `consumed_at`
-  branch to leave a deferred entry exactly as the sweep left it), or (b) skip
-  legitimately means "un-assume until I confirm" and the docstring is stale.
-  (b) has a real cost: between the skip and the eventual confirm, the pool
-  over-states available meals for an entry the user has *not* said didn't
-  happen. The DORA_VERIFY checklist only asserted the queue behaviour (which
-  passes), so this was never caught.
-- **Recommended resolution:** now — it's a one-line semantic decision, and
-  whichever way it goes, the docstring and code should be made to agree.
-
 ## [OPEN] FU-593 — `reconcile_meals_pending` is invisible on a busy pantry: severity `low` + the hard 8-suggestion cap
 - **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk)
 - **Type:** finding

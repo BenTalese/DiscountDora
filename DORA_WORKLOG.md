@@ -18,6 +18,25 @@ next.
 
 ---
 
+## 2026-07-31 — Reconcile `skip` is now pool-neutral (FU-594, owner picked Option A)
+
+Owner asked for a full explanation of FU-594, then chose **Option A** (skip = truly neutral).
+
+**The bug.** In `dora_api/features/meal_plans/reconcile.py`, the module docstring described `skip` → `resolved_deferred` as neutral ("no consumed_at / pool change"), but the code treated skip like `not_cooked`: `_target_drained()` returned 0 for `VERB_SKIP`, so `pool_delta = current_drained - 0` **reversed** the nightly sweep's auto-drain, and the same branch cleared `consumed_at`. Live repro (auto-drain ON, planned-4 entry): sweep drained pool 14→10, tapping **Skip for now** bumped it back to **14** — the passive "ask me later" button silently added meals back to the pantry.
+
+**Fix (Option A — code now matches the long-standing docstring).** Three edits + docstring note:
+1. **Handler delta math** — deferring verbs now set `target_drained = current_drained` → `pool_delta = 0`; skip removed from the `consumed_at`-clearing branch (leaves the sweep's stamp intact). Every other verb unchanged.
+2. **`_effective_drained` follow-through** — split `resolved_deferred` out of the `→ 0` branch; a deferred entry now reports its *true* drain via `consumed_at` (`planned if consumed_at else 0`). Without this, a `cooked` after a skip would read deferred as un-drained and **double-drain** (4→3). This is the subtle part I flagged up front — Option A is more than a one-liner precisely because of this.
+3. **`_target_drained` comment** — skip no longer flows through it (handled in caller); comment updated.
+
+**Verify.** New backend contract tests in `test_reconcile_verbs.py`: skip is pool-neutral + keeps `consumed_at` (the core FU-594 assertion — pins the pool number the old DORA_VERIFY walk never checked), `cooked`-after-skip is a no-op (no double drain), `not_cooked`-after-skip reverses the drain exactly once + clears `consumed_at`. `test_reconcile_verbs.py` 17/17; sibling suites `test_reconcile_receipts` + `test_reconcile_signal` + `test_recipe_pool` + `test_meal_plan_router` 38/38. The pre-existing skip test (queue membership only) still passes. No frontend change — the SPA just displays the server's `new_pool`.
+
+**Close-gate:** ENGINEERING_STANDARDS — this is a **state-ownership** win: the "how much has this entry drained" fact stays server-owned, and the deferred-state drain is derived from `consumed_at` rather than duplicated. No new R-rule/ADR (a single semantic bugfix, not a recurring decision). No D-rules (no UI change). CHANGELOG Fixed ×1; FU-594 → `_RESOLVED`. No DORA_VERIFY item — the contract is fully backend-test-pinned and there's no new UI to walk.
+
+**Next up:** owner to pick — **FU-593** (reconcile suggestion visibility, the last meal-planner-cluster item) is the natural continuation; or FU-608 external open-source/donation setup when ready to publish.
+
+---
+
 ## 2026-07-31 — "Build my week" auto-planner replaces the step-by-step builder (FU-596)
 
 Owner: *"plan my week feature needs to be better built… an actual 'build it for me' tool, with some user input to guide it"* — flagged it addressed an FU (it was **FU-596**, "the step-by-step builder puts every meal in Breakfast", which itself noted the flow "looks unconsidered").

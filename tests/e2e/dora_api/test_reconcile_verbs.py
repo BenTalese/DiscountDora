@@ -330,6 +330,80 @@ def test__verb_skip_keeps_entry_in_queue_next_visit(api):
         requests.delete(f"{MEAL_PLANS}/{plan_id}")
 
 
+def test__verb_skip_on_auto_drain_is_pool_neutral(api):
+    """FU-594 — "Skip for now" must NOT touch the pool or consumed_at. The
+    sweep already drained this auto-drain-ON entry; skipping it leaves the
+    drain in place. The old bug treated skip like "didn't cook" and reversed
+    the drain (pool 4 → 5, consumed_at cleared)."""
+    _set_auto_drain(True)
+    recipe = _pick_recipe()
+    _bump_pool(recipe["recipe_id"], target=5)
+    plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
+    try:
+        _trigger_sweep()
+        pool_after_sweep = _get_pool(recipe["recipe_id"])  # 5 - 1 = 4
+        assert _entry_consumed_at(entry_id) is not None, "sweep should stamp consumed_at"
+
+        resp = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "skip"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["new_pool"] == pool_after_sweep, "skip must not move the pool"
+        assert _get_pool(recipe["recipe_id"]) == pool_after_sweep
+        # consumed_at untouched — skip is not "didn't cook".
+        assert _entry_consumed_at(entry_id) is not None
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
+def test__cooked_after_skip_does_not_double_drain(api):
+    """FU-594 follow-through — because skip leaves the entry drained, a later
+    `cooked` must be a pool no-op, not a second drain. Guards the
+    `_effective_drained` deferred branch: reading a deferred entry as
+    un-drained would make the following `cooked` drain again (4 → 3)."""
+    _set_auto_drain(True)
+    recipe = _pick_recipe()
+    _bump_pool(recipe["recipe_id"], target=5)
+    plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
+    try:
+        _trigger_sweep()
+        pool_after_sweep = _get_pool(recipe["recipe_id"])  # 4
+
+        requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "skip"})
+        assert _get_pool(recipe["recipe_id"]) == pool_after_sweep  # still 4
+
+        r = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "cooked"})
+        assert r.status_code == 200, r.text
+        assert r.json()["new_pool"] == pool_after_sweep, "cooked after skip must not re-drain"
+        assert _get_pool(recipe["recipe_id"]) == pool_after_sweep
+        states = [rr["state"] for rr in _receipts_for(entry_id)]
+        assert states == ["unresolved_auto", "resolved_deferred", "resolved_confirmed"], states
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
+def test__not_cooked_after_skip_reverses_drain_once(api):
+    """FU-594 follow-through — the honesty case. After a neutral skip the entry
+    is still drained; saying "didn't cook" must put the servings back exactly
+    once (4 → 5) and clear consumed_at."""
+    _set_auto_drain(True)
+    recipe = _pick_recipe()
+    _bump_pool(recipe["recipe_id"], target=5)
+    plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
+    try:
+        _trigger_sweep()
+        pool_after_sweep = _get_pool(recipe["recipe_id"])  # 4
+
+        requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "skip"})
+        assert _get_pool(recipe["recipe_id"]) == pool_after_sweep  # still 4
+
+        r = requests.post(f"{MEAL_PLANS}/reconcile/{entry_id}", json={"verb": "not_cooked"})
+        assert r.status_code == 200, r.text
+        assert r.json()["new_pool"] == pool_after_sweep + 1, "drain reversed exactly once"
+        assert _get_pool(recipe["recipe_id"]) == pool_after_sweep + 1
+        assert _entry_consumed_at(entry_id) is None
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+
+
 # ── Idempotence + change-of-mind ────────────────────────────────────────
 
 def test__same_verb_replay_is_idempotent(api):

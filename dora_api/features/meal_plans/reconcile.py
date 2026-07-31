@@ -25,7 +25,10 @@ State model (proposal §3.2 + §7.1):
   - `not_cooked`         → resolved_not_cooked
   - `skip`               → resolved_deferred (session hint; small side
                           effect, keeps the entry in the queue on next
-                          visit — no consumed_at / pool change).
+                          visit — no consumed_at / pool change). FU-594:
+                          this neutrality is enforced — skip leaves the
+                          sweep's drain + consumed_at untouched, unlike
+                          not_cooked which reverses them.
 
 **Idempotence.** A repeat call with the same verb + same fields returns
 200 without adding a receipt. A different verb writes a new corrective
@@ -470,8 +473,16 @@ def _effective_drained(latest: Optional[dict], entry_planned_servings: int,
         return entry_planned_servings
     if state == STATE_RESOLVED_ADJUSTED:
         return int(latest["actual_servings"] or 0)
-    if state in (STATE_RESOLVED_NOT_COOKED, STATE_RESOLVED_DEFERRED):
+    if state == STATE_RESOLVED_NOT_COOKED:
         return 0
+    if state == STATE_RESOLVED_DEFERRED:
+        # FU-594 — "Skip for now" is neutral: it never changes the pool, so a
+        # deferred entry still carries whatever drain the sweep left it with.
+        # `consumed_at` tracks that (auto-drain stamped it, manual didn't), so
+        # the *next* verb after a skip recomputes its delta from the true drain
+        # instead of treating a deferred entry as un-drained (which would make
+        # a following `cooked` drain a second time).
+        return entry_planned_servings if entry_consumed_at is not None else 0
     if state == STATE_UNRESOLVED_AUTO:
         # Sweep drained on auto-drain-ON.
         return entry_planned_servings
@@ -485,7 +496,8 @@ def _target_drained(verb: str, entry_planned_servings: int,
         return entry_planned_servings
     if verb == VERB_COOKED_ADJUSTED:
         return int(actual_servings or 0)
-    # not_cooked / skip → no drain
+    # not_cooked → no drain. (skip never reaches here — the caller treats it as
+    # pool-neutral, FU-594.)
     return 0
 
 
@@ -576,10 +588,16 @@ def submit_verb(entry_id: UUID):
             now = prev_created + timedelta(microseconds=1)
 
     # Compute pool delta.
-    current_drained = _effective_drained(
-        latest, int(entry["servings"] or 0), entry["consumed_at"],
-    )
-    target_drained = _target_drained(verb, int(entry["servings"] or 0), req.actual_servings)
+    # FU-594 — "Skip for now" is neutral: it re-queues the entry (writes a
+    # resolved_deferred receipt below) without changing the pool or consumed_at,
+    # leaving it exactly as the sweep left it. Its target drain therefore equals
+    # its current drain → delta 0. Every other verb recomputes the target.
+    planned = int(entry["servings"] or 0)
+    current_drained = _effective_drained(latest, planned, entry["consumed_at"])
+    if verb in _DEFERRING_VERBS:
+        target_drained = current_drained
+    else:
+        target_drained = _target_drained(verb, planned, req.actual_servings)
     pool_delta = current_drained - target_drained  # positive = pool goes UP
 
     if pool_delta != 0:
@@ -587,14 +605,15 @@ def submit_verb(entry_id: UUID):
     else:
         new_pool = _read_pool(entry["recipe_id"])
 
-    # Sync consumed_at: cooked verbs stamp now (if not already); non-cooked
-    # verbs (not_cooked / skip) clear it.
+    # Sync consumed_at: cooked verbs stamp now (if not already); not_cooked
+    # clears it. Skip is intentionally absent — it leaves consumed_at exactly as
+    # the sweep set it (FU-594, neutral).
     if verb in _COOKED_VERBS and entry["consumed_at"] is None:
         db.session.execute(
             text('UPDATE "MealPlanEntry" SET consumed_at = :now WHERE id = :eid'),
             {"now": now, "eid": _id_bytes(entry["id"])},
         )
-    elif verb in (VERB_NOT_COOKED, VERB_SKIP) and entry["consumed_at"] is not None:
+    elif verb == VERB_NOT_COOKED and entry["consumed_at"] is not None:
         db.session.execute(
             text('UPDATE "MealPlanEntry" SET consumed_at = NULL WHERE id = :eid'),
             {"eid": _id_bytes(entry["id"])},

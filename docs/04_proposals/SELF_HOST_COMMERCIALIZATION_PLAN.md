@@ -1,8 +1,22 @@
 # Self-host commercialization plan
 
-**Type:** 🟡 active plan (self-host track). **Owns:** the sequence to get Dashy Dora
+**Type:** 📦 **superseded** (2026-07-31). **Owns:** the sequence to get Dashy Dora
 sold as **self-hosted software**. **Raised by:** FU-412 (action the
 `docs/05_investigations/COMMERCIALIZATION_REPORT.md` into a real plan).
+
+> **⛔ SUPERSEDED — direction reversed 2026-07-31 (owner).** Dora is **no longer being
+> sold.** The owner returned to the original pre-monetization vision: **donation-funded,
+> open-source (MIT retained), all features free to everyone by default.** That deletes the
+> critical path this plan sequenced — **Track 1 (relicense/legal)** and **Track 2
+> (billing/tier split)** are **won't-do** ([[FU-567]] keep MIT, [[FU-562]] no billing —
+> both RESOLVED). No billing code was ever written, so nothing is removed. What survives,
+> de-commercialized, is **Track 4 launch → open-source *release* readiness** (README/
+> showcase, release process, best-effort support channel) now tracked in the reframed
+> **FU-406** + **FU-557**; and **Track 3**'s short privacy statement (the scraping/recipe
+> disclaimer was **dropped** — low real-world risk for a free niche tool). The hosted/SaaS
+> option stays parked in `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` (owner kept it, didn't
+> close it). **Everything below is retained for history only** — read it as "what the paid
+> plan was," not as active work.
 
 > **Scope.** This is the self-host track only — the report's live sections
 > **§1–2 (legal de-risk)**, **§3–4 (robustness)**, and the **product-value half of

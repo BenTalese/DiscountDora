@@ -75,6 +75,70 @@
 
         <hr class="settings-divider" />
 
+        <!-- Open-source project & support links. Restored when the repo went
+             public again (FU-608); the "Report" row is gated on a configured
+             support channel (useSupportChannel / support_channel.py). -->
+        <SettingsSection>
+            <template #title>Project &amp; source</template>
+            <template #description>
+                Dora is free and open-source (MIT). Contributions, bug reports,
+                and a little support all help.
+            </template>
+
+            <q-list class="about-list">
+                <q-item
+                    clickable
+                    tag="a"
+                    :href="REPO_URL"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section>
+                        <q-item-label>Source code</q-item-label>
+                        <q-item-label caption>GitHub · BenTalese/dashy-dora</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+
+                <q-item
+                    v-if="hasChannel"
+                    clickable
+                    tag="a"
+                    :href="reportHref"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section>
+                        <q-item-label>Report a bug or request a feature</q-item-label>
+                        <q-item-label caption>Opens a new issue on GitHub.</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+
+                <q-item
+                    clickable
+                    tag="a"
+                    :href="PRIMARY_DONATION.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section>
+                        <q-item-label>Support Dora</q-item-label>
+                        <q-item-label caption>Donations keep the project going 💗</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.favorite" size="18px" :style="{ color: 'var(--donate)' }" />
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
         <!-- F1 — onboarding restart lives here as a help / re-tour action. -->
         <SettingsSection>
             <template #title>First-run wizard</template>
@@ -118,16 +182,25 @@
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import { useSupportChannel, supportHref } from 'src/composables/useSupportChannel';
+    import { PRIMARY_DONATION } from 'src/config/donationLinks';
     import {
         getBackendBaseUrl,
         isNativePlatform,
         setBackendBaseUrl,
     } from 'src/services/api/backendUrl';
 
+    // Public repo (source-code link). The bug-report target comes from the
+    // gated support channel, not hardcoded here.
+    const REPO_URL = 'https://github.com/BenTalese/dashy-dora';
+
     const $q = useQuasar();
     const router = useRouter();
     const authStore = useAuthStore();
     const onboardingApi = new OnboardingApiService();
+
+    const { channel, hasChannel } = useSupportChannel();
+    const reportHref = computed(() => supportHref(channel.value));
 
     const restartingOnboarding = ref(false);
 

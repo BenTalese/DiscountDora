@@ -33,13 +33,16 @@
             </div>
             <h1 v-else class="settings-shell__title">Settings</h1>
 
-            <BaseButton
-                variant="danger-ghost"
-                :icon="ICONS.logout"
-                label="Sign out"
-                :loading="signingOut"
-                @click="onSignOut"
-            />
+            <div class="settings-shell__header-actions">
+                <DonateButton variant="settings" />
+                <BaseButton
+                    variant="danger-ghost"
+                    :icon="ICONS.logout"
+                    label="Sign out"
+                    :loading="signingOut"
+                    @click="onSignOut"
+                />
+            </div>
         </header>
 
         <!-- Mobile (<md): top tab strip (§6.3). Shown via CSS below. -->
@@ -68,6 +71,7 @@
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
     import BaseButton from 'src/components/BaseButton.vue';
+    import DonateButton from 'src/components/donate/DonateButton.vue';
     import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -246,6 +250,11 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+    }
+    .settings-shell__header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
     .settings-shell__title {
         margin: 0;

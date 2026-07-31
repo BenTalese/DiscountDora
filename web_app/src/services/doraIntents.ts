@@ -59,8 +59,8 @@ export type DoraReply = {
     suggestions?: DoraIntentId[];
     // Optional navigation. The chat UI renders a button when present.
     navigateTo?: { path: string; label: string };
-    // External link (e.g. upstream release notes). Opens in a new tab.
-    // Repo is private — no public issue-tracker link any more.
+    // External link — upstream release notes, or the report-issue target
+    // when a support channel is configured. Opens in a new tab.
     externalLink?: { url: string; label: string };
 };
 
@@ -283,9 +283,10 @@ const INSULT_REPLIES = [
 
 // Fallback bank — rotated when the rule engine can't make sense of an input.
 // Every variant gets the Help nav + quick-action suggestions (set on the
-// reply, not in the text), so the user always has a path forward. The repo
-// is private — no public issue tracker to point at — so fallback copy keeps
-// the framing local ("rephrase / try a quick action / open Help").
+// reply, not in the text), so the user always has a path forward. Fallback
+// copy keeps the framing local ("rephrase / try a quick action / open Help")
+// rather than pointing at the issue tracker — a generic "didn't understand"
+// isn't a bug report (the report_issue intent handles real ones).
 const FALLBACK_REPLIES = [
     "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.)",
     "Hmm, drawing a blank on that one. Could be I'm having a moment, or it's a feature I haven't learned yet. Try rephrasing and I'll have another crack.",
@@ -832,10 +833,10 @@ export const INTENTS: ReadonlyArray<{
         matches: ['tour', 'show me around', 'walk me through', 'overview', 'what can you do'],
     },
     {
-        // Bug reporting — explicit affordance for "I found an issue" so
-        // the user gets an acknowledgement + Help-nav prompt instead of
-        // the rotating fallback text. Repo is private; no public issues
-        // page to link out to.
+        // Bug reporting — explicit affordance for "I found an issue". When a
+        // support channel is configured it surfaces a real "Report it" button
+        // (see the report_issue case below); otherwise the user still gets an
+        // acknowledgement + Help-nav prompt instead of the rotating fallback.
         id: 'report_issue',
         label: 'I found an issue',
         matches: [
@@ -963,9 +964,9 @@ export async function runIntent(
                 text: `You're on Dashy Dora ${versionInfo?.current ?? 'an unknown version'}. The Help page has the full changelog; recent highlights include the assistant (that's me, the burger), the locations heatmap, and per-user preferences.${updateBit}`,
                 mood: versionInfo?.updateAvailable ? 'super_excited' : 'excited',
                 navigateTo: { path: '/help', label: 'Open Help (changelog tab)' },
-                // Repo is private — the release URL isn't surfaced as an
-                // external link any more. The Help-page changelog is the
-                // canonical place to read about updates.
+                // The Help-page changelog is the canonical place to read about
+                // updates, so this reply points there rather than surfacing the
+                // raw release URL as an external link.
                 ...{},
             };
         }

@@ -10,6 +10,7 @@
             variant="full-bleed"
             role="status"
             :aria-busy="!error"
+            :donate="false"
         >
             <div class="splash-inner">
                 <div class="splash-logo-wrap">

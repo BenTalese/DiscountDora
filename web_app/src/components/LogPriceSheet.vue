@@ -66,7 +66,7 @@
                         variant="icon"
                         :icon="ICONS.arrow_back"
                         aria-label="Back to item picker"
-                        @click="clearSelection"
+                        @click="backToPicker"
                     />
                     <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
                 </div>
@@ -166,6 +166,14 @@
     function clearSelection() {
         selectedItem.value = null;
         prefill.value = null;
+    }
+
+    // FU-585: the Back arrow returns to a *clean* picker — clearing the search
+    // as well as the selection — so Back matches dismiss (both reset to the
+    // smart shortlist) rather than dropping the user back on a filtered list.
+    function backToPicker() {
+        query.value = '';
+        clearSelection();
     }
 
     async function onSubmit(value: {

@@ -135,7 +135,7 @@ describe('AddToListButton — row variant (default)', () => {
 
         expect(wrapper.find('.q-icon').classes()).toContain('mdi-cart-plus');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('Add to a draft list');
+            .toBe('Add to a list');
     });
 
     it('swaps to a primary-coloured cart when on the quick-add target', () => {
@@ -145,7 +145,7 @@ describe('AddToListButton — row variant (default)', () => {
         expect(wrapper.find('.q-icon').classes()).toContain('mdi-cart');
         expect(wrapper.find('button').classes()).toContain('text-primary');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On your draft list — click to remove');
+            .toBe('On your list — click to remove');
     });
 
     it('uses the accent colour for a non-target draft list', () => {
@@ -154,7 +154,7 @@ describe('AddToListButton — row variant (default)', () => {
 
         expect(wrapper.find('button').classes()).toContain('text-accent');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On a draft list — click to remove');
+            .toBe('On another list — click to remove');
     });
 
     it('escalates to the attention checkout icon when on multiple lists', () => {

@@ -16,6 +16,13 @@ in `docs/05_investigations/COMMERCIALIZATION_REPORT.md` §1–4/§6-product-valu
 the active `DORA_FOLLOWUPS.md` items). Selling self-host needs legal de-risk,
 robustness, a licence + launch, and support — none of which is in here.
 
+> **Update (2026-07-31).** The **self-host track it counterparts was itself dropped** —
+> Dora reverted to **donation-funded, open-source, all-free** (no selling; FU-562/FU-567
+> RESOLVED won't-do). This hosted/SaaS bucket is therefore **even less likely**, but the
+> owner chose to **keep it parked** (not close it) — a future "someone will pay me to host
+> it" option stays open, and the distribution-posture hygiene that keeps it reopenable is
+> maintained regardless. Still NOT a committed plan.
+
 ---
 
 ## 1. Why this is separate

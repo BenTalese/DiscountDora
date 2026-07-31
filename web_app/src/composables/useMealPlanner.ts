@@ -478,7 +478,12 @@ export function useMealPlanner() {
         });
     }
 
-    async function generateListForWeek() {
+    // FU-596 — an optional `recipeIds` scopes generation to just those recipes
+    // (the "plan a single day → shop for that day" builder path), routed through
+    // the existing `recipes` auto-generate source. With no arg the whole focused
+    // week is generated via `meal_plan_week` (unchanged default; the sidebar and
+    // mobile "Generate list" buttons still call it arg-less).
+    async function generateListForWeek(recipeIds?: string[]) {
         const plan = focusedPlan.value;
         if (!plan) return;
         const target = await pickGenerateTarget();
@@ -486,9 +491,10 @@ export function useMealPlanner() {
         generating.value = true;
         try {
             const startIso = toIso(plan.start_date);
+            const scoped = recipeIds !== undefined && recipeIds.length > 0;
             const result = await shoppingListApi.autoGenerateAsync({
                 ...(target ? { merge_into_list_id: target } : { name: `Meals: week of ${formatDate(plan.start_date)}` }),
-                sources: { meal_plan_week: startIso },
+                sources: scoped ? { recipes: recipeIds } : { meal_plan_week: startIso },
             });
             await shoppingListStore.refreshAsync();
             if (result.nothing_to_add) {
@@ -686,28 +692,25 @@ export function useMealPlanner() {
         }
     }
 
-    // ── Sequential builder (C-2.J) ─────────────────────────────────────────
-    async function builderBuildPlan(recipeIds: string[]) {
-        const futureDays = weekDays.value.map((d) => d.iso).filter((iso) => !isPastDay(iso));
-        if (futureDays.length === 0) {
+    // ── "Build my week" auto-planner commit (FU-596) ───────────────────────
+    // The builder dialog now hands us fully-placed entry commands — recipe +
+    // day + slot + servings — authored server-side (or edited by the user in
+    // the review step). This replaces the old recipe-ids-only signature whose
+    // client-side slot spread defaulted everything to the vocab's first slot
+    // (the FU-596 "everything in Breakfast" bug). Placement is no longer
+    // computed here; we just persist what the review step committed.
+    async function builderBuildPlan(newCmds: MealPlanEntryCommand[]) {
+        const upcoming = newCmds.filter((c) => !isPastDay(c.scheduled_for));
+        if (upcoming.length === 0) {
             $q.notify({
                 type: 'warning', position: 'bottom-right',
-                message: 'This week has no upcoming days — pick a future week first.',
+                message: 'No upcoming meals to add — pick a future day first.',
             });
-            throw new Error('no future days');
+            throw new Error('no upcoming entries');
         }
-        const slots = slotNames.value.length ? slotNames.value : ['Dinner'];
-        // Spread the picks across upcoming days (day-major), wrapping to the
-        // next slot if there are more meals than days.
-        const newCmds: MealPlanEntryCommand[] = recipeIds.map((rid, i) => ({
-            recipe_id: rid,
-            scheduled_for: futureDays[i % futureDays.length]!,
-            servings: 1,
-            slot: slots[Math.floor(i / futureDays.length) % slots.length]!,
-        }));
         if (!focusedPlan.value) {
             try {
-                await mealPlanStore.createMealPlanAsync({ start_date: focusedMonday.value, entries: newCmds });
+                await mealPlanStore.createMealPlanAsync({ start_date: focusedMonday.value, entries: upcoming });
                 await refreshAfterMutation();
             } catch (err) {
                 notifyPlanError(err);
@@ -716,7 +719,7 @@ export function useMealPlanner() {
         } else {
             const ok = await persistEntries(
                 focusedPlan.value.meal_plan_id,
-                [...planEntryCommands(focusedPlan.value), ...newCmds],
+                [...planEntryCommands(focusedPlan.value), ...upcoming],
             );
             if (!ok) throw new Error('meal-plan build failed'); // toast already shown by persistEntries
         }

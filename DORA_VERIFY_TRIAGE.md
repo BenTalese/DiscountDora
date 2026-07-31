@@ -226,6 +226,69 @@ Notes:
 
 ---
 
+### "Build my week" auto-planner (FU-596) — walked live (2026-07-31, money seed)
+
+Drove `dora-verify-backend-money` + `dora-spa` as `dora`/`dora`. Splash-overlay
+worked around by hiding the `Waking up Dora` node (the documented rAF-suspend
+artifact — pane runs hidden). All checks passed; the DORA_VERIFY FU-596 section
+was deleted (delete-on-pass).
+
+- **Week generate + review** — 7 meals spread day-major across the 3 upcoming days
+  (Fri/Sat/Sun); reason chips populated; aggregate "6 to buy · 19 in stock".
+- **Smart slot placement (the FU-596 fix)** — recipes with `time_of_day=Dinner`
+  landed in Dinner, "Vanilla Ice Cream Bowl" landed in **Dessert** (its own
+  `time_of_day`) — never the vocab's first slot. Commit = `PATCH … 204`, so the
+  server slot-validation accepted the placed slots.
+- **Reshuffle / edits** — reshuffle re-calls auto-build; **Add a meal** (picker →
+  row appears, chip "Added"), **Swap** (Spaghetti → Egg Fried Rice, picker titled
+  "Swap this meal"), remove, and **"I'll pick myself"** (empty review) all work.
+- **Day scope** — single-day proposal (all entries on the chosen day), default
+  meal count **1**; commit + **scoped shopping list** via `sources.recipes`
+  (`auto-generate 200`, `nothing_to_add` when the cookable recipe was fully in
+  stock — a valid outcome).
+- **Budget cap (residual #1 — set budget $500/wk in Settings → Money first).**
+  API A/B for emphasis=variety: cap **off** → cost $3189.71, `projected_over`
+  true; cap **on** → dearest "Load recipe 002" swapped for "Tomato Pasta"
+  (chip `budget_friendly`), cost $2543.06. UI toggle confirmed: with **Keep the
+  week under budget** on, the review row "Tomato Pasta" shows the
+  **Budget-friendly** chip. (Seed recipe prices are huge, so it stays over $500 —
+  best-effort swap-down is the documented contract, not a guarantee.)
+- **Mobile entry point (residual #2)** — at 375×812 the `.mobile-focus` view
+  renders a full-width **Build my week** CTA that opens the same builder (Guide
+  step, all dials). Desktop toolbar + empty-week banner entry points also confirmed.
+
+Backend ranker pinned by `tests/test_build_week.py` (16); no durable Vitest added
+(slot contract lives server-side — matches the lean stance). Non-issue noted: a
+`PATCH /auth/me` 403 during setup was a synthetic-event artifact (missing
+`X-CSRF-Token`); the same call with the `dora_csrf` header returned 200, and the
+real Settings flow attaches it — not an app bug.
+
+### FU-596 — slot dials + per-row editing (2026-07-31, second round, extra checks)
+
+Follow-up round after adding **per-row servings stepper + day picker** to the
+review step (the earlier build only had a slot dropdown — the "edit day/servings"
+claim was made good). All on the dev seed via the rAF-shim recipe.
+
+- **One slot mode** — chose **Breakfast**; the 3-meal week landed **all in
+  Breakfast**, overriding the recipes' own `time_of_day=Dinner` (Dinner not in the
+  pool → forced), and the count clamped to the 3-day × 1-slot grid. ✓
+- **Servings stepper** — bumped "Load recipe 001" to **3**; reactive in the review.
+- **Day picker** — moved "Load recipe 003" Sat→Fri; the review re-grouped (Fri
+  gained it, Sat group vanished). ✓
+- **Edits persist through commit** — after Save, `GET /meal-plans` showed
+  `Load recipe 001` = Fri/Breakfast/**servings 3** and `Load recipe 003` = **Fri**
+  (moved)/Breakfast. ✓
+- **Pick slots (server)** — direct `auto-build` with `slot_names:["Lunch","Snack"]`
+  + 6 meals spread one-Lunch-one-Snack per day; `slots_used:["Lunch","Snack"]`. ✓
+- **Pick slots (UI)** — **could not drive**: the pane maxes at 750px so the
+  multi-select is a mobile bottom-sheet whose options don't respond to synthetic
+  clicks (only ever bound one slot). Left as a 10-sec human check in DORA_VERIFY.
+  Not a product concern — plain `q-select multiple`, and the server accepts it.
+- **Bonus** — all of the above ran on the **mobile (≤750px) layout**, so the full
+  builder + the mobile "Build my week" CTA are confirmed working on mobile too.
+
+---
+
 ## Pilot results — Password policy (FU-442), 2026-07-16
 
 Walked live against `localhost:5174` (dev SPA) + `:5170` (backend). Test

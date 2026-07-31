@@ -7,6 +7,16 @@ legal exposure, the architectural reality, monetization, and the branching paths
 market. Companion to **PROMPT_PLAN_PART_7_COMMERCIALIZATION.md**, which turns the
 decisions here into runnable prompts.
 
+> **⛔ Selling reversed (2026-07-31, owner).** Dora is **not being sold** — it returned to
+> the original vision: **donation-funded, open-source (MIT retained), all features free.**
+> The whole monetization thread here (self-host billing, tiers, relicensing, freemium) is
+> **historical**: FU-562 (billing) and FU-567 (relicense) are RESOLVED won't-do; the plan
+> doc that sequenced them (`../04_proposals/SELF_HOST_COMMERCIALIZATION_PLAN.md`) is
+> superseded. The report's **non-monetization findings still stand** — the productionization
+> recommendations (§3–4: Postgres, WSGI, RapidFuzz, de-scraping, security headers) all
+> shipped and remain valid engineering. Read §5–7 (SaaS/tenancy/freemium) as parked, not
+> planned.
+
 > **Self-host-first decision (2026-07-14).** The near-term plan is to **sell Dora
 > as self-hosted software**. The **multi-tenant SaaS (Path A) + managed
 > single-tenant (Path B)** material in this report — **§5 (households/tenancy

@@ -18,6 +18,100 @@ next.
 
 ---
 
+## 2026-07-31 — "Build my week" auto-planner replaces the step-by-step builder (FU-596)
+
+Owner: *"plan my week feature needs to be better built… an actual 'build it for me' tool, with some user input to guide it"* — flagged it addressed an FU (it was **FU-596**, "the step-by-step builder puts every meal in Breakfast", which itself noted the flow "looks unconsidered").
+
+**Design (plan-mode, owner-confirmed via AskUserQuestion):** full **replacement** of the manual `SequentialBuilderDialog` (its only edges over the grid — batch multi-select, pre-commit ingredient preview, auto-spread — are all subsumed by the new editable review), keeping manual control as "add/swap in the review step" so nothing's lost. Guidance dials owner-picked: **all four** (emphasis / meal-count / slots / budget-cap) **plus a specific-day scope** ("plan Wednesday, shop for it, cook, done"). Slot default = **spread-with-smarts**: honour a recipe's `time_of_day`, else least-loaded slot.
+
+**Backend — server-owned selection + placement (R-003), mirrors `swap_suggestions.py`.** New `dora_api/features/meal_plans/build_week.py`: pure ranker (`select_recipes` emphasis-weighted greedy w/ cuisine/category variety penalty; `apply_budget_cap` best-effort swap-down; `place_entries`/`_pick_slot` smart slots) + thin `compute_auto_build` orchestrator (recipes via `GetRecipesHandler`, expiring via `count_expiring_ingredients_per_recipe`, cost via `estimate_costs_for`, slots via `GetMealSlotsHandler`, budget via `budget.period_bounds/period_spent`) + `POST /api/meal-plans/auto-build` (**preview only, never persists**). Auto-discovered by `startup.py` walk_packages — no `__init__` edit. 16 fixture unit tests (`tests/test_build_week.py`).
+
+**Not a Decision-7 regression:** the cut "Suggest meals I can cook now" was a *cookable-now browse surface* (belongs on Cookbook). This is a plan **generator** that only *uses* those signals to rank; noted inline in the module.
+
+**Frontend.** `MealPlanBuilderDialog.vue` (Guide → Review → Done) replaces `SequentialBuilderDialog.vue` (deleted). Review step is fully editable — per-row slot select, swap (picker), remove, servings; **Reshuffle**; **+ Add a meal**; **I'll pick myself** (empty review); live "what you'll need" via `previewIngredientsAsync`. `autoBuildAsync` + DTO types added. **FU-596 fix proper:** `builderBuildPlan(recipeIds)` → `builderBuildPlan(entryCommands)` — the client-side slot-spread that defaulted to the vocab's first slot is **deleted**; client now commits server-authored/user-edited slots verbatim. `generateListForWeek(recipeIds?)` gains a scoped path (`sources.recipes`) for day-scope. Entry points renamed **Build my week** (toolbar + empty-week banner) and a **new mobile CTA** in `MealPlanMobileFocus`.
+
+**Two of my own bugs found + fixed in live verify** (not shipped): day-scope sent an empty `start_date` when `dayIso` wasn't initialised (400 → dialog crashed to ErrorBoundary) — added `effectiveDayIso()` fallback + a scope-watch initialiser; and `generate()` had no `catch` so any API error escaped the dialog — now toasts and stays on Guide. Also set the day-scope default meal count to **1** (was clamping the week default of 7 down to the slot-grid).
+
+**Verify.** Backend `pytest` build_week 16/16 + meal-plan suite 47/47 green; frontend `vitest` **412/412**; `vue-tsc` + `eslint` clean. **Live (money-on seed, desktop):** week generate (day-major spread, smart slots — dessert recipe → Dessert slot, reason chips, aggregate buy-list), reshuffle, commit (PATCH 204, slots pass server validation — **no all-Breakfast**), budget toggle renders, day-scope generate + commit + scoped list (200), manual path, add + swap. **Both residuals then verified same-session** (2026-07-31, evidence in DORA_VERIFY_TRIAGE): set a $500/wk budget via Settings → Money, then confirmed the budget cap swaps the dearest recipe for a cheaper one carrying the **Budget-friendly** chip (API A/B: $3189→$2543 for the same emphasis, and the UI toggle reproduces it); and at 375×812 the mobile `.mobile-focus` view shows the full-width **Build my week** CTA that opens the same builder. The DORA_VERIFY FU-596 section was deleted (delete-on-pass). *Note: the "Waking up Dora…" splash kept intercepting clicks on full reloads — the **documented** rAF-suspend browser-pane artifact (pane runs hidden; DORA_VERIFY_TRIAGE top banner), not our change; hid the splash node to drive the checks.*
+
+**Original-spec check:** `00_original_spec/Feature Notes/Automated meal plans.md` *was* a first-spec intent (Meals board) — this revives it. Its nutrition-driven / personalised-per-person framing is intentionally **superseded** (charter §7 nutrition off+simple-only; meal plans are household-wide, not per-person); its "recommend based on current stock" core is exactly the **Use-up-stock** emphasis. No further extraction.
+
+**Deliberate plan deviation:** dropped the planned Vitest for `builderBuildPlan`/scoped-list — the slot contract now lives server-side (covered by the ranker tests), so a heavy-mock composable test would pin scaffolding, not a contract (matches the owner's LEAN, manual-first verification stance). Recorded rather than silently skipped.
+
+**Close-gate:** ENGINEERING_STANDARDS — selection/placement/cost are server-owned (**R-003 / state-ownership**), mirroring the swap ranker; theme tokens only in the dialog CSS; component-first (dialog + reused `MealPlanRecipePicker`/`BaseSegmented`). One small DRY note: `_budget_remaining` re-inlines the money-on gate that `swap_suggestions._money_features_on` also does (4 lines) — commented in place citing the mirror, not worth a shared extraction yet. No new R-rule/ADR (the "server generates → client edits → client commits via existing write path" shape is a reasonable candidate if it recurs; noted, not promoted). CHANGELOG Added ×1; FU-596 → `_RESOLVED`; PROJECT_STATE meal-plans row refreshed.
+
+**Second round (same day, owner asked for more checks + leaned "add it").** Closed the honesty gap: the review row only had a **slot** dropdown, but the CHANGELOG/summary claimed day/servings editing too. **Added** a per-row **servings stepper** (−/+ , min 1) and a **day picker** (`dayOptions`, shown when >1 upcoming day) to `MealPlanBuilderDialog`. Verified live (mobile ≤750px layout — the pane can't go wider): **One slot** mode forces all meals into the chosen slot (Breakfast, overriding recipe `time_of_day=Dinner`); servings edit (→3) + day move (Sat→Fri) are reactive and **persist through commit** (`GET /meal-plans` confirmed); **Pick slots** server placement verified by direct API (Lunch+Snack spread one-each-per-day). The only unverified bit is the **Pick-slots multi-select UI holding two slots** — the harness can't drive the mobile bottom-sheet menu (synthetic clicks bind only one); it's a plain `q-select multiple` and the server accepts multi-slot, so it's logged as a 10-sec human check in DORA_VERIFY, not a defect. tsc + eslint clean; commit-through-edits round-tripped. Full evidence: DORA_VERIFY_TRIAGE FU-596 second-round.
+
+**Next up:** owner to pick — remaining meal-planner FUs (**FU-594** reconcile-skip contract, **FU-593** reconcile suggestion visibility) are the natural continuation; or the one DORA_VERIFY residual (Pick-slots two-slot UI, human check).
+
+---
+
+## 2026-07-31 — Knocked off FU-573 + FU-585 (shopping-list toast over-count + Log-a-price Back)
+
+Owner picked two self-contained bug fixes to clear.
+
+**FU-573 — "Removed from N lists" over-counts.** `removeFromAllLists` fanned `remove-by-stock-item` out over every open list and counted every 2xx as a removal, but the endpoint is an idempotent no-op success when the item isn't on a list → an item on 1 list toasted "Removed from 3 lists." **State-ownership fix:** the server already computed `RemoveByStockItemResponse.removed` and threw it away with a 204 — the endpoint now returns `ok({"removed": ...})`, `shoppingListApiService.removeByStockItemFromListAsync` surfaces `{removed}`, and `removeFromAllLists` counts only server-confirmed removals (toast: accurate count, or "It was already off your lists." when nothing matched; error only when a call actually threw). Updated the now-accurate `useBuyVerdictActions.removeFromAllOpenLists` docstring. **New backend contract test** `tests/e2e/dora_api/test_shopping_list_remove_by_stock_item.py` (3, passing): removed true→false (idempotent), never-on-list false, unknown-list 404.
+
+**FU-585 — Log-a-price Back keeps the search.** Owner's call (AskUserQuestion): **clear** the search on Back (matches his original FU-300 checklist; also makes Back consistent with dismiss). Added `backToPicker()` (resets `query` + selection) in `LogPriceSheet.vue` and wired the Back arrow to it. The spec that pinned the old preserve-behaviour (`dashboard-log-price.spec.ts`) was already deleted in the 2026-07-20 e2e purge, so nothing to flip.
+
+**Pre-existing red test cleaned up in-pass:** the frontend suite was already failing 3 in `addToListButton.spec.ts` — the component copy was intentionally changed ("a draft list" → "a list"/"your list"/"another list") without updating the spec. NOT my change (git-confirmed unmodified); fixed the 3 stale assertions to match the current copy so the tree is green.
+
+**Verify:** backend `pytest` new file 3/3 green; frontend `vitest` **412/412** green; `vue-tsc` + `eslint` clean. Two user-facing eyeballs (toast wording, Back clears search) queued in DORA_VERIFY — the FU-573 server contract is test-pinned so only the toast string needs a glance.
+
+**Close-gate:** ENGINEERING_STANDARDS — FU-573 follows the **state-ownership principle** (the "was a line removed?" fact is the server's; moved it server-side rather than inferring client membership). No new R-rule/ADR. CHANGELOG Fixed ×2; both FUs → `_RESOLVED`.
+
+**Next up:** owner to pick — the meal-planner cluster (FU-594 real bug + 596/593 product calls) is the next natural batch; or FU-608 external setup when ready to publish.
+
+---
+
+## 2026-07-31 — Donation buttons + restored issue/support links + README rewrite (FU-608)
+
+Follow-on from the monetization reversal (same day, entry below). Owner asked to (1) put back the GitHub issue links that were stripped when the repo went private, (2) add attention-grabbing donation buttons in three spots, (3) rewrite the README, and (4) capture all the external account setup as **one owner-checklist FU** — building with placeholders for now.
+
+**Investigation.** A git-history agent traced the removed links to one commit (`5701a37`, all using the old `DiscountDora` name) across 4 surfaces: HelpPage, PageErrorState, AboutSettings, doraIntents. FU-370's support-channel plumbing (dormant since) auto-lights Help + PageErrorState + DoraBot the moment a URL is set; only AboutSettings needed hand-restoration. Real repo slug is `BenTalese/dashy-dora` (git remote) — README said `DashyDora`, SECURITY.md said `DiscountDora`; both corrected.
+
+**Decisions (owner, AskUserQuestion):** keep MIT (already done); donation platforms = Buy Me a Coffee (primary, instant) + GitHub Sponsors + a third TBD; **bold pink, gentle pulse** styling.
+
+**Built (all placeholders):**
+- **Donation token** `--donate` / `-strong` / `-contrast` / `-glow` in `tokens.scss` — its own fixed sponsor-pink (theme-independent, not a semantic role, not `--brand-accent`). Icons: `volunteer_activism`, `coffee`.
+- **Single-source config** `web_app/src/config/donationLinks.ts` (R-003) — `DONATION_PLATFORMS` + `PRIMARY_DONATION` + `DONATIONS_CONFIGURED`, all sentinel `PLACEHOLDER` URLs.
+- **`DonateButton.vue`** (3 variants: header / settings / floating) + **`DonateMenu.vue`** (shared popover, R-003). Wired into `MainLayout` header (`v-if currentUser`), `AuthShell` (floating bottom-left, `donate` prop; `:donate=false` on SplashScreen), `SettingsShell` (beside Sign out). D-rules: 44px target (D-004), aria-label + tooltip (D-005), motion tokens + reduced-motion override (D-010), own colour token (no semantic overload).
+- **Restored links:** `_DEFAULT_SUPPORT_URL` → `github.com/BenTalese/dashy-dora/issues/new/choose` (auto-lights Help/PageErrorState/DoraBot); `AboutSettings.vue` regains Source-code + gated Report + Support-Dora rows; 4 stale "repo is private" comments in `doraIntents.ts` corrected; `SECURITY.md` slug fixed.
+- **`.github/FUNDING.yml`** commented scaffold (no broken Sponsor button pre-swap); **README.md** full rewrite (intro, feature highlights, GIF/screenshot placeholder grid, quickstart preserved in a `<details>`, donate/issues/contributing sections, MIT).
+- **FU-608** opened — the owner checklist (repo→public, Sponsors, BMC, README media) + the one-pass placeholder swap list.
+- **Issue templates written** (same session): `.github/ISSUE_TEMPLATE/{config.yml, bug_report.yml, feature_request.yml}` — YAML issue forms in Dora's friendly voice (sets the one-person-project expectation), a chooser config funnelling security → private advisory + a donate link, Discussions link left commented until enabled.
+- **Platform decision (owner asked, then revised):** advised two is the sweet spot; owner then chose to add **PayPal.me** as a cheap catch-all. Final = **three**: Buy Me a Coffee (primary) + GitHub Sponsors + PayPal — spanning one-off↔recurring↔catch-all and casual↔developer. Skip Ko-fi (dupes BMC), Patreon/Open Collective (overkill). All three in `donationLinks.ts`/`FUNDING.yml`/README as placeholders; PayPal setup added to FU-608. eslint clean. (3-row popover render already proven in the live check.)
+
+**Verify.** `vue-tsc --noEmit` 0 errors, `eslint` 0 (fixed one QMenu anchor/self typing — used `QMenuProps['anchor']`). Drove the running app (SQLite money seed): the auth-shell floating button renders bottom-left with the correct pink `rgb(199,35,115)` = `--donate`; clicking opens DonateMenu with title/tagline + all 3 platforms, each `target="_blank"` at the placeholder; `/api/health` `support` block carries the correct dashy-dora issues URL (so all gated report affordances light up). **Not driven:** header + settings placements — the SPA dev-server's bootstrap probe hangs in this env (stuck splash overlay; unrelated to these changes), so those need auth to reach. Both reuse the verified DonateMenu + token and are typecheck/lint-clean → queued for an owner eyeball in DORA_VERIFY.
+
+**Close-gate:** ENGINEERING_STANDARDS — R-003 (single donation config + shared menu), R-002/theme-tokens (new `--donate` token, no hard-coded colour in components). No new R-rule/ADR (the donation token follows the existing token pattern; a bespoke CTA colour is a one-off, not a recurring decision). D-rules checked inline above. No new migration, no backend logic change.
+
+**Next up:** owner runs FU-608 (external account setup) then swaps placeholders; owner eyeballs the header + settings donate placements (DORA_VERIFY).
+
+---
+
+## 2026-07-31 — Monetization reversed: donation / open-source, all features free
+
+Owner opened the session to review the paused **pricing/billing/releasing** cluster (FU-567 relicense, FU-562 billing, FU-406 launch, FU-557 support). After a feasibility discussion — sell (closed/paid self-host) vs donate (open-source) — the owner **decided to shift back to the original pre-monetization vision: Dora is not sold. Donation-funded, open-source, MIT retained, every feature free to everyone by default.**
+
+**Reasoning captured:** a solo-built niche self-host pantry app competing against free incumbents (Grocy/Tandoor) has weak paid-revenue potential + a real front-loaded cost and support obligation; donation + open-source costs ~nothing, is more showable (portfolio/pride), and aligns with the app's own privacy/anti-creep ethos + the single-maintainer-legible goal.
+
+**Three confirmed sub-decisions (AskUserQuestion):** (1) **keep MIT** — the whole relicense motivation (forbid resale to protect a paid model) is gone; (2) **drop** the scraping-disclaimer / recipe-import terms note — low real-world risk for a free niche tool, core ships no scraper; (3) **keep the SaaS/hosted option parked** (not closed) in OPTIONAL_SAAS.
+
+**No code changed — this was a docs/FU/licence-decision cleanup, not a teardown** (confirmed no billing code ever existed: "Phase 4 has zero billing code"; grep for entitlement/license_key/paywall/tier/lemon-squeezy found only unrelated hits — stock tiers, price-watch subscriptions, budget trim). `LICENSE` unchanged (already MIT).
+
+**Edits made:**
+- **DORA_FOLLOWUPS:** FU-562 + FU-567 → moved to `_RESOLVED` flipped to won't-do with full rationale. FU-406 reframed *in place* to **open-source release readiness** (README/showcase + GitHub Releases process + Sponsors link + best-effort support; dropped sales page/licence/disclaimer/billing). FU-557 reframed to best-effort GitHub-issues support.
+- **Docs:** banner on `SELF_HOST_COMMERCIALIZATION_PLAN.md` (📦 superseded), `COMMERCIALIZATION_REPORT.md` (monetization thread historical; productionization findings still stand), `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` (parked, even less likely, not closed).
+- **Memory:** replaced `project-self-host-first-commercialization` with `project-donation-open-source`; MEMORY.md index updated.
+- **PROJECT_STATE:** Phase-4 row + Commercialization workstream row + 3 doc-register rows reframed; Recently-shipped + Regenerated line updated.
+
+**Close-gate:** ENGINEERING_STANDARDS — no code touched, so no R-rule interaction; no new ADR (a product-direction decision, not a recurring engineering pattern). No CHANGELOG entry (no user-visible product change — `LICENSE` unchanged, no feature added/removed). No DORA_VERIFY items (nothing to walk).
+
+**Next up:** the open-source release work when the owner's ready to publish publicly — FU-406 (write the README/showcase + set up GitHub Releases + a Sponsors/donation link) and FU-557 (stand up the public GitHub-issues support repo). Neither is urgent; both are last-mile.
+
+---
+
 ## 2026-07-26 — Verify walk round 3: cookable route + unlinked empty-state
 
 Same session, 2 more boxes cleared (895 → 893). FU-386 cookable chip: `#/cookbook?cookable=true` narrows the overview 38→8 (route contract; chip→route already noted live) — deleted. Bulk-linker empty-state: `/settings/admin/data/unlinked-ingredients` shows "Every recipe ingredient is linked to a stock item." (seed has no unlinked rows) — deleted; sibling autocomplete/Link boxes need unlinked data, kept. Evidence in DORA_VERIFY_TRIAGE.md. **The agent-drivable pile is now largely exhausted** — remainder needs contrived data, specific install flags, device flows, or visual eyeballs (owner/device walks). No product code changed.

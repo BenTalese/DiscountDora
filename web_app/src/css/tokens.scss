@@ -45,6 +45,18 @@
     --semantic-info: hsl(218 76% 56%);
     --semantic-info-soft: hsl(218 76% 94%);
 
+    /* Donation / "support the project" accent. Its own token — NOT a
+       semantic role and NOT --brand-accent (D-note: don't overload a
+       meaning-colour or the sparingly-used accent as a second CTA). A
+       fixed sponsor-pink that reads the same across every theme (like the
+       semantics, it encodes a fixed meaning, not the theme's aesthetic).
+       Base is dark enough to carry white text at AA; --donate-strong is
+       the hover/pressed step; --donate-glow drives the attention pulse. */
+    --donate:          hsl(331 70% 46%);
+    --donate-strong:   hsl(331 74% 39%);
+    --donate-contrast: hsl(0 0% 100%);
+    --donate-glow:     hsla(331, 82%, 58%, 0.55);
+
     /* ────────────────────────────── Brand defaults (Pesto) ───────── */
     --brand-primary: hsl(150 76% 39%);            /* #17b073 */
     --brand-primary-soft: hsl(150 70% 92%);

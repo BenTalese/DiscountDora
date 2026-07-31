@@ -88,30 +88,35 @@ export function useShoppingListActions() {
      * One summary toast at the end (decision 6 — even for the "remove from
      * all" branch in the multi-list popover). Returns the count actually
      * removed.
+     *
+     * FU-573: `listIds` may include lists the item isn't on (callers fan out
+     * over every open list), and the endpoint is an idempotent no-op there.
+     * We count only responses where the server actually removed a line, so the
+     * toast can't over-report (item on 1 list no longer says "Removed from 3").
      */
     async function removeFromAllLists(
         stockItemId: string,
         listIds: string[],
     ): Promise<number> {
         let removed = 0;
+        let failed = 0;
         for (const listId of listIds) {
             try {
-                await api.removeByStockItemFromListAsync(listId, stockItemId);
-                removed++;
+                const result = await api.removeByStockItemFromListAsync(listId, stockItemId);
+                if (result.removed) removed++;
             } catch {
                 // Continue; one bad list shouldn't block the others.
+                failed++;
             }
         }
         if (removed > 0) {
             await shoppingListStore.refreshAsync();
             invalidateBuyVerdict(stockItemId);
-        }
-        if (removed === listIds.length && removed > 0) {
             notifyOk(`Removed from ${removed} list${removed === 1 ? '' : 's'}.`);
-        } else if (removed > 0) {
-            notifyOk(`Removed from ${removed} of ${listIds.length} lists.`);
-        } else if (listIds.length > 0) {
+        } else if (failed > 0) {
             notifyErr('Could not remove from any list.');
+        } else if (listIds.length > 0) {
+            notifyOk('It was already off your lists.');
         }
         return removed;
     }

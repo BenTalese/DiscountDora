@@ -22,6 +22,17 @@ top-to-bottom.
 
 ---
 
+## Donation buttons + restored support links (FU-608) — origin FU-608
+- [ ] **Menu bar (logged in):** the pink **Support Dora** heart shows in the header cluster (next to the alerts bell / help / avatar), gently pulses, and reads well against the toolbar colour on each theme; clicking opens the popover with all 3 platforms. *(Auth-shell floating button + the shared popover already verified live 2026-07-31 — this is the header trigger, which needs login.)*
+- [ ] **Settings (logged in):** the **Support Dora** pink pill sits beside **Sign out** in the Settings header; opens the same popover.
+- [ ] **Pulse feel:** confirm the pulse "pops" without feeling naggy across the menu-bar + floating buttons; with OS reduced-motion on, the pulse is off (static button).
+- [ ] **Settings → About:** the **Project & source** section shows Source-code (→ github.com/BenTalese/dashy-dora), **Report a bug** (only when a support channel is set), and **Support Dora** rows.
+- [ ] **After the repo is public + FU-608 placeholders swapped:** the donation links open the real pages; Help "Report an issue", the full-page-error "Report this", and DoraBot's report link all reach the live issue tracker; the issue templates resolve.
+
+## Shopping-list / dashboard quick fixes (FU-573, FU-585)
+- [ ] **FU-573 remove-count:** put a stock item on exactly **one** open list, then use the buy-verdict card's "remove from list" (or the multi-list popover's "remove from all") → the toast says **"Removed from 1 list."**, not an inflated count. Remove again with it on none → "It was already off your lists." *(Server contract is backend-test-pinned; this is the toast-wording eyeball.)*
+- [ ] **FU-585 Log-a-price Back:** Dashboard → "Log a price" → search e.g. "milk" → pick an item → tap **Back** → the search box is **empty** and the smart shortlist (frequently-added / low / out) is shown, not your "milk" results.
+
 ## Onboarding story pass (2026-07-12)
 - [ ] Launch onboarding as a fresh install → scene 1 (problem) renders and **does not auto-advance**; sitting on it 10+ seconds waits for you.
 - [ ] Click Next → scene 2 (loop) draws in ring + nodes, then Dora at centre; the "What you're here for" persona-chip bar **does not appear anywhere** below the loop.
@@ -292,6 +303,10 @@ Requires a **built** frontend served over HTTPS or localhost (SW won't register 
 ---
 
 ## Meal plans
+
+### "Build my week" — Pick-slots multi-select (FU-596) — origin FU-596
+*(Everything else in the builder verified live 2026-07-31 — see DORA_VERIFY_TRIAGE. Server-side multi-slot placement is confirmed by direct API; this is the one UI bit the browser harness couldn't drive: its pane maxes at 750px so the multi-select opens as a mobile bottom-sheet whose options don't respond to synthetic clicks.)*
+- [ ] In **Build my week → Slots → Pick slots**, select **two** slots (e.g. Lunch + Snack): both show as chips, and the generated week uses only those two slots (spread across them), never the others. *(Standard `q-select multiple`; expected to just work — 10-second confirmation.)*
 
 ### Past-unconsumed entry no longer freezes the week (FU-595 fix) — origin FU-595
 - [ ] With **auto-drain OFF** (or after Reconcile → "Didn't cook" on a past day), add a meal to the current week: it succeeds (no "cannot be scheduled in the past" toast), the planner does **not** blank to "Something went wrong", and the past entry stays visible as history. *(Contract pinned by an e2e test; this is optional eyes-on confirmation.)*

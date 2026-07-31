@@ -1,0 +1,88 @@
+name: 🐞 Bug report
+description: Something in Dora isn't working the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make Dora better! 🍔
+
+        Dora is a one-person hobby project, so a reply might take a little while —
+        but every report gets read. The more of the below you can fill in, the
+        faster it can be tracked down.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: I clicked "Add to list" on the stock item page and the app showed an error instead of adding it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A numbered list is perfect. If it only happens sometimes, say so.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See the error
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Dora version
+      description: You'll find this at Settings → About → Build (or the release tag you're on).
+      placeholder: e.g. v0.3.0, or "local dev"
+    validations:
+      required: false
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running Dora?
+      options:
+        - Docker (self-hosted)
+        - Local dev (Python + Quasar)
+        - Desktop app (Windows / macOS / Linux)
+        - Mobile app / installed PWA
+        - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Browser / platform
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Mobile browser
+        - Desktop / native app
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic details (optional)
+      description: >
+        If Dora showed an error screen with a reference id, paste it here.
+        Any browser console errors or server log lines help too.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this doesn't look like a duplicate.
+          required: true

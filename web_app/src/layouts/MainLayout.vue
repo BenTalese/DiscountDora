@@ -29,6 +29,11 @@
 
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
+                <!-- Support Dora — donation CTA. Dora is free & open-source;
+                     this is the gentle, always-available "chip in" affordance
+                     (own --donate pink, own DonateMenu). -->
+                <DonateButton v-if="currentUser" variant="header" class="q-mr-xs" />
+
                 <!-- Help & guides — peer of the profile button.
                      Direct nav to `/help`; carries the same active-ring
                      affordance as the avatar so the header advertises
@@ -135,6 +140,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AlertsBell from 'src/components/AlertsBell.vue';
+    import DonateButton from 'src/components/donate/DonateButton.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import DoraBubble from 'src/components/dora/DoraBubble.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';

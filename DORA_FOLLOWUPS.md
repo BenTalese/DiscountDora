@@ -52,6 +52,26 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-608 — Owner checklist: stand up the open-source + donation infrastructure, then swap the in-app placeholders
+- **Raised:** 2026-07-31 (donation / open-source pivot — [[FU-562]]/[[FU-567]] resolved; part of the reframed [[FU-406]] release readiness).
+- **Type:** deferred job (owner/external actions + a one-pass placeholder swap).
+- **What:** the in-app donation buttons, `FUNDING.yml`, README, and issue/support links were **built with placeholders** on 2026-07-31 (see that worklog entry). This FU is the owner's checklist to stand up the real external accounts and then swap the placeholders to live URLs in one pass.
+- **Owner checklist (external, do in this order):**
+  - [ ] **Make the GitHub repo public** — `github.com/BenTalese/dashy-dora`. Until it's public, every restored issue/support link 404s for outsiders. (Confirm the canonical slug is `dashy-dora`, not the stale `DashyDora`/`DiscountDora` the old README/SECURITY.md carried — both are being corrected to `dashy-dora`.)
+  - [ ] **Set up GitHub Sponsors** — apply at `github.com/sponsors`, complete Stripe/payout onboarding (has an approval wait). Once live, the profile is `github.com/sponsors/BenTalese`.
+  - [ ] **Set up Buy Me a Coffee** — create the page, note the handle (`buymeacoffee.com/<handle>`). Instant, no approval wait — good candidate for the **primary** in-app CTA while Sponsors is pending.
+  - [ ] **Set up PayPal.me** — the universal catch-all (owner added 2026-07-31). Create/confirm your `paypal.me/<handle>` link (near-zero setup). Already wired as the third in-app option + `FUNDING.yml` + README — just needs the real handle at swap time. *(Decided: these three only — they span one-off↔recurring↔catch-all and casual↔developer. Skip Ko-fi (dupes BMC), Patreon/Open Collective (overkill).)*
+  - [ ] **Pick the primary in-app CTA** — currently Buy Me a Coffee (instant). Switch to whichever is live first if that changes.
+  - [ ] **Supply README media** — real banner + screenshots + the feature GIFs (placeholder `<!-- GIF: … -->` blocks are already marked in `README.md`).
+- **Then swap placeholders (one pass — all point at the sentinel `PLACEHOLDER`):**
+  - [ ] `web_app/src/config/donationLinks.ts` — the single source for all donation URLs + which is primary (R-003). Swap the `PLACEHOLDER` values; the three button placements (menu bar, auth shell, settings) + tests read from here.
+  - [ ] `.github/FUNDING.yml` — swap the placeholder handles so the repo's native **Sponsor** button lights up.
+  - [ ] `README.md` — donation section links + media.
+  - [ ] `dora_api/features/support/support_channel.py` — `_DEFAULT_SUPPORT_URL` is set to the real `dashy-dora` issues URL; confirm it once the repo is public (auto-lights Help / page errors / DoraBot report).
+  - [x] GitHub **issue templates** written 2026-07-31 — `.github/ISSUE_TEMPLATE/{config.yml,bug_report.yml,feature_request.yml}` (YAML issue forms + a security/donate chooser). Remaining: (optional) enable GitHub **Discussions** and uncomment the Discussions contact link in `config.yml`; the donate contact link in `config.yml` also carries the `PLACEHOLDER` and rides the swap above.
+- **Why deferred:** every account setup is an out-of-app owner action with signup/approval/payout steps; only the owner can do them.
+- **Recommended resolution:** when you're ready to publish the repo publicly. Cross-ref: [[FU-406]] (release readiness), [[FU-557]] (support channel — the issues URL doubles as the support channel).
+
 ## [OPEN] FU-607 — Stock-item image editing appears gone; `ImageUploadField` docstring still cites it as a consumer
 - **Raised:** 2026-07-24 (DORA_VERIFY R-024 image-source-picker sweep)
 - **Type:** finding (code/doc drift; possible dropped feature)
@@ -132,25 +152,6 @@ long session summary. Distinct from the other logs:
   states get a legend) — the deeper rule this suggests is "colour alone is never
   the only channel", which may deserve its own D-rule.
 
-## [OPEN] FU-596 — The step-by-step builder puts every meal in **Breakfast**
-- **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7, C-2.J walk)
-- **Type:** finding (UX)
-- **What:** Built a week through **Plan step-by-step** with four recipes (Cheesy
-  Garlic Bread, Egg Fried Rice, Veggie Stir Fry, Tomato Pasta). The day spread is
-  correct — one per day across Wed/Thu/Fri/Sat, skipping past days — but **all
-  four landed in the `Breakfast` slot**, apparently the first entry of the
-  household slot vocabulary rather than a considered default. A user who asks
-  Dora to plan their week gets a week of breakfasts.
-- **Note:** this is *not* the F35 tap-add defect — tap-add correctly honours the
-  slot you picked (verified the same session: chose Breakfast explicitly and the
-  entry landed in Breakfast, not Dinner).
-- **Why deferred:** the right default is a product call — `Dinner` is the obvious
-  candidate, but it could equally be "spread across the slots the user actually
-  uses" or a slot picker in the builder's Build step. Not a safe drive-by.
-- **Recommended resolution:** opportunistic — fold into the next meal-planner
-  pass. Low severity (entries are trivially moved), but it makes the flagship
-  "plan my week" flow look unconsidered.
-
 ## [OPEN] FU-594 — Reconcile `skip` reverses the pool drain, contradicting the module's own documented contract
 - **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk)
 - **Type:** finding
@@ -194,23 +195,6 @@ long session summary. Distinct from the other logs:
   feed?), not an obvious defect — the cap is working as written.
 - **Recommended resolution:** opportunistic — fold into the next suggestions /
   dashboard-feed pass.
-
-## [OPEN] FU-585 — LogPriceSheet back arrow keeps the search query; FU-300 verify bullet expected it cleared
-- **Raised:** 2026-07-19 (verify Batch 10 — codifying FU-300)
-- **Type:** finding
-- **What:** in `LogPriceSheet.vue`, the step-2 back arrow calls
-  `clearSelection()` which drops only the selected item — the search query
-  survives, so the user returns to their filtered shortlist. The DORA_VERIFY
-  FU-300 bullet said "Back arrow returns to the picker with the search input
-  cleared". The full reset (query + selection) happens on dialog dismiss
-  (`onHide`), which IS pinned. Preserved-query-on-back is arguably the better
-  UX (picked the wrong milk → back → still see milks), so this wasn't
-  blind-patched to match the checklist.
-- **Why deferred:** behaviour-vs-checklist design call, not a clear defect.
-  `dashboard-log-price.spec.ts` pins the current behaviour with a comment
-  naming this FU — flip the assertion if the call goes the other way.
-- **Recommended resolution:** opportunistic — one-word decision; likely
-  "keep code behaviour, checklist was aspirational".
 
 ## [OPEN] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
 - **Raised:** 2026-07-19 (verify Batch 10, running the full Playwright suite)
@@ -547,22 +531,6 @@ long session summary. Distinct from the other logs:
   surface is touched (papercut until the PWA/native distribution push — then
   it matters).
 
-## [OPEN] FU-573 — "Removed from N lists" toast over-counts: server no-ops counted as removals
-- **Raised:** 2026-07-17 (verify-campaign Batch 0, BuyVerdictCard walk L89)
-- **Type:** finding (cosmetic accuracy — verified live)
-- **What:** `useShoppingListActions.removeFromAllLists` fans
-  `remove-by-stock-item` out over every open list and counts every
-  **non-throwing** call as a removal — but the server endpoint is a deliberate
-  no-op success when the list doesn't contain the item. Observed: item on 1
-  open list, toast said "Removed from 3 lists." `useBuyVerdictActions.
-  removeFromAllOpenLists`'s docstring ("returns the count actually removed")
-  is wrong for the same reason.
-- **Fix shape:** have the server return whether a line was actually removed
-  (or its count) and sum that; or pre-filter `listIds` by the item's known
-  membership (`membership.active_lists`) before fanning out.
-- **Recommended resolution:** opportunistic (next touch of the shopping-list
-  action seams).
-
 ## [OPEN] FU-570 — Boot proceeds silently against a stale/unversioned SQLite DB → per-request 500s
 - **Raised:** 2026-07-16 (verify-campaign pilot)
 - **Type:** finding (needs a decision — operator robustness)
@@ -591,64 +559,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** the race is vanishingly unlikely + low-harm on a single-household self-host app (Codex itself rated it low). A real fix means a **unique constraint + migration + a case-insensitivity decision** (a plain unique index is case-sensitive on Postgres; case-insensitive uniqueness needs a functional index / `citext`, which differs SQLite↔Postgres — R-005/R-006 care). Disproportionate right now.
 - **Recommended resolution:** opportunistic. (a) The recipe-name strip is a trivial 4-line `field_validator` mirror of the stock-item fix — do it next time recipes are touched. (b) The unique-constraint/race is a data-model call — bundle with the FU-045 Postgres/migration work or whenever concurrent-write hardening is on the table; decide case-insensitive-uniqueness semantics then.
 
-## [OPEN] FU-567 — Relicense Dashy Dora off MIT for the paid self-host model
-- **Raised:** 2026-07-16 (FU-412 self-host commercialization plan).
-- **Type:** decision + deferred job (legal; prerequisite to charging).
-- **What:** The repo ships under an **MIT licence** (`LICENSE`, © 2023 Ben Peter Talese),
-  which explicitly permits resale and redistribution of the source. That directly
-  undermines the paid-self-host model: FU-562's leverage is gating updates/downloads via
-  an offline licence key, but under MIT anyone can legally strip the key check and
-  redistribute the build for free. **Relicensing is a prerequisite to charging, not a
-  nice-to-have** — the report (`COMMERCIALIZATION_REPORT.md` §1.2) flagged it as "consider";
-  the self-host plan promotes it to a blocker.
-- **Options (owner + lawyer call):**
-  - **(a) Source-available commercial licence** — e.g. PolyForm Noncommercial, or a custom
-    "you may run it, not resell/redistribute it" licence. Simplest fit for "sell the right
-    to run it."
-  - **(b) Dual licence** — free for personal/non-commercial use, paid commercial licence.
-    Preserves goodwill + a free tier, adds enforcement teeth.
-  - **(c) BSL (Business Source License)** — source-available now, converts to open (e.g.
-    Apache) after N years. Popular for commercial OSS.
-- **Also settle here:** the **scraping disclaimer** + **recipe-import personal-use note**
-  belong in the same licence/terms drafting pass (self-host plan Track 1) — core ships no
-  scraper, but the companion does, and the terms must push residual scraping liability to
-  the operator (report §1.1).
-- **Why deferred:** needs an owner decision + an Australian IP/commercial lawyer; longest
-  lead-time item on the self-host track, so start it early even though it lands late.
-- **Recommended resolution:** **first** step of the self-host commercialization push
-  (`docs/04_proposals/SELF_HOST_COMMERCIALIZATION_PLAN.md` §6 sequence) — before building
-  FU-562's key gate, since the gate is only meaningful once the licence forbids
-  redistribution. Cross-ref: [[FU-562]] (billing build), [[FU-412]] (RESOLVED — the plan).
-
-## [OPEN] FU-562 — Self-host billing: revenue model + trial delivery mechanism still open (enforcement = offline license key; platform = Lemon Squeezy MoR; tier split + after-trial=Core — all decided)
-- **Raised:** 2026-07-14 (billing discussion under the self-host-first decision).
-- **Type:** decision + deferred job (self-host commercialization track; the self-host counterpart to the relocated subscription FU-402).
-- **The constraint (why self-host billing is different):** the app runs on the customer's machine, so payment/feature-gating **can't be technically enforced** (any binary check is bypassable; self-hosters skew technical). Design around gating the **download/update channel** (which you control), not the running app. This is also why plan-gating/usage-limits (FU-403) is SaaS-only and got parked in `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md`.
-- **DECIDED — enforcement = offline license key.** A signed key file that unlocks the app / gates downloads+updates. Adds friction + legitimacy, bypassable by determined users but standard for paid self-host. **No phone-home activation** (breaks air-gapped self-host + contradicts the privacy posture, Charter P8).
-- **OPEN DECISION 1 — revenue model:**
-  - **(a) Recurring annual license** — yearly fee = ongoing updates + support; stop paying → keep your last build, lose new updates (JetBrains-style). Predictable income; self-host-friendly because you gate *updates*, not the app. *Best recurring option without runtime DRM.*
-  - **(b) One-time + paid upgrades** — buy once, own that version; major versions are a new/discounted purchase (Sublime-style). Lumpier income, no subscription feel.
-  - **(c) Pure one-time perpetual** — pay once, own forever, updates included. Simplest/most generous; no recurring revenue.
-  - **(d) Free + donations / sponsor** — free to run, optional pay. Max goodwill, minimal/uncertain revenue.
-- **DECIDED — payment platform = Lemon Squeezy** (merchant-of-record). Owner chose MoR over raw Stripe to offload global sales-tax/VAT compliance (too much burden for a solo dev), and **Lemon Squeezy** specifically (indie-friendly, simplest onboarding; now Stripe-owned, so effectively Stripe's MoR layer — tax offload without direct-Stripe tax liability). Bonus: LS issues + validates **license keys** and hosts download/update delivery, so most of the decided offline-license-key plumbing comes built-in — the build is mostly wiring the app to check an LS-minted key, not a from-scratch licensing system. Ruled out: raw Stripe (owner tax-liable everywhere + build key issuance/delivery yourself); Paddle (fine too, but LS is the simpler indie fit).
-- **TRIAL / FREE-TIER SHAPE — designed 2026-07-15 (planning session with owner). The framing:**
-  - **Why self-host inverts the usual SaaS §6 playbook:** (1) can't enforce at runtime → key is a speed-bump + legitimacy signal, real leverage is the update/download gate; (2) **no cost-driver to paywall** (self-hosters pay own hosting, BYO LLM key) → paywall on *value*, not cost; (3) **the "aha" IS the intelligence layer** → a permanently-dumb free tier never lets the user feel what they'd pay for, so it doesn't convert. Conclusion: "get the feel of what's possible" is best delivered by letting them feel the *full* thing time-boxed on their own pantry, not by a crippled free build.
-  - **Three trial surfaces, stacked as a funnel (not either/or):** (1) **hosted demo** — the shared `DORA_DEMO_MODE` showcase + interval reset, *already built*; zero-install top-of-funnel, link from landing page. (2) **time-limited full trial** — download the real app, everything unlocked N days on your own data; the real conversion engine (magic is personal). (3) **free "Core" edition** — the useful floor the app runs at with no key / after trial.
-  - **DECIDED — after-trial behaviour = fall back to a genuinely useful Core tier** (owner, 2026-07-15). App keeps working as a free pantry manager; intelligence features show a gentle hide-don't-nag (R-029) "unlock" state. No hard bricking (fits Anti-creep + self-host ethos).
-  - **DECIDED — free/paid split (owner, 2026-07-15):**
-    - **Free "Core" (no key, forever useful):** full pantry/stock tracking (**no item caps** — volume caps break a pantry app + feel petty on self-host), locations, recipes + paste import, cook mode, shopping lists, manual stocktake, dashboard basics, **Basic (no-LLM) assistant** (stays free — it's the default UX per the basic-mode-must-be-useful principle), import/backup/export, expiry + low-stock alerts.
-    - **Paid "Full":** the whole intelligence/proactivity layer (buy-verdict oracle, zero-input pantry beliefs, suggestion inbox, budget-defense swaps, personal price intelligence, Dora Score, culinary-memory reports, advanced alerts — price-watch/digests/push, receipt/email reconciliation) **+ meal plans + AI assistant mode + native mobile app** (owner ruled all three of these ambiguous surfaces PAID, not free) **+ ongoing updates + support** (the recurring hook, and the one thing genuinely enforceable via the download gate).
-  - **Enforcement mechanics (buildable shape):** one signed key (Ed25519, bundled public key), payload `{kind: trial|annual|perpetual, tier, entitlements[], issued_to, issued_at, expires_at}`, minted by Lemon Squeezy. **One server-side entitlements service = single source of truth (R-003)**; `is_enabled(feature)` reads the key, every gated surface asks it (never re-implements). SPA learns its tier via the existing `/api/auth/capabilities` probe (extend it) + a fuller authed endpoint. **Existing gating seams to route through:** the install-wide feature flags in `AdminSystemFeaturesSettings.vue` (scanning/QR, buy-verdict, product-search) + the `master_llm_enabled` kill-switch. **Two expiry semantics (the subtle bit):** *trial* key expiry → features revert to Core; *annual paid* key expiry → **app keeps every feature working forever on that build**, expiry only gates fetching new updates (matches revenue-option-(a)'s "keep your last build, lose updates"). Accept bypassability — no runtime DRM.
-  - **OPEN — trial delivery mechanism (owner deferred, "decide later"):**
-    - **(i) First-run grace** *(recommended)* — app self-grants N days full on first boot, no signup/key; lowest friction to the aha; reset-able by reinstall (acceptable, can't enforce anyway).
-    - **(ii) Issued trial key** — user requests a time-limited key (LS / a form); captures an email, higher friction, harder to reset.
-    - **(iii) Demo-only** — rely on hosted demo for "feel", downloaded app is Core until a full key is bought; simplest, weakest conversion.
-    - Also still open: **trial length** (14 vs 30 days).
-  - **Rough build sequence:** (1) entitlements service + signed-key verify + Settings → License page; (2) route intelligence surfaces through the gate; (3) trial mechanism per the open fork; (4) extend `/api/auth/capabilities` + SPA tier-awareness + upsell states; (5) landing-page demo link + trial/buy CTA. All net-new (Phase 4 has zero billing code today).
-- **Also decide here:** that the licence + terms disclaim scraping (push it to the off-by-default companion — legal de-risk, COMMERCIALIZATION_REPORT §1–2).
-- **Why deferred:** no pricing decision made yet; part of the self-host commercialization push.
-- **Recommended resolution:** with [[FU-412]] (self-host commercialization plan). **Still open:** revenue model (a–d) + trial delivery mechanism (i–iii) + trial length. **Decided:** enforcement (offline key), platform (Lemon Squeezy), tier split (Core free vs Full paid), after-trial fallback (Core). Next build step once the two open forks are called: entitlements service + signed-key verify + Settings→License page, per the build sequence above. **Recommended resolution point:** at the self-host commercialization push, or sooner if you want to start charging.
-
 ## [OPEN] FU-557 — Stand up + wire the real support channel (FU-370 hook-up)
 - **Raised:** 2026-07-14 (FU-370 build).
 - **Type:** deferred job (out-of-app operator action + a one-line code change).
@@ -667,8 +577,13 @@ long session summary. Distinct from the other logs:
   `report_issue` link all light up automatically. No further code needed.
 - **Why deferred:** the channel is an out-of-app decision that involves creating
   external infrastructure (repo/form/alias) — the user's to make, on his time.
+- **2026-07-31 (donation / open-source pivot):** with the paid model dropped, support is
+  now explicitly **best-effort, not contractual**. Option A (a public GitHub issues repo
+  with a `bug_report.yml` template) is now clearly the right fit — it's the natural
+  open-source channel and doubles as the "show it off" surface. No commercial SLA framing.
 - **Recommended resolution:** when you're ready to point people at a channel (the
-  user asked for this FU explicitly so the hook-up isn't forgotten).
+  user asked for this FU explicitly so the hook-up isn't forgotten). Natural to pair with
+  the open-source release work in [[FU-406]].
 
 ## [OPEN] FU-520 — Test-suite improvements Phase 4: frontend Vitest + Hypothesis + Postgres CI + scraper/emailer fixture tests
 - **Raised:** 2026-07-09 (split from FU-169 close-out).
@@ -704,12 +619,21 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
 
-## [OPEN] FU-406 — Self-host launch readiness (on-call/SLA sliver relocated)
-- **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first).**
-- **Type:** deferred job (launch gate for the self-host product).
-- **What:** the launch checklist for *selling self-host* — **marketing** (landing/sales page), **legal** (a self-host licence + the scraping disclaimer), a **support / incident channel** (the FU-370/557 support-channel work is the seed), and a **release process**. **The operate-the-service sliver — uptime/SLA, on-call rotation, escalation — is relocated** to `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` §3 (only meaningful when you host for customers).
-- **Why deferred:** last-mile, at the self-host commercialization push.
-- **Recommended resolution:** at the self-host launch. **QA half already covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** (Track 1 FST + release-gate). Remaining: marketing, legal/licence, support-channel stand-up (FU-557), release process.
+## [OPEN] FU-406 — Open-source release readiness (was: self-host launch; de-commercialized 2026-07-31)
+- **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first). Reframed 2026-07-31 (donation / open-source pivot).**
+- **Type:** deferred job (release gate for the open-source product).
+- **What (post-pivot):** the checklist to **release Dora as free open-source software**:
+  a **project README / showcase** (what it is, screenshots, how to self-host, a donation/
+  Sponsors link), a **release process** (GitHub Releases + versioning + changelog — no paid
+  download gate), and pointing at a **support channel** (best-effort, [[FU-557]]).
+- **Dropped by the pivot ([[FU-562]] / [[FU-567]] resolved won't-do):** the *sales* landing
+  page, the licence change (keeping MIT), the scraping/terms disclaimer (owner dropped it),
+  and any billing/download-gate wiring. The "never overpay — personal price intelligence"
+  framing survives as a **product story** for the README, not a sales pitch.
+- **Relocated (unchanged):** the operate-the-service sliver — uptime/SLA, on-call, escalation
+  — stays in `docs/04_proposals/OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` §3 (hosted-only).
+- **Why deferred:** last-mile; do it when you're ready to publish the repo publicly.
+- **Recommended resolution:** at the open-source release. **QA half already covered by [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md)** (Track 1 FST + release-gate). Remaining: README/showcase, release process, support-channel stand-up ([[FU-557]]).
 
 ## [OPEN] FU-405 — P7-09 Ops (observability, CI/CD deploy, staging, backups)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit).

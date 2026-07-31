@@ -44,10 +44,17 @@
         <div v-else class="dora-auth-shell__bleed">
             <slot />
         </div>
+
+        <!-- Donation CTA — pulsing FAB, bottom-left. The Dora bubble (bottom-
+             right) doesn't render pre-auth, so the corner is free (D-009).
+             Opt out on splash / cannot-connect states via :donate="false". -->
+        <DonateButton v-if="donate" variant="floating" />
     </div>
 </template>
 
 <script setup lang="ts">
+    import DonateButton from 'src/components/donate/DonateButton.vue';
+
     withDefaults(
         defineProps<{
             backdrop?: 'blobs' | 'quiet' | 'none';
@@ -55,12 +62,16 @@
             variant?: 'card' | 'full-bleed';
             role?: string;
             ariaBusy?: boolean | undefined;
+            /** Show the bottom-left donation FAB. Off for splash / loading
+                surfaces where a "chip in" prompt would read as odd. */
+            donate?: boolean;
         }>(),
         {
             backdrop: 'blobs',
             mascot: 'top-right',
             variant: 'card',
             role: 'main',
+            donate: true,
         },
     );
 </script>

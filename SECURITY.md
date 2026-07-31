@@ -15,7 +15,7 @@ privately rather than opening a public issue.
   starting `[dora-security]`.
 - If you'd prefer end-to-end encryption or the GitHub Security
   Advisories flow, open a
-  [private advisory on this repository](https://github.com/BenTalese/DiscountDora/security/advisories/new).
+  [private advisory on this repository](https://github.com/BenTalese/dashy-dora/security/advisories/new).
 
 **What to include** — enough for us to reproduce it:
 - Affected area (route, feature, or file path).

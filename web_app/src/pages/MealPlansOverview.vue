@@ -48,6 +48,7 @@
                     @entry-adjust="planner.adjustEntryServings"
                     @add-to-slot="onMobileAddToSlot"
                     @generate-list="planner.generateListForWeek"
+                    @open-builder="builderOpen = true"
                     @go-prev-week="planner.goPrevWeek"
                     @go-next-week="planner.goNextWeek"
                 />
@@ -60,8 +61,8 @@
                      page were retired. -->
                 <BaseButton
                     variant="secondary"
-                    :icon="ICONS.lightbulb"
-                    label="Plan step-by-step"
+                    :icon="ICONS.auto_awesome"
+                    label="Build my week"
                     @click="builderOpen = true"
                 />
             </div>
@@ -154,14 +155,14 @@
                             <div>
                                 <div class="text-subtitle2">Plan this week</div>
                                 <div class="text-caption dora-text-muted">
-                                    Use the step-by-step builder, or tap any day below to add a meal.
+                                    Let Dora build it for you, or tap any day below to add a meal.
                                 </div>
                             </div>
                             <q-space />
                             <BaseButton
                                 variant="primary"
-                                :icon="ICONS.lightbulb"
-                                label="Plan step-by-step"
+                                :icon="ICONS.auto_awesome"
+                                label="Build my week"
                                 @click="builderOpen = true"
                             />
                         </q-card-section>
@@ -306,11 +307,17 @@
             </template>
         </BaseDialog>
 
-        <!-- Sequential builder (fresh-cooker flow) ─────────────────── -->
-        <SequentialBuilderDialog
+        <!-- "Build my week" auto-planner (FU-596) ──────────────────── -->
+        <MealPlanBuilderDialog
             v-model="builderOpen"
             :recipes="planner.recipes.value"
             :target-count="mealsPerWeek"
+            :slot-names="planner.slotNames.value"
+            :week-days="planner.weekDays.value"
+            :current-day-iso="planner.currentDayIso.value"
+            :is-past-day="planner.isPastDay"
+            :format-date="planner.formatDate"
+            :money-enabled="moneyEnabled"
             :build-plan="planner.builderBuildPlan"
             :generate-list="planner.generateListForWeek"
             :print-week="planner.printFocusedWeek"
@@ -363,7 +370,7 @@
     import MealPlanTemplatesDrawer from 'src/components/MealPlanTemplatesDrawer.vue';
     import MealPlanWeekDayCard from 'src/components/MealPlanWeekDayCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
-    import SequentialBuilderDialog from 'components/SequentialBuilderDialog.vue';
+    import MealPlanBuilderDialog from 'components/MealPlanBuilderDialog.vue';
     import SwapSuggestionsPanel from 'src/components/SwapSuggestionsPanel.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
@@ -372,12 +379,14 @@
     // target-count sourced from the user's `meals_per_week` pref
     // via this composable (fallback 7 when unset).
     import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
     import { computed, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
     const { mealsPerWeek } = useMealsPerWeek();
+    const { moneyEnabled } = useMoneyEnabled();
     const { total: reconcileTotal } = useReconcileQueue();
     const mealPlanStore = useMealPlanStore();
     const $q = useQuasar();

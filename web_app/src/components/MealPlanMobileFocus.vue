@@ -23,6 +23,17 @@
             </BaseButton>
         </div>
 
+        <!-- FU-596 — flagship "Build my week" entry point. Dora's audience is
+            mobile, so the auto-planner must be reachable here, not just on the
+            desktop toolbar. -->
+        <BaseButton
+            variant="primary"
+            class="full-width q-mt-sm"
+            :icon="ICONS.auto_awesome"
+            label="Build my week"
+            @click="emit('openBuilder')"
+        />
+
         <!-- Day strip — 7 day buttons across the top. Today is highlighted;
             the focused day carries the primary accent. -->
         <div class="mobile-focus__day-strip" role="tablist">
@@ -193,6 +204,7 @@
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;
         (e: 'print'): void;
+        (e: 'openBuilder'): void;
     }>();
 
     // Focused day — defaults to today when today is inside the focused week,

@@ -96,6 +96,8 @@ export function useBuyVerdictActions() {
      * Returns the count actually removed (0 if nothing matched — the
      * verdict card only surfaces this action when the server saw at least
      * one hit, so 0 means the state changed between verdict and tap).
+     * FU-573: this count is now accurate — `removeFromAllLists` counts only
+     * server-confirmed removals, not every no-op 2xx over the open lists.
      */
     async function removeFromAllOpenLists(stockItemId: string): Promise<number> {
         await shoppingListStore.ensureLoadedAsync();

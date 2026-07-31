@@ -442,7 +442,10 @@ def remove_line_by_stock_item(shopping_list_id: UUID, stock_item_id: UUID):
         f"Cart-remove on list {shopping_list_id} for item {stock_item_id}: "
         f"removed={_Response.removed}"
     )
-    return no_content()
+    # FU-573: report whether a line was actually removed (vs the idempotent
+    # no-op when the item wasn't on the list) so a "remove from all lists"
+    # fan-out can count real removals rather than every 2xx response.
+    return ok({"removed": _Response.removed})
 
 
 # ───── Quick-add to inferred primary ──────────────────────────────────────

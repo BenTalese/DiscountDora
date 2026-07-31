@@ -44,10 +44,13 @@ FU that spun off this build.
 import os
 
 # ── The switch — edit these and commit. Blank = dormant. ────────────────
-# Example values (do NOT commit real ones until the channel exists):
-#   _DEFAULT_SUPPORT_URL = "https://github.com/<you>/dashy-dora-issues/issues/new?template=bug_report.yml"
-#   _DEFAULT_SUPPORT_EMAIL = "dora@example.com"
-_DEFAULT_SUPPORT_URL: str = ""
+# Points at the public GitHub issue tracker (the open-source support channel,
+# FU-557). Lights up the Help "Report an issue" button, the page-error "Report
+# this" button, and the DoraBot report_issue link. Goes live for outsiders once
+# the repo is public (owner checklist FU-608); until then the URL simply 404s
+# for anyone not signed in with access — the plumbing is correct.
+#   To route elsewhere per-install: set DORA_SUPPORT_URL / DORA_SUPPORT_EMAIL.
+_DEFAULT_SUPPORT_URL: str = "https://github.com/BenTalese/dashy-dora/issues/new/choose"
 _DEFAULT_SUPPORT_EMAIL: str = ""
 
 

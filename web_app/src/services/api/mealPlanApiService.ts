@@ -1,4 +1,6 @@
-import type { MealPlan, MealPlanIngredient, Shortfall } from 'src/models/mealPlan';
+import type {
+    AutoBuildRequest, AutoBuildResponse, MealPlan, MealPlanIngredient, Shortfall,
+} from 'src/models/mealPlan';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
 import type { Page } from './queryStringBuilder';
@@ -65,6 +67,15 @@ export default class MealPlanApiService {
     ): Promise<MealPlanIngredient[]> =>
         await this.httpClient.post<MealPlanIngredient[], { recipes: { recipe_id: string; servings: number }[] }>(
             '/meal-plans/preview-ingredients', { recipes },
+        );
+
+    /** FU-596 — "Build my week" auto-planner. Returns a proposed set of
+     *  meals (server-selected + slot/day-placed); never persists. The SPA
+     *  renders it as an editable preview and commits via the normal
+     *  create/update path. */
+    autoBuildAsync = async (command: AutoBuildRequest): Promise<AutoBuildResponse> =>
+        await this.httpClient.post<AutoBuildResponse, AutoBuildRequest>(
+            '/meal-plans/auto-build', command,
         );
 
     // ── FU-451 — budget-defense recipe swaps ──────────────────────────

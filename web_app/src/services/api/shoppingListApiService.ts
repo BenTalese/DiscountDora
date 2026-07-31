@@ -264,11 +264,14 @@ export default class ShoppingListApiService {
     deleteLineAsync = async (listId: string, lineId: string): Promise<void> =>
         await this.httpClient.delete<void>(`/shopping-lists/${listId}/lines/${lineId}`);
 
+    // FU-573: returns whether a line was actually removed. The endpoint is an
+    // idempotent no-op (success) when the item isn't on the list, so callers
+    // fanning out over multiple lists count `removed` rather than every 2xx.
     removeByStockItemFromListAsync = async (
         listId: string,
         stockItemId: string,
-    ): Promise<void> =>
-        await this.httpClient.delete<void>(
+    ): Promise<{ removed: boolean }> =>
+        await this.httpClient.delete<{ removed: boolean }>(
             `/shopping-lists/${listId}/lines/by-stock-item/${stockItemId}`,
         );
 

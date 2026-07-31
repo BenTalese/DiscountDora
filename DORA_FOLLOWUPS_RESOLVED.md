@@ -10,6 +10,95 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-596 — The step-by-step builder puts every meal in **Breakfast** (superseded by the "Build my week" auto-planner)
+- **Raised:** 2026-07-22 (lean-verify big round #2 — Batch 7, C-2.J walk) · **Resolved:** 2026-07-31
+- **Type:** finding (UX)
+- **What:** **Plan step-by-step** spread picks day-major correctly but dropped **all**
+  of them into the `Breakfast` slot — the first entry of the household slot vocab,
+  not a considered default — so "plan my week" produced a week of breakfasts.
+- **Resolution (2026-07-31):** the owner escalated this into a full rework — the
+  step-by-step builder was **replaced** by the **"Build my week" auto-planner**
+  (`build_week.py` + `MealPlanBuilderDialog.vue`, CHANGELOG 2026-07-31). Slot
+  placement is now **server-owned** (`build_week.place_entries` / `_pick_slot`):
+  each meal honours its recipe's own `time_of_day` when that maps to a household
+  slot, otherwise the **least-loaded** slot for the day (tie-broken by slot
+  sequence) — never a blind default to the vocab's first slot. The old
+  client-side `builderBuildPlan` slot-spread (the actual bug site) was deleted;
+  the client now commits server-authored (or user-edited) slots verbatim.
+  Pinned by `tests/test_build_week.py` (`test__place_entries__does_not_dump_everything_in_first_slot`,
+  `test__pick_slot__*`), and confirmed live — a generated week landed recipes in
+  Dinner and "Vanilla Ice Cream Bowl" in **Dessert** (its `time_of_day`), and the
+  commit PATCH passed server slot-validation. The "right default is a product
+  call" question the FU raised is answered: **spread-with-smarts** (owner's call).
+
+## [RESOLVED] FU-585 — LogPriceSheet back arrow keeps the search query (owner call: clear it)
+- **Raised:** 2026-07-19 · **Resolved:** 2026-07-31
+- **Type:** finding (behaviour-vs-checklist design call)
+- **What:** the step-2 Back arrow on the "Log a price" sheet cleared only the selected
+  item, keeping the search query — the user returned to a filtered shortlist. The FU-300
+  verify checklist expected the search cleared; a prior session left it preserving the query.
+- **Resolution (2026-07-31, owner picked "clear"):** added `backToPicker()` in
+  `LogPriceSheet.vue` (resets `query` + selection) and wired the Back arrow to it, so Back now
+  matches dismiss — both return to the clean smart shortlist. The spec that pinned the old
+  behaviour (`dashboard-log-price.spec.ts`) no longer exists (deleted in the 2026-07-20
+  smoke-only e2e purge), so nothing to flip. vue-tsc + eslint clean; live-walk queued in
+  DORA_VERIFY.
+
+## [RESOLVED] FU-573 — "Removed from N lists" toast over-counts (server no-ops counted as removals)
+- **Raised:** 2026-07-17 · **Resolved:** 2026-07-31
+- **Type:** finding (cosmetic accuracy)
+- **What:** `removeFromAllLists` fanned `remove-by-stock-item` out over every open list and
+  counted every non-throwing call as a removal — but the endpoint is an idempotent no-op
+  success when the list doesn't contain the item, so an item on 1 list toasted "Removed from
+  3 lists." `useBuyVerdictActions.removeFromAllOpenLists`'s docstring was wrong for the same
+  reason.
+- **Resolution (2026-07-31):** state-ownership fix — the server already computed
+  `removed: bool` and discarded it (204); the `remove-by-stock-item` endpoint now returns
+  `ok({"removed": ...})`, the API service surfaces it, and `removeFromAllLists` counts only
+  server-confirmed removals (toast: accurate count, or "It was already off your lists." when
+  nothing matched). New backend contract test `test_shopping_list_remove_by_stock_item.py` (3,
+  passing) pins removed true→false→never-on-list-false + 404. Frontend suite green (412);
+  fixed 3 pre-existing stale `addToListButton.spec.ts` assertions ("draft list" → "a list"/
+  "your list"/"another list") that were failing before this work (component copy had been
+  intentionally changed without updating the spec).
+
+## [RESOLVED] FU-562 — Self-host billing (won't-do: reverted to donation / open-source, all features free)
+- **Raised:** 2026-07-14 · **Resolved:** 2026-07-31 (won't-do)
+- **Type:** decision + deferred job (self-host commercialization track).
+- **What:** the whole self-host billing build — offline signed licence key + entitlements
+  service + Settings→License page + Lemon Squeezy (merchant-of-record) + trial mechanism +
+  Core-free/Full-paid tier split + after-trial→Core fallback + upsell states. All net-new;
+  no code was ever written (Phase 4 had zero billing code).
+- **Resolution (2026-07-31, owner):** **won't-do.** Owner reversed the paid-self-host
+  direction and returned to the original pre-monetization vision: **donation-funded,
+  open-source, all features available to everyone by default.** There is no tier split, no
+  licence key, no entitlements gate, no trial, no Lemon Squeezy integration — the intelligence
+  layer (buy-verdict, pantry beliefs, suggestion inbox, price intelligence, Dora Score,
+  culinary-memory reports, advanced alerts, meal plans, AI assistant mode, native app) is all
+  **free**. Nothing to build; nothing to remove (no billing code existed). The reasoning:
+  a solo-built niche self-host pantry app competing against free incumbents (Grocy/Tandoor)
+  has weak paid-revenue potential and a real front-loaded cost + support obligation, whereas
+  donation + open-source costs ~nothing, is more showable, and aligns with the app's own
+  privacy/anti-creep ethos. Support becomes best-effort (see FU-557). Cross-ref: [[FU-567]]
+  (keep MIT — resolved same day), [[FU-406]] (reframed to OSS release), the parked hosted
+  option stays in `OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md` (owner chose to keep it parked,
+  not close it). Superseded doc: `SELF_HOST_COMMERCIALIZATION_PLAN.md` (banner added).
+
+## [RESOLVED] FU-567 — Relicense off MIT (won't-do: keeping MIT under the donation / open-source model)
+- **Raised:** 2026-07-16 · **Resolved:** 2026-07-31 (won't-do)
+- **Type:** decision (legal; was a prerequisite to charging).
+- **What:** relicense the repo off MIT (to a source-available / dual / BSL licence) so the
+  paid-self-host model couldn't be legally undermined by resale/redistribution, plus a
+  scraping disclaimer + recipe-import personal-use note in the terms.
+- **Resolution (2026-07-31, owner):** **won't-do — keep MIT.** With the pivot to
+  donation / open-source ([[FU-562]]), the entire motivation for relicensing (forbidding
+  resale to protect a paid model) is gone. MIT stays: simplest, most permissive, most
+  show-it-off-friendly, already in place (`LICENSE`, © 2023 Ben Peter Talese). Owner also
+  chose to **drop the scraping disclaimer / recipe-import terms note** — a free niche hobby
+  tool with no commercial relationship carries low real-world risk, and the core ships no
+  scraper (live scraping lives only in the off-by-default `dora-companion`). No `LICENSE`
+  change needed.
+
 ## [RESOLVED] FU-583 — Kitchen-health action links carry query params StockOverview ignores (`?expiring=1`, `?stocktake=1`)
 - **Raised:** 2026-07-19 (verify-campaign Batch 10, Dora Score codification) · **Resolved:** 2026-07-26
 - **Type:** finding

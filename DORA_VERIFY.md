@@ -22,6 +22,31 @@ top-to-bottom.
 
 ---
 
+## Sign-out from Settings (2026-08-04)
+- [ ] From Settings → Account (no edits made), click **Sign out** → app goes straight to `/login` with no "Discard unsaved changes?" prompt.
+- [ ] From Settings → Account, edit the username draft (make it dirty) → click **Sign out** → still no prompt, sign-out completes to `/login` (intentional exit overrides the guard by design).
+- [ ] From `/cookbook/:id` with an unrelated dirty edit, navigate to Settings and back — the usual "Discard unsaved changes?" prompt still fires on the router-link nav (the bypass only applies to sign-out, not general nav).
+
+## Stock Overview app-shell rebuild (2026-08-04)
+*Structural metrics already verified live (no page scroll, 2 scrollbars, panes equal height, footer at viewport bottom, detail header sticky). These are the eyeball checks the preview browser couldn't do — it renders 0 virtual rows.*
+- [ ] Rows render with visible spacing between them on a **large** pantry (>50 items, virtualised path) **and** on a filtered/small list (<50, glide-in path) — the two should look identical.
+- [ ] Counts footer sits flush with the bottom of the window with the detail pane **closed** (this was the main bug).
+- [ ] Open a row's detail pane → no gap appears between the last row and the footer; both columns are the same height.
+- [ ] Scroll the detail pane → its header (close · name · Delete) stays pinned; scroll the list → the toolbar and footer stay put and the page itself never scrolls.
+- [ ] Exactly two scrollbars with the pane open (one per column), one with it closed.
+- [ ] List scrollbar sits flush against the right edge of its pane (not floating inset over the rows), with a visible gap between the rows and the bar. Filter the list down so it stops scrolling → row widths **don't** shift.
+- [ ] Resize the window narrow→wide and toggle the Filters panel open → the list re-fits, footer stays pinned, nothing clips.
+- [ ] Mobile width (<md): page still usable, footer pinned, no double-scroll. Header uses `reveal` on mobile — confirm hiding/showing it doesn't leave a gap or clip the footer.
+- [ ] Kill the API (stop the backend) so `OfflineBanner` shows → confirm the shell still fits and the footer stays reachable (banner adds 48px above the page; a small page scroll here is the known trade-off).
+
+## Product Search settings page (2026-08-04)
+- [ ] With products overlay ON, sidebar shows **Settings → System → Products**; page renders with URL row (new description: "Enter the URL to your product search/product data importer tool. Useful for quick navigation.") + **Hide menu button** toggle.
+- [ ] With products overlay OFF (no product rows), the **Products** sidebar entry is absent.
+- [ ] Set a URL and blur → toast confirms save; main-nav **Product Search** button opens the URL in a new tab.
+- [ ] Toggle **Hide menu button** ON → main-nav **Product Search** entry disappears; OFF → it reappears.
+- [ ] Clear the URL (leave blank) with hide toggle OFF → nav entry still visible; clicking it routes to `/settings/admin/system/products` (not a 404, not the old `/settings/admin/system/features`). Same for the other in-app "set up product search" entry points (StockItemDetail find-&-link CTA, My Products empty-state, dashboard "Hunt for deals" empty-state, Dora quick-actions).
+- [ ] Backend migration applies cleanly on a fresh drop_all reset; `GET /api/app-settings` includes `product_search_hidden: false` by default.
+
 ## Donation buttons + restored support links (FU-608) — origin FU-608
 - [ ] **Menu bar (logged in):** the pink **Support Dora** heart shows in the header cluster (next to the alerts bell / help / avatar), gently pulses, and reads well against the toolbar colour on each theme; clicking opens the popover with all 3 platforms. *(Auth-shell floating button + the shared popover already verified live 2026-07-31 — this is the header trigger, which needs login.)*
 - [ ] **Settings (logged in):** the **Support Dora** pink pill sits beside **Sign out** in the Settings header; opens the same popover.

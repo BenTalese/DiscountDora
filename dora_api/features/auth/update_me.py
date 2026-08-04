@@ -292,7 +292,7 @@ class UpdateMeHandler:
         # per-user assistant config. Provider is a
         # closed-set sentinel; URL/model/api_key are partial fields the
         # SPA edits in place. The plaintext API key is encrypted on
-        # write (Fernet, see infrastructure.llm.key_encryption); the
+        # write (Fernet, see infrastructure.security.secret_encryption); the
         # ciphertext is what lands on the column. `clear_llm_api_key`
         # is a separate flag (same shape as clear_image) so the SPA
         # can wipe the key without round-tripping the value.

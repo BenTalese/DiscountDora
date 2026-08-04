@@ -52,37 +52,6 @@
                 </SettingsRow>
             </SettingsSection>
 
-            <hr class="settings-divider" />
-
-            <!-- Product search URL is part of the products overlay,
-                 so it follows the same data-presence gate as the rest of the
-                 surface — hidden entirely until at least one Product row
-                 exists. Operators on a fresh install won't see a setting for
-                 a feature they can't yet use; once products land, this row
-                 appears automatically alongside the My Products nav. -->
-            <SettingsSection v-if="productsEnabled">
-                <template #title>Product search</template>
-                <template #description>
-                    A URL the "Product Search" nav entry opens in a new tab.
-                    Point this at whatever search surface you run yourself;
-                    leave blank to show the entry as "not set up".
-                </template>
-
-                <SettingsRow v-if="!loading" stacked>
-                    <q-input
-                        v-model="productSearchUrlDraft"
-                        placeholder="https://your-search.example/"
-                        outlined
-                        dense
-                        :disable="savingProductSearchUrl"
-                        :loading="savingProductSearchUrl"
-                        :error="!!productSearchUrlError"
-                        :error-message="productSearchUrlError ?? undefined"
-                        hint="Must start with http:// or https://. Leave blank to clear."
-                        @blur="onSaveProductSearchUrl"
-                    />
-                </SettingsRow>
-            </SettingsSection>
         </template>
     </div>
 </template>
@@ -103,13 +72,11 @@
     // C-cross Chunk 1 — when the admin flips a flag, refresh the cached
     // `/api/health features.*` answer so every consumer composable picks
     // up the new value without a page reload.
-    const { refresh: featureFlags$refresh, products: productsEnabled } = useFeatureFlags();
+    const { refresh: featureFlags$refresh } = useFeatureFlags();
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
     const api = new AppSettingsApiService();
-
-    const loading = ref(true);
 
     // Scanning & QR labels — a real install-wide flag, saved on toggle.
     const scanningDraft = ref(false);
@@ -242,35 +209,6 @@
         }
     }
 
-    // Product search URL (Phase D / FU-186) ───────────────────────────────
-    const productSearchUrlDraft = ref('');
-    const savedProductSearchUrl = ref('');
-    const savingProductSearchUrl = ref(false);
-    const productSearchUrlError = ref<string | null>(null);
-
-    async function onSaveProductSearchUrl() {
-        const trimmed = productSearchUrlDraft.value.trim();
-        productSearchUrlError.value = null;
-        if (trimmed === savedProductSearchUrl.value) return;
-        if (trimmed && !(trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
-            productSearchUrlError.value = 'Must start with http:// or https://.';
-            return;
-        }
-        savingProductSearchUrl.value = true;
-        try {
-            const updated = await api.updateAsync({
-                product_search_url: trimmed,
-            });
-            savedProductSearchUrl.value = updated.product_search_url;
-            productSearchUrlDraft.value = updated.product_search_url;
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Product search URL saved.' });
-        } catch (e) {
-            productSearchUrlError.value = e instanceof Error ? e.message : 'Save failed.';
-        } finally {
-            savingProductSearchUrl.value = false;
-        }
-    }
-
     type LoadedSettings = {
         scanning_enabled: boolean;
         buy_verdict_enabled?: boolean;
@@ -279,16 +217,11 @@
         nutrition_enabled?: boolean;
         companion_ingestion_enabled?: boolean;
         deals_email_enabled?: boolean;
-        product_search_url?: string;
     };
     function applyLoaded(s: LoadedSettings) {
         scanningDraft.value = s.scanning_enabled;
         if (s.buy_verdict_enabled !== undefined) {
             buyVerdictDraft.value = s.buy_verdict_enabled;
-        }
-        if (s.product_search_url !== undefined) {
-            savedProductSearchUrl.value = s.product_search_url;
-            productSearchUrlDraft.value = s.product_search_url;
         }
         // The feature-flag fields are server-defaulted post-Chunk-1, so they
         // always come through; the optional types keep the frontend tolerant.
@@ -300,26 +233,15 @@
     }
 
     onMounted(async () => {
-        if (!isAdmin.value) {
-            loading.value = false;
-            return;
-        }
+        if (!isAdmin.value) return;
         try {
             applyLoaded(await api.getAsync() as LoadedSettings);
         } catch {
             // Leave defaults.
-        } finally {
-            loading.value = false;
         }
     });
 </script>
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
-    .settings-divider {
-        border: 0;
-        height: 1px;
-        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
-        margin: 8px 0;
-    }
 </style>

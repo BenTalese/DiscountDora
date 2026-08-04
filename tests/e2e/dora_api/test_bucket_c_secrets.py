@@ -6,7 +6,7 @@ stored on the row, DTO returns only the `_configured` bool) and the read
 path (resolver decrypts on demand; a rotated wrapping key surfaces as
 "not configured" rather than a crash).
 
-The wrapping key comes from `DORA_LLM_KEY_ENCRYPTION_KEY`. The pytest
+The wrapping key comes from `DORA_SECRET_ENCRYPTION_KEY`. The pytest
 fixture sets a stable Fernet key for the session so the tests are
 deterministic; individual tests that want to prove the rotation /
 missing-key behaviour override it locally with `monkeypatch`.
@@ -34,7 +34,7 @@ APP_SETTINGS = f"{BASE}/app-settings"
 
 @pytest.fixture(scope="session", autouse=True)
 def _wrapping_key():
-    """Provision `DORA_LLM_KEY_ENCRYPTION_KEY` for the whole module. Every
+    """Provision `DORA_SECRET_ENCRYPTION_KEY` for the whole module. Every
     test here writes a secret through `PATCH /api/app-settings`, which
     requires the wrapping key to be configured — without this fixture
     every write fails with a 400. Uses a fresh Fernet key generated
@@ -42,16 +42,16 @@ def _wrapping_key():
     cleared so the change is observed after the env is populated."""
     from dora_api.infrastructure.llm import key_encryption
 
-    previous = os.environ.get("DORA_LLM_KEY_ENCRYPTION_KEY")
-    os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = Fernet.generate_key().decode("ascii")
+    previous = os.environ.get("DORA_SECRET_ENCRYPTION_KEY")
+    os.environ["DORA_SECRET_ENCRYPTION_KEY"] = Fernet.generate_key().decode("ascii")
     key_encryption._fernet.cache_clear()
     try:
         yield
     finally:
         if previous is None:
-            os.environ.pop("DORA_LLM_KEY_ENCRYPTION_KEY", None)
+            os.environ.pop("DORA_SECRET_ENCRYPTION_KEY", None)
         else:
-            os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = previous
+            os.environ["DORA_SECRET_ENCRYPTION_KEY"] = previous
         key_encryption._fernet.cache_clear()
 
 
@@ -173,7 +173,7 @@ def test__resolver__unset_secrets__return_empty_string():
 # ── Failure modes ───────────────────────────────────────────────────────
 
 def test__resolver__ciphertext_undecodable__degrades_to_empty_with_warning(caplog):
-    """If someone rotates DORA_LLM_KEY_ENCRYPTION_KEY without re-entering
+    """If someone rotates DORA_SECRET_ENCRYPTION_KEY without re-entering
     the stored secrets, the ciphertext can't be decoded. The resolver
     logs a warning and returns empty (dry-run) — a hard crash would take
     email + push down install-wide until the admin knew to look."""
@@ -203,12 +203,12 @@ def test__patch_secret__without_wrapping_key__returns_400(monkeypatch):
     # need to clear it so the change is observed.
     from dora_api.infrastructure.llm import key_encryption
     key_encryption._fernet.cache_clear()
-    monkeypatch.setenv("DORA_LLM_KEY_ENCRYPTION_KEY", "")
+    monkeypatch.setenv("DORA_SECRET_ENCRYPTION_KEY", "")
 
     try:
         resp = requests.patch(APP_SETTINGS, json={"smtp_password": "no-key-set"})
         assert resp.status_code == 400, resp.text
-        assert "DORA_LLM_KEY_ENCRYPTION_KEY" in resp.text
+        assert "DORA_SECRET_ENCRYPTION_KEY" in resp.text
         # No partial write.
         assert _row_column("smtp_password_encrypted") == ""
     finally:

@@ -54,6 +54,7 @@ class UpdateAppSettingsRequest(BaseModel):
     # problem (the field never echoes back as a clickable link to other
     # users — it ALWAYS opens via target="_blank" rel="noopener").
     product_search_url: str | None = Field(default=None, max_length=500)
+    product_search_hidden: bool | None = None
     # AU vs US per-unit display locale.
     unit_pricing_locale: str | None = Field(default=None, max_length=8)
     # install-wide currency (ISO 4217; 3 uppercase letters) and
@@ -218,6 +219,9 @@ class UpdateAppSettingsHandler:
                 )
             setting.product_search_url = _Url
 
+        if "product_search_hidden" in set_fields and request.product_search_hidden is not None:
+            setting.product_search_hidden = request.product_search_hidden
+
         # backup library controls. Retention is a plain int
         # bounded by the request model; storage path is validated for
         # writeability (an admin pointing at a bad NAS mount finds out
@@ -318,7 +322,7 @@ class UpdateAppSettingsHandler:
 
         # encrypt-and-store the two operational secrets.
         # Empty string is explicit "clear the stored value"; a non-empty
-        # value replaces it. Encryption requires `DORA_LLM_KEY_ENCRYPTION_KEY`;
+        # value replaces it. Encryption requires `DORA_SECRET_ENCRYPTION_KEY`;
         # if the wrapping key isn't configured we bail with a friendly
         # 400 rather than silently swallowing the write.
         for _SecretField, _ColumnField in (
@@ -331,7 +335,7 @@ class UpdateAppSettingsHandler:
             if _Plain is None or _Plain == "":
                 setattr(setting, _ColumnField, "")
                 continue
-            from dora_api.infrastructure.llm.key_encryption import (
+            from dora_api.infrastructure.security.secret_encryption import (
                 EncryptionUnavailable,
                 encrypt,
             )
@@ -340,7 +344,7 @@ class UpdateAppSettingsHandler:
             except EncryptionUnavailable:
                 return UpdateAppSettingsResponse(
                     invalid_reason=(
-                        f"Cannot save {_SecretField}: DORA_LLM_KEY_ENCRYPTION_KEY "
+                        f"Cannot save {_SecretField}: DORA_SECRET_ENCRYPTION_KEY "
                         f"isn't configured for this install. Configure the "
                         f"wrapping key before storing secrets in the database."
                     ),

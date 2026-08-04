@@ -1,22 +1,23 @@
-"""API-key encryption for per-user LLM provider keys.
+"""Data-at-rest encryption for every secret Dora stores in the DB.
 
-FU-153 / DORA_ASSISTANT_ARCHITECTURE_PROPOSAL §7.4 — paid-provider API
-keys (OpenAI, Anthropic, Gemini) are stored as Fernet ciphertext in
-``User.llm_api_key_encrypted``. The plaintext never leaves the handler
-that writes it; reads through the public API return a derived
-``has_llm_api_key: bool`` instead.
+Dora persists several secrets to the database — SMTP password, VAPID
+private key, per-user paid-provider LLM API keys — and wraps them all
+with a single Fernet key so a DB dump (or backup theft) doesn't leak
+plaintext. That wrapping key is Dora's KEK (key-encryption-key); it
+lives in the environment variable ``DORA_SECRET_ENCRYPTION_KEY`` and
+must never be stored in the DB itself (a backup containing both the
+ciphertext and the key that decrypts it defeats the point).
 
-The Fernet key comes from the environment variable
-``DORA_LLM_KEY_ENCRYPTION_KEY``. Operators set it once at boot
-(env file, systemd EnvironmentFile, k8s secret, whatever fits the
-deployment) — same shape as every other secret the app needs (R-005
-distribution posture: env-driven config). If the variable is unset,
-:func:`encrypt` and :func:`decrypt` raise :class:`EncryptionUnavailable`
-so callers can surface a friendly error ("API-key encryption isn't
-configured for this install — set DORA_LLM_KEY_ENCRYPTION_KEY") instead
-of crashing. Ollama doesn't need a key, so an install that only uses
-Ollama can leave the env var unset; the variable is only required to
-*save* a paid-provider key.
+Operators set it once at boot (env file, systemd EnvironmentFile,
+k8s secret, docker/compose env) — same shape as every other secret
+the app needs (R-005 distribution posture: env-driven config). If the
+variable is unset, :func:`encrypt` and :func:`decrypt` raise
+:class:`EncryptionUnavailable` so callers can surface a friendly error
+("secret encryption isn't configured for this install — set
+DORA_SECRET_ENCRYPTION_KEY") instead of crashing. Ollama-only installs
+that never save a paid-provider LLM key, an SMTP password, or Web-Push
+keys can leave the variable unset; it's only required to *save* a
+secret.
 
 Why an env var, not a generated file:
 
@@ -33,6 +34,13 @@ Key generation (for ops docs):
 
 The returned string is a 32-byte url-safe-base64 value; that's what
 goes into the env var verbatim.
+
+History: this module lived at ``infrastructure/llm/key_encryption.py``
+and its env var was named ``DORA_LLM_KEY_ENCRYPTION_KEY`` because it
+was introduced (FU-153) purely for LLM API keys. It was later reused
+for SMTP + VAPID secrets without renaming, which misled operators who
+didn't use LLMs into thinking the gating didn't apply to them. Renamed
+2026-08-04.
 """
 import logging
 import os
@@ -41,14 +49,14 @@ from functools import lru_cache
 from cryptography.fernet import Fernet, InvalidToken
 
 
-_ENV_VAR = "DORA_LLM_KEY_ENCRYPTION_KEY"
+_ENV_VAR = "DORA_SECRET_ENCRYPTION_KEY"
 _Logger = logging.getLogger(__name__)
 
 
 class EncryptionUnavailable(Exception):
     """Raised when the encryption key isn't configured for this install.
 
-    Callers should translate this to a user-friendly 422 ("API-key
+    Callers should translate this to a user-friendly 422 ("secret
     encryption isn't configured for this install — see operator docs")
     rather than a 500.
     """
@@ -56,7 +64,7 @@ class EncryptionUnavailable(Exception):
 
 class EncryptionFailed(Exception):
     """Raised when ciphertext can't be decoded (key rotated, blob
-    corrupted). Treated by callers as "the saved key is no longer
+    corrupted). Treated by callers as "the saved secret is no longer
     usable — ask the user to re-enter it"."""
 
 
@@ -83,21 +91,21 @@ def _fernet() -> Fernet | None:
 def encryption_available() -> bool:
     """Returns True iff the encryption key is configured AND parses.
 
-    The Settings page reads this via the master-flag endpoint so the
-    Save button on paid-provider fields can show a clear "encryption
-    isn't configured — ask your admin to set DORA_LLM_KEY_ENCRYPTION_KEY"
+    Settings pages read this via the master-flag endpoint so the Save
+    button on secret-bearing fields can show a clear "encryption isn't
+    configured — ask your admin to set DORA_SECRET_ENCRYPTION_KEY"
     state, instead of failing only at save time.
     """
     return _fernet() is not None
 
 
 def encrypt(plaintext: str) -> bytes:
-    """Encrypt a UTF-8 plaintext API key. Raises EncryptionUnavailable
+    """Encrypt a UTF-8 plaintext secret. Raises EncryptionUnavailable
     when the env key is unset/invalid."""
     f = _fernet()
     if f is None:
         raise EncryptionUnavailable(
-            f"{_ENV_VAR} isn't configured — paid-provider API keys can't be saved."
+            f"{_ENV_VAR} isn't configured — secrets can't be saved encrypted."
         )
     return f.encrypt(plaintext.encode("utf-8"))
 
@@ -109,12 +117,12 @@ def decrypt(ciphertext: bytes) -> str:
     f = _fernet()
     if f is None:
         raise EncryptionUnavailable(
-            f"{_ENV_VAR} isn't configured — saved API keys can't be decrypted."
+            f"{_ENV_VAR} isn't configured — saved secrets can't be decrypted."
         )
     try:
         return f.decrypt(ciphertext).decode("utf-8")
     except InvalidToken as exc:
         raise EncryptionFailed(
-            "Saved API key couldn't be decrypted — the encryption key "
-            "may have been rotated. Re-enter the key in Settings."
+            "Saved secret couldn't be decrypted — the encryption key "
+            "may have been rotated. Re-enter the value in Settings."
         ) from exc

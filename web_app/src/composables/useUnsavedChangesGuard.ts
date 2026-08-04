@@ -3,6 +3,22 @@ import type { ComputedRef, Ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { useQuasar } from 'quasar';
 
+// Module-level bypass: when true, every mounted guard silently allows
+// navigation and the beforeunload handler is a no-op. Sign-out flips this
+// on so the user isn't asked to "discard unsaved changes" on a nav they
+// explicitly chose — and, more importantly, so drafts that go stale the
+// moment `currentUser` clears (e.g. AccountSettings' username/email drafts
+// diffed against a now-null user) don't produce a false-positive prompt
+// that, on Cancel, would strand the app on a settings page while
+// logged-out.
+let bypass = false;
+export function suppressUnsavedChangesGuard<T>(fn: () => T | Promise<T>): Promise<T> {
+    bypass = true;
+    return Promise.resolve()
+        .then(fn)
+        .finally(() => { bypass = false; });
+}
+
 /**
  * FU-156 — prompt "Discard unsaved changes?" whenever the user tries
  * to navigate away from the current page while `isDirty` is true.
@@ -40,18 +56,18 @@ export function useUnsavedChangesGuard(
                 .onDismiss(() => resolve(false));
         });
 
-    onBeforeRouteLeave(async () => isDirty.value ? await confirmDiscard() : true);
+    onBeforeRouteLeave(async () => bypass || !isDirty.value ? true : await confirmDiscard());
     // Catches same-component param changes (e.g. clicking a related
     // recipe while editing the current one — both routes match the
     // same `/cookbook/:id` component, so `onBeforeRouteLeave` doesn't
     // fire; `onBeforeRouteUpdate` does).
-    onBeforeRouteUpdate(async () => isDirty.value ? await confirmDiscard() : true);
+    onBeforeRouteUpdate(async () => bypass || !isDirty.value ? true : await confirmDiscard());
 
     // Browser-level guard for refresh / close / address-bar nav. The
     // dialog text is ignored on modern browsers — setting `returnValue`
     // is what causes the native "Leave site?" prompt to fire.
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-        if (!isDirty.value) return;
+        if (bypass || !isDirty.value) return;
         event.preventDefault();
         event.returnValue = '';
     };

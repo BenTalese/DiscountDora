@@ -59,7 +59,7 @@
                 </p>
                 <p class="q-mb-none text-caption dora-text-muted">
                     For paid providers, this install needs the
-                    <code>DORA_LLM_KEY_ENCRYPTION_KEY</code> environment
+                    <code>DORA_SECRET_ENCRYPTION_KEY</code> environment
                     variable set so user-saved API keys can be stored
                     encrypted at rest. Generate one with:
                     <code>python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code>.

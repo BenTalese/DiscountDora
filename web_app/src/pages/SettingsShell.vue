@@ -72,9 +72,11 @@
     import { useAuthStore } from 'src/stores/authStore';
     import BaseButton from 'src/components/BaseButton.vue';
     import DonateButton from 'src/components/donate/DonateButton.vue';
-    import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
+    import SettingsNavGroup, { type SettingsNavEntry, type SettingsNavLeaf } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { suppressUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, nextTick, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
@@ -124,25 +126,39 @@
         return base;
     });
 
-    const adminSections: SettingsNavEntry[] = [
+    const { products: productsEnabled } = useFeatureFlags();
+
+    const adminSystemItems = computed<SettingsNavLeaf[]>(() => {
+        const items: SettingsNavLeaf[] = [
+            { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
+            { path: '/settings/admin/system/locale', label: 'Currency & locale', icon: ICONS.language },
+            { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
+            { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
+            { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
+            { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
+            { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
+            { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
+        ];
+        // Products page (URL + hide toggle) mirrors the products overlay's
+        // data-presence gate — no products ⇒ no settings row for it.
+        if (productsEnabled.value) {
+            items.push({ path: '/settings/admin/system/products', label: 'Products', icon: ICONS.shopping_bag });
+        }
+        items.push(
+            // operational config that used to be env-only.
+            { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
+            { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
+            { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
+            { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
+        );
+        return items;
+    });
+
+    const adminSections = computed<SettingsNavEntry[]>(() => [
         { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
         {
             subheader: 'System',
-            items: [
-                { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
-                { path: '/settings/admin/system/locale', label: 'Currency & locale', icon: ICONS.language },
-                { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
-                { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
-                { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
-                { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
-                { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
-                { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
-                // operational config that used to be env-only.
-                { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
-                { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
-                { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
-                { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
-            ],
+            items: adminSystemItems.value,
         },
         // Data sub-group: relocated from the retired `/data`
         // shell. Backup & restore + Import land here so their chrome
@@ -158,7 +174,7 @@
         },
         { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.fact_check },
         { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
-    ];
+    ]);
 
     const authStore = useAuthStore();
     const { isAdmin } = storeToRefs(authStore);
@@ -195,9 +211,17 @@
     const signingOut = ref(false);
     async function onSignOut() {
         signingOut.value = true;
+        // Sign-out is an intentional exit; suppress the unsaved-changes
+        // guard so a page whose draft-vs-user diff goes stale the moment
+        // logout clears currentUser (e.g. AccountSettings) doesn't fire
+        // a false-positive "discard unsaved changes?" prompt. Cancel on
+        // that prompt would also strand the app on a settings page while
+        // already logged-out.
         try {
-            await authStore.logoutAsync();
-            void router.push('/login');
+            await suppressUnsavedChangesGuard(async () => {
+                await authStore.logoutAsync();
+                await router.push('/login');
+            });
         } finally {
             signingOut.value = false;
         }
@@ -214,7 +238,7 @@
 
     const navGroups = computed<SettingsNavGroupDef[]>(() => {
         if (isAdmin.value && mode.value === 'admin') {
-            return [{ label: 'Admin · global', items: adminSections, icon: ICONS.shield }];
+            return [{ label: 'Admin · global', items: adminSections.value, icon: ICONS.shield }];
         }
         return [
             { label: 'Account', items: accountSections },

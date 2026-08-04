@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Push notifications"
-            description="Web-push (VAPID) keys the browser needs to sign notification subscriptions. The private key is stored encrypted-at-rest (Fernet, wrapped by DORA_LLM_KEY_ENCRYPTION_KEY)."
+            description="Web-push (VAPID) keys the browser needs to sign notification subscriptions. The private key is stored encrypted-at-rest (Fernet, wrapped by DORA_SECRET_ENCRYPTION_KEY)."
             :icon="ICONS.notifications_active"
         />
 
@@ -48,7 +48,7 @@
                     :label="privateKeyConfigured ? 'Private key (change)' : 'Private key'"
                     :help="privateKeyConfigured
                         ? 'A private key is stored. Enter a new one to replace it, or use Clear to remove.'
-                        : 'Encrypted at rest with DORA_LLM_KEY_ENCRYPTION_KEY. Push sends stay in dry-run until this is set.'"
+                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY. Push sends stay in dry-run until this is set.'"
                     stacked
                 >
                     <div class="column q-gutter-sm">

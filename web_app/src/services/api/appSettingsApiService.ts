@@ -35,6 +35,8 @@ export type AppSettings = {
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.
     // Empty string ⇒ unset; the nav entry renders disabled with a hint.
     product_search_url: string;
+    // Hides the Product Search nav entry entirely, regardless of URL.
+    product_search_hidden: boolean;
     // PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     // These are the single user-visible cadence dial; the old
     // `default_days_until_stocktake_alert` field was retired in the

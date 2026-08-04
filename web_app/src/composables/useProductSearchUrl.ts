@@ -9,12 +9,14 @@ import { computed, ref } from 'vue';
 import type { Router } from 'vue-router';
 import AppSettingsApiService from 'src/services/api/appSettingsApiService';
 
-// Admin Features page that owns the Product Search URL row. Used as the
-// fallback destination for every "Product Search" entry point when no URL is
-// configured yet, so the not-set-up state stays actionable instead of dead.
-export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/features';
+// Admin Products page that owns the Product Search URL row + hide toggle.
+// Used as the fallback destination for every "Product Search" entry point
+// when no URL is configured yet, so the not-set-up state stays actionable
+// instead of dead.
+export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/products';
 
 const url = ref<string>('');
+const hidden = ref<boolean>(false);
 const loaded = ref(false);
 let inflight: Promise<void> | null = null;
 
@@ -24,6 +26,7 @@ function load(): Promise<void> {
             .getAsync()
             .then((s) => {
                 url.value = s.product_search_url || '';
+                hidden.value = !!s.product_search_hidden;
             })
             .catch(() => {
                 // Anonymous / unreachable / non-admin — leave the URL empty.
@@ -46,6 +49,7 @@ export function useProductSearchUrl() {
     }
     return {
         url,
+        hidden,
         loaded,
         configured,
         refresh,
@@ -55,7 +59,7 @@ export function useProductSearchUrl() {
 // Single destination resolver for every in-app "Product Search" entry point
 // (nav strip + the empty-state / find-&-link CTAs). FU-186 removed the in-app
 // `/product-search` route: a configured URL opens the external companion in a
-// new tab; when unset we route to the admin Features page so the setup path is
+// new tab; when unset we route to the admin Products page so the setup path is
 // discoverable rather than a 404 (owner call, FU-581). The old `q` /
 // `stock_item_id` seeding is dropped — nothing consumes it any more.
 export function openProductSearch(router: Router): void {

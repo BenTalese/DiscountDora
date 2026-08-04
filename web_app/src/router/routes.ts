@@ -391,6 +391,11 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
                     },
+                    {
+                        path: 'admin/system/products',
+                        component: () => import('pages/settings/AdminSystemProductsSettings.vue'),
+                        meta: { title: 'System: Products' }
+                    },
                     // four focused System pages carrying the
                     // operational config that used to live in DORA_* env vars.
                     {

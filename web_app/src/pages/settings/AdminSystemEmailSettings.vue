@@ -29,6 +29,62 @@
             </SettingsSection>
 
             <SettingsSection>
+                <template #title>Setting up Gmail</template>
+                <template #description>
+                    Google no longer accepts your regular login here — you
+                    need an <strong>App Password</strong> (16 characters)
+                    tied to 2-Step Verification. Once you have one, fill in
+                    the SMTP fields below.
+                </template>
+
+                <ol class="gmail-steps">
+                    <li>
+                        Turn on <strong>2-Step Verification</strong> on your
+                        Google Account (Security → 2-Step Verification).
+                        Required — App Passwords can't be created without it.
+                    </li>
+                    <li>
+                        Open the App Passwords page, create one named
+                        <em>&ldquo;Dora&rdquo;</em>, and copy the
+                        16-character password Google shows you (spaces don't
+                        matter).
+                    </li>
+                    <li>
+                        Fill in the SMTP fields below with
+                        <code>smtp.gmail.com</code>, port <code>587</code>,
+                        <strong>Use TLS</strong> on, your full Gmail address
+                        as <em>Username</em> and <em>From address</em>, and
+                        paste the App Password as the SMTP password.
+                    </li>
+                    <li>
+                        Turn <strong>Email enabled</strong> on and try a
+                        password reset (or any email-emitting flow) to
+                        confirm it works.
+                    </li>
+                </ol>
+
+                <p class="gmail-note">
+                    <strong>Gotchas.</strong> If sends fail with
+                    <code>535-5.7.8 Username and Password not accepted</code>
+                    you've pasted your account password instead of the App
+                    Password. Free Gmail caps at ~500 recipients/day; fine
+                    for a personal self-host, not a public multi-user
+                    install — for that, use a transactional provider
+                    (Postmark, Resend, SES).
+                </p>
+
+                <div class="gmail-cta">
+                    <BaseButton
+                        variant="secondary"
+                        :icon="ICONS.google"
+                        label="Create Gmail App Password"
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                    />
+                </div>
+            </SettingsSection>
+
+            <SettingsSection>
                 <template #title>SMTP</template>
                 <template #description>
                     Reached via TLS when the toggle below is on. Username
@@ -98,7 +154,7 @@
                     :label="passwordConfigured ? 'Password (change)' : 'Password'"
                     :help="passwordConfigured
                         ? 'A password is stored. Enter a new one to replace it, or use Clear to remove.'
-                        : 'Encrypted at rest with DORA_LLM_KEY_ENCRYPTION_KEY. Leave blank to keep the sender in dry-run mode.'"
+                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY. Leave blank to keep the sender in dry-run mode.'"
                     stacked
                 >
                     <div class="row items-center q-gutter-sm">
@@ -245,4 +301,37 @@
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
+    .gmail-steps {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        color: var(--text-primary);
+        font-size: 0.9375rem;
+        line-height: 1.45;
+        max-width: 68ch;
+    }
+    .gmail-steps code {
+        font-size: 0.875em;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--surface-sunken);
+        color: var(--text-primary);
+    }
+    .gmail-note {
+        margin: 0;
+        max-width: 68ch;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    .gmail-note code {
+        font-size: 0.875em;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--surface-sunken);
+        color: var(--text-primary);
+    }
+    .gmail-cta { display: flex; }
 </style>

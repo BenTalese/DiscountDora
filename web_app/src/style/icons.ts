@@ -186,6 +186,7 @@ export const ICONS = {
     error: 'mdi-alert-circle',
     file_upload: 'mdi-file-upload',
     folder: 'mdi-folder',
+    google: 'mdi-google',
     group: 'mdi-account-group',
     person_add: 'mdi-account-plus',
     help: 'mdi-help',

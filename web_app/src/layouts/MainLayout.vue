@@ -211,6 +211,7 @@
 
     const productSearchEntry = computed<MenuButtonProps | null>(() => {
         if (!features.products.value) return null;
+        if (productSearch.hidden.value) return null;
         const url = productSearch.url.value.trim();
         if (url) {
             return {

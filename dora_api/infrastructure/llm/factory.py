@@ -13,7 +13,7 @@ Behaviour summary, by which knobs the user has set:
   * ``user.llm_provider`` is unset → unavailable. The user enabled AI
     mode but never finished the setup. Fall back without crashing.
   * Provider needs an API key and the install hasn't configured
-    ``DORA_LLM_KEY_ENCRYPTION_KEY`` → unavailable. The saved key can't
+    ``DORA_SECRET_ENCRYPTION_KEY`` → unavailable. The saved key can't
     be decrypted.
   * Provider needs an API key and the saved blob can't be decrypted
     (key rotated, blob corrupt) → unavailable.
@@ -36,7 +36,7 @@ from dora_api.domain.entities.user import (
 )
 from dora_api.infrastructure.llm.anthropic_client import AnthropicClient
 from dora_api.infrastructure.llm.gemini_client import GeminiClient
-from dora_api.infrastructure.llm.key_encryption import (
+from dora_api.infrastructure.security.secret_encryption import (
     EncryptionFailed,
     EncryptionUnavailable,
     decrypt,

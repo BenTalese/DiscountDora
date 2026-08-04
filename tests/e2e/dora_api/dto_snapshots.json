@@ -35,6 +35,7 @@
       "piper_bin",
       "piper_bundled_voice_dir",
       "piper_voice",
+      "product_search_hidden",
       "product_search_url",
       "public_url",
       "scanning_enabled",

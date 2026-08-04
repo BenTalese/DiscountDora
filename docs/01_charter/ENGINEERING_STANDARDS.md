@@ -1165,9 +1165,9 @@ exceptions, which still must be commented) · **Source** (where it was establish
   **Settings → Admin → System**. **Env vars are reserved for bootstrap**:
   values the app has to read before the DB is reachable (`DORA_SECRET_KEY`,
   `DORA_ENV`, `DORA_SPA_DIR`, storage-path overrides) or root wrapping keys
-  the DB ciphertext depends on (`DORA_LLM_KEY_ENCRYPTION_KEY`). Everything
+  the DB ciphertext depends on (`DORA_SECRET_ENCRYPTION_KEY`). Everything
   else — including secrets — belongs on the row, with real secrets stored
-  as Fernet ciphertext wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`.
+  as Fernet ciphertext wrapped by `DORA_SECRET_ENCRYPTION_KEY`.
 - **Why:** Bootstrap-vs-runtime is the canonical split in every well-built
   self-hosted app (GitLab `gitlab.rb` vs application_settings; Discourse env
   vs site_settings; Mattermost `config.json` vs admin UI). Blurring it grows
@@ -2124,15 +2124,15 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 - **Date / task:** 2026-07-06 (FU-333 close-out — Buckets B + C + D shipped end-to-end).
 - **Status:** accepted
 - **Context:** Dora accumulated 19 `DORA_*` env vars at boot — every optional feature (SMTP, VAPID, TTS, audit retention, public URL, etc.) added one or more. Operators self-hosting had to configure a long environment table before the app was useful; desktop end-users would never see one at all. The FU-333 audit split the vars into three buckets — Bucket A (7 vars, genuine bootstrap: read before the DB or root wrapping keys), Bucket B (12 operational vars — SMTP host/port/username/from/use-TLS, VAPID public+subject, Piper paths, email_enabled, audit_retention_days, public_url), Bucket C (2 real secrets — SMTP password, VAPID private key). Bucket B shipped 2026-07-05 as `AppSetting` columns with an env-fallback lane. This ADR closes out Buckets C + D and drops the fallback (pre-release; no operators to preserve — user directive 2026-07-06).
-- **Decision:** Adopt **R-030**. `AppSetting` is the single source of truth for install-wide operational config; env vars are reserved for the 7 bootstrap values and the wrapping key (`DORA_LLM_KEY_ENCRYPTION_KEY`). Real secrets live on the row *encrypted-at-rest* with the FU-153 Fernet helper. The response DTO surfaces a `<field>_configured: bool` for every secret; ciphertext never leaves the DB. Desktop bundles auto-generate the two remaining bootstrap keys on first launch (Bucket D), so end-users see no env var at all.
+- **Decision:** Adopt **R-030**. `AppSetting` is the single source of truth for install-wide operational config; env vars are reserved for the 7 bootstrap values and the wrapping key (`DORA_SECRET_ENCRYPTION_KEY`). Real secrets live on the row *encrypted-at-rest* with the FU-153 Fernet helper. The response DTO surfaces a `<field>_configured: bool` for every secret; ciphertext never leaves the DB. Desktop bundles auto-generate the two remaining bootstrap keys on first launch (Bucket D), so end-users see no env var at all.
 - **Alternatives considered:**
   - **Keep the Bucket-B env fallbacks for one release.** Rejected — pre-release, no operators to preserve. Fallback code is dead weight and hides the strict-AppSetting contract from future readers.
   - **Store SMTP password + VAPID private key in a JSON keychain file.** Rejected — makes backups + Postgres migrations harder (a second data location); doesn't compose with SaaS's shared-DB story. `AppSetting` + Fernet is the same pattern per-user LLM keys already use.
-  - **Auto-generate `DORA_LLM_KEY_ENCRYPTION_KEY` on server self-host too.** Rejected for the server path — operators want an explicit "I made a choice" signal about the wrapping key (matches the FU-153 rationale). Desktop is the odd one out because the "operator" *is* the end user.
+  - **Auto-generate `DORA_SECRET_ENCRYPTION_KEY` on server self-host too.** Rejected for the server path — operators want an explicit "I made a choice" signal about the wrapping key (matches the FU-153 rationale). Desktop is the odd one out because the "operator" *is* the end user.
 - **Consequences:**
-  - Env footprint: 19 → **2** on server self-host (`DORA_SECRET_KEY` + `DORA_LLM_KEY_ENCRYPTION_KEY`); **0** on desktop bundles. The `.env.example` block for the promoted vars is gone.
+  - Env footprint: 19 → **2** on server self-host (`DORA_SECRET_KEY` + `DORA_SECRET_ENCRYPTION_KEY`); **0** on desktop bundles. The `.env.example` block for the promoted vars is gone.
   - New pattern for any future "where should this config live?" call: default to `AppSetting` unless it's read pre-DB or is a wrapping key.
-  - Rotating `DORA_LLM_KEY_ENCRYPTION_KEY` invalidates the two operational secrets + every per-user LLM API key; the resolver degrades to dry-run (with a warning log) rather than crashing. Admin re-enters secrets in Settings — documented in `key_encryption.py` and `.env.example`.
+  - Rotating `DORA_SECRET_ENCRYPTION_KEY` invalidates the two operational secrets + every per-user LLM API key; the resolver degrades to dry-run (with a warning log) rather than crashing. Admin re-enters secrets in Settings — documented in `key_encryption.py` and `.env.example`.
   - Desktop bundle: `desktop_app._detect_bundled_piper_paths()` + `_seed_desktop_paths()` write detected `piper_bin` / `piper_bundled_voice_dir` into the row *post-init*; no env fallback path to lose in the resolver.
 - **Promotes rule:** R-030.
 

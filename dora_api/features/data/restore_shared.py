@@ -109,7 +109,7 @@ SECTIONS: tuple[Section, ...] = (
         _singleton_key,
         # FU-387 — never ship Fernet-wrapped operational secrets in a
         # backup. They're encrypted with the install's
-        # `DORA_LLM_KEY_ENCRYPTION_KEY`, so ciphertext alone isn't
+        # `DORA_SECRET_ENCRYPTION_KEY`, so ciphertext alone isn't
         # compromise, but backup-plus-key is. Defence-in-depth: an
         # admin can't accidentally email a backup that contains their
         # own SMTP + push credentials. Restoring an install re-enters

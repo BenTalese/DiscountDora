@@ -6,7 +6,7 @@
              Mark-open / Set-expiry / Add-to-list trio is gone because all
              three actions live inline on the page already. Show QR stays
              since it's not reachable elsewhere. -->
-        <div class="row items-center q-mb-md q-gutter-sm">
+        <div class="row items-center q-mb-md q-gutter-sm stock-detail__header">
             <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
                 <q-tooltip>Close panel</q-tooltip>

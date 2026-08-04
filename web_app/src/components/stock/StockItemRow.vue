@@ -706,6 +706,13 @@
            round-1 spacing bump. Bring the min-height down a notch while
            keeping the gap+padding that gave it breathing room. */
         min-height: 56px;
+        /* Intrinsic row gap. The parent used to rely on `q-gutter-y-sm`,
+           but that class is a no-op inside `q-virtual-scroll` (the virtual
+           scroller sets its own item spacing and swallows container
+           gutters), so once a pantry crosses the virtualisation threshold
+           the rows go flush. Owning the gap on the row itself keeps the
+           spacing consistent in both the ListTransition and virtual paths. */
+        margin-bottom: 8px;
         position: relative;
         border-radius: 8px;
         overflow: hidden; /* clip the essential stripe to the rounded border */

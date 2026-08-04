@@ -19,7 +19,7 @@ from dora_api.infrastructure.llm.factory import (
     build_assistant_client_from_provider,
 )
 from dora_api.infrastructure.llm.gemini_client import GeminiClient
-from dora_api.infrastructure.llm.key_encryption import (
+from dora_api.infrastructure.security.secret_encryption import (
     EncryptionFailed,
     EncryptionUnavailable,
     encrypt as encrypt_api_key,

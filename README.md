@@ -223,7 +223,7 @@ Alerts that fire while the SPA is closed are delivered via the Web Push protocol
    python -m py_vapid --gen --applicationServerKey
    ```
    Writes `private_key.pem` to the current directory and prints the matching base64url-encoded public key to stdout. Treat the private key like any other secret.
-2. **Configure the keys** at **Settings → Admin → System → Push notifications** (all three fields live on `AppSetting`; the private key is stored encrypted-at-rest, wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`). Paste the public key + private key into the admin form and set `Subject` to your contact URL. All fields flip to dry-run when either half is missing.
+2. **Configure the keys** at **Settings → Admin → System → Push notifications** (all three fields live on `AppSetting`; the private key is stored encrypted-at-rest, wrapped by `DORA_SECRET_ENCRYPTION_KEY`). Paste the public key + private key into the admin form and set `Subject` to your contact URL. All fields flip to dry-run when either half is missing.
 3. No restart needed — the resolver picks up the row on the next call. The **Settings → Notifications → Push** toggle appears once both halves are configured.
 
 ### AI assistant (optional, bring-your-own-LLM, per-user)
@@ -232,11 +232,11 @@ Dora's chat can be backed by a language model — Ollama you host yourself, or O
 
 Setup: (1) admin confirms the master switch is on at **Settings → System → AI assistant**; (2) each account that wants AI goes to **Settings → Assistant**, picks a provider, fills in URL/model (Ollama) or API key + model (paid), and turns AI mode on. There's a **Test connection** button. For Ollama, `ollama pull qwen2.5:7b` + `ollama serve` is the canonical setup; the model must be tool-capable (qwen2.5, llama3.1, gpt-oss, etc.).
 
-**Paid providers (one operator step):** set `DORA_LLM_KEY_ENCRYPTION_KEY` so per-user API keys can be stored encrypted at rest (Ollama doesn't need this):
+**Paid providers (one operator step):** set `DORA_SECRET_ENCRYPTION_KEY` (Dora's data-at-rest KEK, shared with SMTP + VAPID) so per-user API keys can be stored encrypted at rest (Ollama doesn't need this):
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
-Put the output into the API server's environment. Rotating the key invalidates every saved API key.
+Put the output into the API server's environment. Rotating the key invalidates every saved API key (and any other stored secret wrapped by it).
 
 **Network topology note:** the Dora **backend** reaches the LLM, not your browser. On a single box the base URL is `http://localhost:11434`; on a split setup the backend must be able to reach wherever the LLM runs (LAN routing / Tailscale / port forward).
 

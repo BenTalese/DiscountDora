@@ -72,6 +72,10 @@ class AppSetting(BaseEntity):
     # "Set up in Settings" hint (R-014 reveal-and-disable). See
     # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
     product_search_url: str = ""
+    # When True, the "Product Search" nav entry is hidden entirely, even if
+    # `product_search_url` is set. Lets an operator suppress the surface for
+    # an install that doesn't run a companion search tool at all.
+    product_search_hidden: bool = False
     # the AU-shelf vs US-shelf display convention for
     # per-unit prices. `"AU"` shows `/100ml`/`/100g`/`/L`/`/kg`/`/ea` with
     # the flip at 1 L / 1 kg; `"US"` shows `/fl oz`/`/qt`/`/oz`/`/lb`/`/ea`
@@ -141,15 +145,15 @@ class AppSetting(BaseEntity):
     # operational config that was formerly carried as
     # `DORA_*` env vars. An admin now configures a fresh install through
     # Settings → Admin → System; the two remaining bootstrap-only vars
-    # (`DORA_SECRET_KEY`, `DORA_LLM_KEY_ENCRYPTION_KEY`) stay in env because
+    # (`DORA_SECRET_KEY`, `DORA_SECRET_ENCRYPTION_KEY`) stay in env because
     # they're read before the DB is reachable / are root keys the DB
     # ciphertext depends on. On desktop bundles both are auto-generated on
     # first boot (see `desktop_app.py _bootstrap_keys`).
     #
     # Bucket C secrets — SMTP password + VAPID private key — live here
-    # encrypted at rest with the Fernet helper from FU-153
-    # (`infrastructure/llm/key_encryption`) using
-    # `DORA_LLM_KEY_ENCRYPTION_KEY` as the wrapping key. The plaintext
+    # encrypted at rest with the Fernet helper at
+    # `infrastructure/security/secret_encryption` using
+    # `DORA_SECRET_ENCRYPTION_KEY` as the wrapping key. The plaintext
     # never leaves the write handler; reads decrypt on demand inside the
     # resolver. The DTO surfaces a `<field>_configured: bool` instead of
     # the ciphertext so the admin UI can render Set/Change without ever
@@ -190,6 +194,7 @@ class AppSetting(BaseEntity):
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         PRODUCT_SEARCH_URL = "product_search_url"
+        PRODUCT_SEARCH_HIDDEN = "product_search_hidden"
         UNIT_PRICING_LOCALE = "unit_pricing_locale"
         CURRENCY = "currency"
         LOCALE = "locale"

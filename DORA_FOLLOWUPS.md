@@ -52,6 +52,32 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-609 — No shared page-height contract: 11 MainLayout pages skip `<q-page>` and hand-roll their own layout
+- **Raised:** 2026-08-04 (Stock Overview scroll-model rebuild — see that worklog entry).
+- **Type:** finding (app-wide structural inconsistency).
+- **What:** `<q-page>`'s job is to set `min-height: screen.height − layoutOffset`, computed from **live** layout state (`QPage.js:44` — header size, plus a QFooter if one ever lands). It is the only thing that gives a page a height contract. Pages that skip it have none, so anything height-dependent — a `position: sticky` footer, a fill-the-viewport shell, an internally-scrolling pane — has to hand-roll the offset with a hardcoded pixel guess, which silently rots when chrome changes. This is exactly how the Stock Overview bugs happened: it mixed a self-capping virtual list with a sticky footer, and my first patch attempt hardcoded a 64px offset that was **already wrong** (`OfflineBanner` adds 48px when the API is unreachable). Only 10 of 29 top-level pages use `<q-page>`.
+- **The pages to visit** (inside `MainLayout` → `q-page-container`, currently rooted on a bare `<div>`):
+
+  | Page | Current root | Note |
+  |---|---|---|
+  | `DashboardPage.vue` | `<div class="dora-dash">` | |
+  | `RecipesOverview.vue` | `<div class="q-pa-md">` | **uses `PageCountsFooter`** — same sticky-footer dependency as Stock Overview had |
+  | `MealPlansOverview.vue` | `<div class="q-pa-md">` | |
+  | `MealPlanTemplatesPage.vue` | `<div class="q-pa-md column …">` | |
+  | `MealReconcilePage.vue` | `<div class="runner-shell">` | runner shell — likely wants the app-shell treatment |
+  | `StocktakeRunner.vue` | `<div class="runner-shell">` | same shell as above |
+  | `PriceHistoryPage.vue` | `<div class="q-pa-md row …">` | |
+  | `RecipeCookMode.vue` | `<div class="q-pa-md cook-mode">` | |
+  | `ReportsPage.vue` | `<div class="reports-page">` | |
+  | `StockItemDetailPage.vue` | `<div class="q-pa-md">` | **dual-host** — also renders `embedded` inside Stock Overview's peek, so it must stay layout-agnostic; converting it needs care |
+  | `SettingsShell.vue` | `<div class="settings-shell">` | already hand-rolls `height: calc(100dvh - 64px)` + dual internal scrollers — the same hardcoded-64 smell |
+  | `ShopNowRedirect.vue` | `<div class="text-center q-pa-xl">` | redirect stub, no real UI — trivial/skip |
+
+- **Explicitly NOT affected** (correctly have no `<q-page>` — they render outside `q-page-container`, where `QPage` cannot resolve a layout): `LoginPage`, `SetupAdminPage`, `setup/BackendSetupPage`, `VerifyEmailPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `ConfirmEmailChangePage`, `ErrorNotFound`. Likewise every `pages/settings/*.vue` — those mount inside `SettingsShell`'s own scroller, not the layout, so they should stay plain divs (fix `SettingsShell` itself instead). `pages/errors/ErrorPageNotFound.vue` + `ErrorServer.vue` *are* in-layout and worth a look.
+- **Why deferred:** owner scope call (2026-08-04) — fix Stock Overview now, audit the rest separately. Converting 11 pages blind risks regressions on surfaces nobody reported a problem with; several also need a per-page decision (document-scroll vs app-shell), which isn't a mechanical find/replace.
+- **Suggested approach when picked up:** convert opportunistically as each page is touched, and promote the pattern to an `R-0NN` + ADR in `ENGINEERING_STANDARDS.md` ("a route component hosted by `MainLayout` roots on `<q-page>`; never hardcode the layout offset — use `:style-fn` when a page needs a fixed-height shell"). `StockOverview.vue` is the worked reference.
+- **Recommended resolution:** opportunistic (per page, as touched). Bump to "now" for `RecipesOverview` if its counts footer shows the same not-pinned behaviour.
+
 ## [OPEN] FU-608 — Owner checklist: stand up the open-source + donation infrastructure, then swap the in-app placeholders
 - **Raised:** 2026-07-31 (donation / open-source pivot — [[FU-562]]/[[FU-567]] resolved; part of the reframed [[FU-406]] release readiness).
 - **Type:** deferred job (owner/external actions + a one-pass placeholder swap).

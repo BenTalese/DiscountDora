@@ -18,6 +18,108 @@ next.
 
 ---
 
+## 2026-08-04 (later) — Rename `DORA_LLM_KEY_ENCRYPTION_KEY` → `DORA_SECRET_ENCRYPTION_KEY`; move module out of `infrastructure/llm/`
+
+**Trigger.** Owner tried to save an SMTP password with LLM off and hit the "DORA_LLM_KEY_ENCRYPTION_KEY isn't configured" 400. Flagged as misleading: the env var was introduced (FU-153) for LLM API keys, then quietly reused as the wrapping key for the two Bucket-C secrets (SMTP password, VAPID private key) without renaming — so operators who don't use LLMs are told an LLM knob blocks them.
+
+**Decisions.** (a) Env-only stays (KEK in the DB defeats "encrypted at rest" — a backup + key = full compromise). (b) **Hard rename**, no back-compat fallback (pre-release, no live installs to preserve). (c) Module also moves from `infrastructure/llm/key_encryption.py` → `infrastructure/security/secret_encryption.py` so the location matches the semantic (it's not LLM-scoped).
+
+**Changes.**
+- New module `dora_api/infrastructure/security/secret_encryption.py` (relocated + rewritten docstring; error copy says "secrets", not "API keys"). Old file deleted.
+- New package `dora_api/infrastructure/security/__init__.py` re-exports the public API (`encrypt`, `decrypt`, `encryption_available`, `EncryptionUnavailable`, `EncryptionFailed`).
+- `dora_api/infrastructure/llm/__init__.py` re-export now sources from the new path (keeps `encrypt_api_key`/`decrypt_api_key` aliases working for the LLM callers that legitimately think of them as "LLM API-key" ops).
+- Direct-import call sites updated: `factory.py`, `operational_config.py`, `update_app_settings.py`.
+- Env var renamed everywhere: source (`_ENV_VAR`), 400 message, warning log, `.env.example`, `README.md`, `ENGINEERING_STANDARDS.md` (R-030), `desktop_app.py` (+ per-install key file `.llm_key_encryption_key` → `.secret_encryption_key`), all three admin Settings pages (Email / Push / AI Assistant), `HelpPage.vue`, test module `tests/e2e/dora_api/test_bucket_c_secrets.py`.
+- Docstring cross-refs in `user.py`, `update_me.py`, `table_mappings.py` pointed at the new module path.
+- Owner's dev `.env` now sets `DORA_SECRET_ENCRYPTION_KEY` (Fernet-generated 2026-08-04); previous install had it unset, which is exactly why the SMTP-password save was failing.
+
+**Untouched by design.**
+- Historical alembic migrations (`a3e7d2c9b5f1_…`, `e5b9d3c7a8f2_…`) — frozen history, docstrings only reference the old path.
+- Historical docs (`DORA_FOLLOWUPS_RESOLVED.md`, prior worklog entries, `SECURITY_REVIEW.md`, `IMPL_PLAN_ENV_TO_APPSETTING.md`, `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`) — history, not active guidance.
+- The existing wrapping *value* — unchanged, so any real install that still has ciphertext will decrypt fine once the env var is renamed. Only rotating the value invalidates ciphertext.
+
+**Smoke test.** Ran a live import + Fernet roundtrip against the new module path and the LLM re-export shim — green.
+
+**Files:** `dora_api/infrastructure/security/{__init__,secret_encryption}.py` (new), `dora_api/infrastructure/llm/key_encryption.py` (deleted), `dora_api/infrastructure/llm/__init__.py`, `dora_api/infrastructure/llm/factory.py`, `dora_api/features/app_settings/{operational_config,update_app_settings}.py`, `dora_api/domain/entities/{app_setting,user}.py`, `dora_api/features/auth/update_me.py`, `dora_api/persistence/table_mappings.py`, `dora_api/features/data/restore_shared.py`, `desktop_app.py`, `.env.example`, `README.md`, `docs/01_charter/ENGINEERING_STANDARDS.md`, `web_app/src/pages/settings/{AdminSystemEmailSettings,AdminSystemPushSettings,AdminSystemAssistantSettings}.vue`, `web_app/src/pages/HelpPage.vue`, `tests/e2e/dora_api/test_bucket_c_secrets.py`, `.env` (owner's, not tracked), `CHANGELOG.md`.
+
+**Next up.** Owner should restart the API so the new env var is picked up, then try saving the SMTP password on Admin → Email — should succeed now instead of 400ing.
+
+---
+
+## 2026-08-04 (later) — Sign-out from Settings: false-positive "Discard unsaved changes?" + logged-out-but-stranded state
+
+Owner reported: clicking **Sign out** from Settings pops a "Discard unsaved changes?" prompt over a light-theme flash, and hitting **Cancel** leaves the app in a bad state.
+
+**Root cause.** `SettingsShell.onSignOut` awaited `authStore.logoutAsync()` first — which sets `currentUser.value = null` in its `finally` — *before* `router.push('/login')`. On any settings sub-page whose unsaved-changes guard predicate diffs a draft against `currentUser` (AccountSettings' `usernameDraft`/`emailDraft`, both fed from `currentUser?.username ?? ''`), clearing the user side flips `usernameUnchanged` / `emailUnchanged` to false — the guard sees fresh "dirt" that appeared post-logout, and `onBeforeRouteLeave` fires `confirmDiscard()` against the subsequent nav. The theme flip is a correlated cause, not a separate bug: `themeService` reverts to `DEFAULT_THEME_KEY` (pesto, light) as soon as the user pref is gone. Cancel then aborts the nav → app is authless but still rendered on `/settings/*`.
+
+**Fix.** Added a module-level bypass to `web_app/src/composables/useUnsavedChangesGuard.ts` exposed as `suppressUnsavedChangesGuard(fn)`; while running its callback both `onBeforeRouteLeave`/`onBeforeRouteUpdate` and the `beforeunload` handler short-circuit to allow. `SettingsShell.onSignOut` wraps `logoutAsync() + router.push('/login')` in it. Sign-out is an intentional exit — nothing to save, no prompt needed.
+
+**Not fixed here / non-issues:** WelcomeLayout's `onSignOut` isn't wrapped — none of its child routes mount the guard (it's the pre-auth / setup shell). The theme flash is architectural (user pref → default) and not something to fight during an active navigation.
+
+**Files:** `web_app/src/composables/useUnsavedChangesGuard.ts`, `web_app/src/pages/SettingsShell.vue`, `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Next up:** owner to walk the verify item in the running app.
+
+---
+
+## 2026-08-04 (later) — Stock Overview scroll-model rebuild (app shell); spun off FU-609
+
+Owner reported four defects on `/stock`: rows flush with no spacing, counts footer only pinning to the viewport bottom while the peek pane was open, a dead gap between the last row and the footer when it *was* open, and **three** scrollbars in that state. He explicitly asked for a **proper assessment before further changes** after my first round of patches missed.
+
+**Honest note on round 1.** Of my three initial patches only the row-spacing one was correct. The `min-height: calc(100dvh - 64px)` on the page root hardcoded an offset that was already wrong (measured: content starts at **112px**, because `OfflineBanner` occupies 48px), and the `.stock-peek { overflow-y: auto }` patch **added the third scrollbar** the owner then reported. Both were reverted.
+
+**Assessment (evidence gathered live via the Browser pane + Quasar source).**
+- `quasar.css` hardcodes `.q-splitter__before, .q-splitter__after { overflow: auto }` — using QSplitter *at all* creates two scroll containers, not opt-in.
+- `.stock-virtual-scroll` nested a third scroller (`max-height: calc(100vh - 320px)`) **inside** the already-scrolling left panel.
+- The document scrolled as a fourth (768 vs 720 viewport).
+- **Root cause: two incompatible scroll models on one page.** The virtual list self-capped (an app-shell move that *prevents* document overflow) while `PageCountsFooter` used `position: sticky; bottom: 0` (a document-scroll move that *requires* it). So the footer only pinned when the unbounded peek pane made the document overflow — and QSplitter being `display: flex` stretched the short left pane to match the tall right one, which is what the "dead gap" was.
+- Secondary finding: only 10/29 pages use `<q-page>`, so there is no shared page-height contract app-wide. That's why the page had to hand-roll an offset at all.
+
+**Owner decisions.** (a) Option **B — app shell** for Stock Overview. (b) Log the `<q-page>` gap as a follow-up **with the specific pages listed** for him to visit.
+
+**Implementation.**
+- `StockOverview.vue` root is now `<q-page :style-fn="pageStyleFn">`. `pageStyleFn(offset, height)` returns `height - offset` — QPage supplies the layout's **real** chrome offset from live state (`QPage.js:44`), so no pixel constant survives anywhere on this page.
+- Page is a flex column: chrome (toolbar / FilterBar / bulk bar) and the counts footer keep natural height; only `.stock-splitter` flexes (`flex: 1 1 auto; min-height: 0` — the `min-height: 0` is load-bearing).
+- `:deep(.q-splitter__before) { overflow: hidden }` cancels Quasar's default so the left column has exactly one scroller; `__after` keeps `overflow: auto` as the peek's single scroller.
+- New `.stock-list-pane` (fills panel, `overflow: hidden`) + `.stock-list` (`flex: 1 1 auto; min-height: 0; overflow-y: auto`) applied to **both** list branches. They're `v-if`/`v-else-if` mutually exclusive, so exactly one scroller can exist. `.stock-virtual-scroll` and its viewport formula are deleted.
+- The June 2026-06-18 (round 2) requirement — "don't let the embedded detail header scroll away" — is preserved by pinning it, not by removing the panel's overflow (which is what caused the unbounded growth). Added a real `stock-detail__header` class to `StockItemDetailPage.vue` so the rule targets a class rather than a fragile `:deep(> .q-pa-md > .row:first-child)` structural selector.
+- Row gap moved onto `.stock-row` itself (`margin-bottom: 8px`) — `q-gutter-y-sm` is a no-op inside QVirtualScroll, which is why spacing vanished only on large pantries.
+
+**Verified live** (Browser pane, 1280×720, 521 items, peek open): document does not scroll · exactly **2** active scrollers (`.stock-list` + `.q-splitter__after`) · both panels 473px — identical, so no stretch gap · footer bottom = 720 = viewport bottom, with the peek both open **and** closed · `.stock-detail__header` computed `position: sticky`. **Not verified here:** row rendering — QVirtualScroll renders 0 items in the preview browser, but it did so *before* these changes too (captured in the first measurement), so it's a preview-browser quirk, not a regression. Owner's Firefox renders rows fine; visual confirmation is queued in `DORA_VERIFY.md`.
+
+**Follow-up in the same unit — scrollbar placement.** Owner: "the scrollbar in the left pane is inside the rows visually." Correct — the pane held `q-pr-md` while its child `.stock-list` was the scroller, so the scroller stopped 16px short of the pane edge and the bar painted inset over the rows with dead space beyond it. Moved the right padding off the pane and onto the scroller: a scrollbar paints at the scroller's outer edge, so the bar now sits flush at the pane edge with the 16px gap between it and the rows. Added `scrollbar-gutter: stable` so row widths don't jump when filtering flips the list between scrolling and not. The empty-state banner (the `v-else` branch, not the scroller) picked up its own `q-mr-md`. **Measured to confirm rather than trusting the spec from memory:** pane right edge 740 · scroller border-box right 740 (gap 0) · scrollbar occupies 725→740 · row content ends 709 → 16px gap, bar flush at the edge. Shell metrics re-checked after the change and unchanged (no document scroll, 2 scrollers, both panes 473px, footer bottom 720).
+
+**Untouched on purpose.** `PageCountsFooter` keeps its `position: sticky` — `MyProductsPage` + `RecipesOverview` still use it under the document-scroll model, so changing it would regress them. Inside the new shell the sticky is simply inert.
+
+**Standards close-gate.** R-035/D-rules: only theme tokens used (`--surface-page`); no raw colours. R-003: the layout offset now has a single server-of-truth (QPage) instead of duplicated constants. No new rule promoted — the pattern is captured in FU-609's "suggested approach" so it can become an `R-0NN` when the audit runs.
+
+**Spun off.** `FU-609` — the `<q-page>` audit, with a per-page table (11 in-layout pages + the explicit "correctly exempt" list, so the owner doesn't waste time on the auth/settings pages).
+
+**Next up.** Owner to eyeball `/stock` in Firefox (`DORA_VERIFY.md`), then whatever he names.
+
+---
+
+## 2026-08-04 — Product Search: dedicated settings page + hide-menu-button toggle
+
+Owner asked for three things on the Product Search config: (1) move the setting off the busy Features page into a new **Settings → System → Products** page gated on the products overlay flag, (2) reword the URL row's description to the plain "Enter the URL to your product search/product data importer tool. Useful for quick navigation.", and (3) add a toggle that hides the "Product Search" main-nav entry entirely (independent of URL).
+
+**Backend.** New `AppSetting.product_search_hidden: bool = False` — entity + Fields enum, table column (`Boolean, nullable=False, server_default=false()`), GET DTO field, PATCH request field + handler, and an alembic migration branching off head `d3f8b1a6c4e2`. Existing `product_search_url` row untouched.
+
+**Frontend.**
+- New page `AdminSystemProductsSettings.vue` with the URL row (moved verbatim, new description) + the hide toggle. Both call `productSearch.refresh()` after a successful save so `useProductSearchUrl` picks up the new value session-wide and the main-nav re-renders.
+- Route registered at `/settings/admin/system/products`; sidebar entry (`SettingsShell.vue`) added under the System sub-header, conditionally rendered via `useFeatureFlags().products` (same data-presence gate as My Products / the nav entry). Refactored `adminSections` from a plain array to a computed so the conditional rendering can live in it.
+- `useProductSearchUrl` now exposes `hidden` alongside `url`, loads it from the same `/api/app-settings` fetch, and its `PRODUCT_SEARCH_SETTINGS_PATH` fallback destination now points at `/settings/admin/system/products`. `MainLayout.vue`'s `productSearchEntry` gains a `if (productSearch.hidden.value) return null` short-circuit before the URL branching.
+- Old section stripped from `AdminSystemFeaturesSettings.vue` — Product Search UI, the `onSaveProductSearchUrl` handler, the `productsEnabled` import from `useFeatureFlags`, and the newly-unused `loading` ref all deleted.
+- `dto_snapshots.json` updated to include the new key so the DTO shape snapshot test stays green.
+
+**R-003 / R-005 check.** Server owns the hidden flag; every consumer reads through the single `useProductSearchUrl` composable (no parallel store, no `AppSetting` fetch elsewhere). URL validation still lives server-side; the client just prevents an obvious "wrong scheme" round-trip with a matching inline hint. No portable-DB drift (plain Boolean column, `server_default=sa.false()`).
+
+**Verify owed.** Change is browser-observable (new settings page renders, nav entry hides when toggled, existing "Product Search" links land on the new page when URL is unset). Preview server was not started this session; added a `Products settings page` block to `DORA_VERIFY.md` for the operator walk. No FU spun off — the ask was self-contained.
+
+**Next up.** Whatever the owner names.
+
+---
+
 ## 2026-07-31 — Reconcile `skip` is now pool-neutral (FU-594, owner picked Option A)
 
 Owner asked for a full explanation of FU-594, then chose **Option A** (skip = truly neutral).

@@ -396,7 +396,7 @@
                 {
                     title: "Admin: install-wide AI master switch + API-key encryption",
                     summary:
-                        "Admins get a single master kill-switch at Settings > System > AI assistant: when off, every account's AI mode is forced off regardless of personal setting (defence in depth). For paid providers, the install needs the environment variable DORA_LLM_KEY_ENCRYPTION_KEY set so user API keys can be stored encrypted at rest. Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
+                        "Admins get a single master kill-switch at Settings > System > AI assistant: when off, every account's AI mode is forced off regardless of personal setting (defence in depth). For paid providers, the install needs the environment variable DORA_SECRET_ENCRYPTION_KEY set so user API keys can be stored encrypted at rest. Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
                     path: '/settings/admin/system/assistant',
                 },
             ],

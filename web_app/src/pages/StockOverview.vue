@@ -1,5 +1,5 @@
 <template>
-    <div class="q-pa-md">
+    <q-page class="q-pa-md stock-overview" :style-fn="pageStyleFn">
         <!-- Header bar — FU-121: New item · Scan · Stocktake · Bulk select
              · Export. Search stays separate on the right. -->
         <div class="row items-center q-mb-md q-gutter-sm">
@@ -381,7 +381,7 @@
                  draggability signal. No #separator template content
                  needed — the bar IS the separator. -->
             <template #before>
-                <div class="q-pr-md q-pt-xs">
+                <div class="q-pt-xs stock-list-pane">
                     <!-- small lists keep the glide-in
                          ListTransition (DS4 perceived-perf masking, see
                          STOCK_OVERVIEW_PERF.md); large lists swap to
@@ -391,7 +391,7 @@
                     <ListTransition
                         v-if="filters.filteredStockItems.value.length > 0 && filters.filteredStockItems.value.length <= VIRTUAL_SCROLL_THRESHOLD"
                         tag="div"
-                        class="q-list q-gutter-y-sm"
+                        class="q-list stock-list"
                     >
                         <StockItemRow
                             v-for="(item, idx) in filters.filteredStockItems.value"
@@ -414,7 +414,7 @@
                         :items="filters.filteredStockItems.value"
                         :virtual-scroll-item-size="VIRTUAL_SCROLL_ITEM_SIZE"
                         :virtual-scroll-slice-size="30"
-                        class="stock-virtual-scroll q-list q-gutter-y-sm"
+                        class="q-list stock-list"
                         v-slot="{ item, index }"
                     >
                         <StockItemRow
@@ -434,7 +434,9 @@
                     </q-virtual-scroll>
 
                     <!-- Empty state ───────────────────────────────────── -->
-                    <q-banner v-else class="dora-bg-sunken q-mt-md" rounded>
+                    <!-- Carries its own right margin: the pane's padding moved
+                         onto the scrolling list, and this branch isn't it. -->
+                    <q-banner v-else class="dora-bg-sunken q-mt-md q-mr-md" rounded>
                         <template v-if="stockItems.length === 0">
                             <div class="text-subtitle1 q-mb-sm">Your pantry is empty.</div>
                             <div class="text-body2 q-mb-md dora-text-secondary">
@@ -558,7 +560,7 @@
                 <div class="scan-action-caption">{{ scanActionCaption }}</div>
             </template>
         </ScanOverlay>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>
@@ -673,6 +675,18 @@
     // average — Quasar self-corrects after the first measure.
     const VIRTUAL_SCROLL_THRESHOLD = 50;
     const VIRTUAL_SCROLL_ITEM_SIZE = 72;
+
+    // App-shell height (2026-08-04). QPage hands us the layout's real
+    // chrome `offset` (header, plus a QFooter if the layout ever grows
+    // one) and the viewport `height`, both from live layout state — so the
+    // page fills the viewport exactly without a hardcoded pixel guess.
+    // `height` is 0 only before Quasar's first screen measure; fall back to
+    // calc() so the shell is still correct on that first paint.
+    function pageStyleFn(offset: number, height: number) {
+        return {
+            height: height === 0 ? `calc(100vh - ${offset}px)` : `${height - offset}px`,
+        };
+    }
 
     const filters = useStockFilters({
         stockItems: () => stockItems.value,
@@ -1453,8 +1467,49 @@
     .dora-subbar__inner {
         padding: 12px 16px;
     }
-    .stock-splitter {
-        min-height: 50vh;
+    /* ── App-shell layout (2026-08-04) ────────────────────────────────
+       The page is a fixed-height flex column: chrome (toolbar, filters,
+       bulk bar) and the counts footer keep their natural height, the
+       splitter takes whatever is left, and all scrolling happens INSIDE
+       the splitter panes. The document itself never scrolls.
+
+       Why this replaced the previous CSS: the page was running two
+       incompatible scroll models at once. The virtual list capped itself
+       at `calc(100vh - 320px)` (an app-shell move, which stopped the
+       document from overflowing), while PageCountsFooter used
+       `position: sticky; bottom: 0` (a document-scroll move, which only
+       works when the document DOES overflow). Net effect: the footer
+       only pinned while the peek pane was open — the unbounded detail
+       page was the sole thing making the document overflow — and
+       QSplitter's flex row stretched the short left pane to match the
+       tall right one, leaving a dead gap above the footer. Bounding the
+       shell here removes both symptoms by construction rather than by
+       counter-patching each one. */
+    .stock-overview {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    /* Only the splitter flexes; every other direct child (toolbar,
+       FilterBar, bulk bar, counts footer) keeps its natural height.
+       `min-height: 0` is required — a flex child refuses to shrink below
+       its content height without it, which would push the footer back
+       off-screen. */
+    .stock-overview > .stock-splitter {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    /* Quasar sets `overflow: auto` on BOTH splitter panels by default
+       (quasar.css — `.q-splitter__before, .q-splitter__after`). The left
+       panel's list child owns its scroll (see `.stock-list`), so the
+       panel must not scroll too, or the same column ends up with two
+       nested scrollbars. The right panel keeps the default and is the
+       peek's single scroller. */
+    .stock-splitter :deep(.q-splitter__before) {
+        overflow: hidden;
+    }
+    .stock-splitter :deep(.q-splitter__after) {
+        overflow: auto;
     }
     /* Feedback 2026-06-18 (round 3): the divider is a clean coloured
        vertical bar. When no peek is open it collapses to transparent so
@@ -1472,21 +1527,49 @@
     .stock-splitter--peeking :deep(.dora-splitter__separator):hover {
         background: var(--q-accent);
     }
-    /* Feedback 2026-06-18 (round 2): drop the panel's max-height +
-       internal overflow. The competing scroll hid the embedded header
-       (name + delete) once the user scrolled inside the panel. Letting
-       the panel grow naturally means the page scroll handles overflow
-       and the header stays in the layout. */
+    /* Peek pane. Its panel owns the scroll now, so pin the embedded
+       detail header. Losing that header on scroll was the 2026-06-18
+       (round 2) complaint, and the workaround then was to drop the
+       panel's internal overflow entirely — which is what let the peek
+       grow unbounded and stretch the left pane. Sticky keeps both: an
+       internally-scrolling panel AND a header that stays put. */
     .stock-peek {
         min-height: 0;
     }
-    /* C-1 Chunk 1 — virtualised list needs a sized scroll container.
-       The viewport-relative height keeps the footer + top toolbar
-       visible while the rows scroll inside the splitter pane. */
-    .stock-virtual-scroll {
-        max-height: calc(100vh - 320px);
-        min-height: 240px;
+    .stock-peek :deep(.stock-detail__header) {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--surface-page);
+    }
+    /* Left pane. Fills the splitter panel and hands the scroll to whichever
+       list branch is mounted. */
+    .stock-list-pane {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    /* C-1 Chunk 1 — the virtualised list needs a sized scroll container.
+       It now inherits that size from the shell instead of guessing at the
+       chrome height with a viewport formula. The two list branches
+       (ListTransition below VIRTUAL_SCROLL_THRESHOLD, QVirtualScroll
+       above it) are mutually exclusive, so exactly one scroller exists at
+       a time and the pane can't nest two. */
+    .stock-list {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
+        /* The pane's right padding lives HERE, on the scroller, not on the
+           pane. A scrollbar is painted at the scroller's outer edge, so
+           holding the padding here puts the bar hard against the pane edge
+           with the gap between it and the rows. With the padding on the
+           pane instead, the scroller stopped 16px short and the bar read as
+           floating inside the rows with dead space beyond it. */
+        padding-right: var(--space-4);
+        /* Reserve the gutter so the row width doesn't jump when the list
+           crosses from non-scrolling to scrolling (filtering, deleting). */
+        scrollbar-gutter: stable;
     }
     /* FU-378 — caption under the in-overlay current-action switcher. Light
        text on the dark camera surface. */

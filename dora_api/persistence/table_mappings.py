@@ -111,6 +111,7 @@ def configure_mappings(db: SQLAlchemy):
         # Phase D / FU-186 — admin-set URL the Product Search nav opens.
         # Empty string ⇒ unset; see entity comment.
         Column("product_search_url", String(500), nullable=False, server_default=""),
+        Column("product_search_hidden", Boolean, nullable=False, server_default=false()),
         # AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
         Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
@@ -151,7 +152,7 @@ def configure_mappings(db: SQLAlchemy):
         # AppSetting projection (env fallbacks dropped 2026-07-06 —
         # pre-release, no operators to preserve). Bucket C secrets
         # (`smtp_password_encrypted`, `vapid_private_key_encrypted`) hold
-        # Fernet ciphertext wrapped by `DORA_LLM_KEY_ENCRYPTION_KEY`; the
+        # Fernet ciphertext wrapped by `DORA_SECRET_ENCRYPTION_KEY`; the
         # DTO surfaces a `<field>_configured: bool` instead of the ciphertext.
         Column("smtp_host", String(255), nullable=False, server_default=""),
         Column("smtp_port", Integer, nullable=False, server_default="587"),
@@ -1015,7 +1016,7 @@ def configure_mappings(db: SQLAlchemy):
         # per-user assistant config. `llm_provider`
         # is a closed-set sentinel ('ollama' | 'openai' | 'anthropic' |
         # 'gemini') validated at update_me. API key blob is Fernet
-        # ciphertext (see infrastructure/llm/key_encryption.py); deferred
+        # ciphertext (see infrastructure/security/secret_encryption.py); deferred
         # below so list endpoints never haul the bytes per row, same shape
         # as `image`.
         Column("llm_enabled", Boolean, nullable=False, server_default=false()),

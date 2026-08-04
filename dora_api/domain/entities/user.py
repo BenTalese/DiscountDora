@@ -284,7 +284,7 @@ class User(BaseEntity):
     # Gemini, `llm_api_key_encrypted` + `llm_model` are required and the
     # base URL is optional (only used to point at a self-hosted relay).
     # The api-key blob is Fernet ciphertext — see
-    # `infrastructure/llm/key_encryption.py`. Plaintext never leaves the
+    # `infrastructure/security/secret_encryption.py`. Plaintext never leaves the
     # handler that writes it; reads return `has_llm_api_key: bool`.
     llm_enabled: bool = False
     llm_provider: str | None = None

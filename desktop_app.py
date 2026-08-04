@@ -9,7 +9,7 @@ Boot sequence:
        export them as DORA_* env vars BEFORE any dora_api module
        loads (the env-first config layer reads them at import time).
     2. Auto-generate the two remaining bootstrap keys
-       (`DORA_SECRET_KEY`, `DORA_LLM_KEY_ENCRYPTION_KEY`) into the
+       (`DORA_SECRET_KEY`, `DORA_SECRET_ENCRYPTION_KEY`) into the
        per-user data dir if not already set — FU-333 Bucket D so a
        double-click end-user never sees an env var.
     3. Tell the production gate to stand down (DORA_SKIP_PROD_VALIDATION).
@@ -91,17 +91,18 @@ def _bootstrap_keys() -> None:
     """FU-333 Bucket D — auto-generate the two remaining bootstrap env vars
     on desktop bundles.
 
-    `DORA_SECRET_KEY` signs the session cookie; `DORA_LLM_KEY_ENCRYPTION_KEY`
-    wraps per-user LLM API keys (FU-153) and the Bucket-C operational secrets
-    (SMTP password, VAPID private key). On server self-host the operator sets
-    both explicitly at deploy time. On a desktop bundle the user should never
-    see an env var — so we persist a per-install key file under the user data
-    dir and set the env from it before dora_api loads.
+    `DORA_SECRET_KEY` signs the session cookie; `DORA_SECRET_ENCRYPTION_KEY`
+    is Dora's data-at-rest KEK — it wraps every secret persisted in the DB
+    (SMTP password, VAPID private key, per-user paid-provider LLM API keys).
+    On server self-host the operator sets both explicitly at deploy time. On
+    a desktop bundle the user should never see an env var — so we persist a
+    per-install key file under the user data dir and set the env from it
+    before dora_api loads.
 
     Rotation: the operator can delete the key file to force a re-generate at
-    the next launch. That invalidates every stored ciphertext (LLM keys, SMTP
-    password, VAPID private key) and every existing session — same trade-off
-    documented in `key_encryption.py`.
+    the next launch. That invalidates every stored ciphertext (SMTP password,
+    VAPID private key, LLM API keys) and every existing session — same
+    trade-off documented in `secret_encryption.py`.
     """
     data = Path(os.environ["DORA_DATA_DIR"])
     data.mkdir(parents=True, exist_ok=True)
@@ -113,14 +114,14 @@ def _bootstrap_keys() -> None:
             secret_file.write_text(secrets.token_hex(32))
         os.environ["DORA_SECRET_KEY"] = secret_file.read_text().strip()
 
-    if not os.environ.get("DORA_LLM_KEY_ENCRYPTION_KEY"):
-        wrap_file = data / ".llm_key_encryption_key"
+    if not os.environ.get("DORA_SECRET_ENCRYPTION_KEY"):
+        wrap_file = data / ".secret_encryption_key"
         if not wrap_file.exists():
             # Fernet.generate_key() returns 32-byte url-safe base64 — exactly
-            # what `key_encryption._fernet()` expects to read from env.
+            # what `secret_encryption._fernet()` expects to read from env.
             from cryptography.fernet import Fernet
             wrap_file.write_bytes(Fernet.generate_key())
-        os.environ["DORA_LLM_KEY_ENCRYPTION_KEY"] = wrap_file.read_bytes().decode("ascii").strip()
+        os.environ["DORA_SECRET_ENCRYPTION_KEY"] = wrap_file.read_bytes().decode("ascii").strip()
 
 
 def _bootstrap_spa_dir() -> None:

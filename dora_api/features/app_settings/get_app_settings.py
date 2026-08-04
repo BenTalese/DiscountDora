@@ -36,6 +36,8 @@ class AppSettingsDto:
     expiring_soon_window_days: int
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     product_search_url: str
+    # Hides the Product Search nav entry entirely, regardless of URL state.
+    product_search_hidden: bool
     # AU vs US per-unit display locale.
     unit_pricing_locale: str
     # install-wide currency (ISO 4217) + display locale (BCP-47).
@@ -95,6 +97,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         timezone=setting.timezone or "UTC",
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
         product_search_url=setting.product_search_url or "",
+        product_search_hidden=bool(getattr(setting, "product_search_hidden", False)),
         unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
         currency=getattr(setting, "currency", None) or "AUD",
         locale=getattr(setting, "locale", None) or "en-AU",

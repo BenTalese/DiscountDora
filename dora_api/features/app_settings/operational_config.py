@@ -6,7 +6,7 @@ deprecation window (env fallbacks) was dropped 2026-07-06 pre-release
 — nothing to preserve. Bucket-C secrets (SMTP password, VAPID private
 key) are Fernet ciphertext on the row and decrypted on demand here.
 
-Bootstrap-only env vars (``DORA_SECRET_KEY``, ``DORA_LLM_KEY_ENCRYPTION_KEY``,
+Bootstrap-only env vars (``DORA_SECRET_KEY``, ``DORA_SECRET_ENCRYPTION_KEY``,
 ``DORA_ENV``, ``DORA_SECURE_COOKIES``, ``DORA_SPA_DIR``,
 ``DORA_SKIP_PROD_VALIDATION``, ``DORA_ALLOW_DESTRUCTIVE``) are *not* handled
 here — they're read before the DB is reachable, so they must stay in env by
@@ -26,7 +26,7 @@ import logging
 from dataclasses import dataclass
 
 from dora_api.features.app_settings.access import get_or_create_app_setting
-from dora_api.infrastructure.llm.key_encryption import (
+from dora_api.infrastructure.security.secret_encryption import (
     EncryptionFailed,
     EncryptionUnavailable,
     decrypt,
@@ -69,7 +69,7 @@ def _decrypt_or_empty(ciphertext: str, *, field: str) -> str:
         return decrypt(ciphertext.encode("ascii"))
     except EncryptionUnavailable:
         _Logger.warning(
-            "Cannot decrypt %s: DORA_LLM_KEY_ENCRYPTION_KEY is unset. "
+            "Cannot decrypt %s: DORA_SECRET_ENCRYPTION_KEY is unset. "
             "Configure the key or re-enter the secret in Settings.", field,
         )
         return ""

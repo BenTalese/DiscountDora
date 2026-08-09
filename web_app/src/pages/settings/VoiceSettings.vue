@@ -14,7 +14,7 @@
             <SettingsRow label="Enable voice input">
                 <q-toggle
                     :model-value="currentUser.voice_input_enabled"
-                    :disable="!voiceInputAvailable || saving"
+                    :disable="!voiceInputAvailable"
                     @update:model-value="onVoiceInputChange"
                 />
             </SettingsRow>
@@ -31,7 +31,7 @@
             <SettingsRow label="Let Dora speak her replies">
                 <q-toggle
                     :model-value="currentUser.voice_output_enabled"
-                    :disable="!voiceOutputAvailable || saving"
+                    :disable="!voiceOutputAvailable"
                     @update:model-value="onVoiceOutputChange"
                 />
             </SettingsRow>
@@ -56,7 +56,6 @@
                 <DoraSegmented
                     :model-value="currentUser.voice_engine"
                     :options="engineOptions"
-                    :disabled="saving"
                     @update:model-value="onEngineChange"
                 />
             </SettingsRow>
@@ -79,7 +78,6 @@
                     :model-value="currentUser.voice_id"
                     :voices="voices"
                     :piper-available="piperAvailable"
-                    :disabled="saving"
                     @update:model-value="onVoiceChange"
                     @download="onDownload"
                 />
@@ -108,7 +106,7 @@
     const ttsApi = new TtsApiService();
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
-    const { saving, notifySuccess, notifyError, update } = useSettingsSave();
+    const { notifySuccess, notifyError, update } = useSettingsSave();
     const loadingVoices = ref(true);
     const voices = ref<TtsVoice[]>([]);
     const piperAvailable = ref(false);

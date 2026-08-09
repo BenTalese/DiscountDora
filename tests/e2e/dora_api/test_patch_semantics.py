@@ -189,7 +189,7 @@ def test__patch_stock_item__same_value_noop__changes_nothing(api):
     # also xfail-pinned below).
     resp = requests.patch(
         f"{BASE}/stock-items/{item_id}",
-        json={"notes": "same note", "is_flagged": False},
+        json={"notes": "same note", "is_essential": False},
     )
     assert resp.status_code == 204, resp.text
     assert _item_detail(item_id) == before

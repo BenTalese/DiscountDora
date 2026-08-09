@@ -20,7 +20,7 @@
                 <DoraSegmented
                     :model-value="currentUser.nutrition_mode"
                     :options="nutritionToggleOptions"
-                    :disabled="!nutritionInstallEnabled || saving"
+                    :disabled="!nutritionInstallEnabled"
                     @update:model-value="onNutritionModeChange"
                 />
             </SettingsRow>
@@ -72,7 +72,7 @@
     // R-003 / FU-601 — shared save-toast helper (fixes the "Could not save
     // <success sentence>." error-copy bug that was copied across all six
     // settings pages).
-    const { saving, update } = useSettingsSave();
+    const { update } = useSettingsSave();
 
     async function onNutritionModeChange(value: NutritionMode) {
         const labelByMode: Record<NutritionMode, string> = {

@@ -121,7 +121,7 @@ def test__get_stocktake_queue__ItemPastFortnightlyBand__QueuedWithOverdueDays(ap
 def test__get_stocktake_queue__EssentialItem__BandBumpedOneStepFaster(api):
     token = _token()
     item = make_stock_item(
-        stock_level_id=_stocked_level_id(), name=f"{token} coffee", is_flagged=True,
+        stock_level_id=_stocked_level_id(), name=f"{token} coffee", is_essential=True,
     )
     _unmute(item["stock_item_id"])
     _backdate_last_checked(item["stock_item_id"], 10)

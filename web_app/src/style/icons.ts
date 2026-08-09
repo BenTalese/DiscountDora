@@ -245,6 +245,7 @@ export const ICONS = {
     //  exists so semantic call sites don't shadow it accidentally.)
     submit: 'mdi-check',
     open: 'mdi-open-in-new',
+    export_data: 'mdi-export-variant',
     expand: 'mdi-chevron-down',
     collapse: 'mdi-chevron-up',
     overflowVertical: 'mdi-dots-vertical',

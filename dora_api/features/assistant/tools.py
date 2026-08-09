@@ -999,7 +999,7 @@ def search_stock(args: dict) -> list[dict]:
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(horizon))
     if _truthy(args.get("flagged_only")):
-        conditions.append(EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True))
+        conditions.append(EntityField(StockItem, StockItem.Fields.IS_ESSENTIAL).eq(True))
     if _truthy(args.get("open_only")):
         conditions.append(EntityField(StockItem, StockItem.Fields.IS_OPEN).eq(True))
     if args.get("location_name"):
@@ -1013,7 +1013,7 @@ def search_stock(args: dict) -> list[dict]:
             "location": item.stock_location.name if item.stock_location else None,
             "group": item.stock_group.name if item.stock_group else None,
             "expiry_date": item.expiry_date.isoformat() if item.expiry_date else None,
-            "is_flagged": bool(item.is_flagged),
+            "is_essential": bool(item.is_essential),
             "is_open": bool(item.is_open),
         }
         for item in items[:_MAX_ROWS]
@@ -1513,7 +1513,7 @@ def pantry_health(_args: dict) -> list[dict]:
     total = len(items)
     low = sum(1 for i in items if needs_restock(i.stock_level))
     out = sum(1 for i in items if is_out_of_stock(i.stock_level))
-    flagged = sum(1 for i in items if i.is_flagged)
+    flagged = sum(1 for i in items if i.is_essential)
     open_items = sum(1 for i in items if i.is_open)
     # R-021 — household-tz boundary for the expiring/expired buckets.
     # window honours AppSetting override, not the bare default.
@@ -1762,7 +1762,7 @@ def stock_item_detail(args: dict) -> list[dict]:
         "location": item.stock_location.name if item.stock_location else None,
         "group": item.stock_group.name if item.stock_group else None,
         "expiry_date": item.expiry_date.isoformat() if item.expiry_date else None,
-        "is_flagged": bool(item.is_flagged),
+        "is_essential": bool(item.is_essential),
         "is_open": bool(item.is_open),
         "opened_on": item.opened_on.isoformat() if getattr(item, "opened_on", None) else None,
         "stock_level_last_updated": (
@@ -2005,7 +2005,7 @@ def find_location(args: dict) -> list[dict]:
                     "name": it.name,
                     "stock_level": it.stock_level.name if it.stock_level else None,
                     "expiry_date": it.expiry_date.isoformat() if it.expiry_date else None,
-                    "is_flagged": bool(it.is_flagged),
+                    "is_essential": bool(it.is_essential),
                 }
                 for it in loc_items[:_MAX_ROWS]
             ],

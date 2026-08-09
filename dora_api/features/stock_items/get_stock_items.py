@@ -34,7 +34,7 @@ class StockItemDto:
     stock_group_id: UUID | None
     stock_level_last_updated: datetime
     expiry_date: date | None
-    is_flagged: bool
+    is_essential: bool
     is_open: bool
     opened_on: date | None
     last_checked_at: datetime | None
@@ -61,7 +61,7 @@ class StockItemDto:
             stock_group_id = stock_item.stock_group.id if stock_item.stock_group else None,
             stock_level_last_updated = stock_item.stock_level_last_updated,
             expiry_date = stock_item.expiry_date,
-            is_flagged = bool(stock_item.is_flagged),
+            is_essential = bool(stock_item.is_essential),
             is_open = bool(stock_item.is_open),
             opened_on = stock_item.opened_on,
             last_checked_at = stock_item.last_checked_at,
@@ -73,7 +73,7 @@ _FIELD_MAP: dict[str, EntityField] = {
     "stock_level_id": EntityField(StockItem, "_stock_level_id"),
     "stock_location_id": EntityField(StockItem, "_stock_location_id"),
     "stock_group_id": EntityField(StockItem, "_stock_group_id"),
-    "is_flagged": EntityField(StockItem, StockItem.Fields.IS_FLAGGED),
+    "is_essential": EntityField(StockItem, StockItem.Fields.IS_ESSENTIAL),
     "is_open": EntityField(StockItem, StockItem.Fields.IS_OPEN),
 }
 

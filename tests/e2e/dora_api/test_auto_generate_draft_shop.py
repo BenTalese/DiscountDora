@@ -51,7 +51,7 @@ def test__auto_generate__create_new_honours_the_explicit_name(api):
     item_resp = requests.post(f"{BASE}/stock-items", json={
         "name": f"FU-351 named {uuid4().hex[:8]}",
         "stock_level_id": stock_level_id,
-        "is_flagged": True,
+        "is_essential": True,
     })
     assert item_resp.status_code == 201, item_resp.text
     stock_item_id = item_resp.json()["stock_item_id"]
@@ -74,5 +74,5 @@ def test__auto_generate__create_new_honours_the_explicit_name(api):
     finally:
         if generated_list_id:
             requests.delete(f"{LISTS}/{generated_list_id}")
-        requests.patch(f"{BASE}/stock-items/{stock_item_id}", json={"is_flagged": False})
+        requests.patch(f"{BASE}/stock-items/{stock_item_id}", json={"is_essential": False})
         requests.delete(f"{BASE}/stock-items/{stock_item_id}")

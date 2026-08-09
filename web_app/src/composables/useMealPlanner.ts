@@ -726,6 +726,72 @@ export function useMealPlanner() {
         // §9-B — build is decoupled from generate-list. The builder UI exposes
         // an explicit "Generate shopping list" button on its done step.
     }
+    // ── Duplicate this week to the next one ────────────────────────────────
+    // Owner call (2026-08-07): **replace** semantics — next week's forward
+    // entries are overwritten, not merged, so "duplicate" produces a week that
+    // actually matches the one you copied. Past + consumed entries are never
+    // sent (FU-595's rule); the server preserves those on its own.
+    function nextWeekCommands(): MealPlanEntryCommand[] {
+        return (focusedPlan.value?.entries ?? [])
+            .map((e) => ({
+                recipe_id: e.recipe_id,
+                scheduled_for: shiftDays(toIso(e.scheduled_for), 7),
+                servings: e.servings,
+                slot: e.slot,
+            }))
+            .filter((c) => !isPastDay(c.scheduled_for));
+    }
+
+    function confirmDuplicateToNextWeek() {
+        if (!focusedPlan.value) return;
+        const commands = nextWeekCommands();
+        if (commands.length === 0) {
+            $q.notify({
+                type: 'info', position: 'bottom-right',
+                message: 'Nothing to duplicate — this week has no meals to carry forward.',
+            });
+            return;
+        }
+        const nextMonday = shiftDays(focusedMonday.value, 7);
+        const existing = mealPlans.value.find((p) => mondayOf(p.start_date) === nextMonday);
+        const replacing = (existing?.entries ?? []).filter(isForwardEditable).length;
+        const plural = commands.length === 1 ? '' : 's';
+        $q.dialog({
+            title: 'Duplicate to next week',
+            message: replacing > 0
+                ? `Copy ${commands.length} meal${plural} to the week of ${formatDate(nextMonday)}. `
+                    + `This replaces the ${replacing} meal${replacing === 1 ? '' : 's'} already planned there.`
+                : `Copy ${commands.length} meal${plural} to the week of ${formatDate(nextMonday)}.`,
+            cancel: { noCaps: true },
+            ok: { label: replacing > 0 ? 'Replace' : 'Copy', noCaps: true, color: 'primary' },
+        }).onOk(() => void doDuplicateToNextWeek(commands, nextMonday, existing?.meal_plan_id));
+    }
+
+    async function doDuplicateToNextWeek(
+        commands: MealPlanEntryCommand[],
+        nextMonday: string,
+        existingPlanId: string | undefined,
+    ) {
+        if (existingPlanId) {
+            if (!await persistEntries(existingPlanId, commands)) return;
+        } else {
+            try {
+                await mealPlanStore.createMealPlanAsync({ start_date: nextMonday, entries: commands });
+                await refreshAfterMutation();
+            } catch (err) {
+                notifyPlanError(err);
+                return;
+            }
+        }
+        $q.notify({
+            type: 'positive', position: 'bottom-right',
+            message: `Copied ${commands.length} meal${commands.length === 1 ? '' : 's'} to next week.`,
+        });
+        // Land the user on what they just created rather than making them
+        // navigate to check it worked.
+        focusedMonday.value = nextMonday;
+    }
+
     function printFocusedWeek() {
         if (focusedPlan.value) planExport.openPrintView(focusedPlan.value.meal_plan_id);
     }
@@ -817,6 +883,7 @@ export function useMealPlanner() {
         loadRecurringSources,
         applyRecurring,
         builderBuildPlan,
+        confirmDuplicateToNextWeek,
         printFocusedWeek,
         // nav
         goPrevWeek,

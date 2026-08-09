@@ -119,8 +119,10 @@
         color: var(--text-primary);
     }
     /* Attention modifier — pulsing accent glow around the button to draw
-       the eye. Used for one-off CTAs (stocktake glow, etc.). The
-       animation pauses for users with reduced-motion enabled. */
+       the eye. Used for one-off CTAs (stocktake glow, etc.). The button
+       fill tint pulses in sync with the surrounding glow so the whole
+       control breathes, not just the ring. The animation pauses for users
+       with reduced-motion enabled. */
     .dora-btn--attention {
         animation: dora-btn-attention-pulse 2s ease-in-out infinite;
         border-color: var(--brand-primary) !important;
@@ -128,15 +130,18 @@
     @keyframes dora-btn-attention-pulse {
         0%, 100% {
             box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-accent) 55%, transparent);
+            background-color: color-mix(in srgb, var(--brand-accent) 22%, transparent);
         }
         50% {
             box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand-accent) 0%, transparent);
+            background-color: color-mix(in srgb, var(--brand-accent) 0%, transparent);
         }
     }
     @media (prefers-reduced-motion: reduce) {
         .dora-btn--attention {
             animation: none;
             box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 35%, transparent);
+            background-color: color-mix(in srgb, var(--brand-accent) 15%, transparent);
         }
     }
 </style>

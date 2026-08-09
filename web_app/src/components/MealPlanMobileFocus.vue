@@ -15,8 +15,17 @@
             <BaseButton
                 v-if="plannedCount > 0"
                 variant="icon"
-                :icon="ICONS.print"
+                :icon="ICONS.content_copy"
                 class="q-ml-sm"
+                aria-label="Duplicate to next week"
+                @click="emit('duplicateWeek')"
+            >
+                <q-tooltip>Duplicate to next week</q-tooltip>
+            </BaseButton>
+            <BaseButton
+                v-if="plannedCount > 0"
+                variant="icon"
+                :icon="ICONS.print"
                 @click="emit('print')"
             >
                 <q-tooltip>Print this week</q-tooltip>
@@ -204,6 +213,7 @@
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;
         (e: 'print'): void;
+        (e: 'duplicateWeek'): void;
         (e: 'openBuilder'): void;
     }>();
 

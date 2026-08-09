@@ -68,14 +68,11 @@ class AppSetting(BaseEntity):
     # in a new tab when product data is present. Set by the install operator
     # to point at whatever search surface they run themselves (a sibling
     # companion, a static page, etc — Dora doesn't know or care).
-    # Empty string ⇒ no URL configured; the nav entry renders disabled with a
-    # "Set up in Settings" hint (R-014 reveal-and-disable). See
+    # Empty string ⇒ no URL configured; the "Product Search" nav entry is
+    # hidden entirely until a URL is set (setting it, in Settings → Features,
+    # is what makes the button appear). See
     # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
     product_search_url: str = ""
-    # When True, the "Product Search" nav entry is hidden entirely, even if
-    # `product_search_url` is set. Lets an operator suppress the surface for
-    # an install that doesn't run a companion search tool at all.
-    product_search_hidden: bool = False
     # the AU-shelf vs US-shelf display convention for
     # per-unit prices. `"AU"` shows `/100ml`/`/100g`/`/L`/`/kg`/`/ea` with
     # the flip at 1 L / 1 kg; `"US"` shows `/fl oz`/`/qt`/`/oz`/`/lb`/`/ea`
@@ -134,7 +131,7 @@ class AppSetting(BaseEntity):
     # every item. Values:
     #   `'off'`            — never auto-add on low.
     #   `'essential_only'` — fire only for items flagged as essential
-    #                        (`is_flagged=True`). Default.
+    #                        (`is_essential=True`). Default.
     #   `'all'`            — fire for any item that transitions Stocked
     #                        → Low/Out.
     # The `essential_only` default is the closest single behaviour to
@@ -194,7 +191,6 @@ class AppSetting(BaseEntity):
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         PRODUCT_SEARCH_URL = "product_search_url"
-        PRODUCT_SEARCH_HIDDEN = "product_search_hidden"
         UNIT_PRICING_LOCALE = "unit_pricing_locale"
         CURRENCY = "currency"
         LOCALE = "locale"

@@ -5,7 +5,7 @@ export type StockItem = {
     stock_level_id: string;
     stock_location_id: string | null;
     expiry_date?: string | null;
-    is_flagged?: boolean;
+    is_essential?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
     stock_level_last_updated?: string | null;

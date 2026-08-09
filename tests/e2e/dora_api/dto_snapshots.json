@@ -35,7 +35,6 @@
       "piper_bin",
       "piper_bundled_voice_dir",
       "piper_voice",
-      "product_search_hidden",
       "product_search_url",
       "public_url",
       "scanning_enabled",
@@ -322,7 +321,7 @@
     ],
     "item_keys": [
       "expiry_date",
-      "is_flagged",
+      "is_essential",
       "is_low_stock",
       "is_open",
       "is_out_of_stock",

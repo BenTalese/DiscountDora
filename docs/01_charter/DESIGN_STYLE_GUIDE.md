@@ -250,6 +250,24 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
 - A chip that encodes a state must be decodable — labelled, tooltip'd, or in a
   legend (D-013). Don't ship a bare coloured dot as the only signal.
 
+## B2a · Segmented & toggle groups
+- **One choice of several → `BaseSegmented`** (a `q-btn-toggle` wrapper). Small,
+  mutually-exclusive vocabularies only (2–4 options); anything longer is a
+  select.
+- **Several independent choices at once → `BaseToggleGroup`.** A labelled row of
+  card-sized toggle buttons plus a **Select all / Clear all** control that flips
+  its own label to whichever action applies. Cards: `--radius-lg`,
+  `--space-2`/`--space-3` padding, **44px minimum** either dimension (D-004),
+  optional caption line under the label at `--font-size-xs`/`--text-muted`. The
+  row wraps (`flex-wrap`) — it never h-scrolls (D-011).
+- Selected = `--brand-primary` fill + `--text-on-primary`. Both components carry
+  the full state set (hover / active / focus-visible / disabled / selected,
+  D-016) and expose `aria-pressed` per option.
+- **Options that can't be chosen stay in place, disabled + tooltip'd** — don't
+  filter them out. A row that reflows as options drop away costs the user their
+  spatial memory (the meal-plan builder's past weekdays are the reference case).
+- Reference consumer: `MealPlanBuilderDialog` (days row + meal-slots row).
+
 ## B3 · Inputs & form fields
 - Quasar `outlined`, `--radius-md`, min height **44px**, label always present
   (placeholder is not a label), `--font-size-md` text.
@@ -413,6 +431,12 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   default-focused action. Follow B1/B6.
 - **Why:** casing drift ("SKIP / UPDATE EXPIRY" vs "Restock & finish") and the
   no-cancel expiry dialog were raw Quasar defaults (FU-578 #2).
+- **Carve-out (owner, 2026-08-08):** the sentence-case rule governs *interactive
+  controls* — buttons, dialog actions, chips, form labels. **Page/route titles use
+  Title Case**: the mobile menu-bar header and browser-tab title (route `meta.title`
+  in `web_app/src/router/routes.ts`) capitalise every principal word ("Stock Item",
+  "Price History", "System: Alert Thresholds"). This is the one deliberate exception
+  to "sentence case everywhere"; don't revert these to sentence case.
 
 ### D-009 — Toasts & floating chrome respect a placement budget
 - **Rule:** bottom-right is single-occupancy — one toast column, mascot docked
@@ -504,6 +528,29 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   reason.
 - **Why:** ragged alignment and per-pair spacing read as unfinished even when
   every individual element is fine.
+
+### D-019 — Never bind transient async state to `disable` on a focusable control
+- **Rule:** a save/load flag (`saving`, `busy`, `pending`) must not drive
+  `:disable` / `:disabled` on an **input, select, toggle, segmented control or
+  any other focusable field**. Disabled elements are not focusable, so flipping
+  the flag mid-interaction blurs whatever the user just moved into. Permanent or
+  semantic reasons to disable a field are fine (`!installEnabled`,
+  `!smtpConfigured`, `emailUnchanged`) — it is the *transient* flag that is
+  banned. **Action buttons are the carve-out:** `:disable="saving"` on a
+  submit/Save/Test button is correct double-submit protection, and losing focus
+  on the button you just clicked is expected. Show in-flight state with
+  `:loading` on the button, or the success toast — never by inerting the form.
+- **Why:** blur-triggered autosave plus a page-wide `saving` flag makes it
+  impossible to tab or click through several fields in a row: field A's blur
+  starts the save, which disables field B a frame after the user lands in it, and
+  focus is silently dropped. Reported by the owner 2026-08-07 against the settings
+  pages ("you can't easily/smoothly edit multiple inputs in a row"); stock detail
+  was unaffected precisely because it only gates *buttons* on `busy`.
+- **Violation signal:** `:disable="saving"` / `:disabled="savingX"` on a
+  `q-input`, `q-select`, `q-toggle`, `q-btn-toggle`, `DoraSegmented` or a
+  custom field wrapper. Concurrency is not a reason to keep it — per-field
+  PATCHes are independent, and a double-toggle is last-write-wins, which is
+  already the behaviour the user asked for.
 
 ---
 

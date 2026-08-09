@@ -886,7 +886,7 @@
         const ids = (keepsOut.value?.rows ?? []).map((r) => r.stock_item_id);
         if (ids.length === 0) return;
         try {
-            await Promise.all(ids.map((id) => stockApi.updateAsync({ stock_item_id: id, is_flagged: true })));
+            await Promise.all(ids.map((id) => stockApi.updateAsync({ stock_item_id: id, is_essential: true })));
             Notify.create({
                 type: 'positive',
                 position: 'bottom-right',

@@ -79,7 +79,7 @@ class AutoGenerateSources(BaseModel):
     model_config = ConfigDict(extra="forbid")
     low_stock: bool = False
     out_of_stock: bool = False
-    # When True, only essential (is_flagged) items count for the low/out
+    # When True, only essential (is_essential) items count for the low/out
     # picks above — useful for "shop the staples I'm short on" runs.
     essentials_only_for_low: bool = False
     flagged: bool = False
@@ -325,11 +325,11 @@ class AutoGenerateHandler:
             seq = getattr(item.stock_level, "sequence", -1)
             if seq not in wanted_seqs:
                 continue
-            if sources.essentials_only_for_low and not item.is_flagged:
+            if sources.essentials_only_for_low and not item.is_essential:
                 continue
             via = (
                 ADDED_VIA_AUTO_ESSENTIAL
-                if sources.essentials_only_for_low and item.is_flagged
+                if sources.essentials_only_for_low and item.is_essential
                 else ADDED_VIA_AUTO_LOW_STOCK
             )
             self._merge(candidates, item.id, _Candidate(stock_item=item, added_via=via))
@@ -339,7 +339,7 @@ class AutoGenerateHandler:
         # list even if currently stocked. The user has explicitly said
         # "always restock this".
         items: List[StockItem] = self.repository.get(StockItem).all(
-            EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True)
+            EntityField(StockItem, StockItem.Fields.IS_ESSENTIAL).eq(True)
         )
         for item in items:
             self._merge(

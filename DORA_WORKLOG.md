@@ -18,6 +18,130 @@ next.
 
 ---
 
+## 2026-08-08 — Stock UI polish batch + Title-case page titles + `is_flagged`→`is_essential` rename
+
+**Trigger.** Owner feedback, two messages. First: mobile menu-bar page name should be Title Case ("Stock Item" not "Stock item") — asked where it comes from first, then "all to be changed to title case". Second: a Stock-surface polish list + a naming cleanup — (a) expiry dropdown options need icons + "Push expiry by X day/s" wording, Clear=✕, Log-waste as-is; (b) Export button needs a real icon (suggested one); (c) Stocktake glow should also pulse the button *fill*; (d) usual-store dropdown shows store logo; (e) Clear-expiry button repositioned so the UI doesn't shift on clear; (f) recipe cards reflow by column count on resize; (g) ensure `is_essential` is the name throughout code + DB (old `is_flagged` lingering).
+
+**What shipped.**
+1. **Title-case route titles.** All `meta.title` in `web_app/src/router/routes.ts` → Title Case (38 strings). Consumed in exactly two per-route places: mobile top-bar label (`MainLayout.vue:16-17`, `$q.screen.lt.md`) and browser-tab title (`router/index.ts:168`). Drawer nav labels are a *separate* array in `MainLayout.vue` (already Title Case) — untouched. Recorded a carve-out on **D-008** in `DESIGN_STYLE_GUIDE.md` (sentence-case rule governs controls; page/tab titles are Title Case) so it isn't reverted.
+2. **Expiry dropdown** (`components/stock/StockItemRow.vue`): each `q-item` gets an avatar icon — `ICONS.add` (push ×3), `ICONS.clear` (Clear, negative), `ICONS.wasted` (Log waste). Wording "Push expiry +N day(s)" → "Push expiry by N day(s)". Clear got `text-negative`.
+3. **Export button** (`pages/StockOverview.vue`): icon `more_horiz` → new semantic alias **`ICONS.export_data = 'mdi-export-variant'`** (added to `style/icons.ts`). Chose the dedicated export glyph over `print` (menu has CSV *and* print) — explained to owner.
+4. **Stocktake glow** (`components/BaseButton.vue`): `.dora-btn--attention` keyframes now animate `background-color` (accent tint 22%→0%) in sync with the box-shadow ring; reduced-motion branch gets a static 15% tint. Only the Stocktake button uses `:attention`, so no blast radius.
+5. **Usual-store logos** (`pages/StockItemDetailPage.vue`): `storeOptions` now carries `has_image`; added a q-select `#option` slot rendering `<StoreLogo>` (already imported) + label.
+6. **Clear-expiry reposition** (same file): moved the ✕ to the *left* edge of the right-aligned cluster (right after `<q-space/>`, before +1d). Owner said "right of +1d" but in a right-aligned flex row that still shifts +1d on toggle; left-of-cluster is the only spot where showing/hiding it doesn't nudge the +Nd/Set buttons — noted this in the reply + an inline comment.
+7. **Recipe grid reflow** (same file): the Recipes-tab `row q-col-gutter-md` + `col-12 col-sm-6 col-md-4` swapped for a scoped `.stock-detail__recipe-grid` = `display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr))`. RecipesOverview keeps the Quasar col-grid (owner asked for the change on the *detail* surface only).
+8. **`is_flagged` → `is_essential` rename.** The essential flag lived under the legacy DB/entity name `is_flagged` while every surface calls it Essential (import code even said "the schema has no is_essential"). Mechanical token rename (`is_flagged`/`isFlagged`/`IS_FLAGGED` → `is_essential`/`isEssential`/`IS_ESSENTIAL`) across **45 files** (43 caught first pass; `web_app/test/` was outside the initial `src`-scoped sweep — fixed). No compound identifiers existed (checked), so the blind token replace was safe. Fixed the now-stale schema comment in `import_spreadsheet.py` by hand. New migration **`f4a2c7e9b1d3_20260808_rename_is_flagged_to_is_essential.py`** (batch `alter_column` rename, Boolean/NOT NULL/`server_default=false()`, down_revision = head `d3f8b1a6c4e2`) — follows the `rename_merchant_to_store` precedent. Historical migrations that created/mentioned `is_flagged` left as-is (b8f2 only mentions it in comments).
+
+**Verification.**
+- Backend: `pytest` on the affected routers/units — **299 passed** (stock-item, patch-semantics, auto-add, trim-to-budget, sqlalchemy-repo, auto-generate ×2, data-router, location-router, stocktake-router, api-fuzz).
+- Migration: booted `dora-verify-backend-linux` (destructive reset + `flask-migrate upgrade head`) → health 200; alembic graph has a **single head = the new rev**; `PRAGMA table_info` on all 3 dev DBs shows `is_essential` present, `is_flagged` gone.
+- Frontend: `vue-tsc` clean; `vitest` on `useStockFilters` + `queryStringBuilder` = 40 passed.
+- Tab titles confirmed live in the SPA ("Sign In", "Dashboard", "Stock") — Title Case rename is real on the wire.
+
+**Owed (in `DORA_VERIFY.md`, new 2026-08-08 section).** The authenticated *visual* pass — expiry-dropdown icons, export glyph, stocktake fill-pulse, store logos, clear-expiry no-shift, recipe reflow, and an Essential end-to-end regression check. Couldn't drive them here: the preview browser dropped the auth session on every hard reload (`GET /auth/me → 401`, SPA re-bootstrapping) and `computer{screenshot}` timed out repeatedly. All are low-risk presentational changes on a clean typecheck.
+
+**Standards.** No new R-rule violations: icon via `ICONS` token, grid uses tokens/`gap`, glow uses `--brand-accent` `color-mix`, rename tightens R-003 single-source naming, migration follows R-015. D-008 carve-out added for the Title-case decision. No new ADR warranted.
+
+**Next up.** Owner to walk the 2026-08-08 `DORA_VERIFY.md` section in the running app.
+
+---
+
+## 2026-08-07 (later 4) — Reshuffle returned the identical plan (deterministic ranker); added a per-request tiebreak
+
+**Trigger.** Owner: *"reshuffle button has no effect on the 'review' part of the builder."*
+
+**Diagnosis (confirmed live).** The Reshuffle button *does* call `generate()` and re-hit `POST /api/meal-plans/auto-build` — captured before/after in the browser, identical six recipes both times. Root cause is the ranker, not the button: `_base_score` is fully deterministic for every emphasis except `surprise` (which alone reads `rng`). The endpoint already passes a fresh `random.Random()` per request, but nothing consumed it for the default `use_up_stock` emphasis, so the same inputs always produced the same selection.
+
+**Fix (server, pure ranker, R-003).** `select_recipes` now builds a per-candidate jitter map once (`{recipe_id: rng.random() * RESHUFFLE_JITTER}`, `RESHUFFLE_JITTER = 1.5`) and adds it to each candidate's score. Fresh rng per request ⇒ different-but-still-good plan on reshuffle. Sub-dominant by design: a single expiring ingredient (3.0) or a favourite (3.0) still outranks the ≤1.5 jitter, so strong signals stay in and only near-ties shuffle. Computed once per call so a candidate's jitter doesn't fluctuate mid-selection. **Gated on `rng is not None`** — the fixture unit tests call `select_recipes` without an rng, so they stay fully deterministic; no test assertions changed.
+
+**Tests.** 3 new ranker cases (different seeds vary the pick when the pool has slack; no-rng still deterministic; a strongly-expiring recipe survives every seed) — `tests/test_build_week.py` 23 green. No e2e auto-build test asserts exact recipe identities, so none affected.
+
+**Live pass owed.** The running dev backend has no auto-reloader (`is_reloader_enabled()` is False), so it's still executing the pre-fix code — re-testing reshuffle in the browser proves nothing until the backend is restarted. The fix is a pure function fully covered by the new unit tests; the on-the-wire confirmation is a backend-restart-then-reshuffle check, queued in `DORA_VERIFY.md`. Didn't restart the backend myself — it's the owner's running process (PID held 5170), not a preview server I own.
+
+---
+
+## 2026-08-07 (later 3) — Auto-builder default slots: breakfast + lunch + dinner
+
+**Trigger.** Owner: *"Make breakfast, lunch and dinner the default meal slots selected for the auto builder."*
+
+**Change.** `MealPlanBuilderDialog.defaultSlots` now returns every household slot whose name matches breakfast/lunch/dinner (household order preserved) instead of just a single dinner slot; the on-open reset already seeds `selectedSlots` from it. Fallback unchanged for installs that name none of the three (dinner-ish, else last slot) so the dialog always opens with something selected.
+
+**Verified live** (dev seed): builder opens with Breakfast + Lunch + Dinner ticked, Snack + Dessert off, count hint "Dora will plan 6 meals" (2 upcoming days × 3). vue-tsc + eslint clean. Trivial unit — no PROJECT_STATE regen (no workstream moved); CHANGELOG bullet added.
+
+---
+
+## 2026-08-07 (later 2) — Product Search config simplified: URL back in Features, menu button shows only when set; reverted the dedicated Products page + hide toggle
+
+**Trigger.** Owner: *"Issue with the product search menu button. If a normal user, cannot navigate to the settings area (its under admin area). Lets simplify this, and undo some recent work that was done with the separate settings page. If products is enabled, show the product search url setting (in the features area). If the url is supplied, show the main menu button, otherwise it is hidden."*
+
+**Real bug.** The FU-581 owner call (2026-07-26) kept the "Product Search" nav entry visible whenever products was on, even with no URL — and when unset it routed to `/settings/admin/system/products` (admin-only). A normal (non-admin) user saw a nav button that dead-ended on a page they can't open. The 2026-08-04 work compounded it: a dedicated Products settings page + a `product_search_hidden` toggle, more surface for the same job.
+
+**Change — one rule now: URL set ⇒ menu entry (opens it in a new tab); URL blank ⇒ entry hidden.** Reverted the 2026-08-04 additions and simplified FU-581's nav behaviour.
+- **Frontend.** `AdminSystemFeaturesSettings.vue` regains the Product search URL section (gated on `productsEnabled`), written to current standards — **no `:disable` on the input (D-019)**, `:loading` only; save calls `productSearch.refresh()` so the nav re-renders live. `AdminSystemProductsSettings.vue` deleted, plus its route (`routes.ts`) and its SettingsShell nav row (and the now-unused `useFeatureFlags`/`productsEnabled` there). `MainLayout.productSearchEntry` now returns null unless products-on **and** a URL is set (dropped the `hidden` check and the settings-fallback link). `useProductSearchUrl.ts` drops the `hidden` ref + `product_search_hidden` read; `PRODUCT_SEARCH_SETTINGS_PATH` repointed `/settings/admin/system/products` → `/settings/admin/system/features` (still the fallback for the non-nav CTAs — find-&-link, dashboard deals, Dora quick-actions — when unset). `appSettingsApiService.ts` drops the field.
+- **Backend.** Removed `product_search_hidden` from `app_setting.py` (field + `Fields.PRODUCT_SEARCH_HIDDEN`), `get_app_settings.py` (DTO field + mapping), `update_app_settings.py` (request field + handler branch), `table_mappings.py` (column). Deleted migration `a1b7f4e9c3d5` (it was head; new head is its parent `d3f8b1a6c4e2`). Removed the key from `dto_snapshots.json`.
+
+**Migration posture.** Deleted rather than add-then-drop — pre-release, dev resets are `drop_all` (`DORA_ALLOW_DESTRUCTIVE`), no live installs, and the finishing-plan treats migrations as reshapeable pre-release (memory: keep alembic clean, no compat shims). **Owner note:** a dev DB already stamped at `a1b7f4e9c3d5` will need a reset/reseed (drop_all handles it) since that revision no longer exists.
+
+**Verified live** (dev seed, products-on). `GET /api/app-settings` → no `product_search_hidden`, `product_search_url:""`. Nav with URL unset: **no Product Search entry** (My Products still present). Features page renders the **Product search** section and **no Hide toggle**. PATCH a URL → nav re-render shows **Product Search** as an external `target=_blank` link to that URL; clear it → entry gone. `test_dto_contracts` (27), `test_app_settings_router` + `test_migrations` (schema-vs-model match confirms the deleted column stays in sync), `test_product_search_url_setting` (4) all green; frontend 412 Vitest, vue-tsc + eslint clean. No console errors.
+
+**Residual (DORA_VERIFY).** I round-tripped the URL via the API, not the Features **input's** blur handler — one owner eye-check on the save-through-the-input path is queued; the input is a standard settings field otherwise.
+
+**Standards close-gate.** R-035/D-019 honoured (no transient `:disable`). R-029 note: this restores hide-when-unset for the Product Search nav entry, explicitly reversing the FU-581 "keep it visible when unset" exception — which was the source of the reported bug, so the reversal is intended, not drift. No new rule/ADR.
+
+**Not spun off.** The non-nav CTAs still fall back to the admin Features page when the URL is unset — acceptable (an admin configuring it lands right), and out of scope for the reported nav-button issue; noted here rather than as an FU since it's the intended fallback.
+
+---
+
+## 2026-08-07 (later) — Meal-plan builder reworked to day × slot toggles; duplicate-to-next-week
+
+**Trigger.** Owner feedback on the meal planner: *"Plan builder flow is a bit odd. Instead of plan for 'this week | a day' paired with no. of meals paired with slot options 'spread | one slot | pick slots', have toggle buttons for each day of the week mon to sun and a toggle button for each meal slot to plan for. Add functionality for ticking all on/off as well. Slots do not need to be picked per individual day, just one set of buttons to apply to all days. Keep it simple. Also add a 'same day repeating' checkbox … Perhaps add a 'duplicate to next week' button somewhere?"*
+
+**Owner decisions taken up front (AskUserQuestion).** (a) Drop the meal-count slider entirely — the toggles are the count; the `scope` segmented control goes with it (one day selected *is* day-scope). Owner added: two independent rows of card buttons, **not** a days×slots matrix UI. (b) Duplicate-to-next-week lives in the week header and uses **replace** semantics, not merge. (c) All seven weekdays always render; past days are disabled in place rather than filtered out.
+
+**Backend — `build_week.py` contract rewritten.** `AutoBuildRequest` is now `{days[], slot_names[], repeat_same_day, emphasis, budget_cap}`; `scope`, `start_date` and `meal_count` are gone. `_scope_days(scope, start, today)` → `_buildable_days(requested, today)` (de-dupes, orders, drops past days). `_pick_slot` + the load-balancing `place_entries` were replaced by `_fill_one_day(pool, slots)` (one recipe per slot, a recipe whose own `time_of_day` names the slot claims it, else next-best-ranked) and a `place_entries` that fills day×slot cells day-major — or, with `repeat_same_day`, builds one day's pattern and replicates it. Count is derived: `slots` when repeating, `days × slots` otherwise. `MAX_MEALS` 21 → 42 (7 days × 6 slots) since it's now a backstop, not a user-facing cap; `days` is bounded at 7 by pydantic. Response drops `scope`, gains `days_used`. The endpoint's scope validation became a "pick at least one day that isn't in the past" 400.
+
+**Frontend.** New shared **`BaseToggleGroup.vue`** — multi-select counterpart to `BaseSegmented`: labelled row of card toggles + a Select-all/Clear-all button whose label flips, `aria-pressed` per option, full D-016 state set, 44px floor (D-004), options emitted in options-order not click-order. Registered as a Part B spec (**B2a**) in the style guide so the next multi-select reuses it rather than inventing a sibling (D-015). `MealPlanBuilderDialog` step 1 is now: Which days · Which meals · Same meals every day (only once >1 day is picked) · Emphasis · budget toggle · a live "Dora will plan N meals." line. Build is disabled until at least one day *and* one meal is selected. Dialog opens pre-set to every remaining day of the week + the dinner slot, so one tap still yields a week. Downstream (review/reshuffle/what-you'll-need/"I'll pick myself") untouched, except: `targetLabel` and the shopping-list scoping now derive single-day-ness from the *proposal* rather than a `scope` flag.
+
+**Duplicate to next week.** `useMealPlanner.confirmDuplicateToNextWeek()` shifts every focused-week entry +7 days, drops any that would land in the past, and confirms with counts — naming the replace when the target week already has forward entries. Commits via `persistEntries` (existing plan) or `createMealPlanAsync` (empty week), then moves the focused week to the copy so the user lands on what they made. Wired to the desktop week header and the mobile week nav.
+
+**Verified live** (dev seed, 1280×720, hash route `#/meal-plans`). Day row: Mon–Thu disabled+off, Fri/Sat/Sun on, dates as captions; slot row defaults to Dinner. Select-all on slots → 5 on, button flips to "Clear all", hint recomputes to "Dora will plan 15 meals." Repeat **on** → the auto-build response carried 15 entries, the identical 5 (recipe, slot) pairs on each of 07/08/09, `days_used` exactly the three upcoming days. Repeat **off** → distinct recipes per day. Duplicate onto an empty week → "Copy 6 meals to the week of 10/08/2026" → toast + nav to `?monday=2026-08-10`; duplicate onto a populated week → "This replaces the 6 meals already planned there" with the OK button labelled **Replace**; after confirming, `GET /api/meal-plans` showed exactly 6 entries on the mirrored days and the source week untouched. No console errors.
+
+**Not verified — be honest.** **No visual/layout confirmation.** Every element inside the dialog measured 0×0 in the preview browser — including pre-existing controls like `.dora-segmented-btn` — and `computer{screenshot}` timed out repeatedly, same wedge as the previous session. Computed styles were correct (min 44px, 8px/12px padding, 10px radius, dark-theme tokens resolving), but nothing proves the row lays out or wraps properly. Queued in `DORA_VERIFY.md`.
+
+**Fixed in passing (both called out, not silent).** (1) `MealPlanMobileFocus` emitted `print` but `MealPlansOverview` never listened — the mobile Print-this-week button did nothing. Now wired. (2) `var(--separator)` is an undefined token; the builder dialog's two uses became `--divider` / `--border-default`, so those borders now actually render. Nine more occurrences across four other meal-plan components are logged as FU-613 rather than changed blind.
+
+**Standards close-gate.** R-003 held — recipe selection and day/slot placement stayed server-side; the client sends toggles and renders/edits/commits. R-001: the toggle row became a shared component rather than twice-inlined markup. R-035/D-rules: tokens only, no off-scale literals (D-017), 44px targets (D-004), full state set (D-016), past options disabled-in-place rather than filtered (D-011 reflow). No new R-rule or ADR — the reusable output here is a component spec, and Part B is its correct home; ADR-031 already owns the D-rule lifecycle. **Dead code surfaced, not silently removed:** dropping the meal-count slider orphaned the `meals_per_week` user preference — logged as FU-612 for an owner call rather than ripping out a user-facing setting.
+
+**Tests.** `tests/test_build_week.py` rewritten around the new ranker surface (`_fill_one_day`, `_buildable_days`, repeat/no-repeat placement, empty-days) — 20 passing. Full backend suite 1586 passed (the 10 `test_bucket_c_secrets.py` errors reproduce on a clean stash — missing `DORA_SECRET_ENCRYPTION_KEY` in this shell, unrelated). Frontend `npm test` 412/412, `vue-tsc --noEmit` clean, eslint clean.
+
+**Spun off.** FU-611 (builder leaves later days empty when the cookbook is smaller than the grid — observed live: 15 cells, 9 recipes, Sunday blank), FU-612 (`meals_per_week` now drives nothing), FU-613 (phantom `--separator` token, 9 dead borders).
+
+**Next up.** Owner walks the new `DORA_VERIFY.md` "Meal-plan builder toggles + duplicate week" section — it's the visual pass this session couldn't do. Then FU-612 wants a decision: delete `meals_per_week`, or repurpose it to seed the builder's default day selection.
+
+---
+
+## 2026-08-07 — Settings saves stole input focus; removed transient-disable from focusable controls (new D-019)
+
+**Trigger.** Owner UX report: "I change an input, I click to next input and it loses focus immediately because of the saving process. Makes it so you can't easily/smoothly edit multiple inputs in a row. This is not an issue on the stock detail view. Might be the toast affecting things?"
+
+**Diagnosis.** Not the toast. Every settings page bound its in-flight save flag to `:disable` on its own fields — 68 `:disable="saving*"` bindings across 20 pages, ~25 of them on `q-input`/`q-select`/`q-toggle`/`q-btn-toggle`/`DoraSegmented`. Combined with blur-triggered autosave the sequence is: blur field A → save starts → `saving=true` → field B (which the user just clicked into) gets `disabled` → a disabled element cannot hold focus, so the browser blurs it. Stock detail was unaffected because its `busy` flag only gates **buttons**, never the text fields — exactly the contrast the owner noticed.
+
+**Change.** Stripped the transient-saving term from every focusable control on the settings pages; kept it on `BaseButton`/`q-btn` (real double-submit protection, and losing focus on the button you just clicked is expected). Non-transient disable conditions preserved verbatim (`!moneyInstallEnabled`, `!emailSmtpConfigured`, `emailUnchanged`, `!pushVapidConfigured || !pushSupported || pushLoading`, …). Ten pages' bespoke `savingX` refs became dead once their only consumer went, so the ref + its true/false assignments + the now-empty `finally` were removed; five pages dropped `saving` from their `useSettingsSave()` destructure. `AssistantSettings` keeps `saving` — its three action buttons still use it.
+
+**Concurrency call.** Deliberately did *not* replace the disable with a JS in-flight guard. Each field PATCHes independently so parallel saves are fine, and a rapid double-toggle is last-write-wins — which is already the behaviour the user asked for. A guard would silently drop a legitimate change to a different field.
+
+**Standards.** Promoted to **D-019** in `DESIGN_STYLE_GUIDE.md` (never bind transient async state to `disable` on a focusable control; buttons are the carve-out; show in-flight state with `:loading` or the toast). R-035's D-rule range and CLAUDE.md's reference bumped to `D-001..D-019`. No new ADR — ADR-031 already owns the D-rule lifecycle.
+
+**Verification — partial, be honest about it.** `npm run lint` clean, `vue-tsc --noEmit` clean, `npm test` 412/412 green. **Live browser verification did not complete**: the preview pane wedged repeatedly (screenshot timeouts, frozen DOM, duplicated console logs), and once the Assistant page did render, synthetic `input`/`blur` events never triggered the Vue blur handler — no PATCH ever fired, so the "focus survived" observation proves nothing. The mechanism removed is the only one that can blur a focused field, but the end-to-end pass is still owed. Logged as a new section at the top of `DORA_VERIFY.md`.
+
+**Gotcha for the next session.** The SPA is **hash-routed** (`#/settings/...`). Navigating to a bare `/settings/...` path silently renders the dashboard while the title updates — that cost a lot of time here. Dev seed login is `dora` / `dora`.
+
+**Files:** `web_app/src/pages/settings/*.vue` (21 pages), `docs/01_charter/DESIGN_STYLE_GUIDE.md`, `docs/01_charter/ENGINEERING_STANDARDS.md`, `CLAUDE.md`, `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Next up.** Walk the new `DORA_VERIFY.md` "Settings input focus during save" section in a real browser. If it passes, delete the section. Also worth a look: `MealPlansOverview.vue`, `MealPlanTemplatesPage.vue` and `MealPlanTemplatesDrawer.vue` still disable a dialog's single text input on save — left alone as out-of-scope (modal + explicit Save button, not the reported multi-field flow), but they're technically D-019 violations.
+
+---
+
 ## 2026-08-04 (later) — Rename `DORA_LLM_KEY_ENCRYPTION_KEY` → `DORA_SECRET_ENCRYPTION_KEY`; move module out of `infrastructure/llm/`
 
 **Trigger.** Owner tried to save an SMTP password with LLM off and hit the "DORA_LLM_KEY_ENCRYPTION_KEY isn't configured" 400. Flagged as misleading: the env var was introduced (FU-153) for LLM API keys, then quietly reused as the wrapping key for the two Bucket-C secrets (SMTP password, VAPID private key) without renaming — so operators who don't use LLMs are told an LLM knob blocks them.

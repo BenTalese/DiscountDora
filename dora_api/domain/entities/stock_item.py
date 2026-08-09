@@ -24,7 +24,7 @@ class StockItem(BaseEntity):
     stock_location: StockLocation | None
     stocktake_alerts_are_enabled: bool
     expiry_date: date | None = None
-    is_flagged: bool = False
+    is_essential: bool = False
     # the user-curated Store this item is usually bought from. Plain
     # UUID (no relationship object), nullable. Drives shopping-list grouping
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) and a "favourite store" hint on the
@@ -35,7 +35,7 @@ class StockItem(BaseEntity):
     # FU-511 — per-item `auto_add_when_low` was collapsed into
     # `AppSetting.auto_add_mode` (off / essential_only / all). Auto-add
     # now derives from that install-wide setting + this item's
-    # `is_flagged`, not a per-item toggle.
+    # `is_essential`, not a per-item toggle.
     # "I've cracked open the jar" — true while the item is being actively
     # consumed. `opened_on` is set automatically when `is_open` flips to
     # True; flipping back to False clears it.
@@ -67,7 +67,7 @@ class StockItem(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         EXPIRY_DATE = "expiry_date"
-        IS_FLAGGED = "is_flagged"
+        IS_ESSENTIAL = "is_essential"
         IS_OPEN = "is_open"
         NAME = "name"
         NOTES = "notes"

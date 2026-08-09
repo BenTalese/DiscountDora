@@ -30,7 +30,7 @@ class LocationItemDto:
     name: str
     stock_level_name: str | None
     expiry_date: str | None
-    is_flagged: bool
+    is_essential: bool
 
 
 @dataclass
@@ -78,7 +78,7 @@ class GetLocationTreeHandler:
                         item.stock_level.name if item.stock_level else None
                     ),
                     expiry_date = item.expiry_date.isoformat() if item.expiry_date else None,
-                    is_flagged = bool(item.is_flagged),
+                    is_essential = bool(item.is_essential),
                 )
                 for item in direct_items
             ]

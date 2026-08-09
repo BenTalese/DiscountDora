@@ -27,7 +27,6 @@
                         style="max-width: 140px"
                         :min="1"
                         :max="365"
-                        :disable="savingThresholds"
                         :loading="savingThresholds"
                         @blur="() => onSaveThreshold('expiring_soon_window_days', expiringSoonWindowDraft)"
                     />

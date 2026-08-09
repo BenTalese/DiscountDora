@@ -201,13 +201,13 @@ export type CreateStockItemCommand = {
     stock_location_id: string | null;
     stock_group_id?: string | null;
     expiry_date?: string | null;
-    is_flagged?: boolean;
+    is_essential?: boolean;
     is_open?: boolean;
 };
 
 /** Server-populated payload on a level-transition PATCH that fires the
  *  low-stock auto-add hook (FU-511: driven by `AppSetting.auto_add_mode`
- *  + `is_flagged`). Undefined body means no trigger fired (server returned
+ *  + `is_essential`). Undefined body means no trigger fired (server returned
  *  204). See `update_stock_item.py` `_try_auto_add`. */
 export type UpdateStockItemResponse = {
     auto_added?: {
@@ -225,7 +225,7 @@ export type UpdateStockItemCommand = {
     stock_location_id?: string | null;
     stock_group_id?: string | null;
     expiry_date?: string | null;
-    is_flagged?: boolean;
+    is_essential?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
     /** FU-189 — usual store hint. UUID to bind; use `clear_usual_store` to clear. */

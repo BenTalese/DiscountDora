@@ -188,7 +188,7 @@ export type StockItemDetail = {
     expiry_date: string | null;
     is_open: boolean;
     opened_on: string | null;
-    is_flagged: boolean;
+    is_essential: boolean;
     /** FU-189 — usual store hint (nullable). Drives the shopping-list
      *  grouping + a small picker on the stock-item detail. */
     usual_store_id: string | null;

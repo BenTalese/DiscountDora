@@ -60,7 +60,6 @@
                         outlined
                         dense
                         class="col-12 col-sm-8"
-                        :disable="saving"
                         autocomplete="username"
                     />
                     <BaseButton
@@ -92,7 +91,6 @@
                         dense
                         placeholder="you@example.com"
                         class="col-12 col-sm-5"
-                        :disable="savingEmail"
                         autocomplete="email"
                     />
                     <q-input
@@ -102,7 +100,7 @@
                         type="password"
                         label="Current password"
                         class="col-12 col-sm-4"
-                        :disable="savingEmail || emailUnchanged"
+                        :disable="emailUnchanged"
                         autocomplete="current-password"
                     />
                     <BaseButton
@@ -227,7 +225,6 @@
     const newPassword = ref('');
     const confirmPassword = ref('');
 
-    const saving = ref(false);
     const savingEmail = ref(false);
     const savingUsername = ref(false);
     const savingPassword = ref(false);

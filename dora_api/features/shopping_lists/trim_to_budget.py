@@ -469,7 +469,7 @@ def _classify_lines(
 
         # ── Never-cut set ─────────────────────────────────────────────
         # Essentials.
-        if getattr(item, "is_flagged", False):
+        if getattr(item, "is_essential", False):
             continue
         # Meals booked in next 2 days.
         demand = ctx.demand.get(item.id)

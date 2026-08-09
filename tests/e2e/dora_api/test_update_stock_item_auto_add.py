@@ -3,7 +3,7 @@ PATCH /api/stock-items/<id>.
 
 `UpdateStockItemHandler` owns the whole decision (R-003):
 
-  fire iff  _auto_add_enabled_for(item)          # AppSetting.auto_add_mode × is_flagged
+  fire iff  _auto_add_enabled_for(item)          # AppSetting.auto_add_mode × is_essential
         and needs_restock(new_level)             # new level is Low or Out
         and not needs_restock(previous_level)    # ...and it's a genuine transition
         and item not on ANY active list          # dedup — "the user already knows"
@@ -75,7 +75,7 @@ def _create_item(level_id: str, *, flagged: bool) -> str:
     resp = requests.post(STOCK_ITEMS, json=CreateStockItemRequest(
         name=f"auto-add-{uuid4()}",
         stock_level_id=level_id,
-        is_flagged=flagged,
+        is_essential=flagged,
     ).model_dump(mode="json"))
     assert resp.status_code == 201, resp.text
     return resp.json()["stock_item_id"]

@@ -42,7 +42,6 @@
             <SettingsRow label="Show Dora on every page">
                 <q-toggle
                     :model-value="currentUser.show_assistant !== false"
-                    :disable="saving"
                     @update:model-value="onShowAssistantChange"
                 />
             </SettingsRow>
@@ -65,7 +64,7 @@
             <SettingsRow label="Use AI mode for this account">
                 <q-toggle
                     :model-value="currentUser.llm_enabled"
-                    :disable="!installEnabled || saving || !canEnable"
+                    :disable="!installEnabled || !canEnable"
                     @update:model-value="onEnabledChange"
                 />
             </SettingsRow>
@@ -115,7 +114,6 @@
                         dense
                         placeholder="http://localhost:11434"
                         style="max-width: 360px"
-                        :disable="saving"
                         @blur="onBaseUrlBlur"
                         @keydown.enter.prevent="onBaseUrlBlur"
                     />
@@ -127,7 +125,6 @@
                         dense
                         placeholder="qwen2.5:7b"
                         style="max-width: 360px"
-                        :disable="saving"
                         @blur="onModelBlur"
                         @keydown.enter.prevent="onModelBlur"
                     />
@@ -192,7 +189,6 @@
                         autocomplete="off"
                         :placeholder="currentUser.has_llm_api_key ? '••••••••• (saved)' : 'Paste your key here'"
                         style="max-width: 360px"
-                        :disable="saving"
                         @blur="onApiKeyBlur"
                         @keydown.enter.prevent="onApiKeyBlur"
                     />
@@ -214,7 +210,6 @@
                         dense
                         :placeholder="modelPlaceholder"
                         style="max-width: 360px"
-                        :disable="saving"
                         @blur="onModelBlur"
                         @keydown.enter.prevent="onModelBlur"
                     />
@@ -226,7 +221,6 @@
                         dense
                         :placeholder="defaultBaseUrl"
                         style="max-width: 360px"
-                        :disable="saving"
                         @blur="onBaseUrlBlur"
                         @keydown.enter.prevent="onBaseUrlBlur"
                     />

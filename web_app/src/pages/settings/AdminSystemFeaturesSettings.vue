@@ -22,7 +22,6 @@
                 >
                     <q-toggle
                         :model-value="flag.value"
-                        :disable="savingFeatures.has(flag.key)"
                         @update:model-value="(next: boolean) => onFeatureFlagToggle(flag.key, next)"
                     />
                 </SettingsRow>
@@ -33,7 +32,6 @@
                 >
                     <q-toggle
                         :model-value="scanningDraft"
-                        :disable="savingScanning"
                         @update:model-value="onScanningToggle"
                     />
                 </SettingsRow>
@@ -46,8 +44,36 @@
                 >
                     <q-toggle
                         :model-value="buyVerdictDraft"
-                        :disable="savingBuyVerdict"
                         @update:model-value="onBuyVerdictToggle"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+
+            <!-- Product search URL is part of the products overlay, so it
+                 follows the same data-presence gate as the rest of the surface
+                 — hidden entirely until the products feature is on. Setting a
+                 URL is what makes the "Product Search" main-nav entry appear;
+                 leave it blank and the entry stays hidden (no dead "not set up"
+                 link for non-admins to land on). -->
+            <SettingsSection v-if="productsEnabled">
+                <template #title>Product search</template>
+                <template #description>
+                    Enter the URL to your product search / product data importer
+                    tool. When set, a "Product Search" entry appears in the main
+                    menu that opens it in a new tab; leave blank to hide it.
+                </template>
+
+                <SettingsRow v-if="!loading" stacked>
+                    <q-input
+                        v-model="productSearchUrlDraft"
+                        placeholder="https://your-search.example/"
+                        outlined
+                        dense
+                        :loading="savingProductSearchUrl"
+                        :error="!!productSearchUrlError"
+                        :error-message="productSearchUrlError ?? undefined"
+                        hint="Must start with http:// or https://. Leave blank to clear."
+                        @blur="onSaveProductSearchUrl"
                     />
                 </SettingsRow>
             </SettingsSection>
@@ -65,14 +91,19 @@
     import { computed, onMounted, reactive, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     // C-cross Chunk 1 — when the admin flips a flag, refresh the cached
     // `/api/health features.*` answer so every consumer composable picks
-    // up the new value without a page reload.
-    const { refresh: featureFlags$refresh } = useFeatureFlags();
+    // up the new value without a page reload. `products` gates the Product
+    // Search URL row (it belongs to the products overlay).
+    const { refresh: featureFlags$refresh, products: productsEnabled } = useFeatureFlags();
+    // Session-wide Product Search URL cache — refreshed after a save so the
+    // main-nav "Product Search" entry appears/updates without a page reload.
+    const productSearch = useProductSearchUrl();
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -80,12 +111,18 @@
 
     // Scanning & QR labels — a real install-wide flag, saved on toggle.
     const scanningDraft = ref(false);
-    const savingScanning = ref(false);
 
     // buy-verdict oracle install-wide toggle. Defaults on (see
     // AppSetting entity docstring); the API returns the current value.
     const buyVerdictDraft = ref(true);
-    const savingBuyVerdict = ref(false);
+
+    // Product search URL (Phase D / FU-186). `loading` gates the input so the
+    // draft is only rendered once the saved value has arrived.
+    const loading = ref(true);
+    const productSearchUrlDraft = ref('');
+    const savedProductSearchUrl = ref('');
+    const savingProductSearchUrl = ref(false);
+    const productSearchUrlError = ref<string | null>(null);
 
     // C-cross Chunk 1 — install-wide feature flags.
     type FeatureFlagKey =
@@ -101,7 +138,6 @@
         companion_ingestion_enabled: false,
         deals_email_enabled: false,
     });
-    const savingFeatures = ref<Set<FeatureFlagKey>>(new Set());
 
     const featureFlagItems = computed(() => [
         {
@@ -138,9 +174,6 @@
 
     async function onFeatureFlagToggle(key: FeatureFlagKey, next: boolean) {
         const previous = featureFlags[key];
-        savingFeatures.value.add(key);
-        // Reassign to trigger reactivity on the Set.
-        savingFeatures.value = new Set(savingFeatures.value);
         // Optimistic flip for snappy feel; rollback on failure.
         featureFlags[key] = next;
         try {
@@ -159,14 +192,10 @@
                 message: 'Could not save feature flag.',
                 caption: toastCaption(err),
             });
-        } finally {
-            savingFeatures.value.delete(key);
-            savingFeatures.value = new Set(savingFeatures.value);
         }
     }
 
     async function onScanningToggle(value: boolean) {
-        savingScanning.value = true;
         try {
             const result = await api.updateAsync({ scanning_enabled: value });
             scanningDraft.value = result.scanning_enabled;
@@ -181,13 +210,10 @@
                 message: 'Could not save scanning setting.',
                 caption: toastCaption(err),
             });
-        } finally {
-            savingScanning.value = false;
         }
     }
 
     async function onBuyVerdictToggle(value: boolean) {
-        savingBuyVerdict.value = true;
         try {
             const result = await api.updateAsync({ buy_verdict_enabled: value });
             buyVerdictDraft.value = result.buy_verdict_enabled;
@@ -204,8 +230,28 @@
                 message: 'Could not save buy-verdict setting.',
                 caption: toastCaption(err),
             });
+        }
+    }
+
+    async function onSaveProductSearchUrl() {
+        const trimmed = productSearchUrlDraft.value.trim();
+        productSearchUrlError.value = null;
+        if (trimmed === savedProductSearchUrl.value) return;
+        if (trimmed && !(trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
+            productSearchUrlError.value = 'Must start with http:// or https://.';
+            return;
+        }
+        savingProductSearchUrl.value = true;
+        try {
+            const updated = await api.updateAsync({ product_search_url: trimmed });
+            savedProductSearchUrl.value = updated.product_search_url;
+            productSearchUrlDraft.value = updated.product_search_url;
+            await productSearch.refresh();
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Product search URL saved.' });
+        } catch (e) {
+            productSearchUrlError.value = e instanceof Error ? e.message : 'Save failed.';
         } finally {
-            savingBuyVerdict.value = false;
+            savingProductSearchUrl.value = false;
         }
     }
 
@@ -217,9 +263,14 @@
         nutrition_enabled?: boolean;
         companion_ingestion_enabled?: boolean;
         deals_email_enabled?: boolean;
+        product_search_url?: string;
     };
     function applyLoaded(s: LoadedSettings) {
         scanningDraft.value = s.scanning_enabled;
+        if (s.product_search_url !== undefined) {
+            savedProductSearchUrl.value = s.product_search_url;
+            productSearchUrlDraft.value = s.product_search_url;
+        }
         if (s.buy_verdict_enabled !== undefined) {
             buyVerdictDraft.value = s.buy_verdict_enabled;
         }
@@ -233,11 +284,16 @@
     }
 
     onMounted(async () => {
-        if (!isAdmin.value) return;
+        if (!isAdmin.value) {
+            loading.value = false;
+            return;
+        }
         try {
             applyLoaded(await api.getAsync() as LoadedSettings);
         } catch {
             // Leave defaults.
+        } finally {
+            loading.value = false;
         }
     });
 </script>

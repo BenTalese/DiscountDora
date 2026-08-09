@@ -3,9 +3,14 @@
 The old "Plan step-by-step" builder was just the planner's recipe picker in a
 modal — the user hand-picked every meal and the client spread them across days
 (dropping every one into the first slot, hence FU-596). This replaces it with a
-genuine *generator*: given light guidance (emphasis, meal count, slots, scope,
-optional budget cap) Dora proposes a week — the client renders it as an editable
-preview and commits through the existing create/update path.
+genuine *generator*: given light guidance (which days, which meal slots, an
+emphasis, an optional budget cap) Dora proposes a week — the client renders it
+as an editable preview and commits through the existing create/update path.
+
+The shape the user drives is deliberately flat: two independent sets of toggles
+(days, then slots) whose cross-product *is* the plan — one meal per day×slot
+cell, no separate meal-count knob. `repeat_same_day` builds one day's line-up
+and duplicates it across the rest.
 
   POST /api/meal-plans/auto-build  — preview only; never persists.
 
@@ -24,7 +29,7 @@ import logging
 import random
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
@@ -56,8 +61,18 @@ WEEK_LENGTH_DAYS = 7
 # "expiring soon" horizon for the use-up-stock emphasis — matches the cookbook
 # "Uses expiring ingredients" filter (get_recipes / rescue feed, R-003).
 EXPIRING_HORIZON_DAYS = 14
-# Hard ceiling so a bad client can't ask us to place 500 meals.
-MAX_MEALS = 21
+# Hard ceiling so a bad client can't ask us to place 500 meals. The builder is
+# a *week* tool, so the real bound is `days` (≤ 7, validated) × the household
+# slot vocabulary (server-resolved, so a client can't inflate it); this is the
+# backstop for an install with an unusually long slot list.
+MAX_MEALS = 42
+# Per-candidate random tiebreak added to the emphasis score so the "Reshuffle"
+# button (a fresh rng each request) yields a different-but-still-good plan.
+# Kept sub-dominant to the real signals — a single expiring ingredient (3.0) or
+# a favourite (3.0) still outranks it — so only near-ties get shuffled. Without
+# an rng (the fixture unit tests) no jitter is added, so selection stays fully
+# deterministic there.
+RESHUFFLE_JITTER = 1.5
 
 # ── Emphasis + reason-chip vocabulary (frozen server-side, R-003) ──────────
 
@@ -112,8 +127,8 @@ class ProposedEntry:
 
 @dataclass(frozen=True, slots=True)
 class AutoBuildResponse:
-    scope: str
     entries: List[ProposedEntry]
+    days_used: List[date]
     slots_used: List[str]
     cost_total: Optional[float]
     budget_amount: Optional[float]
@@ -168,6 +183,13 @@ def select_recipes(
         (c for c in candidates if c.recipe_id not in exclude_ids),
         key=lambda c: (c.name.lower(), str(c.recipe_id)),
     )
+    # Per-candidate tiebreak, fixed for the whole selection (so a recipe's
+    # jitter doesn't fluctuate between iterations). A fresh rng per request is
+    # what makes "Reshuffle" produce a new plan; no rng ⇒ no jitter ⇒ stable.
+    jitter = (
+        {c.recipe_id: rng.random() * RESHUFFLE_JITTER for c in eligible}
+        if rng is not None else {}
+    )
     selected: List[RecipeCandidate] = []
     used_cuisine: Counter = Counter()
     used_category: Counter = Counter()
@@ -178,7 +200,7 @@ def select_recipes(
         best_score = None
         for c in eligible:
             repeats = used_cuisine[c.cuisine_id] + used_category[c.category_id]
-            score = _base_score(c, emphasis, rng) - vweight * repeats
+            score = _base_score(c, emphasis, rng) - vweight * repeats + jitter.get(c.recipe_id, 0.0)
             if best_score is None or score > best_score:
                 best, best_score = c, score
         assert best is not None
@@ -233,35 +255,47 @@ def apply_budget_cap(
     return selected, swapped
 
 
-def _pick_slot(
-    c: RecipeCandidate, slots: List[str], day_load: dict, slot_sequence: dict,
-) -> str:
-    """Smart slot placement (FU-596 fix): honour the recipe's own `time_of_day`
-    when it's one of the allowed slots; otherwise fall to the least-loaded slot
-    for the day (tie-broken by the household slot order, then name)."""
-    if c.time_of_day and c.time_of_day in slots:
-        return c.time_of_day
-    return min(slots, key=lambda s: (day_load.get(s, 0), slot_sequence.get(s, 0), s))
+def _fill_one_day(pool: List[RecipeCandidate], slots: List[str]) -> List[tuple]:
+    """Assign one recipe per slot for a single day, consuming `pool` (which is
+    in selection-rank order). A recipe whose own `time_of_day` names the slot
+    wins it (the FU-596 fix); otherwise the next-best-ranked recipe takes it.
+    Returns `(candidate, slot)` pairs, short if the pool runs dry."""
+    out: List[tuple] = []
+    for slot in slots:
+        if not pool:
+            break
+        index = next(
+            (i for i, c in enumerate(pool) if c.time_of_day == slot),
+            0,
+        )
+        out.append((pool.pop(index), slot))
+    return out
 
 
 def place_entries(
     selected: List[RecipeCandidate],
     days: List[date],
     allowed_slots: List[str],
-    slot_sequence: dict,
+    repeat_same_day: bool = False,
 ) -> List[tuple]:
-    """Spread the picks day-major across `days`, wrapping to a second per day
-    once each has one. Returns `(candidate, day, slot)` triples."""
+    """Fill the day×slot cells the user toggled on — exactly one meal per cell.
+
+    `repeat_same_day` builds a single day's line-up and duplicates it to every
+    other selected day (the "I eat the same thing all week" case); otherwise
+    each day gets its own distinct recipes. Returns `(candidate, day, slot)`
+    triples in day-major order.
+    """
     if not days:
         return []
     slots = allowed_slots or ["Dinner"]
-    load = {d: {s: 0 for s in slots} for d in days}
+    if repeat_same_day:
+        pattern = _fill_one_day(list(selected), slots)
+        return [(c, day, slot) for day in days for (c, slot) in pattern]
+    pool = list(selected)
     placements: List[tuple] = []
-    for i, c in enumerate(selected):
-        day = days[i % len(days)]
-        slot = _pick_slot(c, slots, load[day], slot_sequence)
-        load[day][slot] += 1
-        placements.append((c, day, slot))
+    for day in days:
+        for (c, slot) in _fill_one_day(pool, slots):
+            placements.append((c, day, slot))
     return placements
 
 
@@ -286,16 +320,14 @@ def reason_chip(c: RecipeCandidate, emphasis: str, budget_swapped: bool) -> str:
 
 class AutoBuildRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # "week" fills the upcoming days of the week beginning `start_date` (a
-    # Monday); "day" fills just `start_date` (the "plan Wednesday, shop, cook"
-    # use case).
-    scope: str = "week"
-    start_date: date
-    meal_count: int = Field(default=7, ge=1, le=MAX_MEALS)
+    # The days the user toggled on. One meal is placed per day × slot cell, so
+    # there is no separate meal count — the toggles *are* the count.
+    days: List[date] = Field(min_length=1, max_length=WEEK_LENGTH_DAYS)
     emphasis: str = EMPHASIS_USE_UP_STOCK
-    # Empty ⇒ spread across every household slot. One name ⇒ single-slot
-    # (e.g. Dinner only). A subset ⇒ spread across just those.
+    # Empty ⇒ every household slot. A subset ⇒ just those, household-ordered.
     slot_names: List[str] = Field(default_factory=list)
+    # Build one day's line-up and duplicate it to every other selected day.
+    repeat_same_day: bool = False
     budget_cap: bool = False
 
 
@@ -327,13 +359,11 @@ def _budget_remaining(repository: SqlAlchemyRepository, user: Optional[User]) ->
     return float(user.budget_amount) - spent
 
 
-def _scope_days(scope: str, start: date, today: date) -> List[date]:
-    """Upcoming days the build may place into. Past days are dropped so we never
-    schedule into yesterday (create_meal_plan rejects past entries anyway)."""
-    if scope == "day":
-        return [start] if start >= today else []
-    week = [start + timedelta(days=i) for i in range(WEEK_LENGTH_DAYS)]
-    return [d for d in week if d >= today]
+def _buildable_days(requested: List[date], today: date) -> List[date]:
+    """The requested days, de-duplicated and ordered, with past days dropped so
+    we never schedule into yesterday (create_meal_plan rejects past entries
+    anyway). The client disables past toggles; this is the server-side guard."""
+    return sorted({d for d in requested if d >= today})
 
 
 def _resolve_allowed_slots(requested: List[str], household_slots: List[str]) -> List[str]:
@@ -381,11 +411,10 @@ def compute_auto_build(
     rng: Optional[random.Random] = None,
 ) -> AutoBuildResponse:
     today = household_today(repository)
-    days = _scope_days(request.scope, request.start_date, today)
+    days = _buildable_days(request.days, today)
 
     slot_dtos = GetMealSlotsHandler(repository).handle()
     household_slots = [s.name for s in slot_dtos]
-    slot_sequence = {s.name: s.sequence for s in slot_dtos}
     allowed_slots = _resolve_allowed_slots(request.slot_names, household_slots)
 
     recipes = _all_recipe_dtos(repository)
@@ -415,9 +444,11 @@ def compute_auto_build(
 
     excluded = _planned_recipe_ids_in_range(repository, days)
     emphasis = request.emphasis if request.emphasis in _EMPHASES else EMPHASIS_USE_UP_STOCK
-    # Never place two meals in the same day+slot: cap the count at the grid size.
-    grid = len(days) * max(len(allowed_slots), 1)
-    count = max(1, min(request.meal_count, grid)) if days else 0
+    # One meal per cell, so the toggles decide the count. Repeating a single
+    # day only needs one day's worth of distinct recipes.
+    per_day = max(len(allowed_slots), 1)
+    wanted = per_day if request.repeat_same_day else len(days) * per_day
+    count = min(wanted, MAX_MEALS) if days else 0
 
     selected = select_recipes(candidates, emphasis, count, excluded, rng)
 
@@ -428,7 +459,7 @@ def compute_auto_build(
         pool = [c for c in candidates if c.recipe_id not in selected_ids and c.recipe_id not in excluded]
         selected, swapped = apply_budget_cap(selected, pool, budget_remaining)
 
-    placements = place_entries(selected, days, allowed_slots, slot_sequence)
+    placements = place_entries(selected, days, allowed_slots, request.repeat_same_day)
     entries = [
         ProposedEntry(
             recipe_id=c.recipe_id,
@@ -453,8 +484,8 @@ def compute_auto_build(
     )
 
     return AutoBuildResponse(
-        scope=request.scope,
         entries=entries,
+        days_used=days,
         slots_used=allowed_slots,
         cost_total=cost_total,
         budget_amount=float(user.budget_amount) if (user and user.budget_amount is not None) else None,
@@ -478,8 +509,8 @@ def _entry_payload(e: ProposedEntry) -> dict:
 
 def _response_payload(r: AutoBuildResponse) -> dict:
     return {
-        "scope": r.scope,
         "entries": [_entry_payload(e) for e in r.entries],
+        "days_used": [d.isoformat() for d in r.days_used],
         "slots_used": r.slots_used,
         "cost_total": r.cost_total,
         "budget_amount": r.budget_amount,
@@ -491,20 +522,19 @@ def _response_payload(r: AutoBuildResponse) -> dict:
 @has_request_body(AutoBuildRequest)
 def auto_build():
     request: AutoBuildRequest = get_request_body()
-    if request.scope not in ("week", "day"):
-        return bad_request("scope must be 'week' or 'day'.")
 
     repo = SqlAlchemyRepository()
     user_id = _current_user_id()
     user = repo.get(User).by_id(user_id) if user_id else None
 
     today = household_today(repo)
-    if request.scope == "day" and request.start_date < today:
-        return bad_request("Can't build a plan for a day in the past.")
+    if not _buildable_days(request.days, today):
+        return bad_request("Pick at least one day that isn't in the past.")
 
     result = compute_auto_build(repo, request, user, rng=random.Random())
     _LOGGER.info(
-        "Auto-build (%s, emphasis=%s, budget_cap=%s) proposed %d meal(s).",
-        request.scope, request.emphasis, request.budget_cap, len(result.entries),
+        "Auto-build (%d day(s), emphasis=%s, repeat=%s, budget_cap=%s) proposed %d meal(s).",
+        len(result.days_used), request.emphasis, request.repeat_same_day,
+        request.budget_cap, len(result.entries),
     )
     return ok(_response_payload(result))

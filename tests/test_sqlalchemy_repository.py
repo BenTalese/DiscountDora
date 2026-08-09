@@ -73,9 +73,9 @@ def _uid(n: int) -> UUID:
 #   _uid(6) "bottom shelf"  area    _uid(2)     6
 #
 # StockItem — for Boolean / DateTime / UUID-FK coercion:
-#   _uid(101) "Milk"      is_flagged=True   location _uid(1)  updated 2026-01-10
-#   _uid(102) "Bread"     is_flagged=False  location _uid(2)  updated 2026-02-10
-#   _uid(103) "Ice Cream" is_flagged=False  location None     updated 2026-03-10
+#   _uid(101) "Milk"      is_essential=True   location _uid(1)  updated 2026-01-10
+#   _uid(102) "Bread"     is_essential=False  location _uid(2)  updated 2026-02-10
+#   _uid(103) "Ice Cream" is_essential=False  location None     updated 2026-03-10
 
 _ALL_LOCATION_NAMES = {"Pantry", "fridge", "Freezer", "cellar", "Top Shelf", "bottom shelf"}
 _ID_ORDER = ["Pantry", "fridge", "Freezer", "cellar", "Top Shelf", "bottom shelf"]
@@ -95,7 +95,7 @@ _LOCATION_FIELD_MAP = {
 }
 _STOCK_ITEM_FIELD_MAP = {
     "stock_location_id": EntityField(StockItem, "_stock_location_id"),
-    "is_flagged": EntityField(StockItem, StockItem.Fields.IS_FLAGGED),
+    "is_essential": EntityField(StockItem, StockItem.Fields.IS_ESSENTIAL),
 }
 
 
@@ -132,19 +132,19 @@ def engine(tmp_path_factory):
                 name="Milk", notes=None, stock_group=None,
                 stock_level_last_updated=datetime(2026, 1, 10, 8, 0, 0),
                 stock_level=level, stock_location=zones[0],
-                stocktake_alerts_are_enabled=True, is_flagged=True, id=_uid(101),
+                stocktake_alerts_are_enabled=True, is_essential=True, id=_uid(101),
             ),
             StockItem(
                 name="Bread", notes=None, stock_group=None,
                 stock_level_last_updated=datetime(2026, 2, 10, 8, 0, 0),
                 stock_level=level, stock_location=zones[1],
-                stocktake_alerts_are_enabled=True, is_flagged=False, id=_uid(102),
+                stocktake_alerts_are_enabled=True, is_essential=False, id=_uid(102),
             ),
             StockItem(
                 name="Ice Cream", notes=None, stock_group=None,
                 stock_level_last_updated=datetime(2026, 3, 10, 8, 0, 0),
                 stock_level=level, stock_location=None,
-                stocktake_alerts_are_enabled=False, is_flagged=False, id=_uid(103),
+                stocktake_alerts_are_enabled=False, is_essential=False, id=_uid(103),
             ),
         ])
         seed.commit()
@@ -421,7 +421,7 @@ def test__paginate__uuid_string_filter_on_fk_column__matches_binary_uuid(repo):
 ])
 def test__paginate__bool_string_filter__coerces_to_boolean(repo, raw, expected):
     result = repo.get(StockItem).paginate(
-        _options(filters=[FilterClause(field="is_flagged", operator="eq", value=raw)]),
+        _options(filters=[FilterClause(field="is_essential", operator="eq", value=raw)]),
         lambda e: e.name,
         field_map=_STOCK_ITEM_FIELD_MAP)
 

@@ -25,7 +25,6 @@
                         v-model="draft.vapid_public_key"
                         outlined dense clearable
                         placeholder="base64url-encoded uncompressed P-256 public key"
-                        :disable="saving"
                         @blur="() => onSaveField('vapid_public_key')"
                     />
                 </SettingsRow>
@@ -35,7 +34,6 @@
                         v-model="draft.vapid_subject"
                         outlined dense clearable
                         placeholder="mailto:admin@example.com"
-                        :disable="saving"
                         @blur="() => onSaveField('vapid_subject')"
                     />
                 </SettingsRow>
@@ -60,7 +58,6 @@
                             :placeholder="privateKeyConfigured
                                 ? '••••••••'
                                 : 'Paste base64 / PEM private key'"
-                            :disable="saving"
                         />
                         <div class="row q-gutter-sm">
                             <BaseButton

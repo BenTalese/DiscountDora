@@ -28,7 +28,7 @@ Resolution order for a single item:
 3.  If the item hit Low or Out in the last `_LOW_OUT_BUMP_DAYS`, bump
     the resolved band one step faster (Monthly → Fortnightly →
     Weekly). Actively depleting stock should surface sooner.
-4.  If the item is Essential (`is_flagged`), bump one more step faster.
+4.  If the item is Essential (`is_essential`), bump one more step faster.
     Essential is a coarse per-item lever — the user's design call
     ("nobody would fine-tune per item, but Essential is a useful pre-
     existing toggle").
@@ -122,7 +122,7 @@ class ItemHistory:
     # True if any StockLevelChange within the last _LOW_OUT_BUMP_DAYS
     # transitioned the item into Low or Out. Bumps one band faster.
     hit_low_or_out_recently: bool
-    # `is_flagged` on the StockItem — bumps one band faster on top of
+    # `is_essential` on the StockItem — bumps one band faster on top of
     # whatever the above produced. §3 of the brief.
     is_essential: bool
 

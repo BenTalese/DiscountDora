@@ -26,7 +26,6 @@
                         toggle-color="primary"
                         unelevated
                         no-caps
-                        :disable="savingBand"
                         @update:model-value="onBandChange"
                     />
                 </SettingsRow>
@@ -47,7 +46,6 @@
                 <SettingsRow label="Auto">
                     <q-toggle
                         :model-value="autoDraft"
-                        :disable="savingAuto"
                         @update:model-value="onAutoChange"
                     />
                 </SettingsRow>
@@ -96,12 +94,9 @@
     // the draft without a re-fetch round-trip.
     let savedBand: CadenceBand = 'fortnightly';
     let savedAuto = true;
-    const savingBand = ref(false);
-    const savingAuto = ref(false);
 
     async function onBandChange(next: CadenceBand) {
         if (next === savedBand) return;
-        savingBand.value = true;
         try {
             const result = await api.updateAsync({
                 stocktake_default_cadence_band: next,
@@ -119,14 +114,11 @@
                 message: 'Could not save cadence.',
                 caption: toastCaption(err),
             });
-        } finally {
-            savingBand.value = false;
         }
     }
 
     async function onAutoChange(next: boolean) {
         if (next === savedAuto) return;
-        savingAuto.value = true;
         try {
             const result = await api.updateAsync({
                 stocktake_auto_tuning_enabled: next,
@@ -144,8 +136,6 @@
                 message: 'Could not save Auto setting.',
                 caption: toastCaption(err),
             });
-        } finally {
-            savingAuto.value = false;
         }
     }
 

@@ -64,7 +64,7 @@ class ShoppingListLine(BaseEntity):
     sequence: int = 0
     # Provenance. "manual" for user-typed adds; one of the auto_* values
     # when the line came from /auto-generate or the low-stock auto-add
-    # hook (FU-511: fires per AppSetting.auto_add_mode + is_flagged). If
+    # hook (FU-511: fires per AppSetting.auto_add_mode + is_essential). If
     # a user later edits the line (quantity/product), the caller flips
     # this back to "manual" so the chip disappears.
     added_via: str = ADDED_VIA_MANUAL

@@ -37,7 +37,7 @@ class CreateStockItemRequest(BaseModel):
     stock_location_id: UUID | None = None
     stock_group_id: UUID | None = None
     expiry_date: date | None = None
-    is_flagged: bool = False
+    is_essential: bool = False
     is_open: bool = False
 
     # Normalise the name at the request boundary: strip surrounding whitespace
@@ -112,7 +112,7 @@ class CreateStockItemHandler:
             stock_location = _StockLocation,
             stocktake_alerts_are_enabled = False,
             expiry_date = request.expiry_date,
-            is_flagged = request.is_flagged,
+            is_essential = request.is_essential,
             is_open = request.is_open,
             # R-021 — opened_on is the household calendar day, not server-local.
             opened_on = household_today(self.repository) if request.is_open else None,

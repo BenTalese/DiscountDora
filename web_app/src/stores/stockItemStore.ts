@@ -47,7 +47,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
 
     /** When a level-change PATCH transitions a stock item to Low/Out and
      *  the install-wide auto-add mode says fire (FU-511: `off` never,
-     *  `essential_only` iff `is_flagged`, `all` always), the server drops
+     *  `essential_only` iff `is_essential`, `all` always), the server drops
      *  it onto the unambiguous draft list and returns
      *  `{ auto_added: { line_id, shopping_list_id } }`. Fire a positive
      *  toast naming the list + the item, and refresh the shopping-list

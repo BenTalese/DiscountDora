@@ -252,7 +252,30 @@
                                             borderless
                                             :display-value="form.usual_store_id ? undefined : '—'"
                                             @update:model-value="onChangeUsualStore"
-                                        />
+                                        >
+                                            <!-- Feedback 2026-08-08: show each store's logo
+                                                 (real image when uploaded, deterministic
+                                                 swatch otherwise) in the option list. -->
+                                            <template #option="{ opt, itemProps }">
+                                                <q-item v-bind="itemProps">
+                                                    <q-item-section
+                                                        avatar
+                                                        style="min-width: 0; padding-right: 8px"
+                                                    >
+                                                        <StoreLogo
+                                                            :name="opt.label"
+                                                            :store-id="opt.value"
+                                                            :has-image="opt.has_image"
+                                                            :height="20"
+                                                            :width="34"
+                                                        />
+                                                    </q-item-section>
+                                                    <q-item-section>
+                                                        <q-item-label>{{ opt.label }}</q-item-label>
+                                                    </q-item-section>
+                                                </q-item>
+                                            </template>
+                                        </q-select>
                                     </q-item-section>
                                 </q-item>
 
@@ -264,15 +287,11 @@
                                                 {{ detail.expiry_date || '—' }}
                                             </span>
                                             <q-space />
-                                            <BaseButton variant="ghost" dense size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
-                                            <BaseButton variant="ghost" dense size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
-                                            <BaseButton variant="ghost" dense size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
-                                            <!-- Feedback 2026-06-18: the calendar-only icon
-                                                 button picks up the "Set" label that used to
-                                                 live in the top toolbar. -->
-                                            <BaseButton variant="ghost" dense size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
-                                                <q-tooltip>Pick a date</q-tooltip>
-                                            </BaseButton>
+                                            <!-- Feedback 2026-08-08: Clear sits at the left
+                                                 edge of the right-aligned cluster so showing/
+                                                 hiding it (it only exists when there's a date)
+                                                 doesn't nudge the +Nd / Set buttons — those
+                                                 stay anchored to the right. -->
                                             <BaseButton
                                                 v-if="detail.expiry_date"
                                                 variant="danger-icon"
@@ -282,6 +301,15 @@
                                                 @click="clearExpiry"
                                             >
                                                 <q-tooltip>Clear expiry</q-tooltip>
+                                            </BaseButton>
+                                            <BaseButton variant="ghost" dense size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
+                                            <BaseButton variant="ghost" dense size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
+                                            <BaseButton variant="ghost" dense size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
+                                            <!-- Feedback 2026-06-18: the calendar-only icon
+                                                 button picks up the "Set" label that used to
+                                                 live in the top toolbar. -->
+                                            <BaseButton variant="ghost" dense size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
+                                                <q-tooltip>Pick a date</q-tooltip>
                                             </BaseButton>
                                         </div>
                                     </q-item-section>
@@ -318,7 +346,7 @@
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
-                                                :model-value="detail.is_flagged"
+                                                :model-value="detail.is_essential"
                                                 :disable="busy"
                                                 @update:model-value="onToggleFlagged"
                                             />
@@ -345,7 +373,7 @@
                                      (off / essential-only / all), which
                                      branches on this item's Essential flag
                                      above. Rationale: the per-item toggle
-                                     was redundant with `is_flagged` for
+                                     was redundant with `is_essential` for
                                      the "staple you never want to run
                                      out of" use it was designed for. -->
 
@@ -649,11 +677,15 @@
                     <div v-if="recipesForDetail.length === 0" class="dora-text-muted text-caption q-pa-md">
                         Not used in any saved recipe.
                     </div>
-                    <div v-else class="row q-col-gutter-md">
+                    <!-- Feedback 2026-08-08: reflow by column count, not by
+                         stretching a fixed 3-up breakpoint grid. An auto-fill
+                         grid keeps each card near its natural width and adds/
+                         removes a whole column as the window resizes, instead
+                         of the cards continuously growing/shrinking. -->
+                    <div v-else class="stock-detail__recipe-grid">
                         <div
                             v-for="r in recipesForDetail"
                             :key="r.recipe_id"
-                            class="col-12 col-sm-6 col-md-4"
                         >
                             <!-- wire the
                                  favourite-toggle + add-all-to-list events
@@ -1219,7 +1251,11 @@
     // user is invited to add some.
     const storesStore = useStoresStore();
     const storeOptions = computed(() =>
-        storesStore.stores.map((s) => ({ label: s.name, value: s.store_id })),
+        storesStore.stores.map((s) => ({
+            label: s.name,
+            value: s.store_id,
+            has_image: s.has_image,
+        })),
     );
     // resolve the level *sequence* (StockLevelDot maps it to a
     // colour, or the sunken fallback when null). Untracked items (no
@@ -1242,7 +1278,7 @@
         notes?: string | null;
         stock_location_id?: string | null;
         stock_group_id?: string | null;
-        is_flagged?: boolean;
+        is_essential?: boolean;
         expiry_date?: string | null;
         usual_store_id?: string | null;
         clear_usual_store?: boolean;
@@ -1315,7 +1351,7 @@
         }
     }
     async function onToggleFlagged(value: boolean) {
-        await saveField({ is_flagged: value });
+        await saveField({ is_essential: value });
     }
     function shiftExpiry(days: number) {
         // From the current expiry if set, otherwise from today. Date math in
@@ -2159,8 +2195,8 @@
         if (si.opened_on !== undefined && si.opened_on !== detail.value.opened_on) {
             detail.value.opened_on = si.opened_on;
         }
-        if (si.is_flagged !== undefined && si.is_flagged !== detail.value.is_flagged) {
-            detail.value.is_flagged = si.is_flagged;
+        if (si.is_essential !== undefined && si.is_essential !== detail.value.is_essential) {
+            detail.value.is_essential = si.is_essential;
         }
         if (si.stock_level_id && si.stock_level_id !== detail.value.stock_level_id) {
             detail.value.stock_level_id = si.stock_level_id;
@@ -2217,5 +2253,14 @@
     .dora-level-picker:hover,
     .dora-level-picker:focus-within {
         border-color: var(--brand-primary);
+    }
+
+    /* Feedback 2026-08-08: recipe cards reflow by column count rather than
+       stretching within a Quasar breakpoint grid. auto-fill keeps each card
+       within a bounded width band and drops/adds a whole column on resize. */
+    .stock-detail__recipe-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
     }
 </style>

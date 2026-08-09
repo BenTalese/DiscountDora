@@ -54,7 +54,6 @@ class UpdateAppSettingsRequest(BaseModel):
     # problem (the field never echoes back as a clickable link to other
     # users — it ALWAYS opens via target="_blank" rel="noopener").
     product_search_url: str | None = Field(default=None, max_length=500)
-    product_search_hidden: bool | None = None
     # AU vs US per-unit display locale.
     unit_pricing_locale: str | None = Field(default=None, max_length=8)
     # install-wide currency (ISO 4217; 3 uppercase letters) and
@@ -218,9 +217,6 @@ class UpdateAppSettingsHandler:
                     invalid_reason="Product search URL must start with http:// or https://."
                 )
             setting.product_search_url = _Url
-
-        if "product_search_hidden" in set_fields and request.product_search_hidden is not None:
-            setting.product_search_hidden = request.product_search_hidden
 
         # backup library controls. Retention is a plain int
         # bounded by the request model; storage path is validated for

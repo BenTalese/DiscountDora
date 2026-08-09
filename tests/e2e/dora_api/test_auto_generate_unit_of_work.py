@@ -24,7 +24,7 @@ def test__auto_generate__flagged_source__commits_list_and_lines_together(api):
     create = requests.post(f"{BASE}/stock-items", json={
         "name": name,
         "stock_level_id": stock_level_id,
-        "is_flagged": True,
+        "is_essential": True,
     })
     assert create.status_code in (200, 201), create.text
     stock_item_id = create.json().get("stock_item_id") or create.json().get("id")
@@ -49,5 +49,5 @@ def test__auto_generate__flagged_source__commits_list_and_lines_together(api):
         if generated_list_id:
             requests.delete(f"{LISTS}/{generated_list_id}")
         # unflag + delete the seed stock item so other tests aren't polluted
-        requests.patch(f"{BASE}/stock-items/{stock_item_id}", json={"is_flagged": False})
+        requests.patch(f"{BASE}/stock-items/{stock_item_id}", json={"is_essential": False})
         requests.delete(f"{BASE}/stock-items/{stock_item_id}")

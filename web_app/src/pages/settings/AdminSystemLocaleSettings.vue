@@ -26,7 +26,6 @@
                     dense
                     maxlength="3"
                     style="max-width: 120px; text-transform: uppercase"
-                    :disable="saving"
                     :error="currencyError !== null"
                     :error-message="currencyError ?? ''"
                     hint="3-letter ISO 4217 code"
@@ -43,7 +42,6 @@
                     dense
                     maxlength="35"
                     style="max-width: 200px"
-                    :disable="saving"
                     :error="localeError !== null"
                     :error-message="localeError ?? ''"
                     hint="BCP-47 tag, e.g. en-AU"

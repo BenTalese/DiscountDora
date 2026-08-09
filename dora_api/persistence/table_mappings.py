@@ -111,7 +111,6 @@ def configure_mappings(db: SQLAlchemy):
         # Phase D / FU-186 — admin-set URL the Product Search nav opens.
         # Empty string ⇒ unset; see entity comment.
         Column("product_search_url", String(500), nullable=False, server_default=""),
-        Column("product_search_hidden", Boolean, nullable=False, server_default=false()),
         # AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
         Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
@@ -241,7 +240,7 @@ def configure_mappings(db: SQLAlchemy):
         "StockItem", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("expiry_date", Date, nullable=True),
-        Column("is_flagged", Boolean, nullable=False, server_default=false()),
+        Column("is_essential", Boolean, nullable=False, server_default=false()),
         Column("is_open", Boolean, nullable=False, server_default=false()),
         Column("opened_on", Date, nullable=True),
         Column("name", String(255)),

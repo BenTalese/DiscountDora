@@ -432,7 +432,7 @@ _CORE_CREATE_FUZZ: list[tuple[str, dict, dict]] = [
             "stock_level_id": {"unexpected": "object"},
             "stock_location_id": 3.14,
             "expiry_date": {"y": 2026},
-            "is_flagged": "banana",
+            "is_essential": "banana",
             "is_open": [],
         },
     ),

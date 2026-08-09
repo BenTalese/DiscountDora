@@ -45,7 +45,6 @@ export type Shortfall = {
 // placement are server-owned (R-003); the client sends guidance and renders
 // / edits / commits the returned proposal.
 
-export type AutoBuildScope = 'week' | 'day';
 export type AutoBuildEmphasis = 'use_up_stock' | 'variety' | 'favourites' | 'surprise';
 
 /** Reason chip frozen server-side per proposed meal. */
@@ -59,14 +58,14 @@ export type AutoBuildReason =
     | 'picked';
 
 export type AutoBuildRequest = {
-    scope: AutoBuildScope;
-    /** Monday of the week (scope=week) or the specific day (scope=day). ISO. */
-    start_date: string;
-    meal_count: number;
+    /** The days the user toggled on (ISO). One meal per day × slot cell, so
+     *  the toggles are the meal count — there is no separate knob. */
+    days: string[];
     emphasis: AutoBuildEmphasis;
-    /** Empty ⇒ spread across every household slot; one ⇒ single slot; a
-     *  subset ⇒ spread across just those. */
+    /** Empty ⇒ every household slot; a subset ⇒ just those. */
     slot_names: string[];
+    /** Build one day's line-up and duplicate it to the other selected days. */
+    repeat_same_day: boolean;
     budget_cap: boolean;
 };
 
@@ -83,8 +82,9 @@ export type ProposedEntry = {
 };
 
 export type AutoBuildResponse = {
-    scope: AutoBuildScope;
     entries: ProposedEntry[];
+    /** The requested days the server actually built into (past days dropped). */
+    days_used: string[];
     slots_used: string[];
     cost_total: number | null;
     budget_amount: number | null;

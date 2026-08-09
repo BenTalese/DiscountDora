@@ -17,7 +17,7 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/login',
         component: () => import('pages/LoginPage.vue'),
-        meta: { title: 'Sign in' }
+        meta: { title: 'Sign In' }
     },
     // fresh-install first-admin setup. Lives outside MainLayout
     // for the same reason as /login. The router guard sends visitors here
@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/setup',
         component: () => import('pages/SetupAdminPage.vue'),
-        meta: { title: 'Set up Dashy Dora' },
+        meta: { title: 'Set Up Dashy Dora' },
     },
     // native app first-run instance picker. Only reachable when
     // Capacitor.isNativePlatform() is true and no backend URL is stored
@@ -34,7 +34,7 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/setup/backend',
         component: () => import('pages/setup/BackendSetupPage.vue'),
-        meta: { title: 'Choose your instance' },
+        meta: { title: 'Choose Your Instance' },
     },
     // ── A1 out-of-band auth flows. Each one lives outside MainLayout so
     // signed-out users (or someone clicking a verify link in a fresh
@@ -42,22 +42,22 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/verify-email',
         component: () => import('pages/VerifyEmailPage.vue'),
-        meta: { title: 'Verify email' },
+        meta: { title: 'Verify Email' },
     },
     {
         path: '/forgot-password',
         component: () => import('pages/ForgotPasswordPage.vue'),
-        meta: { title: 'Forgot password' },
+        meta: { title: 'Forgot Password' },
     },
     {
         path: '/reset-password',
         component: () => import('pages/ResetPasswordPage.vue'),
-        meta: { title: 'Reset password' },
+        meta: { title: 'Reset Password' },
     },
     {
         path: '/confirm-email-change',
         component: () => import('pages/ConfirmEmailChangePage.vue'),
-        meta: { title: 'Confirm new email' },
+        meta: { title: 'Confirm New Email' },
     },
     // First-run wizard. Uses its own minimal layout so the nav drawer /
     // dashboard chrome don't peek through while the user is still being
@@ -87,12 +87,12 @@ const routes: RouteRecordRaw[] = [
             // any bookmark / deep link that predates this change.
             { path: 'stocktake', component: () => import('pages/StocktakeRunner.vue'), meta: { title: 'Stocktake' } },
             { path: 'stocktake/run', redirect: '/stocktake' },
-            { path: 'stock/:id', component: () => import('pages/StockItemDetailPage.vue'), meta: { title: 'Stock item' } },
+            { path: 'stock/:id', component: () => import('pages/StockItemDetailPage.vue'), meta: { title: 'Stock Item' } },
             // Phase D / FU-186 — the in-app `/product-search` route is gone.
             // The Product Search nav entry now opens `AppSetting.product_search_url`
             // in a new tab when product data is present. No route remains here.
-            { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
-            { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
+            { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price History' } },
+            { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My Products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
             // minimal alerts list, reuses alertStore (same
             // data as the header bell). The full alerts control centre is
@@ -107,8 +107,8 @@ const routes: RouteRecordRaw[] = [
             // `/recipes/<id>` now hits the 404 page (which is fine).
             { path: 'cookbook', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Cookbook' } },
             { path: 'cookbook/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
-            { path: 'cookbook/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
-            { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },
+            { path: 'cookbook/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook Mode' } },
+            { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal Plans' } },
             // FU-304 closed 2026-07-07 — Direction A won the A/B experiment;
             // `/meal-plans/board` (Direction B) is retired. Redirect any
             // deep-links / bookmarks back to the surviving planner surface.
@@ -116,15 +116,15 @@ const routes: RouteRecordRaw[] = [
             // FU-308 (2026-07-07) — page repurposed to Rotating template
             // sets only; per-template CRUD moved to the planner's drawer.
             // Route path kept for existing deep-links / bookmarks.
-            { path: 'meal-plans/templates', component: () => import('pages/MealPlanTemplatesPage.vue'), meta: { title: 'Rotating template sets' } },
+            { path: 'meal-plans/templates', component: () => import('pages/MealPlanTemplatesPage.vue'), meta: { title: 'Rotating Template Sets' } },
             // FU-317 Chunk 5 — reconcile page (single-runner-style, one
             // entry at a time, five verbs). Empty state is handled by the
             // runner itself; no separate landing.
-            { path: 'meal-plans/reconcile', component: () => import('pages/MealReconcilePage.vue'), meta: { title: 'Reconcile past meals' } },
+            { path: 'meal-plans/reconcile', component: () => import('pages/MealReconcilePage.vue'), meta: { title: 'Reconcile Past Meals' } },
             {
                 path: 'shopping-lists',
                 component: () => import('pages/ShoppingListsOverview.vue'),
-                meta: { title: 'Shopping lists' },
+                meta: { title: 'Shopping Lists' },
                 // the detail page is the canonical surface
                 // (with a list-selector in its header). The landing's job is
                 // to pick a target list and route there. We do it as a
@@ -157,14 +157,14 @@ const routes: RouteRecordRaw[] = [
                     return;
                 },
             },
-            { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping list templates' } },
+            { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping List Templates' } },
             // UX-v2: detail is the single shopping surface for every status
             // (S4: plural title; the old /shop route + page were merged in).
-            { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping lists' } },
+            { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping Lists' } },
             // PWA-shortcut landing page that redirects to whichever
             // list is live / next up. Lightweight stub; see
             // pages/ShopNowRedirect.vue.
-            { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
+            { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop Now' } },
             { path: 'reports', component: () => import('pages/ReportsPage.vue'), meta: { title: 'Reports' } },
             // C-waste W6 — the standalone /waste page is gone. Capture
             // moved to a row action on the stock-item expiry dropdown;
@@ -178,12 +178,12 @@ const routes: RouteRecordRaw[] = [
             {
                 path: 'errors/not-found',
                 component: () => import('pages/errors/ErrorPageNotFound.vue'),
-                meta: { title: 'Not found' }
+                meta: { title: 'Not Found' }
             },
             {
                 path: 'errors/server',
                 component: () => import('pages/errors/ErrorServer.vue'),
-                meta: { title: 'Server error' }
+                meta: { title: 'Server Error' }
             },
             // the `/data` shell + its DataManagement.vue host are
             // retired. Backup + Import now live under Settings → Admin →
@@ -280,12 +280,12 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'kitchen-setup/stock-locations',
                         component: () => import('pages/settings/StockLocationsSettings.vue'),
-                        meta: { title: 'Stock locations' }
+                        meta: { title: 'Stock Locations' }
                     },
                     {
                         path: 'kitchen-setup/stock-groups',
                         component: () => import('pages/settings/StockGroupsSettings.vue'),
-                        meta: { title: 'Stock groups' }
+                        meta: { title: 'Stock Groups' }
                     },
                     // Stores moved out of Admin per §2.1 — it's user-curated
                     // retail data, not install governance.
@@ -300,27 +300,27 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'kitchen-setup/recipe-cuisines',
                         component: () => import('pages/settings/RecipeCuisinesSettings.vue'),
-                        meta: { title: 'Recipe cuisines' }
+                        meta: { title: 'Recipe Cuisines' }
                     },
                     {
                         path: 'kitchen-setup/recipe-categories',
                         component: () => import('pages/settings/RecipeCategoriesSettings.vue'),
-                        meta: { title: 'Recipe categories' }
+                        meta: { title: 'Recipe Categories' }
                     },
                     {
                         path: 'kitchen-setup/recipe-tools',
                         component: () => import('pages/settings/RecipeToolsSettings.vue'),
-                        meta: { title: 'Recipe tools' }
+                        meta: { title: 'Recipe Tools' }
                     },
                     {
                         path: 'kitchen-setup/recipe-meal-slots',
                         component: () => import('pages/settings/RecipeMealSlotsSettings.vue'),
-                        meta: { title: 'Recipe meal slots' }
+                        meta: { title: 'Recipe Meal Slots' }
                     },
                     {
                         path: 'kitchen-setup/recipe-dietary-tags',
                         component: () => import('pages/settings/RecipeDietaryTagsSettings.vue'),
-                        meta: { title: 'Recipe dietary tags' }
+                        meta: { title: 'Recipe Dietary Tags' }
                     },
                     // QR labels (Print sheet). Relocated from
                     // `/data/barcodes`; the old page's Scan tab was retired
@@ -331,7 +331,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'kitchen-setup/qr-labels',
                         component: () => import('pages/settings/QrLabels.vue'),
-                        meta: { title: 'QR labels' }
+                        meta: { title: 'QR Labels' }
                     },
                     // Backwards-compat redirects for moved/split routes.
                     // Bookmarks, email deep-links and HelpPage entries that
@@ -374,27 +374,22 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/locale',
                         component: () => import('pages/settings/AdminSystemLocaleSettings.vue'),
-                        meta: { title: 'System: Currency & locale' }
+                        meta: { title: 'System: Currency & Locale' }
                     },
                     {
                         path: 'admin/system/alerts',
                         component: () => import('pages/settings/AdminSystemAlertsSettings.vue'),
-                        meta: { title: 'System: Alert thresholds' }
+                        meta: { title: 'System: Alert Thresholds' }
                     },
                     {
                         path: 'admin/system/assistant',
                         component: () => import('pages/settings/AdminSystemAssistantSettings.vue'),
-                        meta: { title: 'System: AI assistant' }
+                        meta: { title: 'System: AI Assistant' }
                     },
                     {
                         path: 'admin/system/features',
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
-                    },
-                    {
-                        path: 'admin/system/products',
-                        component: () => import('pages/settings/AdminSystemProductsSettings.vue'),
-                        meta: { title: 'System: Products' }
                     },
                     // four focused System pages carrying the
                     // operational config that used to live in DORA_* env vars.
@@ -406,7 +401,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/push',
                         component: () => import('pages/settings/AdminSystemPushSettings.vue'),
-                        meta: { title: 'System: Push notifications' }
+                        meta: { title: 'System: Push Notifications' }
                     },
                     {
                         path: 'admin/system/voice',
@@ -440,7 +435,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/meal-reconcile',
                         component: () => import('pages/settings/AdminSystemMealReconcileSettings.vue'),
-                        meta: { title: 'System: Meal reconciliation' }
+                        meta: { title: 'System: Meal Reconciliation' }
                     },
                     {
                         // Old single System page → first of the four.
@@ -450,12 +445,12 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/audit-log',
                         component: () => import('pages/settings/AuditLogSettings.vue'),
-                        meta: { title: 'Audit log' }
+                        meta: { title: 'Audit Log' }
                     },
                     {
                         path: 'admin/api-access',
                         component: () => import('pages/settings/ApiAccessSettings.vue'),
-                        meta: { title: 'API access' }
+                        meta: { title: 'API Access' }
                     },
                     // Data sub-group under Admin: relocated
                     // Backup/Restore + Import from the retired `/data`
@@ -466,7 +461,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/data/backup',
                         component: () => import('pages/settings/AdminDataBackupRestore.vue'),
-                        meta: { title: 'Backup & restore' }
+                        meta: { title: 'Backup & Restore' }
                     },
                     {
                         path: 'admin/data/import',
@@ -480,7 +475,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/data/unlinked-ingredients',
                         component: () => import('pages/settings/AdminDataUnlinkedIngredients.vue'),
-                        meta: { title: 'Unlinked ingredients' }
+                        meta: { title: 'Unlinked Ingredients' }
                     }
                 ]
             }
@@ -492,7 +487,7 @@ const routes: RouteRecordRaw[] = [
     {
         path: '/:catchAll(.*)*',
         component: () => import('pages/ErrorNotFound.vue'),
-        meta: { title: 'Not found' }
+        meta: { title: 'Not Found' }
     }
 ];
 

@@ -16,28 +16,30 @@
                     </div>
 
                     <div class="builder-field">
-                        <div class="builder-field__label">Plan for</div>
-                        <BaseSegmented v-model="scope" :options="scopeOptions" dense />
-                    </div>
-
-                    <div v-if="scope === 'day'" class="builder-field">
-                        <div class="builder-field__label">Which day</div>
-                        <q-select
-                            v-model="dayIso"
-                            outlined dense emit-value map-options
-                            :options="dayOptions"
+                        <BaseToggleGroup
+                            v-model="selectedDays"
+                            label="Which days"
+                            :options="dayToggleOptions"
                         />
                     </div>
 
                     <div class="builder-field">
-                        <div class="builder-field__label">
-                            How many meals ({{ mealCount }})
-                        </div>
-                        <q-slider
-                            v-model="mealCount"
-                            :min="1" :max="maxMeals" :step="1"
-                            label snap markers
+                        <BaseToggleGroup
+                            v-model="selectedSlots"
+                            label="Which meals"
+                            :options="slotToggleOptions"
                         />
+                    </div>
+
+                    <div v-if="selectedDays.length > 1" class="builder-field">
+                        <q-checkbox
+                            v-model="repeatSameDay"
+                            dense
+                            label="Same meals every day"
+                        />
+                        <div class="text-caption dora-text-muted q-mt-xs">
+                            Builds one day's meals and repeats them across the days you picked.
+                        </div>
                     </div>
 
                     <div class="builder-field">
@@ -48,23 +50,6 @@
                         </div>
                     </div>
 
-                    <div class="builder-field">
-                        <div class="builder-field__label">Slots</div>
-                        <BaseSegmented v-model="slotMode" :options="slotModeOptions" dense />
-                        <q-select
-                            v-if="slotMode === 'single'"
-                            v-model="singleSlot"
-                            outlined dense class="q-mt-xs"
-                            :options="slotNames"
-                        />
-                        <q-select
-                            v-if="slotMode === 'pick'"
-                            v-model="pickedSlots"
-                            outlined dense multiple use-chips class="q-mt-xs"
-                            :options="slotNames"
-                        />
-                    </div>
-
                     <div v-if="moneyEnabled" class="builder-field">
                         <q-toggle
                             v-model="budgetCap"
@@ -72,6 +57,8 @@
                             label="Keep the week under budget"
                         />
                     </div>
+
+                    <div class="builder-field__label">{{ plannedCountHint }}</div>
                 </q-step>
 
                 <!-- ── Step 2 — Review ────────────────────────────────────── -->
@@ -225,8 +212,7 @@
                             Ready to save {{ proposed.length }} meal{{ proposed.length === 1 ? '' : 's' }}.
                         </div>
                         <div class="text-caption dora-text-muted q-mt-xs">
-                            They'll be added to
-                            {{ scope === 'day' ? focusedDayLabel : 'the current week' }}.
+                            They'll be added to {{ targetLabel }}.
                             You can generate the shopping list straight after.
                         </div>
                     </div>
@@ -262,6 +248,7 @@
                 :icon="ICONS.auto_awesome"
                 label="Build my week"
                 :loading="generatingProposal"
+                :disable="!canGenerate"
                 @click="generate"
             />
             <BaseButton
@@ -310,12 +297,12 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import BaseToggleGroup, { type ToggleOption } from 'src/components/BaseToggleGroup.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import type { RecipeTray } from 'src/composables/useMealPlanner';
     import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
-        AutoBuildEmphasis, AutoBuildReason, AutoBuildScope, MealPlanIngredient,
-        ProposedEntry,
+        AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
     } from 'src/models/mealPlan';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import type { Recipe } from 'src/models/recipe';
@@ -327,8 +314,6 @@
     const props = defineProps<{
         modelValue: boolean;
         recipes: Recipe[];
-        /** Household `meals_per_week` — the week-scope default meal count. */
-        targetCount: number;
         /** Household meal-slot vocabulary (ordered). */
         slotNames: string[];
         /** Days of the focused week (`{ label, iso }`). */
@@ -362,29 +347,20 @@
     const previewLoading = ref(false);
 
     // ── Guidance inputs ─────────────────────────────────────────────────────
-    const scope = ref<AutoBuildScope>('week');
-    const dayIso = ref<string>('');
-    const mealCount = ref<number>(props.targetCount);
+    // Two independent toggle sets — the days to plan and the meal slots to fill
+    // — whose cross-product is the plan (one meal per day × slot). There is no
+    // separate meal-count control: the toggles *are* the count.
+    const selectedDays = ref<string[]>([]);
+    const selectedSlots = ref<string[]>([]);
+    const repeatSameDay = ref(false);
     const emphasis = ref<AutoBuildEmphasis>('use_up_stock');
-    const slotMode = ref<'spread' | 'single' | 'pick'>('spread');
-    const singleSlot = ref<string>('');
-    const pickedSlots = ref<string[]>([]);
     const budgetCap = ref(false);
 
-    const scopeOptions = [
-        { label: 'This week', value: 'week' as AutoBuildScope },
-        { label: 'A day', value: 'day' as AutoBuildScope },
-    ];
     const emphasisOptions = [
         { label: 'Use up stock', value: 'use_up_stock' as AutoBuildEmphasis },
         { label: 'Variety', value: 'variety' as AutoBuildEmphasis },
         { label: 'Favourites', value: 'favourites' as AutoBuildEmphasis },
         { label: 'Surprise me', value: 'surprise' as AutoBuildEmphasis },
-    ];
-    const slotModeOptions = [
-        { label: 'Spread', value: 'spread' as const },
-        { label: 'One slot', value: 'single' as const },
-        { label: 'Pick slots', value: 'pick' as const },
     ];
     const emphasisHints: Record<AutoBuildEmphasis, string> = {
         use_up_stock: 'Leans on meals you can cook now and stock that’s expiring soon.',
@@ -395,52 +371,62 @@
     const emphasisHint = computed(() => emphasisHints[emphasis.value]);
 
     const upcomingDays = computed(() => props.weekDays.filter((d) => !props.isPastDay(d.iso)));
+    // All seven weekdays always render in the same positions so the row never
+    // reflows mid-week; days already gone are inert with an explaining tooltip.
+    const dayToggleOptions = computed<ToggleOption[]>(() =>
+        props.weekDays.map((d) => {
+            const past = props.isPastDay(d.iso);
+            return {
+                label: d.label,
+                value: d.iso,
+                caption: props.formatDate(d.iso),
+                ...(past ? { disable: true, tooltip: 'That day has already been and gone.' } : {}),
+            };
+        }),
+    );
+    const slotToggleOptions = computed<ToggleOption[]>(
+        () => props.slotNames.map((s) => ({ label: s, value: s })),
+    );
+    // The review step still lets the user move a meal to another day, but only
+    // to a day that can actually hold one.
     const dayOptions = computed(() =>
         upcomingDays.value.map((d) => ({ label: `${d.label} — ${props.formatDate(d.iso)}`, value: d.iso })),
     );
-    const weekStartIso = computed(() => props.weekDays[0]?.iso ?? props.currentDayIso);
-    const focusedDayLabel = computed(() => {
-        const d = props.weekDays.find((x) => x.iso === dayIso.value);
-        return d ? `${d.label}, ${props.formatDate(d.iso)}` : 'that day';
-    });
 
-    // Grid ceiling so the count slider can't ask for more than the days×slots.
-    const activeSlotCount = computed(() => {
-        if (slotMode.value === 'single') return 1;
-        if (slotMode.value === 'pick') return Math.max(pickedSlots.value.length, 1);
-        return Math.max(props.slotNames.length, 1);
-    });
-    const maxMeals = computed(() => {
-        const days = scope.value === 'day' ? 1 : Math.max(upcomingDays.value.length, 1);
-        return Math.max(1, Math.min(21, days * activeSlotCount.value));
-    });
-
-    const defaultSingleSlot = computed(
-        () => props.slotNames.find((s) => /dinner/i.test(s))
-            ?? props.slotNames[props.slotNames.length - 1]
-            ?? 'Dinner',
+    const canGenerate = computed(
+        () => selectedDays.value.length > 0 && selectedSlots.value.length > 0,
     );
-    const resolvedSlotNames = computed<string[]>(() => {
-        if (slotMode.value === 'single') return [singleSlot.value || defaultSingleSlot.value];
-        if (slotMode.value === 'pick') return [...pickedSlots.value];
-        return []; // spread ⇒ all household slots (server default)
+    // One meal per cell either way — "same meals every day" changes *which*
+    // recipes land, not how many.
+    const plannedMealCount = computed(
+        () => selectedDays.value.length * selectedSlots.value.length,
+    );
+    const plannedCountHint = computed(() => {
+        if (selectedDays.value.length === 0) return 'Pick at least one day.';
+        if (selectedSlots.value.length === 0) return 'Pick at least one meal.';
+        const n = plannedMealCount.value;
+        return `Dora will plan ${n} meal${n === 1 ? '' : 's'}.`;
     });
 
-    // Keep the count sensible as scope / slots change. A single day defaults to
-    // one meal (the "plan this Wednesday" case); the week uses the household
-    // meals-per-week preference. Either way the slider caps at the grid size.
-    watch(scope, (s) => {
-        mealCount.value = s === 'day' ? 1 : props.targetCount;
-        if (mealCount.value > maxMeals.value) mealCount.value = maxMeals.value;
-        if (mealCount.value < 1) mealCount.value = 1;
-        // Ensure the day picker holds a valid upcoming day the moment day-scope
-        // is chosen (don't rely solely on the on-open reset).
-        if (s === 'day' && !upcomingDays.value.some((d) => d.iso === dayIso.value)) {
-            dayIso.value = upcomingDays.value[0]?.iso ?? props.currentDayIso;
-        }
+    // Default the slot selection to breakfast, lunch and dinner — the three
+    // main meals most households plan — matched against the configured slot
+    // vocabulary (household order preserved). If none of the three are named
+    // in this install's slots, fall back to a single dinner-ish slot so the
+    // builder always opens with something selected.
+    const defaultSlots = computed<string[]>(() => {
+        const mains = props.slotNames.filter((s) => /breakfast|lunch|dinner/i.test(s));
+        if (mains.length) return mains;
+        const dinner = props.slotNames.find((s) => /dinner/i.test(s));
+        return dinner ? [dinner] : props.slotNames.slice(-1);
     });
-    watch(maxMeals, (m) => {
-        if (mealCount.value > m) mealCount.value = m;
+
+    /** Where the Done step says the meals are landing. */
+    const targetLabel = computed(() => {
+        const days = [...new Set(proposed.value.map((e) => e.scheduled_for))].sort();
+        if (days.length !== 1) return 'the current week';
+        const iso = days[0]!;
+        const day = props.weekDays.find((d) => d.iso === iso);
+        return day ? `${day.label}, ${props.formatDate(iso)}` : props.formatDate(iso);
     });
 
     // ── Reason chips ────────────────────────────────────────────────────────
@@ -546,21 +532,15 @@
     }
 
     // ── Generate (server auto-build) ────────────────────────────────────────
-    function effectiveDayIso(): string {
-        // Guard against an empty picker (e.g. the default day fell in the past):
-        // fall back to the first upcoming day, then today.
-        if (dayIso.value) return dayIso.value;
-        return upcomingDays.value[0]?.iso ?? props.currentDayIso;
-    }
     async function generate() {
+        if (!canGenerate.value) return;
         generatingProposal.value = true;
         try {
             const res = await api.autoBuildAsync({
-                scope: scope.value,
-                start_date: scope.value === 'week' ? weekStartIso.value : effectiveDayIso(),
-                meal_count: mealCount.value,
+                days: [...selectedDays.value],
                 emphasis: emphasis.value,
-                slot_names: resolvedSlotNames.value,
+                slot_names: [...selectedSlots.value],
+                repeat_same_day: repeatSameDay.value,
                 budget_cap: budgetCap.value,
             });
             proposed.value = res.entries.map(toDraft);
@@ -607,15 +587,19 @@
         pickerOpen.value = true;
     }
 
-    /** First upcoming day with the fewest meals so a manual add spreads too. */
+    /** Chosen day with the fewest meals so a manual add spreads too. Falls back
+     *  to any upcoming day when the user skipped the toggles ("I'll pick
+     *  myself" jumps straight to the review step). */
     function leastLoadedDay(): string {
-        const days = scope.value === 'day' && dayIso.value ? [dayIso.value] : upcomingDays.value.map((d) => d.iso);
+        const days = selectedDays.value.length
+            ? selectedDays.value
+            : upcomingDays.value.map((d) => d.iso);
         if (!days.length) return props.currentDayIso;
         const load = (iso: string) => proposed.value.filter((e) => e.scheduled_for === iso).length;
         return days.reduce((best, iso) => (load(iso) < load(best) ? iso : best), days[0]!);
     }
     function slotFor(recipe: Recipe): string {
-        const pool = resolvedSlotNames.value.length ? resolvedSlotNames.value : props.slotNames;
+        const pool = selectedSlots.value.length ? selectedSlots.value : props.slotNames;
         if (recipe.time_of_day && pool.includes(recipe.time_of_day)) return recipe.time_of_day;
         return pool[0] ?? 'Dinner';
     }
@@ -666,8 +650,10 @@
     async function onGenerateList() {
         generatingList.value = true;
         try {
-            // Day scope → scope the list to exactly the meals just planned.
-            const ids = scope.value === 'day'
+            // A single-day build → scope the list to exactly the meals just
+            // planned; a multi-day build wants the whole week's list.
+            const singleDay = new Set(proposed.value.map((e) => e.scheduled_for)).size === 1;
+            const ids = singleDay
                 ? [...new Set(proposed.value.map((e) => e.recipe_id))]
                 : undefined;
             await props.generateList(ids);
@@ -684,18 +670,13 @@
         previewIngredients.value = [];
         doneState.value = false;
         recipeSearch.value = '';
-        scope.value = 'week';
         emphasis.value = 'use_up_stock';
-        slotMode.value = 'spread';
-        singleSlot.value = defaultSingleSlot.value;
-        pickedSlots.value = [];
+        repeatSameDay.value = false;
         budgetCap.value = false;
-        mealCount.value = Math.min(props.targetCount, maxMeals.value);
-        // Default the day picker to today-in-week, else the first upcoming day.
-        const today = props.currentDayIso;
-        dayIso.value = upcomingDays.value.some((d) => d.iso === today)
-            ? today
-            : upcomingDays.value[0]?.iso ?? today;
+        // Open on the obvious default: every day still ahead in this week, and
+        // the dinner slot. One tap gets you a week; the rest is fine-tuning.
+        selectedDays.value = upcomingDays.value.map((d) => d.iso);
+        selectedSlots.value = [...defaultSlots.value];
     });
 </script>
 
@@ -722,7 +703,7 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.4rem 0;
-        border-bottom: 1px solid var(--separator);
+        border-bottom: 1px solid var(--divider);
     }
     .builder-row__main {
         flex: 1 1 auto;
@@ -766,7 +747,7 @@
     .builder-picker {
         max-height: 55vh;
         overflow-y: auto;
-        border: 1px solid var(--separator);
+        border: 1px solid var(--border-default);
         border-radius: 6px;
     }
     .builder-list {

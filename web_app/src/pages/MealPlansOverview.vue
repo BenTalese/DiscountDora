@@ -51,6 +51,8 @@
                     @open-builder="builderOpen = true"
                     @go-prev-week="planner.goPrevWeek"
                     @go-next-week="planner.goNextWeek"
+                    @duplicate-week="planner.confirmDuplicateToNextWeek"
+                    @print="planner.printFocusedWeek"
                 />
             </template>
             <template v-else>
@@ -97,6 +99,15 @@
                         </BaseButton>
                         <div class="text-subtitle2 q-ml-sm">{{ planner.weekRangeLabel.value }}</div>
                         <q-space />
+                        <BaseButton
+                            v-if="planner.focusedPlan.value"
+                            variant="icon"
+                            :icon="ICONS.content_copy"
+                            aria-label="Duplicate to next week"
+                            @click="planner.confirmDuplicateToNextWeek"
+                        >
+                            <q-tooltip>Duplicate to next week</q-tooltip>
+                        </BaseButton>
                         <BaseButton
                             v-if="planner.focusedPlan.value"
                             variant="icon"
@@ -311,7 +322,6 @@
         <MealPlanBuilderDialog
             v-model="builderOpen"
             :recipes="planner.recipes.value"
-            :target-count="mealsPerWeek"
             :slot-names="planner.slotNames.value"
             :week-days="planner.weekDays.value"
             :current-day-iso="planner.currentDayIso.value"
@@ -376,16 +386,12 @@
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     // FU-317 Chunk 5 — reconcile nudge line count.
     import { useReconcileQueue } from 'src/composables/useReconcileQueue';
-    // target-count sourced from the user's `meals_per_week` pref
-    // via this composable (fallback 7 when unset).
-    import { useMealsPerWeek } from 'src/composables/useMealsPerWeek';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
     import { computed, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
-    const { mealsPerWeek } = useMealsPerWeek();
     const { moneyEnabled } = useMoneyEnabled();
     const { total: reconcileTotal } = useReconcileQueue();
     const mealPlanStore = useMealPlanStore();

@@ -22,7 +22,6 @@
                 <SettingsRow label="Email enabled">
                     <q-toggle
                         v-model="draft.email_enabled"
-                        :disable="saving"
                         @update:model-value="() => onSaveField('email_enabled')"
                     />
                 </SettingsRow>
@@ -98,7 +97,6 @@
                         v-model="draft.smtp_host"
                         outlined dense clearable
                         placeholder="smtp.gmail.com"
-                        :disable="saving"
                         @blur="() => onSaveField('smtp_host')"
                     />
                 </SettingsRow>
@@ -111,7 +109,6 @@
                         style="max-width: 140px"
                         :min="1"
                         :max="65535"
-                        :disable="saving"
                         @blur="() => onSaveField('smtp_port')"
                     />
                 </SettingsRow>
@@ -121,7 +118,6 @@
                         v-model="draft.smtp_username"
                         outlined dense clearable
                         placeholder="dora@example.com"
-                        :disable="saving"
                         @blur="() => onSaveField('smtp_username')"
                     />
                 </SettingsRow>
@@ -131,7 +127,6 @@
                         v-model="draft.smtp_from"
                         outlined dense clearable
                         placeholder="Leave blank to use username"
-                        :disable="saving"
                         @blur="() => onSaveField('smtp_from')"
                     />
                 </SettingsRow>
@@ -139,7 +134,6 @@
                 <SettingsRow label="Use TLS">
                     <q-toggle
                         v-model="draft.smtp_use_tls"
-                        :disable="saving"
                         @update:model-value="() => onSaveField('smtp_use_tls')"
                     />
                 </SettingsRow>
@@ -164,7 +158,6 @@
                             outlined dense
                             style="flex: 1 1 auto"
                             :placeholder="passwordConfigured ? '••••••••' : 'Enter SMTP password'"
-                            :disable="saving"
                         />
                         <BaseButton
                             variant="primary"

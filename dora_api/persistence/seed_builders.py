@@ -130,7 +130,7 @@ class SeedBuilders:
             stock_location=location,
             stocktake_alerts_are_enabled=kw.get("stocktake_alerts", False),
             expiry_date=kw.get("expiry"),
-            is_flagged=kw.get("flagged", False),
+            is_essential=kw.get("flagged", False),
             is_open=kw.get("is_open", False),
             opened_on=kw.get("opened_on"),
             products=kw.get("products", []),

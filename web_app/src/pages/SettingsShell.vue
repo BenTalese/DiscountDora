@@ -76,7 +76,6 @@
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { suppressUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, nextTick, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
@@ -126,8 +125,6 @@
         return base;
     });
 
-    const { products: productsEnabled } = useFeatureFlags();
-
     const adminSystemItems = computed<SettingsNavLeaf[]>(() => {
         const items: SettingsNavLeaf[] = [
             { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
@@ -139,11 +136,6 @@
             { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
             { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
         ];
-        // Products page (URL + hide toggle) mirrors the products overlay's
-        // data-presence gate — no products ⇒ no settings row for it.
-        if (productsEnabled.value) {
-            items.push({ path: '/settings/admin/system/products', label: 'Products', icon: ICONS.shopping_bag });
-        }
         items.push(
             // operational config that used to be env-only.
             { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },

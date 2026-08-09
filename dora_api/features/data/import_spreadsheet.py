@@ -20,8 +20,7 @@ Mapping is opinionated:
   required: name
   optional: level, location, group, expiry, is_essential
 The frontend's column-mapping UI sets which spreadsheet column feeds
-each target. `is_essential` maps to StockItem.is_flagged (the schema
-has no is_essential — is_flagged is the closest existing flag).
+each target. `is_essential` maps directly to StockItem.is_essential.
 
 Row-level errors carry the row number, the offending value, and a
 human-readable reason. Halt-on-error aborts the whole transaction;
@@ -480,7 +479,7 @@ class CommitSpreadsheetHandler:
                         if col_index["expiry"] is not None and col_index["expiry"] < len(row)
                         else None
                     )
-                    is_flagged = (
+                    is_essential = (
                         _is_truthy(row[col_index["is_essential"]])
                         if col_index["is_essential"] is not None and col_index["is_essential"] < len(row)
                         else False
@@ -510,7 +509,7 @@ class CommitSpreadsheetHandler:
                     stock_group_id=stock_group_id,
                     stock_level_last_updated=datetime.now(),
                     expiry_date=expiry,
-                    is_flagged=is_flagged,
+                    is_essential=is_essential,
                     is_open=False,
                     opened_on=None,
                 ))

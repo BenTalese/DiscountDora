@@ -14,7 +14,7 @@ design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
 
 1.  **Engagement gate — one honest question.** An item enters the queue
     only when it shows a *current* sign the user manages it. The old
-    flag-based signals (`is_flagged`, `auto_add_when_low`) are dropped
+    flag-based signals (`is_essential`, `auto_add_when_low`) are dropped
     — a flag never forces a not-actually-kept item into the queue —
     and the two history signals gain a **60-day window** so an item
     touched a year ago no longer nags forever. Signals:
@@ -29,7 +29,7 @@ design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
     `cadence.py`). Baseline = the global
     `AppSetting.stocktake_default_cadence_band`; Auto (on by default)
     overrides from movement history; Low/Out in the last 14 days bumps
-    one band faster; Essential (`is_flagged`) bumps one more.
+    one band faster; Essential (`is_essential`) bumps one more.
     Change-level *implicitly* checks the item (already done in
     `update_stock_item.py`), so the grace-period baseline for a
     never-checked item is `COALESCE(last_checked_at,
@@ -249,7 +249,7 @@ def _is_engaged(item: StockItem, signals: _EngagementSignals) -> bool:
     """The single question: *do you actually keep this item?*
 
     Any one of four in-play signs is enough. Flag columns
-    (`is_flagged` / `auto_add_when_low`) are **not** signals here —
+    (`is_essential` / `auto_add_when_low`) are **not** signals here —
     they cover how an in-play item is treated, not whether the item
     is in play at all. See §2 of the brief.
     """
@@ -333,7 +333,7 @@ def resolve_overdue_map(
                 signals.change_timestamps_by_item.get(item.id, ())
             ),
             hit_low_or_out_recently=item.id in signals.items_hit_low_or_out_recently,
-            is_essential=bool(item.is_flagged),
+            is_essential=bool(item.is_essential),
         )
         band = resolve_band(
             default_band=default_band,

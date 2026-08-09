@@ -48,7 +48,7 @@ class UpdateStockItemRequest(BaseModel):
     stock_location_id: UUID | None = None
     stock_group_id: UUID | None = None
     expiry_date: date | None = None
-    is_flagged: bool | None = None
+    is_essential: bool | None = None
     is_open: bool | None = None
     # Explicit override for `opened_on` — usually set automatically when
     # `is_open` flips True, but the spec also wants a manual edit path
@@ -95,7 +95,7 @@ class UpdateStockItemResponse:  # noqa: D401
     stock_location_not_found: bool = False
     stock_group_not_found: bool = False
     # When the auto-add hook fires (FU-511: driven by AppSetting.auto_add_mode
-    # + this item's is_flagged), the API needs to know so it can surface an
+    # + this item's is_essential), the API needs to know so it can surface an
     # undoable "Tomato Soup auto-added to <list>" notification. None when no
     # auto-add happened.
     auto_added_line_id: UUID | None = None
@@ -229,8 +229,8 @@ class UpdateStockItemHandler:
                     occurred_at = datetime.now(UTC),
                 ))
 
-        if "is_flagged" in _SetFields and request.is_flagged is not None:
-            _StockItem.is_flagged = request.is_flagged
+        if "is_essential" in _SetFields and request.is_essential is not None:
+            _StockItem.is_essential = request.is_essential
 
         # usual store hint. Clear flag wins over a present-but-None.
         # We don't validate the target Store exists here: the FK has SET NULL
@@ -282,7 +282,7 @@ class UpdateStockItemHandler:
         # `AppSetting.auto_add_mode` (FU-511, replacing the retired per-item
         # `auto_add_when_low` boolean):
         #   `off`             — never.
-        #   `essential_only`  — only when the item is `is_flagged=True`.
+        #   `essential_only`  — only when the item is `is_essential=True`.
         #   `all`             — always on a low/out transition.
         # Skipped silently if there's no primary, or if the item is already
         # on ANY non-archived list — the user already knows; double-add
@@ -348,10 +348,10 @@ class UpdateStockItemHandler:
 
     def _auto_add_enabled_for(self, stock_item: StockItem) -> bool:
         """FU-511 — resolve the install-wide auto-add mode against this
-        item's `is_flagged`. Returns True iff the mode says fire for this
+        item's `is_essential`. Returns True iff the mode says fire for this
         item. Unknown / missing modes degrade to `essential_only`, matching
         the seeded default so a bad row can't silently disable auto-add
-        for `is_flagged` items."""
+        for `is_essential` items."""
         from dora_api.domain.entities.app_setting import AppSetting
         from dora_api.features.app_settings.access import (
             get_or_create_app_setting,
@@ -362,7 +362,7 @@ class UpdateStockItemHandler:
             return False
         if mode == "all":
             return True
-        return bool(stock_item.is_flagged)
+        return bool(stock_item.is_essential)
 
     def _try_auto_add(self, stock_item: StockItem) -> tuple[UUID, UUID] | None:
         """Adds the stock item to the primary shopping list, X5-style.
@@ -456,7 +456,7 @@ def update_stock_item(stock_item_id: UUID):
 
     _Logger.info(f"Successfully updated stock item with ID: {stock_item_id}")
     # If the auto-add hook fired (FU-511, driven by AppSetting.auto_add_mode +
-    # is_flagged), return a 200 with a minimal body so the UI can pop the
+    # is_essential), return a 200 with a minimal body so the UI can pop the
     # undoable "auto-added to <list>" toast. No trigger → keep the original
     # 204 for simplicity.
     if _Response.auto_added_line_id is not None:

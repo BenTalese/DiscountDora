@@ -136,7 +136,7 @@
                     />
 
                     <div class="row items-center q-gutter-sm">
-                        <q-toggle v-model="form.is_flagged" label="Essential" />
+                        <q-toggle v-model="form.is_essential" label="Essential" />
                         <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
                             <q-tooltip max-width="320px">
                                 Flagged as an essential — shows up in
@@ -243,7 +243,7 @@
         stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
         stock_location_id: null,
         stock_group_id: null,
-        is_flagged: false,
+        is_essential: false,
     });
 
     const form: CreateStockItemCommand = reactive(defaultForm());
@@ -308,7 +308,7 @@
                 stock_level_id: form.stock_level_id,
                 stock_location_id: form.stock_location_id,
                 stock_group_id: form.stock_group_id || null,
-                is_flagged: form.is_flagged ?? false,
+                is_essential: form.is_essential ?? false,
             });
             // if the dialog was opened from a scan flow with a
             // barcode prefill, register the EAN against the new stock

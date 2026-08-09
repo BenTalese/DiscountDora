@@ -30,7 +30,7 @@
              indicator — thicker + secondary-toned so it scans without an
              accompanying icon. Colour matches the "Essential" footer count
              + filter chip so the concept reads as one visual family. -->
-        <div v-if="item.is_flagged" class="stock-row__essential-stripe" aria-hidden="true" />
+        <div v-if="item.is_essential" class="stock-row__essential-stripe" aria-hidden="true" />
         <q-card-section class="row items-center no-wrap stock-row__body">
             <!-- ──────────────────────────────────────────────────────
                  Leading image slot (FU-125). First child so its left
@@ -159,7 +159,7 @@
                  round size="md"` so they read as a uniform cluster
                  (previously expiry was round, open was a square, cart was
                  sm — three different visual languages). The essential
-                 flag is now interactive (toggles `is_flagged`) and
+                 flag is now interactive (toggles `is_essential`) and
                  rendered alongside the others.
             ────────────────────────────────────────────────────────── -->
             <RowActionButton
@@ -200,17 +200,41 @@
                 >
                     <q-list dense style="min-width: 180px">
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 1)">
-                            <q-item-section>Push expiry +1 day</q-item-section>
+                            <q-item-section
+                                avatar
+                                style="min-width: 0; padding-right: 8px"
+                            >
+                                <q-icon :name="ICONS.add" size="20px" />
+                            </q-item-section>
+                            <q-item-section>Push expiry by 1 day</q-item-section>
                         </q-item>
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 7)">
-                            <q-item-section>Push expiry +7 days</q-item-section>
+                            <q-item-section
+                                avatar
+                                style="min-width: 0; padding-right: 8px"
+                            >
+                                <q-icon :name="ICONS.add" size="20px" />
+                            </q-item-section>
+                            <q-item-section>Push expiry by 7 days</q-item-section>
                         </q-item>
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 14)">
-                            <q-item-section>Push expiry +14 days</q-item-section>
+                            <q-item-section
+                                avatar
+                                style="min-width: 0; padding-right: 8px"
+                            >
+                                <q-icon :name="ICONS.add" size="20px" />
+                            </q-item-section>
+                            <q-item-section>Push expiry by 14 days</q-item-section>
                         </q-item>
                         <q-separator />
-                        <q-item clickable @click="clearExpiry">
-                            <q-item-section class="text-negative">Clear expiry</q-item-section>
+                        <q-item clickable class="text-negative" @click="clearExpiry">
+                            <q-item-section
+                                avatar
+                                style="min-width: 0; padding-right: 8px"
+                            >
+                                <q-icon :name="ICONS.clear" size="20px" color="negative" />
+                            </q-item-section>
+                            <q-item-section>Clear expiry</q-item-section>
                         </q-item>
                         <q-item clickable class="text-negative" @click="openMarkAsWasted">
                             <q-item-section
@@ -460,7 +484,7 @@
         () =>
             props.item.is_low_stock ?? isLowStockSequence(levelSequence.value),
     );
-    const isEssential = computed(() => props.item.is_flagged === true);
+    const isEssential = computed(() => props.item.is_essential === true);
 
     const isAlertRow = computed(
         () =>

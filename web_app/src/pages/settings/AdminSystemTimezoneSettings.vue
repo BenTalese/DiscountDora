@@ -24,7 +24,6 @@
                         input-debounce="0"
                         options-dense
                         class="col-12 col-sm-8"
-                        :disable="savingTimezone"
                         :loading="savingTimezone"
                         @filter="onTimezoneFilter"
                         @update:model-value="onSaveTimezone"

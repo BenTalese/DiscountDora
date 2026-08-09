@@ -1004,7 +1004,7 @@
                         // not loaded the location stays null — not a blocker.
                         locationName: null,
                         expiryDate: s.expiry_date ?? null,
-                        isFlagged: Boolean(s.is_flagged),
+                        isEssential: Boolean(s.is_essential),
                         isOpen: Boolean(s.is_open),
                     };
                 });

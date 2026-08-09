@@ -28,7 +28,6 @@
                         toggle-color="primary"
                         unelevated
                         no-caps
-                        :disable="savingMode"
                         @update:model-value="onModeChange"
                     />
                 </SettingsRow>
@@ -69,11 +68,9 @@
     const loading = ref(true);
     const modeDraft = ref<AutoAddMode>('essential_only');
     let savedMode: AutoAddMode = 'essential_only';
-    const savingMode = ref(false);
 
     async function onModeChange(next: AutoAddMode) {
         if (next === savedMode) return;
-        savingMode.value = true;
         try {
             const result = await api.updateAsync({ auto_add_mode: next });
             savedMode = result.auto_add_mode;
@@ -89,8 +86,6 @@
                 message: 'Could not save auto-add mode.',
                 caption: toastCaption(err),
             });
-        } finally {
-            savingMode.value = false;
         }
     }
 

@@ -1030,7 +1030,7 @@ def test__stock_overview_export_csv__returns_csv_with_header(api):
     assert response.headers["Content-Type"].startswith("text/csv")
     header = response.text.splitlines()[0]
     for col in (
-        "location", "name", "level", "expiry", "is_flagged",
+        "location", "name", "level", "expiry", "is_essential",
         "is_open", "notes",
     ):
         assert col in header

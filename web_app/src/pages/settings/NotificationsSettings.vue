@@ -21,7 +21,6 @@
             >
                 <q-toggle
                     :model-value="currentUser.deals_email_enabled"
-                    :disable="saving"
                     @update:model-value="onDealsEnabledChange"
                 />
             </SettingsRow>
@@ -38,7 +37,6 @@
                         outlined
                         dense
                         style="min-width: 180px"
-                        :disable="saving"
                         @update:model-value="onSendDealsOnDayChange"
                     />
                 </SettingsRow>
@@ -49,7 +47,6 @@
                 >
                     <q-toggle
                         :model-value="currentUser.deals_email_compact"
-                        :disable="saving"
                         @update:model-value="onDealsCompactChange"
                     />
                 </SettingsRow>
@@ -71,7 +68,7 @@
             <SettingsRow label="Email me a digest of my alerts">
                 <q-toggle
                     :model-value="currentUser.alerts_email_enabled"
-                    :disable="saving || !emailSmtpConfigured"
+                    :disable="!emailSmtpConfigured"
                     @update:model-value="onAlertsEmailEnabledChange"
                 />
             </SettingsRow>
@@ -103,7 +100,6 @@
                         outlined
                         dense
                         style="min-width: 180px"
-                        :disable="saving"
                         @update:model-value="onAlertsEmailDayChange"
                     />
                 </SettingsRow>
@@ -124,7 +120,7 @@
             <SettingsRow label="Send me push notifications on this device">
                 <q-toggle
                     :model-value="pushSubscribed"
-                    :disable="saving || !pushVapidConfigured || !pushSupported || pushLoading"
+                    :disable="!pushVapidConfigured || !pushSupported || pushLoading"
                     @update:model-value="onPushToggle"
                 />
             </SettingsRow>
@@ -214,7 +210,7 @@
     const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
-    const { saving, notifySuccess, notifyError, update } = useSettingsSave();
+    const { notifySuccess, notifyError, update } = useSettingsSave();
 
     watch(currentUser, (u) => {
         if (!u) return;

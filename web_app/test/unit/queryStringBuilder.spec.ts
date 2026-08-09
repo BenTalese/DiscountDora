@@ -36,9 +36,9 @@ describe('createQueryString — list-endpoint query wire format', () => {
 
     it('stringifies number and boolean filter values', () => {
         const qs = createQueryString([
-            { field: 'is_flagged', operator: FilterOperator.EQUAL, value: true },
+            { field: 'is_essential', operator: FilterOperator.EQUAL, value: true },
         ]);
-        expect(qs).toBe('?filter=is_flagged%3Aeq%3Atrue');
+        expect(qs).toBe('?filter=is_essential%3Aeq%3Atrue');
     });
 
     it('defaults sort order to ascending', () => {

@@ -33,10 +33,8 @@ export type AppSettings = {
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.
-    // Empty string ⇒ unset; the nav entry renders disabled with a hint.
+    // Empty string ⇒ unset; the nav entry is hidden until a URL is set.
     product_search_url: string;
-    // Hides the Product Search nav entry entirely, regardless of URL.
-    product_search_hidden: boolean;
     // PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     // These are the single user-visible cadence dial; the old
     // `default_days_until_stocktake_alert` field was retired in the
@@ -46,7 +44,7 @@ export type AppSettings = {
     /** FU-511 — install-wide auto-add mode. Replaces the retired per-item
      *  `StockItem.auto_add_when_low` toggle. Auto-add fires per the mode:
      *    'off'            — never.
-     *    'essential_only' — only for items with `is_flagged=true` (default).
+     *    'essential_only' — only for items with `is_essential=true` (default).
      *    'all'            — always on a Stocked → Low/Out transition.
      *  Server owns the branching in `update_stock_item._try_auto_add`. */
     auto_add_mode: AutoAddMode;

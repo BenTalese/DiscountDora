@@ -28,7 +28,7 @@ NODE_KEYS = {
     "location_id", "name", "kind", "parent_id", "sequence",
     "direct_item_count", "descendant_item_count", "items", "children",
 }
-ITEM_KEYS = {"stock_item_id", "name", "stock_level_name", "expiry_date", "is_flagged"}
+ITEM_KEYS = {"stock_item_id", "name", "stock_level_name", "expiry_date", "is_essential"}
 
 
 def _token() -> str:
@@ -116,7 +116,7 @@ def test__get_location_tree__NodeAndItemShape__MatchesContract(api):
     )
     assert set(entry.keys()) == ITEM_KEYS
     assert entry["name"] == f"{token} beans"
-    assert entry["is_flagged"] is False
+    assert entry["is_essential"] is False
     assert entry["expiry_date"] is None
 
 

@@ -24,7 +24,6 @@
                         v-model="draft.piper_bin"
                         outlined dense clearable
                         placeholder="/usr/local/bin/piper"
-                        :disable="saving"
                         @blur="() => onSaveField('piper_bin')"
                     />
                 </SettingsRow>
@@ -43,7 +42,6 @@
                         v-model="draft.piper_bundled_voice_dir"
                         outlined dense clearable
                         placeholder="/opt/dora/voices"
-                        :disable="saving"
                         @blur="() => onSaveField('piper_bundled_voice_dir')"
                     />
                 </SettingsRow>
@@ -57,7 +55,6 @@
                         v-model="draft.piper_voice"
                         outlined dense clearable
                         placeholder="/opt/dora/voices/en_US-amy-medium.onnx"
-                        :disable="saving"
                         @blur="() => onSaveField('piper_voice')"
                     />
                 </SettingsRow>
@@ -85,7 +82,6 @@
     const api = new AppSettingsApiService();
 
     const loading = ref(true);
-    const saving = ref(false);
     const saved = reactive({
         piper_bin: '',
         piper_bundled_voice_dir: '',
@@ -100,7 +96,6 @@
     async function onSaveField(field: VoiceField) {
         const value = (draft[field] ?? '').trim();
         if (value === saved[field]) return;
-        saving.value = true;
         try {
             const result = await api.updateAsync({ [field]: value });
             saved[field] = result[field];
@@ -116,8 +111,6 @@
                 message: 'Could not save voice settings.',
                 caption: toastCaption(err),
             });
-        } finally {
-            saving.value = false;
         }
     }
 

@@ -33,7 +33,6 @@
                 <SettingsRow label="Allow AI mode on this install">
                     <q-toggle
                         :model-value="masterEnabled"
-                        :disable="saving"
                         @update:model-value="onToggleMaster"
                     />
                 </SettingsRow>
@@ -88,7 +87,6 @@
 
     const masterEnabled = ref(true);
     const loading = ref(false);
-    const saving = ref(false);
 
     onMounted(async () => {
         if (!isAdmin.value) return;
@@ -114,7 +112,6 @@
         // like meal_planning_enabled / scanning_enabled).
         const previous = masterEnabled.value;
         masterEnabled.value = next;
-        saving.value = true;
         try {
             const s = await api.updateAsync({ master_llm_enabled: next });
             masterEnabled.value = s.master_llm_enabled;
@@ -131,8 +128,6 @@
                 message: 'Could not save.',
                 caption: toastCaption(err),
             });
-        } finally {
-            saving.value = false;
         }
     }
 </script>

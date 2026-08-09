@@ -24,7 +24,6 @@
                         v-model="draft.public_url"
                         outlined dense clearable
                         placeholder="https://dora.example.com"
-                        :disable="saving"
                         :error="publicUrlHasError"
                         :error-message="publicUrlHasError ? 'Must start with http:// or https://.' : ''"
                         @blur="() => onSavePublicUrl()"
@@ -47,7 +46,6 @@
                         style="max-width: 140px"
                         :min="1"
                         :max="3650"
-                        :disable="saving"
                         @blur="() => onSaveField('audit_retention_days')"
                     />
                 </SettingsRow>
@@ -75,7 +73,6 @@
     const api = new AppSettingsApiService();
 
     const loading = ref(true);
-    const saving = ref(false);
     const saved = reactive({
         public_url: '',
         audit_retention_days: 365,
@@ -108,7 +105,6 @@
     }
 
     async function persist(field: HostingField, value: unknown) {
-        saving.value = true;
         try {
             const result = await api.updateAsync({ [field]: value });
             (saved as Record<HostingField, unknown>)[field] = result[field];
@@ -124,8 +120,6 @@
                 message: 'Could not save hosting settings.',
                 caption: toastCaption(err),
             });
-        } finally {
-            saving.value = false;
         }
     }
 

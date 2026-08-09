@@ -1,7 +1,7 @@
 """GET /api/alerts — items that need the user's attention right now.
 
 All signals are derived from existing schema (expiry_date, stock_level,
-is_flagged, plus the stocktake queue's band-based resolver), so the
+is_essential, plus the stocktake queue's band-based resolver), so the
 alert *conditions* are never stored — they're recomputed every request
 and so always reflect current pantry state. `stocktake_overdue` alerts
 route through the same `resolve_overdue_map` helper the queue endpoint
@@ -215,7 +215,7 @@ class GetAlertsHandler:
                 if is_out_of_stock(item.stock_level):
                     # Essential + out-of-stock is the harshest combination,
                     # so it gets its own kind.
-                    if item.is_flagged:
+                    if item.is_essential:
                         raw.append(AlertDto(
                             alert_id = stock_alert_key(item.id, "essential_out"),
                             kind = "essential_low",
@@ -238,7 +238,7 @@ class GetAlertsHandler:
                             related_date = None,
                         ))
                 elif is_low_stock(item.stock_level):
-                    if item.is_flagged:
+                    if item.is_essential:
                         raw.append(AlertDto(
                             alert_id = stock_alert_key(item.id, "essential_low"),
                             kind = "essential_low",

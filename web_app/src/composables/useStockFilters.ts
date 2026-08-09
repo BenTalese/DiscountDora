@@ -146,7 +146,7 @@ export function useStockFilters(sources: {
         const seq = levelSequence(item.stock_level_id);
         const isLow = item.is_low_stock ?? isLowStockSequence(seq);
         const isOut = item.is_out_of_stock ?? isOutOfStockSequence(seq);
-        const isEssential = item.is_flagged === true;
+        const isEssential = item.is_essential === true;
         return (isEssential && (isLow || isOut)) || isExpired(item) || isExpiringSoon(item);
     }
 
@@ -213,7 +213,7 @@ export function useStockFilters(sources: {
                 item.stock_level_sequence ?? levelSequence(item.stock_level_id);
             if (item.is_low_stock ?? isLowStockSequence(seq)) low++;
             if (item.is_out_of_stock ?? isOutOfStockSequence(seq)) out++;
-            if (item.is_flagged) essentials++;
+            if (item.is_essential) essentials++;
             if (item.is_open) open++;
         }
         return { low, out, essentials, open };
@@ -246,7 +246,7 @@ export function useStockFilters(sources: {
                 return false;
             if (groupFilter.value !== null && item.stock_group_id !== groupFilter.value)
                 return false;
-            if (essentialsOnly.value && !item.is_flagged) return false;
+            if (essentialsOnly.value && !item.is_essential) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
             if (needsCheckOnly.value) {
@@ -361,7 +361,7 @@ export function useStockFilters(sources: {
         for (const it of items) {
             if (it.stock_level_id)
                 byLevel.set(it.stock_level_id, (byLevel.get(it.stock_level_id) ?? 0) + 1);
-            if (it.is_flagged) flagged++;
+            if (it.is_essential) flagged++;
             if (hasAlert(it)) attention++;
             // Round-10: count items present on at least one active shopping
             // list — once per item, not per line/list. Anything other than

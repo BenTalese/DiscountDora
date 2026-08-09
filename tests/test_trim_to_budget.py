@@ -55,10 +55,10 @@ class _StockLevel:
     sequence: int = 0     # 0 stocked · 1 low · 2 out
 
 
-def _item(item_id, *, band="stocked", is_flagged=False):
+def _item(item_id, *, band="stocked", is_essential=False):
     return SimpleNamespace(
         id=item_id,
-        is_flagged=is_flagged,
+        is_essential=is_essential,
         stock_level=_StockLevel(sequence={"stocked": 0, "low": 1, "out": 2}[band]),
     )
 
@@ -267,7 +267,7 @@ def test_tier5_multi_meal_reference():
 
 
 def test_never_cut_essential():
-    item = _item(uuid4(), is_flagged=True)
+    item = _item(uuid4(), is_essential=True)
     line = _line(item.id, added_via=ADDED_VIA_AUTO_FREQUENTLY_ADDED)
     ctx = _ctx([item], verdicts={item.id: _verdict()})
     assert _classify_lines([line], ctx, excluded=set()) == []

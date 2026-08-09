@@ -76,7 +76,7 @@ export type StockSnapshotItem = {
     levelSequence: number | null;   // higher = less stock; null when unknown
     locationName: string | null;
     expiryDate: string | null;      // ISO yyyy-mm-dd
-    isFlagged: boolean;
+    isEssential: boolean;
     isOpen: boolean;
 };
 
@@ -1104,7 +1104,7 @@ export async function runIntent(
                 const d = daysUntil(s.expiryDate);
                 return d !== null && d <= EXPIRY_HORIZON_DAYS;
             });
-            const flagged = stock.filter((s) => s.isFlagged);
+            const flagged = stock.filter((s) => s.isEssential);
             return {
                 text: `${stock.length} item${stock.length === 1 ? '' : 's'} tracked. ${low.length} low, ${expiring.length} expiring within a week, ${flagged.length} flagged. ${low.length + expiring.length === 0 ? "All under control. Magnificent." : "Want the rundown?"}`,
                 mood: low.length + expiring.length === 0 ? 'super_excited' : 'searching',

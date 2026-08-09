@@ -18,7 +18,7 @@
             <SettingsRow label="Show money features">
                 <q-toggle
                     :model-value="currentUser.money_features_enabled"
-                    :disable="!moneyInstallEnabled || saving"
+                    :disable="!moneyInstallEnabled"
                     @update:model-value="onMoneyFeaturesChange"
                 />
             </SettingsRow>
@@ -45,7 +45,6 @@
                 <SettingsRow label="Track a grocery budget">
                     <q-toggle
                         :model-value="budgetEnabledDraft"
-                        :disable="saving"
                         @update:model-value="onBudgetEnabledChange"
                     />
                 </SettingsRow>
@@ -61,7 +60,6 @@
                             outlined
                             dense
                             style="max-width: 160px"
-                            :disable="saving"
                             @blur="onBudgetAmountBlur"
                             @keydown.enter.prevent="onBudgetAmountBlur"
                         />
@@ -115,7 +113,7 @@
     ];
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
-    const { saving, update } = useSettingsSave();
+    const { update } = useSettingsSave();
 
     watch(currentUser, (u) => {
         if (!u) return;

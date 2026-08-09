@@ -13,7 +13,7 @@ export type LocationItem = {
     name: string;
     stock_level_name: string | null;
     expiry_date: string | null;
-    is_flagged: boolean;
+    is_essential: boolean;
 };
 
 export type LocationNode = {

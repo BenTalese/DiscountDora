@@ -25,7 +25,6 @@
                 <SettingsRow label="Auto-drain">
                     <q-toggle
                         :model-value="autoDrainDraft"
-                        :disable="saving"
                         @update:model-value="onAutoDrainChange"
                     />
                 </SettingsRow>
@@ -77,11 +76,9 @@
     const loading = ref(true);
     const autoDrainDraft = ref<boolean>(true);
     let savedAutoDrain = true;
-    const saving = ref(false);
 
     async function onAutoDrainChange(next: boolean) {
         if (next === savedAutoDrain) return;
-        saving.value = true;
         try {
             const result = await api.updateAsync({ auto_drain_past_meals: next });
             savedAutoDrain = result.auto_drain_past_meals;
@@ -99,8 +96,6 @@
                 message: 'Could not save reconcile setting.',
                 caption: toastCaption(err),
             });
-        } finally {
-            saving.value = false;
         }
     }
 

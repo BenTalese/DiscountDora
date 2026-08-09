@@ -9,14 +9,15 @@ import { computed, ref } from 'vue';
 import type { Router } from 'vue-router';
 import AppSettingsApiService from 'src/services/api/appSettingsApiService';
 
-// Admin Products page that owns the Product Search URL row + hide toggle.
-// Used as the fallback destination for every "Product Search" entry point
-// when no URL is configured yet, so the not-set-up state stays actionable
-// instead of dead.
-export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/products';
+// Admin Features page that owns the Product Search URL row. Used as the
+// fallback destination for the non-nav "Product Search" CTAs (find-&-link,
+// dashboard "hunt for deals", Dora quick-actions) when no URL is configured
+// yet, so those stay actionable for an admin instead of dead-ending on the
+// retired `/product-search` route. The main-nav entry no longer uses this —
+// it simply hides when no URL is set (see MainLayout).
+export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/features';
 
 const url = ref<string>('');
-const hidden = ref<boolean>(false);
 const loaded = ref(false);
 let inflight: Promise<void> | null = null;
 
@@ -26,11 +27,10 @@ function load(): Promise<void> {
             .getAsync()
             .then((s) => {
                 url.value = s.product_search_url || '';
-                hidden.value = !!s.product_search_hidden;
             })
             .catch(() => {
                 // Anonymous / unreachable / non-admin — leave the URL empty.
-                // The Product Search nav entry just shows as "not set up".
+                // The Product Search nav entry just stays hidden.
             })
             .finally(() => {
                 loaded.value = true;
@@ -49,7 +49,6 @@ export function useProductSearchUrl() {
     }
     return {
         url,
-        hidden,
         loaded,
         configured,
         refresh,

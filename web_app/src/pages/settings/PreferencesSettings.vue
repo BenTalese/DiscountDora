@@ -106,7 +106,6 @@
             >
                 <q-toggle
                     :model-value="currentUser.always_ask_which_shopping_list"
-                    :disable="savingAlwaysAsk"
                     @update:model-value="onAlwaysAskChange"
                 />
             </SettingsRow>
@@ -131,7 +130,6 @@
             >
                 <q-toggle
                     :model-value="currentUser.inferred_pantry_enabled"
-                    :disable="savingInferredPantry"
                     @update:model-value="onInferredPantryChange"
                 />
             </SettingsRow>
@@ -170,7 +168,6 @@
                     :max="21"
                     style="max-width: 100px"
                     :placeholder="String(BUILDER_TARGET_MEALS_FALLBACK)"
-                    :disable="savingMealsPerWeek"
                     @change="onMealsPerWeekChange"
                 />
             </SettingsRow>
@@ -219,9 +216,7 @@
     // "always ask which list" quick-add opt-in. Optimistic flip
     // with rollback on error, same shape as the other single-toggle prefs
     // on this page.
-    const savingAlwaysAsk = ref(false);
     async function onAlwaysAskChange(value: boolean) {
-        savingAlwaysAsk.value = true;
         try {
             await authStore.updateMeAsync({ always_ask_which_shopping_list: value });
             notifySuccess(
@@ -229,16 +224,12 @@
             );
         } catch (err) {
             notifyError('Could not save shopping-list preference.', err);
-        } finally {
-            savingAlwaysAsk.value = false;
         }
     }
 
     // Zero-Input Pantry opt-out. Same optimistic-flip shape as the
     // other single-toggle prefs. Default true on a fresh account.
-    const savingInferredPantry = ref(false);
     async function onInferredPantryChange(value: boolean) {
-        savingInferredPantry.value = true;
         try {
             await authStore.updateMeAsync({ inferred_pantry_enabled: value });
             notifySuccess(
@@ -248,8 +239,6 @@
             );
         } catch (err) {
             notifyError('Could not save pantry preference.', err);
-        } finally {
-            savingInferredPantry.value = false;
         }
     }
 
@@ -257,7 +246,6 @@
     // stores NULL and the builder falls back to
     // BUILDER_TARGET_MEALS_FALLBACK. Validated 1–21 server-side.
     const mealsPerWeekDraft = ref<number | null>(currentUser.value?.meals_per_week ?? null);
-    const savingMealsPerWeek = ref(false);
     watch(currentUser, (u) => {
         if (u) mealsPerWeekDraft.value = u.meals_per_week ?? null;
     });
@@ -271,7 +259,6 @@
         // reverts to the placeholder shape immediately.
         mealsPerWeekDraft.value = next;
         if (next === (currentUser.value?.meals_per_week ?? null)) return;
-        savingMealsPerWeek.value = true;
         try {
             await authStore.updateMeAsync({ meals_per_week: next });
             notifySuccess(
@@ -282,8 +269,6 @@
         } catch (err) {
             notifyError('Could not save meals per week.', err);
             mealsPerWeekDraft.value = currentUser.value?.meals_per_week ?? null;
-        } finally {
-            savingMealsPerWeek.value = false;
         }
     }
 
@@ -359,8 +344,7 @@
     const fontSizeDraft = ref<FontSizePreference>(currentUser.value?.font_size ?? 'md');
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave). This
-    // page also keeps its own bespoke per-toggle handlers (savingAlwaysAsk,
-    // savingInferredPantry, savingMealsPerWeek) which already use correct,
+    // page also keeps its own bespoke per-toggle handlers, which use correct,
     // hand-written noun messages via notifySuccess/notifyError.
     const { notifySuccess, notifyError, update } = useSettingsSave();
 

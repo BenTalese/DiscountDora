@@ -52,6 +52,34 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-613 — `--separator` is a phantom CSS token: 9 borders across 4 meal-plan components silently don't render (D-017/R-035)
+- **Raised:** 2026-08-07 (meal-plan builder rework).
+- **Type:** finding.
+- **What:** `var(--separator)` is used as a border colour in `MealPlanWeekDayCard.vue` (1), `MealPlanMobileFocus.vue` (3), `MealPlanRichCard.vue` (3) and `MealPlanEntryChip.vue` (2) — but no such token is defined in `tokens.scss` / `themes.scss`. An undefined custom property makes the whole `border` declaration invalid, so those borders (several of them dashed drop-target outlines) render as nothing. The real tokens are `--divider` (hairline separators) and `--border-default` (component outlines). The two occurrences in `MealPlanBuilderDialog.vue` were fixed in-place during this unit.
+- **Why deferred:** fixing the other four makes visible changes to components this task didn't otherwise touch — the owner should see them land deliberately, not as a side effect of a builder rework.
+- **Recommended resolution:** opportunistic — next time the meal-plan cards are touched. Note the dashed borders are drag/drop affordances, so fixing them is a small UX improvement, not just cosmetics.
+
+## [OPEN] FU-612 — `meals_per_week` user preference no longer drives anything
+- **Raised:** 2026-08-07 (meal-plan builder rework).
+- **Type:** finding.
+- **What:** the builder's meal-count slider was the only consumer of the household `meals_per_week` preference (via `useMealsPerWeek()` → the dialog's `targetCount` prop). Now that the day × slot toggles decide the count, the prop and the `useMealsPerWeek()` call in `MealPlansOverview.vue` are gone. The setting still renders and saves on Settings → Preferences, and `useMealsPerWeek.ts` / `BUILDER_TARGET_MEALS_FALLBACK` still exist — but nothing reads the value. A setting that does nothing is worse than no setting.
+- **Why deferred:** removing a user-facing preference (plus its column, DTO field and settings row) is a product call, not a refactor to slip into a builder rework.
+- **Recommended resolution:** now-ish — the owner needs to decide: (a) delete the preference end-to-end, or (b) give it a job again, e.g. seed the builder's default day selection from it instead of defaulting to every remaining day.
+
+## [OPEN] FU-611 — Builder can leave later days empty when the cookbook is smaller than the day × slot grid
+- **Raised:** 2026-08-07 (meal-plan builder rework).
+- **Type:** finding.
+- **What:** the ranker never repeats a recipe within one build (`select_recipes` returns distinct recipes only). With "Same meals every day" **off**, a grid larger than the available recipe pool fills days in order and simply stops — observed live: 3 days × 5 slots = 15 cells against 9 unplanned recipes produced Friday 5 meals, Saturday 4, Sunday 0. The review step shows this honestly, but the user gets no explanation for why the last day is blank.
+- **Why deferred:** pre-existing behaviour (the distinct-recipes rule predates this change), and the fix is a product decision: allow repeats, spread the shortfall evenly across days instead of front-loading, or surface a "your cookbook only has N recipes — pick fewer meals, or tick Same meals every day" hint.
+- **Recommended resolution:** opportunistic — a hint on the review step is probably the cheapest honest fix.
+
+## [OPEN] FU-610 — Meal-plan dialogs still disable their text input while saving (D-019)
+- **Raised:** 2026-08-07 (settings-focus fix — see that worklog entry).
+- **Type:** finding.
+- **What:** `MealPlansOverview.vue` (template-name + notes inputs), `MealPlanTemplatesPage.vue` (set-name input) and `MealPlanTemplatesDrawer.vue` still bind a transient `savingTemplate`/`savingSet` flag to `:disable` on a `q-input` — the pattern D-019 now bans. Lower impact than the settings pages (each is a modal with a single field and an explicit Save button, not the multi-field blur-autosave flow the owner reported), so no focus-stealing is expected in practice.
+- **Why deferred:** out of scope for the reported bug; the settings fix was already a 21-file change and scope discipline says don't widen it.
+- **Recommended resolution:** opportunistic — next time one of those dialogs is touched. Swap the input's `:disable` for `:loading` on the dialog's Save button.
+
 ## [OPEN] FU-609 — No shared page-height contract: 11 MainLayout pages skip `<q-page>` and hand-roll their own layout
 - **Raised:** 2026-08-04 (Stock Overview scroll-model rebuild — see that worklog entry).
 - **Type:** finding (app-wide structural inconsistency).

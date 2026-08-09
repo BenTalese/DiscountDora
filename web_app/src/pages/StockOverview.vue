@@ -41,7 +41,7 @@
                  (secondary) so it sits flush with the other toolbar
                  buttons. The dropdown menu hangs off the BaseButton via
                  q-menu — same UX, consistent chrome. -->
-            <BaseButton variant="secondary" :icon="ICONS.more_horiz" label="Export">
+            <BaseButton variant="secondary" :icon="ICONS.export_data" label="Export">
                 <q-menu auto-close>
                     <q-list dense style="min-width: 200px">
                         <!-- both exports respect the

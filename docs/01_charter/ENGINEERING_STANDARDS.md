@@ -1335,12 +1335,13 @@ exceptions, which still must be commented) · **Source** (where it was establish
   an exact token (colour/type/spacing/radius/elevation/border/icon/breakpoint),
   **Part B** gives per-component specs (buttons, chips, inputs, cards, list rows,
   dialogs, toasts, menus, empty states, skeletons, tables, the floating layer),
-  and **Part C** is the enforceable checklist **D-001..D-018** (level-colour
+  and **Part C** is the enforceable checklist **D-001..D-019** (level-colour
   semantics, contrast floors, type floor, tap targets, icon naming, one
   date/number formatter, skeleton loading, dialog conventions, toast/floating
   placement, micro-feedback, page composition, data-density, state legends, copy
   voice, pattern reuse, full interactive-state coverage, snap-to-scale/no-off-token
-  values, alignment/rhythm consistency). When Part A/B states a value, use it
+  values, alignment/rhythm consistency, no transient-disable on focusable
+  controls). When Part A/B states a value, use it
   exactly — an off-token literal is a carve-out, not a judgement call.
 - **Why:** the 2026-07-18 UX audit (FU-578, 54 findings +
   `docs/05_investigations/UX_DESIGN_CRITIQUE_2026-07-18.md`) showed a strong

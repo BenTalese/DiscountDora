@@ -51,8 +51,8 @@ function item(overrides: Partial<StockItem> & Pick<StockItem, 'stock_item_id' | 
 //   flour  — low but NOT essential, currently open (no alert — Model C)
 const ITEMS: StockItem[] = [
     item({ stock_item_id: 'si-apple', name: 'Apple', stock_location_id: 'loc-pantry', stock_group_id: 'grp-fresh', stock_level_last_updated: '2026-07-01T00:00:00Z' }),
-    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_flagged: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z' }),
-    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_flagged: true }),
+    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_essential: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z' }),
+    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_essential: true }),
     item({ stock_item_id: 'si-dill', name: 'Dill', expiry_date: '2026-07-13', stock_location_id: 'loc-shelf', stock_group_id: 'grp-fresh' }),
     item({ stock_item_id: 'si-egg', name: 'Egg', expiry_date: '2026-07-01' }),
     item({ stock_item_id: 'si-flour', name: 'Flour', stock_level_id: 'lv-low', is_open: true, stock_level_last_updated: '2026-07-05T00:00:00Z' }),
@@ -264,7 +264,7 @@ describe('useStockFilters — filtering', () => {
         // Item claims a stocked level but the server says it's low — the
         // derived boolean must drive the attention rule (R-003 contract).
         const overridden: StockItem[] = [
-            item({ stock_item_id: 'si-x', name: 'X', is_flagged: true, is_low_stock: true }),
+            item({ stock_item_id: 'si-x', name: 'X', is_essential: true, is_low_stock: true }),
         ];
         const f = useStockFilters({
             stockItems: () => overridden,

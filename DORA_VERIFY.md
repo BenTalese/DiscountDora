@@ -22,6 +22,35 @@ top-to-bottom.
 
 ---
 
+## Stock UI polish + Title-case page titles + essential rename (2026-08-08)
+*Code-complete; backend 299 targeted tests + frontend typecheck & 40 affected unit tests green, and the `is_flagged`→`is_essential` migration applied on a real destructive boot (DB column confirmed renamed on all three dev DBs). Visual pass owed — the preview browser here dropped the auth session on every reload and screenshots timed out, so the running-app look wasn't confirmed by the session.*
+- [ ] Mobile (narrow) view: the top menu-bar page name is Title Case on each page — "Stock Item", "Price History", "Meal Plans", "System: Alert Thresholds" — and the browser tab title matches.
+- [ ] Stock Overview → any item's expiry dropdown: three "Push expiry by 1 day / 7 days / 14 days" rows each with a **+** icon, "Clear expiry" with an **✕**, "Log waste" with the bin — icons aligned in one column.
+- [ ] Stock Overview toolbar: the **Export** button shows the export glyph (tray-with-out-arrow); its menu still offers **Export as CSV** + **Print / Save as PDF**.
+- [ ] Stock Overview: with a stocktake overdue, the **Stocktake** button's fill tint pulses in/out in sync with its glow ring (not just the ring). Turn on reduced-motion → it sits static with a soft tint, no animation.
+- [ ] Stock item detail → **Usual store** dropdown: each option shows the store's logo (or swatch) beside the name; the currently-selected store still reads fine.
+- [ ] Stock item detail → **Expiry** row: set a date, then clear it → the +1d/+7d/+14d/Set buttons don't shift; only the ✕ appears/disappears at the left of the cluster.
+- [ ] Stock item detail → **Recipes** tab: drag-resize the window → cards hold a steady width and add/remove a whole column, instead of continuously stretching/shrinking.
+- [ ] **Essential still works after the rename**: mark an item Essential on its detail page → the Overview **Essentials** filter chip includes it, its left-edge stripe shows, and (with auto-add in "essential only" mode) it's the one that auto-adds when low.
+
+## Meal-plan builder toggles + duplicate week (2026-08-07)
+*Behaviour verified live (toggle state, select-all, repeat payload, both duplicate paths, no console errors). Layout could not be measured — every element inside the dialog reported 0×0 in the preview browser, including pre-existing controls — so the visual pass is owed.*
+- [ ] Meal plans → **Build my week**: the day row shows Mon–Sun as card buttons with dates, past days greyed; the meal row shows your slots. Both are legible and tappable, and neither row overflows the dialog at 1280px or on a phone.
+- [ ] Selected toggles read clearly as selected (green fill, white text) against unselected — and the greyed past days aren't mistakable for selected.
+- [ ] Keyboard: tab into the day row, space toggles a card, the focus ring is visible on every card.
+- [ ] Tick **Same meals every day**, pick 3 days × 2 meals, Build → review shows the same two recipes on all three days.
+- [ ] Duplicate to next week from a week with meals, onto a week that already has some → confirm text says "replaces the N meals already planned there"; after confirming, next week matches the source exactly (no leftovers from what was there).
+- [ ] **After restarting the API** (the dev backend has no auto-reloader): Build my week → on the Review step hit **Reshuffle** a few times with the default "Use up stock" emphasis and a cookbook bigger than the day×slot grid → the set of meals changes between shuffles (unit-tested; needs a backend restart to see live, since the fix is server-side).
+
+## Settings input focus during save (2026-08-07)
+*The disable-on-save mechanism is gone (lint/typecheck/412 Vitest green), but the session could not drive a real save through the preview browser — synthetic events never triggered the blur handler — so the end-to-end behaviour is unconfirmed.*
+- [ ] Settings → AI assistant: type in **Base URL**, click straight into **Model** → caret lands and stays in Model while the save toast fires; keep typing without re-clicking.
+- [ ] Same page, tab (not click) from Base URL → Model mid-save → focus ring survives.
+- [ ] Admin → System → Email: edit SMTP host, tab through port and username in one pass → no field goes inert, all three saves land.
+- [ ] Settings → Money: edit the budget **Amount**, then immediately change **Period** → both apply.
+- [ ] Save/Test buttons still grey out while their request is in flight (double-submit protection kept deliberately).
+- [ ] Trigger a save failure (stop the backend) → error toast fires and the field reverts, still focusable.
+
 ## Sign-out from Settings (2026-08-04)
 - [ ] From Settings → Account (no edits made), click **Sign out** → app goes straight to `/login` with no "Discard unsaved changes?" prompt.
 - [ ] From Settings → Account, edit the username draft (make it dirty) → click **Sign out** → still no prompt, sign-out completes to `/login` (intentional exit overrides the guard by design).
@@ -39,13 +68,9 @@ top-to-bottom.
 - [ ] Mobile width (<md): page still usable, footer pinned, no double-scroll. Header uses `reveal` on mobile — confirm hiding/showing it doesn't leave a gap or clip the footer.
 - [ ] Kill the API (stop the backend) so `OfflineBanner` shows → confirm the shell still fits and the footer stays reachable (banner adds 48px above the page; a small page scroll here is the known trade-off).
 
-## Product Search settings page (2026-08-04)
-- [ ] With products overlay ON, sidebar shows **Settings → System → Products**; page renders with URL row (new description: "Enter the URL to your product search/product data importer tool. Useful for quick navigation.") + **Hide menu button** toggle.
-- [ ] With products overlay OFF (no product rows), the **Products** sidebar entry is absent.
-- [ ] Set a URL and blur → toast confirms save; main-nav **Product Search** button opens the URL in a new tab.
-- [ ] Toggle **Hide menu button** ON → main-nav **Product Search** entry disappears; OFF → it reappears.
-- [ ] Clear the URL (leave blank) with hide toggle OFF → nav entry still visible; clicking it routes to `/settings/admin/system/products` (not a 404, not the old `/settings/admin/system/features`). Same for the other in-app "set up product search" entry points (StockItemDetail find-&-link CTA, My Products empty-state, dashboard "Hunt for deals" empty-state, Dora quick-actions).
-- [ ] Backend migration applies cleanly on a fresh drop_all reset; `GET /api/app-settings` includes `product_search_hidden: false` by default.
+## Product Search config simplified (2026-08-07)
+*Behaviour verified live this session (URL-unset → no nav entry; URL-set-via-API → external new-tab entry appears; Features page shows the Product search section and no Hide toggle; DTO drops `product_search_hidden`). Residual: the save through the actual Features input (I round-tripped the URL via the API, not the input's blur handler).*
+- [ ] Settings → System → Features (products ON): type a URL in **Product search → Search URL**, blur → toast confirms; the main-menu **Product Search** entry appears and opens the URL in a new tab. Clear it and blur → the entry disappears again.
 
 ## Donation buttons + restored support links (FU-608) — origin FU-608
 - [ ] **Menu bar (logged in):** the pink **Support Dora** heart shows in the header cluster (next to the alerts bell / help / avatar), gently pulses, and reads well against the toolbar colour on each theme; clicking opens the popover with all 3 platforms. *(Auth-shell floating button + the shared popover already verified live 2026-07-31 — this is the header trigger, which needs login.)*

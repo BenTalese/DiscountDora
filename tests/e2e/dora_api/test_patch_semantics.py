@@ -30,8 +30,8 @@ should confirm this is the *intended* matrix, it is currently implicit):
                             .stock_group_id / .opened_on / .expiry_date,
                             recipe's plain nullable attrs + FK vocabs,
                             shopping_list.name, line.quantity,
-                            user.meals_per_week / .household_headcount /
-                            .dashboard_layout, admin-user.email
+                            user.meals_per_week / .dashboard_layout,
+                            admin-user.email
   ignored on explicit null: any non-nullable field (names, bools,
                             stock_level_id), store.image (clear_image
                             flag required), line.selected_product_id
@@ -844,14 +844,9 @@ def test__patch_me__meals_per_week_inclusive_bounds__accepted(api):
         assert _me()["meals_per_week"] == good
 
 
-def test__patch_me__null_household_headcount__clears_it(api):
-    set_resp = requests.patch(f"{BASE}/auth/me", json={"household_headcount": 4})
-    assert set_resp.status_code == 200, set_resp.text
-    assert _me()["household_headcount"] == 4
-
-    clear_resp = requests.patch(f"{BASE}/auth/me", json={"household_headcount": None})
-    assert clear_resp.status_code == 200, clear_resp.text
-    assert _me()["household_headcount"] is None
+# FU-615 — `household_headcount` moved off /auth/me to the install-wide
+# AppSetting; its null-clear round-trip now lives in test_onboarding_flags.py
+# (`test__app_settings__household_headcount_roundtrips`).
 
 
 def test__patch_me__unknown_field__rejected_400(api):

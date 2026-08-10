@@ -10,6 +10,12 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-615 — Household headcount + batch-cooking moved from per-user to install-wide (AppSetting)
+- **Raised:** 2026-08-10 (onboarding cleanup — owner questioned why cooking prefs are per-user) · **Resolved:** 2026-08-10
+- **Type:** follow-up (design + backend change)
+- **What:** `User.household_headcount` and `User.batch_features_enabled` were per-user only because cook-mode's serving scaler needed a home (`PROPOSAL_ONBOARDING §3.4`), not because they vary per person. A household has one headcount + one cook-style, so asking every account was wrong.
+- **Resolution (2026-08-10, owner chose BOTH install-wide, hard change, no data preserved):** both fields moved onto the install-wide `AppSetting` singleton and dropped from `User` outright (migration `b9d4f2a7c1e6`, single head; SQLite batch mode). New reads: every client pulls them from **`GET /api/health.cooking_policy`** (new block, mirrors `image_policy`/`locale_policy`) via the new `useCookingPolicy` composable — cook mode's headcount scaler (`RecipeCookMode.vue`) and `useBatchEnabled` (5 meal-plan components) now source there. Edits: a new admin page **Settings → System → Cooking** (`AdminSystemCookingSettings.vue`) via `PATCH /app-settings`. Removed from `update_me`/`register_user`/`AuthenticatedUserDto`, the onboarding welcome step (now personal-look only), and the per-user Preferences "Cooking style" toggle. Tests: `test_onboarding_flags` headcount/batch roundtrips repointed to `/app-settings` + `/health`, `test_patch_semantics` null-clear removed, DTO snapshots refreshed (app_settings +2 keys, auth_me −2, health +cooking_policy). Verified: backend e2e green (incl. new roundtrips), full `vue-tsc` + eslint clean, real destructive migration boot to single head, `/health` emits `cooking_policy`. **Owner still owes a visual walk of the new admin page** (browser pane wouldn't composite the layout swap) — logged in `DORA_VERIFY.md`.
+
 ## [RESOLVED] FU-594 — Reconcile `skip` reversed the pool drain, contradicting the module's own documented contract
 - **Raised:** 2026-07-22 (lean-verify big round — Batch 7 Meal plans, reconcile walk) · **Resolved:** 2026-07-31
 - **Type:** finding

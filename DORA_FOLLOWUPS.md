@@ -52,6 +52,13 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-616 — Onboarding no longer offers a sign-out; confirm skip-onboarding is a sufficient escape
+- **Raised:** 2026-08-10 (onboarding top-area cleanup).
+- **Type:** finding.
+- **What:** The onboarding shell's header (with its **Sign out** button) was removed — the persistent escape is now **Skip onboarding**, which completes onboarding and lands the user in the app (where normal sign-out is available). So a user who is mid-onboarding on the *wrong account* can no longer sign out directly from the wizard; they must skip through into the app first, then sign out. `router/index.ts:26-29` still lists sign-out among the "safety hatches" reachable during onboarding — that comment is now slightly stale.
+- **Why deferred:** owner explicitly asked to remove the sign-out button and let skip replace it (this session). Logging only so the decision is traceable and the stale router comment gets tidied when that file is next touched.
+- **Recommended resolution:** opportunistic — no action unless the skip-only escape proves annoying in real use; tidy the `router/index.ts` comment next time it's edited.
+
 ## [OPEN] FU-614 — Font-family option list is duplicated across two files (R-003)
 - **Raised:** 2026-08-10 (font "Nunito (Default)" relabel).
 - **Type:** finding.

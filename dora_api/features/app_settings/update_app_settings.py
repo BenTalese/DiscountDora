@@ -83,6 +83,13 @@ class UpdateAppSettingsRequest(BaseModel):
     # `_VALID_AUTO_ADD_MODES` in the handler so a typo can't silently
     # degrade behaviour to the seeded default.
     auto_add_mode: str | None = Field(default=None, max_length=16)
+    # FU-615 — household cooking config (install-wide, moved off User).
+    # `household_headcount`: 1–99, or null to clear back to "use each
+    # recipe's servings". `batch_features_enabled`: plain cook-style bool.
+    # Present-in-body semantics: headcount is set (incl. explicit null)
+    # whenever the field is in the body; omit to leave unchanged.
+    household_headcount: int | None = Field(default=None, ge=1, le=99)
+    batch_features_enabled: bool | None = None
     # FU-317 — install-wide meal-plan reconcile posture. Plain bool;
     # the sweep reads it and picks a branch (see reconcile_consumed_meals).
     auto_drain_past_meals: bool | None = None
@@ -288,6 +295,15 @@ class UpdateAppSettingsHandler:
                     ),
                 )
             setting.auto_add_mode = _Mode
+
+        # FU-615 — household cooking config. Headcount uses present-in-body
+        # semantics (an explicit null clears it back to "use recipe
+        # servings"); the 1–99 bounds are enforced by the request model.
+        # Batch cook-style is a plain bool.
+        if "household_headcount" in set_fields:
+            setting.household_headcount = request.household_headcount
+        if "batch_features_enabled" in set_fields and request.batch_features_enabled is not None:
+            setting.batch_features_enabled = request.batch_features_enabled
 
         # operational config. Strings strip on save; the
         # `public_url` scheme guard mirrors `product_search_url` above so a

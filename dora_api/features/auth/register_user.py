@@ -81,10 +81,8 @@ class AuthenticatedUserDto:
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     # Layered with install `money_enabled` via useMoneyEnabled().
     money_features_enabled: bool
-    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-    # posture. Default False ("fresh"); when True the meal-planner reveals
-    # the cook-pool affordances + shortfall warning.
-    batch_features_enabled: bool
+    # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
+    # clients read the cook-style via /api/health.cooking_policy.
     # "always ask which draft list on quick-add".
     always_ask_which_shopping_list: bool
     # target meal count for the sequential builder.
@@ -98,8 +96,8 @@ class AuthenticatedUserDto:
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
     # Default True. FU-508 dropped the stock-image companion.
     show_recipe_images: bool
-    # Onboarding C-5.4 — household cooking headcount; None = not set.
-    household_headcount: int | None
+    # FU-615 — `household_headcount` moved to AppSetting (install-wide);
+    # clients read it via /api/health.cooking_policy.
     # alerts email digest channel (PROPOSAL_ALERTS §3.5).
     # `alerts_email_cadence` is 'off' | 'daily' | 'weekly'; `alerts_email_
     # day` is the weekly send day (Mon=0 … Sun=6, ignored on daily).
@@ -159,7 +157,6 @@ class AuthenticatedUserDto:
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
             money_features_enabled=bool(user.money_features_enabled),
-            batch_features_enabled=bool(user.batch_features_enabled),
             always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
             meals_per_week=(
@@ -167,10 +164,6 @@ class AuthenticatedUserDto:
             ),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
-            household_headcount=(
-                int(user.household_headcount)
-                if user.household_headcount is not None else None
-            ),
             alerts_email_enabled=bool(user.alerts_email_enabled),
             alerts_email_cadence=user.alerts_email_cadence,
             alerts_email_day=int(user.alerts_email_day),

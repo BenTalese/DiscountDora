@@ -48,6 +48,13 @@ export type AppSettings = {
      *    'all'            — always on a Stocked → Low/Out transition.
      *  Server owns the branching in `update_stock_item._try_auto_add`. */
     auto_add_mode: AutoAddMode;
+    // FU-615 — household cooking config, install-wide (moved off User).
+    // `household_headcount` null = not set (cook mode uses recipe servings);
+    // `batch_features_enabled` = cook-style ("batch" reveals the cook pool).
+    // Also mirrored on /api/health.cooking_policy so every client (not just
+    // admins) reads them — cook mode + the meal-planner read there.
+    household_headcount: number | null;
+    batch_features_enabled: boolean;
     // FU-317 — install-wide meal-plan reconcile posture. True = today's
     // silent auto-drain (past-day entries are assumed cooked, pool drains
     // as the day rolls). False = the sweep writes `unresolved_manual`

@@ -562,6 +562,7 @@
     import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import { useCookingPolicy } from 'src/composables/useCookingPolicy';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import { scaleQuantity } from 'src/helpers/scaleQuantity';
@@ -632,13 +633,12 @@
         () => recipe.value?.steps_mode === 'image',
     );
 
-    // session-only headcount. Seeds from the user's
-    // `household_headcount` (set in onboarding) when present, otherwise the
-    // recipe's own `servings`. Never writes back to the saved recipe —
-    // matches the B8-substitute discipline of "this cook only".
-    const householdHeadcount = computed(
-        () => authStore.currentUser?.household_headcount ?? null,
-    );
+    // session-only headcount. Seeds from the install-wide
+    // `household_headcount` (FU-615 — set in Settings → System → Cooking,
+    // read via /api/health) when present, otherwise the recipe's own
+    // `servings`. Never writes back to the saved recipe — matches the
+    // B8-substitute discipline of "this cook only".
+    const { householdHeadcount } = useCookingPolicy();
     const cookingFor = ref<number>(
         householdHeadcount.value && householdHeadcount.value > 0
             ? householdHeadcount.value

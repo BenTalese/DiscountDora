@@ -1,16 +1,8 @@
 <template>
     <div class="story">
-        <!-- Persistent escape: skip the whole wizard. -->
-        <div class="story-top">
-            <BaseButton
-                variant="ghost"
-                class="dora-text-secondary"
-                :icon="ICONS.skip_next"
-                label="Skip onboarding"
-                @click="emit('skip')"
-            />
-        </div>
-
+        <!-- The persistent "Skip onboarding" escape lives in the wizard's
+             slim top row now (inline with the mascot + progress rail), so
+             the story itself is just the stage + in-scene nav. -->
         <div class="story-stage">
             <transition name="scene-fade" mode="out-in">
                 <OnboardingScene
@@ -114,7 +106,6 @@
     const emit = defineEmits<{
         'update:sceneIndex': [number];
         'enter-setup': [];
-        skip: [];
     }>();
 
     const currentScene = computed(
@@ -154,10 +145,6 @@
         flex-direction: column;
         min-height: min(78vh, 640px);
         gap: var(--space-4);
-    }
-    .story-top {
-        display: flex;
-        justify-content: flex-end;
     }
     .story-stage {
         flex: 1;

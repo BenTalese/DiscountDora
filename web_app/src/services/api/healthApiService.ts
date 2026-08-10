@@ -35,6 +35,15 @@ export interface HealthInfo {
         currency: string;        // ISO 4217, e.g. 'AUD'
         locale: string;          // BCP-47, e.g. 'en-AU'
     };
+    // FU-615 — install-wide household cooking config (moved off User).
+    // Every client reads it here: cook mode seeds its serving scaler from
+    // `household_headcount`, and the meal-planner reveals the cook pool when
+    // `batch_features_enabled` is on. Optional in the type because older
+    // backends won't emit it; callers default to no-headcount + fresh.
+    cooking_policy?: {
+        household_headcount: number | null;
+        batch_features_enabled: boolean;
+    };
     // FU-370 — install's support / report-an-issue channel. Optional in the
     // type because older backends won't emit it; both strings empty ⇒ dormant
     // (no report affordance renders). `url` wins over `email` when both set.

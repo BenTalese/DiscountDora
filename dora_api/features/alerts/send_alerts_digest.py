@@ -30,7 +30,7 @@ from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_DAILY,
 from dora_api.features.alerts.alert_kinds import TIER_ACTIONABLE
 from dora_api.features.alerts.get_alerts import (AlertDto, AlertsDto,
                                                  GetAlertsHandler)
-from dora_api.infrastructure.auth_helpers import public_base_url
+from dora_api.infrastructure.auth_helpers import spa_deep_link
 from dora_api.infrastructure.email_sender import render_template, send_email
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -142,7 +142,7 @@ def _process_user(
         cadence=cadence_label,
         actionable=actionable,
         fyi=fyi,
-        alerts_url=f"{public_base_url()}/alerts",
+        alerts_url=spa_deep_link("/alerts"),
     )
     text_body = _render_text_digest(user.username, cadence_label, actionable, fyi)
 
@@ -225,7 +225,7 @@ def _render_text_digest(
             if alert.detail:
                 lines.append(f"      {alert.detail}")
         lines.append("")
-    lines.append(f"Open alerts: {public_base_url()}/alerts")
+    lines.append(f"Open alerts: {spa_deep_link('/alerts')}")
     lines.append("")
     lines.append("Manage your channels in Settings → Preferences.")
     return "\n".join(lines)

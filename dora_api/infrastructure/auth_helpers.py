@@ -270,12 +270,30 @@ def public_base_url() -> str:
     return "http://localhost:5174"
 
 
+def spa_deep_link(route_path: str) -> str:
+    """Build a link to a specific in-app SPA route for emails.
+
+    The SPA runs in **hash-history** mode (`web_app/quasar.config` →
+    build.vueRouterMode: 'hash'), so a deep link MUST carry the in-app route in
+    the URL *fragment*: ``https://host/#/reset-password?token=…``. A path-based
+    link (``https://host/reset-password?token=…``) is served the SPA's
+    index.html, but the hash router never sees that path — it resolves to ``/``
+    and the auth guard bounces the (logged-out) visitor to ``#/login``, which is
+    exactly the "reset link dumps me on the login screen" bug. Keeping every
+    e-mailed deep link on this one helper means the hash coupling lives in a
+    single, documented place; if the router mode ever changes, this is the only
+    edit. ``route_path`` is the in-app path incl. any query, leading slash
+    required, e.g. ``"/reset-password?token=abc"``.
+    """
+    return f"{public_base_url()}/#{route_path}"
+
+
 def build_verify_url(token: str) -> str:
-    return f"{public_base_url()}/verify-email?token={token}"
+    return spa_deep_link(f"/verify-email?token={token}")
 
 
 def build_reset_url(token: str) -> str:
-    return f"{public_base_url()}/reset-password?token={token}"
+    return spa_deep_link(f"/reset-password?token={token}")
 
 
 # ── Rate limiter ───────────────────────────────────────────────────────
@@ -376,7 +394,7 @@ __all__ = [
     "PURPOSE_VERIFY_EMAIL", "PURPOSE_RESET_PASSWORD",
     "issue_token", "find_active_token", "consume_token",
     "revoke_tokens_for_user",
-    "public_base_url", "build_verify_url", "build_reset_url",
+    "public_base_url", "spa_deep_link", "build_verify_url", "build_reset_url",
     "rate_limit", "rate_limit_remaining_seconds",
     "try_send",
 ]

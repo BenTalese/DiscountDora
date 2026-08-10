@@ -66,9 +66,8 @@ class UpdateMeRequest(BaseModel):
     voice_id: str | None = None
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     money_features_enabled: bool | None = None
-    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-    # posture. Boolean only.
-    batch_features_enabled: bool | None = None
+    # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
+    # edited via PATCH /app-settings, not here.
     # per-user "always ask which draft list on quick-add" toggle.
     always_ask_which_shopping_list: bool | None = None
     # target meal count for the sequential builder.
@@ -84,8 +83,8 @@ class UpdateMeRequest(BaseModel):
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
     # FU-508 dropped the stock-image companion.
     show_recipe_images: bool | None = None
-    # Onboarding C-5.4 — household cooking headcount (1–99; null clears it).
-    household_headcount: int | None = Field(default=None, ge=1, le=99)
+    # FU-615 — `household_headcount` moved to AppSetting (install-wide);
+    # edited via PATCH /app-settings, not here.
     # alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
     # Cadence is a closed-set sentinel validated at this boundary (R-010
     # carve-out, same shape as `nutrition_mode`). Day is Mon=0 … Sun=6
@@ -210,8 +209,7 @@ class UpdateMeHandler:
         # saved `budget_amount` survives toggling off (data preserved).
         if "money_features_enabled" in _SetFields and request.money_features_enabled is not None:
             _User.money_features_enabled = request.money_features_enabled
-        if "batch_features_enabled" in _SetFields and request.batch_features_enabled is not None:
-            _User.batch_features_enabled = request.batch_features_enabled
+        # FU-615 — batch cook-style moved to AppSetting (install-wide).
         if (
             "always_ask_which_shopping_list" in _SetFields
             and request.always_ask_which_shopping_list is not None
@@ -254,11 +252,8 @@ class UpdateMeHandler:
         if "show_recipe_images" in _SetFields and request.show_recipe_images is not None:
             _User.show_recipe_images = request.show_recipe_images
 
-        # Onboarding C-5.4 — household headcount. Present-in-body sets it (a
-        # null clears it back to "use each recipe's servings"); the 1–99
-        # bounds are enforced by the request model above.
-        if "household_headcount" in _SetFields:
-            _User.household_headcount = request.household_headcount
+        # FU-615 — household headcount moved to AppSetting (install-wide);
+        # edited via PATCH /app-settings.
 
         # alerts email digest. Plain bool + closed-set cadence +
         # 0–6 day. R-014 (shown-disabled when SMTP unset) is enforced on

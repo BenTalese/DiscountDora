@@ -1,9 +1,10 @@
 """FU-193 — backend behavioural coverage for the Onboarding C-5.3/.4/.5 surfaces.
 
-Covers products data-presence gating (FU-209), the per-user household headcount,
-and the starter catalogue + name-resolved item seeding. Migrations themselves are
-verified separately (single head + well-formed batch DDL); these tests assert
-the runtime round-trips that the wizard relies on.
+Covers products data-presence gating (FU-209), the install-wide household
+cooking config (FU-615 — headcount + batch cook-style, moved off User onto
+AppSetting), and the starter catalogue + name-resolved item seeding.
+Migrations themselves are verified separately (single head + well-formed batch
+DDL); these tests assert the runtime round-trips that the wizard relies on.
 """
 import uuid
 
@@ -41,24 +42,51 @@ def test__app_settings__no_longer_carries_products_enabled(api):
     assert 400 <= rejected.status_code < 500
 
 
-# ── C-5.4 household headcount ─────────────────────────────────────────
+# ── FU-615 install-wide household cooking config (headcount + cook-style) ──
 
 
-def test__users_me__household_headcount_roundtrips(api):
-    original = requests.get(ME).json().get("household_headcount")
+def test__app_settings__household_headcount_roundtrips(api):
+    # Moved off /auth/me to the install-wide AppSetting; the admin dev user
+    # can PATCH it and it mirrors onto /api/health.cooking_policy for every
+    # client (cook mode reads it there).
+    original = requests.get(APP_SETTINGS).json().get("household_headcount")
     try:
-        assert requests.patch(ME, json={"household_headcount": 4}).status_code == 200
-        assert requests.get(ME).json()["household_headcount"] == 4
+        assert requests.patch(APP_SETTINGS, json={"household_headcount": 4}).status_code == 200
+        assert requests.get(APP_SETTINGS).json()["household_headcount"] == 4
+        assert requests.get(HEALTH).json()["cooking_policy"]["household_headcount"] == 4
         # null clears it back to "not set" (cook mode then falls back to servings).
-        assert requests.patch(ME, json={"household_headcount": None}).status_code == 200
-        assert requests.get(ME).json()["household_headcount"] is None
+        assert requests.patch(APP_SETTINGS, json={"household_headcount": None}).status_code == 200
+        assert requests.get(APP_SETTINGS).json()["household_headcount"] is None
+        assert requests.get(HEALTH).json()["cooking_policy"]["household_headcount"] is None
     finally:
-        requests.patch(ME, json={"household_headcount": original})
+        requests.patch(APP_SETTINGS, json={"household_headcount": original})
 
 
-def test__users_me__household_headcount_out_of_range_rejected(api):
-    assert requests.patch(ME, json={"household_headcount": 0}).status_code == 400
-    assert requests.patch(ME, json={"household_headcount": 100}).status_code == 400
+def test__app_settings__household_headcount_out_of_range_rejected(api):
+    assert requests.patch(APP_SETTINGS, json={"household_headcount": 0}).status_code == 400
+    assert requests.patch(APP_SETTINGS, json={"household_headcount": 100}).status_code == 400
+
+
+def test__app_settings__batch_features_enabled_roundtrips(api):
+    original = requests.get(APP_SETTINGS).json().get("batch_features_enabled")
+    try:
+        assert requests.patch(APP_SETTINGS, json={"batch_features_enabled": True}).status_code == 200
+        assert requests.get(APP_SETTINGS).json()["batch_features_enabled"] is True
+        assert requests.get(HEALTH).json()["cooking_policy"]["batch_features_enabled"] is True
+        assert requests.patch(APP_SETTINGS, json={"batch_features_enabled": False}).status_code == 200
+        assert requests.get(HEALTH).json()["cooking_policy"]["batch_features_enabled"] is False
+    finally:
+        requests.patch(APP_SETTINGS, json={"batch_features_enabled": bool(original)})
+
+
+def test__users_me__no_longer_carries_cooking_config(api):
+    # FU-615 — the two prefs left /auth/me entirely; GET must not expose them
+    # and PATCHing them is rejected by the request model (extra="forbid").
+    me = requests.get(ME).json()
+    assert "household_headcount" not in me
+    assert "batch_features_enabled" not in me
+    assert requests.patch(ME, json={"household_headcount": 4}).status_code == 400
+    assert requests.patch(ME, json={"batch_features_enabled": True}).status_code == 400
 
 
 # ── C-5.5 starter catalogue + name-resolved seeding ──────────────────

@@ -1,13 +1,32 @@
 <template>
     <q-page padding>
         <div class="wizard-shell q-mx-auto">
-            <!-- ── Shared, non-linear progress rail (Story + Setup) ────── -->
-            <div class="wizard-rail q-mb-lg">
+            <!-- ── Slim top row: mascot · progress rail · skip escape ────
+                 The three elements sit inline with generous horizontal
+                 spacing. The persistent "Skip onboarding" hatch lives here
+                 (it replaced the old sign-out button in the layout header),
+                 except on the finish step where the Finish action takes
+                 over. ────────────────────────────────────────────────── -->
+            <div class="wizard-topbar q-mb-lg">
+                <q-avatar square size="40px" class="wizard-mascot">
+                    <img src="../../assets/logo-mascot.png" alt="Dora" />
+                </q-avatar>
                 <OnboardingStepRail
+                    class="wizard-topbar-rail"
                     :sections="railSections"
                     :active-section="view"
                     :active-index="railActiveIndex"
                     @jump="onRailJump"
+                />
+                <BaseButton
+                    v-if="!(view === 'setup' && isLastStep)"
+                    variant="ghost"
+                    dense
+                    class="wizard-skip dora-text-secondary"
+                    :icon="ICONS.skip_next"
+                    label="Skip onboarding"
+                    :loading="completing"
+                    @click="onSkipEverything"
                 />
             </div>
 
@@ -16,33 +35,22 @@
                 v-if="view === 'story'"
                 v-model:scene-index="storySceneIndex"
                 @enter-setup="enterSetup"
-                @skip="onSkipEverything"
             />
 
             <!-- ══ SETUP — the steps (draft-until-finish; applied on Finish) ══ -->
             <template v-else>
-            <!-- ── Header: skip-everything on non-final steps; on the
-                 finish step, a duplicate Finish button so the user can
-                 commit from either the top or the bottom of a long
-                 flow-cards list. Progress lives in the shared step-rail
-                 at the top of the shell. ─────────────────────────── -->
-            <div class="row justify-end q-mb-md">
+            <!-- ── Header: on the finish step, a duplicate Finish button so
+                 the user can commit from either the top or the bottom of a
+                 long flow-cards list. The skip-everything hatch now lives in
+                 the slim top row; progress lives in the shared step-rail
+                 there too. ──────────────────────────────────────────── -->
+            <div v-if="isLastStep" class="row justify-end q-mb-md">
                 <BaseButton
-                    v-if="isLastStep"
                     variant="primary"
                     icon-right="check"
                     label="Finish"
                     :loading="completing"
                     @click="advance"
-                />
-                <BaseButton
-                    v-else
-                    variant="ghost"
-                    class="dora-text-secondary"
-                    :icon="ICONS.skip_next"
-                    label="Skip onboarding"
-                    :loading="completing"
-                    @click="onSkipEverything"
                 />
             </div>
 
@@ -62,7 +70,7 @@
                         <img src="../../assets/logo-mascot.png" alt="Dora" />
                     </q-avatar>
                     <div class="col">
-                        <div class="text-h6">Hi! I'm Dora.</div>
+                        <div class="text-h6">Hi, I'm Dora.</div>
                         <div class="text-body2 dora-text-secondary">
                             I keep your pantry, shopping and cooking in one
                             place so the weekly shop stops feeling like
@@ -73,17 +81,6 @@
                 </q-card-section>
                 <q-separator />
                 <q-card-section class="q-gutter-md">
-                    <q-input
-                        v-model="form.displayName"
-                        outlined
-                        dense
-                        label="What should I call you?"
-                        autofocus
-                        :error="!!displayNameError"
-                        :error-message="displayNameError ?? undefined"
-                        @update:model-value="displayNameError = null"
-                        @keydown.enter.prevent="advance"
-                    />
                     <div class="row q-col-gutter-md">
                         <q-select
                             v-model="form.theme"
@@ -106,32 +103,10 @@
                             class="col-12 col-sm-6"
                         />
                     </div>
-                    <q-input
-                        v-model.number="form.headcount"
-                        outlined
-                        dense
-                        type="number"
-                        min="1"
-                        max="99"
-                        label="How many people do you usually cook for?"
-                        hint="Cook mode scales recipes to this. Leave blank to use each recipe's own serving size."
-                        @blur="onHeadcountBlur"
-                    />
-                    <q-item tag="label" class="q-px-none">
-                        <q-item-section>
-                            <q-item-label>I batch-cook</q-item-label>
-                            <q-item-label caption>
-                                One cook session feeds several days. Turns on the
-                                cook-pool controls in the meal planner — a per-recipe
-                                ± counter, "N free" chip, and a shortfall warning when
-                                the plan needs more cooks than you have on hand. Off
-                                by default; flip in Settings any time.
-                            </q-item-label>
-                        </q-item-section>
-                        <q-item-section side>
-                            <q-toggle v-model="form.batchCooking" />
-                        </q-item-section>
-                    </q-item>
+                    <!-- FU-615 — household headcount + cook-style ("I batch-cook")
+                         are install-wide settings now (a household has one of
+                         each), edited by an admin in Settings → System → Cooking.
+                         Onboarding's welcome step is just personal look now. -->
                 </q-card-section>
             </q-card>
 
@@ -663,7 +638,7 @@ Toilet paper, Toiletries, Bathroom"
     // Preferences. Values are real ThemePreference keys so we persist the
     // resolved theme rather than the legacy 'light'/'dark' aliases.
     const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
-        { label: 'System (follow OS)', value: 'system' },
+        { label: 'System', value: 'system' },
         { label: 'Light', value: 'pesto' },
         { label: 'Dark', value: 'pesto-dark' },
     ];
@@ -688,7 +663,6 @@ Toilet paper, Toiletries, Bathroom"
 
     const state = ref<OnboardingState | null>(null);
     const loadError = ref<string | null>(null);
-    const displayNameError = ref<string | null>(null);
     const stepIndex = ref(0);
     const completing = ref(false);
 
@@ -804,14 +778,10 @@ Toilet paper, Toiletries, Bathroom"
 
     // ── Form state (persists to localStorage so refresh resumes) ─────
     type WizardDraft = {
-        displayName: string;
         theme: ThemePreference;
         fontFamily: FontFamilyPreference;
-        headcount: number | null;
-        // surfaced in onboarding alongside headcount (both
-        // are "how you cook" prefs). Default false matches the Charter P10
-        // Anti-creep posture the useBatchEnabled composable enforces.
-        batchCooking: boolean;
+        // FU-615 — headcount + batch cook-style are install-wide settings now
+        // (Settings → System → Cooking), no longer collected per-user here.
         // the seed-catalogue master booleans are gone; the
         // per-name pick sets below carry the same signal. A card is
         // effectively "on" when any name in it is picked, "off" when
@@ -835,11 +805,8 @@ Toilet paper, Toiletries, Bathroom"
         `dora.onboarding.draft.${userId || 'anonymous'}`;
 
     const form = reactive<WizardDraft>({
-        displayName: '',
         theme: 'system',
         fontFamily: 'default',
-        headcount: null,
-        batchCooking: false,
         seedDemo: false,
         stepIndex: 0,
     });
@@ -1254,15 +1221,6 @@ Toilet paper, Toiletries, Bathroom"
 
     function handleApplyError(err: unknown) {
         const extracted = extractFieldErrors(err);
-        // The displayName field maps to the server's `username` validator.
-        // Surface it and jump back to the welcome step — by Finish it may
-        // be off-screen.
-        if (extracted.fieldErrors.username) {
-            displayNameError.value = extracted.fieldErrors.username;
-            delete extracted.fieldErrors.username;
-            const welcomeIdx = visibleSteps.value.findIndex((s) => s.id === 'welcome');
-            if (welcomeIdx >= 0) stepIndex.value = welcomeIdx;
-        }
         const remainingFields = Object.values(extracted.fieldErrors).filter(Boolean);
         loadError.value =
             [extracted.generalError, ...remainingFields].filter(Boolean).join(' ') ||
@@ -1270,36 +1228,19 @@ Toilet paper, Toiletries, Bathroom"
     }
 
     async function persistPreferences() {
+        // Display name is no longer collected here — it's fixed at account
+        // creation (the username picked at register time). Onboarding only
+        // touches personal look (theme + font); household cooking config
+        // (headcount + cook-style) is install-wide now (FU-615).
         const updates: Record<string, unknown> = {};
-        if (form.displayName.trim().length > 0
-            && form.displayName !== currentUser.value?.username) {
-            updates.username = form.displayName.trim();
-        }
         if (form.theme !== currentUser.value?.theme) {
             updates.theme = form.theme;
         }
         if (form.fontFamily !== currentUser.value?.font_family) {
             updates.font_family = form.fontFamily;
         }
-        if (form.headcount !== (currentUser.value?.household_headcount ?? null)) {
-            updates.household_headcount = form.headcount;
-        }
-        if (form.batchCooking !== !!currentUser.value?.batch_features_enabled) {
-            updates.batch_features_enabled = form.batchCooking;
-        }
         if (Object.keys(updates).length === 0) return;
         await authStore.updateMeAsync(updates);
-    }
-
-    // Clamp the headcount field on blur: empty/invalid → null (use recipe
-    // servings), otherwise a 1–99 integer (matches the server bounds).
-    function onHeadcountBlur() {
-        const value = form.headcount;
-        if (value === null || value === undefined || !Number.isFinite(value) || value < 1) {
-            form.headcount = null;
-        } else {
-            form.headcount = Math.min(99, Math.floor(value));
-        }
     }
 
     function onAddFirstItem() {
@@ -1325,8 +1266,7 @@ Toilet paper, Toiletries, Bathroom"
 
     function onShowMe(path: string) {
         // "Show me X" = finish onboarding (applying the draft), then land on
-        // that screen. The user can always run "Restart onboarding" from
-        // Settings → Account if they want to redo the tour.
+        // that screen.
         void finish(path);
     }
 
@@ -1366,7 +1306,6 @@ Toilet paper, Toiletries, Bathroom"
     async function complete(): Promise<boolean> {
         completing.value = true;
         loadError.value = null;
-        displayNameError.value = null;
         try {
             await applyDraft();
             await onboardingApi.completeAsync();
@@ -1401,10 +1340,10 @@ Toilet paper, Toiletries, Bathroom"
             loadError.value =
                 extracted.generalError ?? "Couldn't load onboarding state. Please refresh.";
         }
-        // Seed the displayName from the current username, theme/font from
-        // the user's prefs, then layer the saved draft on top.
+        // Seed theme/font from the user's saved values, then layer the saved
+        // draft on top. Display name is set at account creation; household
+        // cooking config is install-wide (FU-615) — neither is collected here.
         if (currentUser.value) {
-            form.displayName = currentUser.value.username ?? '';
             // Pre-fill from the user's saved prefs. If their stored theme
             // isn't one of the three onboarding options (e.g. they picked a
             // richer palette in Preferences on a re-run), the select shows
@@ -1412,8 +1351,6 @@ Toilet paper, Toiletries, Bathroom"
             // clobber a real choice.
             form.theme = currentUser.value.theme ?? 'system';
             form.fontFamily = coalesceFontFamily(currentUser.value.font_family);
-            form.headcount = currentUser.value.household_headcount ?? null;
-            form.batchCooking = !!currentUser.value.batch_features_enabled;
         }
         loadDraft();
 
@@ -1433,6 +1370,21 @@ Toilet paper, Toiletries, Bathroom"
 <style scoped>
     .wizard-shell {
         max-width: 720px;
+    }
+    /* Slim top row — mascot · progress rail · skip escape — with generous
+       horizontal spacing between the three so it reads as one clean band. */
+    .wizard-topbar {
+        display: flex;
+        align-items: center;
+        gap: var(--space-5);
+    }
+    .wizard-topbar-rail {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .wizard-mascot,
+    .wizard-skip {
+        flex: 0 0 auto;
     }
     /* Bounds the absolutely-positioned finish confetti to the step. */
     .finish-step {

@@ -139,30 +139,6 @@
 
         <hr class="settings-divider" />
 
-        <!-- F1 — onboarding restart lives here as a help / re-tour action. -->
-        <SettingsSection>
-            <template #title>First-run wizard</template>
-            <template #description>
-                Want to revisit the welcome tour? This sends you back to
-                /welcome — nothing in your data is touched, you'll just
-                step through the prompts again.
-            </template>
-
-            <SettingsRow stacked>
-                <div>
-                    <BaseButton
-                        variant="secondary"
-                        :icon="ICONS.restart_alt"
-                        label="Restart onboarding"
-                        :loading="restartingOnboarding"
-                        @click="onRestartOnboarding"
-                    />
-                </div>
-            </SettingsRow>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
-
         <p class="about-footer dora-text-muted">
             Dora is a hobby project. The mascot is doing its best.
         </p>
@@ -175,13 +151,10 @@
     import { useQuasar } from 'quasar';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
     import DoraBrand from 'src/components/DoraBrand.vue';
-    import OnboardingApiService from 'src/services/api/onboardingApiService';
-    import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
-    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import { useSupportChannel, supportHref } from 'src/composables/useSupportChannel';
     import { PRIMARY_DONATION } from 'src/config/donationLinks';
     import {
@@ -196,50 +169,9 @@
 
     const $q = useQuasar();
     const router = useRouter();
-    const authStore = useAuthStore();
-    const onboardingApi = new OnboardingApiService();
 
     const { channel, hasChannel } = useSupportChannel();
     const reportHref = computed(() => supportHref(channel.value));
-
-    const restartingOnboarding = ref(false);
-
-    async function onRestartOnboarding() {
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: 'Restart onboarding?',
-                message:
-                    "We'll send you back to /welcome. Your stock items, " +
-                    "groups, locations and shopping lists are untouched.",
-                ok: { label: 'Restart', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!ok) return;
-        restartingOnboarding.value = true;
-        try {
-            await onboardingApi.restartAsync();
-            await authStore.refreshAsync();
-            try {
-                localStorage.removeItem('dora.onboarding.skipped_at');
-            } catch {
-                // Ignore.
-            }
-            void router.push('/welcome');
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not restart onboarding.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            restartingOnboarding.value = false;
-        }
-    }
 
     // surface the live backend URL (which now includes the
     // Capacitor/localStorage runtime override), not just the build-time

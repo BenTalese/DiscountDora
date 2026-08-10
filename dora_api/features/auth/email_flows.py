@@ -35,7 +35,7 @@ from dora_api.infrastructure.api_response import (
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (
     CHANGE_EMAIL_TTL, RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL,
-    build_reset_url, build_verify_url, consume_token, find_active_token,
+    build_reset_url, build_verify_url, spa_deep_link, consume_token, find_active_token,
     hash_password, is_valid_email, issue_token, normalise_email, rate_limit,
     rate_limit_remaining_seconds, revoke_tokens_for_user, try_send,
     validate_password,
@@ -334,13 +334,11 @@ def request_email_change():
         )
 
     # An email-change token must land on /confirm-email-change, not the
-    # /verify-email route build_verify_url defaults to. Compute the rewritten
-    # URL once and use it for BOTH bodies — the text body previously used the
-    # un-rewritten /verify-email URL, dead-ending the flow for text-only mail
-    # clients (FU-522).
-    confirm_url = build_verify_url(raw_token).replace(
-        "/verify-email", "/confirm-email-change"
-    )
+    # /verify-email route build_verify_url defaults to. Build it directly on the
+    # shared hash-aware helper (was a fragile string-replace on the verify URL);
+    # used for BOTH bodies — the text body previously used the un-rewritten
+    # /verify-email URL, dead-ending the flow for text-only mail clients (FU-522).
+    confirm_url = spa_deep_link(f"/confirm-email-change?token={raw_token}")
     try_send(
         send_email,
         to=new_email,

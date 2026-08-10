@@ -83,11 +83,9 @@ export type AuthenticatedUser = {
     // `useMoneyEnabled()`. `budget_amount` above stays the per-user
     // budget — saved value survives toggling this off (data preserved).
     money_features_enabled: boolean;
-    // IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-    // posture. Default false ("fresh"); when true, the meal-planner
-    // reveals cook-pool affordances + shortfall warning. Use
-    // `useBatchEnabled()` to read + write.
-    batch_features_enabled: boolean;
+    // FU-615 — `batch_features_enabled` moved to the install-wide AppSetting
+    // (read via `useCookingPolicy()` / `useBatchEnabled()`, edited by an admin
+    // in Settings → System → Cooking). No longer a per-user field.
     // when true, `useQuickAddTargetPick` skips the remembered pick
     // so the "which list?" prompt fires every quick-add for users with more
     // than one draft. Default false = current behaviour (session-remembered).
@@ -107,9 +105,9 @@ export type AuthenticatedUser = {
     // Defaults true. Use `useImagePrefs()` to read + write. FU-508
     // dropped the stock-image companion.
     show_recipe_images: boolean;
-    // Onboarding C-5.4 — household cooking headcount; null = not set (cook
-    // mode falls back to each recipe's own serving size).
-    household_headcount: number | null;
+    // FU-615 — `household_headcount` moved to the install-wide AppSetting
+    // (read via `useCookingPolicy()`, edited in Settings → System → Cooking).
+    // No longer a per-user field.
     // alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
     // default; `alerts_email_cadence` is `'off' | 'daily' | 'weekly'` and
     // `alerts_email_day` is the weekly send day (Mon=0 … Sun=6, ignored on

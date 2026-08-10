@@ -18,6 +18,229 @@ next.
 
 ---
 
+## 2026-08-10 — Bug: e-mailed reset/verify links dead-ended on the login screen (hash-mode mismatch)
+
+**Trigger.** Owner set up SMTP, requested a password reset, clicked the link and
+landed on the **login** screen, not a set-new-password screen. Reported nav:
+`http://localhost:5174/reset-password?token=…#/login?redirect=/`.
+
+**Root cause (confirmed).** The SPA runs in **hash-history** mode
+(`web_app/quasar.config` → build.vueRouterMode: `'hash'`), but every e-mailed
+deep link was built **path-based** in `auth_helpers.py`:
+`{public_base_url()}/reset-password?token=…`. In hash mode the router only reads
+the URL *fragment* — a bare path is served the app shell, resolves to `/`, and the
+auth guard bounces the logged-out visitor to `#/login` (exactly the reported URL);
+the `?token=` sat in the page query ahead of the `#`, so `route.query.token` was
+also empty. Systemic: same mechanism broke **verify-email**, **confirm-email-change**,
+and the **alerts-digest `/alerts`** link.
+
+**Fix.** New shared `spa_deep_link(route_path)` helper in `auth_helpers.py` that
+builds `{public_base_url()}/#{route_path}` — one documented home for the hash
+coupling. Routed `build_verify_url` / `build_reset_url` through it; replaced the
+fragile `build_verify_url(...).replace("/verify-email","/confirm-email-change")`
+in `email_flows.py` with a direct `spa_deep_link(...)`; switched the
+`send_alerts_digest` `/alerts` links (html + text) to it (dropped the now-unused
+`public_base_url` import there). No template changes — all deep links flow through
+these Python builders (grep-confirmed; templates embed whatever URL they're given).
+
+**Files touched:** `dora_api/infrastructure/auth_helpers.py`,
+`dora_api/features/auth/email_flows.py`,
+`dora_api/features/alerts/send_alerts_digest.py`; new
+`tests/test_auth_link_builders.py`.
+
+**Verification.**
+- New unit test `test_auth_link_builders.py` pins the contract (route in the
+  fragment, token in the hash query, never a bare-path route) — 4 tests green;
+  `test_email_templates.py` still green (12) — builder-agnostic.
+- e2e green: `test_auth_flows.py` + `test_security_injection.py` (42) — the real
+  confirm-email-change builder now emits `/#/confirm-email-change?token=…`, still
+  satisfies the substring assertions.
+- **Live browser proof:** loaded `http://localhost:5174/#/reset-password?token=demo-token-xyz`
+  in the running SPA → routed to `/reset-password?token=demo-token-xyz`, tab title
+  "Reset Password", page rendered "**Choose a new password / New password / Confirm
+  new password**", and `route.query.token === 'demo-token-xyz'`. The old path URL is
+  what bounced to login; the hash URL the backend now emits lands correctly.
+
+**Engineering-standards close-gate.** No new R-rule violations; the fix *reduces*
+coupling (one documented `spa_deep_link` chokepoint, R-003-style single source, +
+removes a brittle string-replace). No ADR — it's a localisation of an existing
+convention, not a new recurring decision. Reported-defect rule satisfied: real bug,
+fixed **and** confirmed live in the browser (not a "didn't reproduce" case), so no
+lingering FU.
+
+**Next up.** Owner (optional): re-trigger a real reset email now that SMTP is set up
+to confirm the full click-through loop end-to-end (the routing fix itself is proven).
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-10 — FU-615: household headcount + batch-cooking moved per-user → install-wide
+
+**Trigger.** Follow-on from the onboarding cleanup: owner asked "why are the cooking
+prefs per-user? a household has a fixed headcount — I'd expect an admin/first-time
+setup thing." Investigation confirmed both `household_headcount` + `batch_features_
+enabled` were on `User` only as a convenient home for cook-mode's scaler
+(`PROPOSAL_ONBOARDING §3.4`), not a considered per-user call. Owner: **move both
+install-wide, hard change, drop the per-user storage, don't preserve data.**
+
+**What changed — backend.**
+- `AppSetting` entity + `AppSetting` table (`table_mappings`): added
+  `household_headcount` (nullable int) + `batch_features_enabled` (bool default
+  False). Removed both columns from `User` (entity + table + `Fields`).
+- Migration `b9d4f2a7c1e6_20260810_cooking_config_install_wide.py` (chained off head
+  `f4a2c7e9b1d3`, single head confirmed): adds the two AppSetting columns, drops the
+  two User columns. SQLite batch mode; pre-release hard change, no data preserved.
+- `update_me` / `register_user` (`AuthenticatedUserDto`): removed both fields +
+  their handlers/projections — `/auth/me` no longer carries them, and `extra=forbid`
+  now 400s a stray patch.
+- `get_app_settings` DTO + `update_app_settings` request/handler: added both (admin
+  edit path; headcount 1–99 or null, present-in-body semantics).
+- `health_check`: new `_cooking_policy(setting)` block → `/api/health.cooking_policy`
+  `{household_headcount, batch_features_enabled}`, mirroring `image_policy` /
+  `locale_policy` — the public read surface every client uses.
+
+**What changed — frontend.**
+- New `useCookingPolicy` composable (module-level, mirrors `useImagePolicy`): loads
+  `/health`, exposes `householdHeadcount` + `batchEnabled` + `refreshCookingPolicy`.
+- `useBatchEnabled` rewritten as a thin delegator to `useCookingPolicy` (keeps the 5
+  meal-plan component call sites unchanged); `setBatchEnabled` gone.
+- `RecipeCookMode` headcount now from `useCookingPolicy`, not `currentUser`.
+- New admin page `AdminSystemCookingSettings.vue` (headcount input + Fresh/Batch
+  segmented) at `/settings/admin/system/cooking` (route + `SettingsShell` nav entry,
+  icon `restaurant`); eager-save + `refreshCookingPolicy()` after each save.
+- Removed the per-user "Cooking style" toggle from `PreferencesSettings`; removed the
+  headcount input + batch toggle + all their draft/persist/seed machinery from
+  `WelcomeWizard` (welcome step is personal-look only now).
+- `models/auth.ts` + `authApiService` (update payload) + `appSettingsApiService`
+  (AppSettings type) + `healthApiService` (HealthInfo) updated to match.
+
+**Where the admin sets it.** Chose the always-available **Settings → System → Cooking**
+admin page as the home (that *is* the admin/first-time setup surface), rather than
+bolting install-wide immediate-apply controls onto the onboarding admin step (which is
+informational + draft-until-finish, and only the first user sees it). Noted as the
+deliberate call; not building an onboarding-admin-step duplicate (Anti-creep).
+
+**Files touched (14 code + 3 tests):** `dora_api/domain/entities/app_setting.py`,
+`.../user.py`, `persistence/table_mappings.py`, new migration
+`b9d4f2a7c1e6_…`, `features/auth/update_me.py`, `.../register_user.py`,
+`features/app_settings/get_app_settings.py`, `.../update_app_settings.py`,
+`features/health/health_check.py`; `web_app` — new `composables/useCookingPolicy.ts`,
+`composables/useBatchEnabled.ts`, new `pages/settings/AdminSystemCookingSettings.vue`,
+`pages/settings/PreferencesSettings.vue`, `pages/onboarding/WelcomeWizard.vue`,
+`pages/RecipeCookMode.vue`, `router/routes.ts`, `pages/SettingsShell.vue`,
+`services/api/{health,auth,appSettings}ApiService.ts`, `models/auth.ts`. Tests:
+`test_onboarding_flags.py`, `test_patch_semantics.py`, `dto_snapshots.json`.
+
+**Verification.**
+- Backend: modules import clean; **e2e green** — `test_onboarding_flags` (new
+  headcount + batch roundtrips via `/app-settings` → mirrored on `/health`,
+  out-of-range 400s, and `/auth/me` no-longer-carries + 400-on-patch),
+  `test_patch_semantics` (null-clear removed), 393 passed across the auth/app-settings/
+  health/cook slice. DTO contract snapshots refreshed — diff is **exactly** the three
+  expected shape changes (app_settings +2, auth_me −2, health +cooking_policy),
+  nothing else drifted; 27 DTO tests green.
+- Migration: real **destructive boot to head** succeeds; `alembic heads` = single
+  `b9d4f2a7c1e6`; `/health.cooking_policy` serves the defaults live.
+- Frontend: full **`vue-tsc` typecheck clean** (0 errors) + eslint clean on all
+  changed files. New admin route resolves in the running SPA (tab title →
+  "System: Cooking"), no console/compile errors — but the **visual render of the new
+  page couldn't be confirmed** (the in-app browser pane wasn't compositing the layout
+  swap; same limitation as the top-bar walk). Left for the owner in `DORA_VERIFY.md`.
+
+**Engineering-standards close-gate.** No new R-rule violations. Follows the existing
+install-wide-value convention exactly (R-003 single source: server owns headcount +
+cook-style; one read path via `/health`, one edit path via `/app-settings`) — same
+shape as `image_policy` / `locale_policy`, so **no new ADR** warranted. `meals_per_week`
+deliberately left per-user (out of scope; separate FU-612).
+
+**Next up.** Owner: (1) visual walk of Settings → System → Cooking + confirm cook mode
+scales to the install headcount and the meal planner shows batch tools when the
+install cook-style is Batch (DORA_VERIFY); (2) FU-616 (onboarding sign-out) still open.
+
+**Open questions for user.** None — scope was confirmed (both install-wide).
+
+---
+
+## 2026-08-10 — Onboarding cleanup: slim top bar, forced-dark, step-1 trims, restart removed
+
+**Trigger.** Owner feedback list on onboarding: fix the top area (drop sign-out,
+move skip up, drop brand text, put mascot inline with the progress bar); relabel
+theme "System (follow OS)" → "System"; "Hi! I'm Dora." → "Hi, I'm Dora."; remove the
+"What should I call you?" field (name is set at account creation); question why the
+cooking prefs are the only setup options and why they're per-user; remove "restart
+onboarding" (it could strand a light-theme user in a dark-canvas wizard) and consider
+making onboarding theme-agnostic.
+
+**Decisions made (2 forks put to owner).**
+- *Onboarding theme:* **force a self-contained dark look** — the wizard now pins
+  `data-theme="pesto-dark"` on its shell so inner cards can't render light-on-dark.
+- *Cooking prefs:* owner pushed back — "these don't make sense as per-user; a
+  household has a fixed headcount; I'd expect an admin/first-time-setup thing." Root
+  cause found: `household_headcount` was put on `User` only so cook-mode's scaler
+  could read it (`PROPOSAL_ONBOARDING §3.4`), not a considered per-user call. Left
+  headcount + batch **in onboarding untouched** this pass (removing them without a
+  new home would leave headcount unsettable — onboarding is the only place it's set)
+  and logged the install-wide relocation as **FU-615** for a dedicated unit.
+
+**What changed (code).**
+- `layouts/WelcomeLayout.vue` — removed the entire `q-header` (sign out + mascot +
+  `DoraBrand`); shell now just page-container + offline banner + router-view, and
+  carries `data-theme="pesto-dark"` to force the dark palette. Dropped the now-unused
+  BaseButton/DoraBrand/ICONS/auth imports + `onSignOut`.
+- `pages/onboarding/WelcomeWizard.vue` — replaced the standalone progress rail with a
+  slim `.wizard-topbar` flex row: **mascot · rail · Skip-onboarding** (skip hidden on
+  the finish step), `gap: var(--space-5)`. Setup-header now renders only the
+  finish-step Finish button (its skip button moved to the top row). Step 1: greeting
+  "Hi, I'm Dora."; removed the display-name `q-input` and all its machinery
+  (`form.displayName`, `displayNameError`, the `username` branch in
+  `persistPreferences` + `handleApplyError`, the onMounted seed); theme option label
+  → "System".
+- `pages/onboarding/OnboardingStory.vue` — removed the duplicate `.story-top` skip
+  button + its `skip` emit + CSS (skip is persistent up top now).
+- `pages/settings/AboutSettings.vue` — removed the "First-run wizard / Restart
+  onboarding" section + `onRestartOnboarding` + now-unused imports (OnboardingApiService,
+  useAuthStore, SettingsRow). The `/onboarding/restart` API endpoint stays (still used
+  by the dashboard's time-boxed "continue setup" banner).
+
+**Files touched:** `web_app/src/layouts/WelcomeLayout.vue`,
+`web_app/src/pages/onboarding/WelcomeWizard.vue`,
+`web_app/src/pages/onboarding/OnboardingStory.vue`,
+`web_app/src/pages/settings/AboutSettings.vue`, `CHANGELOG.md`,
+`DORA_FOLLOWUPS.md` (FU-615, FU-616).
+
+**Verification.**
+- `eslint` clean on all four changed SFCs; grep confirms zero orphan refs
+  (displayName / wizard-rail / emit('skip') / onRestartOnboarding).
+- Drove it live (dora-spa + dora-verify-backend): logged in as seeded `dora`, reset
+  onboarding via `/onboarding/restart` (CSRF `dora_csrf` → `X-CSRF-Token`), loaded
+  `/welcome`. Confirmed via read_page: top row = **mascot → progress rail → Skip
+  onboarding**, no brand text / no sign-out. Confirmed via DOM/computed-style on the
+  welcome step: greeting "Hi, I'm Dora." present, old "Hi!" gone, "What should I call
+  you?" gone, "System (follow OS)" gone; **card bg `rgb(28,31,35)` / text
+  `rgb(255,255,255)`** and `--surface-component` = `hsl(170 28% 12%)` under the
+  `data-theme="pesto-dark"` scope → forced-dark works. Re-completed onboarding for the
+  seeded user afterward; stopped both servers. (Interactive clicks were flaky because
+  the Browser pane wasn't compositing — used DOM `.click()` / computed styles instead.)
+
+**Engineering-standards close-gate.** No new R-rule violations. R-003 improved (three
+skip-button copies collapsed to one). R-035/D-rules: used theme tokens + spacing
+tokens throughout; the pre-existing raw `#1e2a26` canvas hex in `WelcomeLayout` was
+kept (deliberate onboarding backdrop, predates this change) — not newly introduced.
+No new ADR warranted (one-off UI cleanup).
+
+**Next up.**
+1. **FU-615** — owner to confirm scope (headcount only vs headcount + batch), then
+   relocate to an install-wide `AppSetting` set at first-time/admin setup (migration +
+   admin surface + cook-mode/meal-plan read-site changes). This is the real answer to
+   "why is this per-user?".
+2. Owner walk of the live onboarding for feel (added to DORA_VERIFY).
+
+**Open questions for user.** FU-615 scope: headcount only, or headcount + batch-cooking
+moved install-wide together?
+
+---
+
 ## 2026-08-10 — Fixes: stocktake fill-pulse (never rendered) + expiry menu wrap
 
 **Trigger.** Owner, two bugs. (1) *"Stocktake button fill to pair with glow is not

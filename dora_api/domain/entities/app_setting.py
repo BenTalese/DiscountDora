@@ -139,6 +139,19 @@ class AppSetting(BaseEntity):
     # "staple you never want to run out of" — same shape as Essential).
     # Server-side authority; see `update_stock_item._try_auto_add`.
     auto_add_mode: str = "essential_only"
+    # FU-615 — household cooking config, install-wide (moved off User).
+    # `household_headcount` is how many people the household usually cooks
+    # for; NULL = not set (cook mode falls back to each recipe's own
+    # `servings`). `batch_features_enabled` is the household's cook-style:
+    # False ("fresh") keeps the meal-planner pure scheduling, True ("batch")
+    # reveals the cook-pool affordances (per-recipe ± / log-cook / "n free"),
+    # the shortfall warning, and the "to cook by" line. Both were per-user
+    # (a convenience home for cook-mode's scaler); a household has one
+    # headcount + one cook-style, so they're install-wide now. Read by every
+    # client via /api/health.cooking_policy; edited by an admin in
+    # Settings → System → Cooking.
+    household_headcount: int | None = None
+    batch_features_enabled: bool = False
     # operational config that was formerly carried as
     # `DORA_*` env vars. An admin now configures a fresh install through
     # Settings → Admin → System; the two remaining bootstrap-only vars
@@ -202,6 +215,8 @@ class AppSetting(BaseEntity):
         STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"
         AUTO_DRAIN_PAST_MEALS = "auto_drain_past_meals"
         AUTO_ADD_MODE = "auto_add_mode"
+        HOUSEHOLD_HEADCOUNT = "household_headcount"
+        BATCH_FEATURES_ENABLED = "batch_features_enabled"
         SMTP_HOST = "smtp_host"
         SMTP_PORT = "smtp_port"
         SMTP_USERNAME = "smtp_username"

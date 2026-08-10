@@ -140,20 +140,11 @@
         <SettingsSection>
             <template #title>Meal planning</template>
             <template #description>
-                Cooking style controls what the meal planner shows.
-                <strong>Fresh</strong> keeps the planner pure scheduling.
-                <strong>Batch</strong> adds the cook pool (per-recipe ± /
-                log-cook), the cook-shortfall warning, and the
-                "to cook by" sidebar line.
+                How many meals the sequential builder aims for.
+                <!-- FU-615 — the household cook-style (Fresh / Batch) is an
+                     install-wide setting now, edited in Settings → System →
+                     Cooking, not per user. -->
             </template>
-
-            <SettingsRow label="Cooking style">
-                <DoraSegmented
-                    :model-value="batchEnabled ? 'batch' : 'fresh'"
-                    :options="cookingStyleOptions"
-                    @update:model-value="onCookingStyleChange"
-                />
-            </SettingsRow>
 
             <SettingsRow
                 label="Meals per week"
@@ -178,7 +169,6 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import type {
         FontFamilyPreference,
         FontSizePreference,
@@ -193,26 +183,17 @@
         type ThemeFamily,
     } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { BUILDER_TARGET_MEALS_FALLBACK } from 'src/composables/useMealPlanner';
     import { ref, watch } from 'vue';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
-    const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
-    const { batchEnabled, setBatchEnabled } = useBatchEnabled();
 
-    type CookingStyle = 'fresh' | 'batch';
-    const cookingStyleOptions: DoraSegmentedOption<CookingStyle>[] = [
-        { label: 'Fresh', value: 'fresh' },
-        { label: 'Batch', value: 'batch' },
-    ];
     // "always ask which list" quick-add opt-in. Optimistic flip
     // with rollback on error, same shape as the other single-toggle prefs
     // on this page.
@@ -269,19 +250,6 @@
         } catch (err) {
             notifyError('Could not save meals per week.', err);
             mealsPerWeekDraft.value = currentUser.value?.meals_per_week ?? null;
-        }
-    }
-
-    async function onCookingStyleChange(next: CookingStyle) {
-        try {
-            await setBatchEnabled(next === 'batch');
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not change cooking style.',
-                caption: toastCaption(err),
-            });
         }
     }
 

@@ -146,6 +146,12 @@ def configure_mappings(db: SQLAlchemy):
         # FU-511 — install-wide auto-add mode ('off' | 'essential_only' | 'all').
         # Replaces the per-item StockItem.auto_add_when_low column.
         Column("auto_add_mode", String(16), nullable=False, server_default="essential_only"),
+        # FU-615 — household cooking config, install-wide (moved off User).
+        # `household_headcount` NULL = not set (cook mode uses recipe servings);
+        # `batch_features_enabled` default False ("fresh"). Read by every client
+        # via /api/health.cooking_policy; edited in Settings → System → Cooking.
+        Column("household_headcount", Integer, nullable=True),
+        Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
         # operational config promoted from `DORA_*`
         # env vars. `resolved_operational_config()` is now a straight
         # AppSetting projection (env fallbacks dropped 2026-07-06 —
@@ -977,10 +983,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("voice_id", String(32), nullable=False, server_default="amy"),
         # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
         Column("money_features_enabled", Boolean, nullable=False, server_default=false()),
-        # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-        # posture. Default False ("fresh"); when True, the planner reveals
-        # the cook-pool affordances + shortfall warning + "to cook by" line.
-        Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
+        # FU-615 — `batch_features_enabled` moved off User to AppSetting
+        # (install-wide cook-style; a household has one cook-style).
         # per-user "always ask which draft list on quick-add" flag.
         # Default False; when True the SPA skips the remembered pick so the
         # picker fires every time (see useStockItemActions.addToList).
@@ -997,8 +1001,8 @@ def configure_mappings(db: SQLAlchemy):
         # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
         # Default True. FU-508 dropped the stock-image companion column.
         Column("show_recipe_images", Boolean, nullable=False, server_default=true()),
-        # Onboarding C-5.4 — household cooking headcount (NULL = not set).
-        Column("household_headcount", Integer, nullable=True),
+        # FU-615 — `household_headcount` moved off User to AppSetting
+        # (install-wide; a household has one headcount).
         # alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
         # Off by default; cadence values 'off' | 'daily' | 'weekly'; day is
         # the weekly send day Mon=0…Sun=6 (ignored on the daily cadence).

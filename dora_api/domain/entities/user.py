@@ -210,13 +210,8 @@ class User(BaseEntity):
     # budget controls — they only become editable when this is True,
     # but the saved value survives a toggle round-trip.
     money_features_enabled: bool = False
-    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-    # posture. Default False ("fresh") — Charter P10 Anti-creep. When
-    # True ("batch"), the meal-planner reveals the cook-pool affordances
-    # (per-recipe ± / log-cook / "n free"), the shortfall warning, and the
-    # "to cook by" sidebar line. Fresh households see a pure scheduling
-    # surface; batch households opt in to the extra layer.
-    batch_features_enabled: bool = False
+    # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide
+    # cook-style; a household has one cook-style, not one per person).
     # per-user "always ask which draft list on quick-add" toggle.
     # Default False → the SPA's `useQuickAddTargetPick` remembers the picked
     # list for the tab session (current behaviour). True → the picker fires
@@ -246,10 +241,8 @@ class User(BaseEntity):
     # dropped the stock-image half of this pair (photos of pantry items
     # were never meaningfully used; a linked Product carries the visual).
     show_recipe_images: bool = True
-    # Onboarding C-5.4 — how many people the household usually cooks for.
-    # NULL = not set (cook mode falls back to each recipe's own `servings`).
-    # Read by RecipeCookMode to seed its per-session serving scaler (L44).
-    household_headcount: int | None = None
+    # FU-615 — `household_headcount` moved to AppSetting (install-wide;
+    # a household has one headcount). Cook mode reads it via /api/health.
     # alerts email digest (PROPOSAL_ALERTS §3.5 / §4.4). Off by
     # default (P10 Anti-creep + the proposal §5 "channels: in-app on; email
     # off (opt-in)"). When `alerts_email_enabled` is True, the scheduled
@@ -320,13 +313,11 @@ class User(BaseEntity):
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
         MONEY_FEATURES_ENABLED = "money_features_enabled"
-        BATCH_FEATURES_ENABLED = "batch_features_enabled"
         ALWAYS_ASK_WHICH_SHOPPING_LIST = "always_ask_which_shopping_list"
         MEALS_PER_WEEK = "meals_per_week"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
-        HOUSEHOLD_HEADCOUNT = "household_headcount"
         ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
         ALERTS_EMAIL_DAY = "alerts_email_day"

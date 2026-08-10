@@ -1,30 +1,15 @@
 <template>
-    <!-- Minimal first-run shell: no nav drawer, no header chrome — just a
-         centred container so the user's eye lands on the wizard, not the
-         app furniture. We keep the offline banner because the wizard
-         needs the API to seed and complete.
+    <!-- Minimal first-run shell: no header chrome at all — the mascot, the
+         progress rail and the "Skip onboarding" escape now live inline at the
+         top of the wizard itself (a slim, single row), so the whole viewport
+         goes to the onboarding screens.
 
-         Onboarding is deliberately a plain dark canvas — no AuthShell
-         blobs — so focus stays on the scene text, not the backdrop. -->
-    <q-layout view="hHh Lpr lFf" class="welcome-layout">
-        <q-header reveal class="bg-transparent welcome-header q-px-md">
-            <q-toolbar class="welcome-toolbar">
-                <q-avatar square size="36px">
-                    <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
-                </q-avatar>
-                <q-toolbar-title class="welcome-title">
-                    <DoraBrand />
-                </q-toolbar-title>
-                <BaseButton
-                    variant="ghost"
-                    dense
-                    :icon="ICONS.logout"
-                    label="Sign out"
-                    @click="onSignOut"
-                />
-            </q-toolbar>
-        </q-header>
-
+         Onboarding is a self-contained dark canvas regardless of the user's
+         chosen theme: `data-theme="pesto-dark"` pins every semantic token to
+         the dark palette so the wizard's cards can never render light-on-dark
+         (which is what happened when a light-theme user re-entered the tour).
+         Focus stays on the scene, not the backdrop. -->
+    <q-layout view="hHh Lpr lFf" class="welcome-layout" data-theme="pesto-dark">
         <q-page-container>
             <OfflineBanner />
             <router-view v-slot="{ Component }">
@@ -37,21 +22,8 @@
 </template>
 
 <script setup lang="ts">
-    import { ICONS } from 'src/style/icons';
-    import BaseButton from 'src/components/BaseButton.vue';
-    import DoraBrand from 'src/components/DoraBrand.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
-    import { useAuthStore } from 'src/stores/authStore';
-    import { useRouter } from 'vue-router';
-
-    const authStore = useAuthStore();
-    const router = useRouter();
-
-    async function onSignOut() {
-        await authStore.logoutAsync();
-        void router.push('/login');
-    }
 </script>
 
 <style scoped>
@@ -59,18 +31,5 @@
         background: #1e2a26;
         color: #ffffff;
         min-height: 100vh;
-    }
-    .welcome-header {
-        color: #ffffff;
-    }
-    .welcome-toolbar {
-        max-width: 960px;
-        width: 100%;
-        margin: 0 auto;
-    }
-    .welcome-title {
-        font-size: clamp(22px, 2.4vw, 30px);
-        letter-spacing: 0;
-        line-height: 1;
     }
 </style>

@@ -58,10 +58,6 @@ export type UpdateMeCommand = {
     /** C-cross Chunk 2 — per-user money-features opt-in. Layered with the
      *  install-wide `money_enabled` flag via `useMoneyEnabled()`. */
     money_features_enabled?: boolean;
-    /** IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
-     *  posture. Default off ("fresh"); when on, the meal-planner reveals
-     *  cook-pool affordances + shortfall warning. */
-    batch_features_enabled?: boolean;
     /** FU-316 — when true, quick-add prompts every time (skips the
      *  session-remembered pick). Only matters when the user has >1 draft. */
     always_ask_which_shopping_list?: boolean;
@@ -79,10 +75,6 @@ export type UpdateMeCommand = {
      *  survive a toggle (only rendering is suppressed). FU-508 dropped
      *  the stock-image companion. */
     show_recipe_images?: boolean;
-    /** Onboarding C-5.4 — household cooking headcount (1–99). Server clears
-     *  when `null` is sent. Drives serving-aware suggestions / shopping
-     *  quantity hints. */
-    household_headcount?: number | null;
     /** C-9.7 — alerts email digest channel. Cadence is `'off' | 'daily'
      *  | 'weekly'`; `alerts_email_day` is the weekly send day Mon=0 …
      *  Sun=6 (ignored on the daily cadence; saved either way). */

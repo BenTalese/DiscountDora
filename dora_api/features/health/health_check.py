@@ -185,6 +185,27 @@ def _image_policy(setting) -> dict[str, int]:
     return {"quality": quality, "max_dimension": max_dim}
 
 
+def _cooking_policy(setting) -> dict:
+    """FU-615 — install-wide household cooking config, surfaced here (not on
+    `/app-settings`) because every logged-in user's client needs it, not just
+    admins: cook mode seeds its per-session serving scaler from
+    `household_headcount`, and the meal-planner reveals the cook-pool
+    affordances when `batch_features_enabled` is on. Both moved off User to
+    AppSetting (a household has one headcount + one cook-style). Wrapped in a
+    try so a DB hiccup doesn't take the probe down — falls back to the
+    unset defaults (no headcount ⇒ recipe servings; fresh cook-style)."""
+    headcount: int | None = None
+    batch = False
+    try:
+        if setting is not None:  # shared singleton, fetched once by health_check
+            _Raw = getattr(setting, "household_headcount", None)
+            headcount = int(_Raw) if _Raw is not None else None
+            batch = bool(getattr(setting, "batch_features_enabled", False))
+    except Exception:
+        pass
+    return {"household_headcount": headcount, "batch_features_enabled": batch}
+
+
 def _support_channel() -> dict[str, str]:
     """FU-370 — install's support/report-an-issue channel, surfaced here (not
     on `/app-settings`) because every logged-in user's browser needs it to
@@ -224,5 +245,6 @@ def health_check():
         "features": _feature_flags(setting),
         "image_policy": _image_policy(setting),
         "locale_policy": _locale_policy(setting),
+        "cooking_policy": _cooking_policy(setting),
         "support": _support_channel(),
     }), 200

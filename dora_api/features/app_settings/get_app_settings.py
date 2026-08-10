@@ -54,6 +54,12 @@ class AppSettingsDto:
     stocktake_auto_tuning_enabled: bool
     # FU-511 — install-wide auto-add mode. 'off' | 'essential_only' | 'all'.
     auto_add_mode: str
+    # FU-615 — household cooking config, install-wide (moved off User).
+    # `household_headcount` None = not set (cook mode uses recipe servings).
+    # `batch_features_enabled` = cook-style ("batch" reveals the cook pool).
+    # Also mirrored on /api/health.cooking_policy so every client reads them.
+    household_headcount: int | None
+    batch_features_enabled: bool
     # FU-317 — install-wide meal-plan reconcile posture (D5 install-wide,
     # FU-517). True keeps today's silent auto-drain; False flips the daily
     # sweep to write `unresolved_manual` receipts and leave the pool +
@@ -109,6 +115,11 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
             getattr(setting, "stocktake_auto_tuning_enabled", True)
         ),
         auto_add_mode=(getattr(setting, "auto_add_mode", None) or "essential_only"),
+        household_headcount=(
+            int(setting.household_headcount)
+            if getattr(setting, "household_headcount", None) is not None else None
+        ),
+        batch_features_enabled=bool(getattr(setting, "batch_features_enabled", False)),
         auto_drain_past_meals=bool(getattr(setting, "auto_drain_past_meals", True)),
         smtp_host=getattr(setting, "smtp_host", None) or "",
         smtp_port=int(getattr(setting, "smtp_port", 587) or 587),

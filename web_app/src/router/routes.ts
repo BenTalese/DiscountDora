@@ -437,6 +437,13 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemMealReconcileSettings.vue'),
                         meta: { title: 'System: Meal Reconciliation' }
                     },
+                    // FU-615 — install-wide household cooking config
+                    // (headcount + cook-style), moved off the per-user record.
+                    {
+                        path: 'admin/system/cooking',
+                        component: () => import('pages/settings/AdminSystemCookingSettings.vue'),
+                        meta: { title: 'System: Cooking' }
+                    },
                     {
                         // Old single System page → first of the four.
                         path: 'admin/system',

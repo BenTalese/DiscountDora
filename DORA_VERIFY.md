@@ -36,6 +36,11 @@ top-to-bottom.
 *Trivial display chip (reads the already-loaded ingredient list); vue-tsc clean; mirrors the adjacent time/serves chips. No dev server on this machine to eyeball it.*
 - [ ] Cookbook: recipe cards show an **"N ingredients"** chip next to the time/serves/difficulty chips; a recipe with 1 ingredient reads "1 ingredient"; a recipe with none shows no chip. Also present on a stock item detail → **Recipes using this** cards.
 
+## Password-reset / verify-email link routing (2026-08-10)
+*Root-caused + fixed (e-mailed deep links were path-based but the SPA is hash-routed, so they bounced to /login). Verified live: loading `http://localhost:5174/#/reset-password?token=…` lands on the "Choose a new password" screen with the token applied; unit + e2e auth tests green. Owner has SMTP live — worth one real click-through now that it's fixed.*
+- [ ] Trigger a real password reset → click the emailed link → it opens the **"Choose a new password"** screen (not the login page), and submitting a new password actually changes it (log in with the new one).
+- [ ] Verify-email + email-change confirmation links from a real inbox likewise open their confirmation screens, not the login page.
+
 ## Transactional email brand banner (2026-08-10)
 *Code-complete; template + sender unit tests green (30), and the rendered email confirmed in-browser (banner img 520px, "Reset Password", new intro, footer). Owed: an eyes-on check in a real inbox once SMTP is live — CID inline images render in Gmail/Outlook/Apple Mail, but worth a glance.*
 - [ ] Trigger a password reset with SMTP configured → the email opens with the brand banner (Dora mascot on the left, "Dashy Dora" in the Cute Dino font, on the yellow strip) rendered inline (not a broken-image box) in Gmail, Outlook, and Apple Mail.
@@ -1144,6 +1149,22 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 ---
 
 ## Onboarding
+
+### FU-615 — household cooking config moved install-wide (2026-08-10)
+Backend + typecheck verified green; these are the running-app checks (the browser pane wouldn't composite the new admin page for an agent walk).
+- [ ] **Settings → System → Cooking** renders: a "People" number field (blank = per-recipe) and a Fresh/Batch segmented control. Set headcount to e.g. 4 and flip to Batch — each change toasts and persists (reload the page, values stick).
+- [ ] Open a recipe → **Cook mode**: the serving scaler seeds from the install headcount (4), not the recipe's own servings. Clear the headcount in System → Cooking → cook mode falls back to the recipe's servings.
+- [ ] With install cook-style = **Batch**, the meal planner shows the cook-pool tools (per-recipe ± / "N free" / "to cook by"); set it to **Fresh** and they disappear — for *every* user, not per-account.
+- [ ] **Settings → Preferences** no longer has a "Cooking style" toggle (just "Meals per week" under Meal planning).
+- [ ] Onboarding welcome step no longer asks headcount or "I batch-cook" (theme + font only).
+
+### Onboarding top-bar + forced-dark cleanup (2026-08-10)
+Verified live via DOM/computed-style (structure + forced-dark confirmed); these are the eyeball-feel checks left for the owner.
+- [ ] Top row reads mascot · Story/Setup progress rail · **Skip onboarding**, evenly spaced with breathing room — no sign-out, no "Dashy Dora" wordmark. Check it holds at a narrow width (rail wraps, row doesn't overflow).
+- [ ] Whole wizard is dark on every step regardless of your saved theme; set a **light** theme first, then walk story + all setup steps — cards must stay dark (no light-on-dark flash).
+- [ ] On the final "You're all set" step the top-row **Skip onboarding** disappears (Finish takes over) — confirm you can still complete from the Finish button.
+- [ ] Step 1 has no "What should I call you?" field; greeting reads "Hi, I'm Dora."; theme dropdown lists **System** (not "System (follow OS)").
+- [ ] Settings → About no longer has a "Restart onboarding" section.
 
 ### FU-184 — onboarding sell-copy honesty pass (2026-07-06) — origin FU-184
 - [ ] Welcome card (`/welcome` step 1) reads "I keep your pantry, **shopping and cooking** in one place…" — no mention of "deals".

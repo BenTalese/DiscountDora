@@ -667,14 +667,19 @@ Toilet paper, Toiletries, Bathroom"
         { label: 'Light', value: 'pesto' },
         { label: 'Dark', value: 'pesto-dark' },
     ];
+    // "Nunito (Default)" names the default (the app's base body font — see
+    // Preferences page for the full rationale). The standalone 'nunito' option
+    // is dropped as a confusing duplicate of the default; `coalesceFontFamily`
+    // folds any legacy 'nunito' selection back onto 'default'.
     const FONT_OPTIONS = [
-        { label: 'Default', value: 'default' },
+        { label: 'Nunito (Default)', value: 'default' },
         { label: 'Urbanist', value: 'urbanist' },
-        { label: 'Nunito', value: 'nunito' },
         { label: 'Inter', value: 'inter' },
         { label: 'Lexend', value: 'lexend' },
         { label: 'Plus Jakarta Sans', value: 'plus_jakarta_sans' },
     ];
+    const coalesceFontFamily = (f: FontFamilyPreference | undefined): FontFamilyPreference =>
+        f === undefined || f === 'nunito' ? 'default' : f;
     // ── Wizard step state ────────────────────────────────────────────
     type StepId =
         | 'welcome' | 'admin'
@@ -1406,7 +1411,7 @@ Toilet paper, Toiletries, Bathroom"
             // blank and persistPreferences leaves it untouched — we never
             // clobber a real choice.
             form.theme = currentUser.value.theme ?? 'system';
-            form.fontFamily = currentUser.value.font_family ?? 'default';
+            form.fontFamily = coalesceFontFamily(currentUser.value.font_family);
             form.headcount = currentUser.value.household_headcount ?? null;
             form.batchCooking = !!currentUser.value.batch_features_enabled;
         }

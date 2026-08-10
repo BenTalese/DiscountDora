@@ -122,18 +122,34 @@
        the eye. Used for one-off CTAs (stocktake glow, etc.). The button
        fill tint pulses in sync with the surrounding glow so the whole
        control breathes, not just the ring. The animation pauses for users
-       with reduced-motion enabled. */
+       with reduced-motion enabled.
+
+       The fill is animated on the ::before layer, NOT the button element:
+       Quasar forces `.q-btn--outline { background: transparent !important }`,
+       and `!important` is *ignored inside @keyframes*, so a fill on the
+       element can never paint on an outline button (the Stocktake button is
+       `secondary` = outline). Quasar's `.q-btn:before` is an inset,
+       radius-inheriting layer that paints behind the label and carries no
+       `!important` background, so the tint shows there for every variant. */
     .dora-btn--attention {
-        animation: dora-btn-attention-pulse 2s ease-in-out infinite;
-        border-color: var(--brand-primary) !important;
+        animation: dora-btn-attention-glow 2s ease-in-out infinite;
     }
-    @keyframes dora-btn-attention-pulse {
+    .dora-btn--attention::before {
+        animation: dora-btn-attention-fill 2s ease-in-out infinite;
+    }
+    @keyframes dora-btn-attention-glow {
         0%, 100% {
             box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-accent) 55%, transparent);
-            background-color: color-mix(in srgb, var(--brand-accent) 22%, transparent);
         }
         50% {
             box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand-accent) 0%, transparent);
+        }
+    }
+    @keyframes dora-btn-attention-fill {
+        0%, 100% {
+            background-color: color-mix(in srgb, var(--brand-accent) 32%, transparent);
+        }
+        50% {
             background-color: color-mix(in srgb, var(--brand-accent) 0%, transparent);
         }
     }
@@ -141,7 +157,10 @@
         .dora-btn--attention {
             animation: none;
             box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 35%, transparent);
-            background-color: color-mix(in srgb, var(--brand-accent) 15%, transparent);
+        }
+        .dora-btn--attention::before {
+            animation: none;
+            background-color: color-mix(in srgb, var(--brand-accent) 22%, transparent);
         }
     }
 </style>

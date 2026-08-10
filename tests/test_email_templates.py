@@ -63,10 +63,13 @@ def _assert_fully_rendered(html: str) -> None:
 
 def _assert_layout_applied(html: str, subject: str) -> None:
     """Every content template extends _layout.html — doctype, <title> from
-    the subject, the Dashy Dora heading, and the footer must all be there."""
+    the subject, the brand banner header, and the footer must all be there.
+    The header is the inline banner image (mascot + Cute Dino wordmark),
+    referenced via cid:brand-banner and carrying "Dashy Dora" alt text."""
     assert html.lstrip().lower().startswith("<!doctype html>")
     assert f"<title>{subject}</title>" in html
-    assert "<h1" in html and "Dashy Dora" in html
+    assert 'src="cid:brand-banner"' in html
+    assert 'alt="Dashy Dora"' in html
     assert "your pantry at your fingertips" in html
 
 
@@ -118,8 +121,11 @@ def test__render_template__reset_password__interpolates_username_and_link():
 
     assert "Hi ben," in html
     assert html.count(f'href="{reset_url}"') == 2  # button + fallback link
-    assert "Reset password" in html
+    assert "Reset Password" in html
+    assert "There was a request to reset the password" in html
     assert "expires in 1 hour" in html
+    # The "if you didn't ask for this" line was removed (owner feedback).
+    assert "stays" not in html
     _assert_layout_applied(html, subject)
     _assert_fully_rendered(html)
 

@@ -28,6 +28,10 @@
                 <q-chip v-if="recipe.servings" dense :icon="ICONS.restaurant">
                     Serves {{ recipe.servings }}
                 </q-chip>
+                <q-chip v-if="ingredientCount > 0" dense :icon="ICONS.ingredients">
+                    {{ ingredientCount }}
+                    {{ ingredientCount === 1 ? 'ingredient' : 'ingredients' }}
+                </q-chip>
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
                     {{ recipe.difficulty }}
                 </q-chip>
@@ -185,6 +189,11 @@
 
     const cookable = computed(() => props.recipe.cookable);
     const unlinkedCount = computed(() => props.recipe.unlinked_ingredient_count ?? 0);
+    // Display-only count of the recipe's ingredient lines. The list
+    // endpoint already hydrates `ingredients` (the footer actions read it),
+    // so this is presentation of data in hand, not a client-owned domain
+    // rule — no server field warranted (R-003 "fine client display math").
+    const ingredientCount = computed(() => props.recipe.ingredients.length);
 
     // Tri-state cook-button colour (IMPL_PLAN_RECIPE_IMPORTER §Chunk 4):
     //   true  → primary (green-ish, "ready to cook")

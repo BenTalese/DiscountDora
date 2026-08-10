@@ -198,7 +198,7 @@
                     transition-show="jump-down"
                     transition-hide="jump-up"
                 >
-                    <q-list dense style="min-width: 180px">
+                    <q-list dense class="expiry-menu-list">
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 1)">
                             <q-item-section
                                 avatar
@@ -725,6 +725,17 @@
 </script>
 
 <style scoped lang="scss">
+    /* Expiry push-shortcut menu. Widened from the old 180px floor so the
+       longest option ("Push expiry by 14 days") fits on one line, and the
+       label sections never wrap regardless of font/locale — the row grows
+       to fit instead. `:deep` because q-menu teleports its list to body. */
+    .expiry-menu-list {
+        min-width: 224px;
+    }
+    .expiry-menu-list :deep(.q-item__section:not(.q-item__section--avatar)) {
+        white-space: nowrap;
+    }
+
     .stock-row {
         /* Feedback 2026-06-18 (round 3): rows felt too tall after the
            round-1 spacing bump. Bring the min-height down a notch while

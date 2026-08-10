@@ -22,12 +22,32 @@ top-to-bottom.
 
 ---
 
+## Stocktake fill-pulse + expiry menu width fixes (2026-08-10)
+*Bug 1 (fill never rendered on the outline button) fixed by moving the fill to the `::before` layer — mechanism confirmed against real Quasar CSS (computed `::before` bg = live tint, animation running). Bug 2 is a menu width/nowrap tweak. Both are visual/animation → owner once-over.*
+- [ ] Stock Overview, stocktake overdue: the **Stocktake** button's **fill colour** now breathes in sync with the glow ring (not just the ring) — the whole control pulses. Reduced-motion → static soft fill, no animation.
+- [ ] Stock row expiry dropdown → **"Push expiry by 14 days"** sits on one line (no wrap); the menu is comfortably wide and all options read cleanly.
+
+## Font picker names the default (2026-08-10)
+*Label-only + option removal; vue-tsc clean; no test referenced it. No dev server here to eyeball.*
+- [ ] Settings → Preferences → **Font family**: the first option reads **"Nunito (Default)"** (not "Default"), there's no separate "Nunito" option, and selecting it applies the default font. Check the longer label doesn't crowd/overflow the segmented control on a narrow screen.
+- [ ] Onboarding wizard (fresh account or re-run) → the font step shows the same **"Nunito (Default)"** first option with no duplicate "Nunito".
+
+## Recipe card ingredient count (2026-08-10)
+*Trivial display chip (reads the already-loaded ingredient list); vue-tsc clean; mirrors the adjacent time/serves chips. No dev server on this machine to eyeball it.*
+- [ ] Cookbook: recipe cards show an **"N ingredients"** chip next to the time/serves/difficulty chips; a recipe with 1 ingredient reads "1 ingredient"; a recipe with none shows no chip. Also present on a stock item detail → **Recipes using this** cards.
+
+## Transactional email brand banner (2026-08-10)
+*Code-complete; template + sender unit tests green (30), and the rendered email confirmed in-browser (banner img 520px, "Reset Password", new intro, footer). Owed: an eyes-on check in a real inbox once SMTP is live — CID inline images render in Gmail/Outlook/Apple Mail, but worth a glance.*
+- [ ] Trigger a password reset with SMTP configured → the email opens with the brand banner (Dora mascot on the left, "Dashy Dora" in the Cute Dino font, on the yellow strip) rendered inline (not a broken-image box) in Gmail, Outlook, and Apple Mail.
+- [ ] With remote images blocked, the header degrades to the "Dashy Dora" alt text rather than an empty gap.
+- [ ] The other transactional emails (verify email, email-change confirmation/notice, password-changed, alerts digest) show the same banner header.
+
 ## Stock UI polish + Title-case page titles + essential rename (2026-08-08)
 *Code-complete; backend 299 targeted tests + frontend typecheck & 40 affected unit tests green, and the `is_flagged`→`is_essential` migration applied on a real destructive boot (DB column confirmed renamed on all three dev DBs). Visual pass owed — the preview browser here dropped the auth session on every reload and screenshots timed out, so the running-app look wasn't confirmed by the session.*
 - [ ] Mobile (narrow) view: the top menu-bar page name is Title Case on each page — "Stock Item", "Price History", "Meal Plans", "System: Alert Thresholds" — and the browser tab title matches.
 - [ ] Stock Overview → any item's expiry dropdown: three "Push expiry by 1 day / 7 days / 14 days" rows each with a **+** icon, "Clear expiry" with an **✕**, "Log waste" with the bin — icons aligned in one column.
 - [ ] Stock Overview toolbar: the **Export** button shows the export glyph (tray-with-out-arrow); its menu still offers **Export as CSV** + **Print / Save as PDF**.
-- [ ] Stock Overview: with a stocktake overdue, the **Stocktake** button's fill tint pulses in/out in sync with its glow ring (not just the ring). Turn on reduced-motion → it sits static with a soft tint, no animation.
+- [ ] Stock Overview: with a stocktake overdue, the **Stocktake** button's glow ring pulses. *(The fill-with-glow part was broken and re-fixed 2026-08-10 — see that section below.)*
 - [ ] Stock item detail → **Usual store** dropdown: each option shows the store's logo (or swatch) beside the name; the currently-selected store still reads fine.
 - [ ] Stock item detail → **Expiry** row: set a date, then clear it → the +1d/+7d/+14d/Set buttons don't shift; only the ✕ appears/disappears at the left of the cluster.
 - [ ] Stock item detail → **Recipes** tab: drag-resize the window → cards hold a steady width and add/remove a whole column, instead of continuously stretching/shrinking.

@@ -52,6 +52,13 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-614 — Font-family option list is duplicated across two files (R-003)
+- **Raised:** 2026-08-10 (font "Nunito (Default)" relabel).
+- **Type:** finding.
+- **What:** The font-family picker vocabulary lives in two places — `fontFamilyOptions` in `PreferencesSettings.vue` and `FONT_OPTIONS` in `WelcomeWizard.vue` — and now the `coalesceFontFamily` legacy-fold helper is duplicated in both too. A single source (e.g. a shared const beside `FONT_FAMILY_CSS` in `themeService.ts`, exposing `{value, label}` + the coalesce) would satisfy R-003.
+- **Why deferred:** the two lists **deliberately differ** — Preferences uses the short `'Plus Jakarta'` label (fits its segmented control), the wizard uses `'Plus Jakarta Sans'`. A naive merge to one array loses that per-surface width tuning, so centralising needs a small label-override shape, not a straight lift. Out of scope for a label-only change.
+- **Recommended resolution:** opportunistic — next time either font picker is touched. Keep the per-control label divergence (or make it explicit) when centralising.
+
 ## [OPEN] FU-613 — `--separator` is a phantom CSS token: 9 borders across 4 meal-plan components silently don't render (D-017/R-035)
 - **Raised:** 2026-08-07 (meal-plan builder rework).
 - **Type:** finding.

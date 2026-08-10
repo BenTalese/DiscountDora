@@ -293,14 +293,22 @@
         { label: 'Light', value: 'light', icon: ICONS.light_mode },
         { label: 'Dark', value: 'dark', icon: ICONS.dark_mode },
     ];
+    // The 'default' option removes the per-user font override, so the app
+    // falls back to its base body font — Nunito (css/app.scss). We label it
+    // "Nunito (Default)" so the default is named, not a mystery. The standalone
+    // 'nunito' option is intentionally gone: it rendered identically to the
+    // default, so it was a confusing duplicate. `coalesceFontFamily` folds any
+    // legacy 'nunito' selection onto 'default' so the picker still shows a
+    // selection (the enum keeps 'nunito' for back-compat; it just isn't offered).
     const fontFamilyOptions: DoraSegmentedOption<FontFamilyPreference>[] = [
-        { label: 'Default', value: 'default' },
+        { label: 'Nunito (Default)', value: 'default' },
         { label: 'Urbanist', value: 'urbanist' },
-        { label: 'Nunito', value: 'nunito' },
         { label: 'Inter', value: 'inter' },
         { label: 'Lexend', value: 'lexend' },
         { label: 'Plus Jakarta', value: 'plus_jakarta_sans' },
     ];
+    const coalesceFontFamily = (f: FontFamilyPreference | undefined): FontFamilyPreference =>
+        f === undefined || f === 'nunito' ? 'default' : f;
     const fontSizeOptions: DoraSegmentedOption<FontSizePreference>[] = [
         { label: 'Small', value: 'sm' },
         { label: 'Medium', value: 'md' },
@@ -339,7 +347,7 @@
 
     const themeDraft = ref<ThemePreference>(currentUser.value?.theme ?? 'system');
     const fontFamilyDraft = ref<FontFamilyPreference>(
-        currentUser.value?.font_family ?? 'default'
+        coalesceFontFamily(currentUser.value?.font_family)
     );
     const fontSizeDraft = ref<FontSizePreference>(currentUser.value?.font_size ?? 'md');
 
@@ -354,7 +362,7 @@
         const decoded = modeAndFamilyForKey(u.theme);
         modeDraft.value = decoded.mode;
         familyDraft.value = decoded.familyKey;
-        fontFamilyDraft.value = u.font_family;
+        fontFamilyDraft.value = coalesceFontFamily(u.font_family);
         fontSizeDraft.value = u.font_size;
     });
 

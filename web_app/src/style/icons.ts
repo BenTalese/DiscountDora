@@ -260,6 +260,7 @@ export const ICONS = {
     essential: 'mdi-flag',
     store: 'mdi-store',
     recipe: 'mdi-book-open-page-variant',
+    ingredients: 'mdi-food-variant',
     meal: 'mdi-silverware-fork-knife',
     chef_hat: 'mdi-chef-hat',
     location: 'mdi-map-marker',

@@ -18,6 +18,194 @@ next.
 
 ---
 
+## 2026-08-10 — Fixes: stocktake fill-pulse (never rendered) + expiry menu wrap
+
+**Trigger.** Owner, two bugs. (1) *"Stocktake button fill to pair with glow is not
+visible, was it actually added?"* — re the 2026-08-08 change that claimed to pulse
+the button fill with the glow. (2) *"Need to slightly expand the expiry dropdown
+menu, as the last +X days option text is wrapping."*
+
+**Bug 1 — root cause (was added, but could never paint).** The 2026-08-08 keyframe
+*did* set `background-color` on `.dora-btn--attention` — but the Stocktake button is
+`variant="secondary"` = a Quasar **outline** button, and Quasar ships
+`.q-btn--outline { background: transparent !important; }`. Per the CSS spec,
+`!important` declarations inside `@keyframes` are **ignored**, so an animated fill on
+the element can never beat that `!important`. Only the glow (box-shadow, uncontested)
+rendered. So the previous session's "fill pulse" was real code that was 100% dead on
+the one button that uses it.
+**Fix (`BaseButton.vue`).** Split the animation: glow stays on the element
+(`dora-btn-attention-glow`), fill moves to `.dora-btn--attention::before`
+(`dora-btn-attention-fill`). Quasar's `.q-btn:before` is an inset, radius-inheriting
+layer that paints behind the label and carries **no** `!important` background, so the
+tint renders there for every variant (outline/flat/unelevated). Two animations, same
+`2s ease-in-out infinite`, applied together → in sync. Bumped peak tint 22%→32% so it
+reads. Reduced-motion static fill moved to `::before` too (it was equally dead before).
+**Verified empirically**, not just by reading: built an isolated page with the *real*
+`node_modules/quasar/dist/quasar.css` + the exact outline-btn DOM, probed computed
+styles — `::before` background resolves to `oklab(… / 0.32)` with animation `fill`
+running, while the element background stays `rgba(0,0,0,0)` (Quasar's `!important`
+still wins there, confirming why the old approach failed).
+
+**Bug 2 — expiry menu wrap (`StockItemRow.vue`).** The push-shortcut `q-list` had
+`min-width: 180px`, too narrow for "Push expiry by 14 days" → wrap. Replaced the inline
+floor with a `.expiry-menu-list` class: `min-width: 224px` + `white-space: nowrap` on
+the non-avatar item sections (`:deep`, since q-menu teleports to body), so labels never
+wrap regardless of font/locale and the menu grows to fit.
+
+**Standards.** R-035/D-rules: fill uses `--brand-accent` via `color-mix`, no hardcoded
+colour (the hex in the throwaway probe page was scratchpad-only, not committed). R-003:
+attention animation stays centralised in `BaseButton`. No ADR — though the "`!important`
+is ignored in `@keyframes`, animate a pseudo-layer instead" gotcha is worth remembering;
+left as this worklog note rather than a rule (single occurrence).
+
+**Verification.** `vue-tsc` clean; no test referenced the attention keyframes or the
+menu width. Bug 1 mechanism confirmed against real Quasar CSS (above). Live once-over
+(both are visual/animation) queued in `DORA_VERIFY.md` — replaces the 2026-08-08
+fill-pulse line, which was verifying a change that never actually rendered.
+
+**Next up.** Owner to glance at the Stocktake glow+fill and the expiry menu.
+
+---
+
+## 2026-08-10 — Font picker: name the default "Nunito (Default)"
+
+**Trigger.** Owner: *"Anywhere 'Default' is displayed for font selection, it should
+instead be '<Font name> (Default)', e.g. 'Open Sans (Default)', so people KNOW what
+the default font is."*
+
+**Finding first.** The app's base body font is **Nunito** (`css/app.scss:35`), and
+the picker's `'default'` value = remove the per-user override → fall back to that.
+So the correct label is **"Nunito (Default)"** (the owner's "Open Sans" was
+illustrative — Open Sans isn't loaded). But the list *also* had a standalone
+`'nunito'` option that renders identically to the default → relabelling would make
+two look-alike "Nunito" rows. Surfaced this to the owner; decision: **drop the
+standalone Nunito option**.
+
+**What shipped.** Two font-option lists (the only two places "Default" shows for
+fonts):
+- `PreferencesSettings.vue` (`fontFamilyOptions`) and
+- `WelcomeWizard.vue` (`FONT_OPTIONS`).
+Both: `'Default'` → `'Nunito (Default)'`; standalone `'Nunito'` option removed.
+`FontFamilyPreference` **keeps** `'nunito'` (enum/backend/`FONT_FAMILY_CSS`
+untouched) so stored values still resolve — just not offered. Added a tiny
+`coalesceFontFamily` in each file that folds a stored `'nunito'` (or undefined)
+onto `'default'` at draft-seed, so an account previously on Nunito shows a
+selected "Nunito (Default)" instead of a blank segmented control. No migration
+(pre-release; renders identically either way).
+
+**Standards.** R-035/D-rules: label-only + option removal, no token/colour/icon
+changes. **R-003 flag:** the font-option list is duplicated across the two files
+(and now `coalesceFontFamily` too). Pre-existing duplication — and the two lists
+deliberately differ (Preferences "Plus Jakarta" vs wizard "Plus Jakarta Sans",
+tuned to each control's width), so a naive merge would lose that. Logged as a
+findings FU (centralise the font-option vocabulary if it's touched again) rather
+than force-merging here. No new ADR.
+
+**Verification.** `vue-tsc --noEmit` clean; no test/DTO-snapshot referenced the old
+label or the `nunito` option. No live pass (no dev server on this machine; preview
+browser can't screenshot/hold auth per recent entries). One thing to eyeball:
+"Nunito (Default)" is a longer segmented label than the old "Default" — check it
+doesn't crowd the control on a narrow screen. Queued in `DORA_VERIFY.md`.
+
+**Next up.** Owner to glance at the Preferences + onboarding font pickers.
+
+---
+
+## 2026-08-10 — Recipe cards show ingredient count
+
+**Trigger.** Owner (CONSIDER): *"The number of ingredients would be nice to see maybe on recipe cards?"*
+
+**What shipped.** A dense chip **"N ingredients"** on `RecipeCard.vue`, placed after
+the Serves chip in the same chip row (before difficulty). Singular handled
+("1 ingredient"); hidden entirely when the recipe has zero ingredients (no
+"0 ingredients" noise). New semantic icon alias `ICONS.ingredients =
+'mdi-food-variant'` (distinct from `ICONS.list`, which already means the
+"N parts" section badge). Count is `recipe.ingredients.length` — the list
+endpoint already hydrates `ingredients` (the card's footer actions/`missingIds`
+read it), so this is display of data in hand, not a client-owned domain rule;
+no server field added. Applies everywhere `RecipeCard` renders (cookbook grid +
+stock-item "Recipes using this" tab).
+
+**Standards.** R-003: considered the state-ownership rule — a client counting a
+fetched collection is normally a smell, but this is the explicit "fine client
+display math" carve-out (the array is already fully loaded for other card
+behaviour; adding a server `ingredient_count` for a chip would be over-build).
+Noted inline. Icon via the `ICONS` token map (D-rule). No new ADR.
+
+**Verification.** `vue-tsc --noEmit` clean. No live pass — there's no
+launch.json/running dev server on this machine and the preview browser here
+can't screenshot (fails "Browser pane is not displayed") or hold auth per recent
+entries; standing up the full stack for one chip isn't warranted. Change mirrors
+the adjacent time/serves chips exactly. Browser-eyeball queued in `DORA_VERIFY.md`.
+No test added — churny presentational UI, which the 2026-07-20 verify stance says
+not to over-test.
+
+**Next up.** Owner to glance at a cookbook card.
+
+---
+
+## 2026-08-10 — Password-reset email: branded header banner + copy cleanup
+
+**Trigger.** Owner feedback on the password-reset email: (1) use the mascot —
+"a top banner above the body, centered in it is the Dashy Dora text in the cute
+dino font with the mascot on the left of it"; (2) capitalise the button →
+"Reset Password"; (3) remove the "If you didn't ask for this, ignore the email —
+your password stays the same." line; (4) reword "Someone asked to reset the
+password on…" → "There was a request to reset the password on…" (it's the owner
+9/10 times, not "someone").
+
+**Key constraint driving the design.** Email clients don't load web fonts, so the
+Cute Dino wordmark can't be live text; and Gmail/Outlook strip `data:` image URIs,
+so the mascot can't be a base64 `<img>`. The robust path is a **pre-rendered PNG
+banner embedded as an inline CID attachment**.
+
+**What shipped.**
+1. **Brand banner PNG** — `dora_api/email_templates/assets/brand-banner.png`
+   (1040×264 = 2× of 520×132): mascot inset left, "Dashy Dora" in the real Cute
+   Dino font centred, on brand-accent yellow (#fed224), dark-navy ink (#1d2733).
+   Rasterised in a **browser canvas** (only place the woff2 renders faithfully;
+   there's no Pillow/brotli in the env) from the frontend's own font + mascot —
+   single source of truth. Committed a durable regenerator +
+   docstring: `assets/generate_brand_banner.py`.
+2. **CID inline-image support in `email_sender.send_email`.** New
+   `include_brand_banner: bool = True`. When on (default) it wraps the message in
+   `multipart/related` = `[multipart/alternative(text?,html), image/png]`, the
+   image carrying `Content-ID: <brand-banner>` + `inline` disposition. Banner
+   bytes read once via `@lru_cache`; **missing file degrades gracefully** (logs a
+   warning, sends without it — alt text covers it). All 5 call sites unchanged
+   (every template extends the shared layout).
+3. **Shared `_layout.html`** — replaced the plain `<h1>Dashy Dora</h1>` header
+   with `<img src="cid:brand-banner" alt="Dashy Dora" …>` full-width at the top of
+   the card (`overflow:hidden` clips it to the rounded corners; content padding
+   moved to an inner div). **This benefits every transactional email**, not just
+   reset — the DRY choice (R-003), since the header lives once in the layout.
+4. **`reset_password.html` copy** — the three owner edits (button "Reset
+   Password"; "There was a request to reset the password on…"; removed the
+   "stays the same" line — the layout footer already handles suspicious mail).
+
+**Verification.**
+- Backend: `pytest tests/test_email_templates.py tests/test_email_sender.py` —
+  **30 passed**. Updated the layout-assertion helper (banner img + alt, not the
+  gone `<h1>`), the reset copy assertions, and the MIME-structure tests
+  (`multipart/related` with the CID image + a new `include_brand_banner=False`
+  bare-alternative case).
+- Visual: rendered `reset_password.html` end-to-end (banner data-URI-swapped for
+  local preview only), confirmed in-browser — img 1040×264 @520px display, alt
+  "Dashy Dora", button "Reset Password", new intro line, "stays" gone, footer
+  intact. Direct render of the banner PNG confirmed the mascot + Cute Dino
+  wordmark look right.
+
+**Standards.** No R-rule violations. R-003 tightened (banner header single-sourced
+in the layout; CID constant single-sourced in `email_sender`; banner rasterised
+from the frontend's canonical font/mascot, not a copy). No new ADR warranted —
+CID inline images are a stdlib `email` idiom, not a recurring architectural call.
+
+**Next up.** Owner to eyeball the banner in a real inbox (Gmail/Outlook/Apple
+Mail) once SMTP is live — queued in `DORA_VERIFY.md`. CID inline images render in
+all three, but the belt-and-braces check is worth a glance.
+
+---
+
 ## 2026-08-08 — Stock UI polish batch + Title-case page titles + `is_flagged`→`is_essential` rename
 
 **Trigger.** Owner feedback, two messages. First: mobile menu-bar page name should be Title Case ("Stock Item" not "Stock item") — asked where it comes from first, then "all to be changed to title case". Second: a Stock-surface polish list + a naming cleanup — (a) expiry dropdown options need icons + "Push expiry by X day/s" wording, Clear=✕, Log-waste as-is; (b) Export button needs a real icon (suggested one); (c) Stocktake glow should also pulse the button *fill*; (d) usual-store dropdown shows store logo; (e) Clear-expiry button repositioned so the UI doesn't shift on clear; (f) recipe cards reflow by column count on resize; (g) ensure `is_essential` is the name throughout code + DB (old `is_flagged` lingering).

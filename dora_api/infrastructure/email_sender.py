@@ -16,8 +16,10 @@ import logging
 import smtplib
 import ssl
 from dataclasses import dataclass
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,30 @@ _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     autoescape=select_autoescape(["html"]),
 )
+
+# The shared _layout.html header renders the brand banner (mascot + the
+# "Dashy Dora" wordmark in the Cute Dino font). Web fonts don't render in
+# email clients, so the wordmark is a pre-rendered PNG embedded inline via
+# CID (data: URIs get stripped by Gmail/Outlook). Every transactional email
+# extends that layout, so send_email attaches this image by default.
+# Regenerate with email_templates/assets/generate_brand_banner.py (a
+# browser-canvas render of the real font — see that script's docstring).
+_BRAND_BANNER_CID = "brand-banner"
+_BRAND_BANNER_PATH = _TEMPLATE_DIR / "assets" / "brand-banner.png"
+
+
+@lru_cache(maxsize=1)
+def _brand_banner_bytes() -> bytes | None:
+    """Read the brand banner PNG once. None if it's missing so a send still
+    goes out (the layout's alt text degrades gracefully)."""
+    try:
+        return _BRAND_BANNER_PATH.read_bytes()
+    except OSError:
+        logging.getLogger(__name__).warning(
+            "brand banner missing at %s — emails will send without it",
+            _BRAND_BANNER_PATH,
+        )
+        return None
 
 
 @dataclass(slots=True)
@@ -93,10 +119,15 @@ def send_email(
     subject: str,
     html_body: str,
     text_body: str | None = None,
+    include_brand_banner: bool = True,
 ) -> None:
     """Send a single email synchronously. Raises on SMTP failure;
     callers should wrap in `try_send` (auth_helpers) when delivery
     failure shouldn't propagate to the user.
+
+    `include_brand_banner` embeds the shared header banner (referenced by
+    the layout as `cid:brand-banner`) as an inline image. Defaults on since
+    every transactional template extends _layout.html.
     """
     log = logging.getLogger(__name__)
     cfg = _config()
@@ -107,13 +138,31 @@ def send_email(
         )
         return
 
-    message = MIMEMultipart("alternative")
+    # The text + html alternatives always live together in a
+    # multipart/alternative. When an inline image rides along, that
+    # alternative is nested inside a multipart/related wrapper alongside
+    # the image, so clients resolve the cid: reference to the attached PNG.
+    alternative = MIMEMultipart("alternative")
+    if text_body:
+        alternative.attach(MIMEText(text_body, "plain", "utf-8"))
+    alternative.attach(MIMEText(html_body, "html", "utf-8"))
+
+    banner = _brand_banner_bytes() if include_brand_banner else None
+    if banner is not None:
+        message = MIMEMultipart("related")
+        message.attach(alternative)
+        image = MIMEImage(banner, _subtype="png")
+        image.add_header("Content-ID", f"<{_BRAND_BANNER_CID}>")
+        image.add_header(
+            "Content-Disposition", "inline", filename="brand-banner.png",
+        )
+        message.attach(image)
+    else:
+        message = alternative
+
     message["Subject"] = subject
     message["From"] = cfg.sender
     message["To"] = to
-    if text_body:
-        message.attach(MIMEText(text_body, "plain", "utf-8"))
-    message.attach(MIMEText(html_body, "html", "utf-8"))
 
     context = ssl.create_default_context()
     with smtplib.SMTP(cfg.host, cfg.port) as server:

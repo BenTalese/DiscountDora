@@ -129,15 +129,26 @@ def test__send_email__configured_transport__sends_multipart_with_expected_header
     assert message["Subject"] == "Verify your Dashy Dora account"
     assert message["From"] == "Dora <dora@test.local>"
     assert message["To"] == "rcpt@example.com"
-    assert message.get_content_type() == "multipart/alternative"
+    # The brand banner rides along, so the top level is multipart/related
+    # wrapping the alternative + the inline PNG.
+    assert message.get_content_type() == "multipart/related"
 
-    parts = message.get_payload()
+    related = message.get_payload()
+    assert [p.get_content_type() for p in related] == [
+        "multipart/alternative", "image/png",
+    ]
+
+    parts = related[0].get_payload()
     # text/plain first, text/html last — MIME clients prefer the LAST
     # alternative they can render, so the HTML body must come second.
     assert [p.get_content_type() for p in parts] == ["text/plain", "text/html"]
     assert parts[0].get_payload(decode=True).decode("utf-8") == "Hi ben, verify here."
     assert parts[1].get_payload(decode=True).decode("utf-8") == "<p>Hi ben, verify here.</p>"
     assert parts[1].get_content_charset() == "utf-8"
+
+    image = related[1]
+    assert image["Content-ID"] == "<brand-banner>"
+    assert image.get_content_disposition() == "inline"
     # Context-managed transport → connection closed after the send.
     assert server.exited is True
 
@@ -149,8 +160,27 @@ def test__send_email__no_text_body__attaches_html_part_only(monkeypatch):
     send_email(to="rcpt@example.com", subject="s", html_body="<p>html only</p>")
 
     (_, _, _, raw) = created[0].calls[-1]
-    parts = message_from_string(raw).get_payload()
-    assert [p.get_content_type() for p in parts] == ["text/html"]
+    related = message_from_string(raw).get_payload()
+    assert [p.get_content_type() for p in related] == [
+        "multipart/alternative", "image/png",
+    ]
+    assert [p.get_content_type() for p in related[0].get_payload()] == ["text/html"]
+
+
+def test__send_email__banner_excluded__sends_bare_alternative(monkeypatch):
+    monkeypatch.setattr(email_sender, "_config", lambda: _configured())
+    created = _install_fake_smtp(monkeypatch)
+
+    send_email(
+        to="rcpt@example.com", subject="s", html_body="<p>x</p>",
+        text_body="x", include_brand_banner=False,
+    )
+
+    message = message_from_string(created[0].calls[-1][3])
+    assert message.get_content_type() == "multipart/alternative"
+    assert [p.get_content_type() for p in message.get_payload()] == [
+        "text/plain", "text/html",
+    ]
 
 
 # ── wire choreography / config-driven branches ──────────────────────────

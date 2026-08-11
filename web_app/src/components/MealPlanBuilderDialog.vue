@@ -77,6 +77,17 @@
                         />
                     </div>
 
+                    <div v-if="showShortfallHint" class="builder-hint">
+                        <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
+                        <div>
+                            Dora planned {{ lastBuildPlaced }} of the {{ lastBuildRequested }}
+                            meals you picked. Each meal uses a different recipe, and there
+                            weren’t enough to fill them all — so some days are still empty.
+                            Add more recipes, choose fewer days or meals, or tick
+                            <strong>Same meals every day</strong> to reuse recipes.
+                        </div>
+                    </div>
+
                     <div v-if="proposed.length === 0" class="dora-text-muted text-center q-py-md text-caption">
                         No meals yet — reshuffle, or add your own below.
                     </div>
@@ -92,6 +103,14 @@
                                 <div class="builder-row__main">
                                     <div class="builder-row__name">{{ entry.recipe_name }}</div>
                                     <div class="builder-row__meta">
+                                        <span
+                                            v-if="cookMarker(entry)"
+                                            class="builder-cook"
+                                            :class="{ 'builder-cook--leftover': cookMarker(entry) === 'leftover' }"
+                                        >
+                                            <q-icon :name="ICONS.link" size="12px" />
+                                            {{ cookMarker(entry) === 'cook' ? 'Cook once' : 'Leftovers' }}
+                                        </span>
                                         <q-chip dense square class="builder-reason">
                                             {{ reasonLabel(entry.reason_chip) }}
                                         </q-chip>
@@ -346,6 +365,24 @@
     const previewIngredients = ref<MealPlanIngredient[]>([]);
     const previewLoading = ref(false);
 
+    // FU-611 — the ranker only ever picks *distinct* recipes, so a day×slot
+    // grid larger than the cookbook fills days in order and then stops, leaving
+    // later days silently blank (the review list just omits empty days). Capture
+    // what the last build asked for vs. what it could place so the review step
+    // can explain the gap. Both 0 for a manual ("I'll pick myself") start.
+    const lastBuildRequested = ref(0);
+    const lastBuildPlaced = ref(0);
+    // Only surface the hint when the *build* genuinely fell short, and keep it up
+    // only until the user fills the missing cells by hand — so it never fires
+    // just because someone deleted a meal from an otherwise-full plan. Scoped to
+    // the non-repeat case (repeat-same-day is the mitigation we point them at).
+    const showShortfallHint = computed(() =>
+        !repeatSameDay.value
+        && lastBuildRequested.value > 0
+        && lastBuildPlaced.value < lastBuildRequested.value
+        && proposed.value.length < lastBuildRequested.value,
+    );
+
     // ── Guidance inputs ─────────────────────────────────────────────────────
     // Two independent toggle sets — the days to plan and the meal slots to fill
     // — whose cross-product is the plan (one meal per day × slot). There is no
@@ -544,6 +581,9 @@
                 budget_cap: budgetCap.value,
             });
             proposed.value = res.entries.map(toDraft);
+            // Cells the toggles asked for vs. what the ranker could place (FU-611).
+            lastBuildRequested.value = res.days_used.length * res.slots_used.length;
+            lastBuildPlaced.value = res.entries.length;
             step.value = 2;
             await refreshPreview();
         } catch {
@@ -562,6 +602,8 @@
     function startManual() {
         proposed.value = [];
         previewIngredients.value = [];
+        lastBuildRequested.value = 0;
+        lastBuildPlaced.value = 0;
         step.value = 2;
     }
 
@@ -608,11 +650,12 @@
         const recipe = props.recipes.find((r) => r.recipe_id === recipeId);
         if (!recipe) return;
         if (pickerMode.value === 'swap' && swapTargetKey.value) {
+            // Swapping a recipe breaks its cook batch's one-recipe rule — unlink it.
             proposed.value = proposed.value.map((e) =>
                 e._key === swapTargetKey.value
                     ? { ...e, recipe_id: recipe.recipe_id, recipe_name: recipe.name,
                         reason_chip: 'picked', cookable: recipe.cookable,
-                        missing_stock_item_names: [], estimated_cost: null }
+                        missing_stock_item_names: [], estimated_cost: null, cook_key: null }
                     : e,
             );
         } else {
@@ -626,9 +669,33 @@
                 cookable: recipe.cookable,
                 missing_stock_item_names: [],
                 estimated_cost: null,
+                cook_key: null,
             })];
         }
         pickerOpen.value = false;
+    }
+
+    // PROPOSAL_MEAL_PLANS_PART_2 §9 — a proposed cook batch only survives to the
+    // commit if it's still a valid group after any review-step edits: >=2 rows,
+    // one recipe, one slot, distinct days. Otherwise the entry commits standalone
+    // (the server would reject a malformed group). Also powers the review marker.
+    function validCookKey(entry: DraftEntry): string | null {
+        if (!entry.cook_key) return null;
+        const group = proposed.value.filter((e) => e.cook_key === entry.cook_key);
+        if (group.length < 2) return null;
+        const recipes = new Set(group.map((e) => e.recipe_id));
+        const slots = new Set(group.map((e) => e.slot));
+        const days = group.map((e) => e.scheduled_for);
+        if (recipes.size > 1 || slots.size > 1 || new Set(days).size !== days.length) return null;
+        return entry.cook_key;
+    }
+    // Cook-day = the earliest day of a (valid) batch; that row shows "Cook", the
+    // rest "Leftovers".
+    function cookMarker(entry: DraftEntry): 'cook' | 'leftover' | null {
+        const key = validCookKey(entry);
+        if (!key) return null;
+        const days = proposed.value.filter((e) => e.cook_key === key).map((e) => e.scheduled_for);
+        return entry.scheduled_for === days.reduce((a, b) => (a < b ? a : b)) ? 'cook' : 'leftover';
     }
 
     // ── Commit + follow-ups ─────────────────────────────────────────────────
@@ -640,6 +707,7 @@
                 scheduled_for: e.scheduled_for,
                 servings: e.servings,
                 slot: e.slot,
+                ...(validCookKey(e) ? { cook_key: validCookKey(e) as string } : {}),
             })));
             doneState.value = true;
         } finally {
@@ -668,6 +736,8 @@
         step.value = 1;
         proposed.value = [];
         previewIngredients.value = [];
+        lastBuildRequested.value = 0;
+        lastBuildPlaced.value = 0;
         doneState.value = false;
         recipeSearch.value = '';
         emphasis.value = 'use_up_stock';
@@ -688,6 +758,24 @@
         font-size: var(--font-size-sm);
         font-weight: 500;
         margin-bottom: 0.35rem;
+    }
+    .builder-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0.25rem 0 0.5rem;
+        padding: 0.5rem 0.65rem;
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-default);
+        border-radius: 8px;
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        line-height: 1.35;
+    }
+    .builder-hint__icon {
+        flex: 0 0 auto;
+        margin-top: 1px;
+        color: var(--text-secondary);
     }
     .builder-day {
         margin-top: 0.75rem;
@@ -721,6 +809,19 @@
     .builder-reason {
         background: var(--surface-sunken);
         color: var(--text-secondary);
+    }
+    /* PROPOSAL_MEAL_PLANS_PART_2 §9 — proposed cook-batch marker (icon + text). */
+    .builder-cook {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--brand-primary);
+    }
+    .builder-cook--leftover {
+        color: var(--text-secondary);
+        font-weight: 500;
     }
     .builder-row__controls {
         display: flex;

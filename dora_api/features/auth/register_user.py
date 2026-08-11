@@ -85,9 +85,6 @@ class AuthenticatedUserDto:
     # clients read the cook-style via /api/health.cooking_policy.
     # "always ask which draft list on quick-add".
     always_ask_which_shopping_list: bool
-    # target meal count for the sequential builder.
-    # None = not set (SPA falls back to 7).
-    meals_per_week: int | None
     # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
@@ -159,9 +156,6 @@ class AuthenticatedUserDto:
             money_features_enabled=bool(user.money_features_enabled),
             always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
-            meals_per_week=(
-                int(user.meals_per_week) if user.meals_per_week is not None else None
-            ),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
             alerts_email_enabled=bool(user.alerts_email_enabled),

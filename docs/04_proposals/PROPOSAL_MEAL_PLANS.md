@@ -1,5 +1,10 @@
 # Meal Plans — redesign proposal (Wave C-2)
 
+> **See also [Part 2 — Cook batches](PROPOSAL_MEAL_PLANS_PART_2.md)** (2026-08-11):
+> builds the batch-cooker's "cook once, eat across several days" planning mechanic
+> that this doc's §7 persona framing (F26) implied but never specified. Designed,
+> tracked as `DORA_FOLLOWUPS.md` FU-617.
+
 **Status:** proposal · changes **no code** · revised after a full
 cross-check against `docs/Feedback _ Fixes - as of [06-Jun-2026].md §MEAL PLANS`.
 **Reads from:** `MealPlansOverview.vue`, `MealPlanEditDialog.vue`,

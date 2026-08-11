@@ -1,5 +1,7 @@
 <template>
-    <div class="q-pa-md column q-gutter-md page">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract
+         (document-scroll page; no :style-fn). -->
+    <q-page class="q-pa-md column q-gutter-md page">
         <div class="row items-center">
             <BaseButton variant="icon" :icon="ICONS.chevron_left" @click="goToPlanner">
                 <q-tooltip>Back to the planner</q-tooltip>
@@ -71,7 +73,7 @@
             card-style="min-width: 420px; max-width: 95vw"
         >
             <q-card-section class="q-pt-none q-gutter-sm">
-                <q-input v-model="setName" outlined dense autofocus label="Set name" :disable="savingSet" />
+                <q-input v-model="setName" outlined dense autofocus label="Set name" />
                 <div class="text-caption dora-text-muted">Templates rotate in this order:</div>
                 <q-list bordered separator class="rounded-borders">
                     <q-item v-for="(tid, idx) in setTemplateIds" :key="`${tid}-${idx}`">
@@ -96,7 +98,6 @@
                     :options="templateOptions"
                     label="Add a template"
                     emit-value map-options
-                    :disable="savingSet"
                     @update:model-value="onAddTemplate"
                 />
             </q-card-section>
@@ -110,7 +111,7 @@
                 />
             </template>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

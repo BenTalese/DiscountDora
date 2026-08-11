@@ -12,6 +12,10 @@
     >
         <div class="entry-chip__body">
             <div v-if="showSlot" class="entry-chip__slot">{{ entry.slot }}</div>
+            <div v-if="linked" class="entry-chip__cook" :class="{ 'entry-chip__cook--leftover': !entry.is_cook_day }">
+                <q-icon :name="ICONS.link" size="12px" />
+                <span>{{ cookMarkerLabel }}</span>
+            </div>
             <div class="entry-chip__main">
                 <span class="entry-chip__name">{{ entry.recipe_name }}</span>
                 <span class="entry-chip__pill">×{{ entry.servings }}</span>
@@ -63,6 +67,17 @@
                     <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
                     <q-item-section>Cook now</q-item-section>
                 </q-item>
+                <template v-if="batchEnabled">
+                    <q-separator />
+                    <q-item clickable v-close-popup @click="emit('link')">
+                        <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
+                        <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
+                    </q-item>
+                    <q-item v-if="linked" clickable v-close-popup @click="emit('unlink')">
+                        <q-item-section avatar><q-icon :name="ICONS.link_off" /></q-item-section>
+                        <q-item-section>Separate this cook</q-item-section>
+                    </q-item>
+                </template>
                 <q-separator />
                 <q-item clickable v-close-popup @click="emit('remove')">
                     <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
@@ -97,16 +112,30 @@
         (e: 'cook'): void;
         (e: 'remove'): void;
         (e: 'adjust', delta: number): void;
+        (e: 'link'): void;
+        (e: 'unlink'): void;
     }>();
+
+    // PROPOSAL_MEAL_PLANS_PART_2 — a linked cook batch (one cook, several days).
+    // Only surfaced for Batch-cooking households.
+    const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
+    const cookMarkerLabel = computed(() =>
+        props.entry.is_cook_day
+            ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
+            : 'Leftovers',
+    );
 
     // R-Phase 6 §4.6 — single accessible label that names the recipe + slot +
     // servings, so AT users hear the whole meal at once instead of three
     // separate spans. Shortfall is announced as a status, not a colour.
     const accessibleLabel = computed(() => {
         const base = `${props.entry.recipe_name}, ${props.entry.slot}, ${props.entry.servings} serving${props.entry.servings === 1 ? '' : 's'}`;
-        if (props.entry.consumed_at) return `${base}, cooked`;
-        if (props.shortfall && batchEnabled.value) return `${base}, needs cooking`;
-        return base;
+        const withCook = linked.value
+            ? `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`
+            : base;
+        if (props.entry.consumed_at) return `${withCook}, cooked`;
+        if (props.shortfall && batchEnabled.value) return `${withCook}, needs cooking`;
+        return withCook;
     });
 </script>
 
@@ -126,7 +155,7 @@
         padding: 6px 8px;
         margin-bottom: 4px;
         background: var(--surface-elevated);
-        border: 1px solid var(--separator);
+        border: 1px solid var(--border-default);
         border-left: 3px solid var(--brand-primary);
         border-radius: 8px;
         color: var(--text-primary);
@@ -148,7 +177,7 @@
     }
     .entry-chip--consumed {
         opacity: 0.55;
-        border-left-color: var(--separator);
+        border-left-color: var(--border-default);
         cursor: default;
     }
     .entry-chip--highlight {
@@ -165,6 +194,21 @@
         text-transform: uppercase;
         letter-spacing: 0.02em;
         color: var(--text-muted);
+    }
+    /* PROPOSAL_MEAL_PLANS_PART_2 — linked-cook eyebrow. Icon + text carry the
+       signal (not colour alone), D-014-safe. */
+    .entry-chip__cook {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--brand-primary);
+        margin-bottom: 1px;
+    }
+    .entry-chip__cook--leftover {
+        color: var(--text-muted);
+        font-weight: 500;
     }
     .entry-chip__main {
         display: flex;

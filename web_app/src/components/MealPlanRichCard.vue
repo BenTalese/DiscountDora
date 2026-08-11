@@ -23,6 +23,14 @@
             <div class="rich-card__name">{{ entry.recipe_name }}</div>
             <div class="rich-card__meta">
                 <span class="rich-card__tag">{{ entry.slot }}</span>
+                <span
+                    v-if="linked"
+                    class="rich-card__cook"
+                    :class="{ 'rich-card__cook--leftover': !entry.is_cook_day }"
+                >
+                    <q-icon :name="ICONS.link" size="12px" />
+                    {{ cookMarkerLabel }}
+                </span>
                 <span class="rich-card__servings">×{{ entry.servings }}</span>
                 <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
                     <q-icon :name="ICONS.timer" size="12px" />
@@ -79,6 +87,17 @@
                     <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
                     <q-item-section>Cook now</q-item-section>
                 </q-item>
+                <template v-if="batchEnabled">
+                    <q-separator />
+                    <q-item clickable v-close-popup @click="emit('link')">
+                        <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
+                        <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
+                    </q-item>
+                    <q-item v-if="linked" clickable v-close-popup @click="emit('unlink')">
+                        <q-item-section avatar><q-icon :name="ICONS.link_off" /></q-item-section>
+                        <q-item-section>Separate this cook</q-item-section>
+                    </q-item>
+                </template>
                 <q-separator />
                 <q-item clickable v-close-popup @click="emit('remove')">
                     <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
@@ -113,7 +132,17 @@
         (e: 'cook'): void;
         (e: 'remove'): void;
         (e: 'adjust', delta: number): void;
+        (e: 'link'): void;
+        (e: 'unlink'): void;
     }>();
+
+    // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).
+    const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
+    const cookMarkerLabel = computed(() =>
+        props.entry.is_cook_day
+            ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
+            : 'Leftovers',
+    );
 
     const thumbUrl = computed(() => recipeImageUrl(props.entry.recipe_id));
     const monogramLetter = computed(
@@ -125,9 +154,12 @@
     // separate text fragments. Status text alternative covers 1.4.1.
     const accessibleLabel = computed(() => {
         const base = `${props.entry.recipe_name}, ${props.entry.slot}, ${props.entry.servings} serving${props.entry.servings === 1 ? '' : 's'}`;
-        if (props.entry.consumed_at) return `${base}, cooked`;
-        if (props.shortfall && batchEnabled.value) return `${base}, needs cooking`;
-        return base;
+        const withCook = linked.value
+            ? `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`
+            : base;
+        if (props.entry.consumed_at) return `${withCook}, cooked`;
+        if (props.shortfall && batchEnabled.value) return `${withCook}, needs cooking`;
+        return withCook;
     });
 </script>
 
@@ -138,7 +170,7 @@
         gap: 8px;
         padding: 6px 8px;
         background: var(--surface-elevated);
-        border: 1px solid var(--separator);
+        border: 1px solid var(--border-default);
         border-left: 3px solid var(--brand-primary);
         border-radius: 8px;
         cursor: pointer;
@@ -163,7 +195,7 @@
     }
     .rich-card--consumed {
         opacity: 0.55;
-        border-left-color: var(--separator);
+        border-left-color: var(--border-default);
     }
     .rich-card--shortfall {
         border-left-color: var(--q-warning);
@@ -191,7 +223,7 @@
     }
     .rich-card__thumb--mono {
         background: var(--surface-elevated);
-        border: 1px dashed var(--separator);
+        border: 1px dashed var(--border-default);
     }
     .rich-card__mono-letter {
         font-size: 1.2rem;
@@ -233,6 +265,18 @@
     }
     .rich-card__servings {
         font-weight: 600;
+    }
+    /* PROPOSAL_MEAL_PLANS_PART_2 — linked-cook marker (icon + text, D-014-safe). */
+    .rich-card__cook {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-weight: 600;
+        color: var(--brand-primary);
+    }
+    .rich-card__cook--leftover {
+        color: var(--text-muted);
+        font-weight: 500;
     }
     .rich-card__cook-time {
         display: inline-flex;

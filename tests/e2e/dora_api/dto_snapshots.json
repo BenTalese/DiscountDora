@@ -78,7 +78,6 @@
       "llm_enabled",
       "llm_model",
       "llm_provider",
-      "meals_per_week",
       "money_features_enabled",
       "nutrition_mode",
       "onboarding_completed_at",
@@ -147,6 +146,7 @@
       "ok",
       "profile",
       "schema_version",
+      "schema_version_db",
       "support",
       "version"
     ]

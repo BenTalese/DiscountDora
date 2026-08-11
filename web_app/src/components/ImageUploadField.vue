@@ -9,8 +9,10 @@
         The parent owns the value (preview URL + whether it changed) and the
         commit semantics — this component only emits `pick` (data URL ready)
         and `clear`. Originally built for recipes (RecipeImageField),
-        generalised when the stock-item detail surface adopted it (FU-126 /
-        R-001 second-consumer threshold).
+        generalised when further surfaces (account avatar, store logo) adopted
+        it (R-001 second-consumer threshold). (Stock-item image *editing* was
+        removed — items show their linked product's image, not a user upload —
+        so the old FU-126 stock-item consumer no longer exists; see FU-607.)
     -->
     <div class="image-upload-field">
         <div class="image-upload-field__preview" :style="previewUrl ? '' : placeholderStyle">

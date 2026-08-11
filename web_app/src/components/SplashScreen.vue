@@ -44,6 +44,18 @@
                     class="splash-retry"
                     @click="emit('retry')"
                 />
+                <!-- FU-574 — when a runtime backend override is set (native
+                     always, or a browser/PWA user who saved an instance URL
+                     from Settings), a bogus URL renders this same error screen
+                     and #/settings/about is unreachable too — so surface the
+                     recovery here instead of forcing a localStorage hand-clear. -->
+                <AuthButton
+                    v-if="error && showChangeUrl"
+                    colour="ghost"
+                    label="Change instance URL"
+                    class="splash-change-url"
+                    @click="onChangeInstance"
+                />
             </div>
         </AuthShell>
     </div>
@@ -55,9 +67,68 @@
     import logoSrc from 'src/assets/logo-mascot.png';
     import offlineSrc from 'src/assets/dora/dorabot-fatal-error-or-offline.png';
     import { onBeforeUnmount, ref, watch } from 'vue';
+    import { useQuasar } from 'quasar';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import {
+        backendBaseUrlIsUserSet,
+        getBackendBaseUrl,
+        setBackendBaseUrl,
+    } from 'src/services/api/backendUrl';
 
     const props = defineProps<{ error: string | null }>();
     const emit = defineEmits<{ retry: [] }>();
+
+    const $q = useQuasar();
+
+    // FU-574 — only offer the change-URL recovery when a runtime override is
+    // actually in play (native always; a browser/PWA user who saved one). A
+    // plain web install on its env default has no URL to change, so retry is
+    // the only honest action there. Read once at construction: the boot file
+    // has already populated the cache from storage before we mount.
+    const showChangeUrl = backendBaseUrlIsUserSet();
+
+    // Mirror of AboutSettings.onChangeInstance — but usable while the app is
+    // un-bootstrapped (the router-driven About screen is unreachable behind
+    // this same error overlay), so it can't depend on the router.
+    async function onChangeInstance(): Promise<void> {
+        const initial = getBackendBaseUrl();
+        const url = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: 'Change instance URL',
+                message:
+                    "Point this app at a different Dora backend. Enter the "
+                    + "full URL you'd type in a browser — we'll add /api "
+                    + "automatically if you leave it off.",
+                prompt: {
+                    model: initial,
+                    type: 'url',
+                    isValid: (v: string) => v.trim().length > 0,
+                },
+                ok: { label: 'Save', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((v: string) => resolve(v))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!url) return;
+        try {
+            await setBackendBaseUrl(url);
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: 'Instance URL saved. Refreshing…',
+                timeout: 1500,
+            });
+            // Full reload so the boot probe re-runs against the new backend.
+            setTimeout(() => window.location.reload(), 400);
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save the URL.',
+                caption: toastCaption(err),
+            });
+        }
+    }
 
     // Loading flavour text. Cycled while the boot probe is in flight so the
     // user has something to read instead of staring at the pulsing logo.
@@ -193,6 +264,21 @@
     .splash-retry {
         margin-top: 8px;
         max-width: 260px;
+    }
+
+    /* FU-574 — the change-URL escape hatch is a ghost button; its default
+       teal accent is dim on the midnight splash canvas, so lift the text to
+       the same light treatment as the splash copy. */
+    .splash-change-url {
+        max-width: 260px;
+    }
+    .splash-change-url :deep(.dora-auth-btn--ghost) {
+        color: #ffffff;
+        opacity: 0.85;
+    }
+    .splash-change-url :deep(.dora-auth-btn--ghost:hover) {
+        background: rgba(255, 255, 255, 0.08);
+        opacity: 1;
     }
 
     @keyframes splash-fade-in {

@@ -137,32 +137,6 @@
 
         <hr class="settings-divider" />
 
-        <SettingsSection>
-            <template #title>Meal planning</template>
-            <template #description>
-                How many meals the sequential builder aims for.
-                <!-- FU-615 — the household cook-style (Fresh / Batch) is an
-                     install-wide setting now, edited in Settings → System →
-                     Cooking, not per user. -->
-            </template>
-
-            <SettingsRow
-                label="Meals per week"
-                help="How many meals the sequential builder aims for. Leave blank to use the default of 7."
-            >
-                <q-input
-                    v-model.number="mealsPerWeekDraft"
-                    outlined
-                    dense
-                    type="number"
-                    :min="1"
-                    :max="21"
-                    style="max-width: 100px"
-                    :placeholder="String(BUILDER_TARGET_MEALS_FALLBACK)"
-                    @change="onMealsPerWeekChange"
-                />
-            </SettingsRow>
-        </SettingsSection>
     </div>
 </template>
 
@@ -180,10 +154,11 @@
         familyAndModeOf,
         themeKeyFor,
         osPrefersDark,
+        fontFamilyOptions as buildFontFamilyOptions,
+        coalesceFontFamily,
         type ThemeFamily,
     } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { BUILDER_TARGET_MEALS_FALLBACK } from 'src/composables/useMealPlanner';
     import { ref, watch } from 'vue';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -223,36 +198,6 @@
         }
     }
 
-    // meals-per-week input. Null / cleared → server
-    // stores NULL and the builder falls back to
-    // BUILDER_TARGET_MEALS_FALLBACK. Validated 1–21 server-side.
-    const mealsPerWeekDraft = ref<number | null>(currentUser.value?.meals_per_week ?? null);
-    watch(currentUser, (u) => {
-        if (u) mealsPerWeekDraft.value = u.meals_per_week ?? null;
-    });
-    async function onMealsPerWeekChange() {
-        const raw = mealsPerWeekDraft.value;
-        const next: number | null =
-            typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 && raw <= 21
-                ? Math.round(raw)
-                : null;
-        // Normalise the local field so a blanked / out-of-range input
-        // reverts to the placeholder shape immediately.
-        mealsPerWeekDraft.value = next;
-        if (next === (currentUser.value?.meals_per_week ?? null)) return;
-        try {
-            await authStore.updateMeAsync({ meals_per_week: next });
-            notifySuccess(
-                next === null
-                    ? `Meals per week reset to the default (${BUILDER_TARGET_MEALS_FALLBACK}).`
-                    : `Meals per week set to ${next}.`,
-            );
-        } catch (err) {
-            notifyError('Could not save meals per week.', err);
-            mealsPerWeekDraft.value = currentUser.value?.meals_per_week ?? null;
-        }
-    }
-
     const themeFamilies = THEME_FAMILIES;
     type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -265,18 +210,11 @@
     // falls back to its base body font — Nunito (css/app.scss). We label it
     // "Nunito (Default)" so the default is named, not a mystery. The standalone
     // 'nunito' option is intentionally gone: it rendered identically to the
-    // default, so it was a confusing duplicate. `coalesceFontFamily` folds any
-    // legacy 'nunito' selection onto 'default' so the picker still shows a
-    // selection (the enum keeps 'nunito' for back-compat; it just isn't offered).
-    const fontFamilyOptions: DoraSegmentedOption<FontFamilyPreference>[] = [
-        { label: 'Nunito (Default)', value: 'default' },
-        { label: 'Urbanist', value: 'urbanist' },
-        { label: 'Inter', value: 'inter' },
-        { label: 'Lexend', value: 'lexend' },
-        { label: 'Plus Jakarta', value: 'plus_jakarta_sans' },
-    ];
-    const coalesceFontFamily = (f: FontFamilyPreference | undefined): FontFamilyPreference =>
-        f === undefined || f === 'nunito' ? 'default' : f;
+    // default. Options + the `coalesceFontFamily` fold are the shared
+    // FU-614 source in themeService (R-003). The compact segmented control
+    // shortens "Plus Jakarta Sans" to "Plus Jakarta" via the label override.
+    const fontFamilyOptions: DoraSegmentedOption<FontFamilyPreference>[] =
+        buildFontFamilyOptions({ plus_jakarta_sans: 'Plus Jakarta' });
     const fontSizeOptions: DoraSegmentedOption<FontSizePreference>[] = [
         { label: 'Small', value: 'sm' },
         { label: 'Medium', value: 'md' },

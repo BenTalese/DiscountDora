@@ -80,6 +80,7 @@ def bootstrap(is_test_env: bool = False):
     migrate_legacy_uploads(DORA_CONFIG.get_uploads_dir())
 
     init_db(is_test_env)
+    _warn_on_schema_drift()
     configure_logging(
         "dapi",
         DORA_CONFIG.get_log_dir(),
@@ -221,6 +222,53 @@ def init_db(is_test_env: bool):
             return
 
         upgrade()
+
+
+def _warn_on_schema_drift() -> None:
+    """FU-570 — after DB init, compare the live schema against the models the
+    code expects and log a loud banner on drift (missing tables or columns).
+
+    This is the guard the pilot lacked: it booted clean against a stale,
+    `create_all`-built `dora.data.db` (old columns, no `alembic_version`) and
+    then 500'd request-by-request on the missing columns, with no boot-time
+    complaint. A names-only comparison (not types) keeps it portable across
+    SQLite/Postgres and avoids false positives.
+
+    Warn, don't refuse: a dev boot against a freshly `create_all`-built DB is
+    always current and sees nothing; we'd rather serve with a loud warning
+    than block a boot on a spurious mismatch. A genuinely stale DB now
+    announces itself at boot instead of failing silently per request.
+    """
+    _Logger = logging.getLogger(__name__)
+    try:
+        with app.app_context():
+            from sqlalchemy import inspect as sa_inspect
+            inspector = sa_inspect(db.engine)
+            existing_tables = set(inspector.get_table_names())
+            missing_tables: list[str] = []
+            missing_columns: list[str] = []
+            for table_name, table in db.metadata.tables.items():
+                if table_name not in existing_tables:
+                    missing_tables.append(table_name)
+                    continue
+                actual_cols = {c["name"] for c in inspector.get_columns(table_name)}
+                for column in table.columns:
+                    if column.name not in actual_cols:
+                        missing_columns.append(f"{table_name}.{column.name}")
+            if missing_tables or missing_columns:
+                _Logger.error(
+                    "SCHEMA DRIFT DETECTED — the connected database is behind "
+                    "the code's models; requests touching the missing schema "
+                    "will 500. Missing tables: %s. Missing columns: %s. Fix: run "
+                    "migrations (`flask db upgrade`) against this DB, or recreate "
+                    "it (dev: DORA_ALLOW_DESTRUCTIVE=true to wipe + reseed). "
+                    "See FU-570.",
+                    sorted(missing_tables) or "none",
+                    sorted(missing_columns) or "none",
+                )
+    except Exception as exc:  # noqa: BLE001
+        # Best-effort diagnostics — never block boot on the guard itself.
+        _Logger.warning("schema-drift check failed: %s", exc)
 
 
 def register_routers():

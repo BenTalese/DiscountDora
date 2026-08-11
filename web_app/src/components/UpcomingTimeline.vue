@@ -285,20 +285,29 @@
         display: flex;
         gap: 2px;
     }
+    /* FU-598 — each category carries a SHAPE as well as a colour (circle /
+       square / diamond), so the three stay distinguishable even in themes where
+       two of the role tokens coincide (e.g. Pesto's --brand-primary and
+       --semantic-positive are the same green). Colour is never the only channel.
+       The legend swatches reuse these classes, so they teach the shape mapping. */
     .up-dot {
         display: inline-block;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;   /* expiry = circle */
         background: var(--text-muted);
+        vertical-align: middle;
     }
     .up-dot--expiry {
         background: var(--semantic-warning);
     }
     .up-dot--shopping {
         background: var(--brand-primary);
+        border-radius: 1px;   /* shopping = square */
     }
     .up-dot--meal {
         background: var(--semantic-positive);
+        border-radius: 1px;
+        transform: rotate(45deg);   /* meal = diamond */
     }
 </style>

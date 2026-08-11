@@ -45,6 +45,50 @@ _MAX_SUGGESTIONS = 8
 _SEVERITY_RANK = {"high": 2, "medium": 1, "low": 0}
 
 
+def _select_for_display(suggestions: list[Suggestion], limit: int) -> list[Suggestion]:
+    """Rank + truncate to `limit`, with per-kind fairness (FU-593).
+
+    A plain severity-desc truncation lets one noisy category monopolise the
+    whole cap: on a busy pantry `use_soon` alone emits 8+ HIGH cards, so a
+    low-severity-but-distinct nudge (e.g. `reconcile_meals_pending`) was
+    dropped entirely — silently, exactly when the kitchen is busiest and
+    reconciling matters most. So we guarantee **every firing kind at least
+    one slot** before any kind takes a second, then fill the remaining slots
+    by severity. Within that, severity ordering is preserved (a HIGH card
+    still outranks a LOW one for the shared slots, and each kind's own
+    representative is its highest-severity card).
+    """
+    ranked = sorted(
+        suggestions,
+        key=lambda s: (-_SEVERITY_RANK.get(s.severity, 0), s.title.lower()),
+    )
+    if len(ranked) <= limit:
+        return ranked
+
+    # First pass over the severity-ordered list: each kind's first (=
+    # highest-severity) card is reserved; the rest queue behind it.
+    first_of_kind: list[Suggestion] = []
+    rest: list[Suggestion] = []
+    seen_kinds: set[str] = set()
+    for sugg in ranked:
+        if sugg.kind not in seen_kinds:
+            seen_kinds.add(sugg.kind)
+            first_of_kind.append(sugg)
+        else:
+            rest.append(sugg)
+
+    selected = first_of_kind[:limit]
+    remaining = limit - len(selected)
+    if remaining > 0:
+        selected.extend(rest[:remaining])
+
+    # Re-order the final selection for display (severity desc, then title).
+    selected.sort(
+        key=lambda s: (-_SEVERITY_RANK.get(s.severity, 0), s.title.lower()),
+    )
+    return selected
+
+
 def _current_user_id() -> UUID | None:
     raw = session.get("user_id")
     if not raw:
@@ -117,9 +161,7 @@ class GetSuggestionsHandler:
             sugg for sugg in suggestions
             if (sugg.kind, sugg.dedup_key) not in active_suppressions
         ]
-        filtered.sort(
-            key=lambda s: (-_SEVERITY_RANK.get(s.severity, 0), s.title.lower()),
-        )
+        selected = _select_for_display(filtered, _MAX_SUGGESTIONS)
 
         return [
             SuggestionDto(
@@ -132,7 +174,7 @@ class GetSuggestionsHandler:
                 primary_action=s.primary_action,
                 payload=s.payload,
             )
-            for s in filtered[:_MAX_SUGGESTIONS]
+            for s in selected
         ]
 
 

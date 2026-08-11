@@ -45,6 +45,29 @@ def _resolve_schema_head() -> str | None:
 _SCHEMA_HEAD = _resolve_schema_head()
 
 
+def _resolve_db_schema_version() -> str | None:
+    """Read the applied alembic revision from the *connected DB's*
+    `alembic_version` table (FU-570). Returns None when the table is absent
+    — e.g. a `create_all`-built dev DB that was never migration-stamped, or
+    an unreadable DB. Reported alongside `schema_version` (the code-side
+    head) so a diagnoser can tell code-expectation from DB-reality: a null
+    here against a non-null `schema_version` means the DB isn't
+    migration-managed, and a *different* value means it's behind/ahead. The
+    old response reported only the code head, which actively misled when the
+    connected DB was stale."""
+    try:
+        from sqlalchemy import text
+
+        from dora_api.app import db
+        with db.engine.connect() as conn:
+            row = conn.execute(text("SELECT version_num FROM alembic_version")).first()
+            return row[0] if row else None
+    except Exception:
+        # No alembic_version table, or a DB hiccup — keep the probe up and
+        # report null rather than failing the health check.
+        return None
+
+
 def _feature_flags(setting) -> dict[str, bool]:
     """Surface what the backend can do, for client capability gating.
     Reads runtime state cheaply — DB-backed flags pull from the
@@ -241,6 +264,10 @@ def health_check():
         "ok": True,
         "version": CURRENT_VERSION,
         "schema_version": _SCHEMA_HEAD,
+        # FU-570 — the DB's actual applied revision (None if the DB was
+        # built via create_all and never stamped, or on a read error). Lets
+        # diagnosis distinguish code-expectation from DB-reality.
+        "schema_version_db": _resolve_db_schema_version(),
         "profile": (os.environ.get("DORA_ENV") or "development").lower(),
         "features": _feature_flags(setting),
         "image_policy": _image_policy(setting),

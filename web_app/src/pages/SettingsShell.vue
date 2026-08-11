@@ -1,5 +1,10 @@
 <template>
-    <div class="settings-shell">
+    <!-- FU-609 / R-036 — app-shell root: <q-page :style-fn> gives the desktop
+         dual-scroll shell its height from the *live* layout offset instead of a
+         hardcoded `calc(100dvh - 64px)` (which rotted when chrome changed, e.g.
+         the OfflineBanner). On mobile the shell falls back to window-scroll — the
+         media query overrides the inline height (see styles). -->
+    <q-page class="settings-shell" :style-fn="pageStyleFn">
         <header class="settings-shell__header">
             <!-- FU-346: for admins, the h1 becomes a two-mode segmented
                  toggle. "Settings" holds the personal groups (Account,
@@ -63,7 +68,7 @@
                 <router-view />
             </main>
         </div>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>
@@ -238,6 +243,16 @@
             { label: 'Kitchen setup', items: kitchenSetupSections.value },
         ];
     });
+
+    // FU-609 / R-036 — app-shell height from the live layout offset (header, plus
+    // the OfflineBanner when it shows), replacing the old hardcoded
+    // `calc(100dvh - 64px)`. Applied inline by <q-page>; the mobile media query
+    // overrides it back to `height: auto` so the shell window-scrolls on <md.
+    function pageStyleFn(offset: number, height: number) {
+        return {
+            height: height === 0 ? `calc(100vh - ${offset}px)` : `${height - offset}px`,
+        };
+    }
 </script>
 
 <style scoped lang="scss">
@@ -249,10 +264,10 @@
        window — the router's window-scroll reset now has nothing to yank
        because the window itself isn't the scroller. */
     .settings-shell {
-        /* q-header dora-titlebar is 64px; subtract to fit under it without
-           double-scroll. dvh keeps it correct on mobile browsers that
-           collapse their address bar. */
-        height: calc(100dvh - 64px);
+        /* FU-609 / R-036 — height comes from the <q-page :style-fn> (viewport −
+           live layout offset), not a hardcoded `calc(100dvh - 64px)` that
+           ignored the real chrome height. Desktop fills the viewport under the
+           toolbar, then the sidebar + main pane each scroll independently. */
         max-width: 1280px;
         margin: 0 auto;
         padding: 28px 28px 0;
@@ -359,7 +374,9 @@
        page feel truncated. */
     @media (max-width: 1023px) {
         .settings-shell {
-            height: auto;
+            /* !important overrides the inline height the <q-page :style-fn> sets
+               (FU-609) so mobile reverts to a single window-scrolled column. */
+            height: auto !important;
             padding: 20px;
             display: block;
         }

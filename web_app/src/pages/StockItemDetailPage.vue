@@ -1,5 +1,7 @@
 <template>
-    <div class="q-pa-md">
+    <!-- FU-609 / R-036 — <q-page> when routed, plain <div> when embedded in the
+         Stock Overview peek (see rootTag). class + padding apply to both. -->
+    <component :is="rootTag" class="q-pa-md">
         <!-- Header — back/close · name · spacer · (Show QR) · Delete top-right.
              Feedback 2026-06-18: the level chip moves down to the overview
              (under the name field, combined with "Level updated"); the top
@@ -1023,7 +1025,7 @@
                     </q-list>
                 </q-card-section>
         </BaseDialog>
-    </div>
+    </component>
 </template>
 
 <script lang="ts" setup>
@@ -1041,7 +1043,7 @@
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
+    import { QPage, useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
@@ -1080,6 +1082,12 @@
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{ idOverride?: string; embedded?: boolean }>();
+
+    // FU-609 / R-036 — dual-host root. Routed under MainLayout it must root on
+    // <q-page> for the layout height contract; embedded inside Stock Overview's
+    // peek splitter it is NOT in a q-page-container, so <q-page> can't resolve a
+    // layout — fall back to a plain <div> there. Document-scroll either way.
+    const rootTag = computed(() => (props.embedded ? 'div' : QPage));
     const emit = defineEmits<{
         (e: 'close'): void;
         /** Round-17: emitted when the user clicks a substitute inside the

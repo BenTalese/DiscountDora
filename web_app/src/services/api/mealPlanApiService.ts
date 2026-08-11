@@ -10,6 +10,10 @@ export type MealPlanEntryCommand = {
     scheduled_for: string;
     servings: number;
     slot: string;
+    /** PROPOSAL_MEAL_PLANS_PART_2 — transient grouping token; entries sharing a
+     *  `cook_key` become one CookBatch (cook once, eat several days). Carry the
+     *  saved entry's `cook_batch_id` here to keep a link across edits. */
+    cook_key?: string;
 };
 
 export type CreateMealPlanCommand = {

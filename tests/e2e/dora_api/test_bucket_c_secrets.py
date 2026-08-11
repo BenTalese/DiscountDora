@@ -38,13 +38,13 @@ def _wrapping_key():
     test here writes a secret through `PATCH /api/app-settings`, which
     requires the wrapping key to be configured — without this fixture
     every write fails with a 400. Uses a fresh Fernet key generated
-    once per session; the `key_encryption._fernet` lru_cache is
+    once per session; the `secret_encryption._fernet` lru_cache is
     cleared so the change is observed after the env is populated."""
-    from dora_api.infrastructure.llm import key_encryption
+    from dora_api.infrastructure.security import secret_encryption
 
     previous = os.environ.get("DORA_SECRET_ENCRYPTION_KEY")
     os.environ["DORA_SECRET_ENCRYPTION_KEY"] = Fernet.generate_key().decode("ascii")
-    key_encryption._fernet.cache_clear()
+    secret_encryption._fernet.cache_clear()
     try:
         yield
     finally:
@@ -52,7 +52,7 @@ def _wrapping_key():
             os.environ.pop("DORA_SECRET_ENCRYPTION_KEY", None)
         else:
             os.environ["DORA_SECRET_ENCRYPTION_KEY"] = previous
-        key_encryption._fernet.cache_clear()
+        secret_encryption._fernet.cache_clear()
 
 
 @pytest.fixture(autouse=True)
@@ -181,7 +181,7 @@ def test__resolver__ciphertext_undecodable__degrades_to_empty_with_warning(caplo
     # no longer decodes. We do this by overwriting the column directly
     # with a token encrypted under a *different* key — reproducing the
     # "operator rotated the wrapping key" scenario without racing the
-    # `key_encryption._fernet` lru_cache.
+    # `secret_encryption._fernet` lru_cache.
     other_key = Fernet.generate_key()
     stale_token = Fernet(other_key).encrypt(b"used-to-work").decode("ascii")
     with app.app_context():
@@ -201,8 +201,8 @@ def test__patch_secret__without_wrapping_key__returns_400(monkeypatch):
     Missing key → friendly 400 + no partial write, not a silent success."""
     # Point the encryption helper at an empty key. lru_cache means we also
     # need to clear it so the change is observed.
-    from dora_api.infrastructure.llm import key_encryption
-    key_encryption._fernet.cache_clear()
+    from dora_api.infrastructure.security import secret_encryption
+    secret_encryption._fernet.cache_clear()
     monkeypatch.setenv("DORA_SECRET_ENCRYPTION_KEY", "")
 
     try:
@@ -212,4 +212,4 @@ def test__patch_secret__without_wrapping_key__returns_400(monkeypatch):
         # No partial write.
         assert _row_column("smtp_password_encrypted") == ""
     finally:
-        key_encryption._fernet.cache_clear()
+        secret_encryption._fernet.cache_clear()

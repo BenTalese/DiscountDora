@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from flask import has_request_context, request, session
+from flask import g, has_request_context, request, session
 
 from dora_api.app import db
 from dora_api.domain.entities.audit_event import (
@@ -46,13 +46,26 @@ SCRUBBED_KEYS: frozenset[str] = frozenset({
 })
 
 # Endpoints we never auto-audit (idempotent + frequent enough that a row
-# per call would dominate the table).
+# per call would dominate the table). Note: endpoints that emit an explicit
+# audit event no longer need listing here — the request-scoped
+# `_dora_explicit_audit` flag (FU-599) suppresses the generic row for any
+# request whose handler already emitted. `login`/`logout` are kept for
+# documentation + belt-and-suspenders; the rest are hard skips regardless of
+# any emit.
 _NO_AUDIT_ENDPOINTS: frozenset[str] = frozenset({
     "submit_client_log",   # already persisted via its own emit path
     "health_check",
     "login",               # handler emits an explicit auth.login.* row
     "logout",              # handler emits an explicit auth.logout row (FU-548)
 })
+
+# Request-scoped marker (Flask `g`). Set by `emit()` after a successful
+# explicit audit write inside a request; read by `auto_audit_after_request`
+# to skip its generic row so a security action isn't logged twice under two
+# names (FU-599). Deliberately set only *after* the commit succeeds — if the
+# explicit emit fails, the generic row still lands as a fallback rather than
+# losing audit coverage entirely.
+_EXPLICIT_AUDIT_FLAG = "_dora_explicit_audit"
 
 # Endpoint-name → (entity_type, action_suffix) for common verb prefixes.
 # Falls through to `_default_action_for` for everything else.
@@ -152,6 +165,7 @@ def emit(
     actor_ip: str | None = None,
     request_id: str | None = None,
     occurred_at: datetime | None = None,
+    _auto: bool = False,
 ) -> None:
     """Persist an audit row. Never raises — logging failures must not
     take down the actual feature.
@@ -160,6 +174,10 @@ def emit(
     invalid values get rewritten to safe defaults rather than blocking
     the audit (we'd rather record a malformed event than nothing at
     all).
+
+    `_auto` is set only by the middleware's own generic emit; an explicit
+    (non-auto) emit inside a request marks the request so the middleware
+    skips its duplicate generic row (FU-599).
     """
     _Logger = logging.getLogger(__name__)
     try:
@@ -207,6 +225,12 @@ def emit(
         )
         db.session.add(row)
         db.session.commit()
+
+        # Mark the request as explicitly audited so the middleware's generic
+        # row is skipped (FU-599). Only after a successful commit, and never
+        # for the middleware's own emit.
+        if not _auto and has_request_context():
+            setattr(g, _EXPLICIT_AUDIT_FLAG, True)
     except Exception as exc:  # noqa: BLE001
         try:
             db.session.rollback()
@@ -234,6 +258,12 @@ def auto_audit_after_request(response):
         if not endpoint or endpoint in _NO_AUDIT_ENDPOINTS:
             return response
 
+        # The handler already emitted an explicit audit event for this
+        # request — its domain-named row (actor + entity + payload) is
+        # strictly richer than the generic one, so don't double-log (FU-599).
+        if getattr(g, _EXPLICIT_AUDIT_FLAG, False):
+            return response
+
         # Don't auto-audit failures — explicit auth emits cover the
         # "login failed" case; everything else surfaces in logs already.
         if response.status_code >= 400:
@@ -257,6 +287,7 @@ def auto_audit_after_request(response):
                 "path": request.path,
                 "status": response.status_code,
             },
+            _auto=True,
         )
     except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).warning(

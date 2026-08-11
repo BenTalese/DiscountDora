@@ -1,5 +1,8 @@
 <template>
-    <div class="q-pa-md">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract.
+         Document-scroll page (sticky planner side-columns rely on the window
+         scroll container); no :style-fn. -->
+    <q-page class="q-pa-md">
         <!-- R-Phase 6 §9-I — skeleton during the initial parallel mount load
             so the planner shape arrives instantly instead of popcorning in. -->
         <MealPlanSkeleton
@@ -46,6 +49,8 @@
                     @entry-cook="planner.cookRecipe"
                     @entry-remove="planner.removeEntry"
                     @entry-adjust="planner.adjustEntryServings"
+                    @entry-link="onEntryLink"
+                    @entry-unlink="onEntryUnlink"
                     @add-to-slot="onMobileAddToSlot"
                     @generate-list="planner.generateListForWeek"
                     @open-builder="builderOpen = true"
@@ -205,6 +210,8 @@
                                 @entry-cook="planner.cookRecipe"
                                 @entry-remove="planner.removeEntry"
                                 @entry-adjust="planner.adjustEntryServings"
+                                @entry-link="onEntryLink"
+                                @entry-unlink="onEntryUnlink"
                             />
                         </div>
                     </transition>
@@ -299,12 +306,11 @@
         <!-- Save the focused week as a template ─────────────────────── -->
         <BaseDialog v-model="saveTemplateOpen" title="Save as a template" closable card-style="min-width: 340px">
             <q-card-section class="q-pt-none q-gutter-sm">
-                <q-input v-model="templateName" outlined dense autofocus label="Template name" :disable="savingTemplate" />
+                <q-input v-model="templateName" outlined dense autofocus label="Template name" />
                 <q-input
                     v-model="templateDescription"
                     outlined dense type="textarea" autogrow
                     label="Description (optional)"
-                    :disable="savingTemplate"
                 />
             </q-card-section>
             <template #actions>
@@ -342,11 +348,10 @@
                     :options="planner.recurringSourceOptions.value"
                     emit-value map-options
                     label="Template or rotating set"
-                    :disable="recurringApplying"
                 />
                 <div class="row q-col-gutter-sm">
-                    <q-input class="col" v-model="recurringStart" outlined dense type="date" label="From (week of)" :disable="recurringApplying" />
-                    <q-input class="col" v-model="recurringEnd" outlined dense type="date" label="To (week of)" :disable="recurringApplying" />
+                    <q-input class="col" v-model="recurringStart" outlined dense type="date" label="From (week of)" />
+                    <q-input class="col" v-model="recurringEnd" outlined dense type="date" label="To (week of)" />
                 </div>
                 <div class="text-caption dora-text-muted">
                     Each week is forked from the template (a set rotates through its templates).
@@ -363,7 +368,7 @@
                 />
             </template>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>
@@ -389,6 +394,7 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
+    import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
@@ -502,6 +508,39 @@
     function onMobileAddToSlot(dayIso: string, slot: string) {
         planner.selectSlot(dayIso, slot);
         if (planner.focusedTarget.value) pickerSheetOpen.value = true;
+    }
+
+    // PROPOSAL_MEAL_PLANS_PART_2 — link/unlink a cook batch (one cook, several
+    // days). The day picker ticks the days this cook covers; >=2 links them.
+    const dayOf = (iso: string) => iso.slice(0, 10);
+    function onEntryLink(entry: MealPlanEntry) {
+        const covered = new Set([dayOf(entry.scheduled_for), ...planner.cookBatchDays(entry)]);
+        const items = planner.weekDays.value
+            .filter((d) => !planner.isPastDay(d.iso))
+            .map((d) => ({ label: `${d.label} · ${planner.formatDate(d.iso)}`, value: d.iso }));
+        if (items.length < 2) {
+            $q.notify({
+                type: 'info', position: 'bottom-right',
+                message: 'No other upcoming days this week to cook ahead for.',
+            });
+            return;
+        }
+        $q.dialog({
+            title: entry.cook_batch_id ? 'Change cook days' : 'Cook once for more days',
+            message: `Cook ${entry.recipe_name} once (${entry.slot}) and eat it on the days you tick.`,
+            options: {
+                type: 'checkbox',
+                model: items.filter((i) => covered.has(dayOf(i.value))).map((i) => i.value),
+                items,
+            },
+            cancel: true,
+            persistent: false,
+        }).onOk((picked: string[]) => {
+            void planner.setCookDays(entry, picked);
+        });
+    }
+    function onEntryUnlink(entry: MealPlanEntry) {
+        void planner.setCookDays(entry, [dayOf(entry.scheduled_for)]);
     }
 
     // ── Templates drawer (R-Phase 5 / §9-E) ────────────────────────────────

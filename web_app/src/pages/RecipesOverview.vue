@@ -1,5 +1,10 @@
 <template>
-    <div class="q-pa-md">
+    <!-- FU-609 — root on <q-page> for the layout height contract so the sticky
+         PageCountsFooter pins to the viewport bottom even on a short list. No
+         :style-fn here: this page document-scrolls (a growing card grid), it is
+         NOT a fixed-height app-shell like StockOverview — <q-page>'s default
+         min-height is exactly what's wanted. See ENGINEERING_STANDARDS R-036. -->
+    <q-page class="q-pa-md">
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
             <!-- Counts moved to the sticky PageCountsFooter (A7). -->
@@ -386,7 +391,7 @@
             @confirm="onPickerConfirm"
         />
 
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

@@ -12,7 +12,8 @@ from dora_api.features.meal_plans.build_week import (
     CHIP_BUDGET, CHIP_COOKABLE_NOW, CHIP_FAVOURITE, CHIP_NOT_MADE_RECENTLY,
     CHIP_USES_EXPIRING, EMPHASIS_FAVOURITES, EMPHASIS_SURPRISE,
     EMPHASIS_USE_UP_STOCK, EMPHASIS_VARIETY, RecipeCandidate, _buildable_days,
-    _fill_one_day, apply_budget_cap, place_entries, reason_chip, select_recipes)
+    _fill_one_day, apply_budget_cap, place_entries, place_entries_batched,
+    reason_chip, select_recipes)
 
 
 def _cand(name, *, time_of_day=None, cookable=None, expiring=0, favourite=False,
@@ -222,3 +223,41 @@ def test__buildable_days__de_duplicates_and_orders():
 
 def test__buildable_days__all_past__empty():
     assert _buildable_days([date(2026, 7, 28)], date(2026, 7, 29)) == []
+
+
+# ── place_entries_batched (PROPOSAL_MEAL_PLANS_PART_2 §9) ────────────────────
+
+
+def test__batched__chunks_days_into_runs_sharing_one_cook():
+    # 3 recipes, one dinner slot, 6 days, span 3 → two cooks of three days each.
+    pool = [_cand(n, time_of_day="Dinner", cuisine=uuid4()) for n in ("a", "b", "c")]
+    days = [date(2026, 7, d) for d in range(1, 7)]
+    out = place_entries_batched(pool, days, ["Dinner"], span=3)
+    assert len(out) == 6  # every day filled
+    # each 3-day run is one recipe + one shared cook_key
+    keys = [key for (_c, _d, _s, key) in out]
+    assert keys[0] == keys[1] == keys[2] and keys[0] is not None
+    assert keys[3] == keys[4] == keys[5] and keys[3] is not None
+    assert keys[0] != keys[3]
+    recipes = [c.name for (c, _d, _s, _k) in out]
+    assert recipes[0] == recipes[1] == recipes[2]      # one cook = one recipe
+    assert recipes[0] != recipes[3]                    # distinct recipe per cook
+
+
+def test__batched__single_day_run_has_no_cook_key():
+    # 4 days, span 3 → runs of [3, 1]; the trailing 1-day run is a normal meal.
+    pool = [_cand(n, time_of_day="Dinner", cuisine=uuid4()) for n in ("a", "b")]
+    days = [date(2026, 7, d) for d in range(1, 5)]
+    out = place_entries_batched(pool, days, ["Dinner"], span=3)
+    keys = [key for (_c, _d, _s, key) in out]
+    assert keys[0] == keys[1] == keys[2] and keys[0] is not None  # the 3-run links
+    assert keys[3] is None                                        # the lone day is standalone
+
+
+def test__batched__stops_when_pool_runs_dry():
+    # One recipe, 6 days, span 3 → only the first run can be filled.
+    pool = [_cand("only", time_of_day="Dinner", cuisine=uuid4())]
+    days = [date(2026, 7, d) for d in range(1, 7)]
+    out = place_entries_batched(pool, days, ["Dinner"], span=3)
+    assert len(out) == 3  # first run only; no recipe left for the second
+    assert {d for (_c, d, _s, _k) in out} == set(days[:3])

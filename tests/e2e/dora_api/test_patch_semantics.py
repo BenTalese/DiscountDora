@@ -30,8 +30,7 @@ should confirm this is the *intended* matrix, it is currently implicit):
                             .stock_group_id / .opened_on / .expiry_date,
                             recipe's plain nullable attrs + FK vocabs,
                             shopping_list.name, line.quantity,
-                            user.meals_per_week / .dashboard_layout,
-                            admin-user.email
+                            user.dashboard_layout, admin-user.email
   ignored on explicit null: any non-nullable field (names, bools,
                             stock_level_id), store.image (clear_image
                             flag required), line.selected_product_id
@@ -811,37 +810,9 @@ def test__patch_me__null_username__is_ignored(api):
     assert _me()["username"] == before["username"]
 
 
-def test__patch_me__null_meals_per_week__clears_it(api):
-    # Pinned: meals_per_week is one of the null-out-supported fields
-    # (present-in-body null clears back to the SPA's 7 fallback).
-    set_resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": 10})
-    assert set_resp.status_code == 200, set_resp.text
-    assert _me()["meals_per_week"] == 10
-
-    clear_resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": None})
-    assert clear_resp.status_code == 200, clear_resp.text
-    assert _me()["meals_per_week"] is None
-
-
-def test__patch_me__meals_per_week_out_of_bounds__rejected_and_no_write(api):
-    # FU-181 server bounds guard (DORA_VERIFY L385/L390): the field is
-    # `int | None, ge=1, le=21`. The SPA clamps/rounds before sending, but a raw
-    # PATCH past the bounds (DevTools, a stale client) must be rejected, not
-    # silently stored. A fractional value is rejected too — rounding is the
-    # client's job, the server never truncates one silently.
-    before = _me()["meals_per_week"]
-    for bad in (0, -3, 22, 100, 3.7):
-        resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": bad})
-        assert resp.status_code == 400, f"{bad}: {resp.status_code} {resp.text}"
-    assert _me()["meals_per_week"] == before, "a rejected value must not persist"
-
-
-def test__patch_me__meals_per_week_inclusive_bounds__accepted(api):
-    # Both inclusive edges (1 and 21) are valid and round-trip.
-    for good in (1, 21):
-        resp = requests.patch(f"{BASE}/auth/me", json={"meals_per_week": good})
-        assert resp.status_code == 200, f"{good}: {resp.text}"
-        assert _me()["meals_per_week"] == good
+# FU-612 — the `meals_per_week` per-user preference was deleted end-to-end
+# (its only consumer, the sequential builder's target-count, was removed in the
+# day×slot builder rework). No /auth/me field remains to null-out or bounds-check.
 
 
 # FU-615 — `household_headcount` moved off /auth/me to the install-wide

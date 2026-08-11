@@ -70,10 +70,6 @@ class UpdateMeRequest(BaseModel):
     # edited via PATCH /app-settings, not here.
     # per-user "always ask which draft list on quick-add" toggle.
     always_ask_which_shopping_list: bool | None = None
-    # target meal count for the sequential builder.
-    # Present-in-body sets it (null clears back to the 7 fallback); bounds
-    # 1–21 enforced here so the request never persists an out-of-range value.
-    meals_per_week: int | None = Field(default=None, ge=1, le=21)
     # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
@@ -215,11 +211,6 @@ class UpdateMeHandler:
             and request.always_ask_which_shopping_list is not None
         ):
             _User.always_ask_which_shopping_list = request.always_ask_which_shopping_list
-        # present-in-body sets the target; a null
-        # payload clears back to the SPA's 7 fallback. Range already
-        # validated by the request model above.
-        if "meals_per_week" in _SetFields:
-            _User.meals_per_week = request.meals_per_week
         # Zero-Input Pantry opt-out.
         if (
             "inferred_pantry_enabled" in _SetFields

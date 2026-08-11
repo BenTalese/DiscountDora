@@ -595,6 +595,7 @@ Toilet paper, Toiletries, Bathroom"
     import OnboardingStory from 'src/pages/onboarding/OnboardingStory.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import { fontFamilyOptions, coalesceFontFamily } from 'src/services/themeService';
     import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
     import type {
         OnboardingCatalog,
@@ -642,19 +643,10 @@ Toilet paper, Toiletries, Bathroom"
         { label: 'Light', value: 'pesto' },
         { label: 'Dark', value: 'pesto-dark' },
     ];
-    // "Nunito (Default)" names the default (the app's base body font — see
-    // Preferences page for the full rationale). The standalone 'nunito' option
-    // is dropped as a confusing duplicate of the default; `coalesceFontFamily`
-    // folds any legacy 'nunito' selection back onto 'default'.
-    const FONT_OPTIONS = [
-        { label: 'Nunito (Default)', value: 'default' },
-        { label: 'Urbanist', value: 'urbanist' },
-        { label: 'Inter', value: 'inter' },
-        { label: 'Lexend', value: 'lexend' },
-        { label: 'Plus Jakarta Sans', value: 'plus_jakarta_sans' },
-    ];
-    const coalesceFontFamily = (f: FontFamilyPreference | undefined): FontFamilyPreference =>
-        f === undefined || f === 'nunito' ? 'default' : f;
+    // Font options + the `coalesceFontFamily` fold are the shared FU-614 source
+    // in themeService (R-003). The wizard uses the full "Plus Jakarta Sans" label
+    // (it has room), so no override.
+    const FONT_OPTIONS = fontFamilyOptions();
     // ── Wizard step state ────────────────────────────────────────────
     type StepId =
         | 'welcome' | 'admin'

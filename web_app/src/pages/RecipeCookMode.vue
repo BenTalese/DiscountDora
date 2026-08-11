@@ -1,5 +1,8 @@
 <template>
-    <div class="q-pa-md cook-mode">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract.
+         Document-scroll page (normal padding + an internally-scrolling
+         ingredients pane); no :style-fn. -->
+    <q-page class="q-pa-md cook-mode">
         <div v-if="!recipe" class="text-center q-pa-xl">
             <AppSpinner v-if="loading" size="40px" />
             <q-banner v-else class="dora-bg-sunken">Recipe not found.</q-banner>
@@ -550,7 +553,7 @@
                 <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
             </template>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

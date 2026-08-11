@@ -1,5 +1,7 @@
 <template>
-    <div class="reports-page">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract
+         (document-scroll page; no :style-fn). -->
+    <q-page class="reports-page">
         <header class="reports-header">
             <div class="reports-title-block">
                 <h1 class="reports-title">Reports</h1>
@@ -443,7 +445,7 @@
                 </div>
             </article>
         </div>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

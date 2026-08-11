@@ -38,6 +38,8 @@
                         @cook="emit('entryCook', entry.recipe_id)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                        @link="emit('entryLink', entry)"
+                        @unlink="emit('entryUnlink', entry)"
                     />
                     <span
                         v-if="!slotEntries(slot).length && !isPast"
@@ -64,6 +66,8 @@
                         @cook="emit('entryCook', entry.recipe_id)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                        @link="emit('entryLink', entry)"
+                        @unlink="emit('entryUnlink', entry)"
                     />
                 </div>
             </div>
@@ -124,6 +128,8 @@
         (e: 'entryCook', recipeId: string): void;
         (e: 'entryRemove', entry: MealPlanEntry): void;
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
+        (e: 'entryLink', entry: MealPlanEntry): void;
+        (e: 'entryUnlink', entry: MealPlanEntry): void;
     }>();
 
     // Q2 — used slots default. When showAllSlots is on, every household slot
@@ -208,7 +214,7 @@
         font-weight: 500;
         color: var(--text-secondary);
         background: transparent;
-        border: 1px dashed var(--separator);
+        border: 1px dashed var(--border-default);
         border-radius: 999px;
         cursor: pointer;
         transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;

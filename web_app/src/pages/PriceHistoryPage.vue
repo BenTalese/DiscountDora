@@ -1,5 +1,7 @@
 <template>
-    <div class="q-pa-md row q-col-gutter-md">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract
+         (document-scroll page; no :style-fn). -->
+    <q-page class="q-pa-md row q-col-gutter-md">
         <!-- ── Left rail: picker + selected chips ─────────────────── -->
         <div class="col-12 col-md-3">
             <q-card flat bordered>
@@ -249,7 +251,7 @@
                     </q-item>
                 </q-list>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

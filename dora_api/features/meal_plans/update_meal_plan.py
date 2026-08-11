@@ -6,10 +6,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.cook_batch import CookBatch
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.app_settings.clock import household_today
+from dora_api.features.meal_plans.cook_batch_grouping import (
+    group_by_cook_key, validate_cook_groups)
 from dora_api.features.meal_slots.slot_validation import (
     find_invalid_slot, get_valid_slot_names, invalid_slot_message)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
@@ -30,6 +33,9 @@ class UpdateMealPlanEntryRequest(BaseModel):
     scheduled_for: date
     servings: int = Field(default = 1, ge = 1)
     slot: str = Field(min_length = 1, max_length = 50)
+    # PROPOSAL_MEAL_PLANS_PART_2 — transient grouping token; entries sharing a
+    # `cook_key` become one CookBatch. Not a DB id (see create_meal_plan).
+    cook_key: str | None = Field(default = None, max_length = 64)
 
 
 class UpdateMealPlanRequest(BaseModel):
@@ -52,6 +58,7 @@ class UpdateMealPlanResponse:
     has_past_entry: bool = False
     needs_clear_confirmation: bool = False
     invalid_slot_message: str | None = None
+    invalid_cook_batch_message: str | None = None
 
 
 class UpdateMealPlanHandler:
@@ -90,6 +97,11 @@ class UpdateMealPlanHandler:
                     invalid_slot_message = invalid_slot_message(_BadSlot, _ValidSlots)
                 )
 
+            # PROPOSAL_MEAL_PLANS_PART_2 — validate cook-batch groups before any write.
+            _CookBatchError = validate_cook_groups(request.entries)
+            if _CookBatchError is not None:
+                return UpdateMealPlanResponse(invalid_cook_batch_message = _CookBatchError)
+
             _Today = household_today(self.repository)
             # Preserve the immutable past. Past days are read-only, so the
             # client resends only forward-looking entries; anything already
@@ -114,21 +126,57 @@ class UpdateMealPlanHandler:
                 if _EntryRequest.scheduled_for < _Today:
                     return UpdateMealPlanResponse(has_past_entry = True)
 
-            _NewEntries: List[MealPlanEntry] = []
+            # Resolve recipes once (a cook group repeats a recipe id) before any
+            # write, so a missing recipe never leaves an orphan batch behind.
+            _RecipeById: dict[UUID, Recipe] = {}
             _MissingIds: List[UUID] = []
             for _EntryRequest in request.entries:
+                if _EntryRequest.recipe_id in _RecipeById:
+                    continue
                 _Recipe = self.repository.get(Recipe).by_id(_EntryRequest.recipe_id)
                 if not _Recipe:
                     _MissingIds.append(_EntryRequest.recipe_id)
-                    continue
+                else:
+                    _RecipeById[_EntryRequest.recipe_id] = _Recipe
+            if _MissingIds:
+                return UpdateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
+
+            # PROPOSAL_MEAL_PLANS_PART_2 — the forward portion is replaced, so its
+            # CookBatches are too. Keep only batches still referenced by a preserved
+            # (past/consumed) entry; delete the rest of this plan's batches. Their
+            # forward entries are about to be delete-orphaned; the SET NULL FK means
+            # deleting a batch first can't trip an FK error.
+            _PreservedBatchIds = {
+                _Entry.cook_batch_id for _Entry in _PreservedExisting
+                if _Entry.cook_batch_id is not None
+            }
+            _ExistingBatches = self.repository.get(CookBatch).all(
+                EntityField(CookBatch, CookBatch.Fields.MEAL_PLAN_ID).eq(meal_plan_id)
+            )
+            for _Batch in _ExistingBatches:
+                if _Batch.id not in _PreservedBatchIds:
+                    self.repository.remove(_Batch)
+            self.repository.flush()
+
+            # Rebuild the forward batches from the resent cook_keys.
+            _BatchByKey: dict[str, CookBatch] = {}
+            for _Key, _Members in group_by_cook_key(request.entries).items():
+                _Batch = CookBatch(meal_plan_id = meal_plan_id, recipe_id = _Members[0].recipe_id)
+                self.repository.add(_Batch)
+                _BatchByKey[_Key] = _Batch
+            if _BatchByKey:
+                self.repository.flush()
+
+            _NewEntries: List[MealPlanEntry] = []
+            for _EntryRequest in request.entries:
+                _Batch = _BatchByKey.get(_EntryRequest.cook_key) if _EntryRequest.cook_key else None
                 _NewEntries.append(MealPlanEntry(
-                    recipe = _Recipe,
+                    recipe = _RecipeById[_EntryRequest.recipe_id],
                     scheduled_for = _EntryRequest.scheduled_for,
                     servings = _EntryRequest.servings,
                     slot = _EntryRequest.slot,
+                    cook_batch_id = _Batch.id if _Batch else None,
                 ))
-            if _MissingIds:
-                return UpdateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
             for _Entry in _NewEntries:
                 self.repository.add(_Entry)
             _Plan.entries = _PreservedExisting + _NewEntries
@@ -150,6 +198,9 @@ def update_meal_plan(meal_plan_id: UUID):
 
     if _Response.invalid_slot_message:
         return bad_request(_Response.invalid_slot_message)
+
+    if _Response.invalid_cook_batch_message:
+        return bad_request(_Response.invalid_cook_batch_message)
 
     if _Response.has_past_entry:
         return bad_request("Meal plan entries cannot be scheduled in the past.")

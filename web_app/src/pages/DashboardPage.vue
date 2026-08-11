@@ -1,5 +1,7 @@
 <template>
-    <div class="dora-dash">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract.
+         Document-scroll page (the window scrolls the dashboard); no :style-fn. -->
+    <q-page class="dora-dash">
         <!-- ───── Hero band ─────────────────────────────────────────────── -->
         <section class="dora-hero">
             <q-avatar size="72px" square class="dora-hero-mascot">
@@ -1121,7 +1123,7 @@
             v-model="showCreateStockItem"
             @created="onStockItemCreated"
         />
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

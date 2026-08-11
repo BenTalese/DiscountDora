@@ -1,10 +1,12 @@
 <template>
-    <div class="text-center q-pa-xl">
+    <!-- FU-609 / R-036 — root on <q-page> for the layout height contract so the
+         redirect spinner centres in the viewport (document-scroll; no :style-fn). -->
+    <q-page class="text-center q-pa-xl column flex-center">
         <AppSpinner size="60px" />
         <div class="text-body2 dora-text-muted q-mt-md">
             {{ message }}
         </div>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>

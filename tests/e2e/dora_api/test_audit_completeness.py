@@ -491,6 +491,29 @@ def test__audit_coverage__exempt_set_has_no_stale_rules(api):
     )
 
 
+# ── C2. Explicit emitters don't also write a generic row (FU-599) ──────────
+
+def test__audit_coverage__explicit_emit_suppresses_the_generic_row(api):
+    """FU-599 — an endpoint whose handler emits an explicit (domain-named)
+    audit event must NOT also get the middleware's generic row. Before the
+    request-scoped dedup flag, `admin_create_user` produced BOTH
+    `user.created_by_admin` (explicit, carrying actor + entity + payload) and
+    `admin_create_user` (generic, bare) for a single operation — the same
+    double-log the FU observed on the email-change flow. Pin exactly one row
+    for the request, and that it's the richer explicit one."""
+    before = set(_audit_rows())
+    resp = requests.post(f"{BASE}/users", json={"username": _u("audit-dedup")})
+    assert resp.status_code in (200, 201), resp.text
+
+    after = _audit_rows()
+    new_actions = sorted(after[rid]["action"] for rid in (set(after) - before))
+    assert new_actions == ["user.created_by_admin"], (
+        f"expected exactly one explicit audit row, got {new_actions} — the "
+        "generic middleware row must be suppressed when the handler already "
+        "emitted explicitly (FU-599)"
+    )
+
+
 # ── D. Pin the one deliberate zero-audit endpoint ──────────────────────────
 
 def test__audit_coverage__logout_emits_an_explicit_event(api):

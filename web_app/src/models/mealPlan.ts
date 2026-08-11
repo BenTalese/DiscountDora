@@ -13,6 +13,13 @@ export type MealPlanEntry = {
     category_name: string | null;
     cuisine_name: string | null;
     has_image: boolean;
+    // PROPOSAL_MEAL_PLANS_PART_2 — cook-batch view. `cook_batch_id` groups the
+    // linked meals (one cook, several days); the rest are server-derived across
+    // the batch. Null/false for a standalone meal.
+    cook_batch_id: string | null;
+    is_cook_day: boolean;
+    cook_batch_total_servings: number | null;
+    cook_batch_size: number | null;
 };
 
 export type MealPlan = {
@@ -79,6 +86,9 @@ export type ProposedEntry = {
     cookable: boolean | null;
     missing_stock_item_names: string[];
     estimated_cost: number | null;
+    // PROPOSAL_MEAL_PLANS_PART_2 §9 — grouping token for a proposed cook batch
+    // (Batch households). Entries sharing it are one cook; null = standalone.
+    cook_key: string | null;
 };
 
 export type AutoBuildResponse = {

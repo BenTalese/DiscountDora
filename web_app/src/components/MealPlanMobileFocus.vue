@@ -97,6 +97,8 @@
                 @cook="emit('entryCook', entry.recipe_id)"
                 @remove="emit('entryRemove', entry)"
                 @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                @link="emit('entryLink', entry)"
+                @unlink="emit('entryUnlink', entry)"
             />
             <button
                 v-if="!isPastDay(focusedDayIso)"
@@ -208,6 +210,8 @@
         (e: 'entryCook', recipeId: string): void;
         (e: 'entryRemove', entry: MealPlanEntry): void;
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
+        (e: 'entryLink', entry: MealPlanEntry): void;
+        (e: 'entryUnlink', entry: MealPlanEntry): void;
         (e: 'addToSlot', dayIso: string, slot: string): void;
         (e: 'generateList'): void;
         (e: 'goPrevWeek'): void;
@@ -312,7 +316,7 @@
         gap: 1px;
         padding: 6px 4px;
         background: var(--surface-elevated);
-        border: 1px solid var(--separator);
+        border: 1px solid var(--border-default);
         border-radius: 8px;
         color: var(--text-secondary);
         font-size: 0.7rem;
@@ -375,7 +379,7 @@
         font-weight: 500;
         color: var(--text-secondary);
         background: transparent;
-        border: 1px dashed var(--separator);
+        border: 1px dashed var(--border-default);
         border-radius: 999px;
         cursor: pointer;
         transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
@@ -394,7 +398,7 @@
     }
     .mobile-focus__consequences {
         background: var(--surface-elevated);
-        border: 1px solid var(--separator);
+        border: 1px solid var(--border-default);
         border-radius: 8px;
     }
     .slot-sheet {

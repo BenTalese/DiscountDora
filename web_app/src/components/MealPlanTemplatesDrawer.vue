@@ -69,7 +69,6 @@
                                 <q-input
                                     v-model="renameDraft"
                                     dense outlined autofocus
-                                    :disable="saving"
                                     @keyup.enter="confirmRename(t.meal_plan_template_id)"
                                     @keyup.esc="cancelRename"
                                 />

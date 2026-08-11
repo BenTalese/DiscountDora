@@ -13,6 +13,7 @@ from dora_api.domain.entities.backup import Backup
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
+from dora_api.domain.entities.cook_batch import CookBatch
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.meal_plan_reconcile_receipt import \
@@ -895,6 +896,17 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
+    # PROPOSAL_MEAL_PLANS_PART_2 — a planned single cook feeding several linked
+    # entries (same recipe + slot, distinct days). Thin by design: cook-day /
+    # total yield / span are derived from the entries, never stored. Plan-scoped
+    # (CASCADE with the week); the recipe FK is the integrity anchor.
+    cook_batch_table = Table(
+        "CookBatch", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("meal_plan_id", UUIDType, ForeignKey("MealPlan.id", ondelete="CASCADE"), nullable=False),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
+    )
+
     meal_plan_entry_table = Table(
         "MealPlanEntry", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -904,6 +916,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("servings", Integer, nullable=False, server_default="1"),
         Column("slot", String(50), nullable=False),
         Column("consumed_at", DateTime(timezone=True), nullable=True),
+        # PROPOSAL_MEAL_PLANS_PART_2 — links this meal to a shared CookBatch.
+        # SET NULL: deleting a batch un-links its meals rather than deleting them.
+        Column("cook_batch_id", UUIDType, ForeignKey("CookBatch.id", ondelete="SET NULL"), nullable=True),
     )
 
     meal_plan_template_table = Table(
@@ -989,10 +1004,6 @@ def configure_mappings(db: SQLAlchemy):
         # Default False; when True the SPA skips the remembered pick so the
         # picker fires every time (see useStockItemActions.addToList).
         Column("always_ask_which_shopping_list", Boolean, nullable=False, server_default=false()),
-        # target meal count for the sequential builder.
-        # NULL = not set → SPA falls back to `BUILDER_TARGET_MEALS` (7).
-        # Bounds enforced at the update-me boundary (1–21).
-        Column("meals_per_week", Integer, nullable=True),
         # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
@@ -1121,6 +1132,9 @@ def configure_mappings(db: SQLAlchemy):
     Index("cook_event_recipe_id", _t["CookEvent"].c.recipe_id)
     Index("ix_dora_suggestion_suppression_kind_key", _t["DoraSuggestionSuppression"].c.kind, _t["DoraSuggestionSuppression"].c.dedup_key)
     Index("ix_mealplanentry_reconcile", _t["MealPlanEntry"].c.scheduled_for, _t["MealPlanEntry"].c.consumed_at)
+    Index("ix_meal_plan_entry_cook_batch_id", _t["MealPlanEntry"].c.cook_batch_id)
+    Index("ix_cook_batch_meal_plan_id", _t["CookBatch"].c.meal_plan_id)
+    Index("ix_cook_batch_recipe_id", _t["CookBatch"].c.recipe_id)
     Index("ix_meal_reconcile_receipt_state_created_at", _t["MealPlanReconcileReceipt"].c.state, _t["MealPlanReconcileReceipt"].c.created_at)
     Index("ix_PriceAlert_product", _t["PriceAlert"].c.product_id)
     Index("ix_PriceAlert_user_product", _t["PriceAlert"].c.user_id, _t["PriceAlert"].c.product_id)
@@ -1516,6 +1530,15 @@ def configure_mappings(db: SQLAlchemy):
             "id": meal_plan_reconcile_receipt_table.c.id,
         },
     )
+
+    # PROPOSAL_MEAL_PLANS_PART_2 — no relationships: managed explicitly by the
+    # meal-plan write path (flush contract), same plain-FK-id idiom as the
+    # reconcile receipt above. `meal_plan_id` / `recipe_id` auto-map to the
+    # same-named entity fields.
+    _mapper_registry.map_imperatively(CookBatch, cook_batch_table, properties={
+        "_id_col": cook_batch_table.c.id,
+        "id": cook_batch_table.c.id,
+    })
 
     _mapper_registry.map_imperatively(MealPlan, meal_plan_table, properties={
         "_id_col": meal_plan_table.c.id,

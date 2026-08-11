@@ -1,5 +1,7 @@
 <template>
-    <div class="runner-shell">
+    <!-- FU-609 / R-036 — app-shell root: <q-page :style-fn> so the full-bleed
+         runner fills the viewport below the header without a hardcoded offset. -->
+    <q-page class="runner-shell" :style-fn="pageStyleFn">
         <!-- ── Top progress strip ──────────────────────────────────────
              Close X on the left, progress bar with count in the middle,
              (?) help on the right. No separate landing page any more —
@@ -274,7 +276,7 @@
                 </p>
             </q-card-section>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>
@@ -303,6 +305,15 @@
     const $q = useQuasar();
     const api = new StocktakeApiService();
     const stockApi = new StockItemApiService();
+
+    // FU-609 / R-036 — app-shell height. QPage hands us the layout's live chrome
+    // `offset` + viewport `height`, so the full-bleed runner fills exactly the
+    // area below the header instead of overshooting by a hardcoded 100vh.
+    function pageStyleFn(offset: number, height: number) {
+        return {
+            height: height === 0 ? `calc(100vh - ${offset}px)` : `${height - offset}px`,
+        };
+    }
     const stockLevelStore = useStockLevelStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
     const shoppingListStore = useShoppingListStore();
@@ -554,7 +565,8 @@
        contrast is part of the "you're concentrating" affordance — so
        we use raw palette tokens rather than the semantic surface ones. */
     .runner-shell {
-        min-height: 100vh;
+        /* FU-609 / R-036 — height comes from the <q-page :style-fn> (viewport −
+           live layout offset); no hardcoded 100vh (which ignored the header). */
         background: var(--palette-neutral-900);
         color: var(--text-inverse);
         display: flex; flex-direction: column;

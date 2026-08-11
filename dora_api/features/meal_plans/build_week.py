@@ -73,6 +73,12 @@ MAX_MEALS = 42
 # an rng (the fixture unit tests) no jitter is added, so selection stays fully
 # deterministic there.
 RESHUFFLE_JITTER = 1.5
+# PROPOSAL_MEAL_PLANS_PART_2 §9 — for Batch-cook-style households the builder
+# proposes *cook batches* (one cook feeds a run of days in a slot) instead of a
+# distinct recipe per day. Each cook spans up to this many days — a middle
+# ground between variety and effort, and within the ~4-day freshness horizon
+# (§10). Fresh households cook one distinct recipe per day (span 1).
+BATCH_COOK_SPAN_DAYS = 3
 
 # ── Emphasis + reason-chip vocabulary (frozen server-side, R-003) ──────────
 
@@ -123,6 +129,9 @@ class ProposedEntry:
     cookable: Optional[bool]
     missing_stock_item_names: List[str]
     estimated_cost: Optional[float]
+    # PROPOSAL_MEAL_PLANS_PART_2 §9 — grouping token for a proposed cook batch
+    # (entries sharing it are one cook, several days). None = a standalone meal.
+    cook_key: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +308,37 @@ def place_entries(
     return placements
 
 
+def place_entries_batched(
+    selected: List[RecipeCandidate],
+    days: List[date],
+    allowed_slots: List[str],
+    span: int,
+) -> List[tuple]:
+    """PROPOSAL_MEAL_PLANS_PART_2 §9 — Batch-cooker placement: within each slot,
+    chunk the selected days into runs of up to `span` and cook ONE recipe across
+    each run. Returns `(candidate, day, slot, cook_key)` quads — the `cook_key`
+    is shared across a run's days (None for a 1-day run, which is a normal meal).
+    A recipe whose `time_of_day` names the slot is preferred, mirroring
+    `_fill_one_day`. Consumes `pool` so each cook uses a distinct recipe.
+    """
+    slots = allowed_slots or ["Dinner"]
+    pool = list(selected)
+    placements: List[tuple] = []
+    seq = 0
+    for slot in slots:
+        for start in range(0, len(days), max(span, 1)):
+            if not pool:
+                break
+            chunk = days[start:start + span]
+            index = next((i for i, c in enumerate(pool) if c.time_of_day == slot), 0)
+            candidate = pool.pop(index)
+            cook_key = f"cook{seq}" if len(chunk) > 1 else None
+            seq += 1
+            for day in chunk:
+                placements.append((candidate, day, slot, cook_key))
+    return placements
+
+
 def reason_chip(c: RecipeCandidate, emphasis: str, budget_swapped: bool) -> str:
     if budget_swapped:
         return CHIP_BUDGET
@@ -404,6 +444,17 @@ def _all_recipe_dtos(repository: SqlAlchemyRepository) -> list:
     )
 
 
+def _batch_cook_span(repository: SqlAlchemyRepository) -> int:
+    """`BATCH_COOK_SPAN_DAYS` for a Batch-cook-style household, else 1 (a distinct
+    recipe per day — the Fresh default). Reads the install-wide cook-style flag
+    (`AppSetting.batch_features_enabled`, FU-615) — the same gate the SPA reads
+    via `/api/health.cooking_policy`."""
+    settings = repository.get(AppSetting).all()
+    if settings and settings[0].batch_features_enabled:
+        return BATCH_COOK_SPAN_DAYS
+    return 1
+
+
 def compute_auto_build(
     repository: SqlAlchemyRepository,
     request: AutoBuildRequest,
@@ -444,10 +495,18 @@ def compute_auto_build(
 
     excluded = _planned_recipe_ids_in_range(repository, days)
     emphasis = request.emphasis if request.emphasis in _EMPHASES else EMPHASIS_USE_UP_STOCK
-    # One meal per cell, so the toggles decide the count. Repeating a single
-    # day only needs one day's worth of distinct recipes.
-    per_day = max(len(allowed_slots), 1)
-    wanted = per_day if request.repeat_same_day else len(days) * per_day
+    # How many DISTINCT recipes to select. One per cell normally; a Batch-cook
+    # household cooks one recipe per run of `span` days in a slot (§9), so it
+    # needs fewer. Repeating a single day only needs one day's worth.
+    per_slot = max(len(allowed_slots), 1)
+    span = 1 if request.repeat_same_day else _batch_cook_span(repository)
+    if request.repeat_same_day:
+        wanted = per_slot
+    elif span > 1 and days:
+        cooks_per_slot = (len(days) + span - 1) // span  # ceil
+        wanted = per_slot * cooks_per_slot
+    else:
+        wanted = len(days) * per_slot
     count = min(wanted, MAX_MEALS) if days else 0
 
     selected = select_recipes(candidates, emphasis, count, excluded, rng)
@@ -459,7 +518,15 @@ def compute_auto_build(
         pool = [c for c in candidates if c.recipe_id not in selected_ids and c.recipe_id not in excluded]
         selected, swapped = apply_budget_cap(selected, pool, budget_remaining)
 
-    placements = place_entries(selected, days, allowed_slots, request.repeat_same_day)
+    # Batch households get grouped cooks (one recipe across a run of days);
+    # everyone else keeps the distinct-per-day placement (cook_key None).
+    if span > 1 and not request.repeat_same_day and days:
+        placements = place_entries_batched(selected, days, allowed_slots, span)
+    else:
+        placements = [
+            (c, day, slot, None)
+            for (c, day, slot) in place_entries(selected, days, allowed_slots, request.repeat_same_day)
+        ]
     entries = [
         ProposedEntry(
             recipe_id=c.recipe_id,
@@ -471,8 +538,9 @@ def compute_auto_build(
             cookable=c.cookable,
             missing_stock_item_names=list(c.missing_stock_item_names),
             estimated_cost=c.estimated_cost,
+            cook_key=cook_key,
         )
-        for (c, day, slot) in placements
+        for (c, day, slot, cook_key) in placements
     ]
 
     priced = [e.estimated_cost for e in entries if e.estimated_cost is not None]
@@ -504,6 +572,7 @@ def _entry_payload(e: ProposedEntry) -> dict:
         "cookable": e.cookable,
         "missing_stock_item_names": e.missing_stock_item_names,
         "estimated_cost": e.estimated_cost,
+        "cook_key": e.cook_key,
     }
 
 

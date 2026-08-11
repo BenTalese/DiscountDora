@@ -1368,6 +1368,51 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-036 — A `MainLayout`-hosted route component roots on `<q-page>`; never hardcode the layout offset
+- **Rule:** every route rendered inside `MainLayout`'s `<q-page-container>` roots on
+  `<q-page>`, not a bare `<div>`. `<q-page>` is the only thing that gives a page a
+  **height contract** — it sets `min-height: viewport − layoutOffset` from *live*
+  layout state (header size, and a footer if one ever lands). Two shapes, pick by
+  scroll model:
+  - **Document-scroll page** (a growing list/grid; the window scrolls): bare
+    `<q-page class="q-pa-md">`, no `:style-fn`. The default min-height is what makes
+    a `position: sticky` footer (`PageCountsFooter`) pin to the viewport bottom even
+    when the content is shorter than the viewport. **Reference: `RecipesOverview.vue`.**
+  - **Fixed-height app-shell** (chrome + an internally-scrolling pane, e.g. a virtual
+    list that caps its own height): `<q-page :style-fn>` returning
+    `height: height === 0 ? calc(100vh − ${offset}px) : ${height − offset}px`.
+    **Reference: `StockOverview.vue` (`pageStyleFn`).**
+  Never hardcode the offset (`calc(100dvh − 64px)`, a magic `64`): it silently rots
+  when chrome changes (e.g. `OfflineBanner` adds 48px when the API is unreachable) —
+  take the live `offset` from `:style-fn`.
+- **Why:** a bare-`<div>` page has no height contract, so anything height-dependent —
+  a sticky footer, a fill-the-viewport shell, an internally-scrolling pane — must
+  hand-roll the offset with a pixel guess that drifts from reality. This is exactly
+  how the Stock Overview scroll/footer bugs happened (a self-capping virtual list
+  defeated document scroll; the first patch hardcoded a 64px offset that was already
+  wrong). At R-036's introduction only 10 of ~29 top-level pages used `<q-page>`.
+- **Apply:** the initial `MainLayout` inventory is now **fully converted** (FU-609
+  closed 2026-08-11) — new pages comply from the start. `pages/settings/*` mount inside
+  `SettingsShell`'s own scroller (not the layout) and stay plain divs (`SettingsShell`
+  itself is now `<q-page :style-fn>` with a `!important` mobile override back to
+  window-scroll); auth/setup/error pages render outside `q-page-container` where
+  `<q-page>` can't resolve a layout, so they're correctly exempt. `StockItemDetailPage`
+  is dual-host (also embedded in the Stock Overview peek) — it roots on `<component :is>`
+  that resolves to `QPage` when routed and a plain `<div>` when embedded, so it stays
+  layout-agnostic in the peek. Shapes chosen: **document-scroll** (bare `<q-page>`) for
+  Dashboard, Meal Plans, Meal-Plan Templates, Price History, Cook Mode, Reports, Shop-Now
+  redirect, Stock Item detail; **app-shell** (`<q-page :style-fn>`) for the two runner
+  shells (Meal Reconcile, Stocktake) + SettingsShell.
+- **Violation signal:** a `<div class="q-pa-md">` (or any bare root) as the top
+  element of a `pages/*.vue` routed under `MainLayout`; a `calc(100vh − <literal>px)`
+  / `height: calc(100dvh − 64px)` in a page or shell; a `position: sticky` footer on
+  a page with no `<q-page>` ancestor.
+- **Source:** ADR-032; FU-609 (from the 2026-08-04 Stock Overview scroll-model
+  rebuild); `RecipesOverview` converted as the document-scroll worked example 2026-08-11;
+  the remaining 11-page inventory converted + FU-609 closed 2026-08-11.
+
+---
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -2263,6 +2308,31 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   surface-local conventions (per-page date formats, ad-hoc status colours) without
   a commented carve-out.
 - **Promotes rule:** R-035.
+
+### ADR-032 — A `MainLayout`-hosted route roots on `<q-page>` for the layout height contract; never hardcode the offset
+- **Date / task:** 2026-08-11 (FU-609, from the 2026-08-04 Stock Overview scroll-model rebuild)
+- **Status:** accepted
+- **Context:** `<q-page>` is the only element that gives a routed page a height
+  contract — `min-height: viewport − layoutOffset`, computed from live layout state.
+  Only 10 of ~29 top-level pages used it; the rest rooted on a bare `<div>` and, when
+  they needed a height (sticky footer, fill-the-viewport shell, internal scroll),
+  hand-rolled the offset with a hardcoded pixel guess. That guess rots: the Stock
+  Overview rebuild found a magic `64px` that was already wrong when `OfflineBanner`
+  adds 48px. `RecipesOverview` shares Stock Overview's `PageCountsFooter` but as a
+  bare div, so its footer floats mid-screen on a short list (no min-height to pin to).
+- **Decision:** Promote **R-036**. A `MainLayout`-hosted route roots on `<q-page>`;
+  document-scroll pages use a bare `<q-page>` (default min-height pins the sticky
+  footer), fixed-height app-shells use `<q-page :style-fn>` reading the live `offset`;
+  never hardcode the offset. Converted `RecipesOverview` to a bare `<q-page>` as the
+  document-scroll worked example (StockOverview is the app-shell reference). The
+  remaining pages are **opportunistic per-page conversions**, not a blind sweep — the
+  inventory + per-page notes stay in FU-609; several need a document-scroll-vs-shell
+  call and `SettingsShell`'s own hardcoded offset is a separate fix.
+- **Consequences:** the sticky-footer-on-short-content bug is fixed on the one page
+  that shared Stock Overview's footer, and the pattern is now enforced at the
+  close-gate so new pages don't reintroduce bare-div roots or magic offsets — without
+  taking on the regression risk of converting 11 unreported surfaces at once.
+- **Promotes rule:** R-036.
 
 ---
 

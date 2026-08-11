@@ -289,6 +289,34 @@ const FONT_FAMILY_CSS: Record<FontFamilyPreference, string> = {
     plus_jakarta_sans: `'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ${SYSTEM_FALLBACK}`,
 };
 
+// FU-614 (R-003) — the single source of the font-family picker vocabulary,
+// shared by the Preferences segmented control and the onboarding wizard.
+// "Nunito (Default)" names the default (the app's base body font); the standalone
+// 'nunito' option is intentionally dropped as a confusing duplicate of it —
+// `coalesceFontFamily` folds any legacy 'nunito' selection back onto 'default'.
+const FONT_FAMILY_OPTIONS: { value: FontFamilyPreference; label: string }[] = [
+    { value: 'default', label: 'Nunito (Default)' },
+    { value: 'urbanist', label: 'Urbanist' },
+    { value: 'inter', label: 'Inter' },
+    { value: 'lexend', label: 'Lexend' },
+    { value: 'plus_jakarta_sans', label: 'Plus Jakarta Sans' },
+];
+
+/** The font-family picker options, with optional per-surface label overrides —
+ *  e.g. the compact Preferences control shortens "Plus Jakarta Sans" to fit. */
+export function fontFamilyOptions(
+    labelOverrides: Partial<Record<FontFamilyPreference, string>> = {},
+): { value: FontFamilyPreference; label: string }[] {
+    return FONT_FAMILY_OPTIONS.map((o) => ({ value: o.value, label: labelOverrides[o.value] ?? o.label }));
+}
+
+/** Fold a stored font-family onto an offered option: `undefined` or the retired
+ *  standalone 'nunito' both map to 'default' (which renders as Nunito), so the
+ *  picker always shows a valid selection. */
+export function coalesceFontFamily(f: FontFamilyPreference | undefined): FontFamilyPreference {
+    return f === undefined || f === 'nunito' ? 'default' : f;
+}
+
 let mediaQuery: MediaQueryList | null = null;
 let mediaQueryListener: ((event: MediaQueryListEvent) => void) | null = null;
 let cachedThemePref: ThemePreference = 'system';

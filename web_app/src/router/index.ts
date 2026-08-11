@@ -23,8 +23,10 @@ const PUBLIC_ROUTES = new Set<string>([
     '/confirm-email-change',
 ]);
 // Routes we allow incomplete-onboarding users to visit without the redirect.
-// /welcome is the wizard itself; the rest are safety hatches (sign out,
-// error pages so a crash mid-wizard doesn't lock the user out).
+// /welcome is the wizard itself; the error pages are safety hatches so a crash
+// mid-wizard doesn't lock the user out. (The escape from the wizard is now
+// "Skip onboarding", which completes onboarding into the app — the old in-wizard
+// Sign-out button was removed 2026-08-10, FU-616.)
 const ONBOARDING_BYPASS = new Set<string>([
     '/welcome',
     '/errors/not-found',

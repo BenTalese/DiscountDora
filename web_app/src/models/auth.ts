@@ -90,10 +90,6 @@ export type AuthenticatedUser = {
     // so the "which list?" prompt fires every quick-add for users with more
     // than one draft. Default false = current behaviour (session-remembered).
     always_ask_which_shopping_list: boolean;
-    // target meal count for the sequential builder.
-    // null = not set → the SPA falls back to `BUILDER_TARGET_MEALS_FALLBACK` (7).
-    // Bounds 1–21 enforced server-side.
-    meals_per_week: number | null;
     // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;

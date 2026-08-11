@@ -40,6 +40,17 @@ class MealPlanEntryDto:
     category_name: str | None
     cuisine_name: str | None
     has_image: bool = False
+    # PROPOSAL_MEAL_PLANS_PART_2 — cook-batch view fields. `cook_batch_id` groups
+    # the linked meals; the rest are DERIVED server-side across the batch's entries
+    # (state-ownership) and set in MealPlanDto.from_entity, not here:
+    #   is_cook_day             — this entry is the batch's earliest day (the cook)
+    #   cook_batch_total_servings — Σ servings across the batch (the yield to cook)
+    #   cook_batch_size         — number of linked days
+    # All null/false for a standalone meal (cook_batch_id is None).
+    cook_batch_id: UUID | None = None
+    is_cook_day: bool = False
+    cook_batch_total_servings: int | None = None
+    cook_batch_size: int | None = None
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -54,6 +65,7 @@ class MealPlanEntryDto:
             cook_time_minutes = entry.recipe.cook_time_minutes,
             category_name = entry.recipe.category.name if entry.recipe.category else None,
             cuisine_name = entry.recipe.cuisine.name if entry.recipe.cuisine else None,
+            cook_batch_id = entry.cook_batch_id,
         )
 
 
@@ -66,12 +78,45 @@ class MealPlanDto:
 
     @classmethod
     def from_entity(cls, plan: MealPlan) -> 'MealPlanDto':
+        entries = [MealPlanEntryDto.from_entity(e) for e in (plan.entries or [])]
         return MealPlanDto(
             meal_plan_id = plan.id,
             name = plan.name,
             start_date = plan.start_date,
-            entries = [MealPlanEntryDto.from_entity(e) for e in (plan.entries or [])],
+            entries = _apply_cook_batch_view(entries),
         )
+
+
+def _apply_cook_batch_view(entries: List['MealPlanEntryDto']) -> List['MealPlanEntryDto']:
+    """PROPOSAL_MEAL_PLANS_PART_2 — fill each linked entry's derived cook-batch
+    view (is_cook_day / total yield / size) from the group as a whole. The cook
+    happens on the batch's earliest day; total yield is what that one cook must
+    produce. Standalone entries (no cook_batch_id) pass through untouched.
+    """
+    from collections import defaultdict
+    members: dict = defaultdict(list)
+    for entry in entries:
+        if entry.cook_batch_id is not None:
+            members[entry.cook_batch_id].append(entry)
+    if not members:
+        return entries
+
+    aggregate: dict = {}
+    for batch_id, group in members.items():
+        aggregate[batch_id] = {
+            "cook_day": min(e.scheduled_for for e in group),
+            "total": sum(e.servings for e in group),
+            "size": len(group),
+        }
+    return [
+        entry if entry.cook_batch_id is None else dataclasses.replace(
+            entry,
+            is_cook_day = entry.scheduled_for == aggregate[entry.cook_batch_id]["cook_day"],
+            cook_batch_total_servings = aggregate[entry.cook_batch_id]["total"],
+            cook_batch_size = aggregate[entry.cook_batch_id]["size"],
+        )
+        for entry in entries
+    ]
 
 
 _FIELD_MAP: dict[str, EntityField] = {

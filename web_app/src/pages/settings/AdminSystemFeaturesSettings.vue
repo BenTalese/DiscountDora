@@ -91,6 +91,8 @@
     import { computed, onMounted, reactive, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
@@ -101,6 +103,12 @@
     // up the new value without a page reload. `products` gates the Product
     // Search URL row (it belongs to the products overlay).
     const { refresh: featureFlags$refresh, products: productsEnabled } = useFeatureFlags();
+    // FU-580 — scanning and buy-verdict have their own dedicated module-level
+    // probe composables (separate from useFeatureFlags), so their toggle
+    // handlers must refresh *those* caches too or the gated UI (Stock Overview
+    // scan button, QR labels, buy-verdict badges) stays stale until a reload.
+    const { refreshScanning } = useScanningEnabled();
+    const { refreshBuyVerdict } = useBuyVerdictEnabled();
     // Session-wide Product Search URL cache — refreshed after a save so the
     // main-nav "Product Search" entry appears/updates without a page reload.
     const productSearch = useProductSearchUrl();
@@ -199,6 +207,9 @@
         try {
             const result = await api.updateAsync({ scanning_enabled: value });
             scanningDraft.value = result.scanning_enabled;
+            // FU-580 — re-probe both composables that gate scanning UI so it
+            // appears/disappears without a page reload.
+            await Promise.all([refreshScanning(), featureFlags$refresh()]);
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: value ? 'Scanning & QR labels enabled.' : 'Scanning & QR labels disabled.',
@@ -217,6 +228,9 @@
         try {
             const result = await api.updateAsync({ buy_verdict_enabled: value });
             buyVerdictDraft.value = result.buy_verdict_enabled;
+            // FU-580 — re-probe the buy-verdict cache so the row-level badges
+            // appear/disappear without a page reload.
+            await refreshBuyVerdict();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: value

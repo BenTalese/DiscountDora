@@ -58,6 +58,49 @@ top-to-bottom.
 - [ ] Stock item detail → **Recipes** tab: drag-resize the window → cards hold a steady width and add/remove a whole column, instead of continuously stretching/shrinking.
 - [ ] **Essential still works after the rename**: mark an item Essential on its detail page → the Overview **Essentials** filter chip includes it, its left-edge stripe shows, and (with auto-add in "essential only" mode) it's the one that auto-adds when low.
 
+## Build-my-week shortfall hint (FU-611, 2026-08-11)
+*Data path verified live (auto-build API on the 11-recipe seed: 7 days × 3 meals = 21 requested, 8 placed, 4 days empty → hint condition true). The literal banner render is owed — builder-dialog elements report 0×0 in the preview pane.*
+- [ ] Meal plans → **Build my week** → tick all remaining days + Breakfast/Lunch/Dinner (leave "Same meals every day" **off**) → **Build**. The Review step shows a subtle info note: "Dora planned N of the M meals you picked … some days are still empty. Add more recipes, choose fewer days or meals, or tick Same meals every day to reuse recipes." Add meals by hand until the count is met → the note disappears. Tick "Same meals every day" → the note never shows.
+
+## Cookbook counts footer pins on a short list (FU-609 / R-036, 2026-08-11)
+*Conversion verified live (Cookbook root is now `<q-page>`, renders clean, no console errors); the pixel-pin on a SHORT list couldn't be measured (preview pane reports innerHeight 0, and the seed cookbook is long).*
+- [ ] Filter the Cookbook down to just a few recipes (so the content is shorter than the window) → the counts footer sits flush at the **bottom of the viewport**, not floating mid-screen. Then clear the filter (long list) → footer still behaves (pins while scrolling, rests at content end). No double scrollbar.
+
+## Meal-plan dialogs keep fields live while saving (FU-610 / D-019, 2026-08-11)
+*Removed the transient saving flag from the inputs in 4 dialogs; type/lint clean; behaviour eyeball owed.*
+- [ ] Meal plans → save a week as a template (and Templates page → save a set): while the Save button spins, the name field / description / dropdowns stay focusable — you can keep typing or tab between them, focus isn't yanked out mid-save. Same for the inline template **rename** field and the **Apply recurring** date pickers.
+
+## Cook batches — "Cook once for more days" dialog (FU-617 Phase 4, 2026-08-11)
+*Verified live: the linked-cook markers ("Cook · serves 6" / "Leftovers"), the batch menu items, and "Separate this cook" (dissolves the batch) all work with Batch cook-style on. The one path not driven in-pane is the link-creation dialog itself — its write path is the same `setCookDays` proven by unlink + the backend cook_key tests, so this is a light eyeball.*
+- [ ] Settings → System → Cooking = **Batch**. In the planner, on a meal's ⋮ menu tap **"Cook once for more days…"** → the day-picker lists this week's upcoming days with the meal's own day ticked → tick two more, confirm → those days now show the same cook (one "Cook · serves N" on the earliest, "Leftovers" on the rest). With cook-style **Fresh**, the menu shows no batch options at all.
+
+## Page-height contract sweep — remaining MainLayout pages → <q-page> (FU-609, 2026-08-11)
+*Converted the last 11 MainLayout pages to R-036 (`<q-page>`; app-shell `:style-fn` for runners + SettingsShell; `<component :is>` for the dual-host stock detail). Agent-verified Dashboard + Reports render as proper `<q-page>` with content; typecheck/lint/compile clean on all. The other 9 couldn't be driven in the agent browser (non-composited pane freezes the page FadeTransition) — walk these once in a real browser.*
+- [ ] **Runner shells fill the viewport, no overshoot** — open **Stocktake** (`/stocktake`) and **Meal reconcile** (`/meal-plans/reconcile`): each fills exactly the area below the app header with **no extra scroll / no gap at the bottom** (they used to overshoot by the header height). Trigger the **OfflineBanner** (stop the backend) and confirm the shell still fits under banner+header without a double-scrollbar.
+- [ ] **Settings shell** (`/settings/account`): desktop (≥1024px) — sidebar + main pane each scroll independently, window itself doesn't scroll, footer/last item reachable. Mobile (<1024px) — reverts to a single window-scrolled column (the sidebar becomes the top tab strip); no fixed-height clipping.
+- [ ] **Doc-scroll pages render + scroll normally** — Dashboard, Meal Plans (sticky planner side-columns still pin while the page scrolls), Meal-Plan Templates, Price History, Cook Mode, Reports: each shows its content and window-scrolls as before; nothing clipped, no mid-screen floating footer.
+- [ ] **Stock item detail — both hosts** — open `/stock/<id>` full-page (renders normally) **and** the Stock Overview peek panel (click a row's peek): the embedded panel still renders inside the splitter (it must NOT try to be a full page there). Both show the same detail content.
+
+## Stale-DB boot guard logs a banner (FU-570, 2026-08-11)
+*New `_warn_on_schema_drift()` in startup.py logs a loud ERROR banner when the live DB is missing tables/columns the models expect (names-only inspector compare). Health also gains `schema_version_db` (pinned by test). The boot banner is an operator smoke check.*
+- [ ] Boot the backend against a **deliberately stale** SQLite DB — e.g. copy an old `dora.data.db` (or drop a column from a table by hand) into place and start `dora-backend` **without** `DORA_ALLOW_DESTRUCTIVE`. Confirm the stderr/log shows a single **"SCHEMA DRIFT DETECTED …"** ERROR line naming the missing tables/columns + the fix hint, and the app still boots (warn, not refuse). A fresh/normal DB boot shows **no** such banner.
+
+## Feature toggles apply without a reload (FU-580, 2026-08-11)
+*Wired the scanning + buy-verdict toggle handlers to re-probe their dedicated composables (`useScanningEnabled`/`useBuyVerdictEnabled`); the generic flags already refreshed. Type/lint clean; needs an admin session to walk.*
+- [ ] As admin, Settings → System → Features. With a stock item visible on **Stock Overview** in another tab/route: toggle **"Should I buy?" oracle** off → the buy/wait/skip badges on stock rows + shopping-list lines disappear **without a page reload** (toggle back on → they return). Same for **Scanning & QR labels** → the Stock Overview scan button + QR-label affordances appear/disappear live.
+
+## Bad instance URL is recoverable from the error screen (FU-574, 2026-08-11)
+*Added a "Change instance URL" button to the SplashScreen error overlay, shown only when a runtime backend override is set. Router-independent (runs pre-bootstrap). Type/lint clean. Trigger is destructive (breaks the backend connection) so left as an owner walk.*
+- [ ] Settings → About → **Change instance URL** → save a deliberately bogus URL (e.g. `https://nope.invalid`). App reloads into the **"Can't reach Dora's brain"** screen, which now shows **both** *Try again* and *Change instance URL*. Click **Change instance URL** → the prompt opens pre-filled → enter the correct URL → app reloads and recovers. (On a plain browser install with no custom URL saved, the button should **not** appear — retry only.)
+
+## Upcoming-timeline dots gain a shape channel (FU-598, 2026-08-11)
+*Added a shape per category (circle=expiry, square=shopping, diamond=meal) so the dots stay distinct even where two theme colours coincide (Pesto's primary=positive green). CSS-only; type/lint clean; eyeball only.*
+- [ ] Dashboard → **Upcoming** grid: the legend and the per-day dots show three distinct shapes — **circle** (expiry), **square** (shopping), **diamond** (meal). On **Pesto** (default theme) a shopping-day dot and a meal-day dot are the same green but now clearly different shapes. Diamonds shouldn't look clipped inside the cell.
+
+## Meal-plan card borders now render (FU-613, 2026-08-11)
+*Fixed a phantom `--separator` token → `--border-default` across 4 meal-plan components; borders that previously drew as nothing now render. Type/lint clean; eyeball only.*
+- [ ] Meal plans week view: the **entry chips** and **rich day cards** show a faint outline (plus their coloured left accent), and the dashed **"add a meal" / drop-target** outlines are visible on day cards and the mobile day-focus view. Check in a couple of themes (e.g. Pesto dark + a light theme) — the borders should be a subtle theme-appropriate line, not missing and not harsh.
+
 ## Meal-plan builder toggles + duplicate week (2026-08-07)
 *Behaviour verified live (toggle state, select-all, repeat payload, both duplicate paths, no console errors). Layout could not be measured — every element inside the dialog reported 0×0 in the preview browser, including pre-existing controls — so the visual pass is owed.*
 - [ ] Meal plans → **Build my week**: the day row shows Mon–Sun as card buttons with dates, past days greyed; the meal row shows your slots. Both are legible and tappable, and neither row overflows the dialog at 1280px or on a phone.
@@ -1155,7 +1198,7 @@ Backend + typecheck verified green; these are the running-app checks (the browse
 - [ ] **Settings → System → Cooking** renders: a "People" number field (blank = per-recipe) and a Fresh/Batch segmented control. Set headcount to e.g. 4 and flip to Batch — each change toasts and persists (reload the page, values stick).
 - [ ] Open a recipe → **Cook mode**: the serving scaler seeds from the install headcount (4), not the recipe's own servings. Clear the headcount in System → Cooking → cook mode falls back to the recipe's servings.
 - [ ] With install cook-style = **Batch**, the meal planner shows the cook-pool tools (per-recipe ± / "N free" / "to cook by"); set it to **Fresh** and they disappear — for *every* user, not per-account.
-- [ ] **Settings → Preferences** no longer has a "Cooking style" toggle (just "Meals per week" under Meal planning).
+- [ ] **Settings → Preferences** no longer has a "Cooking style" toggle, and (FU-612) the whole "Meal planning" section / "Meals per week" field is gone too.
 - [ ] Onboarding welcome step no longer asks headcount or "I batch-cook" (theme + font only).
 
 ### Onboarding top-bar + forced-dark cleanup (2026-08-10)

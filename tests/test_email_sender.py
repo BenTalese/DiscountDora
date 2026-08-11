@@ -352,9 +352,12 @@ class _Alert:
 
 
 def test__render_text_digest__actionable_and_fyi__renders_sections_with_counts(monkeypatch):
-    import dora_api.features.alerts.send_alerts_digest as digest_module
+    # The digest builds its "Open alerts" link via spa_deep_link (hash-history
+    # deep link — .../#/alerts), which reads public_base_url from auth_helpers;
+    # patch it at that source.
+    import dora_api.infrastructure.auth_helpers as auth_helpers
     monkeypatch.setattr(
-        digest_module, "public_base_url", lambda: "https://dora.example",
+        auth_helpers, "public_base_url", lambda: "https://dora.example",
     )
 
     text = _render_text_digest(
@@ -371,14 +374,14 @@ def test__render_text_digest__actionable_and_fyi__renders_sections_with_counts(m
     assert "      Used by 3 meals" in lines
     assert "HEADS-UP (1):" in lines
     assert "  - Price drop on olive oil" in lines
-    assert "Open alerts: https://dora.example/alerts" in lines
+    assert "Open alerts: https://dora.example/#/alerts" in lines
     assert lines[-1] == "Manage your channels in Settings → Preferences."
 
 
 def test__render_text_digest__no_fyi__omits_heads_up_section(monkeypatch):
-    import dora_api.features.alerts.send_alerts_digest as digest_module
+    import dora_api.infrastructure.auth_helpers as auth_helpers
     monkeypatch.setattr(
-        digest_module, "public_base_url", lambda: "https://dora.example",
+        auth_helpers, "public_base_url", lambda: "https://dora.example",
     )
 
     text = _render_text_digest(

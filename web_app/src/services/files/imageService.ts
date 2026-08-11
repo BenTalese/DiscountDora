@@ -9,8 +9,10 @@
  *
  * PROPOSAL_RECIPE_IMAGE_STEPS — `processImageFile` is the single client-side
  * resize + re-encode + MIME-validation pipeline used by every upload site
- * (user avatar, recipe hero, stock item, store, step images). Centralised
+ * (user avatar, recipe hero, store logo, recipe step images). Centralised
  * so resize targets / quality / MIME allow-list don't drift per surface.
+ * (Stock items have no image-upload surface — they show their linked
+ * product's image; FU-607.)
  *
  * FU-345 — the resize dimensions + JPEG quality are install-wide
  * settings (`AppSetting.image_max_dimension` + `AppSetting.image_quality`)

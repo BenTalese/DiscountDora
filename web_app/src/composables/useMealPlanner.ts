@@ -22,11 +22,6 @@ import { useStockLevelStore } from 'src/stores/stockLevelStore';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-// Fallback used when the user hasn't set a `meals_per_week` preference
-// (FU-181 loose-end 2). Callers should prefer `useMealsPerWeek()` — this
-// constant stays as the single source of the fallback so no other file
-// re-hardcodes 7.
-export const BUILDER_TARGET_MEALS_FALLBACK = 7;
 const RECIPE_TRAY_CAP = 10;
 
 export type RecipeTray = {
@@ -232,15 +227,21 @@ export function useMealPlanner() {
     }
 
     // ── Entry mutations ────────────────────────────────────────────────────
+    // PROPOSAL_MEAL_PLANS_PART_2 — map a saved entry to a write command, carrying
+    // its `cook_batch_id` back as the transient `cook_key` so a cook batch (one
+    // cook, several days) survives every edit. Standalone entries have no key.
+    function toCommand(e: MealPlanEntry): MealPlanEntryCommand {
+        return {
+            recipe_id: e.recipe_id,
+            scheduled_for: toIso(e.scheduled_for),
+            servings: e.servings,
+            slot: e.slot,
+            ...(e.cook_batch_id ? { cook_key: e.cook_batch_id } : {}),
+        };
+    }
+
     function planEntryCommands(plan: MealPlan): MealPlanEntryCommand[] {
-        return plan.entries
-            .filter(isForwardEditable)
-            .map((e) => ({
-                recipe_id: e.recipe_id,
-                scheduled_for: toIso(e.scheduled_for),
-                servings: e.servings,
-                slot: e.slot,
-            }));
+        return plan.entries.filter(isForwardEditable).map(toCommand);
     }
 
     async function refreshAfterMutation() {
@@ -327,10 +328,8 @@ export function useMealPlanner() {
             .filter(isForwardEditable)
             .filter((e) => !(e.meal_plan_entry_id === entry.meal_plan_entry_id && next < 1))
             .map((e) => ({
-                recipe_id: e.recipe_id,
-                scheduled_for: toIso(e.scheduled_for),
+                ...toCommand(e),
                 servings: e.meal_plan_entry_id === entry.meal_plan_entry_id ? next : e.servings,
-                slot: e.slot,
             }));
         await persistEntries(plan.meal_plan_id, cmds);
     }
@@ -340,13 +339,56 @@ export function useMealPlanner() {
         if (!plan) return;
         const remaining = plan.entries
             .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id && isForwardEditable(e))
-            .map((e) => ({
-                recipe_id: e.recipe_id,
-                scheduled_for: toIso(e.scheduled_for),
-                servings: e.servings,
-                slot: e.slot,
-            }));
+            .map(toCommand);
         await persistEntries(plan.meal_plan_id, remaining);
+    }
+
+    // ── PROPOSAL_MEAL_PLANS_PART_2 — cook batches (one cook, several days) ─────
+
+    /** ISO days already part of `entry`'s cook batch (empty if standalone). */
+    function cookBatchDays(entry: MealPlanEntry): string[] {
+        const plan = focusedPlan.value;
+        if (!plan || !entry.cook_batch_id) return [];
+        return plan.entries
+            .filter((e) => e.cook_batch_id === entry.cook_batch_id)
+            .map((e) => toIso(e.scheduled_for));
+    }
+
+    /** Redefine `entry`'s cook to span exactly `selectedDayIsos` (same recipe +
+     *  slot). >=2 days links them as one cook; 0-1 days leaves/makes it a
+     *  standalone meal (i.e. this also implements "separate this cook"). Reuses
+     *  an existing same-recipe+slot entry on a day, else adds one; days dropped
+     *  from the set become standalone. Preserves every OTHER batch on the plan. */
+    async function setCookDays(entry: MealPlanEntry, selectedDayIsos: string[]) {
+        const plan = focusedPlan.value;
+        if (!plan) return;
+        const selected = new Set(selectedDayIsos.filter((iso) => !isPastDay(iso)));
+        const oldKey = entry.cook_batch_id ?? undefined;
+        const newKey = selected.size >= 2
+            ? (globalThis.crypto?.randomUUID?.() ?? `cook-${entry.meal_plan_entry_id}`)
+            : undefined;
+
+        // Start from the current forward entries, dropping this batch's old links
+        // (we're redefining it) while keeping every other batch intact.
+        const cmds: MealPlanEntryCommand[] = plan.entries
+            .filter(isForwardEditable)
+            .map((e) => {
+                const cmd = toCommand(e);
+                if (oldKey && cmd.cook_key === oldKey) delete cmd.cook_key;
+                return cmd;
+            });
+
+        for (const iso of selected) {
+            let cmd = cmds.find(
+                (c) => c.recipe_id === entry.recipe_id && c.slot === entry.slot && c.scheduled_for === iso,
+            );
+            if (!cmd) {
+                cmd = { recipe_id: entry.recipe_id, scheduled_for: iso, servings: entry.servings, slot: entry.slot };
+                cmds.push(cmd);
+            }
+            if (newKey) cmd.cook_key = newKey; else delete cmd.cook_key;
+        }
+        await persistEntries(plan.meal_plan_id, cmds);
     }
 
     // ── Week navigation (carousel) ─────────────────────────────────────────
@@ -871,6 +913,8 @@ export function useMealPlanner() {
         addEntry,
         adjustEntryServings,
         removeEntry,
+        cookBatchDays,
+        setCookDays,
         confirmClearWeek,
         loadIngredients,
         generateListForWeek,

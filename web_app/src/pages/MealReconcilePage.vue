@@ -1,5 +1,7 @@
 <template>
-    <div class="runner-shell">
+    <!-- FU-609 / R-036 — app-shell root: <q-page :style-fn> so the full-bleed
+         runner fills the viewport below the header without a hardcoded offset. -->
+    <q-page class="runner-shell" :style-fn="pageStyleFn">
         <!-- ── Top progress strip ─────────────────────────────────────
              Same shape as StocktakeRunner: close X, progress bar,
              (?) help. Empty-queue is a state of the runner, not a
@@ -236,7 +238,7 @@
                 </p>
             </q-card-section>
         </BaseDialog>
-    </div>
+    </q-page>
 </template>
 
 <script lang="ts" setup>
@@ -255,6 +257,16 @@
 
     const $q = useQuasar();
     const { entries, loading, submitVerb, reload } = useReconcileQueue();
+
+    // FU-609 / R-036 — app-shell height. QPage hands us the layout's live chrome
+    // `offset` (header, incl. the OfflineBanner when it shows) + viewport
+    // `height`, so the full-bleed runner fills exactly the area below the header
+    // instead of overshooting by a hardcoded 100dvh (which ignored the offset).
+    function pageStyleFn(offset: number, height: number) {
+        return {
+            height: height === 0 ? `calc(100vh - ${offset}px)` : `${height - offset}px`,
+        };
+    }
 
     const index = ref(0);
     const busy = ref(false);
@@ -360,7 +372,8 @@
     // typography, same warm accent. Colour flips to brand-primary
     // (reconcile is a meal-plan surface, not a stock surface).
     .runner-shell {
-        min-height: 100dvh;
+        /* FU-609 / R-036 — height comes from the <q-page :style-fn> (viewport −
+           live layout offset); no hardcoded 100dvh (which ignored the header). */
         background: var(--surface-page);
         display: flex;
         flex-direction: column;

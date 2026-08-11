@@ -18,6 +18,442 @@ next.
 
 ---
 
+## 2026-08-11 — FU-609: finish the page-height contract sweep (11 remaining MainLayout pages → R-036)
+
+**Trigger.** Owner: "resolve the rest of 609" — overriding R-036's default opportunistic-per-page stance to do the full sweep now.
+
+**Done — all 11 remaining pages converted, shape chosen per page:**
+- **Document-scroll** (bare `<q-page>`): `DashboardPage`, `MealPlansOverview`, `MealPlanTemplatesPage`, `PriceHistoryPage`, `RecipeCookMode`, `ReportsPage`, `ShopNowRedirect`.
+- **App-shell** (`<q-page :style-fn="pageStyleFn">`, same offset/height fn as `StockOverview`): `MealReconcilePage` + `StocktakeRunner` (dropped their hardcoded `min-height:100vh/100dvh`, which overshot by the header inside `q-page-container`) and `SettingsShell` (replaced `calc(100dvh - 64px)`; mobile `<md` keeps window-scroll via a documented `height:auto !important` overriding the inline :style-fn height).
+- **Dual-host** `StockItemDetailPage`: `<component :is="rootTag">` → `QPage` routed / `<div>` embedded in the Stock Overview peek (imported `QPage` from quasar; added `rootTag` computed on the `embedded` prop).
+Each carries an inline `FU-609 / R-036` comment. R-036/ADR-032 updated: inventory now fully converted.
+
+**Checks.** `vue-tsc` **0 errors** + eslint **0 errors** on all 11; dev-server compiled clean (0/0). Live-verified **Dashboard** (`<main class="q-page dora-dash">` + hero) and **Reports** (`<main class="q-page reports-page">` + content) render correctly, no console errors. The other 9 could **not** be driven in the in-app browser: its pane isn't displayed → the `mode="out-in"` `FadeTransition` around the page router-view never composites/completes → empty container on route changes (harness limitation, not a defect; the clean Vue-compiler pass proves every template is balanced). Per-page visual walks queued in `DORA_VERIFY.md` for a real browser.
+
+**Engineering-standards close-gate.** This IS an R-036 sweep — every converted page now complies; the one `!important` (SettingsShell mobile) is documented in place as overriding the framework-set inline height. App-shell pages reuse the single proven `pageStyleFn` (no per-page offset guesses). No new violations, no new ADR (R-036/ADR-032 already own this).
+
+**Next up.** Open FUs ~19 — mostly owner/external (FU-608 donation infra, FU-557 support channel, FU-406 release, FU-405/404 ops/compliance) + test-infra (FU-584, FU-520) + smaller findings.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — FU-618: restore the two pre-existing backend test breakages → suite fully green
+
+**Trigger.** Owner: "do 618."
+
+**Done (test-only — no product code touched).**
+- **bucket-C secrets (10 setup ERRORs) → fixed.** `test_bucket_c_secrets.py`'s `_wrapping_key` fixture imported `from dora_api.infrastructure.llm import key_encryption`, dead since that module moved to `infrastructure/security/secret_encryption.py` (DORA_SECRET_ENCRYPTION_KEY rename, CHANGELOG 2026-08-04). Repointed the import + renamed the local refs to `secret_encryption` (the env var was already correct). **10 pass.**
+- **email digest (2 failures) → fixed.** The two `_render_text_digest` tests monkeypatched `send_alerts_digest.public_base_url`, an attribute the module no longer has — it now builds the "Open alerts" link via `spa_deep_link` (hash-history, `…/#/alerts`), which reads `public_base_url` from `auth_helpers`. Repointed the monkeypatch to `auth_helpers.public_base_url` and updated the expected URL to the `/#/alerts` form. **All email-sender tests pass.**
+
+**Checks.** Full backend suite now **1620 passed, 1 skipped, 1 xfailed, 0 failed, 0 errors** (was 1607 passed / 3 failed / 10 errors). `pytest` (no args) is green again.
+
+**Engineering-standards close-gate.** Both were pure test-side drift (stale import + stale monkeypatch target) — the fixes track code that already moved, no new production code. No CHANGELOG (test-only). No new violations, no ADR.
+
+**Next up.** Open FUs ~20. FU-609 (page-height, per-page), plus owner/external + test-infra items.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — FU sweep #3: FU-599 (audit double-log) + FU-570 (stale-DB boot guard + health schema)
+
+**Trigger.** Owner: "do both 570 and 599."
+
+**Done.**
+- **FU-599 (audit integrity) → RESOLVED.** Handlers with an explicit `audit_emit` also got the middleware's generic row → two rows per op under two naming conventions. Instead of hand-extending `_NO_AUDIT_ENDPOINTS` (the FU flagged that as risky — a static list can suppress a *richer*-needed row), added a **request-scoped dedup flag** (`_dora_explicit_audit` on Flask `g`): `emit()` sets it after a successful explicit (non-`_auto`) commit; `auto_audit_after_request` passes `_auto=True` and skips its row when the flag is set. Self-maintaining, and safe — only suppresses when an explicit emit actually fired, and only post-commit (a failed explicit still leaves the generic row as fallback). `_NO_AUDIT_ENDPOINTS` kept (completeness suite pins it). New test drives `POST /api/users` → exactly one `user.created_by_admin`. Dual-naming cleanup left out of scope.
+- **FU-570 (operator robustness) → RESOLVED.** Reframed the guard: this codebase `create_all`s in dev (current schema, never alembic-stamped) and `upgrade()`s in prod, so "alembic_version absent" is ambiguous — the real stale-DB signal is **missing columns the models expect**. (a) `_warn_on_schema_drift()` in `startup.py` (after `init_db`) inspector-compares live tables/columns vs `db.metadata` (names-only, PG/SQLite-portable) and logs a loud ERROR banner on drift; **warns, doesn't refuse** (fresh dev boot is silent). (b) `/api/health` gains `schema_version_db` (the DB's actual applied revision, null when unstamped) beside the code-head `schema_version`. Tests: health-router assertion + DTO-contract snapshot updated. Boot banner → DORA_VERIFY (operator smoke check).
+
+**Checks.** Syntax OK; audit + completeness + health + DTO-contract e2e **43 passed** (incl. 3 new). Full backend suite: **1607 passed, 3 failed, 10 errors** — the failures/errors are **pre-existing + unrelated** (confirmed by stashing these changes: `test_bucket_c_secrets` stale import `infrastructure.llm.key_encryption` → moved to `security.secret_encryption`; `test_email_sender` digest render). Logged as **FU-618**. CHANGELOG: both (operator-visible). Ledger moved to RESOLVED.
+
+**Engineering-standards close-gate.** FU-599 dedup is centralised in `audit.py` (single mechanism, R-003) not scattered per-endpoint. FU-570 guard is portable across SQLite/PG (§7.5 distribution posture — names-only compare, no engine-specific assumptions). Audit's "keys never removed" health contract honoured (added `schema_version_db`, removed nothing). No new violations, no ADR (the dedup pattern is a local mechanism, not a recurring cross-cutting decision worth a rule).
+
+**Next up.** Open FUs ~21. FU-618 (pre-existing test red — the bucket-C import fix is one mechanical line worth doing), FU-609 (page-height, per-page), plus owner/external + test-infra items.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — FU sweep #2: FU-580 (flag toggle refresh), FU-593 (suggestion feed fairness), FU-574 (bad-URL recovery), FU-607 (image docstring)
+
+**Trigger.** Owner picked these four off the "what's next" menu — three real bugs + one doc-drift call (FU-607 answer: drop the stale docstring, stock-item image editing was intentionally removed).
+
+**Done.**
+- **FU-580 (finding) → RESOLVED.** `AdminSystemFeaturesSettings.vue`'s generic flag handler already refreshed `useFeatureFlags`, but **scanning** + **buy-verdict** toggles didn't refresh their *dedicated* module-level probe composables, so gated UI (scan button, QR labels, buy-verdict badges) stayed stale until reload. Wired `onScanningToggle` → `Promise.all([refreshScanning(), featureFlags$refresh()])` (scanning gated by both) and `onBuyVerdictToggle` → `refreshBuyVerdict()`. Live walk queued in DORA_VERIFY (needs admin session).
+- **FU-593 (finding) → RESOLVED.** Suggestion feed truncated 8 by severity, so noisy HIGH `use_soon` starved the LOW `reconcile_meals_pending` nudge. New pure `_select_for_display` in `suggestions.py` reserves one slot per firing kind before any kind takes a second, then fills by severity (server-side; correct per state-ownership). Pinned by new `tests/test_suggestion_selection.py` (4 unit tests) — stable contract, so a test not a walk. Backend suggestion suite **18 passed**.
+- **FU-574 (finding) → RESOLVED.** A bad instance URL reloaded into the "Can't reach Dora's brain" screen whose only action was Try again, and #/settings/about rendered that same screen → stuck. Added a router-independent **"Change instance URL"** hatch to `SplashScreen.vue`, gated on `backendBaseUrlIsUserSet()` (mirrors `AboutSettings.onChangeInstance`). Live walk queued in DORA_VERIFY (destructive trigger).
+- **FU-607 (doc drift) → RESOLVED.** Owner: stock-item image editing intentionally removed. Dropped the stale FU-126 stock-item clause from `ImageUploadField.vue` docstring (now cites real consumers — avatar, store logo) + removed "stock item" from `imageService.ts`'s upload-site list. Kept the FU-014 encoding-convention line (backend, not a client site). Comment-only.
+
+**Checks.** vue-tsc + eslint clean on all touched web files; backend suggestion suite 18 passed. CHANGELOG: FU-580/593/574 (user-visible); FU-607 none (comment). Ledger moved to RESOLVED.
+
+**Engineering-standards close-gate.** FU-593 keeps the ranking server-side (state-ownership) + adds a pure, unit-tested helper. FU-580 removes stale-cache drift. No new violations, no ADR. FU-580 does surface a latent R-003 smell — scanning is gated by *two* composables (`useScanningEnabled` **and** `useFeatureFlags().scanning`); I refreshed both rather than unify them (out of scope). Not logged as a new FU (low-severity, both are thin health-probe reads) — flagged here for whoever next touches the flag composables.
+
+**Next up.** Open FUs now ~22. Remaining actionable: FU-570 (stale-DB boot guard, needs a decision), FU-599 (double audit rows), FU-609 (page-height, per-page), plus owner/external + test-infra items.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — Opportunistic FU sweep: FU-598 (timeline shape channel), FU-614 (font-list R-003), FU-616 (router comment)
+
+**Trigger.** Owner "next thing to do?" — cleared three self-contained, actionable follow-ups (all opportunistic) after the cook-batch feature closed.
+
+**Done.**
+- **FU-598 (design/theming) → RESOLVED.** On Pesto (default) + Cherry Cola, `--brand-primary`
+  and `--semantic-positive` are the same green, so the Upcoming timeline's shopping vs. meal
+  dots were undecodable (legend didn't help — same swatches). Took the accessible option the FU
+  endorsed rather than a palette change: **added a shape channel** to `UpcomingTimeline.vue` dots
+  — circle=expiry, square=shopping, diamond=meal (`border-radius`/`transform` on `.up-dot--*`);
+  legend reuses the classes. Colour no longer load-bearing. Grepped the other 4 files pairing the
+  two tokens (MealPlanCalendar, PantryBeliefChip, DashboardPage, ReportsPage) — none is a
+  side-by-side same-category legend, so no other surface is undecodable. Verify line added.
+- **FU-614 (R-003) → RESOLVED.** Font-family option list + `coalesceFontFamily` were duplicated
+  across `PreferencesSettings.vue` and `WelcomeWizard.vue`, with a deliberate one-label divergence
+  (`'Plus Jakarta'` vs `'Plus Jakarta Sans'`). Centralised into `themeService.ts` with a
+  **label-override factory** (`fontFamilyOptions(overrides?)` + shared `FONT_FAMILY_OPTIONS` +
+  shared `coalesceFontFamily`); both consumers import it, divergence preserved via overrides.
+- **FU-616 (finding) → RESOLVED.** Comment-only: `router/index.ts` onboarding "safety hatches"
+  note named sign-out (removed this era); now names **Skip onboarding** as the escape.
+
+**Checks.** vue-tsc + eslint clean on all touched web files. FU-598 is the only user-visible one
+(CHANGELOG Fixed entry); FU-614/616 are refactor/comment (no CHANGELOG). Ledger entries moved to
+`DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Engineering-standards close-gate.** FU-614 *fixes* an R-003 violation (single-sourced). FU-598
+strengthens the "colour not the only channel" posture (D-013 spirit) — considered promoting a new
+D-rule but declined (single occurrence, not yet recurring); parked for a future design pass. No
+new violations, no ADR.
+
+**Next up.** Remaining open FUs are mostly opportunistic/owner-external (29→26). No forced next.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — Build: Meal Plans Part 2 cook batches — Phase 5 (builder auto-proposal) shipped + verified; FEATURE COMPLETE
+
+**Trigger.** Owner "continue" — the last phase: have "Build my week" propose cook batches.
+
+**Built + tested.**
+- **Backend (`build_week.py`):** new `place_entries_batched` (chunks each slot's days into
+  runs of `BATCH_COOK_SPAN_DAYS`=3, one recipe per run, shared `cook_key`; 1-day runs stay
+  standalone) + `_batch_cook_span` (reads the install `batch_features_enabled`, else span 1).
+  `compute_auto_build` computes the reduced recipe count for batch households and picks batched
+  vs distinct-per-day placement; `ProposedEntry.cook_key` + payload carry the group. Fresh
+  households unchanged (span 1, cook_key None).
+- **Frontend (`MealPlanBuilderDialog.vue`):** `ProposedEntry.cook_key` in the model; review-step
+  "Cook once" / "Leftovers" markers via `validCookKey`/`cookMarker` (which also *defend* the
+  commit — a group broken by a review edit, e.g. a swap, silently unlinks so the server never
+  sees a malformed batch); `onBuild` commits `cook_key`. Swap/add clear the key.
+- **Tests:** `test_build_week.py` +3 (`place_entries_batched`: chunking, 1-day-run standalone,
+  pool-dry) → 26; `test_cook_batches.py` +1 e2e (Batch household proposes grouped cooks, Fresh
+  doesn't, one recipe per run, fewer distinct recipes) → 10. Consolidated gate (build_week +
+  cook_batches + meal_plan_router + preview) **59 passed**. vue-tsc + eslint clean.
+
+**Verified LIVE** (Batch on, "Build my week"): the review rendered **18 Cook/Leftovers markers**
+— each recipe "Cook once" on its first day + "Leftovers" on the next two (3-day spans); committing
+created **6 real CookBatch rows** (3 slots × 2 cooks over 6 days), 18 linked entries, correct
+is_cook_day (6) + total yield. Restored Fresh after.
+
+**FEATURE COMPLETE (FU-617 → RESOLVED).** Phases 1 (backend) + 4 (manual UI) + 5 (builder) all
+built, tested, verified live. Phases 2/3 dropped as no-ops (Σ-yield invariance). The one path not
+driven in-pane — the manual "Cook once for more days" *picker dialog* — is queued in DORA_VERIFY
+(its write path is the same `setCookDays` proven by unlink + backend tests).
+
+**Engineering-standards close-gate.** Batched placement is pure/unit-tested; `cook_key` grouping
+single-sourced; markers icon+text (D-014); tokens-only. No new violations. No ADR.
+
+**Next up.** Feature done. Optional future extensions live in the proposal §12 (cross-week cooks,
+per-recipe keeps-days, ingredient-overlap ranking, cross-slot cooks).
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — Build: Meal Plans Part 2 cook batches — Phase 4 (manual UI) shipped + verified live
+
+**Trigger.** Owner "continue" — build the FU-617 frontend after the tested backend (Phase 1).
+
+**Built (frontend, all type/lint clean).**
+- **Model/API:** `MealPlanEntry` gains the cook-batch read fields; `MealPlanEntryCommand.cook_key`
+  — crucially mapped from a saved entry's `cook_batch_id` (new `toCommand` helper) so a link
+  survives every edit (servings ±, remove, etc.).
+- **Composable (`useMealPlanner`):** all three command builders route through `toCommand`
+  (carry `cook_key`); new `setCookDays(entry, days)` — redefines a cook to span exactly the
+  given days (≥2 links, 0-1 makes standalone, so it also implements "separate this cook"),
+  reusing/adding entries as needed and preserving every OTHER batch; `cookBatchDays(entry)`.
+- **Components:** per-entry linked marker on `MealPlanEntryChip` (desktop) + `MealPlanRichCard`
+  (mobile) — "Cook · serves N" on the cook day, "Leftovers" on the rest, icon+text (D-014-safe),
+  gated on `batchEnabled`. Menu items "Cook once for more days…" / "Separate this cook" (batch
+  households only). Emits threaded through `MealPlanWeekDayCard` / `MealPlanMobileFocus` →
+  `MealPlansOverview`, which opens a Quasar checkbox day-picker → `setCookDays`.
+
+**Verified LIVE** (dev server + venv backend; Batch cook-style flipped on via the admin Cooking
+page toggle → `refreshCookingPolicy`; created a 3×2 dinner batch via the API): markers render
+correctly — **"Cook · serves 6" on the earliest day, "Leftovers" on the other two** (derived
+view: is_cook_day = earliest, total yield = 6 = 3×2); the ⋮ menu shows both batch actions
+(link / link-off icons); **"Separate this cook" dissolves the batch** (entries → standalone,
+markers gone). No console errors (only pre-login 401 probes). Test plan deleted + cook-style
+restored to Fresh after.
+
+**Only Phase 5 left:** builder auto-proposal of cooks for Batch households (also ties off
+FU-611) — an Effortless enhancement; the manual path is fully usable now. CHANGELOG entry added
+(feature is user-visible); the link-creation *dialog* eyeball queued in DORA_VERIFY (its write
+path is the same `setCookDays` proven by unlink).
+
+**Engineering-standards close-gate.** `cook_key` single-sourced via `toCommand` (R-003); markers
+use icon+text not colour-only (D-014); tokens-only styling (R-002/D-017). No new violations.
+
+**Next up.** Phase 5 (builder auto-proposal) when prioritised.
+
+---
+
+## 2026-08-11 — Build: Meal Plans Part 2 cook batches — BACKEND (Phase 1) shipped + tested; scope correction
+
+**Trigger.** Owner: "go - build" the FU-617 cook-batch feature per `PROPOSAL_MEAL_PLANS_PART_2.md`.
+
+**Built (backend, all tested).**
+- **Schema:** new first-class `CookBatch` entity (`domain/entities/cook_batch.py`) + `CookBatch`
+  table (plan-scoped CASCADE, recipe FK anchor) + `MealPlanEntry.cook_batch_id` (nullable, SET
+  NULL) + 3 FK covering indexes (R-034). Imperative mapping follows the plain-FK-id idiom of
+  `MealPlanReconcileReceipt` (no new relationships — explicit management is more legible and
+  dodges cascade/delete-orphan subtleties). Migration `d5a9f27c4e18` (chained off head
+  `c3f8a1b52d9e`, single head; UUIDType to match the schema-match test; SQLite batch for the
+  new column). `verify_mappings` + `test_migrations` (schema-match) green.
+- **Write path:** `cook_key` transient grouping token on create + update entry requests; shared
+  `cook_batch_grouping.py` (R-003) validates each group (≥2 days, one recipe, one slot, distinct
+  days). Create/update build one `CookBatch` per `cook_key` and link entries via `cook_batch_id`,
+  using the repo's documented two-`flush()` FK-ordering contract (plan→batches→entries, no
+  relationships). Update preserves the batches of preserved past entries and replaces only the
+  forward ones (SET NULL means deleting a replaced batch can't trip an FK).
+- **Read view:** `MealPlanEntryDto` gains `cook_batch_id` + server-derived `is_cook_day`
+  (earliest linked day), `cook_batch_total_servings` (Σ), `cook_batch_size` — computed once per
+  batch in `MealPlanDto.from_entity` (state-ownership; never stored).
+- **Tests:** new `test_cook_batches.py` (8) — grouping+derived view, all four validation
+  rejections, standalone entries unaffected, forward-replace lifecycle, and demand-invariance.
+  `test_meal_plan_router` / `_preview` / `_today` still green (26). No regression.
+
+**SCOPE CORRECTION (build-to-plan caught a wrong assumption).** The proposal's **Phase 2
+(demand-collapse)** and **Phase 3 (reconcile cook-once)** are **not needed** — they were written
+against a *single-yield* mental model, but the proposal actually committed to the **Σ-yield
+model** (`total_yield = Σ entry servings`). Under Σ, a batch of 3×2=6 portions needs
+6-portions-of-ingredients whether cooked once or three times, and the existing per-recipe
+servings-sum already equals total_yield. Ingredients / cost / shortfall / pool-drain are all
+provably batch-invariant (none references `cook_batch_id`); pinned by
+`test__ingredient_demand__is_identical_linked_vs_unlinked`. Reconcile only drains (per day,
+correct); the pool bump is cook-mode-driven (once). **Corrected proposal §0/§6/§13** and FU-617
+so the next agent doesn't "fix" six non-bugs.
+
+**Remaining (all frontend):** Phase 4 UI (per-entry linked markers + link/unlink menu, gated on
+`batchEnabled`, desktop + mobile — reuse the left-accent + highlight-set plumbing), Phase 5
+builder auto-proposals (grouped `cook_key`; ties off FU-611), Phase 6 browser-verify. Backend is
+complete + inert until the UI can create batches (`cook_batch_id` nullable → standalone default).
+
+**Engineering-standards close-gate.** New table/column/indexes declared in the ORM model
+(R-034); additive portable migration (R-005/R-006); grouping+validation single-sourced (R-003);
+derived facts server-owned (state-ownership). No new violations. No ADR (applies existing rules).
+No CHANGELOG entry yet — feature isn't user-visible until the UI lands.
+
+**Next up.** Phase 4 (UI) then Phase 5 (builder). Backend contract is stable + tested to build against.
+
+**Open questions for user.** None — but note the scope shrank (Phases 2-3 dropped as no-ops);
+remaining work is UI + builder only.
+
+---
+
+## 2026-08-11 — Design brief: Meal Plans Part 2 — cook batches (one cook, several days)
+
+**Trigger.** Multi-turn design conversation with the owner about giving the meal-plan
+builder control over ingredient overlap + day-to-day similarity. It converged on a
+concrete primitive: **link the same slot across several days to one cook** ("cook X
+Monday, eat it Mon+Tue+Wed dinner") — the batch-cooker's missing planning mechanic.
+Owner: write it up as Part 2 of the meal-plans proposal, full context so a build agent
+can execute cold. **No code changed** — design doc only.
+
+**Investigation (4 parallel general-purpose agents, read-only)** grounded the design in
+the live code before writing:
+- **Data model:** no existing entry-grouping; side-table precedent (`MealPlanReconcileReceipt`
+  / `MealPlanSwapLedger`); the write path destroys+recreates forward entries so they have no
+  stable identity (the hinge).
+- **Pool vs batch:** the existing `available_meals` pool is *retrospective* (cooked & on-hand);
+  reconcile drains it; `batch_features_enabled` cook-style just reveals pool tools; `get_shortfall`
+  is the *inverse* of a planned cook. Owner's instinct "batch ≠ the cook-mode pool" confirmed;
+  big naming-collision finding around the word "batch".
+- **Aggregation impact:** one scaling primitive (`aggregate_meal_plan_ingredients`) fed by 6
+  summation points that would double-count a batch; shopping-list generator already batch-safe.
+- **UI:** planner is day-major everywhere → a literal spanning bracket needs the retired
+  slot-major grid; a per-entry linked marker (reusing the highlight-set plumbing) fits with no
+  restructure and works on mobile.
+
+**Deliverable.** `docs/04_proposals/PROPOSAL_MEAL_PLANS_PART_2.md` — first-class `CookBatch`
+entity (+ `MealPlanEntry.cook_batch_id`), the servings split (batch = demand unit counted once
+at total yield; entry = consumption unit), `cook_key` grouping on the write path (resolves the
+identity problem without an identity rewrite), the 6 impact points as a change-list with
+file:line, reconcile cook-once-drain-many, per-entry linked-cook UI, builder auto-proposals for
+Batch households (also the honest fix for the FU-611 shortfall case), global 4-day freshness
+warn, charter/standards check, future extensions, sequencing. **Folds into the existing "Batch"
+cook-style** (owner-agreed) so there's no new setting/word. Coverage table maps it to F26
+(line-371 "essential" batch-vs-fresh bullet). Original-spec skim: nothing to extract
+(nutrition-driven, out of scope). Open decisions all closed inline (8).
+
+**Cross-refs.** Part 1 (`PROPOSAL_MEAL_PLANS.md`) now links to Part 2. Build tracked as
+**FU-617**. COVERAGE_GAPS unchanged (F26 not tracked there as a gap; post-ship check noted in
+the doc §16).
+
+**Engineering-standards close-gate.** Doc-only; commits *future* code to R-003/state-ownership
+(derived cook-day/yield/span), R-005/R-006 (additive portable migration), R-034 (model owns the
+new table + FK index). No ADR (no new recurring decision — it applies existing rules).
+
+**Next up.** Owner review of the brief; then FU-617 build when prioritised (§13 sequencing:
+backend model + write path first).
+
+**Open questions for user.** None — design decisions all resolved in the doc; awaiting go/no-go
+on the build.
+
+---
+
+## 2026-08-11 — FU-611 (builder shortfall hint) + FU-609 (page-height contract → R-036/ADR-032 + RecipesOverview)
+
+**Trigger.** Owner: "lets do 611 and 609."
+
+**FU-611 — builder shortfall hint (client-only).** `select_recipes` picks only
+*distinct* recipes, so a day×slot grid larger than the cookbook fills days in order
+and stops — later days blank, unexplained. Cheapest honest fix = a review-step hint;
+no backend change (the auto-build response already carries `days_used`/`slots_used`).
+`MealPlanBuilderDialog.vue` now records `lastBuildRequested` (days×slots) +
+`lastBuildPlaced` (entries) per generate/reshuffle (0 on manual start / reopen) and
+renders a `showShortfallHint` banner when `!repeatSameDay && placed < requested &&
+proposed.length < requested` — only when the build fell short, clearing once the user
+fills the gap (so a manual delete never trips it). Copy cites accurate placed-vs-
+requested numbers only (no cookbook-size claim — misleads when recipes are excluded
+for being already-planned). **Verified live** on the 11-recipe seed via the auto-build
+API: 7×3=21 requested → 8 placed → 4 empty days → condition true.
+
+**FU-609 — page-height contract.** Root cause: `<q-page>` is the only thing giving a
+routed page a height contract; bare-`<div>` pages hand-roll offsets that rot. Did the
+**safe, high-value slice**, NOT a blind 11-page sweep (the FU + close-gate both warn
+against converting unreported surfaces):
+- **Codified R-036 + ADR-032** in `ENGINEERING_STANDARDS.md`: a MainLayout-hosted route
+  roots on `<q-page>`; document-scroll → bare `<q-page>`, fixed-height app-shell →
+  `<q-page :style-fn>` reading the live offset; never hardcode the offset. Two worked
+  references (StockOverview = app-shell, RecipesOverview = doc-scroll).
+- **Converted `RecipesOverview.vue`** (`<div class="q-pa-md">` → bare `<q-page>`, no
+  style-fn) — it shares StockOverview's `PageCountsFooter`, which floated mid-screen on
+  a short list for lack of a min-height contract. Chose bare `<q-page>` (keeps
+  document-scroll) over the app-shell shape — minimal, correct, non-behaviour-changing
+  for long lists.
+- FU-609 **stays OPEN** as the remaining opportunistic per-page backlog (RecipesOverview
+  row ticked; R-036 now governs the rest).
+
+**Verification.** vue-tsc + eslint clean (all touched files). **Live browser walk**
+(dev server :5174 HMR + venv backend :5170, rAF-shim + in-place login recipe): Cookbook
+root confirmed now `<main class="q-page">`, renders clean, **no console errors** (only
+pre-login 401 probes); auto-build shortfall reproduced with real server data. Two
+visual eyeballs queued in `DORA_VERIFY.md` (the shortfall banner + the short-list
+footer-pin — both need states the 0×0 preview pane can't measure). No DB mutations
+(auto-build is preview-only).
+
+**Engineering-standards close-gate.** FU-609 *adds* a rule (R-036/ADR-032) rather than
+violating one; FU-611 is additive. No other violations. FU-611 → RESOLVED; FU-609
+updated (partial).
+
+**Next up.** FU-609's opportunistic tail: `MealPlansOverview` + the runner shells
+(`MealReconcilePage`/`StocktakeRunner`) are the next deliberate conversions under R-036.
+No blockers.
+
+**Open questions for user.** None — but note FU-609 is *not* fully closed by design
+(remaining pages are opportunistic, not a blind sweep). Say so if you want the full
+11-page conversion done now.
+
+---
+
+## 2026-08-11 — FU-610: meal-plan dialogs stop inerting their fields while saving (D-019)
+
+**Trigger.** "next task?" → continued the meal-plan cleanup thread with the
+colocated D-019 finding.
+
+**What.** Four dialogs bound a transient `saving*` flag to `:disable` on focusable
+fields (blurs what the user just moved into mid-save — D-019). Stripped the flag
+from every input/select in the cluster; each Save button already had `:loading`
+(+ permanent `!x.trim()` guard), so in-flight state still reads correctly. Action
+buttons keep `:disable="saving"` (D-019's double-submit carve-out).
+
+**Fields fixed:** `MealPlansOverview.vue` — save-template dialog (name input +
+description textarea); **plus, extended in-scope** (same D-019 violation, same file,
+not named in the FU but flagged by the R-035/D-019 close-gate): the "Apply recurring"
+dialog (source `q-select` + two date `q-input`s). `MealPlanTemplatesPage.vue` —
+save-set dialog (set-name input + "Add a template" `q-select`).
+`MealPlanTemplatesDrawer.vue` — inline rename input.
+
+**Verification.** vue-tsc clean; eslint clean on all 3 files. Behaviour is a
+focus-retention change best confirmed by driving the modals live; the hidden preview
+pane handles modal focus poorly, so — matching how the original settings D-019 fix
+(the one that raised this FU) was left — queued an owner eyeball in `DORA_VERIFY.md`
+(Meal plans). No test: the change is the *absence* of an attribute; there's no
+stable contract to pin (lean/manual-first stance).
+
+**Engineering-standards close-gate.** Removes D-019 violations (via R-035); no new
+violations; no ADR (D-019 already exists). FU-610 → RESOLVED.
+
+**Next up.** Remaining meal-plan-area findings are all opportunistic (FU-611
+builder-shortfall hint, FU-609 q-page contract, FU-614 font-list R-003). No blockers.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — Meal-plan cleanup: FU-613 phantom border token + FU-612 delete dead `meals_per_week`
+
+**Trigger.** Session-start "what next?" → owner picked the meal-plan cleanup pass
+(two colocated findings from the 2026-08-07 builder rework).
+
+**FU-613 — phantom `--separator` token (cosmetic, code-clean).** `var(--separator)`
+was used as a border colour in 9 places across `MealPlanEntryChip.vue` (2),
+`MealPlanMobileFocus.vue` (3), `MealPlanRichCard.vue` (3), `MealPlanWeekDayCard.vue`
+(1). No such token is defined in any theme → the whole `border` declaration is
+invalid → those borders (card outlines + dashed drag/drop affordances) drew as
+nothing. Swapped all 9 → `var(--border-default)` (every one is a component/card
+outline or dashed drop-target, not a hairline list separator; `--divider` reserved
+for hairlines — matches the already-fixed `MealPlanBuilderDialog.vue` sibling).
+`--border-default` confirmed defined in all themes. Visual eyeball queued in
+`DORA_VERIFY.md` (Meal plans, dated 2026-08-11).
+
+**FU-612 — delete `meals_per_week` end-to-end (owner call: option a).** The
+preference only ever fed the builder's target count; the day×slot toggle rework
+orphaned it (grep confirmed zero readers — `useMealsPerWeek()` had no importers,
+only the settings page referenced its own draft). Owner chose delete over
+re-purpose. Removed:
+- **FE:** `useMealsPerWeek.ts` (deleted); `BUILDER_TARGET_MEALS_FALLBACK` const in
+  `useMealPlanner.ts`; the Settings → Preferences "Meal planning" section + import +
+  draft/watch/handler; `meals_per_week` on `models/auth.ts` + `authApiService.ts`.
+- **BE:** entity attr + `Fields.MEALS_PER_WEEK` (`user.py`); table-mappings column;
+  `update_me` request field + set-handler; `register_user` DTO field + projection;
+  `dto_snapshots.json` auth_me entry; the 3 `meals_per_week` tests in
+  `test_patch_semantics.py` (contract gone) + its null-out-matrix docstring line.
+- **Migration** `c3f8a1b52d9e_20260811_drop_user_meals_per_week` — chained off head
+  `b9d4f2a7c1e6`, single head confirmed. SQLite batch `drop_column`. Pre-release
+  hard change, value discarded (per owner + prerelease-breaking-changes-ok).
+
+**Verification.** vue-tsc clean; eslint clean on all touched FE files; **116 backend
+tests green** (test_patch_semantics + test_dto_contracts + test_auth_flows); full
+alembic chain re-applied to a throwaway SQLite via `flask_migrate.upgrade()` — chain
+runs clean, `User.meals_per_week` absent, 36 cols. CHANGELOG updated (Removed:
+meals_per_week; Fixed: meal-plan borders).
+
+**Engineering-standards close-gate.** No new R-rule violations. FU-613 fix *removes*
+a D-017/R-035 violation (phantom token). FU-612 *reduces* duplication and kills a
+dead setting (single-maintainer-legibility goal). No ADR — neither is a new recurring
+decision. Both findings moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Next up.** No blockers. Remaining meal-plan-area findings are all *opportunistic*
+(FU-610 dialog `:disable`→`:loading`, FU-611 builder-shortfall hint, FU-609 q-page
+contract, FU-614 font-list R-003). Owner still owes the FU-615 cooking-admin visual
+walk + the new FU-613 border eyeball (both in `DORA_VERIFY.md`).
+
+**Open questions for user.** None.
+
+---
+
 ## 2026-08-10 — Bug: e-mailed reset/verify links dead-ended on the login screen (hash-mode mismatch)
 
 **Trigger.** Owner set up SMTP, requested a password reset, clicked the link and

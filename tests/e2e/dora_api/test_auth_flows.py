@@ -178,15 +178,26 @@ def test__reset_password__weak_password__is_422(api):
 # lives in a separate confirmation flow.
 
 
-def test__update_me__rejects_email_field(api):
-    """FU-197 — the legacy unverified email-write path on PATCH /auth/me
-    is closed; the field is now forbidden by the request model."""
+def test__update_me__email__round_trips_and_validates(api):
+    """The verified change-email flow was retired as overengineered — PATCH
+    /auth/me now accepts `email` directly: it validates the format, updates
+    in place, and reads back on /me."""
     import requests
-    response = requests.patch(
-        f"{BASE}/me",
-        json={"email": f"hijack-{uuid.uuid4().hex[:6]}@example.com"},
-    )
-    assert response.status_code == 400, response.text
+    original = requests.get(f"{BASE}/me").json().get("email")
+    try:
+        # Invalid format is rejected (handler business-rule → 422).
+        bad = requests.patch(f"{BASE}/me", json={"email": "not-an-email"})
+        assert bad.status_code == 422, bad.text
+
+        # A valid address saves, reflects in the DTO, and persists.
+        new_email = f"dora-updated-{uuid.uuid4().hex[:6]}@example.com"
+        patched = requests.patch(f"{BASE}/me", json={"email": new_email})
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["email"] == new_email, patched.text
+        assert requests.get(f"{BASE}/me").json()["email"] == new_email
+    finally:
+        # Restore so the shared bootstrap user doesn't leak state.
+        requests.patch(f"{BASE}/me", json={"email": original or ""})
 
 
 def test__update_me__show_assistant_round_trips(api):

@@ -22,6 +22,16 @@ top-to-bottom.
 
 ---
 
+## Account settings redesign (2026-08-11)
+- [ ] Settings → Account: page is just Profile picture / Username / Email / Change password + one **Save changes** bar at the bottom (no top identity block, no per-field save buttons). Structure was agent-confirmed via page text; the live interactive checks below were auth-blocked (session expired, no creds) — walk them once signed in.
+- [ ] Profile picture is a **circle**; hovering (or keyboard-focusing) shows a pencil overlay; clicking/tapping it opens the file picker and the chosen image saves immediately. **Remove photo** appears only when an image is set and clears it.
+- [ ] Edit Username and/or Email → the **Save changes** button enables (and a **Discard** appears); Save persists both (reload → values stick). Email needs no password/confirmation — it just saves. An invalid email shows an inline error and blocks save; clearing the field saves an empty address.
+- [ ] Fill the three password fields (current + new ≥8 + matching confirm) → Save changes updates the password; leaving them blank saves username/email only. Navigating away with unsaved edits prompts the unsaved-changes guard.
+
+## Blank-nav regression fix (2026-08-11)
+*Root cause + fix landed and functionally verified via live JS-driven nav (all routes render on nav, console clean). Synthetic clicks/screenshots were flaky in the harness pane, so a real-click + visual pass is owed.*
+- [ ] Click around the app between several pages (Dashboard ↔ Cookbook ↔ Stock ↔ Meal plans ↔ Settings) — every page renders on nav; no blank screens, no need to refresh. Confirm the page-to-page cross-fade looks fine (no jarring flash / double-page overlap).
+
 ## Stocktake fill-pulse + expiry menu width fixes (2026-08-10)
 *Bug 1 (fill never rendered on the outline button) fixed by moving the fill to the `::before` layer — mechanism confirmed against real Quasar CSS (computed `::before` bg = live tint, animation running). Bug 2 is a menu width/nowrap tweak. Both are visual/animation → owner once-over.*
 - [ ] Stock Overview, stocktake overdue: the **Stocktake** button's **fill colour** now breathes in sync with the glow ring (not just the ring) — the whole control pulses. Reduced-motion → static soft fill, no animation.

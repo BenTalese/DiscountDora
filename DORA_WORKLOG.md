@@ -18,6 +18,147 @@ next.
 
 ---
 
+## 2026-08-11 — Account settings redesign (identity block out, circular avatar, global save, email simplified)
+
+**Trigger.** Owner's 5-part brief on Settings → Account: drop the top identity block; shrink profile picture to a heading + circular hover-to-edit avatar (no add-file button, keep clear); remove per-field save buttons in favour of one global save with nav protection; email = plain editable input (no description / password / confirmation flow — "overengineered"); remove the change-password button (global save covers it).
+
+**Done — frontend (`AccountSettings.vue` full rewrite).**
+- Removed the identity `<section>` (avatar + name + email + user-id GUID) and the header "Your sign-in identity." description — page starts at Profile picture.
+- Profile picture: heading only; a 96px **circular** `UserAvatar` with a hover/focus **pencil overlay**; click/Enter/Space opens the native file picker (`processImageFile` → `updateMeAsync({image})`, immediate save, no draft). Dropped `ImageUploadField`/the add-file + camera buttons. Clear kept as a small **Remove photo** ghost button shown only when `has_image`.
+- Username + Email are bare inputs (email has no description/password/confirm). All three field groups (username, email, password) now defer to one sticky **Save changes** bar (+ Discard when dirty). `canSave` gates on username non-empty, email well-formed-or-blank, and password-all-valid-if-touched; `useUnsavedChangesGuard` now includes the password draft (it saves through the page button now, so the old browsers-lose-passwords exclusion no longer applies).
+- Save handler batches username+email into one `updateMeAsync` and calls `changePasswordAsync` only if password fields are filled.
+
+**Done — backend (owner's explicit call to retire verified email change).**
+- `update_me.py`: added `email` to `UpdateMeRequest` (was deliberately forbidden) + handler logic — normalise, validate format (`is_valid_email`), dedupe against other users, set `User.email`, and mark `email_verified` to match (trusted owner-entered address; empty clears). `authApiService.UpdateMeCommand` gains `email`.
+- Tests updated to the new contract (3): `test__update_me__email__round_trips_and_validates` (was `__rejects_email_field`) and `test__patch_me__email__updates_directly` (was `__hard_rejected_400`) now assert accept + validate (invalid → 422 business-rule, not 400); `test__patch_me__cannot_mass_assign_id` dropped `email` from the forbidden set (id/user_id still 400). The verified-flow endpoint tests (`test__request_email_change__*`) still pass — that endpoint is left in place but orphaned (see FU-620).
+
+**Checks.** `vue-tsc` clean. Backend: 100 passed across auth-flows / patch-semantics / dto-contracts / security-injection. Live: one clean `get_page_text` confirmed the rendered structure (all 5 changes present — no identity block, circle avatar w/ initial, plain email, single Save bar). **Interactive walk (save enable→persist, avatar upload, nav guard) NOT driven live** — the owner's running instance logged me out mid-verify and I have no creds for it; queued in `DORA_VERIFY.md` under "Account settings redesign".
+
+**Engineering-standards close-gate.** R-020 deferred-save guard wired (incl. password now). R-003 intact (server owns the email validation/dedupe; client only drafts). One flagged item: the retired verified email-change flow is now dead frontend-side → logged as **FU-620** (remove end-to-end opportunistically) rather than ripped out inline (scope). No new ADR.
+
+**Security note.** Email now changes without confirmation/verification — a deliberate owner trade-off for this self-hosted household app (email drives password-reset delivery). Uniqueness is still enforced server-side; format validated; `email_verified` tracks the trusted state.
+
+**Next up.** Back to open FUs (+ still-open owner call: move Import to user-reachable Settings?).
+
+**Open questions for user.** None new.
+
+---
+
+## 2026-08-11 — Attention badge on the "Unlinked ingredients" nav entry
+
+**Trigger.** Owner: "highlight unlinked ingredients when there are some in the list."
+
+**Done.**
+- New store `stores/unlinkedIngredientsStore.ts` — caches the count of distinct unlinked recipe-ingredient groups (server owns grouping/normalisation, R-003). `refreshAsync` (force), `ensureLoadedAsync` (R-016 lazy), `setCount` (feed from a list the caller already fetched).
+- `SettingsNavGroup.vue` — `SettingsNavLeaf` gains optional `badge?: number`; renders a soft brand pill (`.settings-nav-group__badge`, `--brand-primary` / `--text-inverse`) on the right of a link when `badge > 0`. Added to both leaf + sub-leaf branches.
+- `SettingsMobileNav.vue` — same badge on the mobile chip (`.settings-mnav__chip-badge`) so the two navs stay consistent (they read one `navGroups` source, R-003).
+- `SettingsShell.vue` — reads the store count via `storeToRefs`, `refreshAsync()` on mount (each settings visit reflects the current backlog), feeds `badge: unlinkedCount.value` onto the Unlinked-ingredients leaf (computed stays reactive to the count).
+- `UnlinkedIngredientsSettings.vue` — after each `refresh()` (initial load + post-link), `unlinkedStore.setCount(dto.unlinked.length)` so the badge clears/decrements without a second round-trip.
+
+**Checks.** `vue-tsc` clean. Live-verified end-to-end in the running dev app: with a real unlinked row present the store count = 1 and the badge renders "1" in the desktop sidebar (visible, brand-green `rgb(53,151,102)`) and the mobile chip (correctly hidden at desktop width); with 0 the badge is absent. Verified the data path via the actual `GET /recipes/unlinked-ingredients` response (1 group) and the Pinia state (`unlinkedIngredients.count`). Test row was inserted directly into `data/dora.dev.db` and **deleted after** (DB back to 0 unlinked).
+
+**Env note.** The owner's SPA dev server (5174) was down mid-session; I started the managed `dora-spa` config to verify, then **stopped it** — port 5174 is free again for the owner's own `npm run dev`. Backend (5170) untouched.
+
+**Engineering-standards close-gate.** New store follows the existing lazy-hydration store pattern (stockLevelStore shape, R-016) + HMR-accept block; badge value threads through the shared nav-config source (no duplicated count, R-003). No new ADR.
+
+**Next up.** Back to open FUs (+ still-open owner call: move Import to user-reachable Settings?).
+
+**Open questions for user.** None new.
+
+---
+
+## 2026-08-11 — Flatten Kitchen setup nav (drop "Recipe taxonomies" sub-group) + distinct taxonomy icons
+
+**Trigger.** Owner: "hate the nested look of recipe taxonomies section under kitchen setup. unnest please. also give those sections more distinct icons… or ones that make the most sense."
+
+**Done.**
+- `SettingsShell.vue` — removed the `{ subheader: 'Recipe taxonomies', items: […] }` group; Cuisines / Categories / Tools / Meal slots / Dietary tags are now flat leaves in `kitchenSetupSections`, directly after Unlinked ingredients.
+- Distinct icons (were: four shared `menu_book` + `label`): Cuisines → `public` (mdi-earth, world cuisines), Categories → `category` (mdi-shape), Tools → `blender` (mdi-blender, equipment), Meal slots → `schedule` (mdi-clock-outline, time-of-day), Dietary tags → `eco` (mdi-leaf). Also resolves the incidental clash where Dietary tags shared `mdi-label` with Stock groups.
+- `icons.ts` — added three MDI tokens: `public: 'mdi-earth'`, `blender: 'mdi-blender'`, `eco: 'mdi-leaf'` (`category` + `schedule` already existed).
+- Follow-on (owner): Stock groups icon `label` (mdi-label) → `tag_multiple` (mdi-tag-multiple, added token) — matches the page's own "tag your stock items" framing and reads as grouping.
+
+**Checks.** `vue-tsc` clean. Live-verified (seeded dev app): Kitchen setup renders as one flat list with no sub-group; DOM icon classes confirmed per item (mdi-earth / mdi-shape / mdi-blender / mdi-clock-outline / mdi-leaf, Stock groups still mdi-label); zero console errors.
+
+**Engineering-standards close-gate.** Nav-config + icon-catalogue only; no new R-rule violations, no ADR. New icons went through the central `ICONS` map per the catalogue's own "adding a new icon" rule (no raw mdi strings at the call site).
+
+**Note (not acted on).** Flattening drops the "Recipe taxonomies" header, so "Categories"/"Tools" read with slightly less context standing alone — left labels short per the owner's "unnest/clean" intent; the distinct icons + adjacency + on-page titles ("Recipe Categories" etc.) carry it. Prefixing each with "Recipe" is the fallback if they still read ambiguous.
+
+**Next up.** Back to open FUs (+ still-open owner call: move Import to user-reachable Settings?).
+
+**Open questions for user.** None new (Import question still stands from the prior entry).
+
+---
+
+## 2026-08-11 — Move "Unlinked ingredients" out of Admin → user-reachable Kitchen setup
+
+**Trigger.** Owner (following the Voice-page IA discussion): "put stuff that should be reachable by normal users in settings. i can see unlinked ingredients, what else makes sense or is that it?"
+
+**Analysis (checked each Admin item's backend guard, not just nav).** Only **Unlinked ingredients** is a clean mismatch: its endpoints (`GET/POST /api/recipes/unlinked-ingredients[/bulk-link]`, `unlinked_ingredients.py`) carry **no `require_admin`**, yet the page sat under Admin → Data — so a normal user couldn't reach the UI while the API would serve them. It's user-curated recipe data (a paste-import cleanup any recipe author does), matching the earlier **Stores** precedent (moved Admin → Kitchen setup as "user-curated retail data, not install governance"). **Kept in Admin:** Import (`require_admin` on every endpoint + bulk writes to shared data — flagged to owner as a borderline "your call"), API access (ingestion-source/API-key integration, `require_admin`), and all genuine system/governance items.
+
+**Done.**
+- `git mv` `AdminDataUnlinkedIngredients.vue` → `UnlinkedIngredientsSettings.vue` (kitchen-setup naming convention; page had no "Admin" self-reference).
+- `routes.ts`: new route `kitchen-setup/unlinked-ingredients`; old `admin/data/unlinked-ingredients` kept as a **redirect** (bookmarks/deep-links survive).
+- `SettingsShell.vue`: removed the leaf from the Admin → Data subheader; added it to `kitchenSetupSections` as a recipe-related leaf just above the "Recipe taxonomies" sub-group.
+
+**Checks.** `vue-tsc` clean. Live-verified (seeded dev app): page renders under **Settings → Kitchen setup** (personal mode, above Recipe taxonomies), empty-state copy intact, zero console errors; old `admin/data/unlinked-ingredients` hash redirects to the new path.
+
+**Engineering-standards close-gate.** Nav/route move only; no new R-rule violations, no backend/API change (endpoint was already non-admin), no state-ownership change (server still owns normalisation/link, R-003). No new ADR.
+
+**Open for owner.** Move **Import** too? It's the only other plausible "normal user" surface but is `require_admin`-guarded and does bulk writes — deferred pending owner's call (no FU opened; it's a one-line question, not a loop).
+
+**Next up.** Back to open FUs.
+
+**Open questions for user.** Import — move to user-reachable Settings (drops its admin guards), or keep admin-only?
+
+---
+
+## 2026-08-11 — Remove legacy Piper voice override + rewrite admin Voice settings copy
+
+**Trigger.** Owner: "whats up with admin voice settings page? looks like it was made supporting legacy stuff but this is a prerelease app… also the info doesnt look very end-user friendly. missing some context maybe?"
+
+**Investigation.** The page carried a "Legacy voice override" field (`AppSetting.piper_voice`) that was explicitly documented in `tts_synthesize.py` as back-compat with "the original test page": a single-file `.onnx` path that, when set, won over the catalog for every request. Pure prerelease dead weight — nothing to preserve — and it made the page confusing (three overlapping path fields with no explanation of what Piper even is).
+
+**Done — `piper_voice` removed end-to-end.**
+- Backend: dropped `_legacy_voice_override()` + its use in `_resolve_model` and the `list_voices` `has_model` check (`tts_synthesize.py`); removed the field from the `OperationalConfig` dataclass + resolver (`operational_config.py`), the read DTO (`get_app_settings.py`), the update request model + strip-loop (`update_app_settings.py`), the `AppSetting` entity + `Fields` enum, and the table mapping.
+- Migration `b7d2f9c1e4a3` edited **in place** (prerelease, dev resets use drop_all — memory: keep migrations clean, no new patch migration): dropped the column add, the env→row backfill entry, the `drop_column`, and the docstring mention. `DORA_PIPER_VOICE` env var retired; `DORA_PIPER_VOICE_DIR` (the voices *directory*) is unrelated and kept.
+- Frontend: removed `piper_voice` from `AppSettings` (`appSettingsApiService.ts`) and from the page's draft/saved/hydrate/`VoiceField`.
+- Tests: dropped `piper_voice` from the resolver test params + resets and from the `dto_snapshots.json` AppSettings contract.
+
+**Done — page reworked for clarity (the "missing context" half).** Rewrote `AdminSystemVoiceSettings.vue`: plainer header, a new "How Dora's voice works" intro (engine-here vs. voice-elsewhere, with a link to the per-user `/settings/voice` page), and the two remaining fields (Piper program, Voice models folder) reworded to say shipped Docker/desktop builds auto-fill them and blank is normal.
+
+**Checks.** `vue-tsc` clean (no voice/piper errors). Backend: `test_operational_config_resolver` (14), `test_app_settings_router` (17), `test_dto_contracts` (27) all green. Live-verified the page in the seeded dev app (dora/dora): renders with the new copy, legacy row gone, zero console errors. (Screenshot tool timed out — browser-pane quirk this session — but the page-text dump confirms the render.)
+
+**Engineering-standards close-gate.** Clean deletion following existing field-removal patterns; no new R-rule violations, no state-ownership change (server still owns voice resolution), no new ADR. Stale `piper_voice` column may linger in an existing dev DB — harmless (unmapped), gone on the next drop_all reset; not worth an FU.
+
+**Next up.** Back to open FUs.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-11 — Regression fix: blank screens on client-side navigation (out-in transition × `<q-page>` roots)
+
+**Trigger.** Owner: "something broke the UI in the recent commits. navigating around shows blank screens, but a full refresh on that url works."
+
+**Root cause.** The FU-609 R-036 sweep moved every `MainLayout` page onto a `<q-page>` root. `MainLayout`'s router-view fade was `<FadeTransition mode="out-in">`. With the new `<q-page>` roots, `out-in` wedges Vue's transition state machine: on the first client-side nav the leaving page unmounts (leave completes in <50ms, no CSS fade actually applied) but the entering page **never mounts** — the router-view slot's `Component` renders as a bare comment, the page chunk's async loader is never even invoked, and the wedge persists for every later nav. A full reload paints fine because no transition is in flight on first paint. **This is exactly the "empty container on route change" the FU-609 worklog entry (below) saw and wrongly filed as an in-app-browser limitation — it was the real regression, shipped.**
+
+**Repro + diagnosis (live, seeded dev app, dora/dora).** Logged in → Dashboard renders → click any nav → `.q-page-container` has 0 children / 0 text, title + hash update (guard/afterEach ran), no console error. Confirmed it is not async-unresolved (an already-loaded page still blanks) and not `:key` (keyed `out-in` still wedges). Removing `mode="out-in"` → every route renders on nav, including repeated back-and-forth and nested Settings sub-routes; console clean.
+
+**Fix (2 files, surgical).**
+- `web_app/src/layouts/MainLayout.vue` — dropped `mode="out-in"` on the router-view `FadeTransition` (plain cross-fade now); added a comment explaining the wedge so it isn't reintroduced.
+- `web_app/src/router/routes.ts` — the shopping-lists `beforeEnter` comment cited `out-in` as its rationale; reworded to reflect that `out-in` is gone but `beforeEnter` remains the cleaner pattern. No behaviour change.
+- Did **not** revert the `<q-page>` roots (deliberate R-036 work). Left a note: the RecipesOverview mount-time `router.replace` (PWA share path) is no longer a wedge risk either.
+
+**Checks.** Live JS-driven nav sweep across Dashboard / Cookbook / Stock / Reports / Meal plans / My products / Shopping lists / Settings→Account / Settings→Preferences / Help — all render with content, repeated navs and nested router-views included, zero console errors. (Real synthetic *clicks* + screenshots were flaky in the harness pane this session — the pane went unresponsive mid-run — but hash-nav exercises the identical router+transition path.)
+
+**Engineering-standards close-gate.** No new R-rule violations; touches only the transition wiring. Candidate ADR note for a future unit: "don't pair `<transition mode="out-in">` with Quasar `<q-page>` roots" — logged as a follow-up rather than promoted now.
+
+**Next up.** Owner to walk it in a real browser (queued in `DORA_VERIFY.md`). Then back to open FUs.
+
+**Open questions for user.** None.
+
+---
+
 ## 2026-08-11 — FU-609: finish the page-height contract sweep (11 remaining MainLayout pages → R-036)
 
 **Trigger.** Owner: "resolve the rest of 609" — overriding R-036's default opportunistic-per-page stance to do the full sweep now.

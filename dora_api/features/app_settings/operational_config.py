@@ -51,7 +51,6 @@ class OperationalConfig:
     vapid_subject: str
     piper_bin: str
     piper_bundled_voice_dir: str
-    piper_voice: str
     email_enabled: bool
     audit_retention_days: int
     public_url: str
@@ -106,7 +105,6 @@ def resolved_operational_config() -> OperationalConfig:
         vapid_subject=(getattr(row, "vapid_subject", "") or "").strip() or "mailto:admin@dora.local",
         piper_bin=(getattr(row, "piper_bin", "") or "").strip(),
         piper_bundled_voice_dir=(getattr(row, "piper_bundled_voice_dir", "") or "").strip(),
-        piper_voice=(getattr(row, "piper_voice", "") or "").strip(),
         email_enabled=bool(getattr(row, "email_enabled", False)),
         audit_retention_days=int(getattr(row, "audit_retention_days", 365) or 365),
         public_url=(getattr(row, "public_url", "") or "").strip(),

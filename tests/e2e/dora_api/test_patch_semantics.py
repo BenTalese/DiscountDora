@@ -825,13 +825,21 @@ def test__patch_me__unknown_field__rejected_400(api):
     assert resp.status_code == 400, resp.text
 
 
-def test__patch_me__email__hard_rejected_400(api):
-    # FU-197: email is deliberately absent from UpdateMeRequest — the
-    # verified POST /auth/me/email flow is the only write path. The
-    # extra="forbid" config makes a stray email payload a hard 400.
-    resp = requests.patch(f"{BASE}/auth/me", json={"email": "sneaky@example.com"})
-    assert resp.status_code == 400, resp.text
-    assert "email" in resp.json()["errors"]
+def test__patch_me__email__updates_directly(api):
+    # The verified POST /auth/me/email flow was retired as overengineered;
+    # PATCH /auth/me now accepts `email` and updates it in place. Invalid
+    # formats still hard-reject.
+    original = requests.get(f"{BASE}/auth/me").json().get("email")
+    try:
+        bad = requests.patch(f"{BASE}/auth/me", json={"email": "not-an-email"})
+        assert bad.status_code == 422, bad.text
+
+        resp = requests.patch(f"{BASE}/auth/me", json={"email": "Fresh@Example.com"})
+        assert resp.status_code == 200, resp.text
+        # normalise_email lower-cases the stored value.
+        assert resp.json()["email"] == "fresh@example.com", resp.text
+    finally:
+        requests.patch(f"{BASE}/auth/me", json={"email": original or ""})
 
 
 # ═══ Users (admin PATCH) ══════════════════════════════════════════════════

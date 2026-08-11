@@ -180,10 +180,9 @@ class AppSetting(BaseEntity):
     vapid_public_key: str = ""
     vapid_private_key_encrypted: str = ""
     vapid_subject: str = "mailto:admin@dora.local"
-    # TTS / Piper (was DORA_PIPER_BIN / _BUNDLED_VOICE_DIR / _VOICE).
+    # TTS / Piper (was DORA_PIPER_BIN / _BUNDLED_VOICE_DIR).
     piper_bin: str = ""
     piper_bundled_voice_dir: str = ""
-    piper_voice: str = ""
     # Misc operational.
     # `email_enabled` was DORA_EMAIL_ENABLED — the install-wide "email
     # subsystem is switched on" flag surfaced via /api/health features.email.
@@ -228,7 +227,6 @@ class AppSetting(BaseEntity):
         VAPID_SUBJECT = "vapid_subject"
         PIPER_BIN = "piper_bin"
         PIPER_BUNDLED_VOICE_DIR = "piper_bundled_voice_dir"
-        PIPER_VOICE = "piper_voice"
         EMAIL_ENABLED = "email_enabled"
         AUDIT_RETENTION_DAYS = "audit_retention_days"
         PUBLIC_URL = "public_url"

@@ -77,7 +77,6 @@ export type AppSettings = {
     vapid_subject: string;
     piper_bin: string;
     piper_bundled_voice_dir: string;
-    piper_voice: string;
     email_enabled: boolean;
     audit_retention_days: number;
     public_url: string;

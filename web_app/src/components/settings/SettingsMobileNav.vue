@@ -35,6 +35,7 @@
             >
                 <q-icon :name="leaf.icon" size="16px" class="q-mr-xs" />
                 {{ leaf.label }}
+                <span v-if="leaf.badge" class="settings-mnav__chip-badge">{{ leaf.badge }}</span>
             </router-link>
         </div>
     </nav>
@@ -148,5 +149,20 @@
     .settings-mnav__chip--active {
         background: var(--brand-primary-soft);
         font-weight: 600;
+    }
+    .settings-mnav__chip-badge {
+        margin-left: 6px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: var(--brand-primary);
+        color: var(--text-inverse);
+        font-size: 0.625rem;
+        font-weight: 700;
+        line-height: 1;
     }
 </style>

@@ -37,7 +37,6 @@ _STRING_RESETS = {
     "vapid_subject": "mailto:admin@dora.local",
     "piper_bin": "",
     "piper_bundled_voice_dir": "",
-    "piper_voice": "",
     "public_url": "",
 }
 _INT_RESETS = {
@@ -85,7 +84,6 @@ def _resolved():
         ("vapid_subject", "mailto:ops@example.com", "mailto:admin@dora.local"),
         ("piper_bin", "/usr/local/bin/piper", ""),
         ("piper_bundled_voice_dir", "/opt/dora/voices", ""),
-        ("piper_voice", "/opt/dora/voices/amy.onnx", ""),
         ("public_url", "https://dora.example.com", ""),
     ],
 )

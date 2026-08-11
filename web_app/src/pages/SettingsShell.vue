@@ -75,6 +75,7 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useUnlinkedIngredientsStore } from 'src/stores/unlinkedIngredientsStore';
     import BaseButton from 'src/components/BaseButton.vue';
     import DonateButton from 'src/components/donate/DonateButton.vue';
     import SettingsNavGroup, { type SettingsNavEntry, type SettingsNavLeaf } from 'src/components/settings/SettingsNavGroup.vue';
@@ -108,25 +109,42 @@
     // entry keeps the sidebar honest for installs that never opted in.
     const { scanningEnabled } = useScanningEnabled();
 
+    // Attention badge on the Unlinked-ingredients nav entry. The store caches
+    // the count (server owns the grouping, R-003); we refetch on mount so each
+    // settings visit reflects the current backlog, and the page keeps it in
+    // sync after every link.
+    const unlinkedStore = useUnlinkedIngredientsStore();
+    const { count: unlinkedCount } = storeToRefs(unlinkedStore);
+    void unlinkedStore.refreshAsync().catch(() => { /* badge just stays 0 */ });
+
     const kitchenSetupSections = computed<SettingsNavEntry[]>(() => {
         const base: SettingsNavEntry[] = [
             { path: '/settings/kitchen-setup/stock-locations', label: 'Stock locations', icon: ICONS.place },
-            { path: '/settings/kitchen-setup/stock-groups', label: 'Stock groups', icon: ICONS.label },
+            { path: '/settings/kitchen-setup/stock-groups', label: 'Stock groups', icon: ICONS.tag_multiple },
             { path: '/settings/kitchen-setup/stores', label: 'Stores', icon: ICONS.store },
         ];
         if (scanningEnabled.value) {
             base.push({ path: '/settings/kitchen-setup/qr-labels', label: 'QR labels', icon: ICONS.qr_code });
         }
+        // Recipe-ingredient bulk-linker — moved out of Admin → Data
+        // (user-curated recipe data, no admin guard on its endpoints).
         base.push({
-            subheader: 'Recipe taxonomies',
-            items: [
-                { path: '/settings/kitchen-setup/recipe-cuisines', label: 'Cuisines', icon: ICONS.menu_book },
-                { path: '/settings/kitchen-setup/recipe-categories', label: 'Categories', icon: ICONS.menu_book },
-                { path: '/settings/kitchen-setup/recipe-tools', label: 'Tools', icon: ICONS.menu_book },
-                { path: '/settings/kitchen-setup/recipe-meal-slots', label: 'Meal slots', icon: ICONS.menu_book },
-                { path: '/settings/kitchen-setup/recipe-dietary-tags', label: 'Dietary tags', icon: ICONS.label },
-            ],
+            path: '/settings/kitchen-setup/unlinked-ingredients',
+            label: 'Unlinked ingredients',
+            icon: ICONS.link,
+            badge: unlinkedCount.value,
         });
+        // Recipe taxonomies — flat leaves (no sub-group), each with a
+        // distinct icon: globe for world cuisines, shape for categories,
+        // blender for equipment/tools, clock for time-of-day meal slots,
+        // leaf for dietary tags.
+        base.push(
+            { path: '/settings/kitchen-setup/recipe-cuisines', label: 'Cuisines', icon: ICONS.public },
+            { path: '/settings/kitchen-setup/recipe-categories', label: 'Categories', icon: ICONS.category },
+            { path: '/settings/kitchen-setup/recipe-tools', label: 'Tools', icon: ICONS.blender },
+            { path: '/settings/kitchen-setup/recipe-meal-slots', label: 'Meal slots', icon: ICONS.schedule },
+            { path: '/settings/kitchen-setup/recipe-dietary-tags', label: 'Dietary tags', icon: ICONS.eco },
+        );
         return base;
     });
 
@@ -166,8 +184,6 @@
             items: [
                 { path: '/settings/admin/data/backup', label: 'Backup & restore', icon: ICONS.cloud_download },
                 { path: '/settings/admin/data/import', label: 'Import', icon: ICONS.file_upload },
-                // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker page.
-                { path: '/settings/admin/data/unlinked-ingredients', label: 'Unlinked ingredients', icon: ICONS.link },
             ],
         },
         { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.fact_check },

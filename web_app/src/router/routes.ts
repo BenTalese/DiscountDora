@@ -128,14 +128,15 @@ const routes: RouteRecordRaw[] = [
                 // the detail page is the canonical surface
                 // (with a list-selector in its header). The landing's job is
                 // to pick a target list and route there. We do it as a
-                // **route-level `beforeEnter`** rather than an
-                // in-component `router.replace` in `onMounted`: the
-                // MainLayout wraps the router-view in <FadeTransition
-                // mode="out-in">, and a mount-time redirect unmounts the
-                // entering component mid-transition, which wedges the
-                // global transition state and renders subsequent pages
-                // blank. A route guard resolves before the component
-                // mounts, so no transition is ever in flight to wedge.
+                // **route-level `beforeEnter`** rather than an in-component
+                // `router.replace` in `onMounted`: a route guard resolves the
+                // final destination before any component mounts, so the user
+                // never sees the landing page flash then re-navigate. (This
+                // also historically dodged a transition wedge from the
+                // MainLayout router-view's <FadeTransition mode="out-in">;
+                // out-in was removed after it began blanking pages under the
+                // <q-page> roots, but the beforeEnter remains the cleaner
+                // pattern regardless.)
                 beforeEnter: async () => {
                     const { useShoppingListStore } = await import('src/stores/shoppingListStore');
                     const store = useShoppingListStore();
@@ -333,6 +334,16 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/QrLabels.vue'),
                         meta: { title: 'QR Labels' }
                     },
+                    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker for
+                    // paste-imported ingredients that landed unlinked. Moved
+                    // out of Admin → Data: it's user-curated recipe data any
+                    // recipe author cleans up, and its endpoints carry no
+                    // admin guard.
+                    {
+                        path: 'kitchen-setup/unlinked-ingredients',
+                        component: () => import('pages/settings/UnlinkedIngredientsSettings.vue'),
+                        meta: { title: 'Unlinked Ingredients' }
+                    },
                     // Backwards-compat redirects for moved/split routes.
                     // Bookmarks, email deep-links and HelpPage entries that
                     // shipped under the old paths keep working. Drop these
@@ -475,14 +486,13 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminDataImport.vue'),
                         meta: { title: 'Import' }
                     },
-                    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — bulk-linker
-                    // for paste-imported ingredients that landed unlinked.
-                    // Lives under Data because it's a data-cleanup surface
-                    // shaped like Backup / Import, not a per-recipe editor.
+                    // Old admin path kept as a redirect — the page moved to
+                    // Kitchen setup (see below) since it's user-curated recipe
+                    // data, not install governance; its endpoints were never
+                    // admin-guarded.
                     {
                         path: 'admin/data/unlinked-ingredients',
-                        component: () => import('pages/settings/AdminDataUnlinkedIngredients.vue'),
-                        meta: { title: 'Unlinked Ingredients' }
+                        redirect: '/settings/kitchen-setup/unlinked-ingredients'
                     }
                 ]
             }

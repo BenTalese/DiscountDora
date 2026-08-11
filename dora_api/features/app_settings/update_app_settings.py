@@ -110,7 +110,6 @@ class UpdateAppSettingsRequest(BaseModel):
     vapid_subject: str | None = Field(default=None, max_length=255)
     piper_bin: str | None = Field(default=None, max_length=1024)
     piper_bundled_voice_dir: str | None = Field(default=None, max_length=1024)
-    piper_voice: str | None = Field(default=None, max_length=255)
     email_enabled: bool | None = None
     # Retention bounds: 1 day floor (anything less is effectively "no
     # audit"), ~10-year ceiling on a small install DB.
@@ -318,7 +317,7 @@ class UpdateAppSettingsHandler:
         for _StrField in (
             "smtp_host", "smtp_username", "smtp_from",
             "vapid_public_key", "vapid_subject",
-            "piper_bin", "piper_bundled_voice_dir", "piper_voice",
+            "piper_bin", "piper_bundled_voice_dir",
         ):
             if _StrField in set_fields:
                 _Value = getattr(request, _StrField)

@@ -19,8 +19,8 @@ Columns added (12), matching entity field names in
   / ``_FROM`` / ``_USE_TLS``.
 * ``vapid_public_key``, ``vapid_subject`` — was
   ``DORA_VAPID_PUBLIC_KEY`` / ``_SUBJECT``.
-* ``piper_bin``, ``piper_bundled_voice_dir``, ``piper_voice`` — was
-  ``DORA_PIPER_BIN`` / ``_BUNDLED_VOICE_DIR`` / ``_VOICE``.
+* ``piper_bin``, ``piper_bundled_voice_dir`` — was
+  ``DORA_PIPER_BIN`` / ``_BUNDLED_VOICE_DIR``.
 * ``email_enabled``, ``audit_retention_days``, ``public_url`` — was
   ``DORA_EMAIL_ENABLED`` / ``_AUDIT_RETENTION_DAYS`` / ``_PUBLIC_URL``.
 
@@ -76,7 +76,6 @@ def upgrade():
         batch.add_column(sa.Column('vapid_subject', sa.String(255), nullable=False, server_default="mailto:admin@dora.local"))
         batch.add_column(sa.Column('piper_bin', sa.String(1024), nullable=False, server_default=""))
         batch.add_column(sa.Column('piper_bundled_voice_dir', sa.String(1024), nullable=False, server_default=""))
-        batch.add_column(sa.Column('piper_voice', sa.String(255), nullable=False, server_default=""))
         batch.add_column(sa.Column('email_enabled', sa.Boolean(), nullable=False, server_default=false()))
         batch.add_column(sa.Column('audit_retention_days', sa.Integer(), nullable=False, server_default="365"))
         batch.add_column(sa.Column('public_url', sa.String(500), nullable=False, server_default=""))
@@ -93,7 +92,6 @@ def upgrade():
         ("vapid_subject", "DORA_VAPID_SUBJECT", os.environ.get("DORA_VAPID_SUBJECT")),
         ("piper_bin", "DORA_PIPER_BIN", os.environ.get("DORA_PIPER_BIN")),
         ("piper_bundled_voice_dir", "DORA_PIPER_BUNDLED_VOICE_DIR", os.environ.get("DORA_PIPER_BUNDLED_VOICE_DIR")),
-        ("piper_voice", "DORA_PIPER_VOICE", os.environ.get("DORA_PIPER_VOICE")),
         ("email_enabled", "DORA_EMAIL_ENABLED", _bool_from_env(os.environ.get("DORA_EMAIL_ENABLED"))),
         ("audit_retention_days", "DORA_AUDIT_RETENTION_DAYS", _int_from_env(os.environ.get("DORA_AUDIT_RETENTION_DAYS"))),
         ("public_url", "DORA_PUBLIC_URL", os.environ.get("DORA_PUBLIC_URL")),
@@ -116,7 +114,6 @@ def downgrade():
         batch.drop_column('public_url')
         batch.drop_column('audit_retention_days')
         batch.drop_column('email_enabled')
-        batch.drop_column('piper_voice')
         batch.drop_column('piper_bundled_voice_dir')
         batch.drop_column('piper_bin')
         batch.drop_column('vapid_subject')

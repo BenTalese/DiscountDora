@@ -106,8 +106,15 @@
                  browser says we're offline). Sticky so it stays visible
                  while the user keeps scrolling/working. -->
             <OfflineBanner />
+            <!-- No mode="out-in" here. Once the page roots became <q-page>
+                 (FU-609 / R-036), out-in started wedging the transition state
+                 machine: the leaving page unmounts but the entering page never
+                 mounts, so every client-side nav lands on a blank screen (a
+                 full reload paints fine because no transition is in flight).
+                 A plain cross-fade swaps reliably; the ~200ms overlap of two
+                 q-pages is imperceptible. -->
             <router-view v-slot="{ Component }">
-                <FadeTransition mode="out-in">
+                <FadeTransition>
                     <component :is="Component" />
                 </FadeTransition>
             </router-view>

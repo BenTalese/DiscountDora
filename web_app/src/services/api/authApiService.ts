@@ -32,10 +32,10 @@ export type BootstrapAdminCommand = {
 };
 export type UpdateMeCommand = {
     send_deals_on_day?: number;
-    // `email` removed from this command. Email changes flow
-    // through `requestEmailChangeAsync` (password proof + confirmation
-    // link); sending it via `updateMeAsync` is now a 400 from the
-    // backend's `extra="forbid"` model.
+    // Direct email edit (the verified change-email flow was retired as
+    // overengineered). Empty string clears the address; omit to leave
+    // it untouched.
+    email?: string;
     username?: string;
     deals_email_enabled?: boolean;
     deals_email_compact?: boolean;

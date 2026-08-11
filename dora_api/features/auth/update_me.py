@@ -24,6 +24,7 @@ from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation, ok,
                                                   unauthorized)
+from dora_api.infrastructure.auth_helpers import is_valid_email, normalise_email
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
@@ -36,11 +37,12 @@ class UpdateMeRequest(BaseModel):
 
     # Day of the week (0 = Mon … 6 = Sun) the weekly deals email should be sent.
     send_deals_on_day: int | None = Field(default=None, ge=0, le=6)
-    # `email` is intentionally absent. Email changes only flow
-    # through the verified `POST /auth/me/email` path (password proof +
-    # confirmation link + old-address notice). `extra="forbid"` on this
-    # model means a stray `{"email": …}` payload now hard-rejects with
-    # 400, closing the legacy unverified-write path the SPA used to use.
+    # Direct email edit. The old verified change-email flow (password proof +
+    # confirmation link + old-address notice) was retired as overengineered
+    # for this app — the owner edits their address inline and it's trusted.
+    # Empty string clears the address; a non-empty value is validated +
+    # deduped in the handler. Omit the field to leave it untouched.
+    email: str | None = Field(default=None, max_length=255)
     username: str | None = Field(default=None, min_length=1, max_length=255)
     deals_email_enabled: bool | None = None
     deals_email_compact: bool | None = None
@@ -143,6 +145,26 @@ class UpdateMeHandler:
             if _SameName and _SameName.id != user_id:
                 return None, f"Username '{request.username}' is already taken."
             _User.username = request.username
+
+        if "email" in _SetFields:
+            # Empty/whitespace clears the address; otherwise validate format
+            # and reject a duplicate held by another account (email drives
+            # password-reset delivery, so it stays unique even though login
+            # is by username). Owner-entered mail is trusted — the verified
+            # change flow is gone — so a set address counts as verified.
+            _EmailNorm = normalise_email(request.email)
+            if _EmailNorm:
+                if not is_valid_email(_EmailNorm):
+                    return None, "That doesn't look like a valid email address."
+                _EmailField = EntityField(User, User.Fields.EMAIL)
+                _SameEmail: User | None = (
+                    self.repository.get(User).one(_EmailField.eq(_EmailNorm))
+                )
+                if _SameEmail and _SameEmail.id != user_id:
+                    return None, f"Email '{_EmailNorm}' is already in use."
+            if _User.email != _EmailNorm:
+                _User.email = _EmailNorm
+                _User.email_verified = bool(_EmailNorm)
 
         if "send_deals_on_day" in _SetFields and request.send_deals_on_day is not None:
             _User.send_deals_on_day = request.send_deals_on_day

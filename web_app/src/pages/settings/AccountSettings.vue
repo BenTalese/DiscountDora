@@ -4,48 +4,61 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader
-            title="Account"
-            description="Your sign-in identity."
-        />
-
-        <section class="account-identity">
-            <UserAvatar
-                :user-id="currentUser.user_id"
-                :has-image="currentUser.has_image"
-                size="60px"
-                fallback="initials"
-                :username="currentUser.username"
-                color="accent"
-                text-color="dark"
-            />
-            <div class="account-identity__text">
-                <div class="account-identity__name">{{ currentUser.username }}</div>
-                <div class="account-identity__email dora-text-muted">
-                    {{ currentUser.email ?? 'No email on file.' }}
-                </div>
-                <div class="account-identity__userid dora-text-muted">
-                    <span class="text-mono">{{ currentUser.user_id }}</span>
-                </div>
-            </div>
-        </section>
-
-        <hr class="settings-divider" />
+        <SettingsPageHeader title="Account" />
 
         <SettingsSection>
             <template #title>Profile picture</template>
-            <template #description>
-                Shown in the menu bar and anywhere Dora needs to identify you.
-            </template>
             <SettingsRow stacked>
-                <ImageUploadField
-                    :preview-url="profilePreviewUrl"
-                    :name="currentUser.username"
-                    :alt="`${currentUser.username}'s profile picture`"
-                    :can-clear="currentUser.has_image"
-                    @pick="onPickImage"
-                    @clear="onClearImage"
-                />
+                <div class="avatar-edit-wrap">
+                    <div
+                        class="avatar-edit"
+                        role="button"
+                        tabindex="0"
+                        :aria-label="currentUser.has_image
+                            ? 'Change your profile picture'
+                            : 'Upload a profile picture'"
+                        @click="triggerPick"
+                        @keydown.enter.prevent="triggerPick"
+                        @keydown.space.prevent="triggerPick"
+                    >
+                        <UserAvatar
+                            :user-id="currentUser.user_id"
+                            :has-image="currentUser.has_image"
+                            size="96px"
+                            fallback="initials"
+                            :username="currentUser.username"
+                            color="accent"
+                            text-color="dark"
+                        />
+                        <div class="avatar-edit__overlay">
+                            <q-icon :name="ICONS.edit" size="26px" />
+                        </div>
+                        <q-inner-loading :showing="savingImage" />
+                    </div>
+
+                    <BaseButton
+                        v-if="currentUser.has_image"
+                        variant="ghost"
+                        dense
+                        :icon="ICONS.delete_outline"
+                        label="Remove photo"
+                        :loading="savingImage"
+                        @click="onClearImage"
+                    />
+
+                    <!-- Native picker: on mobile this offers camera + gallery,
+                         on desktop the file dialog. -->
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept="image/*"
+                        class="avatar-edit__input"
+                        @change="onFileChange"
+                    />
+                    <div v-if="imageError" class="text-caption text-negative">
+                        {{ imageError }}
+                    </div>
+                </div>
             </SettingsRow>
         </SettingsSection>
 
@@ -54,22 +67,16 @@
         <SettingsSection>
             <template #title>Username</template>
             <SettingsRow stacked>
-                <div class="row q-col-gutter-sm items-end">
-                    <q-input
-                        v-model="usernameDraft"
-                        outlined
-                        dense
-                        class="col-12 col-sm-8"
-                        autocomplete="username"
-                    />
-                    <BaseButton
-                        :icon="ICONS.save"
-                        label="Save"
-                        :loading="savingUsername"
-                        :disable="usernameUnchanged || !usernameDraft.trim()"
-                        @click="onSaveUsername"
-                    />
-                </div>
+                <q-input
+                    v-model="usernameDraft"
+                    outlined
+                    dense
+                    class="account-field"
+                    autocomplete="username"
+                    :error="usernameDraft.trim().length === 0"
+                    :error-message="usernameDraft.trim().length === 0
+                        ? 'Username can\'t be empty' : ''"
+                />
             </SettingsRow>
         </SettingsSection>
 
@@ -77,40 +84,17 @@
 
         <SettingsSection>
             <template #title>Email</template>
-            <template #description>
-                Changing your email requires your current password. We'll
-                send a confirmation link to the new address — the change
-                only takes effect once you click it. A heads-up notice
-                goes to your current address too.
-            </template>
             <SettingsRow stacked>
-                <div class="row q-col-gutter-sm items-end">
-                    <q-input
-                        v-model="emailDraft"
-                        outlined
-                        dense
-                        placeholder="you@example.com"
-                        class="col-12 col-sm-5"
-                        autocomplete="email"
-                    />
-                    <q-input
-                        v-model="emailChangePassword"
-                        outlined
-                        dense
-                        type="password"
-                        label="Current password"
-                        class="col-12 col-sm-4"
-                        :disable="emailUnchanged"
-                        autocomplete="current-password"
-                    />
-                    <BaseButton
-                        :icon="ICONS.save"
-                        label="Send confirmation"
-                        :loading="savingEmail"
-                        :disable="!canRequestEmailChange"
-                        @click="onRequestEmailChange"
-                    />
-                </div>
+                <q-input
+                    v-model="emailDraft"
+                    outlined
+                    dense
+                    placeholder="you@example.com"
+                    class="account-field"
+                    autocomplete="email"
+                    :error="emailInvalid"
+                    :error-message="emailInvalid ? 'Enter a valid email address' : ''"
+                />
             </SettingsRow>
         </SettingsSection>
 
@@ -118,7 +102,9 @@
 
         <SettingsSection>
             <template #title>Change password</template>
-
+            <template #description>
+                Leave these blank unless you want to change your password.
+            </template>
             <SettingsRow stacked>
                 <div class="row q-col-gutter-sm">
                     <q-input
@@ -139,7 +125,9 @@
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
                         hint="At least 8 characters — a passphrase works well."
-                        :rules="[(v) => !v || v.length >= 8 || 'At least 8 characters']"
+                        :error="newPassword.length > 0 && newPassword.length < 8"
+                        :error-message="newPassword.length > 0 && newPassword.length < 8
+                            ? 'At least 8 characters' : ''"
                     />
                     <q-input
                         v-model="confirmPassword"
@@ -154,17 +142,25 @@
                             ? 'Passwords do not match' : ''"
                     />
                 </div>
-                <div class="q-mt-sm">
-                    <BaseButton
-                        :icon="ICONS.lock_reset"
-                        label="Change password"
-                        :loading="savingPassword"
-                        :disable="!canChangePassword"
-                        @click="onChangePassword"
-                    />
-                </div>
             </SettingsRow>
         </SettingsSection>
+
+        <div class="account-savebar">
+            <BaseButton
+                v-if="isDirty"
+                variant="ghost"
+                label="Discard"
+                :disable="saving"
+                @click="resetDrafts"
+            />
+            <BaseButton
+                :icon="ICONS.save"
+                label="Save changes"
+                :loading="saving"
+                :disable="!canSave"
+                @click="onSaveAll"
+            />
+        </div>
     </div>
 </template>
 
@@ -180,87 +176,127 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
-    import ImageUploadField from 'src/components/ImageUploadField.vue';
-    import { userImageUrl } from 'src/services/api/authApiService';
+    import { processImageFile } from 'src/services/files/imageService';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
-    // Profile-picture preview: the live bytes URL (cache-busted by the store's
-    // image-version counter) when one exists, else null so ImageUploadField
-    // renders its initial placeholder.
-    const profilePreviewUrl = computed(() =>
-        currentUser.value?.has_image
-            ? userImageUrl(currentUser.value.user_id, authStore.imageVersionOf(currentUser.value.user_id))
-            : null
-    );
+    // ── Profile picture — click the circle to pick, immediate save ─────
+    // The image is a distinct action, not part of the deferred field save:
+    // picking or clearing commits straight away (no draft window), matching
+    // how modern apps handle an avatar.
+    const fileInput = ref<HTMLInputElement | null>(null);
+    const savingImage = ref(false);
+    const imageError = ref<string | null>(null);
 
-    async function onPickImage(dataUrl: string) {
+    function triggerPick() {
+        if (savingImage.value) return;
+        imageError.value = null;
+        fileInput.value?.click();
+    }
+
+    async function onFileChange(ev: Event) {
+        const input = ev.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = ''; // let re-picking the same file re-fire
+        if (!file) return;
+        savingImage.value = true;
+        imageError.value = null;
         try {
-            await authStore.updateMeAsync({ image: dataUrl });
+            const processed = await processImageFile(file);
+            await authStore.updateMeAsync({ image: processed.dataUrl });
             notifySuccess('Profile picture updated.');
         } catch (err) {
+            imageError.value = err instanceof Error ? err.message : 'Could not update your profile picture.';
             notifyError('Could not update your profile picture.', err);
+        } finally {
+            savingImage.value = false;
         }
     }
 
     async function onClearImage() {
+        savingImage.value = true;
+        imageError.value = null;
         try {
             await authStore.updateMeAsync({ clear_image: true });
             notifySuccess('Profile picture removed.');
         } catch (err) {
             notifyError('Could not remove your profile picture.', err);
+        } finally {
+            savingImage.value = false;
         }
     }
 
+    // ── Deferred field drafts (username / email / password) ────────────
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
-    // proof-of-possession for the verified change-email flow.
-    // Kept separate from the change-password input below so the two
-    // forms don't accidentally share state.
-    const emailChangePassword = ref('');
     const currentPassword = ref('');
     const newPassword = ref('');
     const confirmPassword = ref('');
+    const saving = ref(false);
 
-    const savingEmail = ref(false);
-    const savingUsername = ref(false);
-    const savingPassword = ref(false);
+    function resetDrafts() {
+        usernameDraft.value = currentUser.value?.username ?? '';
+        emailDraft.value = currentUser.value?.email ?? '';
+        currentPassword.value = '';
+        newPassword.value = '';
+        confirmPassword.value = '';
+    }
 
+    // Re-baseline drafts when the user record changes (e.g. after a save
+    // elsewhere), but don't clobber in-progress edits.
     watch(currentUser, (u) => {
         if (!u) return;
-        usernameDraft.value = u.username;
-        emailDraft.value = u.email ?? '';
+        if (usernameUnchanged.value) usernameDraft.value = u.username;
+        if (emailUnchanged.value) emailDraft.value = u.email ?? '';
     });
 
     const usernameUnchanged = computed(
-        () => (currentUser.value?.username ?? '') === usernameDraft.value
+        () => (currentUser.value?.username ?? '') === usernameDraft.value,
     );
     const emailUnchanged = computed(
-        () => (currentUser.value?.email ?? '') === emailDraft.value
+        () => (currentUser.value?.email ?? '') === emailDraft.value.trim(),
     );
-    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
-    // Only the two draft fields (username + email) drive the predicate:
-    // profile picture saves immediately on pick/clear (no draft window) and
-    // password fields are the rule's documented "password field" exclusion
-    // (browsers expect typed passwords to be lost on nav).
-    useUnsavedChangesGuard(computed(
-        () => !usernameUnchanged.value || !emailUnchanged.value,
-    ));
-    const canChangePassword = computed(
-        () =>
-            currentPassword.value.length > 0 &&
-            newPassword.value.length >= 4 &&
-            confirmPassword.value === newPassword.value
+    const passwordDirty = computed(
+        () => currentPassword.value.length > 0
+            || newPassword.value.length > 0
+            || confirmPassword.value.length > 0,
     );
-    const canRequestEmailChange = computed(
-        () =>
-            !emailUnchanged.value &&
-            emailDraft.value.trim().length > 0 &&
-            emailChangePassword.value.length > 0,
+
+    const emailInvalid = computed(() => {
+        const v = emailDraft.value.trim();
+        // Empty is allowed (clears the address); otherwise a light shape check
+        // mirroring the server's validator (real check is server-side).
+        return v.length > 0 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+    });
+
+    const passwordValid = computed(
+        () => currentPassword.value.length > 0
+            && newPassword.value.length >= 8
+            && confirmPassword.value === newPassword.value,
     );
+
+    const isDirty = computed(
+        () => !usernameUnchanged.value || !emailUnchanged.value || passwordDirty.value,
+    );
+
+    // Everything the Save button will commit must be valid: username present,
+    // email well-formed (or blank), and if any password field is touched the
+    // whole password change must be valid.
+    const canSave = computed(
+        () => isDirty.value
+            && usernameDraft.value.trim().length > 0
+            && !emailInvalid.value
+            && (!passwordDirty.value || passwordValid.value),
+    );
+
+    // R-020 — deferred-save surface, wire the unsaved-changes guard. Password
+    // fields join the predicate now that they save through the page button
+    // (the browsers-lose-passwords exclusion applied when they had their own
+    // submit; here an unsaved password edit is real pending work).
+    useUnsavedChangesGuard(isDirty);
 
     function notifySuccess(message: string) {
         $q.notify({ type: 'positive', position: 'bottom-right', message });
@@ -270,99 +306,111 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: toastCaption(err)
+            caption: toastCaption(err),
         });
     }
 
-    async function onRequestEmailChange() {
-        if (!canRequestEmailChange.value) return;
-        savingEmail.value = true;
+    async function onSaveAll() {
+        if (!canSave.value) return;
+        saving.value = true;
         try {
-            await authStore.requestEmailChangeAsync(
-                emailDraft.value.trim(),
-                emailChangePassword.value,
-            );
-            notifySuccess(
-                'Confirmation link sent. Check your new inbox to finish the change.',
-            );
-            emailChangePassword.value = '';
-            // Leave emailDraft as the entered value so the UI shows
-            // what's pending; the displayed email above (currentUser)
-            // doesn't update until the user clicks the confirmation
-            // link and the next /auth/me refresh sees the new value.
+            // Username + email go in one /auth/me patch; only send what changed.
+            const patch: { username?: string; email?: string } = {};
+            if (!usernameUnchanged.value) patch.username = usernameDraft.value.trim();
+            if (!emailUnchanged.value) patch.email = emailDraft.value.trim();
+            if (Object.keys(patch).length > 0) {
+                await authStore.updateMeAsync(patch);
+            }
+            if (passwordDirty.value) {
+                await authStore.changePasswordAsync({
+                    current_password: currentPassword.value,
+                    new_password: newPassword.value,
+                });
+                currentPassword.value = '';
+                newPassword.value = '';
+                confirmPassword.value = '';
+            }
+            notifySuccess('Changes saved.');
         } catch (err) {
-            notifyError('Could not request email change.', err);
+            notifyError('Could not save your changes.', err);
         } finally {
-            savingEmail.value = false;
-        }
-    }
-
-    async function onSaveUsername() {
-        const next = usernameDraft.value.trim();
-        if (!next) return;
-        savingUsername.value = true;
-        try {
-            await authStore.updateMeAsync({ username: next });
-            notifySuccess('Username saved.');
-        } catch (err) {
-            notifyError('Could not save username.', err);
-        } finally {
-            savingUsername.value = false;
-        }
-    }
-
-    async function onChangePassword() {
-        if (!canChangePassword.value) return;
-        savingPassword.value = true;
-        try {
-            await authStore.changePasswordAsync({
-                current_password: currentPassword.value,
-                new_password: newPassword.value
-            });
-            notifySuccess('Password changed.');
-            currentPassword.value = '';
-            newPassword.value = '';
-            confirmPassword.value = '';
-        } catch (err) {
-            notifyError('Could not change password.', err);
-        } finally {
-            savingPassword.value = false;
+            saving.value = false;
         }
     }
 </script>
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
+    // The sections here are short (a heading + one input), so the shared
+    // section rhythm (24px bottom padding) stacked with the dividers left big
+    // empty bands. Tighten both — scoped to this page only.
+    :deep(.settings-section) {
+        padding-bottom: 14px;
+        gap: 12px;
+    }
     .settings-divider {
         border: 0;
         height: 1px;
         background: color-mix(in srgb, var(--text-primary) 8%, transparent);
-        margin: 8px 0;
+        margin: 2px 0;
     }
-    .account-identity {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 4px 0 12px;
-    }
-    .account-identity__text {
+
+    // Circular avatar with a hover/focus pencil overlay — click anywhere on
+    // the circle to open the picker.
+    .avatar-edit-wrap {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        align-items: flex-start;
+        gap: 10px;
     }
-    .account-identity__name {
-        font-size: 1.125rem;
-        font-weight: 700;
-        color: var(--text-primary);
+    .avatar-edit {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        cursor: pointer;
+        outline: none;
     }
-    .account-identity__email {
-        font-size: 0.875rem;
+    .avatar-edit__overlay {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        pointer-events: none;
     }
-    .account-identity__userid {
-        font-size: 0.75rem;
+    .avatar-edit:hover .avatar-edit__overlay,
+    .avatar-edit:focus-visible .avatar-edit__overlay {
+        opacity: 1;
     }
-    .text-mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 0.85em;
+    .avatar-edit:focus-visible {
+        box-shadow: 0 0 0 3px var(--focus-ring, var(--brand-primary));
+        border-radius: 50%;
+    }
+    .avatar-edit__input { display: none; }
+
+    .account-field {
+        width: 100%;
+        max-width: 420px;
+    }
+
+    .account-savebar {
+        position: sticky;
+        bottom: 0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 12px 0;
+        background: linear-gradient(
+            to top,
+            var(--surface-base, var(--surface, transparent)) 65%,
+            transparent
+        );
     }
 </style>

@@ -17,6 +17,7 @@
                         >
                             <q-icon :name="item.icon" size="18px" class="settings-nav-group__icon" />
                             <span class="settings-nav-group__label">{{ item.label }}</span>
+                            <span v-if="item.badge" class="settings-nav-group__badge">{{ item.badge }}</span>
                         </router-link>
                     </li>
                 </template>
@@ -29,6 +30,7 @@
                     >
                         <q-icon :name="entry.icon" size="18px" class="settings-nav-group__icon" />
                         <span class="settings-nav-group__label">{{ entry.label }}</span>
+                        <span v-if="entry.badge" class="settings-nav-group__badge">{{ entry.badge }}</span>
                     </router-link>
                 </li>
             </template>
@@ -46,6 +48,10 @@
         path: string;
         label: string;
         icon: string;
+        // Optional attention count — renders a soft pill on the right of the
+        // link when > 0 (e.g. outstanding unlinked ingredients). Omitted /
+        // 0 ⇒ no badge.
+        badge?: number;
     }
     export interface SettingsNavSubGroup {
         subheader: string;
@@ -142,5 +148,23 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    // Attention badge (e.g. outstanding unlinked ingredients). Soft brand
+    // pill on the right edge; the whole row also reads as active-tinted via
+    // the link states above, so the badge just carries the count.
+    .settings-nav-group__badge {
+        flex: 0 0 auto;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: var(--brand-primary);
+        color: var(--text-inverse);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1;
     }
 </style>

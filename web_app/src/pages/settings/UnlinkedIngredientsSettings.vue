@@ -116,6 +116,7 @@
     } from 'src/services/api/recipeApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useUnlinkedIngredientsStore } from 'src/stores/unlinkedIngredientsStore';
     import { storeToRefs } from 'pinia';
 
     const $q = useQuasar();
@@ -125,6 +126,7 @@
     const { stockItems } = storeToRefs(stockItemStore);
     const stockLevelStore = useStockLevelStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
+    const unlinkedStore = useUnlinkedIngredientsStore();
 
     const groups = ref<UnlinkedIngredientGroup[]>([]);
     const loading = ref(false);
@@ -185,6 +187,9 @@
         try {
             const dto = await recipeApi.getUnlinkedIngredientsAsync();
             groups.value = dto.unlinked;
+            // Keep the sidebar attention badge in sync (reuses this fetch
+            // rather than a second round-trip).
+            unlinkedStore.setCount(dto.unlinked.length);
         } catch (err) {
             console.warn('Failed to load unlinked ingredients', err);
             $q.notify({

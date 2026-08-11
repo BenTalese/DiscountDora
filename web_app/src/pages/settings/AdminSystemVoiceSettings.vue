@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Voice (Piper TTS)"
-            description="Install-wide paths to the Piper binary and its voice bundle. Each user's chosen voice lives on their own Voice settings page and layers on top of this."
+            description="Where the server finds Piper — the offline engine that gives Dora a natural spoken voice in chat and cook mode. Shipped desktop and Docker builds fill these in automatically; you only need to touch this page on a source install, or to point at a custom binary or voice folder."
             :icon="ICONS.record_voice_over"
         />
 
@@ -12,14 +12,42 @@
 
         <template v-else-if="!loading">
             <SettingsSection>
-                <template #title>Piper binary</template>
+                <template #title>How Dora's voice works</template>
                 <template #description>
-                    Path to the piper executable. Leave blank to search
-                    <code>$PATH</code>. The desktop bundle resolves this
-                    automatically.
+                    Two layers, set in two places — this page is only the first.
                 </template>
 
-                <SettingsRow label="Executable" stacked>
+                <ul class="voice-intro">
+                    <li>
+                        <strong>The engine (here).</strong> Piper is a small,
+                        offline neural text-to-speech that runs on the server's
+                        CPU — no cloud calls. The settings below tell the server
+                        where the Piper program and its voice models live. If
+                        Piper can't be found, Dora falls back to the browser's
+                        built-in voice, so she's never silent.
+                    </li>
+                    <li>
+                        <strong>The voice (elsewhere).</strong> Which voice each
+                        person hears — and the download of extra voices — lives
+                        on the per-user
+                        <router-link to="/settings/voice">Voice
+                        settings</router-link> page, not here. This page is
+                        install-wide plumbing; that page is personal choice.
+                    </li>
+                </ul>
+            </SettingsSection>
+
+            <SettingsSection>
+                <template #title>Piper program</template>
+                <template #description>
+                    The path to the <code>piper</code> executable on the server.
+                    Leave blank to search the system <code>PATH</code> (which
+                    works after <code>pip install piper-tts</code>). Desktop and
+                    Docker builds ship Piper and set this for you — leave it
+                    blank there.
+                </template>
+
+                <SettingsRow label="Executable path" stacked>
                     <q-input
                         v-model="draft.piper_bin"
                         outlined dense clearable
@@ -30,32 +58,21 @@
             </SettingsSection>
 
             <SettingsSection>
-                <template #title>Voices</template>
+                <template #title>Voice models folder</template>
                 <template #description>
-                    The bundle directory holds pre-shipped <code>.onnx</code>
-                    voice models. Legacy single-file voice override wins over
-                    the catalog when set.
+                    The folder holding the pre-shipped <code>.onnx</code> voice
+                    files. Blank is normal — the server already knows where the
+                    bundled voices live (next to the app, or inside a desktop /
+                    Docker build). Only set this to point at a custom folder of
+                    voices you've placed yourself.
                 </template>
 
-                <SettingsRow label="Bundled voice directory" stacked>
+                <SettingsRow label="Bundled voice folder" stacked>
                     <q-input
                         v-model="draft.piper_bundled_voice_dir"
                         outlined dense clearable
                         placeholder="/opt/dora/voices"
                         @blur="() => onSaveField('piper_bundled_voice_dir')"
-                    />
-                </SettingsRow>
-
-                <SettingsRow
-                    label="Legacy voice override"
-                    help="Absolute path to a single .onnx voice file. When set and valid, it wins over every other resolution path. Prefer the bundle directory unless migrating from an older install."
-                    stacked
-                >
-                    <q-input
-                        v-model="draft.piper_voice"
-                        outlined dense clearable
-                        placeholder="/opt/dora/voices/en_US-amy-medium.onnx"
-                        @blur="() => onSaveField('piper_voice')"
                     />
                 </SettingsRow>
             </SettingsSection>
@@ -75,7 +92,7 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
-    type VoiceField = 'piper_bin' | 'piper_bundled_voice_dir' | 'piper_voice';
+    type VoiceField = 'piper_bin' | 'piper_bundled_voice_dir';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -85,7 +102,6 @@
     const saved = reactive({
         piper_bin: '',
         piper_bundled_voice_dir: '',
-        piper_voice: '',
     });
     const draft = reactive({ ...saved });
 
@@ -117,7 +133,6 @@
     function hydrate(s: AppSettings) {
         saved.piper_bin = s.piper_bin;
         saved.piper_bundled_voice_dir = s.piper_bundled_voice_dir;
-        saved.piper_voice = s.piper_voice;
         resetDrafts();
     }
 
@@ -138,4 +153,15 @@
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
+    .voice-intro {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 60ch;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
 </style>

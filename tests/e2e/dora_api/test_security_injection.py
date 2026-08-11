@@ -131,9 +131,10 @@ def test__patch_me__cannot_mass_assign_is_admin(api):
     assert requests.get(AUTH_ME).status_code == 200
 
 
-def test__patch_me__cannot_mass_assign_id_or_email(api):
-    # id is server-owned; email has its own verified-change flow (FU-197).
-    for field, value in [("id", str(uuid.uuid4())), ("user_id", str(uuid.uuid4())), ("email", "x@y.z")]:
+def test__patch_me__cannot_mass_assign_id(api):
+    # id / user_id are server-owned — extra="forbid" hard-rejects them.
+    # (email IS editable via this endpoint now; see the auth-flow tests.)
+    for field, value in [("id", str(uuid.uuid4())), ("user_id", str(uuid.uuid4()))]:
         resp = requests.patch(AUTH_ME, json={field: value})
         assert resp.status_code == 400, (field, resp.text[:200])
 

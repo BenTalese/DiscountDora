@@ -13,11 +13,6 @@ Configuration:
                           matching `.onnx.json`). Default: the `voices/`
                           directory next to this file (where the bundled
                           Amy/Ryan models live).
-  DORA_PIPER_VOICE      — legacy single-file override: an absolute path to one
-                          `.onnx` model. When set it wins for every request
-                          regardless of the requested `voice` id (back-compat
-                          with the original test page; new installs use the
-                          dir + catalog instead).
 
 Request JSON (POST): { "text": str, "voice"?: str,
                        "length_scale"?: float, "noise_scale"?: float,
@@ -72,33 +67,14 @@ def _piper_bin() -> str | None:
     return shutil.which("piper")
 
 
-def _legacy_voice_override() -> Path | None:
-    """The original single-voice override — now `AppSetting.piper_voice`.
-    When present and valid it wins for every request (back-compat);
-    otherwise we resolve from the catalog + dir."""
-    try:
-        from dora_api.features.app_settings.operational_config import \
-            resolved_operational_config
-        raw = resolved_operational_config().piper_voice
-    except Exception:
-        raw = ""
-    if not raw:
-        return None
-    p = Path(raw)
-    return p if p.exists() else None
-
-
 def _resolve_model(voice_id: str | None) -> tuple[Path | None, VoiceDef | None]:
-    """Return (model_path, voice_def) for the requested voice, or (path, None)
-    when the legacy override is in force. (None, None) when nothing usable.
+    """Return (model_path, voice_def) for the requested voice, or (None, None)
+    when nothing usable.
 
     Falls through `voice_provision.is_downloaded` which checks the writable
     data dir first and the build-time bundle dir as a fallback — so a shipped
     artifact (Docker / desktop) speaks the bundled default voice immediately,
     while user downloads of additional voices still land in the data dir."""
-    override = _legacy_voice_override()
-    if override is not None:
-        return override, None
     voice = get_voice(voice_id or DEFAULT_VOICE_ID) or get_voice(DEFAULT_VOICE_ID)
     if voice is None:
         return None, None
@@ -130,10 +106,8 @@ def list_voices():
         for v in VOICE_CATALOG
     ]
     # `configured` = Piper can actually speak right now (binary present AND at
-    # least one model available, or a legacy override pointing at a real file).
-    has_model = _legacy_voice_override() is not None or any(
-        v["available"] for v in voices
-    )
+    # least one model available).
+    has_model = any(v["available"] for v in voices)
     return jsonify({
         "configured": piper_ready and has_model,
         # Lets the UI distinguish "no voice downloaded yet" from "Piper engine

@@ -11,6 +11,11 @@
         </q-banner>
 
         <template v-else-if="!loading">
+            <!-- The SMTP password is stored encrypted-at-rest; warn (and offer
+                 a key) when DORA_SECRET_ENCRYPTION_KEY is unset so the admin
+                 knows the password save will be refused until it's configured. -->
+            <EncryptionKeyBanner secret-label="the SMTP password" />
+
             <SettingsSection>
                 <template #title>Email subsystem</template>
                 <template #description>
@@ -191,6 +196,7 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
 
     type EmailField = 'email_enabled' | 'smtp_host' | 'smtp_port'
         | 'smtp_username' | 'smtp_from' | 'smtp_use_tls';

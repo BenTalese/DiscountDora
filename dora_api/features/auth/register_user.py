@@ -64,11 +64,8 @@ class AuthenticatedUserDto:
     font_size: str
     onboarding_completed_at: str | None
     email_verified: bool
-    # grocery budget. `budget_amount` is None when the user
-    # hasn't opted in; a positive number turns on the dashboard / Dora
-    # budget surfaces. Period is one of "weekly" / "monthly".
-    budget_amount: float | None
-    budget_period: str
+    # grocery budget moved to AppSetting (install-wide household budget);
+    # clients read it via /api/health.budget_policy, not this user DTO.
     # voice opt-ins. Both default False; the SPA reads them on
     # boot to seed the per-page mic / volume toggles.
     voice_input_enabled: bool
@@ -78,9 +75,8 @@ class AuthenticatedUserDto:
     # synthesize with, with a browser fallback when Piper is unavailable).
     voice_engine: str
     voice_id: str
-    # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
-    # Layered with install `money_enabled` via useMoneyEnabled().
-    money_features_enabled: bool
+    # money opt-in removed — money is a single install-wide flag
+    # (AppSetting.money_enabled); there is no per-user money layer.
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
     # clients read the cook-style via /api/health.cooking_policy.
     # "always ask which draft list on quick-add".
@@ -145,15 +141,10 @@ class AuthenticatedUserDto:
                 if user.onboarding_completed_at is not None else None
             ),
             email_verified=bool(user.email_verified),
-            budget_amount=(
-                float(user.budget_amount) if user.budget_amount is not None else None
-            ),
-            budget_period=user.budget_period,
             voice_input_enabled=bool(user.voice_input_enabled),
             voice_output_enabled=bool(user.voice_output_enabled),
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
-            money_features_enabled=bool(user.money_features_enabled),
             always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
             nutrition_mode=user.nutrition_mode,

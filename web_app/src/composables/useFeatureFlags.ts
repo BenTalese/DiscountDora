@@ -58,7 +58,8 @@ export function useFeatureFlags() {
         scanning: computed(() => readFlag('scanning')),
         multiUser: computed(() => readFlag('multi_user')),
         email: computed(() => readFlag('email')),
-        assistant: computed(() => readFlag('assistant')),
+        // No `assistant` flag — AI mode has no install-wide gate (per-user
+        // opt-in only), so there's nothing for the server to publish.
         mealPlanning: computed(() => readFlag('meal_planning')),
         money: computed(() => readFlag('money')),
         nutrition: computed(() => readFlag('nutrition')),
@@ -71,6 +72,11 @@ export function useFeatureFlags() {
         // that references an email affordance should `v-if` on this flag,
         // not `:disable`.
         emailSmtpConfigured: computed(() => readFlag('email_smtp_configured')),
+        // True iff DORA_SECRET_ENCRYPTION_KEY is set on the backend. Consumed
+        // by EncryptionKeyBanner (per-user Assistant page + admin Email/Push
+        // pages) to warn — and offer to generate a key — when secrets can't
+        // be stored encrypted. Read by every user, not just admins.
+        secretEncryptionConfigured: computed(() => readFlag('secret_encryption_configured')),
         // true when both DORA_VAPID_PUBLIC_KEY and DORA_VAPID_PRIVATE_KEY
         // are set. Consumed by NotificationsSettings (same R-029 carve-out
         // as emailSmtpConfigured) and short-circuits `usePushSubscription`

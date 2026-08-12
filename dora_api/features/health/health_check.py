@@ -6,8 +6,8 @@ Two callers in mind:
     whether the backend version is compatible with the client
     (`schema_version` lets a thin client refuse to talk to a
     backend that's been migrated past it) and whether features it
-    relies on are enabled (e.g. the assistant chat panel hides
-    itself when `features.assistant` is false).
+    relies on are enabled (e.g. money surfaces hide themselves when
+    `features.money` is false).
 
 Cheap by design: never touches the DB or external services. The
 schema version is resolved once at module import.
@@ -101,7 +101,16 @@ def _feature_flags(setting) -> dict[str, bool]:
         "email": False,
         "email_smtp_configured": False,
         "push_vapid_configured": False,
-        "assistant": False,     # resolved below
+        # NB: there is deliberately no `assistant` flag — AI mode has no
+        # install-wide gate (it's a per-user opt-in), so the server has no
+        # availability fact to publish. The old flag (formerly
+        # `master_llm_enabled`) was dropped with the master switch.
+        # True iff DORA_SECRET_ENCRYPTION_KEY is set + parses. Every client
+        # reads it (not admin-only): the per-user Assistant page and the
+        # admin Email/Push pages show a warning banner when it's unset, since
+        # secrets (LLM API keys, SMTP password, VAPID key) can't be stored
+        # encrypted without it. Resolved below.
+        "secret_encryption_configured": False,
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         # Each pairs with a per-user opt-in (where one exists) — install
         # off ⇒ feature hidden for everyone; install on ⇒ per-user opt-in
@@ -128,11 +137,6 @@ def _feature_flags(setting) -> dict[str, bool]:
             SqlAlchemyRepository
         repo = SqlAlchemyRepository()
         if setting is not None:
-            # install-wide assistant gate is now just the
-            # master kill-switch. Per-user enable + provider config layers on
-            # top (see auth/update_me); useFeatureFlags wires the master flag
-            # as the "feature is available here at all" signal.
-            flags["assistant"] = bool(setting.master_llm_enabled)
             flags["scanning"] = bool(setting.scanning_enabled)
             flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
             flags["meal_planning"] = bool(setting.meal_planning_enabled)
@@ -162,6 +166,12 @@ def _feature_flags(setting) -> dict[str, bool]:
         flags["push_vapid_configured"] = bool(
             op_config.vapid_public_key and op_config.vapid_private_key
         )
+        # env-driven (not DB-backed) — reads the wrapping key straight from
+        # the environment. Drives the "set DORA_SECRET_ENCRYPTION_KEY" banner
+        # on the settings pages that store secrets.
+        from dora_api.infrastructure.security.secret_encryption import \
+            encryption_available
+        flags["secret_encryption_configured"] = bool(encryption_available())
     except Exception:
         pass
     return flags
@@ -229,6 +239,25 @@ def _cooking_policy(setting) -> dict:
     return {"household_headcount": headcount, "batch_features_enabled": batch}
 
 
+def _budget_policy(setting) -> dict:
+    """Install-wide household grocery budget, surfaced here (not on
+    `/app-settings`) because every logged-in user's client reads it — the
+    dashboard budget card + Settings → Money page — not just admins. Moved off
+    User (spend is summed across shared shopping lists, so the target is shared
+    too). `amount` None ⇒ no budget set (value-driven: no amount = off).
+    Wrapped defensively so a read error can't 500 the whole health probe."""
+    amount = None
+    period = "weekly"
+    try:
+        if setting is not None:  # shared singleton, fetched once by health_check
+            raw = getattr(setting, "budget_amount", None)
+            amount = float(raw) if raw is not None and raw > 0 else None
+            period = getattr(setting, "budget_period", None) or "weekly"
+    except Exception:
+        pass
+    return {"amount": amount, "period": period}
+
+
 def _support_channel() -> dict[str, str]:
     """FU-370 — install's support/report-an-issue channel, surfaced here (not
     on `/app-settings`) because every logged-in user's browser needs it to
@@ -273,5 +302,6 @@ def health_check():
         "image_policy": _image_policy(setting),
         "locale_policy": _locale_policy(setting),
         "cooking_policy": _cooking_policy(setting),
+        "budget_policy": _budget_policy(setting),
         "support": _support_channel(),
     }), 200

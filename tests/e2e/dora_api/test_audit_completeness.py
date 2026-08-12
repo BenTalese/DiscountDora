@@ -317,8 +317,6 @@ _EXCLUDED_FROM_BEHAVIOURAL: dict[str, str] = {
     "admin_update_user": "needs a seeded target user",
     "admin_delete_user": "needs a seeded target user",
     "reset_user_password": "needs a seeded target user",
-    "request_email_change": "sends an email-change flow",
-    "confirm_email_change": "out-of-band token flow",
     "change_password": "mutates the admin's own credentials mid-suite",
     "update_me": "mutates the admin's own profile mid-suite",
     "verify_email": "out-of-band token flow",

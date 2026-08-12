@@ -24,10 +24,6 @@ from dora_api.infrastructure.ports import Repository
 class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # single install-wide master kill-switch for the
-    # assistant feature. Per-user LLM URL/model/provider/API key live on
-    # the User row now (see auth/update_me).
-    master_llm_enabled: bool | None = None
     scanning_enabled: bool | None = None
     # buy-verdict oracle toggle.
     buy_verdict_enabled: bool | None = None
@@ -131,8 +127,6 @@ class UpdateAppSettingsHandler:
         setting = get_or_create_app_setting(self.repository)
         set_fields = request.model_fields_set
 
-        if "master_llm_enabled" in set_fields and request.master_llm_enabled is not None:
-            setting.master_llm_enabled = request.master_llm_enabled
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
         if "buy_verdict_enabled" in set_fields and request.buy_verdict_enabled is not None:
@@ -362,10 +356,6 @@ class UpdateAppSettingsHandler:
                 )
             setattr(setting, _ColumnField, token.decode("ascii"))
 
-        # the install-wide setting is now a master kill-
-        # switch only; the per-user "have you finished setting up?"
-        # validation moved to auth/update_me.py.
-
         self.repository.save_changes()
         return UpdateAppSettingsResponse(dto=_to_dto(setting))
 
@@ -436,5 +426,5 @@ def update_app_settings():
     _Response = UpdateAppSettingsHandler(SqlAlchemyRepository()).handle(_Request)
     if _Response.invalid_reason is not None:
         return bad_request("Invalid settings.", detail=_Response.invalid_reason)
-    _Logger.info("Admin updated app settings (master_llm_enabled=%s)", _Response.dto.master_llm_enabled)
+    _Logger.info("Admin updated app settings (scanning_enabled=%s)", _Response.dto.scanning_enabled)
     return ok(_Response.dto)

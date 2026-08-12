@@ -65,10 +65,9 @@ export type AuthenticatedUser = {
     // sent on registration. Drives the verify-banner on LoginPage and
     // the Settings → Account hint. First-user-is-admin auto-verifies.
     email_verified: boolean;
-    // optional grocery budget. `null` amount = feature off
-    // (the user hasn't opted in). Period chooses the rolling window.
-    budget_amount: number | null;
-    budget_period: BudgetPeriod;
+    // grocery budget moved to the install-wide household setting
+    // (AppSetting) — read via /api/health `budget_policy`, not this user
+    // record. Spend is shared across shopping lists, so the target is too.
     // voice opt-ins. Both default false; the SPA seeds its
     // per-page mic / volume toggles from these on boot.
     voice_input_enabled: boolean;
@@ -78,11 +77,9 @@ export type AuthenticatedUser = {
     // voice_output_enabled is on. Default `piper` / `amy`.
     voice_engine: VoiceEngine;
     voice_id: string;
-    // C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
-    // Layered with the install-wide `money_enabled` flag via
-    // `useMoneyEnabled()`. `budget_amount` above stays the per-user
-    // budget — saved value survives toggling this off (data preserved).
-    money_features_enabled: boolean;
+    // money-features opt-in removed — money is a single install-wide flag
+    // (`money_enabled`); there is no per-user money layer. `useMoneyEnabled()`
+    // reads only the install flag now.
     // FU-615 — `batch_features_enabled` moved to the install-wide AppSetting
     // (read via `useCookingPolicy()` / `useBatchEnabled()`, edited by an admin
     // in Settings → System → Cooking). No longer a per-user field.

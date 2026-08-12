@@ -1,6 +1,5 @@
 import type {
     AuthenticatedUser,
-    BudgetPeriod,
     FontFamilyPreference,
     FontSizePreference,
     ThemePreference,
@@ -42,12 +41,6 @@ export type UpdateMeCommand = {
     theme?: ThemePreference;
     font_family?: FontFamilyPreference;
     font_size?: FontSizePreference;
-    /** P2-05 — grocery budget. Sending a positive number opts in;
-     *  `clear_budget_amount: true` opts out. `0` is also treated as opt-out
-     *  by the backend. */
-    budget_amount?: number | null;
-    clear_budget_amount?: boolean;
-    budget_period?: BudgetPeriod;
     /** P2-13 — voice opt-in toggles. Saved per user. */
     voice_input_enabled?: boolean;
     voice_output_enabled?: boolean;
@@ -55,9 +48,6 @@ export type UpdateMeCommand = {
      *  validates the voice id against its catalog (GET /api/tts/voices). */
     voice_engine?: VoiceEngine;
     voice_id?: string;
-    /** C-cross Chunk 2 — per-user money-features opt-in. Layered with the
-     *  install-wide `money_enabled` flag via `useMoneyEnabled()`. */
-    money_features_enabled?: boolean;
     /** FU-316 — when true, quick-add prompts every time (skips the
      *  session-remembered pick). Only matters when the user has >1 draft. */
     always_ask_which_shopping_list?: boolean;
@@ -177,24 +167,6 @@ export default class AuthApiService {
     resetPasswordAsync = async (token: string, newPassword: string): Promise<void> =>
         await this.httpClient.post<void, { token: string; new_password: string }>(
             '/auth/reset-password', { token, new_password: newPassword },
-        );
-
-    /** FU-197 — verified change-email flow. Requires the current
-     *  password as proof-of-possession; on success the server emails a
-     *  confirmation link to the NEW address and a heads-up notice to
-     *  the OLD one. Nothing actually changes until the link is
-     *  clicked. */
-    requestEmailChangeAsync = async (
-        newEmail: string,
-        currentPassword: string,
-    ): Promise<void> =>
-        await this.httpClient.post<void, { new_email: string; current_password: string }>(
-            '/auth/me/email', { new_email: newEmail, current_password: currentPassword },
-        );
-
-    confirmEmailChangeAsync = async (token: string): Promise<void> =>
-        await this.httpClient.post<void, { token: string }>(
-            '/auth/email-change/confirm', { token },
         );
 
     getMeAsync = async (): Promise<AuthenticatedUser | null> => {

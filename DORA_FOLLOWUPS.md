@@ -39,20 +39,6 @@ long session summary. Distinct from the other logs:
 
 ---
 
-## [OPEN] FU-620 — remove the now-orphaned verified email-change flow
-- **Raised:** 2026-08-11 (Account settings redesign)
-- **Type:** finding
-- **What:** The Account page now edits email directly via `PATCH /auth/me` (backend `update_me` accepts `email`; owner's explicit call — the verified change flow was "overengineered"). This orphans the old verified change-email path, now called by nothing in the SPA: backend `POST /auth/me/email` (request_email_change) + `POST /auth/email-change/confirm` + their email templates; `authStore.requestEmailChangeAsync` / `authApiService.requestEmailChangeAsync` + `confirmEmailChangeAsync`; `pages/ConfirmEmailChangePage.vue` + its `/confirm-email-change` route (and the entry in `router/index.ts` public-routes allowlist). Tests `test__request_email_change__*` still exercise the endpoint.
-- **Why deferred:** the redesign only needed to *stop using* it; ripping out a whole auth subsystem (routes + templates + a page + tests) is a separate, bigger change and shouldn't ride along on a UI task.
-- **Recommended resolution:** opportunistic — remove the dead flow end-to-end (and its tests) next time auth/account code is open. Confirm nothing else (e.g. an admin surface) still links `/confirm-email-change` before deleting the route.
-
-## [OPEN] FU-619 — promote "no `<transition mode="out-in">` on `<q-page>` route roots" to an ADR/R-rule
-- **Raised:** 2026-08-11 (blank-nav regression fix)
-- **Type:** finding
-- **What:** The blank-screen-on-nav regression was caused by `MainLayout`'s router-view `<FadeTransition mode="out-in">` wedging once every page root became `<q-page>` (R-036). Fixed by dropping `out-in`. This is a recurring-shaped trap (R-036 mandates `<q-page>` roots; `out-in` is the intuitive "clean swap" default a future dev may re-add), so it's worth a standing rule + ADR in `ENGINEERING_STANDARDS.md`: page-root transitions use plain cross-fade, never `out-in`.
-- **Why deferred:** the fix itself is landed and verified; promoting a rule is a separate doc task and shouldn't gate the fix.
-- **Recommended resolution:** opportunistic (next time `ENGINEERING_STANDARDS.md` is being edited).
-
 ## [OPEN] FU-NNN — short title
 - **Raised:** YYYY-MM-DD (prompt id / task)
 - **Type:** follow-up | deferred job | leftover | finding

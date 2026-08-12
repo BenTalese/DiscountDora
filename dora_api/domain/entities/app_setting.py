@@ -2,6 +2,14 @@ from dataclasses import dataclass
 
 from dora_api.domain.entities.base_entity import BaseEntity
 
+# grocery-budget period. `weekly` rolls from Monday; `monthly` from the 1st
+# (local-civil-date for simplicity; the home use-case doesn't justify
+# timezone gymnastics). Lives here because the budget is a household concept
+# (see `budget_amount` / `budget_period` below) — it moved off User.
+BUDGET_PERIOD_WEEKLY = "weekly"
+BUDGET_PERIOD_MONTHLY = "monthly"
+ALLOWED_BUDGET_PERIODS = (BUDGET_PERIOD_WEEKLY, BUDGET_PERIOD_MONTHLY)
+
 
 @dataclass
 class AppSetting(BaseEntity):
@@ -17,12 +25,12 @@ class AppSetting(BaseEntity):
     install-wide flag, off by default. Scanning is navigation-only — it never
     does live deal lookup.
     """
-    # single install-wide kill-switch for the whole assistant
-    # feature. Defence in depth: a user can configure their own LLM per
-    # §7.1, but the admin keeps a master toggle that forces every user's
-    # AI mode off regardless. Per-user URL / model / provider / API key
-    # live on User (see entity below).
-    master_llm_enabled: bool = True
+    # AI mode is a purely per-user concern — each account configures its own
+    # provider/URL/model/API key on Settings → Assistant and opts in via
+    # `User.llm_enabled`. There is deliberately no install-wide master
+    # kill-switch: the old `master_llm_enabled` toggle was removed (owner
+    # call 2026-08-12 — "allow users to use AI if they wish"). Per-user
+    # URL / model / provider / API key live on User (see entity below).
     scanning_enabled: bool = False
     # buy-verdict oracle ("should I buy this?"). Defaults **on**
     # because it's a pure-personal feature: no external calls, no crowd
@@ -152,6 +160,19 @@ class AppSetting(BaseEntity):
     # Settings → System → Cooking.
     household_headcount: int | None = None
     batch_features_enabled: bool = False
+    # household grocery budget (moved off User). The budget tracks spend
+    # across every *shared* shopping list in the period, so the target must
+    # be shared too — one budget per household, not per person (same class
+    # of fix as household_headcount above). `budget_amount` NULL/≤0 ⇒ the
+    # feature is off (value-driven: no amount = no budget); a positive value
+    # turns on the dashboard + assistant + meal-plan budget surfaces.
+    # `budget_period` picks the rolling window. We deliberately don't store
+    # the period *start* — it's derived from the current date so it can't go
+    # stale. Any authenticated household member edits these via
+    # `PATCH /api/budget/settings`; clients read them via
+    # `/api/health.budget_policy`.
+    budget_amount: float | None = None
+    budget_period: str = BUDGET_PERIOD_WEEKLY
     # operational config that was formerly carried as
     # `DORA_*` env vars. An admin now configures a fresh install through
     # Settings → Admin → System; the two remaining bootstrap-only vars
@@ -191,7 +212,6 @@ class AppSetting(BaseEntity):
     public_url: str = ""
 
     class Fields(BaseEntity.Fields):
-        MASTER_LLM_ENABLED = "master_llm_enabled"
         SCANNING_ENABLED = "scanning_enabled"
         BUY_VERDICT_ENABLED = "buy_verdict_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
@@ -216,6 +236,8 @@ class AppSetting(BaseEntity):
         AUTO_ADD_MODE = "auto_add_mode"
         HOUSEHOLD_HEADCOUNT = "household_headcount"
         BATCH_FEATURES_ENABLED = "batch_features_enabled"
+        BUDGET_AMOUNT = "budget_amount"
+        BUDGET_PERIOD = "budget_period"
         SMTP_HOST = "smtp_host"
         SMTP_PORT = "smtp_port"
         SMTP_USERNAME = "smtp_username"

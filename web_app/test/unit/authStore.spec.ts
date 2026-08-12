@@ -32,7 +32,6 @@ const m = vi.hoisted(() => ({
     bootstrapAdminAsync: vi.fn(),
     updateMeAsync: vi.fn(),
     changePasswordAsync: vi.fn(),
-    requestEmailChangeAsync: vi.fn(),
     logoutAsync: vi.fn(),
     // Captures the handler the store hands to setUnauthorizedHandler, so a
     // 401 from the axios interceptor can be simulated without a real request.
@@ -48,7 +47,6 @@ vi.mock('src/services/api/authApiService', () => ({
         bootstrapAdminAsync = m.bootstrapAdminAsync;
         updateMeAsync = m.updateMeAsync;
         changePasswordAsync = m.changePasswordAsync;
-        requestEmailChangeAsync = m.requestEmailChangeAsync;
         logoutAsync = m.logoutAsync;
     },
 }));
@@ -110,7 +108,7 @@ beforeEach(() => {
         m.updateMeAsync,
     ]) fn.mockResolvedValue(user());
     for (const fn of [
-        m.changePasswordAsync, m.requestEmailChangeAsync, m.logoutAsync,
+        m.changePasswordAsync, m.logoutAsync,
     ]) fn.mockResolvedValue(undefined);
 });
 
@@ -323,19 +321,16 @@ describe('authStore — profile updates + avatar cache', () => {
         expect(store.currentUser).toEqual(refreshed);
     });
 
-    it('changePassword and requestEmailChange call through without mutating the user', async () => {
+    it('changePassword calls through without mutating the user', async () => {
         const me = user({ user_id: 'U-7', email: 'old@x.io' });
         m.loginAsync.mockResolvedValue(me);
         const store = useAuthStore();
         await store.loginAsync({ username: 'ben', password: 'pw' });
 
         await store.changePasswordAsync({ current_password: 'a', new_password: 'b' });
-        await store.requestEmailChangeAsync('new@x.io', 'a');
 
         expect(m.changePasswordAsync).toHaveBeenCalledWith({ current_password: 'a', new_password: 'b' });
-        expect(m.requestEmailChangeAsync).toHaveBeenCalledWith('new@x.io', 'a');
-        // Email only flips after the confirmation link — the store must not
-        // optimistically change it here.
+        // A password change must not touch the cached user identity.
         expect(store.currentUser?.email).toBe('old@x.io');
     });
 });

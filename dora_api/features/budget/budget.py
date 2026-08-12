@@ -3,10 +3,11 @@
   GET /api/budget/status    — current-period spend, remaining, projection
   GET /api/budget/history   — last N completed periods (default 6) for trend
 
-Budget settings (amount + period) live on the User row and are managed via
-the existing `PATCH /api/auth/me` endpoint. That keeps the wiring simple:
-the SPA already refreshes the auth DTO whenever it patches the user, so
-the dashboard / budget chip stay coherent without a second cache.
+Budget settings (amount + period) are a single install-wide household value
+on `AppSetting` (spend is summed across every *shared* shopping list, so the
+target must be shared too). Any household member edits them via
+`PATCH /api/budget/settings`; clients read them via `/api/health.budget_policy`.
+Value-driven: `budget_amount` NULL/≤0 ⇒ the feature is off.
 
 "Spent" in a period = the sum of every line on every archived shopping
 list whose `completed_at` falls inside the rolling period, using the same
@@ -24,11 +25,10 @@ finish this shop you'll be at $X" without committing to numbers we can't
 defend (offers can drift between now and finish).
 
 **Shared arithmetic** — `period_bounds(today, period)`, `period_spent(...)`,
-and `period_headroom(user, on_date, repository)` are the only functions
-authorised to compute budget windows and remaining-money figures. The
-trim-to-budget optimiser (FU-448) and any future budget-aware surface
-call `period_headroom` rather than re-deriving it in a second place.
-R-003 state-ownership.
+and `period_headroom(on_date, repository)` are the only functions authorised
+to compute budget windows and remaining-money figures. The trim-to-budget
+optimiser (FU-448) and any future budget-aware surface call `period_headroom`
+rather than re-deriving it in a second place. R-003 state-ownership.
 """
 import logging
 from dataclasses import dataclass
@@ -37,18 +37,24 @@ from typing import Any
 from uuid import UUID
 
 from flask import session
+from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import household_today
-from dora_api.domain.entities.user import (BUDGET_PERIOD_MONTHLY,
-                                           BUDGET_PERIOD_WEEKLY, User)
+from dora_api.domain.entities.app_setting import (ALLOWED_BUDGET_PERIODS,
+                                                  AppSetting,
+                                                  BUDGET_PERIOD_MONTHLY,
+                                                  BUDGET_PERIOD_WEEKLY)
 from dora_api.features.routers import BUDGET_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
-from dora_api.infrastructure.api_response import ok, unauthorized
+from dora_api.infrastructure.api_response import bad_request, ok, unauthorized
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -85,23 +91,28 @@ def _as_utc_datetime(d: date) -> datetime:
     return datetime.combine(d, time.min, tzinfo=timezone.utc)
 
 
-def _budget_amount(user: User) -> float | None:
-    """Positive budget_amount as a float, or None when disabled / unset."""
-    if user.budget_amount is not None and user.budget_amount > 0:
-        return float(user.budget_amount)
+def _budget_amount(setting: AppSetting) -> float | None:
+    """Positive household budget_amount as a float, or None when off / unset."""
+    if setting.budget_amount is not None and setting.budget_amount > 0:
+        return float(setting.budget_amount)
     return None
 
 
+def _budget_period(setting: AppSetting) -> str:
+    """The household budget period, defaulting to weekly if unset."""
+    return setting.budget_period or BUDGET_PERIOD_WEEKLY
+
+
 def period_spent(
-    user: User,
     period_start: date,
     period_end: date,
     repository: SqlAlchemyRepository,
 ) -> float:
     """Sum of archived shopping-list lines whose completed_at falls in the
     half-open window `[period_start, period_end)`. Uses the `_line_price`
-    ladder — actual > picked-offer > drop. Not per-user because the
-    schema is single-household; if that changes, filter here."""
+    ladder — actual > picked-offer > drop. Household-wide by construction
+    (the schema is single-household): every completed shop in the period
+    counts, no matter which list or user it was on."""
     start_dt = _as_utc_datetime(period_start)
     end_dt = _as_utc_datetime(period_end)
     archived = repository.get(ShoppingList).all(
@@ -128,23 +139,22 @@ def period_spent(
 
 
 def period_headroom(
-    user: User,
     on_date: date,
     repository: SqlAlchemyRepository,
 ) -> float | None:
     """The trim-to-budget optimiser's single source of truth for "how much
-    money is left in the budget for a shop dated `on_date`". Returns None
-    when the user has no positive budget_amount (nothing to constrain
-    against). When the shop is scheduled for a future period, we return
-    the *full* budget_amount for that period — no spend has landed yet.
-    When it's in the current or past period, we deduct actual spend so
+    money is left in the household budget for a shop dated `on_date`".
+    Returns None when there's no positive household budget (nothing to
+    constrain against). When the shop is scheduled for a future period, we
+    return the *full* budget_amount for that period — no spend has landed
+    yet. When it's in the current or past period, we deduct actual spend so
     far in that window."""
-    amount = _budget_amount(user)
+    setting = get_or_create_app_setting(repository)
+    amount = _budget_amount(setting)
     if amount is None:
         return None
-    period = user.budget_period or BUDGET_PERIOD_WEEKLY
-    start, end = period_bounds(on_date, period)
-    spent = period_spent(user, start, end, repository)
+    start, end = period_bounds(on_date, _budget_period(setting))
+    spent = period_spent(start, end, repository)
     return amount - spent
 
 
@@ -192,23 +202,21 @@ class GetBudgetStatusHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, user_id: UUID) -> BudgetStatusDto | None:
-        user: User | None = self.repository.get(User).by_id(user_id)
-        if user is None:
-            return None
+    def handle(self) -> BudgetStatusDto | None:
+        setting = get_or_create_app_setting(self.repository)
 
         # Compute boundaries even when the feature is off — the dashboard
-        # surfaces "this week's spend" as a passive figure for users who
-        # haven't opted in. R-021 — week/month windows align to the
-        # household calendar boundary, not server-local.
+        # surfaces "this week's spend" as a passive figure even when no
+        # budget is set. R-021 — week/month windows align to the household
+        # calendar boundary, not server-local.
         today = household_today(self.repository)
-        period = user.budget_period or BUDGET_PERIOD_WEEKLY
+        period = _budget_period(setting)
         start, end = period_bounds(today, period)
 
         # Spent = archived lines in the window. Extracted to the shared
         # `period_spent` helper so the trim-to-budget optimiser reads the
         # same number.
-        spent = period_spent(user, start, end, self.repository)
+        spent = period_spent(start, end, self.repository)
 
         # Projected still lives here — dashboard-only. Walks active lists'
         # lines, adding one more rung (current offer of the selected
@@ -251,7 +259,7 @@ class GetBudgetStatusHandler:
             if price is not None:
                 projected_active += price * qty
 
-        amount = _budget_amount(user)
+        amount = _budget_amount(setting)
         remaining = (amount - spent) if amount is not None else None
         return BudgetStatusDto(
             enabled=amount is not None,
@@ -282,7 +290,7 @@ def get_budget_status():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
     if dto is None:
         return unauthorized()
     _Logger.debug(
@@ -310,15 +318,13 @@ class GetBudgetHistoryHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, user_id: UUID, periods: int) -> list[BudgetHistoryRowDto] | None:
-        user: User | None = self.repository.get(User).by_id(user_id)
-        if user is None:
-            return None
+    def handle(self, periods: int) -> list[BudgetHistoryRowDto] | None:
+        setting = get_or_create_app_setting(self.repository)
 
         # R-021 — current period anchored on household-tz today.
         today = household_today(self.repository)
-        period = user.budget_period or BUDGET_PERIOD_WEEKLY
-        amount = _budget_amount(user)
+        period = _budget_period(setting)
+        amount = _budget_amount(setting)
 
         # Walk back N periods. The current period is index 0; older
         # rows come from anchoring the boundary calculator to a date
@@ -391,7 +397,70 @@ def get_budget_history():
     # Clamp to a sensible spread — the SPA never needs hundreds of rows
     # and an open-ended N is an easy DoS surface.
     periods = max(1, min(periods, 26))
-    rows = GetBudgetHistoryHandler(SqlAlchemyRepository()).handle(user_id, periods)
+    rows = GetBudgetHistoryHandler(SqlAlchemyRepository()).handle(periods)
     if rows is None:
         return unauthorized()
     return ok({"rows": rows})
+
+
+# ── Settings (household budget) ────────────────────────────────────────────
+# The budget amount + period are an install-wide household value on
+# AppSetting (moved off User — spend is shared, so the target must be too).
+# Unlike the rest of AppSetting (admin-only PATCH /app-settings), this is
+# editable by ANY authenticated household member: the grocery budget is
+# kitchen-setup-grade shared config, same access class as shared shopping
+# lists / stores / stock locations that any member curates. Value-driven —
+# an amount of null / 0 clears the budget (no separate enabled flag).
+
+class UpdateBudgetSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # Present-in-body semantics: send `amount` (incl. explicit null / 0) to set
+    # it, omit to leave unchanged. 0 or null ⇒ budget off.
+    amount: float | None = Field(default=None, ge=0)
+    period: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetSettingsDto:
+    amount: float | None
+    period: str
+
+
+@BUDGET_ROUTER.route("/settings", methods=["PATCH"])
+@has_request_body(UpdateBudgetSettingsRequest)
+def update_budget_settings():
+    _Logger = logging.getLogger(__name__)
+    if _current_user_id() is None:
+        return unauthorized()
+    request: UpdateBudgetSettingsRequest = get_request_body()
+    set_fields = request.model_fields_set
+
+    if "period" in set_fields and request.period is not None:
+        if request.period not in ALLOWED_BUDGET_PERIODS:
+            return bad_request(
+                "Invalid budget period.",
+                detail=f"'{request.period}' is not a valid budget period "
+                       f"(expected one of {list(ALLOWED_BUDGET_PERIODS)}).",
+            )
+
+    repository = SqlAlchemyRepository()
+    setting = get_or_create_app_setting(repository)
+    if "amount" in set_fields:
+        # Value-driven: 0 / null clears the budget (feature off).
+        setting.budget_amount = (
+            float(request.amount)
+            if request.amount is not None and request.amount > 0
+            else None
+        )
+    if "period" in set_fields and request.period is not None:
+        setting.budget_period = request.period
+    repository.save_changes()
+
+    _Logger.info(
+        "Household budget updated (amount=%s period=%s).",
+        setting.budget_amount, setting.budget_period,
+    )
+    return ok(BudgetSettingsDto(
+        amount=float(setting.budget_amount) if setting.budget_amount else None,
+        period=setting.budget_period or BUDGET_PERIOD_WEEKLY,
+    ))

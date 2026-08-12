@@ -54,11 +54,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ResetPasswordPage.vue'),
         meta: { title: 'Reset Password' },
     },
-    {
-        path: '/confirm-email-change',
-        component: () => import('pages/ConfirmEmailChangePage.vue'),
-        meta: { title: 'Confirm New Email' },
-    },
     // First-run wizard. Uses its own minimal layout so the nav drawer /
     // dashboard chrome don't peek through while the user is still being
     // set up. Router guard forces incomplete users here.
@@ -264,10 +259,10 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Nutrition' }
                     },
                     {
-                        // per-user Assistant config (provider +
-                        // URL/model/API key). Sibling to MoneySettings /
-                        // NutritionSettings; the install-wide master flag lives
-                        // separately on AdminSystemAssistantSettings.
+                        // per-user Assistant config (provider + URL/model/API
+                        // key) + per-user AI-mode opt-in. Sibling to
+                        // MoneySettings / NutritionSettings. There is no
+                        // install-wide master switch — AI mode is per-user only.
                         path: 'assistant',
                         component: () => import('pages/settings/AssistantSettings.vue'),
                         meta: { title: 'Assistant' }
@@ -375,28 +370,23 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/UsersAdminSettings.vue'),
                         meta: { title: 'Users' }
                     },
-                    // Phase 2: System splits 1 → 4 focused admin pages.
+                    // Region: household timezone + currency + display locale
+                    // combined onto one page (owner call 2026-08-12 — the three
+                    // are one "where are we" concern). Replaced the old split
+                    // timezone/locale pages (pre-release, no redirects kept).
                     {
-                        path: 'admin/system/timezone',
-                        component: () => import('pages/settings/AdminSystemTimezoneSettings.vue'),
-                        meta: { title: 'System: Timezone' }
-                    },
-                    // install-wide currency + display locale.
-                    {
-                        path: 'admin/system/locale',
-                        component: () => import('pages/settings/AdminSystemLocaleSettings.vue'),
-                        meta: { title: 'System: Currency & Locale' }
+                        path: 'admin/system/region',
+                        component: () => import('pages/settings/AdminSystemRegionSettings.vue'),
+                        meta: { title: 'System: Region & Locale' }
                     },
                     {
                         path: 'admin/system/alerts',
                         component: () => import('pages/settings/AdminSystemAlertsSettings.vue'),
                         meta: { title: 'System: Alert Thresholds' }
                     },
-                    {
-                        path: 'admin/system/assistant',
-                        component: () => import('pages/settings/AdminSystemAssistantSettings.vue'),
-                        meta: { title: 'System: AI Assistant' }
-                    },
+                    // (The install-wide AI master toggle + its admin page were
+                    // removed 2026-08-12 — AI mode is per-user only. No
+                    // redirect kept: pre-release, no bookmarks to preserve.)
                     {
                         path: 'admin/system/features',
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
@@ -456,9 +446,9 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'System: Cooking' }
                     },
                     {
-                        // Old single System page → first of the four.
+                        // Old single System page → first System page.
                         path: 'admin/system',
-                        redirect: '/settings/admin/system/timezone'
+                        redirect: '/settings/admin/system/region'
                     },
                     {
                         path: 'admin/audit-log',

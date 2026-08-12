@@ -7,8 +7,6 @@ provider matrix: it talks to one ABC.
 
 Behaviour summary, by which knobs the user has set:
 
-  * ``master_llm_enabled`` (install) is False → unavailable. The admin
-    has killed the feature install-wide; per-user setting is ignored.
   * ``user.llm_enabled`` is False → unavailable. The user has opted out.
   * ``user.llm_provider`` is unset → unavailable. The user enabled AI
     mode but never finished the setup. Fall back without crashing.
@@ -83,15 +81,12 @@ class _UnavailableClient(LlmClient):
         raise LlmUnavailable(self._reason)
 
 
-def build_assistant_client(user: User, *, master_enabled: bool) -> LlmClient:
+def build_assistant_client(user: User) -> LlmClient:
     """Construct an LlmClient for the given user.
 
-    ``master_enabled`` is the install-wide ``AppSetting.master_llm_enabled``
-    flag — passed in so this module doesn't depend on the app-settings
-    feature layer.
+    AI mode is gated solely by the user's own ``llm_enabled`` opt-in — there
+    is no install-wide master switch (removed 2026-08-12).
     """
-    if not master_enabled:
-        return _UnavailableClient("Assistant feature is disabled by the admin.")
     if not user.llm_enabled:
         return _UnavailableClient("AI mode is off for this user.")
     if not user.llm_provider:

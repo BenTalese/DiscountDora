@@ -44,7 +44,6 @@ PUBLIC_ENDPOINTS = frozenset({
     "resend_verification",
     "forgot_password",
     "reset_password",
-    "confirm_email_change",
     # the ingestion endpoint authenticates via `Authorization:
     # Bearer <key>` against IngestionSource, not the dora_session
     # cookie. Skipping the session gate here lets the bearer-check inside

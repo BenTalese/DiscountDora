@@ -33,7 +33,6 @@ from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.meal_plan_swap_ledger import MealPlanSwapLedger
 from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.budget.budget import period_bounds, period_spent
@@ -219,9 +218,8 @@ def _current_user_id() -> Optional[UUID]:
         return None
 
 
-def _money_features_on(repository: SqlAlchemyRepository, user: Optional[User]) -> bool:
-    if user is None or not user.money_features_enabled:
-        return False
+def _money_features_on(repository: SqlAlchemyRepository) -> bool:
+    """Money is a single install-wide concern now — no per-user layer."""
     settings = repository.get(AppSetting).all()
     return bool(settings[0].money_enabled) if settings else False
 
@@ -244,16 +242,17 @@ def _all_recipe_dtos(repository: SqlAlchemyRepository) -> list:
 
 
 def compute_suggestions(
-    repository: SqlAlchemyRepository, meal_plan_id: UUID, user: Optional[User],
+    repository: SqlAlchemyRepository, meal_plan_id: UUID,
 ) -> Optional[SwapSuggestionsResponse]:
     """Returns None when the plan doesn't exist. Returns a zeroed response
     (projected_over False, no candidates) when money features are off — the
-    surface is hidden client-side, this is the defensive server mirror."""
+    surface is hidden client-side, this is the defensive server mirror.
+    Budget is the household value (moved off User)."""
     plan_dto = GetMealPlansHandler(repository).handle_by_id(meal_plan_id)
     if plan_dto is None:
         return None
 
-    if not _money_features_on(repository, user):
+    if not _money_features_on(repository):
         return SwapSuggestionsResponse(
             projected_over=False, cost_per_week=0.0,
             cost_per_week_priced_ratio={"priced": 0, "total": 0, "unpriced_recipe_ids": []},
@@ -280,11 +279,17 @@ def compute_suggestions(
     cost_per_week = round(cost_per_week, 2)
 
     today = household_today(repository)
-    budget_amount = float(user.budget_amount) if user.budget_amount is not None else None
+    _settings = repository.get(AppSetting).all()
+    _setting = _settings[0] if _settings else None
+    budget_amount = (
+        float(_setting.budget_amount)
+        if _setting is not None and _setting.budget_amount is not None and _setting.budget_amount > 0
+        else None
+    )
     spent = 0.0
     if budget_amount is not None:
-        p_start, p_end = period_bounds(today, user.budget_period)
-        spent = period_spent(user, p_start, p_end, repository)
+        p_start, p_end = period_bounds(today, _setting.budget_period or "weekly")
+        spent = period_spent(p_start, p_end, repository)
     projected_over = (
         budget_amount is not None and (spent + cost_per_week) > budget_amount
     )
@@ -370,8 +375,8 @@ def _load_plan_with_entries(repository: SqlAlchemyRepository, meal_plan_id: UUID
     )
 
 
-def _recompute_after(repository, meal_plan_id, user) -> tuple[float, bool]:
-    resp = compute_suggestions(repository, meal_plan_id, user)
+def _recompute_after(repository, meal_plan_id) -> tuple[float, bool]:
+    resp = compute_suggestions(repository, meal_plan_id)
     if resp is None:
         return 0.0, False
     return resp.cost_per_week, resp.projected_over
@@ -383,9 +388,7 @@ def _recompute_after(repository, meal_plan_id, user) -> tuple[float, bool]:
 @MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/swap-suggestions", methods=["GET"])
 def get_swap_suggestions(meal_plan_id: UUID):
     repo = SqlAlchemyRepository()
-    user_id = _current_user_id()
-    user = repo.get(User).by_id(user_id) if user_id else None
-    result = compute_suggestions(repo, meal_plan_id, user)
+    result = compute_suggestions(repo, meal_plan_id)
     if result is None:
         return not_found(MealPlan.__name__, meal_plan_id)
     return ok(_suggestions_payload(result))
@@ -398,8 +401,7 @@ def apply_swap(meal_plan_id: UUID):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    user = repo.get(User).by_id(user_id)
-    if not _money_features_on(repo, user):
+    if not _money_features_on(repo):
         return business_rule_violation("Money features are off; swaps are unavailable.")
 
     request: ApplySwapRequest = get_request_body()
@@ -444,7 +446,7 @@ def apply_swap(meal_plan_id: UUID):
     repo.add(ledger)
     repo.save_changes()
 
-    new_cost, new_over = _recompute_after(repo, meal_plan_id, user)
+    new_cost, new_over = _recompute_after(repo, meal_plan_id)
     return ok({
         "swap_ledger_id": str(ledger.id),
         "new_cost_per_week": new_cost,
@@ -459,7 +461,6 @@ def undo_swap(meal_plan_id: UUID):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    user = repo.get(User).by_id(user_id)
 
     request: UndoSwapRequest = get_request_body()
     ledger = repo.get(MealPlanSwapLedger).by_id(request.swap_ledger_id)
@@ -492,7 +493,7 @@ def undo_swap(meal_plan_id: UUID):
     ledger.undone_at = datetime.now(timezone.utc)
     repo.save_changes()
 
-    new_cost, new_over = _recompute_after(repo, meal_plan_id, user)
+    new_cost, new_over = _recompute_after(repo, meal_plan_id)
     return ok({
         "new_cost_per_week": new_cost,
         "new_projected_over": new_over,

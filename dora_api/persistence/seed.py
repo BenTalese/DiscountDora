@@ -32,12 +32,13 @@ def seed_dev_data(
     """Populate a rich dev dataset that exercises every screen.
 
     ``money_on`` (FU-592 — verify tooling) boots the dataset with the money +
-    nutrition features already enabled at **both** layers they gate on: the
-    install flags (``AppSetting.money_enabled`` / ``nutrition_enabled``) and the
-    dev user's per-user opt-ins (``money_features_enabled`` /
-    ``nutrition_mode="simple"``). Those surfaces (Chunk 9 cost/kcal cards,
-    buy-verdict, budget) read both layers once at cold mount, so an agent
-    verifying them in the hidden browser pane needs them on from boot — flipping
+    nutrition features already enabled: the install money flag
+    (``AppSetting.money_enabled``) plus a household grocery budget, and the dev
+    user's nutrition opt-in (``nutrition_mode="simple"``; nutrition still has a
+    per-user mode). Money is a single install-wide concern now (no per-user
+    opt-in). Those surfaces (Chunk 9 cost/kcal cards, buy-verdict, budget) read
+    their gating layer once at cold mount, so an agent verifying them in the
+    hidden browser pane needs them on from boot — flipping
     mid-session doesn't re-render. Off by default (env ``DORA_SEED_MONEY_ON``; the
     ``dora-verify-backend-money`` launch profile sets it).
 
@@ -873,16 +874,17 @@ def seed_dev_data(
             line(big_list.id, bulk_items[(s * 3) % bulk_stock_items], s, qty=1 + (s % 3))
         repo.save_changes()
 
-    # FU-592 — verify-seed knob: turn money + nutrition on at both gating layers
-    # (install flags + the dev user's per-user opt-ins) so the flag-gated UI
+    # FU-592 — verify-seed knob: turn money + nutrition on so the flag-gated UI
     # (Chunk 9 cost/kcal cards, buy-verdict, budget) is agent-verifiable in a
-    # cold-mount browser pane, where mid-session flips don't re-render.
+    # cold-mount browser pane, where mid-session flips don't re-render. Money is
+    # install-wide now (flag + household budget); nutrition keeps a per-user mode.
     if money_on:
-        dev_user.money_features_enabled = True
         dev_user.nutrition_mode = NUTRITION_MODE_SIMPLE
         app_setting = get_or_create_app_setting(repo)
         app_setting.money_enabled = True
         app_setting.nutrition_enabled = True
+        app_setting.budget_amount = 200.0
+        app_setting.budget_period = "weekly"
         repo.save_changes()
 
     db.session.autoflush = True

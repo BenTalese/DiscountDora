@@ -11,6 +11,11 @@
         </q-banner>
 
         <template v-else-if="!loading">
+            <!-- The VAPID private key is stored encrypted-at-rest; warn (and
+                 offer a key) when DORA_SECRET_ENCRYPTION_KEY is unset so the
+                 admin knows the save will be refused until it's configured. -->
+            <EncryptionKeyBanner secret-label="the VAPID private key" />
+
             <SettingsSection>
                 <template #title>VAPID</template>
                 <template #description>
@@ -93,6 +98,7 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
 
     type PushField = 'vapid_public_key' | 'vapid_subject';
 

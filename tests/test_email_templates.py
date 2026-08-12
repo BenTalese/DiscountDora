@@ -12,8 +12,6 @@ shapes are copied from the real call sites:
                              (subject, username, reset_url)
   - password_changed.html  → email_flows.py reset_password /
                              change_password.py (subject, username)
-  - email_change_notice.html → email_flows.py request_email_change
-                             (subject, username, new_email)
   - alerts_digest.html     → send_alerts_digest.py _process_user
                              (subject, username, cadence, actionable,
                               fyi, alerts_url)
@@ -93,21 +91,6 @@ def test__render_template__verify_email__interpolates_username_and_link():
     _assert_fully_rendered(html)
 
 
-def test__render_template__verify_email__reused_for_email_change_confirmation_subject():
-    # request_email_change reuses this template with a different subject
-    # and a /confirm-email-change URL — the layout <title> must follow.
-    subject = "Confirm your new Dashy Dora email"
-    url = "https://dora.example/confirm-email-change?token=tok-chg"
-
-    html = render_template(
-        "verify_email.html", subject=subject, username="ben", verify_url=url,
-    )
-
-    assert f"<title>{subject}</title>" in html
-    assert f'href="{url}"' in html
-    _assert_fully_rendered(html)
-
-
 # ── reset_password.html ─────────────────────────────────────────────────
 
 def test__render_template__reset_password__interpolates_username_and_link():
@@ -142,23 +125,6 @@ def test__render_template__password_changed__interpolates_username():
     assert "Hi ben," in html
     assert "password was just changed" in html
     assert "contact your install's admin" in html
-    _assert_layout_applied(html, subject)
-    _assert_fully_rendered(html)
-
-
-# ── email_change_notice.html ────────────────────────────────────────────
-
-def test__render_template__email_change_notice__interpolates_new_email():
-    subject = "An email change was requested"
-
-    html = render_template(
-        "email_change_notice.html",
-        subject=subject, username="ben", new_email="new@example.com",
-    )
-
-    assert "Hi ben," in html
-    assert "<strong>new@example.com</strong>" in html
-    assert "change your password" in html
     _assert_layout_applied(html, subject)
     _assert_fully_rendered(html)
 

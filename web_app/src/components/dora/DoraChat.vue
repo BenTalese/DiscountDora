@@ -393,7 +393,6 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import DoraModeSlider from 'src/components/dora/DoraModeSlider.vue';
-    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { DoraMood } from 'src/components/dora/doraTypes';
@@ -860,11 +859,10 @@
 
     // FU-360 #3 — Basic/AI slider toggle. The slider tracks the user's
     // `llm_enabled` preference (source of truth); flipping it PATCHes /auth/me
-    // and re-probes assistant status. Disabled when the install-wide master
-    // is off, when the user hasn't finished configuring a provider, or during
-    // the in-flight PATCH. Mirrors the guard logic in AssistantSettings.vue.
-    const appSettingsApi = new AppSettingsApiService();
-    const installAiEnabled = ref<boolean | null>(null);
+    // and re-probes assistant status. Disabled when the user hasn't finished
+    // configuring a provider, or during the in-flight PATCH. AI mode is a
+    // purely per-user opt-in now — no install-wide master switch. Mirrors the
+    // guard logic in AssistantSettings.vue.
     const togglingMode = ref(false);
 
     const modeSliderValue = computed(() => !!props.currentUser?.llm_enabled);
@@ -881,14 +879,10 @@
 
     const canToggleMode = computed(() => {
         if (!props.currentUser) return false;
-        if (installAiEnabled.value === false) return false;
         return canConfigureAi.value;
     });
 
     const modeSliderDisabledReason = computed(() => {
-        if (installAiEnabled.value === false) {
-            return 'AI mode is disabled install-wide. An admin can turn it on at System → AI assistant.';
-        }
         const u = props.currentUser;
         if (!u) return '';
         if (!u.llm_provider) return 'Pick a provider in Settings → Assistant first.';
@@ -901,17 +895,6 @@
         }
         return '';
     });
-
-    async function refreshInstallAiEnabled() {
-        try {
-            const s = await appSettingsApi.getAsync();
-            installAiEnabled.value = s.master_llm_enabled;
-        } catch {
-            // Non-blocking — the slider stays enabled per user config; a
-            // failed PATCH later will surface the actual reason.
-            installAiEnabled.value = true;
-        }
-    }
 
     async function onModeSliderToggle(next: boolean) {
         if (togglingMode.value) return;
@@ -1641,8 +1624,6 @@
         void dispatch('greet');
         // Show the AI/Basic badge from the start, before the first message.
         void refreshAiStatus();
-        // Master flag drives the slider's disabled state.
-        void refreshInstallAiEnabled();
     });
 
     onBeforeUnmount(() => {

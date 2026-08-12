@@ -18,6 +18,70 @@ next.
 
 ---
 
+## 2026-08-12 — AI master switch removed (per-user only), timezone+currency+locale merged, encryption-key warning banner + in-UI Fernet key generator
+
+**Trigger.** Owner 3-part brief on Settings: (1) remove the AI-settings admin page + the install-wide master toggle — "makes no sense, allow users to use AI if they wish"; add a warning banner on the *personal* AI settings page when `DORA_SECRET_ENCRYPTION_KEY` isn't set (moving the explanation off the deleted admin page). (2) Combine timezone + currency + locale onto one page. (3) Make the encryption-key requirement obvious wherever a secret is saved (e.g. SMTP password), and — since generating a Fernet key is fiddly — offer to generate one in the UI (not persisted). Same banner everywhere.
+
+**Done — (1) master switch removed end-to-end.** Dropped `AppSetting.master_llm_enabled` fully: entity field + `Fields` const, `table_mappings` column, `access._get_or_create` seed, `get_app_settings` DTO + `_to_dto` + log, `update_app_settings` request field + handler block + log, `factory.build_assistant_client` (dropped the `master_enabled` kwarg + gate + docstring), `ask_assistant._build_client_for_current_user` (dropped the setting read + now-unused `get_or_create_app_setting` import), `health._feature_flags` (the `assistant` flag was **removed entirely** — no install-wide gate means no server availability fact to publish; it had zero consumers, so also dropped from `useFeatureFlags` + the `healthApiService` type). New migration **`a3f8c1d6e402`** revises `c7e1a4b93f52`, drops the column (pre-release, non-preserving; batch mode). Frontend: deleted `AdminSystemAssistantSettings.vue` + its route (no redirect kept — pre-release); removed the sidebar "AI assistant" leaf; stripped `master_llm_enabled` from `AppSettings` type; removed the install-master plumbing from `AssistantSettings.vue` (the "disabled install-wide" banner, the `installEnabled` ref + appSettings read + toggle gate) and from `DoraChat.vue` (`installAiEnabled`/`refreshInstallAiEnabled`/its `AppSettingsApiService` use + the "System → AI assistant" disabled-reason). Rewrote the HelpPage admin-master entry → "API-key encryption" pointing at `/settings/assistant`.
+
+**Done — (2) Region & locale page.** New `AdminSystemRegionSettings.vue` at `/settings/admin/system/region` merges the timezone section + the currency/locale section (preview + "Use this device" for both) into one page, one `AppSettingsApiService.getAsync()` on mount. Deleted `AdminSystemTimezoneSettings.vue` + `AdminSystemLocaleSettings.vue` + their routes (no redirects kept — pre-release); the `admin/system` bare-path redirect retargeted to `/region`; sidebar now one **Region & locale** leaf (was Timezone + Currency & locale).
+
+**Done — (3) encryption-key banner + generator.** New backend health flag **`secret_encryption_configured`** = `encryption_available()` (env-driven, read by every user — the per-user Assistant page needs it, not just admins). New `useFeatureFlags().secretEncryptionConfigured`. New reusable **`EncryptionKeyBanner.vue`** (`secretLabel` prop tailors one sentence; rest identical everywhere): renders only once `/health` resolves AND the key is unset; explains the `DORA_SECRET_ENCRYPTION_KEY` requirement; **Generate a key** mints a valid Fernet key **client-side** (32 `crypto.getRandomValues` bytes → url-safe base64, never sent/stored) with **Copy** + a "not saved anywhere, paste into env & restart, rotating invalidates saved secrets" note; plus the CLI one-liner. Wired onto `AssistantSettings` (API key), `AdminSystemEmailSettings` (SMTP password), `AdminSystemPushSettings` (VAPID key).
+
+**Checks.** Backend import smoke OK (`AppSetting` no longer has `master_llm_enabled`); **alembic single head `a3f8c1d6e402`**, chains off `c7e1a4b93f52`; `test_migrations.py` upgrade-from-empty green; **518 backend unit tests pass**; full suite **collects 1616** (edited e2e `test_app_settings_router` + `dto_snapshots.json` retargeted off `master_llm_enabled`). Frontend: **vue-tsc clean**, **eslint clean** on all touched files, **412 vitest pass**. Verified the in-UI key generator empirically — 3 JS-generated keys all construct a Python `Fernet` and encrypt/decrypt round-trip. **Running-app walk NOT driven** (needs the owner's authed instance; same stance as the Money entry below) — queued in `DORA_VERIFY.md` (two new sections: AI-master-removal/banner + Region merge).
+
+**Engineering-standards close-gate.** R-003 upheld (encryption status is one server-derived fact via `/health`, no client duplication; the region merge keeps one `AppSettingsApiService`). R-008 upheld (all dead master-flag plumbing removed across both languages, not left). R-020 save-on-blur/change carve-outs preserved on the merged region page. Region page's two raw `q-btn`s carry the pre-existing "no matching BaseButton variant" carve-out comments. No unexplained violations. **ADR evaluation:** no new rule — removing a needless install-wide flag is the situational inverse of R-038 (not a general rule); the client-side never-persisted key gen is a one-off; the reusable banner + health-flag follow existing patterns.
+
+**Next up.** Back to open FUs (FU-608 donation infra, FU-584/FU-579 e2e-tooling). Owner may walk the two new DORA_VERIFY sections.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-12 — Settings → Money reworked: budget → install-wide household setting, per-user money toggle removed, period-change bug fixed (R-038/ADR-034)
+
+**Trigger.** Owner brief on Settings → Money: (1) drop the per-user money toggle — money is admin-install-wide, "kitchen setup not personal"; (2) on the fence about the grocery budget's gating, asked "does the code use on+no-value as a state?"; (3) BUG — toggling budget on then changing period flips it back off. Mid-work the owner escalated: "why is an install-wide column on the user row? the budget affects everyone via the shopping list. what else has been done this way?"
+
+**Answered the question.** No — there was no persisted "budget enabled" state; enabled was *derived* from `budget_amount>0`, and the `budgetEnabledDraft` toggle was UI-only. That derived/transient mismatch WAS the bug (a `currentUser` refresh from the period save recomputed the draft from the still-null amount → toggle flipped off). Confirmed root cause in code.
+
+**Audit (owner's "what else?").** Spawned a general-purpose audit over every `User` column vs shared/household data. Verdict: only `budget_amount`/`budget_period` are MISPLACED (the code even self-documents it — `period_spent` comment: *"Not per-user because the schema is single-household"*; spend sums across ALL shared shopping lists, but the target was per-user; meal-plan build/swap read the *triggering* user's budget to constrain the SHARED week). `inferred_pantry_enabled` + `nutrition_mode` are view-suppression only (no shared write) → defensibly personal, left alone. No other column moved.
+
+**Decisions (owner).** Budget model = **value-driven, no toggle** (blank/0 = off). Budget edit = **any authenticated member**, under **Kitchen setup** (shared config like stores/locations — first non-admin write to an AppSetting field, deliberate).
+
+**Done — backend.** Moved `budget_amount`/`budget_period` User→`AppSetting` (+ constants to app_setting.py); **removed `money_features_enabled` end-to-end**; migration `c7e1a4b93f52` (add to AppSetting, drop 3 User cols; pre-release, non-preserving). Rewired `budget.py` (reads household setting; dropped now-unused `user`/`user_id` params from `period_spent`/`period_headroom`/status+history handlers), `build_week.py` + `swap_suggestions.py` (gate on install `money_enabled` only, read household budget; removed the per-user money gate + dead `_current_user_id`/`User` plumbing), `trim_to_budget`, `assistant/tools`, `generators`, `get_dora_score`. Stripped budget/money from `AuthenticatedUserDto` + `update_me` + `register_user` + `seed`. Added `/api/health.budget_policy`; new **`PATCH /api/budget/settings`** (any-user, value-driven, period-validated).
+
+**Done — frontend.** `useMoneyEnabled` → install-flag only; new `useBudgetSettings` (reads health budget_policy); `MoneySettings.vue` rewritten (no toggles, value-driven amount + period, gated on install money); Money nav moved Account→Kitchen setup (gated on money flag) in `SettingsShell`; dropped budget/money from `auth.ts` model + `authApiService` command; `budgetApiService.updateSettingsAsync` added; `healthApiService` budget_policy typed. Route `/settings/money` unchanged (grouping is presentational).
+
+**Checks.** vue-tsc + eslint clean; **518 backend unit tests pass** (incl. migration-from-empty + single-head); `authStore.spec` 17 pass; edited e2e (budget_router, swap_suggestions) collect clean + retargeted to the new contract; `dto_snapshots.json` updated (auth_me −3 keys, health +budget_policy). **Running-app walk NOT driven** — it would need a destructive reseed of the owner's dev DB, not run uninvited; queued in `DORA_VERIFY.md` ("Money → household budget, value-driven").
+
+**Engineering-standards close-gate.** New rule **R-038** (settings over shared/household data live install-wide, not per-user) + **ADR-034** (grocery budget is household) — the 3rd instance of this after FU-615's headcount/cook-style. R-003/R-008 upheld (dead per-user plumbing removed, not left). No unexplained violations.
+
+**Next up.** Back to open FUs (FU-608 donation infra, FU-584/FU-579 e2e-tooling). Owner may walk the Money DORA_VERIFY items.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-12 — PROJECT_STATE reshaped + FU-620 (email-change flow removed) + FU-619 (R-037/ADR-033); Import stays admin-only
+
+**Trigger.** Owner "what's next?" → picked: don't move Import; strip the changelog-diary out of `PROJECT_STATE.md` (make it a milestone-progress doc, not a ship diary); do FU-620 + FU-619.
+
+**Decision — Import stays admin-only.** The open question from the 2026-08-11 nav entries ("move Import to user-reachable Settings?") is **closed: keep it admin-only** (owner call). It's `require_admin`-guarded and does bulk writes to shared data — no move, no FU.
+
+**Done — `PROJECT_STATE.md` reshaped (not regenerated).** Owner: "it shouldn't be a changelog diary; it's a doc for me to see how milestones are progressing." Removed the two diary elements: (1) the giant run-on `**Regenerated:**` header + the entire nested "prior refresh" preamble (old lines 3–231) → replaced with a one-line `**Last reviewed: 2026-08-12.**` stamp; (2) the whole `## Recently shipped (newest first)` section. Kept the front-door intro + status key + phase board + workstreams + needs-attention + document register. **Also updated `CLAUDE.md`'s regeneration brief** so a future close-gate doesn't rebuild the ship-log back in: dropped "Recently-shipped (~10)" from the dashboard agent brief and added the owner directive (2026-08-12) — no changelog-diary section, keep the intro to a one-line stamp. *(Note: the "Needs your attention" list still carries some items resolved earlier this month — FU-595/FU-612/FU-609 etc. That staleness is out of scope for this reshape; flag for the next full dashboard regeneration.)*
+
+**Done — FU-620 (RESOLVED): verified email-change flow removed end-to-end.** Orphaned by the 2026-08-11 Account redesign (email now edits directly via `PATCH /auth/me`). **Backend:** deleted `request_email_change` + `confirm_email_change` + request models from `email_flows.py`, pruned dead imports, removed `confirm_email_change` from `middleware.py` public-route allowlist, retired `PURPOSE_CHANGE_EMAIL` (+ out of `ALLOWED_PURPOSES`) and `CHANGE_EMAIL_TTL` (+ `__all__`), deleted `email_change_notice.html`. **Frontend:** removed the two api-service methods, the store method, the `/confirm-email-change` route + public-routes entry, and deleted `ConfirmEmailChangePage.vue`. **Tests:** dropped/retargeted the email-change e2e + template + audit-skip-map + link-builder references (rewrote the verify-email purpose-mismatch test to use a reset-password token). **Verified:** backend import smoke OK; `test_email_templates.py` + `test_auth_link_builders.py` 14 passed; `vue-tsc` + eslint clean; `authStore.spec.ts` 17 passed. Full backend e2e (needs a live server) not run this session — left to the standard suite gate.
+
+**Done — FU-619 (RESOLVED): R-037 + ADR-033 added.** Codified "no `<transition mode="out-in">` on a `MainLayout` whose routes root on `<q-page>`" — the blank-nav footgun the R-036 rollout created. R-037 sits after R-036; ADR-033 after ADR-032, explicitly paired. Docs-only (`ENGINEERING_STANDARDS.md`).
+
+**Engineering-standards close-gate.** FU-620 is a pure removal — no new violations; the retired token-purpose/TTL constants + dead template all pruned rather than left as clutter (R-008 scope discipline). FU-619 *is* a new rule (R-037/ADR-033). No other R-rule touched.
+
+**Next up.** Back to the open FUs (now FU-608 owner-external donation infra, FU-584/FU-579 e2e-tooling findings). No new owner decisions pending.
+
+**Open questions for user.** None.
+
+---
+
 ## 2026-08-11 — Account settings redesign (identity block out, circular avatar, global save, email simplified)
 
 **Trigger.** Owner's 5-part brief on Settings → Account: drop the top identity block; shrink profile picture to a heading + circular hover-to-edit avatar (no add-file button, keep clear); remove per-field save buttons in favour of one global save with nav protection; email = plain editable input (no description / password / confirmation flow — "overengineered"); remove the change-password button (global save covers it).

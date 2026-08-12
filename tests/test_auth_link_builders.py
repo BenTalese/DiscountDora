@@ -6,7 +6,7 @@ in-app route MUST carry the route in the URL *fragment* (`…/#/reset-password?
 token=…`). A path-based link (`…/reset-password?token=…`) is served the SPA
 shell but the hash router never sees the route — it resolves to `/`, and the
 auth guard bounces the logged-out visitor to `#/login`. That silently
-dead-ended every password-reset / verify-email / confirm-email-change link.
+dead-ended every password-reset / verify-email link.
 
 These pure unit tests (no server, no request context — the builders fall back
 to the localhost dev origin) fix that contract in place so it can't regress.
@@ -45,9 +45,9 @@ def test__deep_links__never_emit_a_bare_path_route():
     for url in (
         build_reset_url("t"),
         build_verify_url("t"),
-        spa_deep_link("/confirm-email-change?token=t"),
+        spa_deep_link("/alerts?token=t"),
     ):
         before_hash = url.partition("#")[0]
         assert "reset-password" not in before_hash, url
         assert "verify-email" not in before_hash, url
-        assert "confirm-email-change" not in before_hash, url
+        assert "alerts" not in before_hash, url

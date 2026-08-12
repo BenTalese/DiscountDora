@@ -88,9 +88,8 @@ def configure_mappings(db: SQLAlchemy):
     app_setting_table = Table(
         "AppSetting", metadata,
         Column("id", UUIDType, primary_key=True),
-        # install-wide master kill-switch. Per-user URL /
-        # model / provider / API key live on the User table.
-        Column("master_llm_enabled", Boolean, nullable=False, server_default=true()),
+        # AI mode is per-user only — no install-wide master kill-switch.
+        # Per-user URL / model / provider / API key live on the User table.
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
         # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
@@ -153,6 +152,9 @@ def configure_mappings(db: SQLAlchemy):
         # via /api/health.cooking_policy; edited in Settings → System → Cooking.
         Column("household_headcount", Integer, nullable=True),
         Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
+        # household grocery budget (moved off User). NULL/≤0 amount = off.
+        Column("budget_amount", Float, nullable=True),
+        Column("budget_period", String(16), nullable=False, server_default="weekly"),
         # operational config promoted from `DORA_*`
         # env vars. `resolved_operational_config()` is now a straight
         # AppSetting projection (env fallbacks dropped 2026-07-06 —
@@ -983,9 +985,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("onboarding_completed_at", DateTime(timezone=True), nullable=True),
         Column("email_verified", Boolean, nullable=False, server_default=false()),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),
-        # grocery budget. NULL amount = feature off.
-        Column("budget_amount", Float, nullable=True),
-        Column("budget_period", String(16), nullable=False, server_default="weekly"),
+        # grocery budget moved off User to AppSetting (install-wide household
+        # budget — spend is shared, so the target must be too).
         # voice opt-ins. Off by default; SPA seeds the in-page
         # toggles from these and the user can override per session.
         Column("voice_input_enabled", Boolean, nullable=False, server_default=false()),
@@ -995,8 +996,8 @@ def configure_mappings(db: SQLAlchemy):
         # otherwise (resolved client-side).
         Column("voice_engine", String(16), nullable=False, server_default="piper"),
         Column("voice_id", String(32), nullable=False, server_default="amy"),
-        # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
-        Column("money_features_enabled", Boolean, nullable=False, server_default=false()),
+        # money opt-in removed: money is a single install-wide flag
+        # (AppSetting.money_enabled); there is no per-user money layer.
         # FU-615 — `batch_features_enabled` moved off User to AppSetting
         # (install-wide cook-style; a household has one cook-style).
         # per-user "always ask which draft list on quick-add" flag.

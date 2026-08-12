@@ -5,7 +5,6 @@ from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
-                                           ALLOWED_BUDGET_PERIODS,
                                            ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES,
                                            ALLOWED_LLM_PROVIDERS,
@@ -49,14 +48,8 @@ class UpdateMeRequest(BaseModel):
     theme: str | None = None
     font_family: str | None = None
     font_size: str | None = None
-    # grocery budget controls. `budget_amount` is the opt-in:
-    # sending a positive number turns the feature on, sending
-    # `clear_budget_amount: true` turns it off. Period change without
-    # an amount change is allowed (lets the user re-pick weekly vs
-    # monthly without resetting their number).
-    budget_amount: float | None = Field(default=None, ge=0)
-    clear_budget_amount: bool = False
-    budget_period: str | None = None
+    # grocery budget moved to AppSetting (install-wide household budget);
+    # edited via PATCH /api/budget/settings, not this endpoint.
     # voice opt-in toggles. Booleans only (no clear variant);
     # the feature is two-state per setting.
     voice_input_enabled: bool | None = None
@@ -66,8 +59,7 @@ class UpdateMeRequest(BaseModel):
     # catalog's VOICE_IDS.
     voice_engine: str | None = None
     voice_id: str | None = None
-    # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
-    money_features_enabled: bool | None = None
+    # money opt-in removed — money is one install-wide flag now.
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
     # edited via PATCH /app-settings, not here.
     # per-user "always ask which draft list on quick-add" toggle.
@@ -190,21 +182,8 @@ class UpdateMeHandler:
                 return None, f"Invalid font size '{request.font_size}'."
             _User.font_size = request.font_size
 
-        # budget. `clear_budget_amount` wins over any amount set
-        # in the same payload so a clear+set in one request is unambiguous
-        # (we treat clear as the user's primary intent).
-        if request.clear_budget_amount:
-            _User.budget_amount = None
-        elif "budget_amount" in _SetFields and request.budget_amount is not None:
-            # Zero is treated the same as "off" — there's nothing
-            # meaningful to track against a $0 budget. Saves the
-            # frontend from sending the clear flag separately.
-            _User.budget_amount = request.budget_amount if request.budget_amount > 0 else None
-
-        if "budget_period" in _SetFields and request.budget_period is not None:
-            if request.budget_period not in ALLOWED_BUDGET_PERIODS:
-                return None, f"Invalid budget period '{request.budget_period}'."
-            _User.budget_period = request.budget_period
+        # grocery budget moved to AppSetting (install-wide household budget);
+        # edited via PATCH /api/budget/settings, not here.
 
         # voice prefs. Plain bool fields; null is ignored.
         if "voice_input_enabled" in _SetFields and request.voice_input_enabled is not None:
@@ -223,10 +202,8 @@ class UpdateMeHandler:
                 return None, f"Invalid voice '{request.voice_id}'."
             _User.voice_id = request.voice_id
 
-        # C-cross Chunk 2 — per-user money opt-in. Plain bool; the
-        # saved `budget_amount` survives toggling off (data preserved).
-        if "money_features_enabled" in _SetFields and request.money_features_enabled is not None:
-            _User.money_features_enabled = request.money_features_enabled
+        # money opt-in removed — money is a single install-wide flag
+        # (AppSetting.money_enabled); there is no per-user money layer.
         # FU-615 — batch cook-style moved to AppSetting (install-wide).
         if (
             "always_ask_which_shopping_list" in _SetFields

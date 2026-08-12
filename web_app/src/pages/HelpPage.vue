@@ -394,10 +394,10 @@
                         "The Dora backend reaches your LLM, not your browser. That means the backend's network has to see your LLM's URL. On a single-laptop install (backend + LLM on the same box) this is just localhost. On a household setup with the backend on a NAS/Pi and an LLM on a different desktop, the backend needs to be able to reach that desktop (LAN routing, Tailscale, or a port forward). The base URL you save in Settings is from the *backend's* point of view.",
                 },
                 {
-                    title: "Admin: install-wide AI master switch + API-key encryption",
+                    title: "Paid providers: API-key encryption (DORA_SECRET_ENCRYPTION_KEY)",
                     summary:
-                        "Admins get a single master kill-switch at Settings > System > AI assistant: when off, every account's AI mode is forced off regardless of personal setting (defence in depth). For paid providers, the install needs the environment variable DORA_SECRET_ENCRYPTION_KEY set so user API keys can be stored encrypted at rest. Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
-                    path: '/settings/admin/system/assistant',
+                        "AI mode is per-account — there's no install-wide master switch; each person just configures it on Settings > Assistant. For paid providers (OpenAI / Anthropic / Gemini), the install needs the environment variable DORA_SECRET_ENCRYPTION_KEY set so your API key can be stored encrypted at rest — until it is, the Assistant page shows a warning and can generate a key for you to paste into the environment. Generate one from a shell with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
+                    path: '/settings/assistant',
                 },
             ],
         },

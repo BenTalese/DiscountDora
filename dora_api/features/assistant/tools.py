@@ -795,7 +795,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "period-remaining budget. Use for 'trim my shopping list "
                 "to my budget', 'cut some things so I don't go over', "
                 "'keep this shop under budget'. Only works when the money "
-                "features are on and the user has a budget_amount set."
+                "features are on and a household grocery budget is set."
             ),
             "parameters": {
                 "type": "object",
@@ -2190,15 +2190,15 @@ def budget_status(_args: dict) -> list[dict]:
     except (ValueError, TypeError):
         return [{"error": "not signed in"}]
 
-    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
     if dto is None:
         return [{"error": "user not found"}]
     if not dto.enabled:
         return [{
             "status": "disabled",
             "note": (
-                "The user hasn't opted in to budget tracking. They can "
-                "enable it in Settings → Preferences → Grocery budget."
+                "No household grocery budget is set. Anyone can set one in "
+                "Settings → Kitchen setup → Money."
             ),
             "period": dto.period,
             "period_start": dto.period_start,

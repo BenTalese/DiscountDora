@@ -23,6 +23,15 @@ export type BudgetHistoryRow = {
     over_budget: boolean;
 };
 
+/** The install-wide household budget settings (amount + period). Moved off
+ *  the User row — the budget tracks spend across every *shared* shopping
+ *  list, so it's one value per household, not per person. Editable by any
+ *  authenticated member (value-driven: amount null/0 ⇒ off). */
+export type BudgetSettings = {
+    amount: number | null;
+    period: BudgetPeriod;
+};
+
 export default class BudgetApiService {
     private httpClient = new AxiosHttpClient();
 
@@ -33,4 +42,11 @@ export default class BudgetApiService {
         await this.httpClient.get<{ rows: BudgetHistoryRow[] }>(
             `/budget/history?periods=${periods}`,
         );
+
+    /** Set the household budget. Omit a field to leave it unchanged; send
+     *  `amount: null` or `0` to clear the budget. */
+    updateSettingsAsync = async (
+        body: { amount?: number | null; period?: BudgetPeriod },
+    ): Promise<BudgetSettings> =>
+        await this.httpClient.patch<BudgetSettings, typeof body>('/budget/settings', body);
 }

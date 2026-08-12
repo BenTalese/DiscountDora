@@ -20,7 +20,6 @@ const PUBLIC_ROUTES = new Set<string>([
     '/verify-email',
     '/forgot-password',
     '/reset-password',
-    '/confirm-email-change',
 ]);
 // Routes we allow incomplete-onboarding users to visit without the redirect.
 // /welcome is the wizard itself; the error pages are safety hatches so a crash

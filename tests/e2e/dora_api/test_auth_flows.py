@@ -11,10 +11,10 @@ import requests
 
 from dora_api.app import app
 from dora_api.domain.entities.auth_token import (
-    PURPOSE_CHANGE_EMAIL, PURPOSE_RESET_PASSWORD, PURPOSE_VERIFY_EMAIL,
+    PURPOSE_RESET_PASSWORD, PURPOSE_VERIFY_EMAIL,
 )
 from dora_api.infrastructure.auth_helpers import (
-    CHANGE_EMAIL_TTL, RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL, issue_token,
+    RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL, issue_token,
 )
 
 
@@ -218,61 +218,6 @@ def test__update_me__show_assistant_round_trips(api):
     restore = requests.patch(f"{BASE}/me", json={"show_assistant": True})
     assert restore.status_code == 200, restore.text
     assert requests.get(f"{BASE}/me").json()["show_assistant"] is True
-
-
-def test__request_email_change__current_password_gates_the_call(api):
-    """FU-197 — `current_password` is a required field (model-level 400
-    when missing) AND the value must match (business-rule 422 when
-    wrong, 204 when right)."""
-    import requests
-    new_email = f"dora-new-{uuid.uuid4().hex[:6]}@example.com"
-
-    # Missing current_password — model-level rejection.
-    missing = requests.post(f"{BASE}/me/email", json={"new_email": new_email})
-    assert missing.status_code == 400, missing.text
-
-    # Wrong current_password — business-rule rejection.
-    wrong = requests.post(f"{BASE}/me/email", json={
-        "new_email": new_email,
-        "current_password": "DefinitelyNotIt",
-    })
-    assert wrong.status_code == 422, wrong.text
-
-    # Right current_password — 204 (the actual swap is gated by clicking
-    # the confirmation link, which lives in a separate flow).
-    ok = requests.post(f"{BASE}/me/email", json={
-        "new_email": new_email,
-        "current_password": "dora",  # the bootstrap user's password
-    })
-    assert ok.status_code == 204, ok.text
-
-
-def test__request_email_change__confirmation_email_links_confirm_route(api, monkeypatch):
-    """FU-522 — the confirmation email sent to the NEW address must link
-    /confirm-email-change (a change-email-purpose token), not the default
-    /verify-email route. The HTML body already rewrote the URL, but the
-    plain-text body used the un-rewritten /verify-email link, dead-ending
-    the flow for text-only mail clients."""
-    import requests
-    from dora_api.features.auth import email_flows
-
-    sent: list[dict] = []
-    # `try_send(send_email, ...)` reads `send_email` from the module at call
-    # time, so patching the module attribute captures the outbound mail.
-    monkeypatch.setattr(email_flows, "send_email", lambda **kw: sent.append(kw))
-
-    new_email = f"chg-{uuid.uuid4().hex[:8]}@example.com"
-    resp = requests.post(f"{BASE}/me/email", json={
-        "new_email": new_email,
-        "current_password": "dora",
-    })
-    assert resp.status_code == 204, resp.text
-
-    confirm = next(m for m in sent if m.get("to") == new_email)
-    assert "/confirm-email-change" in confirm["text_body"], confirm["text_body"]
-    assert "/verify-email" not in confirm["text_body"], confirm["text_body"]
-    # HTML body already did this pre-fix; lock both so neither regresses.
-    assert "/confirm-email-change" in confirm["html_body"]
 
 
 def test__csrf__mutation_without_header_is_403(api):
@@ -495,19 +440,10 @@ def test__reset_password__rejects_verify_email_token(api):
     assert resp.status_code == 400, resp.text
 
 
-def test__verify_email__rejects_change_email_token(api):
-    """FU-522 — a change-email token (which carries the pending address as its
-    payload) must not be honoured on the verify-email route."""
+def test__verify_email__rejects_foreign_purpose_token(api):
+    """A token minted for a different purpose (here reset-password) must not
+    be honoured on the verify-email route — purpose-matching is enforced."""
     _reset_rate_buckets()
-    token = _mint(PURPOSE_CHANGE_EMAIL, CHANGE_EMAIL_TTL, payload="hijack@example.com")
+    token = _mint(PURPOSE_RESET_PASSWORD, RESET_PASSWORD_TTL)
     resp = _fresh_session().post(f"{BASE}/verify-email", json={"token": token})
-    assert resp.status_code == 400, resp.text
-
-
-def test__confirm_email_change__rejects_verify_email_token(api):
-    """FU-522 — the reverse: a verify-email token can't drive an address swap
-    on /email-change/confirm."""
-    _reset_rate_buckets()
-    token = _mint(PURPOSE_VERIFY_EMAIL, VERIFY_EMAIL_TTL)
-    resp = _fresh_session().post(f"{BASE}/email-change/confirm", json={"token": token})
     assert resp.status_code == 400, resp.text

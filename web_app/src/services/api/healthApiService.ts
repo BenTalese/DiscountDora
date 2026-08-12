@@ -16,7 +16,8 @@ export interface HealthInfo {
         scanning: boolean;
         multi_user: boolean;
         email: boolean;
-        assistant: boolean;
+        // True iff DORA_SECRET_ENCRYPTION_KEY is set on the backend.
+        secret_encryption_configured: boolean;
         // Open shape — later additions like `reports`, `substitutes`
         // can land without breaking existing clients.
         [key: string]: boolean;
@@ -43,6 +44,15 @@ export interface HealthInfo {
     cooking_policy?: {
         household_headcount: number | null;
         batch_features_enabled: boolean;
+    };
+    // install-wide household grocery budget (moved off User — spend is
+    // summed across shared shopping lists, so the target is shared too).
+    // Every client reads it here: the dashboard budget card + Settings →
+    // Money page. Optional in the type because older backends won't emit it;
+    // callers default to no budget / weekly. `amount` null ⇒ no budget set.
+    budget_policy?: {
+        amount: number | null;
+        period: 'weekly' | 'monthly';
     };
     // FU-370 — install's support / report-an-issue channel. Optional in the
     // type because older backends won't emit it; both strings empty ⇒ dormant

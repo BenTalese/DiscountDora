@@ -29,7 +29,6 @@
       "image_max_dimension",
       "image_quality",
       "locale",
-      "master_llm_enabled",
       "meal_planning_enabled",
       "money_enabled",
       "nutrition_db_source",
@@ -60,8 +59,6 @@
       "alerts_email_day",
       "alerts_email_enabled",
       "always_ask_which_shopping_list",
-      "budget_amount",
-      "budget_period",
       "dashboard_layout",
       "deals_email_compact",
       "deals_email_enabled",
@@ -77,7 +74,6 @@
       "llm_enabled",
       "llm_model",
       "llm_provider",
-      "money_features_enabled",
       "nutrition_mode",
       "onboarding_completed_at",
       "send_deals_on_day",
@@ -138,6 +134,7 @@
   },
   "health": {
     "keys": [
+      "budget_policy",
       "cooking_policy",
       "features",
       "image_policy",

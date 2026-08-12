@@ -135,7 +135,7 @@ def generate_over_budget(repository: SqlAlchemyRepository, user_id: UUID | None)
     # features/suggestions and features/budget.
     from dora_api.features.budget.budget import GetBudgetStatusHandler
 
-    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
     if dto is None or not dto.enabled or not dto.over_budget or dto.amount is None:
         return []
     over_by = dto.spent - dto.amount

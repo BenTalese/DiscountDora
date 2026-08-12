@@ -26,7 +26,6 @@ from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.user import User
-from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.assistant import (app_knowledge, confirm_actions,
                                           shopping_actions, tools)
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
@@ -227,10 +226,11 @@ def _sanitize_tool_output(payload: str) -> str:
 
 def _build_client_for_current_user() -> LlmClient:
     """FU-153 §7.1 — build the LLM client from the *current user's*
-    per-user config (provider + URL/model/API key), layered with the
-    install-wide ``AppSetting.master_llm_enabled`` kill-switch. Returns
-    an "unavailable" sentinel client when any prerequisite is missing
-    so the assistant handler's fallback path stays in charge of UX."""
+    per-user config (provider + URL/model/API key). AI mode is gated
+    solely by the user's own opt-in — there is no install-wide master
+    switch. Returns an "unavailable" sentinel client when any prerequisite
+    is missing so the assistant handler's fallback path stays in charge of
+    UX."""
     user_id_raw = session.get(SESSION_USER_ID_KEY)
     if not user_id_raw:
         # Unauthenticated callers can't talk to the assistant (route-
@@ -249,8 +249,7 @@ def _build_client_for_current_user() -> LlmClient:
     if user is None:
         from dora_api.infrastructure.llm.factory import _UnavailableClient
         return _UnavailableClient("User not found.")
-    setting = get_or_create_app_setting(repo)
-    return build_assistant_client(user, master_enabled=bool(setting.master_llm_enabled))
+    return build_assistant_client(user)
 
 
 class AskAssistantHandler:

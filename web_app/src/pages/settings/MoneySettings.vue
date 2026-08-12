@@ -1,110 +1,84 @@
 <template>
-    <div v-if="!currentUser">
-        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-    </div>
-
-    <div v-else class="settings-page">
+    <div class="settings-page">
         <SettingsPageHeader
             title="Money &amp; budgets"
-            description="Show dollar surfaces — recipe cost estimates, shopping-list totals, the dashboard budget card. Off by default; turn on to opt in."
+            description="Set a shared grocery budget for the household. Dora tracks spend across every finished shopping list and surfaces dollar figures on recipes, lists, and the dashboard."
         />
 
-        <SettingsSection>
-            <template #title>Money features</template>
+        <div
+            v-if="!moneyInstallEnabled"
+            class="settings-page__note dora-text-muted"
+        >
+            This install has money features turned off. Ask an admin to enable
+            them in System → Features.
+        </div>
+
+        <SettingsSection v-else>
+            <template #title>Grocery budget</template>
             <template #description>
-                Your saved budget number is kept either way.
+                Set a weekly or monthly target and Dora tracks how much the
+                household has spent across every finished shopping list in the
+                period. Shared by everyone — leave the amount blank to turn it
+                off.
             </template>
 
-            <SettingsRow label="Show money features">
-                <q-toggle
-                    :model-value="currentUser.money_features_enabled"
-                    :disable="!moneyInstallEnabled"
-                    @update:model-value="onMoneyFeaturesChange"
+            <SettingsRow label="Amount">
+                <q-input
+                    v-model.number="budgetAmountDraft"
+                    type="number"
+                    step="1"
+                    min="0"
+                    :prefix="currencySymbol"
+                    outlined
+                    dense
+                    placeholder="Off"
+                    style="max-width: 160px"
+                    @blur="onBudgetAmountBlur"
+                    @keydown.enter.prevent="onBudgetAmountBlur"
                 />
             </SettingsRow>
-            <div
-                v-if="!moneyInstallEnabled"
-                class="settings-page__note dora-text-muted"
-            >
-                This install has money features turned off. Ask an admin
-                to enable them in System → Features.
-            </div>
+
+            <SettingsRow v-if="budgetActive" label="Period">
+                <DoraSegmented
+                    :model-value="budgetPeriodDraft"
+                    :options="budgetPeriodOptions"
+                    @update:model-value="onBudgetPeriodChange"
+                />
+            </SettingsRow>
         </SettingsSection>
-
-        <template v-if="moneyEnabled">
-            <hr class="settings-divider" />
-
-            <SettingsSection>
-                <template #title>Grocery budget</template>
-                <template #description>
-                    Set a weekly or monthly target; Dora will track how much
-                    you've spent across every finished shopping list in the
-                    period.
-                </template>
-
-                <SettingsRow label="Track a grocery budget">
-                    <q-toggle
-                        :model-value="budgetEnabledDraft"
-                        @update:model-value="onBudgetEnabledChange"
-                    />
-                </SettingsRow>
-
-                <template v-if="budgetEnabledDraft">
-                    <SettingsRow label="Amount">
-                        <q-input
-                            v-model.number="budgetAmountDraft"
-                            type="number"
-                            step="1"
-                            min="0"
-                            :prefix="currencySymbol"
-                            outlined
-                            dense
-                            style="max-width: 160px"
-                            @blur="onBudgetAmountBlur"
-                            @keydown.enter.prevent="onBudgetAmountBlur"
-                        />
-                    </SettingsRow>
-
-                    <SettingsRow label="Period">
-                        <DoraSegmented
-                            :model-value="budgetPeriodDraft"
-                            :options="budgetPeriodOptions"
-                            @update:model-value="onBudgetPeriodChange"
-                        />
-                    </SettingsRow>
-                </template>
-            </SettingsSection>
-        </template>
     </div>
 </template>
 
 <script lang="ts" setup>
-    import { storeToRefs } from 'pinia';
     import type { BudgetPeriod } from 'src/models/auth';
-    import { useAuthStore } from 'src/stores/authStore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useMoney } from 'src/composables/useMoney';
-    // budget input prefix follows the install currency symbol.
-    const { currencySymbol } = useMoney();
-    import { ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
+    import { useBudgetSettings } from 'src/composables/useBudgetSettings';
+    import BudgetApiService from 'src/services/api/budgetApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
-    const authStore = useAuthStore();
-    const { currentUser } = storeToRefs(authStore);
+    // budget input prefix follows the install currency symbol.
+    const { currencySymbol } = useMoney();
+    // Money is a single install-wide concern now — no per-user layer.
+    const { installEnabled: moneyInstallEnabled } = useMoneyEnabled();
 
-    const {
-        moneyEnabled,
-        installEnabled: moneyInstallEnabled,
-    } = useMoneyEnabled();
+    // Household budget (install-wide, moved off User). Read from /api/health
+    // via the shared composable; written via the any-user budget endpoint.
+    const { budgetAmount, budgetPeriod, refreshBudgetPolicy } = useBudgetSettings();
+    const budgetApi = new BudgetApiService();
 
-    const budgetAmountDraft = ref<number | null>(currentUser.value?.budget_amount ?? null);
-    const budgetPeriodDraft = ref<BudgetPeriod>(currentUser.value?.budget_period ?? 'weekly');
-    const budgetEnabledDraft = ref<boolean>(
-        currentUser.value?.budget_amount != null && currentUser.value.budget_amount > 0
+    const budgetAmountDraft = ref<number | null>(budgetAmount.value);
+    const budgetPeriodDraft = ref<BudgetPeriod>(budgetPeriod.value);
+
+    // "Active" = a positive amount is set. Value-driven: no amount ⇒ off, so
+    // the period picker only appears once there's a budget to apply it to.
+    const budgetActive = computed(
+        () => budgetAmountDraft.value != null && budgetAmountDraft.value > 0,
     );
 
     const budgetPeriodOptions: DoraSegmentedOption<BudgetPeriod>[] = [
@@ -115,69 +89,38 @@
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
     const { update } = useSettingsSave();
 
-    watch(currentUser, (u) => {
-        if (!u) return;
-        budgetAmountDraft.value = u.budget_amount ?? null;
-        budgetPeriodDraft.value = u.budget_period ?? 'weekly';
-        budgetEnabledDraft.value = u.budget_amount != null && u.budget_amount > 0;
-    });
-
-    async function onMoneyFeaturesChange(value: boolean) {
-        await update(
-            value ? 'Money features turned on.' : 'Money features turned off.',
-            () => authStore.updateMeAsync({ money_features_enabled: value }),
-        );
-    }
-
-    async function onBudgetEnabledChange(value: boolean) {
-        budgetEnabledDraft.value = value;
-        if (!value) {
-            const result = await update('Budget tracking turned off.', () =>
-                authStore.updateMeAsync({ clear_budget_amount: true })
-            );
-            if (result === null) budgetEnabledDraft.value = true;
-            return;
-        }
-        if (
-            budgetAmountDraft.value != null
-            && budgetAmountDraft.value > 0
-            && currentUser.value?.budget_amount !== budgetAmountDraft.value
-        ) {
-            const result = await update('Budget enabled.', () =>
-                authStore.updateMeAsync({
-                    budget_amount: budgetAmountDraft.value!,
-                    budget_period: budgetPeriodDraft.value,
-                })
-            );
-            if (result === null) budgetEnabledDraft.value = false;
-        }
-    }
+    // Keep drafts in sync when the household budget changes elsewhere (another
+    // member edits it, or the initial health probe resolves).
+    watch(budgetAmount, (v) => { budgetAmountDraft.value = v; });
+    watch(budgetPeriod, (v) => { budgetPeriodDraft.value = v; });
 
     async function onBudgetAmountBlur() {
-        if (!budgetEnabledDraft.value) return;
         const value = budgetAmountDraft.value;
-        if (value == null || Number.isNaN(value) || value <= 0) {
-            budgetEnabledDraft.value = false;
-            await update('Budget tracking turned off.', () =>
-                authStore.updateMeAsync({ clear_budget_amount: true })
-            );
+        // Normalise to the value-driven contract: null / NaN / ≤0 all mean off.
+        const next = value == null || Number.isNaN(value) || value <= 0 ? null : value;
+        if (next === (budgetAmount.value ?? null)) return;
+        const result = await update(
+            next === null ? 'Grocery budget turned off.' : 'Grocery budget updated.',
+            () => budgetApi.updateSettingsAsync({ amount: next }),
+        );
+        if (result === null) {
+            budgetAmountDraft.value = budgetAmount.value;
             return;
         }
-        if (currentUser.value?.budget_amount === value) return;
-        const previous = currentUser.value?.budget_amount ?? null;
-        const result = await update('Budget updated.', () =>
-            authStore.updateMeAsync({ budget_amount: value })
-        );
-        if (result === null) budgetAmountDraft.value = previous;
+        await refreshBudgetPolicy();
     }
 
     async function onBudgetPeriodChange(value: BudgetPeriod) {
-        const previous = currentUser.value?.budget_period ?? 'weekly';
+        const previous = budgetPeriodDraft.value;
         budgetPeriodDraft.value = value;
         const result = await update('Budget period updated.', () =>
-            authStore.updateMeAsync({ budget_period: value })
+            budgetApi.updateSettingsAsync({ period: value }),
         );
-        if (result === null) budgetPeriodDraft.value = previous;
+        if (result === null) {
+            budgetPeriodDraft.value = previous;
+            return;
+        }
+        await refreshBudgetPolicy();
     }
 </script>
 
@@ -187,11 +130,5 @@
         font-size: 0.8125rem;
         line-height: 1.4;
         margin-top: 4px;
-    }
-    .settings-divider {
-        border: 0;
-        height: 1px;
-        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
-        margin: 0;
     }
 </style>

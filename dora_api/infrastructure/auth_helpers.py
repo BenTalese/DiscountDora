@@ -146,7 +146,6 @@ def is_valid_email(value: str | None) -> bool:
 # Defaults; the per-purpose TTLs match the brief.
 VERIFY_EMAIL_TTL = timedelta(hours=24)
 RESET_PASSWORD_TTL = timedelta(hours=1)
-CHANGE_EMAIL_TTL = timedelta(hours=24)
 
 
 def _hash_token(raw: str) -> str:
@@ -390,7 +389,7 @@ __all__ = [
     "MIN_PASSWORD_LENGTH", "PASSWORD_RULES_DOC", "validate_password",
     "PASSWORD_HASH_METHOD", "hash_password",
     "is_valid_email", "normalise_email",
-    "VERIFY_EMAIL_TTL", "RESET_PASSWORD_TTL", "CHANGE_EMAIL_TTL",
+    "VERIFY_EMAIL_TTL", "RESET_PASSWORD_TTL",
     "PURPOSE_VERIFY_EMAIL", "PURPOSE_RESET_PASSWORD",
     "issue_token", "find_active_token", "consume_token",
     "revoke_tokens_for_user",

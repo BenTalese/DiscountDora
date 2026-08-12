@@ -84,12 +84,10 @@ FONT_SIZE_LG = "lg"
 FONT_SIZE_XL = "xl"  # A6 — extra-large step
 ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL)
 
-# grocery-budget period. `weekly` rolls from Monday; `monthly`
-# from the 1st (local-civil-date for simplicity; the home use-case
-# doesn't justify timezone gymnastics).
-BUDGET_PERIOD_WEEKLY = "weekly"
-BUDGET_PERIOD_MONTHLY = "monthly"
-ALLOWED_BUDGET_PERIODS = (BUDGET_PERIOD_WEEKLY, BUDGET_PERIOD_MONTHLY)
+# grocery-budget period constants moved to AppSetting (the budget is now an
+# install-wide household concept, not per-user — see app_setting.py
+# BUDGET_PERIOD_*). This "grocery budget belongs to the household, not the
+# person" move mirrors FU-615 (household_headcount / batch_features_enabled).
 
 # C-cross Chunk 3 — nutrition mode (proposal §2.3). R-010 carve-out:
 # closed-set string sentinel backed by `NUTRITION_MODE_VALUES`, a
@@ -181,13 +179,10 @@ class User(BaseEntity):
     # the cutoff a session cookie's issued-at must beat, so resetting a
     # password effectively invalidates every existing session.
     password_changed_at: datetime | None = None
-    # optional grocery budget. `budget_amount` NULL means the
-    # feature is disabled (the user hasn't opted in); a positive value
-    # turns on dashboard + assistant budget surfaces. `budget_period`
-    # picks the rolling window. We deliberately don't store the period
-    # *start* — it's derived from the current date so it can't go stale.
-    budget_amount: float | None = None
-    budget_period: str = BUDGET_PERIOD_WEEKLY
+    # grocery budget moved to AppSetting (install-wide household budget):
+    # spend is summed across every shared shopping list, so the target has
+    # to be shared too — a per-user budget compared against a household
+    # spend total is incoherent. See app_setting.py + FU-615 precedent.
     # voice opt-ins. Off by default because the Web Speech APIs
     # are permission-gated and behaviour varies by browser; we never
     # silently activate a microphone or speaker. The SPA reads these on
@@ -202,14 +197,11 @@ class User(BaseEntity):
     # is on — these decide *how* she speaks, not *whether*.
     voice_engine: str = VOICE_ENGINE_PIPER
     voice_id: str = "amy"
-    # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
-    # Default False — Charter P10 Anti-creep. Layered with the
-    # install-wide `money_enabled` AppSetting (see useFeatureFlags +
-    # ADR-005): both must be true for any dollar surface to render.
-    # `budget_amount` / `budget_period` above remain the per-user
-    # budget controls — they only become editable when this is True,
-    # but the saved value survives a toggle round-trip.
-    money_features_enabled: bool = False
+    # money-features opt-in removed: money is a single install-wide
+    # concern now (AppSetting.money_enabled). There is no per-user money
+    # layer — if the install has money on, dollar surfaces render for
+    # everyone; off hides them for everyone. Dropped the old per-user
+    # `money_features_enabled` (owner call: "kitchen setup, not personal").
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide
     # cook-style; a household has one cook-style, not one per person).
     # per-user "always ask which draft list on quick-add" toggle.
@@ -266,8 +258,8 @@ class User(BaseEntity):
     dashboard_layout: str | None = None
     # per-user assistant config. Replaces the
     # singleton AppSetting.llm_* row. `llm_enabled` is the user's own
-    # opt-in; the install-wide `AppSetting.master_llm_enabled` is layered
-    # on top (both must be True for AI mode to fire). `llm_provider` is a
+    # opt-in and the sole gate on AI mode — there is no install-wide master
+    # switch (removed 2026-08-12). `llm_provider` is a
     # closed-set sentinel (R-010, ALLOWED_LLM_PROVIDERS). For Ollama,
     # `llm_base_url` + `llm_model` are required; for OpenAI / Anthropic /
     # Gemini, `llm_api_key_encrypted` + `llm_model` are required and the
@@ -302,13 +294,10 @@ class User(BaseEntity):
         ONBOARDING_COMPLETED_AT = "onboarding_completed_at"
         EMAIL_VERIFIED = "email_verified"
         PASSWORD_CHANGED_AT = "password_changed_at"
-        BUDGET_AMOUNT = "budget_amount"
-        BUDGET_PERIOD = "budget_period"
         VOICE_INPUT_ENABLED = "voice_input_enabled"
         VOICE_OUTPUT_ENABLED = "voice_output_enabled"
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
-        MONEY_FEATURES_ENABLED = "money_features_enabled"
         ALWAYS_ASK_WHICH_SHOPPING_LIST = "always_ask_which_shopping_list"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
         NUTRITION_MODE = "nutrition_mode"

@@ -81,6 +81,7 @@
     import SettingsNavGroup, { type SettingsNavEntry, type SettingsNavLeaf } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { suppressUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import { computed, nextTick, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -97,7 +98,6 @@
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
         { path: '/settings/preferences', label: 'Preferences', icon: ICONS.tune },
         { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
-        { path: '/settings/money', label: 'Money', icon: ICONS.savings },
         { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
         { path: '/settings/nutrition', label: 'Nutrition', icon: ICONS.restaurant },
         { path: '/settings/assistant', label: 'Assistant', icon: ICONS.smart_toy },
@@ -108,6 +108,10 @@
     // the install-wide gate the page itself enforces). Hiding the nav
     // entry keeps the sidebar honest for installs that never opted in.
     const { scanningEnabled } = useScanningEnabled();
+    // Money is an install-wide "kitchen setup" concern now (household budget +
+    // dollar surfaces), gated on the install money flag — not a personal
+    // account section. Hidden entirely when the install has money off.
+    const { money: moneyEnabled } = useFeatureFlags();
 
     // Attention badge on the Unlinked-ingredients nav entry. The store caches
     // the count (server owns the grouping, R-003); we refetch on mount so each
@@ -123,6 +127,9 @@
             { path: '/settings/kitchen-setup/stock-groups', label: 'Stock groups', icon: ICONS.tag_multiple },
             { path: '/settings/kitchen-setup/stores', label: 'Stores', icon: ICONS.store },
         ];
+        if (moneyEnabled.value) {
+            base.push({ path: '/settings/money', label: 'Money', icon: ICONS.savings });
+        }
         if (scanningEnabled.value) {
             base.push({ path: '/settings/kitchen-setup/qr-labels', label: 'QR labels', icon: ICONS.qr_code });
         }
@@ -150,14 +157,12 @@
 
     const adminSystemItems = computed<SettingsNavLeaf[]>(() => {
         const items: SettingsNavLeaf[] = [
-            { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
-            { path: '/settings/admin/system/locale', label: 'Currency & locale', icon: ICONS.language },
+            { path: '/settings/admin/system/region', label: 'Region & locale', icon: ICONS.language },
             { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
             { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
             { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
             { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
             { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
-            { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
             { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
         ];
         items.push(

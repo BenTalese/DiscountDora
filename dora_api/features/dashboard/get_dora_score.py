@@ -112,7 +112,7 @@ class GetDoraScoreHandler:
         has_budget = False
         budget_over_pct: float | None = None
         if not lagged:
-            budget = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(user_id)
+            budget = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
             if budget is not None and budget.amount is not None and budget.enabled:
                 has_budget = True
                 if budget.amount > 0:

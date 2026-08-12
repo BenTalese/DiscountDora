@@ -54,12 +54,11 @@ def _get_or_create(repository: SqlAlchemyRepository) -> AppSetting:
     existing = repository.get(AppSetting).all()
     if existing:
         return existing[0]
-    # install-wide LLM URL/model/enabled fields moved to the User
-    # row (per-user); only the master kill-switch lives here now (defaults
-    # to True so a fresh install allows users to opt in to AI mode
-    # individually).
+    # LLM URL/model/enabled config is entirely per-user (on the User row) —
+    # there is no install-wide AI switch. A fresh install lets each account
+    # opt in to AI mode individually on Settings → Assistant.
     setting = AppSetting(
-        master_llm_enabled=True, scanning_enabled=False,
+        scanning_enabled=False,
         buy_verdict_enabled=True,
         # PROPOSAL_STOCKTAKE_MODE §8 — fresh installs get Fortnightly +
         # Auto-on so the queue "just works" without a Settings visit.

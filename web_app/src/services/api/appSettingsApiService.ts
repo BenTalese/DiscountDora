@@ -6,10 +6,9 @@ import type { CadenceBand } from './stocktakeApiService';
 export type AutoAddMode = 'off' | 'essential_only' | 'all';
 
 export type AppSettings = {
-    // single install-wide master kill-switch for the
-    // assistant feature. Per-user LLM URL/model/provider/API key live
-    // on the User row (see authStore.currentUser.llm_*).
-    master_llm_enabled: boolean;
+    // AI mode is per-user only (no install-wide master switch) — the LLM
+    // URL/model/provider/API key live on the User row (see
+    // authStore.currentUser.llm_*).
     scanning_enabled: boolean;
     // buy-verdict oracle. Default on (pure-personal feature).
     buy_verdict_enabled: boolean;

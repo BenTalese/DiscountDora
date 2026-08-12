@@ -1411,6 +1411,60 @@ exceptions, which still must be commented) · **Source** (where it was establish
   rebuild); `RecipesOverview` converted as the document-scroll worked example 2026-08-11;
   the remaining 11-page inventory converted + FU-609 closed 2026-08-11.
 
+### R-037 — `MainLayout`'s router-view transition is a plain cross-fade, never `mode="out-in"`
+- **Rule:** the `<router-view>` inside `MainLayout` wraps its pages in a plain
+  cross-fade transition (both the leaving and entering page animate at once). It must
+  **not** use `<transition mode="out-in">` (nor a `<transition-group>` equivalent) once
+  every route root is a `<q-page>` (R-036). `mode="out-in"` fully unmounts the old page
+  before mounting the new one; combined with a `<q-page>` root that registers itself with
+  the parent `QLayout` on mount, the swap can wedge and paint a **blank screen on
+  navigation**.
+- **Why:** `out-in` looks like the "clean swap" default (no visual overlap), so it's the
+  intuitive thing a future dev re-adds. But `<q-page>` participates in the layout's
+  height/offset contract at mount time; sequencing the unmount fully before the mount
+  leaves a frame where no page is registered with the layout, and under real timing the
+  new page's `<q-page>` failed to resolve its container and rendered nothing. This is the
+  blank-nav regression that landed the moment R-036 made every page root a `<q-page>`.
+- **Apply:** `MainLayout`'s router-view uses the default simultaneous cross-fade. If a
+  page-swap animation ever needs reworking, keep it modeless; never reach for `out-in` on
+  a layout that hosts `<q-page>` roots.
+- **Violation signal:** `mode="out-in"` on the `<router-view>` transition in `MainLayout`
+  (or any layout whose routes root on `<q-page>`); a blank content area after a nav that
+  only recovers on reload.
+- **Source:** ADR-033; the blank-screen-on-nav regression fix that followed the R-036
+  rollout (FU-619, 2026-08-11).
+
+---
+
+### R-038 — Settings that operate over shared/household data live install-wide (AppSetting), not per-user
+- **Rule:** a setting whose effect is computed over **shared/household data** — data that
+  isn't scoped to a `user_id` (stock, shopping lists, recipes, meal plans) — belongs on the
+  install-wide `AppSetting` singleton, not as a `User` column. If two members holding
+  different values for the setting would produce a **contradictory or whose-value-wins**
+  result over that shared data, it is a household concept and must be install-wide. Read it
+  via `/api/health` (a `*_policy` block) so every client sees one answer; edit it via a
+  dedicated endpoint (admin `PATCH /app-settings`, or an any-member endpoint when the
+  setting is kitchen-setup-grade shared config).
+- **Why:** the app is single-household; its domain data is shared. A per-user *behavioural*
+  setting layered over shared data means the outcome depends on **who triggered the
+  computation** — e.g. a per-user grocery budget compared against a spend total summed
+  across every shared shopping list: "is the household over budget?" resolved differently
+  per member, and (worse) a per-user budget silently changed what got written into the
+  shared meal plan. This has now bitten three times (`household_headcount`,
+  `batch_features_enabled`, `budget_amount`/`budget_period`) — each was put on `User` only
+  as a convenient home and had to be relocated.
+- **Apply:** before adding a `User` column, ask "does this change what the system computes
+  or writes over shared data?" If yes → `AppSetting` + `/api/health` read. Reserve `User`
+  for genuine **presentation / view / per-device / identity** preferences (theme, fonts,
+  voice, image-display, dashboard layout, email-digest timing) — those legitimately differ
+  per person and suppress only that person's own view, never mutating shared state.
+- **Violation signal:** a `User` column read inside a handler that sums/derives/writes over
+  a shared entity (no `user_id` filter); a "policy" value fetched from `currentUser` rather
+  than `/api/health`; two members able to hold conflicting values for something that has one
+  physical truth (the household's budget, headcount, cook-style).
+- **Source:** ADR-034; the grocery-budget relocation (2026-08-12). Extends R-003
+  (state ownership) and mirrors R-030 (operational config on `AppSetting`).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -2333,6 +2387,59 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   close-gate so new pages don't reintroduce bare-div roots or magic offsets — without
   taking on the regression risk of converting 11 unreported surfaces at once.
 - **Promotes rule:** R-036.
+
+### ADR-033 — Page-root route transitions cross-fade, never `mode="out-in"` (paired with ADR-032/R-036)
+- **Date / task:** 2026-08-11 (FU-619, blank-screen-on-nav regression that followed the R-036 rollout)
+- **Status:** accepted
+- **Context:** the moment R-036 (ADR-032) made every `MainLayout` route root a
+  `<q-page>`, navigation started painting a **blank screen** — the content area went
+  empty and only recovered on a reload. Root cause: `MainLayout`'s router-view wrapped
+  its pages in `<FadeTransition mode="out-in">`. `out-in` fully unmounts the leaving page
+  before mounting the entering one; a `<q-page>` registers with its parent `QLayout` at
+  mount, so sequencing the unmount fully ahead of the mount left a frame with no page
+  registered, and the new `<q-page>` failed to resolve its container and rendered nothing.
+  Dropping `out-in` (plain simultaneous cross-fade) fixed it. This is a recurring-shaped
+  trap: `out-in` is the intuitive "clean swap" default a future dev will re-add, and it
+  only breaks in combination with `<q-page>` roots — exactly the combination R-036 now
+  mandates everywhere.
+- **Decision:** Promote **R-037**. `MainLayout`'s router-view transition stays a modeless
+  cross-fade; never use `mode="out-in"` (or a `transition-group` equivalent) on a layout
+  whose routes root on `<q-page>`.
+- **Consequences:** the blank-nav regression can't be reintroduced silently — the rule
+  names the exact anti-pattern and its violation signal, so a future transition rework is
+  steered away from `out-in`. Pairs with ADR-032: R-036 forces `<q-page>` roots, R-037
+  guards the one page-swap footgun that mandate created.
+- **Promotes rule:** R-037.
+
+---
+
+### ADR-034 — The grocery budget is a household concept: install-wide, not per-user (promotes R-038)
+- **Date / task:** 2026-08-12 (owner call on Settings → Money; "the budget affects everyone via the shopping list — why is it on the user row?")
+- **Status:** accepted
+- **Context:** the grocery `budget_amount` / `budget_period` lived on `User`, but the
+  budget engine sums "spent" across **every shared shopping list** in the period (the
+  schema is single-household; `budget.period_spent` even carried the comment *"Not
+  per-user because the schema is single-household"*). So the household spend total was
+  compared against whichever member's personal budget row happened to be loaded, and the
+  meal-plan auto-build / swap-defence read the *triggering* user's budget to decide the cap
+  applied to the **shared** week — "is the week over budget?" depended on who pressed the
+  button, and a per-user budget silently changed what got written into shared data. This is
+  the exact shape FU-615 already fixed twice (`household_headcount`, `batch_features_enabled`
+  moved User → AppSetting: "a household has one headcount, not one per person"). The
+  per-user `money_features_enabled` opt-in was removed in the same pass (owner: money is
+  "kitchen setup, not personal" — one install flag, no per-user layer).
+- **Decision:** Move `budget_amount` / `budget_period` to `AppSetting`; surface via
+  `/api/health.budget_policy`; edit via a new **any-authenticated-member**
+  `PATCH /api/budget/settings` (kitchen-setup-grade shared config, same access class as
+  shared stores/locations — the first non-admin write to an `AppSetting` field, deliberately
+  so). Value-driven: amount null/0 ⇒ off (no separate enabled flag — which also removed the
+  "toggle on with no amount, change period, toggle flips off" bug, since there was no longer
+  a derived-enabled state to stomp). Promote the general lesson to **R-038**.
+- **Consequences:** the household budget now has one physical truth; meal-plan budget-defence
+  and the dashboard read the same shared value regardless of which member is signed in.
+  Establishes that AppSetting can carry an any-member-editable field (not only admin config).
+  Pre-release hard migration — the three `User` columns dropped, no data preserved.
+- **Promotes rule:** R-038.
 
 ---
 

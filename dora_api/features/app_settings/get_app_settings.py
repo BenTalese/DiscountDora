@@ -15,9 +15,6 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 @dataclass(frozen=True, slots=True)
 class AppSettingsDto:
-    # install-wide master kill-switch (replaces the
-    # per-install LLM URL/model/enabled config, which moved to User).
-    master_llm_enabled: bool
     scanning_enabled: bool
     # buy-verdict oracle toggle.
     buy_verdict_enabled: bool
@@ -88,7 +85,6 @@ class AppSettingsDto:
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
     return AppSettingsDto(
-        master_llm_enabled=bool(setting.master_llm_enabled),
         scanning_enabled=bool(setting.scanning_enabled),
         buy_verdict_enabled=bool(getattr(setting, "buy_verdict_enabled", True)),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
@@ -144,5 +140,5 @@ def get_app_settings():
     if err is not None:
         return err
     setting = get_or_create_app_setting(SqlAlchemyRepository())
-    _Logger.debug("Served app settings (master_llm_enabled=%s)", setting.master_llm_enabled)
+    _Logger.debug("Served app settings (scanning_enabled=%s)", setting.scanning_enabled)
     return ok(_to_dto(setting))

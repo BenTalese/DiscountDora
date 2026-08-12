@@ -88,7 +88,7 @@ class TrimToBudgetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: str = Field(default="preview")  # "preview" | "apply"
     # Optional override of the target budget. None → period-remaining, as
-    # computed by `period_headroom(user, on_date)`. Callers who want a
+    # computed by `period_headroom(on_date)`. Callers who want a
     # one-off ("keep this shop under $X") pass an explicit target.
     budget_target: float | None = Field(default=None, ge=0)
     # Line IDs the user has explicitly excluded from the trim (see brief
@@ -170,7 +170,7 @@ class TrimToBudgetHandler:
         target = (
             request.budget_target
             if request.budget_target is not None
-            else period_headroom(user, headroom_date, self.repository)
+            else period_headroom(headroom_date, self.repository)
         )
 
         lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(

@@ -15,9 +15,14 @@ BASE = "http://localhost:5170/api"
 MEAL_PLANS = f"{BASE}/meal-plans"
 
 
-def _set_money(install_on: bool, user_on: bool) -> None:
-    requests.patch(f"{BASE}/app-settings", json={"money_enabled": install_on})
-    requests.patch(f"{BASE}/auth/me", json={"money_features_enabled": user_on})
+def _set_money(on: bool) -> None:
+    # Money is a single install-wide flag now — no per-user layer.
+    requests.patch(f"{BASE}/app-settings", json={"money_enabled": on})
+
+
+def _set_budget(amount, period: str = "weekly") -> None:
+    # Household budget (install-wide), edited via the any-user endpoint.
+    requests.patch(f"{BASE}/budget/settings", json={"amount": amount, "period": period})
 
 
 def _two_recipe_ids() -> tuple[str, str]:
@@ -56,9 +61,9 @@ def _make_plan_with_entry(recipe_id: str) -> tuple[str, str]:
 
 def test__swap_suggestions__shape_and_money_gate(api):
     recipe_a, _ = _two_recipe_ids()
-    _set_money(install_on=True, user_on=True)
+    _set_money(True)
     # Tiny budget so any priced week is projected over.
-    requests.patch(f"{BASE}/auth/me", json={"budget_amount": 1.0, "budget_period": "weekly"})
+    _set_budget(1.0, "weekly")
     plan_id, _ = _make_plan_with_entry(recipe_a)
     try:
         resp = requests.get(f"{MEAL_PLANS}/{plan_id}/swap-suggestions")
@@ -72,18 +77,18 @@ def test__swap_suggestions__shape_and_money_gate(api):
         assert isinstance(body["candidates"], list)
 
         # Money off → the whole surface zeroes out defensively.
-        _set_money(install_on=True, user_on=False)
+        _set_money(False)
         off = requests.get(f"{MEAL_PLANS}/{plan_id}/swap-suggestions").json()
         assert off["projected_over"] is False
         assert off["candidates"] == []
     finally:
         requests.delete(f"{MEAL_PLANS}/{plan_id}")
-        _set_money(install_on=True, user_on=True)
+        _set_money(True)
 
 
 def test__apply_and_undo_swap__round_trips_the_entry_recipe(api):
     recipe_a, recipe_b = _two_recipe_ids()
-    _set_money(install_on=True, user_on=True)
+    _set_money(True)
     plan_id, entry_id = _make_plan_with_entry(recipe_a)
     try:
         applied = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
@@ -114,7 +119,7 @@ def test__apply_and_undo_swap__round_trips_the_entry_recipe(api):
 
 def test__apply_swap__stale_expected_from_recipe__conflicts(api):
     recipe_a, recipe_b = _two_recipe_ids()
-    _set_money(install_on=True, user_on=True)
+    _set_money(True)
     plan_id, entry_id = _make_plan_with_entry(recipe_a)
     try:
         resp = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
@@ -128,9 +133,9 @@ def test__apply_swap__stale_expected_from_recipe__conflicts(api):
 
 def test__apply_swap__money_off__rejected(api):
     recipe_a, recipe_b = _two_recipe_ids()
-    _set_money(install_on=True, user_on=True)
+    _set_money(True)
     plan_id, entry_id = _make_plan_with_entry(recipe_a)
-    _set_money(install_on=True, user_on=False)
+    _set_money(False)
     try:
         resp = requests.post(f"{MEAL_PLANS}/{plan_id}/apply-swap", json={
             "kind": "recipe", "entry_id": entry_id, "to_recipe_id": recipe_b,
@@ -138,4 +143,4 @@ def test__apply_swap__money_off__rejected(api):
         assert resp.status_code == 422, resp.text
     finally:
         requests.delete(f"{MEAL_PLANS}/{plan_id}")
-        _set_money(install_on=True, user_on=True)
+        _set_money(True)

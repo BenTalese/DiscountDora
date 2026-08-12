@@ -6,36 +6,30 @@ Endpoints:
   POST /api/auth/resend-verification    — body {email}; anti-enumeration
   POST /api/auth/forgot-password        — body {email}; anti-enumeration
   POST /api/auth/reset-password         — body {token, new_password}
-  POST /api/auth/me/email               — auth'd; body {new_email}
-  POST /api/auth/email-change/confirm   — body {token}; consumes the
-                                          change_email token + swaps the
-                                          stored address.
+
+Note: the verified email-change flow (POST /me/email + /email-change/confirm)
+was retired 2026-08-12 (FU-620) — the Account page now edits email directly via
+PATCH /auth/me. See DORA_FOLLOWUPS_RESOLVED.md FU-620.
 """
 import logging
 from datetime import datetime, timezone
-from uuid import UUID
 
-from flask import jsonify, session
+from flask import jsonify
 from pydantic import BaseModel, ConfigDict, Field
-from werkzeug.security import check_password_hash
 
-from dora_api.domain.entities.audit_event import SEVERITY_AUDIT, SEVERITY_WARN
+from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.auth_token import (
-    PURPOSE_CHANGE_EMAIL, PURPOSE_RESET_PASSWORD, PURPOSE_VERIFY_EMAIL,
+    PURPOSE_RESET_PASSWORD, PURPOSE_VERIFY_EMAIL,
 )
 from dora_api.domain.entities.user import User
-from dora_api.features.auth.register_user import (
-    SESSION_PWD_V_KEY, SESSION_USER_ID_KEY,
-)
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import (
-    bad_request, business_rule_violation, no_content, ok, ProblemDetails,
-    unauthorized, unprocessable_entity,
+    bad_request, no_content, ok, ProblemDetails, unprocessable_entity,
 )
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (
-    CHANGE_EMAIL_TTL, RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL,
-    build_reset_url, build_verify_url, spa_deep_link, consume_token, find_active_token,
+    RESET_PASSWORD_TTL, VERIFY_EMAIL_TTL,
+    build_reset_url, build_verify_url, consume_token, find_active_token,
     hash_password, is_valid_email, issue_token, normalise_email, rate_limit,
     rate_limit_remaining_seconds, revoke_tokens_for_user, try_send,
     validate_password,
@@ -248,149 +242,3 @@ def reset_password():
 
     _Logger.info("Password reset for user %s", user.id)
     return ok({"password_reset": True})
-
-
-# ── /me/email (change-email request) ───────────────────────────────────
-
-class ChangeEmailRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    new_email: str = Field(min_length=1, max_length=255)
-    # proof-of-possession. Matches the shape of
-    # ChangePasswordRequest so the two sensitive flows stay symmetric:
-    # neither succeeds without re-proving the current password.
-    current_password: str = Field(min_length=1, max_length=255)
-
-
-@AUTH_ROUTER.route("/me/email", methods=["POST"])
-@has_request_body(ChangeEmailRequest)
-def request_email_change():
-    raw = session.get(SESSION_USER_ID_KEY)
-    if not raw:
-        return unauthorized()
-    try:
-        user_id = UUID(raw)
-    except (ValueError, TypeError):
-        session.clear()
-        return unauthorized()
-
-    body: ChangeEmailRequest = get_request_body()
-    new_email = normalise_email(body.new_email)
-    if not new_email or not is_valid_email(new_email):
-        return _validation_failure({"new_email": ["Please enter a valid email address."]})
-
-    repo = SqlAlchemyRepository()
-    user = repo.get(User).by_id(user_id)
-    if user is None:
-        session.clear()
-        return unauthorized()
-
-    # re-prove the current password before letting the request
-    # proceed. Pairs with the new CSRF defence in middleware: even with
-    # both layers a remote attacker would still need the victim's
-    # password to flip their email.
-    if not user.password_hash or not check_password_hash(
-        user.password_hash, body.current_password,
-    ):
-        audit_emit(
-            "auth.email_change.password_failed",
-            severity=SEVERITY_WARN,
-            actor_user_id=user.id,
-            entity_type="User", entity_id=user.id,
-        )
-        return business_rule_violation("Current password is incorrect.")
-
-    # Reject if another user already owns this email.
-    other = repo.get(User).one(EntityField(User, User.Fields.EMAIL).eq(new_email))
-    if other is not None and other.id != user.id:
-        return _validation_failure({"new_email": ["That email is already in use."]})
-
-    raw_token = issue_token(
-        user.id, PURPOSE_CHANGE_EMAIL, CHANGE_EMAIL_TTL,
-        payload=new_email,
-    )
-
-    # notify the OLD address that a change was requested
-    # *before* sending the confirmation to the new one. Even if a
-    # future hole lets an attacker through both prior guards, the
-    # legitimate owner sees a heads-up at the address they currently
-    # control. Best-effort: a delivery failure on this notice must not
-    # block the confirmation email or the user-facing flow.
-    if user.email:
-        try_send(
-            send_email,
-            to=user.email,
-            subject="An email change was requested on your Dashy Dora account",
-            html_body=render_template(
-                "email_change_notice.html",
-                subject="An email change was requested",
-                username=user.username,
-                new_email=new_email,
-            ),
-            text_body=(
-                f"Hi {user.username}, someone (hopefully you) requested to "
-                f"change the email on your Dashy Dora account to {new_email}. "
-                "If this wasn't you, change your password immediately."
-            ),
-        )
-
-    # An email-change token must land on /confirm-email-change, not the
-    # /verify-email route build_verify_url defaults to. Build it directly on the
-    # shared hash-aware helper (was a fragile string-replace on the verify URL);
-    # used for BOTH bodies — the text body previously used the un-rewritten
-    # /verify-email URL, dead-ending the flow for text-only mail clients (FU-522).
-    confirm_url = spa_deep_link(f"/confirm-email-change?token={raw_token}")
-    try_send(
-        send_email,
-        to=new_email,
-        subject="Confirm your new Dashy Dora email",
-        html_body=render_template(
-            "verify_email.html",
-            subject="Confirm your new Dashy Dora email",
-            username=user.username,
-            verify_url=confirm_url,
-        ),
-        text_body=f"Confirm: {confirm_url}",
-    )
-
-    audit_emit(
-        "auth.email_change.requested",
-        severity=SEVERITY_AUDIT,
-        actor_user_id=user.id,
-        entity_type="User", entity_id=user.id,
-        payload={"new_email": new_email},
-    )
-    return no_content()
-
-
-class ConfirmEmailChangeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    token: str = Field(min_length=1, max_length=255)
-
-
-@AUTH_ROUTER.route("/email-change/confirm", methods=["POST"])
-@has_request_body(ConfirmEmailChangeRequest)
-def confirm_email_change():
-    body: ConfirmEmailChangeRequest = get_request_body()
-    token_row = find_active_token(body.token, PURPOSE_CHANGE_EMAIL)
-    if token_row is None or not token_row.payload:
-        return bad_request("This confirmation link is invalid or expired.")
-    repo = SqlAlchemyRepository()
-    user = repo.get(User).by_id(token_row.user_id)
-    if user is None:
-        return bad_request("This confirmation link is invalid or expired.")
-    # Re-check uniqueness in case someone else claimed the address in
-    # the meantime.
-    other = repo.get(User).one(EntityField(User, User.Fields.EMAIL).eq(token_row.payload))
-    if other is not None and other.id != user.id:
-        return bad_request("That email is already in use.")
-    user.email = token_row.payload
-    user.email_verified = True
-    repo.save_changes()
-    consume_token(token_row.id)
-    audit_emit(
-        "auth.email.changed",
-        severity=SEVERITY_AUDIT,
-        actor_user_id=user.id,
-        entity_type="User", entity_id=user.id,
-    )
-    return ok({"email": user.email})

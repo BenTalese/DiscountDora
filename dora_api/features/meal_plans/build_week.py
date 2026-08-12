@@ -37,9 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
-from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.clock import household_today
-from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.budget.budget import period_bounds, period_spent
 from dora_api.features.meal_slots.manage_meal_slots import GetMealSlotsHandler
 from dora_api.features.recipes.get_recipes import (
@@ -52,8 +50,6 @@ from dora_api.infrastructure.query_options import QueryOptions
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
-
-from flask import session
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -371,32 +367,37 @@ class AutoBuildRequest(BaseModel):
     budget_cap: bool = False
 
 
-def _current_user_id() -> Optional[UUID]:
-    raw = session.get(SESSION_USER_ID_KEY)
-    if not raw:
-        return None
-    try:
-        return UUID(str(raw))
-    except (TypeError, ValueError):
-        return None
 
 
-def _budget_remaining(repository: SqlAlchemyRepository, user: Optional[User]) -> Optional[float]:
-    """What's left of this period's grocery budget, or None when money features
-    are off / no budget is set (so the budget cap is a no-op). Mirrors the money
-    gate + period math in `swap_suggestions.compute_suggestions` (R-003 —
-    same budget engine, `budget.period_bounds` / `period_spent`)."""
-    if user is None or not user.money_features_enabled:
+def _household_budget_amount(repository: SqlAlchemyRepository) -> Optional[float]:
+    """The household's positive grocery budget, or None when money is off
+    install-wide or no budget is set. Single household value (moved off User):
+    both the cap gate and the response's display figure read this so they
+    can't disagree."""
+    settings = repository.get(AppSetting).all()
+    setting = settings[0] if settings else None
+    if setting is None or not setting.money_enabled:
+        return None
+    if setting.budget_amount is None or setting.budget_amount <= 0:
+        return None
+    return float(setting.budget_amount)
+
+
+def _budget_remaining(repository: SqlAlchemyRepository) -> Optional[float]:
+    """What's left of this period's household grocery budget, or None when
+    money features are off install-wide / no budget is set (so the budget cap
+    is a no-op). Mirrors the money gate + period math in
+    `swap_suggestions.compute_suggestions` (R-003 — same budget engine,
+    `budget.period_bounds` / `period_spent`)."""
+    amount = _household_budget_amount(repository)
+    if amount is None:
         return None
     settings = repository.get(AppSetting).all()
-    if not settings or not settings[0].money_enabled:
-        return None
-    if user.budget_amount is None:
-        return None
+    period = (settings[0].budget_period if settings else None) or "weekly"
     today = household_today(repository)
-    p_start, p_end = period_bounds(today, user.budget_period)
-    spent = period_spent(user, p_start, p_end, repository)
-    return float(user.budget_amount) - spent
+    p_start, p_end = period_bounds(today, period)
+    spent = period_spent(p_start, p_end, repository)
+    return amount - spent
 
 
 def _buildable_days(requested: List[date], today: date) -> List[date]:
@@ -458,7 +459,6 @@ def _batch_cook_span(repository: SqlAlchemyRepository) -> int:
 def compute_auto_build(
     repository: SqlAlchemyRepository,
     request: AutoBuildRequest,
-    user: Optional[User],
     rng: Optional[random.Random] = None,
 ) -> AutoBuildResponse:
     today = household_today(repository)
@@ -512,7 +512,7 @@ def compute_auto_build(
     selected = select_recipes(candidates, emphasis, count, excluded, rng)
 
     swapped: set = set()
-    budget_remaining = _budget_remaining(repository, user)
+    budget_remaining = _budget_remaining(repository)
     if request.budget_cap and budget_remaining is not None:
         selected_ids = {c.recipe_id for c in selected}
         pool = [c for c in candidates if c.recipe_id not in selected_ids and c.recipe_id not in excluded]
@@ -556,7 +556,7 @@ def compute_auto_build(
         days_used=days,
         slots_used=allowed_slots,
         cost_total=cost_total,
-        budget_amount=float(user.budget_amount) if (user and user.budget_amount is not None) else None,
+        budget_amount=_household_budget_amount(repository),
         projected_over=projected_over,
     )
 
@@ -593,14 +593,12 @@ def auto_build():
     request: AutoBuildRequest = get_request_body()
 
     repo = SqlAlchemyRepository()
-    user_id = _current_user_id()
-    user = repo.get(User).by_id(user_id) if user_id else None
 
     today = household_today(repo)
     if not _buildable_days(request.days, today):
         return bad_request("Pick at least one day that isn't in the past.")
 
-    result = compute_auto_build(repo, request, user, rng=random.Random())
+    result = compute_auto_build(repo, request, rng=random.Random())
     _LOGGER.info(
         "Auto-build (%d day(s), emphasis=%s, repeat=%s, budget_cap=%s) proposed %d meal(s).",
         len(result.days_used), request.emphasis, request.repeat_same_day,

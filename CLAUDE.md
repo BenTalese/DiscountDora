@@ -162,8 +162,13 @@ read); summarise and let detail live in the logs.
   `DORA_FOLLOWUPS.md` (count open; extract only the ~15 that need a decision or a
   running-app check now); `RECONCILED_FINISHING_PLAN.md` §5 for the phase frame.
   Return tight markdown for: Where-we-are (3-5 sentences) · Phase board · Major
-  workstreams · ⚠️ Needs-attention (top ~15) · Recently-shipped (~10). Synthesise,
-  don't dump."* Drop the output into the dashboard sections, preserving order.
+  workstreams · ⚠️ Needs-attention (top ~15). Synthesise, don't dump."* Drop the
+  output into the dashboard sections, preserving order. **Do NOT add a
+  "Recently-shipped" / changelog-diary section** (owner directive 2026-08-12 —
+  removed as diary clutter; this doc shows milestone *progress*, not a ship log —
+  shipped history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`). Likewise keep the
+  top intro to a one-line "Last reviewed" stamp, never a running "Regenerated:"
+  narrative that accretes prior-refresh paragraphs.
 - **Document register (bottom)** — rebuild only when docs are **added, superseded,
   or materially change state** (not every chunk; a periodic re-verify is enough).
   Fan out ~5 parallel `general-purpose` agents over gap-free slices of

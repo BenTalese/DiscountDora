@@ -10,25 +10,10 @@
             :icon="ICONS.smart_toy"
         />
 
-        <!-- install-wide master flag layered with the per-user toggle.
-             When the install master is off, the user's toggle is forced
-             visually off + disabled with an explanatory note. R-029
-             carve-out: this is the assistant's own per-user settings
-             screen (the one legitimate place the disabled state may
-             render); every other surface hides the assistant entry point
-             when the master is off. -->
-        <q-banner
-            v-if="!installEnabled"
-            class="dora-bg-sunken"
-            dense
-            rounded
-        >
-            <template #avatar>
-                <q-icon :name="ICONS.info" size="20px" class="dora-text-muted" />
-            </template>
-            AI mode is disabled install-wide. An admin can turn the master
-            switch back on at System → AI assistant.
-        </q-banner>
+        <!-- Warns (and offers to generate a key) when the install hasn't set
+             DORA_SECRET_ENCRYPTION_KEY — a paid-provider API key can't be
+             stored encrypted without it, so saving one would be refused. -->
+        <EncryptionKeyBanner secret-label="a paid provider's API key" />
 
         <SettingsSection>
             <template #title>Show the Dora helper</template>
@@ -64,12 +49,12 @@
             <SettingsRow label="Use AI mode for this account">
                 <q-toggle
                     :model-value="currentUser.llm_enabled"
-                    :disable="!installEnabled || !canEnable"
+                    :disable="!canEnable"
                     @update:model-value="onEnabledChange"
                 />
             </SettingsRow>
             <div
-                v-if="installEnabled && !canEnable && !currentUser.llm_enabled"
+                v-if="!canEnable && !currentUser.llm_enabled"
                 class="settings-page__note dora-text-muted"
             >
                 {{ enableBlockedReason }}
@@ -266,23 +251,21 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { LlmProvider } from 'src/models/auth';
-    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import AssistantApiService from 'src/services/api/assistantApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { computed, onMounted, ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
+    import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
-    const appSettingsApi = new AppSettingsApiService();
     const assistantApi = new AssistantApiService();
 
-    const installEnabled = ref(true);
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
     const { saving, update } = useSettingsSave();
     // Test connection. `probing` gates the button; `probeResult`
@@ -310,17 +293,6 @@
         // Don't reset the api-key draft — the saved blob is opaque to the
         // SPA; a watch firing on every PATCH would wipe an in-flight type.
     }, { deep: true });
-
-    onMounted(async () => {
-        try {
-            const s = await appSettingsApi.getAsync();
-            installEnabled.value = s.master_llm_enabled;
-        } catch {
-            // The master flag isn't strictly needed — failing to read it
-            // just means we can't surface the "disabled install-wide"
-            // hint. Don't block the rest of the page.
-        }
-    });
 
     const providerOptions: DoraSegmentedOption<LlmProvider>[] = [
         { label: 'Ollama (local)', value: 'ollama' },

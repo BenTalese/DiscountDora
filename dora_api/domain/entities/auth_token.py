@@ -7,8 +7,9 @@ from dora_api.domain.entities.base_entity import BaseEntity
 
 PURPOSE_VERIFY_EMAIL = "verify_email"
 PURPOSE_RESET_PASSWORD = "reset_password"
-PURPOSE_CHANGE_EMAIL = "change_email"
-ALLOWED_PURPOSES = (PURPOSE_VERIFY_EMAIL, PURPOSE_RESET_PASSWORD, PURPOSE_CHANGE_EMAIL)
+# PURPOSE_CHANGE_EMAIL retired 2026-08-12 (FU-620) — the verified email-change
+# flow was removed; email now edits directly via PATCH /auth/me.
+ALLOWED_PURPOSES = (PURPOSE_VERIFY_EMAIL, PURPOSE_RESET_PASSWORD)
 
 
 @dataclass

@@ -3,9 +3,10 @@
   GET /api/budget/status   — current-period spend / remaining / projection
   GET /api/budget/history  — last N periods for the trend chip
 
-Budget settings live on the User row via `PATCH /api/auth/me`
-(`budget_amount` / `budget_period` / `clear_budget_amount`) — exercised here
-because the budget endpoints are their read surface.
+Budget settings are an install-wide household value on `AppSetting`, edited by
+any authenticated member via `PATCH /api/budget/settings` (`amount` / `period`;
+value-driven — amount null/0 clears it). Exercised here because the budget
+read endpoints are their surface.
 
 Determinism: "spent" buckets archived lists by `completed_at` into windows
 anchored on household-today (R-021). Finishing a list stamps `completed_at =
@@ -20,14 +21,13 @@ import requests
 from sqlalchemy import text
 
 from dora_api.app import app, db
-from tests.e2e.dora_api._error_assertions import domain_err
 from tests.e2e.dora_api._spend_seeding import seed_purchase
 from tests.support import uuid_bind
 
 BASE = "http://localhost:5170/api"
 STATUS = f"{BASE}/budget/status"
 HISTORY = f"{BASE}/budget/history"
-ME = f"{BASE}/auth/me"
+SETTINGS = f"{BASE}/budget/settings"
 
 STATUS_KEYS = {
     "enabled", "amount", "period", "period_start", "period_end",
@@ -115,7 +115,7 @@ def test__get_budget_status__CompletedShopInsidePeriod__SpentIncludesIt(api):
 def test__get_budget_status__BudgetSet__RemainingAndOverBudgetDerived(api):
     _seed_spend_in_current_period(7.0)
 
-    patch = requests.patch(ME, json={"budget_amount": 100.0})
+    patch = requests.patch(SETTINGS, json={"amount": 100.0})
     assert patch.status_code == 200, patch.text
     body = _status()
 
@@ -125,7 +125,7 @@ def test__get_budget_status__BudgetSet__RemainingAndOverBudgetDerived(api):
     assert body["over_budget"] is False
 
     # Tighten the budget below the spend → over_budget flips.
-    assert requests.patch(ME, json={"budget_amount": 5.0}).status_code == 200
+    assert requests.patch(SETTINGS, json={"amount": 5.0}).status_code == 200
     over = _status()
     assert over["over_budget"] is True
     assert over["remaining"] == round(5.0 - over["spent"], 2)
@@ -143,28 +143,26 @@ def test__get_budget_status__ActiveListWithPickedPrice__CountsAsProjectedNotSpen
     assert body["spent"] == baseline["spent"]
 
 
-def test__patch_me__ClearBudgetAmount__BudgetDisabledAgain(api):
-    assert requests.patch(ME, json={"budget_amount": 80.0}).status_code == 200
+def test__budget_settings__ClearAmount__BudgetDisabledAgain(api):
+    assert requests.patch(SETTINGS, json={"amount": 80.0}).status_code == 200
     assert _status()["enabled"] is True
 
-    assert requests.patch(ME, json={"clear_budget_amount": True}).status_code == 200
+    # Value-driven: null amount clears the budget (0 does too).
+    assert requests.patch(SETTINGS, json={"amount": None}).status_code == 200
 
     body = _status()
     assert body["enabled"] is False
     assert body["amount"] is None
 
 
-def test__patch_me__UnknownBudgetPeriod__IsBusinessRuleViolation(api):
-    resp = requests.patch(ME, json={"budget_period": "fortnightly"})
+def test__budget_settings__UnknownPeriod__IsBadRequest(api):
+    resp = requests.patch(SETTINGS, json={"period": "fortnightly"})
 
-    assert resp.status_code == 422
-    assert resp.json()["errors"] == {
-        "": [domain_err("Invalid budget period 'fortnightly'.")],
-    }
+    assert resp.status_code == 400, resp.text
 
 
-def test__patch_me__MonthlyPeriod__StatusWindowIsCalendarMonth(api):
-    assert requests.patch(ME, json={"budget_period": "monthly"}).status_code == 200
+def test__budget_settings__MonthlyPeriod__StatusWindowIsCalendarMonth(api):
+    assert requests.patch(SETTINGS, json={"period": "monthly"}).status_code == 200
 
     body = _status()
 

@@ -22,6 +22,16 @@ top-to-bottom.
 
 ---
 
+## AI master switch removed + encryption-key banner + generator (2026-08-12)
+- [ ] The **Admin → System** sidebar no longer lists **AI assistant**; visiting `/settings/admin/system/assistant` 404s (no redirect — pre-release). AI mode still works: turn it on for your account on Settings → Assistant with no install-wide gate blocking it.
+- [ ] The Dora chat mode slider (Basic/AI) enables purely off your own provider config — no "disabled install-wide" reason ever appears.
+- [ ] **Encryption banner (key set):** with `DORA_SECRET_ENCRYPTION_KEY` set, Settings → Assistant + Admin → System → Email + Admin → System → Push show **no** encryption warning banner.
+- [ ] **Encryption banner (key unset):** boot with `DORA_SECRET_ENCRYPTION_KEY` unset → the warning banner appears on all three pages. Click **Generate a key** → a 44-char key shows; **Copy** copies it and toasts. Paste it into the env var, restart → banner gone, and saving an SMTP password / VAPID key / paid-provider API key now succeeds.
+
+## Timezone + currency + locale merged onto one page (2026-08-12)
+- [ ] Admin → System sidebar shows a single **Region & locale** entry (no separate **Timezone** / **Currency & locale** rows). The old `/settings/admin/system/timezone` and `/settings/admin/system/locale` URLs 404 (no redirect — pre-release).
+- [ ] On the Region & locale page: the timezone select + **Use this device** save the household timezone; the currency + locale inputs validate and save, the money **Preview** reflects the saved currency/locale, and its **Use this device** fills the locale. Each saves independently with its own toast.
+
 ## Account settings redesign (2026-08-11)
 - [ ] Settings → Account: page is just Profile picture / Username / Email / Change password + one **Save changes** bar at the bottom (no top identity block, no per-field save buttons). Structure was agent-confirmed via page text; the live interactive checks below were auth-blocked (session expired, no creds) — walk them once signed in.
 - [ ] Profile picture is a **circle**; hovering (or keyboard-focusing) shows a pencil overlay; clicking/tapping it opens the file picker and the chosen image saves immediately. **Remove photo** appears only when an image is set and clears it.
@@ -120,12 +130,18 @@ top-to-bottom.
 - [ ] Duplicate to next week from a week with meals, onto a week that already has some → confirm text says "replaces the N meals already planned there"; after confirming, next week matches the source exactly (no leftovers from what was there).
 - [ ] **After restarting the API** (the dev backend has no auto-reloader): Build my week → on the Review step hit **Reshuffle** a few times with the default "Use up stock" emphasis and a cookbook bigger than the day×slot grid → the set of meals changes between shuffles (unit-tested; needs a backend restart to see live, since the fix is server-side).
 
+## Money → household budget, value-driven (2026-08-12)
+*Backend + FE green on typecheck/lint/unit (518 backend, 17 authStore, migration-from-empty); e2e updated but need a live server; the running-app walk wasn't driven (would need a destructive reseed of the dev DB, not run uninvited).*
+- [ ] With money **on** (admin → System → Features), **Money** appears under **Settings → Kitchen setup** (not under Account); with money **off**, the Money entry is absent and opening `/settings/money` shows the "ask an admin" note.
+- [ ] Money page: type an **Amount** → saves ("Grocery budget updated."), the **Period** picker appears; clear the amount (blank or 0) → saves ("Grocery budget turned off."), Period picker hides. **The reported bug:** set an amount, then change **Period** (Weekly ↔ Monthly) → the budget stays on (does *not* switch off).
+- [ ] The budget is **shared**: set it as one member, sign in as another → the same amount/period shows on their Money page, and the **dashboard budget card** reflects it for both.
+- [ ] Dashboard budget card + meal-planner "over budget" / swap-suggestions still compute correctly against the household budget (spend across all finished lists vs the one shared target).
+
 ## Settings input focus during save (2026-08-07)
 *The disable-on-save mechanism is gone (lint/typecheck/412 Vitest green), but the session could not drive a real save through the preview browser — synthetic events never triggered the blur handler — so the end-to-end behaviour is unconfirmed.*
 - [ ] Settings → AI assistant: type in **Base URL**, click straight into **Model** → caret lands and stays in Model while the save toast fires; keep typing without re-clicking.
 - [ ] Same page, tab (not click) from Base URL → Model mid-save → focus ring survives.
 - [ ] Admin → System → Email: edit SMTP host, tab through port and username in one pass → no field goes inert, all three saves land.
-- [ ] Settings → Money: edit the budget **Amount**, then immediately change **Period** → both apply.
 - [ ] Save/Test buttons still grey out while their request is in flight (double-submit protection kept deliberately).
 - [ ] Trigger a save failure (stop the backend) → error toast fires and the field reverts, still focusable.
 

@@ -10,6 +10,18 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-620 — remove the now-orphaned verified email-change flow
+- **Raised:** 2026-08-11 (Account settings redesign). · **Resolved:** 2026-08-12
+- **Type:** finding
+- **What:** the Account page edits email directly via `PATCH /auth/me` (the verified change flow was "overengineered" per the owner), orphaning the old request-a-change → confirm-via-emailed-link subsystem, which nothing in the SPA still called.
+- **State note (2026-08-12):** removed end-to-end. **Backend:** deleted `request_email_change` (`POST /auth/me/email`) + `confirm_email_change` (`POST /auth/email-change/confirm`) + their request models from `email_flows.py`, pruned the now-dead imports, dropped `confirm_email_change` from `middleware.py`'s public-route allowlist, retired the `PURPOSE_CHANGE_EMAIL` token purpose (`auth_token.py` — also out of `ALLOWED_PURPOSES`) and `CHANGE_EMAIL_TTL` (`auth_helpers.py` + `__all__`), and deleted the `email_change_notice.html` template. **Frontend:** removed `requestEmailChangeAsync`/`confirmEmailChangeAsync` from `authApiService.ts`, `requestEmailChangeAsync` from `authStore.ts`, the `/confirm-email-change` route (`routes.ts`) + its public-routes allowlist entry (`router/index.ts`), and deleted `pages/ConfirmEmailChangePage.vue`. **Tests:** dropped the two `test__request_email_change__*` e2e tests + `test__confirm_email_change__rejects_verify_email_token`, rewrote `test__verify_email__rejects_change_email_token` → `__rejects_foreign_purpose_token` (uses a reset-password token to keep the purpose-mismatch assertion), removed the `email_change_notice` + verify-email-reused-for-change-confirmation template tests, pruned the two entries from `test_audit_completeness.py`'s skip map, and re-pointed the `test_auth_link_builders.py` example off the dead route. **Verified:** backend import smoke OK; `test_email_templates.py` + `test_auth_link_builders.py` 14 passed; `vue-tsc` clean; eslint clean on all touched files; `authStore.spec.ts` 17 passed. (Email now changes without a confirmation round-trip — the deliberate owner trade-off recorded in the 2026-08-11 redesign; uniqueness + format still enforced server-side.)
+
+## [RESOLVED] FU-619 — promote "no `<transition mode="out-in">` on `<q-page>` route roots" to an ADR/R-rule
+- **Raised:** 2026-08-11 (blank-nav regression fix). · **Resolved:** 2026-08-12
+- **Type:** finding
+- **What:** the blank-screen-on-nav regression that appeared once R-036 made every page root a `<q-page>` was caused by `MainLayout`'s router-view `<FadeTransition mode="out-in">`; fixed by dropping `out-in`, but the trap is recurring-shaped (a future dev re-adds the intuitive "clean swap" default) so it wanted a standing rule.
+- **State note (2026-08-12):** added **R-037** ("`MainLayout`'s router-view transition is a plain cross-fade, never `mode="out-in"`") right after R-036, and **ADR-033** in the ADR log after ADR-032, paired with it (R-036 forces `<q-page>` roots; R-037 guards the one page-swap footgun that mandate creates). Docs-only change to `docs/01_charter/ENGINEERING_STANDARDS.md`.
+
 ## [RESOLVED] FU-609 — No shared page-height contract: MainLayout pages skip `<q-page>` and hand-roll their own layout
 - **Raised:** 2026-08-04 (Stock Overview scroll-model rebuild). · **Resolved:** 2026-08-11
 - **Type:** finding (app-wide structural inconsistency).

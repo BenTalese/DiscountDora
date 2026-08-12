@@ -6,14 +6,18 @@
 FROM python:3.11-slim AS develop-stage
 
 # System packages:
-#   nodejs + npm  — frontend build (Quasar/Vite). Debian Bookworm ships
-#                   Node 18, the minimum Quasar 2 supports; bump to
-#                   NodeSource Node 20+ when you next touch this.
+#   nodejs (NodeSource 22) — frontend build (Quasar/Vite). Debian Bookworm's
+#                   apt only ships Node 20, but @quasar/app-vite 2.6+ requires
+#                   Node 22.22+, so we pull Node 22 from NodeSource instead.
+#                   Bump the setup_NN.x line when Quasar next raises the floor.
 #   nginx         — D1: replaces `quasar serve` for serving the static
 #                   SPA in the runtime container.
-#   curl          — used by the HEALTHCHECK directive below.
+#   curl          — used by the HEALTHCHECK directive below (+ fetching the
+#                   NodeSource setup script).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm nginx curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg nginx \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @quasar/cli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -32,16 +36,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir piper-tts==1.2.0
 
 # ── Frontend deps. Critical: install inside /app/web_app so `quasar build`
-#    can find node_modules there. The previous Dockerfile ran npm install in
-#    /app, which left /app/web_app without a node_modules directory and broke
-#    the build step. ───────────────────────────────────────────────────────
+#    can find node_modules there. We copy the WHOLE frontend project (not just
+#    package*.json) before `npm install` because @quasar/app-vite runs
+#    `quasar prepare` as an npm `postinstall` hook, which aborts unless the
+#    Quasar project files (quasar.config.js, src/) are already present. Trade-
+#    off: editing any frontend file now busts the npm-install cache layer —
+#    acceptable for a self-host image built infrequently. `.dockerignore`
+#    excludes node_modules/dist so the host's aren't dragged in. ─────────────
 WORKDIR /app/web_app
-COPY web_app/package*.json ./
+COPY web_app/ ./
 RUN npm install
 
-# ── Source code (after deps so editing source doesn't bust the npm cache).
-#    `.dockerignore` excludes node_modules so the COPY here doesn't wipe the
-#    install above. ─────────────────────────────────────────────────────────
+# ── Rest of the source (backend etc.). `.dockerignore` excludes node_modules
+#    so this COPY doesn't wipe the install above. ──────────────────────────
 WORKDIR /app
 COPY . .
 

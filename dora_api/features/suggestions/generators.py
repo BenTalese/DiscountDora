@@ -32,6 +32,7 @@ from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.features.stock_items.pantry_belief import gather_beliefs_for_items
+from dora_api.infrastructure.utils import pluralize
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -93,24 +94,26 @@ def generate_use_soon(repository: SqlAlchemyRepository) -> list[Suggestion]:
         if not item.expiry_date:
             continue
         days = (item.expiry_date - today).days
+        # DR-4 (FU-578 #1): each branch carries its own verb so the body never
+        # reads "expires expired …" — the past branch already says "expired".
         if days < 0:
             severity = SEVERITY_HIGH
-            window = f"expired {abs(days)} day{'s' if abs(days) != 1 else ''} ago"
+            predicate = f"expired {abs(days)} {pluralize(days, 'day')} ago"
         elif days == 0:
             severity = SEVERITY_HIGH
-            window = "today"
+            predicate = "expires today"
         elif days == 1:
             severity = SEVERITY_HIGH
-            window = "tomorrow"
+            predicate = "expires tomorrow"
         else:
             severity = SEVERITY_MEDIUM
-            window = f"in {days} days"
+            predicate = f"expires in {days} days"
         out.append(Suggestion(
             kind=KIND_USE_SOON,
             dedup_key=str(item.id),
             severity=severity,
             title=f"Use {item.name} soon",
-            body=f"{item.name} expires {window}.",
+            body=f"{item.name} {predicate}.",
             reason=(
                 f"Its recorded expiry date is {item.expiry_date.isoformat()}, "
                 f"which is within the 3-day rescue horizon."
@@ -232,7 +235,7 @@ def generate_likely_due(repository: SqlAlchemyRepository) -> list[Suggestion]:
             title=f"You're probably due for {item.name}",
             body=(
                 f"You usually buy {item.name} every "
-                f"~{round(avg_gap)} day{'s' if round(avg_gap) != 1 else ''}; "
+                f"~{round(avg_gap)} {pluralize(round(avg_gap), 'day')}; "
                 f"last picked up {days_since} days ago."
             ),
             reason=(
@@ -445,7 +448,7 @@ def generate_reconcile_meals_pending(
         severity=SEVERITY_LOW,
         title=f"{signal.unresolved_count} past meals need confirming",
         body=(
-            f"Oldest is {signal.oldest_days_back} day(s) back. "
+            f"Oldest is {signal.oldest_days_back} {pluralize(signal.oldest_days_back, 'day')} back. "
             "A quick pass keeps your pool honest — no rush."
         ),
         reason=(

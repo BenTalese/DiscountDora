@@ -43,6 +43,17 @@ body {
     font-size: calc(var(--font-size-sm) * 1rem);
 }
 
+// DR-7 (FU-578 #41) — Quasar toasts default to the bottom-right corner, the
+// same corner as the Dora assistant launcher (`DoraBubble`, docked 18px + safe
+// area from the edge, ~88px tall at full size). Success/error toasts were
+// piling directly on top of the mascot. Lift the bottom-right notification
+// column clear of it so toasts stack in one clean column *above* Dora rather
+// than over her. Only the mascot's corner is affected; other positions are
+// untouched. (Toasts are teleported to <body>, so this must be a global rule.)
+.q-notifications__list--bottom-right {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
+}
+
 // FU-025 — the sibling of the Quasar SCSS-var overrides in
 // `quasar.variables.scss`. Quasar computes `$field-with-bottom-padding-bottom`
 // and `$bar-dense-height` from these font-size vars via `+ 10px` / `+ 8px`

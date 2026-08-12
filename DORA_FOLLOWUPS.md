@@ -53,6 +53,36 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-624 — Toast lifecycle: single-column `notify()` wrapper + dismiss-on-route-change
+- **Raised:** 2026-08-12 (FU-578 DR-7 carve-out).
+- **Type:** deferred job (cross-cutting tidy).
+- **What:** DR-7 de-congested the toast corner (CSS lift of the bottom-right column clear of the Dora launcher) but did **not** fix the other half of FU-578 #41 — a toast fired just before navigation **persists across the route change** past its read time. The robust fix is a single `notify()`/`useNotify()` wrapper that (a) is the one place toast position/timeout defaults live and (b) tracks active dismiss handles so a `router.afterEach` can clear them on navigation. There are **~296 `$q.notify({ position: 'bottom-right' })` call sites** to migrate to it (also lets us drop the repeated inline `position`/`timeout` and centralise the column — R-003). A boot-level monkeypatch of `Notify.create` was rejected: `$q.notify` captures the original reference at install time (before boot files run), so the wrapper is bypassed — call-site migration is the correct path.
+- **Why deferred:** the mechanism is small but the 296-site migration is its own unit with real churn/regression surface; out of scope for a placement-polish unit. The visible congestion (the headline complaint) is already resolved by the CSS lift.
+- **Recommended resolution:** opportunistic, or a dedicated tidy turn. Cross-ref: `DESIGN_REMEDIATION_PLAN.md` DR-7, D-009, [[FU-578]].
+
+## [OPEN] FU-623 — Centralise `$q.dialog` behind a `noCaps`-injecting wrapper (enforce R-039)
+- **Raised:** 2026-08-12 (FU-578 DR-3 dialog-casing sweep).
+- **Type:** deferred job (tidy / single-source).
+- **What:** DR-3 fixed ~15 files where `$q.dialog` buttons rendered ALL-CAPS by converting every `cancel: true` / string-shorthand `ok:`/`cancel:` to `{ label, noCaps: true }`. That matches the ~15 sites that already spelled `noCaps` out, but the app now has **~30 hand-rolled `$q.dialog` calls each re-stating `noCaps`** — R-039 is enforced by convention, not code. A thin composable (e.g. `useDoraDialog()` returning a wrapper that injects `noCaps: true` into `ok`/`cancel` unless already set, passing `{ component }` dialogs straight through, and preserving the returned `DialogChainObject` so `.onOk().onCancel().onDismiss()` chains are untouched) would make R-039 structural.
+- **Why deferred / not done in-audit:** a **half-migrated** wrapper (some sites through it, some raw) is worse than the current consistent explicit pattern; migrating all ~30 sites — including `options`/`prompt`/`component` dialogs and chained resolvers — is its own unit with real regression surface, out of scope for a casing detail-audit.
+- **Recommended resolution:** opportunistic — when next touching dialog code in bulk, or as a dedicated tidy. Cross-ref: R-039 / ADR-035 in `ENGINEERING_STANDARDS.md`, `DESIGN_REMEDIATION_PLAN.md` DR-3.
+
+## [OPEN] FU-622 — Build an app-wide colour options / assessment board (visual tool)
+- **Raised:** 2026-08-12 (FU-578 DR-1b; owner: "build this options board, i want to assess all the colours in the app with it").
+- **Type:** deferred job (tooling / design aid). **Not now** — owner wants it logged, built in a later turn.
+- **What:** an interactive visual board (Artifact / standalone page) for assessing **every colour token in the app**, not just brand-secondary. Per theme (all 10 = 5 families × light/dark), render each token in its **real roles** (surface, text-on-surface, toolbar bg with its ink, button bg with label, chip, edge-stripe, badge) with **live WCAG contrast ratios** and a pass/fail against the D-002 floors. Support **candidate values side-by-side** (current vs proposed) so the owner can react and pick. Pull token values straight from `web_app/src/css/tokens.scss` + `themes.scss` so it stays in sync.
+- **Serves / supersedes-as-vehicle:** the resolution vehicle for [[FU-621]] (brand-secondary rethink), [[FU-224]] (app-wide colour-usage assessment — primary vs secondary vs accent/info), and [[FU-010]] (late-game holistic theme/colour review). Those are "look at the colours and decide"; this board is *how* you look.
+- **Reuse:** the WCAG ratio probe already written for DR-1 lives in the session scratchpad (`contrast_probe.mjs` / `ratio.mjs`) — fold its hsl→sRGB→luminance→ratio math into the board. The DR-1 muted-ramp fix + DR-1b badge fixes are already probe-verified, so the board should show them green.
+- **Recommended resolution:** a dedicated design turn — build the board, owner walks all tokens with it, decisions flow back into `tokens.scss`/`themes.scss` (and close FU-621/224/010 as they're settled).
+
+## [OPEN] FU-621 — Rethink the brand-secondary colour (feels off; invisible as text on dark themes)
+- **Raised:** 2026-08-12 (FU-578 DR-1b contrast pass; owner: "adjust the secondary colour, it has been feeling off for a while, not sure what to make it").
+- **Type:** finding + design task.
+- **What:** `--brand-secondary` is doing two incompatible jobs. In **light** themes it's a dark colour that works as both a toolbar background (white text on it) and as accent text on white cards. In **dark** themes it's set to a near-black mud (e.g. cherry-cola-dark `hsl(2 16% 19%)` sitting on a `hsl(2 16% 16%)` component) that reads as almost nothing — which is why the **Stock "Essential" footer count** (renders in brand-secondary via `PageCountsFooter` `tone:'secondary'` → Quasar `text-secondary`) measured **1.10:1** on Cherry-Cola-Dark, 2.26 Pesto-Dark, 2.94 Sourdough-Dark (probe, 2026-08-12). Light themes pass (5.7–14.5).
+- **Two coupled fixes:** (1) **lift the dark-theme `--brand-secondary` values** into legible accents (like the dark-theme `--text-secondary` were lifted) — mind that secondary is also used as `-soft` chip bg + secondary-button bg, so check those roles don't invert; (2) give the **Essential footer count** a proper text ink (either the corrected secondary if it becomes legible, or a dedicated legible tone) so it stops using a dark accent as small text.
+- **Why deferred / not blind-edited:** brand-secondary is an interlocking token (toolbar bg / accent / soft / button) and the owner is unsure of the target hue — this needs **visual iteration**, not a computed blind swap. Plan: render a per-theme options board (current secondary in its roles + candidate values with contrast ratios) for the owner to react to, then apply the chosen values.
+- **Recommended resolution:** next design turn — driven via the app-wide colour options board [[FU-622]] (get the owner's pick there), then apply + re-probe. Cross-ref: `DESIGN_REMEDIATION_PLAN.md` DR-1b, [[FU-578]], [[FU-224]], [[FU-010]].
+
 ## [OPEN] FU-608 — Owner checklist: stand up the open-source + donation infrastructure, then swap the in-app placeholders
 - **Raised:** 2026-07-31 (donation / open-source pivot — [[FU-562]]/[[FU-567]] resolved; part of the reframed [[FU-406]] release readiness).
 - **Type:** deferred job (owner/external actions + a one-pass placeholder swap).
@@ -72,42 +102,6 @@ long session summary. Distinct from the other logs:
   - [x] GitHub **issue templates** written 2026-07-31 — `.github/ISSUE_TEMPLATE/{config.yml,bug_report.yml,feature_request.yml}` (YAML issue forms + a security/donate chooser). Remaining: (optional) enable GitHub **Discussions** and uncomment the Discussions contact link in `config.yml`; the donate contact link in `config.yml` also carries the `PLACEHOLDER` and rides the swap above.
 - **Why deferred:** every account setup is an out-of-app owner action with signup/approval/payout steps; only the owner can do them.
 - **Recommended resolution:** when you're ready to publish the repo publicly. Cross-ref: [[FU-406]] (release readiness), [[FU-557]] (support channel — the issues URL doubles as the support channel).
-
-## [OPEN] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
-- **Raised:** 2026-07-19 (verify Batch 10, running the full Playwright suite)
-- **Type:** finding
-- **What:** on a clean full-suite run on this box (fresh `dist/spa` build, system
-  Chrome channel), ~12 detail-page specs fail — `history-tab.spec.ts`,
-  `detail-recipes-tab.spec.ts`, `detail-products-tab.spec.ts`,
-  `recipe-deeplink.spec.ts`, `stock-pickers.spec.ts`, one `buy-verdict.spec.ts`.
-  **Different** tests fail across runs (flaky, not consistent), and every failure
-  snapshot shows the **dashboard still mounted**, not the detail page. Common
-  pattern: the spec does `page.goto('/#/')` then `page.goto('/#/stock/<id>')` —
-  a same-document hash change that Playwright treats as an anchor navigation, so
-  vue-router only routes if it catches the `hashchange`; under load it doesn't,
-  the detail page never mounts, and the `getByRole('tab'/'button')` wait times
-  out at 30s. This is the exact gotcha the verify-runner notes already document
-  ("same-document hash-goto doesn't drive vue-router — engineer state via
-  `page.request`, then one full-document goto").
-- **Why deferred:** these are the parallel verify session's specs, not the
-  Dora Score unit that surfaced the flake; fixing them is a cross-cutting spec
-  change. The specs pass individually often enough that the parallel session's
-  per-file runs went green — it's the full-suite + machine-load combination that
-  trips them here.
-- **Recommended resolution:** opportunistic but soon (the full suite can't be a
-  reliable green gate until then) — replace the two-step `goto('/#/')` +
-  `goto('/#/stock/<id>')` with a single full-document navigation to the detail
-  URL (or a `waitForURL` + explicit router-ready wait) across the affected specs;
-  a shared `gotoDetail(page, path)` helper is the clean fix. Re-run the full
-  suite to confirm the pass count returns to the ~65 the campaign reported.
-- **2026-07-19 addendum:** the race also reproduces on a *warm* history
-  sequence, not just cold double-gotos — in `dashboard-next-cook.spec.ts` a
-  `page.goBack()` to the dashboard followed by a click that `router.push`ed to
-  cook mode wedged the router on a blank document (deterministically, even in
-  isolation), while the visually identical sequence in `dashboard-donut.spec.ts`
-  passed. Both specs now avoid it (reload → fresh hash-goto before the second
-  navigation); fold "no history-back followed by another navigation" into the
-  same sweep/helper.
 
 ## [OPEN] FU-579 — `quasar dev` vite-checker overlay: pre-existing type errors block fresh-browser interaction
 - **Raised:** 2026-07-18 (building the drive.mjs app driver)
@@ -147,6 +141,27 @@ long session summary. Distinct from the other logs:
   `docs/01_charter/DESIGN_STYLE_GUIDE.md` (D-001..D-015, enforced via R-035/ADR-031).
   This FU stays open as the finding-of-record until the DR units close; resolve
   items by DR unit, not piecemeal.
+- **PROGRESS:** DR-6 ✅ closed 2026-07-22 (finish-pickers cut confirmed).
+  **DR-1 ➗ ramp done 2026-08-12** — `--text-muted` retuned to ≥4.5:1 across all 10
+  themes (probe-verified; worst Pesto 3.0→4.62); `--text-secondary` already passed.
+  **DR-1b (2026-08-12):** ✅ alerts count badge + ✅ Buy/Wait/Skip verdict badge
+  fixed (probe-verified AA all themes). New-item primary button + wordmark →
+  owner-call "leave" (brand pairing / WCAG logo exemption). Essential stat +
+  brand-secondary rethink spun out as [[FU-621]] (needs a visual options board).
+  **DR-4 ✅ done 2026-08-12** — copy/leakage sweep shipped (items #1/10/12/13/14/17/21/22/38;
+  #13 was already fixed by the account redesign; **#49 won't-do** — pre-release wants
+  *no* back-compat redirects, so the uneven-alias finding is resolved by leaving both
+  legacy paths 404-ing, not adding one). Backend 36 tests green, vue-tsc + eslint
+  clean; live walk queued in DORA_VERIFY. **Note:** the existing legacy-redirect
+  block in `router/routes.ts` (`/data*`, `stock-locations`, `stock-groups`,
+  `recipe-vocab`, `admin/stores`, `meal-plans/board`, `stocktake/run`) is all dead
+  back-compat aliases (confirmed unreferenced) — a pre-release strip is an available
+  opportunistic cleanup if the owner wants it. **Remaining units:**
+  DR-1 (contrast tokens), DR-2 (level colours + row legend), DR-3 (a11y/casing/glyphs),
+  DR-5 (open-toggle mutation trap), DR-7 (toast/bubble placement), DR-8 (loading states),
+  DR-9 (toolbar/grid layout), DR-10 (nav labels — owner call), DR-11 (recipe read-mode),
+  DR-12 (alerts order + calendars), DR-13 (history grouping), DR-14 (locale/theme authority),
+  DR-15 (micro-motion), DR-16 (onboarding activation — owner call). Suggested next: DR-1 then DR-3/DR-5.
 - **What (bugs — concrete, verified in DOM/server):**
   1. **Copy bug:** "Vanilla Ice Cream expires expired 3 days ago." — `generators.py:113`
      composes `"{name} expires {window}"` but the past branch (line 98) already reads

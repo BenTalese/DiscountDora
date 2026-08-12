@@ -120,7 +120,7 @@
                 title: `New ${kind}`,
                 message: `What's this ${kind} called?`,
                 prompt: { model: '', type: 'text' },
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk((v: string) => resolve(v.trim()))
                 .onCancel(() => resolve(null))
@@ -166,7 +166,7 @@
             $q.dialog({
                 title: `Delete "${node.name}"?`,
                 message: messageParts.join(' '),
-                cancel: true,
+                cancel: { noCaps: true },
                 ok: { label: 'Delete', color: 'negative', noCaps: true },
             })
                 .onOk(() => resolve(true))

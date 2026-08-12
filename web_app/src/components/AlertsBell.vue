@@ -1,7 +1,7 @@
 <template>
     <div>
         <BaseButton variant="icon" :icon="bellIcon" :color="bellColor" @click="open = true">
-            <q-badge v-if="badgeCount > 0" floating color="negative" text-color="white" rounded>
+            <q-badge v-if="badgeCount > 0" floating class="alerts-count-badge" text-color="white" rounded>
                 {{ badgeCount }}
             </q-badge>
             <q-tooltip>
@@ -221,6 +221,13 @@
 </script>
 
 <style scoped>
+    /* DR-1b (FU-578 #7 / D-002): the count badge used `color="negative"`, but
+       --semantic-negative is *lightened* in dark themes (for text/icon use), so
+       white-on-it fell to ~2.96:1. Darken the red toward black by a fixed amount
+       so white stays >=6:1 in every theme while reading as a standard alert red. */
+    .alerts-count-badge {
+        background: color-mix(in srgb, var(--semantic-negative) 65%, black);
+    }
     .alerts-panel {
         width: 420px;
         max-width: 100vw;

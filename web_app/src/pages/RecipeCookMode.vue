@@ -168,9 +168,12 @@
                             label="Start"
                             @click="startTimer(detectedTimerMinutes * 60)"
                         />
-                        <!-- ambiguous — color="warning" has no matching BaseButton variant; left as raw q-btn for review. -->
-                        <q-btn
+                        <!-- Warning tone via BaseButton's `color` override
+                             (no dedicated variant) — keeps the app-wide
+                             no-caps + button language (R-001/DR-3). -->
+                        <BaseButton
                             v-else
+                            variant="primary"
                             color="warning"
                             :icon="ICONS.pause"
                             label="Pause"

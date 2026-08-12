@@ -2751,7 +2751,7 @@
                     type: 'text',
                     isValid: (val: string) => val.trim().length > 0,
                 },
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk((v: string) => resolve(v.trim()))
                 .onCancel(() => resolve(null))

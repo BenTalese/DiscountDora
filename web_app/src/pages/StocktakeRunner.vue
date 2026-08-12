@@ -473,7 +473,7 @@
             title: `Mute ${itemName}?`,
             message:
                 "Dora will stop asking about this item entirely. You can un-mute it later from the item's detail page.",
-            cancel: true,
+            cancel: { noCaps: true },
             persistent: false,
             ok: { label: 'Mute', color: 'negative', unelevated: true },
         }).onOk(() => {
@@ -539,7 +539,7 @@
                     model: active[0]!.shopping_list_id,
                     items: active.map((l) => ({ label: l.name, value: l.shopping_list_id })),
                 },
-                cancel: true,
+                cancel: { noCaps: true },
                 persistent: false,
             })
                 .onOk((val: string) => resolve(val))

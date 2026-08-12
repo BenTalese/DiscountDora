@@ -137,19 +137,24 @@
         height: 22px;
         border: 1px solid transparent;
     }
+    /* DR-1b (FU-578 #7 / D-002): the label used the full-strength semantic ink
+       on its soft chip, but that ink is too light on the pale tint (WAIT hit
+       1.98:1). The label now uses --text-primary (dark in light themes / light
+       in dark) so it's AA in every theme; the coloured border + soft tint + the
+       word itself carry the Buy/Wait/Skip semantic. */
     .dora-buy-verdict-badge.is-buy {
         background: var(--semantic-positive-soft);
-        color: var(--semantic-positive);
+        color: var(--text-primary);
         border-color: var(--semantic-positive);
     }
     .dora-buy-verdict-badge.is-wait {
         background: var(--semantic-warning-soft);
-        color: var(--semantic-warning);
+        color: var(--text-primary);
         border-color: var(--semantic-warning);
     }
     .dora-buy-verdict-badge.is-skip {
         background: var(--semantic-negative-soft);
-        color: var(--semantic-negative);
+        color: var(--text-primary);
         border-color: var(--semantic-negative);
     }
     .dora-buy-verdict-badge.is-unsure {

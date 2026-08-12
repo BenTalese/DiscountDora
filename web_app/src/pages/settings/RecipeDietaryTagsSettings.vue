@@ -144,7 +144,7 @@
                     count > 0
                         ? `${count} recipe${count === 1 ? '' : 's'} tagged with this will lose the tag.`
                         : 'Nothing currently uses this tag.',
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

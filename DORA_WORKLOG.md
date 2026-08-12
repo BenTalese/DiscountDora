@@ -18,6 +18,364 @@ next.
 
 ---
 
+## 2026-08-12 — FU-578 DR-7: toast/helper-bubble placement (done-with-carve-out)
+
+**Trigger.** "continue" → next buildable DR unit. Took DR-7 (toast & helper-bubble
+placement budget, #6/31/35/41).
+
+**Findings.** The Dora launcher (`DoraBubble`) docks bottom-right; Quasar toasts
+**also** default bottom-right (296 `position:'bottom-right'` calls) → they piled on
+the mascot (#41). The first-time hint lingered over content until clicked (#6/#31).
+Greeting inserted the raw lowercase username → "Hi, dora!" and a cryptic "Burger
+online" line (#35). The "6" badge already has a tooltip; the disabled AI segment
+already has `modeSliderDisabledReason` — both non-issues.
+
+**Shipped (contained, low-churn).**
+- **Toast column** (`app.scss`): global rule lifts `.q-notifications__list--
+  bottom-right` clear of the launcher (safe-area aware) so toasts stack above Dora,
+  not on her. One rule, no call-site churn.
+- **Tip auto-dismiss + safe-area** (`DoraBubble.vue`): the first-time hint now
+  auto-hides after ~9s (transient — X is still the permanent ack); root uses
+  `env(safe-area-inset-*)`.
+- **Greeting copy** (`doraIntents.ts` `runIntent`): capitalise the username
+  (mirrors DR-4 dashboard fix); "Burger online" → "Dora reporting for pantry duty".
+  Pinned by 2 new `doraIntents.spec` cases.
+
+**Carve-out → FU-624.** The other half of #41 — a toast fired right before
+navigation persists onto the next route — needs a single `notify()` wrapper (track
+dismiss handles) + `router.afterEach` clear, which means migrating ~296 call sites.
+A boot `Notify.create` monkeypatch was **rejected**: `$q.notify` binds the original
+reference at install (before boot files run), so the wrapper is bypassed. Logged as
+its own unit; DR-7 marked ➗ done-with-carve-out.
+
+**Checks.** vue-tsc clean; eslint clean; full unit suite **421 green** (419 + 2).
+No new R-rule warranted (complies with D-009). Placement walk queued in DORA_VERIFY.
+
+**Next up.** DR-8 (loading-state unification, #15/23/26/52) or the layout units
+DR-9/DR-10 (DR-10 needs an owner taste call). Colour work (FU-621/622) awaits the
+options board.
+
+## 2026-08-12 — FU-578 DR-5: open-toggle mutation trap fixed (defer PATCH until dialog resolves)
+
+**Trigger.** "do DR-5" — the open-toggle mutation trap (FU-578 #2). Chose the
+plan's recommended **defer** option after code archaeology.
+
+**Root cause.** Clicking the open toggle PATCHed `is_open=true` *first*; the
+"Marking as open" prompt only governed expiry. So Skip **and** Escape **and**
+backdrop all left the item open — no abort. The blocker to a clean fix: native
+`$q.dialog` funnels the Cancel button, Escape, and backdrop-click all into one
+`onCancel`, so a two-button prompt can't tell "Skip" (confirm-open) from "abort".
+
+**Shipped (three-outcome, deferred mutation).**
+- **`MarkOpenExpiryDialog.vue`** — a promise-based `$q.dialog({ component })`
+  prompt (`useDialogPluginComponent`, a first for this repo) with three explicit
+  buttons: Cancel / Skip / Update expiry. Escape/backdrop → abort.
+- **`src/composables/openToggle.ts`** — pure `buildOpenTogglePatch(target,
+  decision)`: returns the PATCH body, or **`null` on abort** (no mutation).
+  Kept free of Quasar/store imports so the contract is cheaply unit-pinnable.
+- **`useStockItemActions.planOpenToggle`** — shared orchestration (prompt +
+  patch) reused by `StockItemRow` and `StockItemDetailPage`, replacing the two
+  duplicated inline `$q.dialog` prompts (R-003). Callers do their own write
+  (row: direct + toast; detail: `withBusyReload`) and **bail on `null`**.
+
+**Test.** `test/unit/openToggle.spec.ts` (7 cases) pins the trap fix: abort ⇒ no
+patch; skip/update/seal → correct bodies. No Playwright spec added (repo stance:
+lean, manual-first; no FU-507 frontend e2e existed — those refs are backend
+router tests). Had to extend the `quasar` mock in the existing
+`useStockItemActionsPushExpiry.spec.ts` (it now transitively imports the SFC,
+whose `defineEmits([...useDialogPluginComponent.emits])` reads `.emits` at
+import).
+
+**Checks.** vue-tsc clean; eslint clean on all touched files; **full unit suite
+419 green** (was 411 + 7 new, 1 previously-failing-on-import now fixed).
+Interaction walk queued in DORA_VERIFY.
+
+**Next up.** DR-7 (toast/helper-bubble placement budget, #6/31/35/41) or DR-8
+(loading-state unification, #15/23/26/52) are the next P2 units. DR-9+ are
+layout. Colour work (FU-621/622) still awaits the options board.
+
+## 2026-08-12 — FU-578 DR-3: de-Quasar detail audit (dialog casing, open-toggle glyph + a11y, bulk-bar disabled)
+
+**Trigger.** "do DR-3" — the de-Quasar detail unit of the design-remediation plan
+(FU-578 #3/#15c/#34/#53). Investigated each sub-part before editing.
+
+**Findings from investigation.**
+- **#34 (cart glyphs) already resolved** — `AddToListButton` renders distinct
+  icon + colour + tooltip + `aria-label` per state. No change; noted in the plan.
+- **#3/#15c** — the stock-row open toggle used `lock`/`lock_open` (a *security*
+  padlock) and had **no `aria-label`** (tooltip only). `RowActionButton` forwards
+  `ariaLabel`; the toggle just never passed one.
+- **Casing** — `BaseButton` hard-codes `no-caps`, but the `$q.dialog` **plugin**
+  is a separate render path defaulting to ALL-CAPS. Grep found ~15 files with
+  `cancel: true` / string-shorthand `ok:`/`cancel:` (→ "CANCEL"/"SKIP"/"GOT IT").
+  Plus one raw uppercase template button (`RecipeCookMode` "Pause").
+- **#53** — bulk-bar buttons are `BaseButton variant="ghost"`; the ghost variant
+  hard-sets `color: --text-primary`, so Quasar's opacity-only disabled dim left
+  them near-white on the subbar (looked enabled).
+
+**Shipped.**
+- **Glyph + a11y**: new `ICONS.sealed`/`ICONS.opened`
+  (`package-variant-closed`→`package-variant`) on the open toggle + the missing
+  `aria-label`. (`lock`/`lock_open` kept for auth surfaces.)
+- **Casing sweep**: converted every offender to `{ label, noCaps: true }` across
+  ~15 files (settings CRUD ×6, `useMealPlanner`, `useStockItemActions`,
+  `ShoppingListDetail`, `ShoppingListTemplates`, `StockOverview`,
+  `StockItemDetailPage`, `StockItemRow`, `VocabListEditor`, `MealPlansOverview`,
+  `StocktakeRunner`). The raw `RecipeCookMode` "Pause" `q-btn` became a
+  `BaseButton` (`variant="primary"` + `color="warning"`) — also closed the R-001
+  gap its inline comment flagged.
+- **#53 disabled state**: `BaseButton` SCSS now pins `--text-muted` on the
+  disabled state of flat/outline variants (ghost/secondary/icon/danger-ghost/
+  danger-icon); filled variants keep white-on-fill + opacity (greying their
+  label would fight the fill).
+
+**Standards / ADR.** Promoted **R-039** (+ **ADR-035**): `$q.dialog` buttons must
+set `noCaps` (component dialogs exempt). Enforced by convention today; the proper
+single-source fix — a `noCaps`-injecting `$q.dialog` wrapper — is logged as
+**FU-623** (opportunistic; a half-migrated wrapper would be worse than the
+consistent explicit pattern).
+
+**Checks.** `vue-tsc --noEmit` clean; eslint clean on all ~18 touched files. No
+backend surface. Running-app visual walk queued in DORA_VERIFY (dialog casing,
+box glyph, bulk-bar greying, Pause button).
+
+**Next up.** DR-5 (open-toggle mutation trap — defer the `is_open` PATCH until the
+expiry dialog resolves; #2) is the next buildable DR unit. Or DR-7/DR-8 (toast/
+loading polish). Colour work (FU-621/622) still awaits the options board.
+
+## 2026-08-12 — FU-578 DR-1b: alerts + verdict badges fixed; brand-secondary rethink spun to FU-621
+
+**Trigger.** "Continue starting with DR-1b" — the 5 component-contrast spots the
+DR-1 ramp left. Diagnosed each with a per-theme WCAG ratio probe (real numbers,
+not eyeballing) before touching anything.
+
+**Diagnosis (probe results).** alerts badge white-on-`negative` ≈2.96 in 4/6 dark
+themes; verdict badge label 1.98 (WAIT) / 2.53 (BUY) in light themes; Essential
+footer stat (brand-secondary as text) **1.10** on cherry-cola-dark, 2.26 pesto-dark;
+"New item" primary button 3.89 (pesto)–12+; wordmark ~2.8. Pattern: all five are
+brand/semantic colours used where they don't meet AA — three touch brand-visible
+surfaces app-wide, so I surfaced options rather than blind-editing.
+
+**Shipped (2 clean, owner-approved AA fixes).**
+- **Alerts count badge** (`AlertsBell.vue`): dropped `color="negative"` (lightened
+  in dark themes) for a class `background: color-mix(in srgb, var(--semantic-negative)
+  65%, black)` — white stays ≥6.2:1 in all 10 themes (probe-verified), still reads
+  as a standard alert red.
+- **Verdict badge** (`BuyVerdictBadge.vue`): owner picked **neutral ink** — the
+  Buy/Wait/Skip label is now `--text-primary` (13.6:1 both modes); coloured border +
+  soft tint + the word carry the semantic. is-unsure (text-secondary/sunken)
+  untouched (already AA).
+
+**Owner calls.** New-item primary button → **leave** (borderline brand pairing;
+darkening brand-primary hits every button/toolbar). Wordmark → **leave** (WCAG 1.4.3
+exempts logotypes).
+
+**Spun out → FU-621 (brand-secondary rethink).** Owner: "adjust the secondary
+colour, it's felt off for a while, not sure what to make it." Root cause nailed by
+the probe: `--brand-secondary` must be a *dark* toolbar bg in light themes yet is set
+to near-black mud in dark themes (cherry-cola-dark `hsl(2 16% 19%)` ≈ its own card),
+so it's invisible as the Essential-stat text there — one value can't serve both roles.
+This is an interlocking brand token needing **visual iteration**, so logged as FU-621
+to be driven with a per-theme options board (current vs candidates + ratios), not a
+blind swap. The Essential-stat legibility fix rides on it.
+
+**Checks.** eslint clean on both touched components; all AA claims computed with the
+scratchpad ratio probe across 10 themes. No backend/type surface. Running-app visual
+walk queued in DORA_VERIFY (badge legibility).
+
+**Engineering-standards close-gate.** R-002 upheld — both fixes are token-based
+(color-mix over a semantic token; text-primary), no hardcoded hex. D-002 is the goal.
+No unexplained violations. **ADR evaluation:** no new rule.
+
+**Bookkeeping.** DR-1b marked in the plan (2 ✅, 2 leave, 1 → FU-621); FU-578 progress
++ CHANGELOG + DORA_VERIFY + PROJECT_STATE updated; FU-621 opened.
+
+**Next up.** Build the FU-621 secondary-colour options board for the owner to pick
+from; or move to **DR-3** (a11y labels/casing/glyphs) / **DR-5** (open-toggle trap).
+
+**Open questions for user.** FU-621 target hue for brand-secondary (owner unsure —
+will resolve via the visual board).
+
+---
+
+## 2026-08-12 — FU-578 DR-1 contrast pass: muted-text ramp retuned to AA across all 10 themes
+
+**Trigger.** Continuing FU-578 remediation after DR-4; owner corrected item #49
+first (see below), then "continue on" → DR-1 (contrast token pass).
+
+**Item #49 correction (from the DR-4 unit).** Owner flagged that my DR-4 fix for
+#49 *added* a `/settings/stores` redirect, but pre-release wants **no** back-compat
+redirects. Reverted the addition; reclassified #49 **won't-do** — the uneven-alias
+finding is correctly resolved by leaving both dead legacy paths 404-ing, not adding
+one. Confirmed the whole legacy-redirect block (`/data*`, `stock-locations`,
+`stock-groups`, `recipe-vocab`, `admin/stores`, `meal-plans/board`,
+`stocktake/run`) is unreferenced dead aliases; a wholesale strip is available as an
+opportunistic pre-release cleanup but was not done unilaterally. CHANGELOG /
+DORA_VERIFY / plan / FU / worklog all corrected. DR-4 now clears **9** items, not 10.
+
+**DR-1 — muted/secondary contrast pass (the app-wide ramp).** Built a WCAG
+contrast probe (`scratchpad/contrast_probe.mjs`) that parses `themes.scss`, converts
+each theme's `--text-muted`/`--text-secondary` + 4 surfaces hsl→sRGB→luminance, and
+flags any text×surface pair < 4.5:1. Result matched the audit exactly:
+**`--text-secondary` passed in all 10 themes** (min 5.8); **`--text-muted` failed in
+7** (worst Pesto **3.02:1** on sunken; also lemon-tart, lemon-tart-dark, blueberry,
+blueberry-dark, cherry-cola, sourdough). A second solver script found the minimal
+lightness shift per theme to clear 4.6:1 against each theme's worst surface. Applied:
+- **Light themes darkened** ~10pt L (pesto 50→39, lemon-tart 50→40, blueberry 50→41,
+  cherry-cola 50→42, sourdough 48→38); **dark themes lifted** 2pt (lemon-tart-dark
+  60→62, blueberry-dark 56→58). pesto-dark / cherry-cola-dark / sourdough-dark
+  already passed — untouched. Also updated the `:root` fallback muted in `tokens.scss`
+  to mirror the new Pesto (39%).
+- Hierarchy preserved: muted (L38–62) stays lighter than secondary (L≈32) everywhere.
+- **Re-ran the probe → all 20 muted/secondary rows now ≥4.5:1** (muted min now 4.62).
+  Both scss files compile clean via `npx sass`.
+
+**Scoped out as DR-1b (deliberately not blind-edited).** The 5 individual component
+contrast spots the audit named each carry blast-radius or a size coupling that wants
+a running-app visual check: **BUY badge** (full-strength token already, but the green
+× 11px ≈ 2.5:1 — couples with DR-3's D-003 type floor); **alerts count badge**
+(white-on-`negative`, fails **only in dark themes** where negative is lightened —
+needs a theme-aware badge ink); **Essential stat / New-item button / wordmark**
+(discrete brand-colour choices). Diagnoses recorded in the plan + FU so DR-1b is a
+quick, eyes-on follow-up rather than a re-investigation.
+
+**Checks.** Contrast probe green (all ≥4.5); `npx sass` compiles both files; braces
+balanced. No component logic changed — pure token values, so no vue-tsc/eslint
+surface (scss isn't type/lint-checked here). **Running-app visual walk NOT driven**
+(LEAN stance, owner instance) — aesthetic sanity pass queued in DORA_VERIFY.
+
+**Engineering-standards close-gate.** R-002 upheld (semantic-token-only; the fix is
+in the token layer, no component hardcoding introduced). D-002 is the whole point of
+the change. No unexplained violations. **ADR evaluation:** no new rule — D-002 +
+the probe recipe already exist; this is enforcement, not a new decision.
+
+**Bookkeeping.** DR-1 marked ➗ (ramp done, DR-1b remains) in the plan; FU-578
+progress note updated; CHANGELOG Fixed entry added; PROJECT_STATE attention item 1
+refreshed; DORA_VERIFY contrast-walk section added.
+
+**Next up.** DR-1b (the 5 component spots — best done with the running app), then
+**DR-3** (a11y labels / no-caps / glyphs — pairs with the BUY-badge type-floor) or
+**DR-5** (open-toggle mutation trap). DR-10 + DR-16 still need an owner call.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-12 — FU-584 obviated + FU-578 DR-4 copy/leakage sweep shipped
+
+**Trigger.** Owner: "do 584 and 578" (from the next-up menu).
+
+**FU-584 — obviated, moved to `_RESOLVED`.** The finding proposed a shared
+`gotoDetail()` helper to de-flake ~12 detail-page Playwright specs
+(`history-tab`, `detail-recipes-tab`, `detail-products-tab`, `recipe-deeplink`,
+`stock-pickers`, `buy-verdict`, warm-history `dashboard-next-cook`). Verified all
+of them were **deleted 2026-07-20** in the owner-directed Playwright feature-flow
+cull — `web_app/e2e/` now holds only `login.spec.ts` + `smoke.spec.ts`, no
+`gotoDetail`. The flake can't occur and the proposed fix (re-add specs) is against
+the standing LEAN stance. Closed by circumstance, no code.
+
+**FU-578 — DR-4 (copy & leakage sweep) done end-to-end.** Cleared 9 audit items
+against `DESIGN_REMEDIATION_PLAN.md` DR-4 (#49 reclassified won't-do, see below):
+- **#1** `generators.py` use-soon body read "expires expired 3 days ago" — each
+  expiry branch now carries its own verb (`expired …` / `expires today|tomorrow|in N days`).
+- **#10** "day(s)" placeholder in alerts → new shared
+  **`dora_api.infrastructure.utils.pluralize(count, singular, plural=None)`**
+  (R-003 single source), routed through `get_alerts.py` (×4), `generators.py`
+  (×2 + the reconcile body), and `confirm_actions.py` (×1) — removing the three
+  scattered `day{'s' if …}` idioms too. `tests/test_pluralize.py` pins the
+  |count|==1 boundary incl. the negative "days ago" case.
+- **#12** "Add (file)"/"Add (camera)" labels → natural copy across
+  `ImageUploadField` ("Take a photo" + "Add/Change image"), `StoresSettings`
+  ("Add/Change logo"), `RecipeStepImagesEditor` ("Take a photo" + "Add images/Add more").
+- **#13** raw UUID on Account page — already gone (2026-08-11 account redesign); no action.
+- **#14** `RecipeCard.metaLine` now dedupes case-insensitively → no "Dessert · Dessert".
+- **#17** essential-out alert detail made action-neutral (no "add it to your
+  shopping list" beside a "Mark restocked" button).
+- **#21** `DashboardPage.firstName` capitalises the username → "Good afternoon, Dora".
+- **#22** "saves vs rrp" → "saved vs RRP".
+- **#38** `AdminSystemCookingSettings` Batch explainer de-jargoned (no "cook pool"/"shortfall").
+- **#49 — won't-do (owner call, 2026-08-12).** I first "evened" the uneven
+  `/settings/stores` (404) vs `/settings/stock-locations` (redirect) coverage by
+  *adding* a redirect; owner flagged that pre-release wants **no** back-compat
+  redirects. Reverted the addition — both dead legacy paths now 404 uniformly,
+  which is the pre-release-correct resolution. Confirmed the whole legacy-redirect
+  block is unreferenced (dead aliases); a wholesale strip is left as an available
+  opportunistic cleanup, not done unilaterally.
+
+**Checks.** Backend: import smoke clean; `test_pluralize.py` + `test_suggestion_selection.py`
++ `test_alerts.py` → **36 passed**; no test asserted any old copy literal (grepped
+`tests/`). Frontend: **vue-tsc clean**, **eslint clean** on all 7 touched files; no
+Vitest spec asserts the changed strings. **Running-app walk NOT driven** (needs the
+owner's authed instance; LEAN stance) — queued as a new **DORA_VERIFY** section
+("Copy & wording sweep DR-4").
+
+**Engineering-standards close-gate.** R-003 upheld — `pluralize` is now the single
+pluralisation authority; the copy fixes touch presentation only (D-014 voice /
+D-006 formatting satisfied). R-008 upheld (dead `day{'s'…}` idioms removed, not
+left). No unexplained violations. **ADR evaluation:** no new rule — `pluralize` is
+a small shared util under existing R-003, not a new architectural decision.
+
+**Bookkeeping.** DR-4 marked ✅ in `DESIGN_REMEDIATION_PLAN.md`; FU-578 annotated
+with DR progress (stays open — ~13 DR units remain); FU-584 moved to `_RESOLVED`;
+`CHANGELOG.md [Unreleased]` Fixed entry added; `PROJECT_STATE.md` attention list +
+open-count (17→16) updated.
+
+**Next up.** FU-578 continues by DR unit — suggested order **DR-1** (contrast
+token pass), then **DR-3** (a11y labels / no-caps / glyphs) and **DR-5**
+(open-toggle mutation trap). DR-10 (nav labels) + DR-16 (onboarding activation)
+need an owner taste/product call before building.
+
+**Open questions for user.** None.
+
+---
+
+## 2026-08-12 — PROJECT_STATE.md full regeneration (both halves) + stale-attention-list purge
+
+**Trigger.** Owner asked "what's next?" then "refresh project state completely."
+Investigating the two tasks the owner picked from the next-up menu (FU-595 planner
+blocker, FU-447 security) showed **both were already resolved** and sitting in
+`DORA_FOLLOWUPS_RESOLVED.md` — FU-595 fixed 2026-07-24 (strict-preserve shape,
+tested), FU-447 reconciled 2026-07-08 (the HIGH CSRF + MEDIUM email-change were
+actually fixed under FU-197 on 2026-06-30; residuals → FU-515, also resolved). The
+dashboard's whole "Needs attention" block was stale, so the right move was a full
+front-door regen rather than net-new work.
+
+**Done — full two-half regeneration per the CLAUDE.md routine.** Fanned out 5
+parallel `general-purpose` agents: 1 dashboard compiler (worklog-top-10 +
+CHANGELOG [Unreleased] + RUNBOOK live-status + open-FU extract + RECONCILED §5)
+and 4 register-slice auditors over gap-free `docs/**/*.md` partitions
+(charter+feedback+prompts; 04_proposals A; 04_proposals B; investigations+legacy+
+scratch). Each auditor cross-checked doc bodies against worklog/CHANGELOG/code so
+stale "no code yet" headers were classified by shipped reality. Consolidated into
+a rewritten `PROJECT_STATE.md`:
+- **Dashboard** — Where-we-are, Phase board, ~25 Major workstreams, and a
+  right-sized ⚠️ Needs-attention list (**12 real decision/verify items** + a
+  trigger-gated tail). Added a "Cleared since last review" note enumerating the
+  ~20 resolved FUs that were wrongly still listed (FU-595, the security thread,
+  FU-620/612/609/346/353/606/085/429/025/549/464/355/383, P6 tail 450/451/452).
+- **Document register** — rebuilt per-doc across **127 active docs / 8 folders**
+  (up from the old "107"); 00_original_spec kept as one historical bucket. Systemic
+  findings updated: security thread now ✅ closed; backlog corrected from the stale
+  "~60" to the actual **17 open**.
+
+**Checks.** No code touched — pure doc regen. Backlog count verified against
+`grep -c "^## \[OPEN\] FU-"` (17 real, excluding 2 template placeholders); every
+dropped attention item confirmed present in `DORA_FOLLOWUPS_RESOLVED.md` before
+removal.
+
+**Engineering-standards close-gate.** N/A — documentation only, no rules touched.
+No ADR.
+
+**Next up.** Genuine open work for an agent to pick up: **FU-584** (shared
+`gotoDetail()` helper to de-flake detail-page e2e specs — self-contained),
+**FU-578** triage (UX/UI review → fix units, needs owner prioritisation), or the
+champion browser-verify sweep (needs the owner's authed running instance).
+
+**Open questions for user.** None — the two picked tasks turned out already-done;
+awaiting the owner's steer on which genuinely-open item to take next.
+
+---
+
 ## 2026-08-12 — AI master switch removed (per-user only), timezone+currency+locale merged, encryption-key warning banner + in-UI Fernet key generator
 
 **Trigger.** Owner 3-part brief on Settings: (1) remove the AI-settings admin page + the install-wide master toggle — "makes no sense, allow users to use AI if they wish"; add a warning banner on the *personal* AI settings page when `DORA_SECRET_ENCRYPTION_KEY` isn't set (moving the explanation off the deleted admin page). (2) Combine timezone + currency + locale onto one page. (3) Make the encryption-key requirement obvious wherever a secret is saved (e.g. SMTP password), and — since generating a Fernet key is fiddly — offer to generate one in the UI (not persisted). Same banner everywhere.

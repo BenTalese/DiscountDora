@@ -17,7 +17,7 @@ suites. Contrast checks use the ratio-probe eval from the audit session.
 
 ## Wave 1 — token & convention passes (small diffs, app-wide lift)
 
-### DR-1 · Contrast token pass (D-002) — P1
+### DR-1 · Contrast token pass (D-002) — ➗ RAMP DONE 2026-08-12; DR-1b component spots remain
 Retune `--text-muted` / `--text-secondary` (light variants especially) and
 soft-chip text colours to AA; fix the alerts-badge (3.0:1), "New item" button
 (3.6:1), Essential footer stat (2.3:1), BUY badge (2.5:1@11px), and audit the
@@ -25,6 +25,38 @@ wordmark treatment (2.8:1). **Files:** `tokens.scss`, `themes.scss` (all 10
 variants), `colours.scss`. **Accept:** ratio probe passes D-002 floors on stock
 overview, dashboard, shopping list detail in all 5 families × light/dark.
 **Refs:** FU-578 #7/43.
+**Shipped (the app-wide ramp — the highest-leverage part):** `--text-muted`
+retuned across all 10 themes + the `:root` fallback in `tokens.scss` so it clears
+**≥4.5:1 on every surface** (worst was Pesto 3.0:1 → 4.62:1; light themes darkened
+~10pt L, Lemon-Tart-Dark + Blueberry-Dark lifted 2pt). `--text-secondary` already
+passed everywhere (probe-verified) — left unchanged. Verified with a WCAG
+contrast probe over every text×surface pair in all 10 themes (all ≥4.5); scss
+compiles clean. Hierarchy preserved (muted stays lighter than secondary).
+**DR-1b — component spots (diagnosed with a per-theme ratio probe 2026-08-12):**
+- **✅ Alerts count badge** (`AlertsBell.vue`): was `color="negative"`, but
+  `--semantic-negative` is *lightened* in dark themes so white-on-it hit ~2.96:1.
+  **Fixed** — the badge now uses `color-mix(in srgb, var(--semantic-negative) 65%,
+  black)`, white stays ≥6.2:1 in all 10 themes (probe-verified).
+- **✅ Buy/Wait/Skip verdict badge** (`BuyVerdictBadge.vue`): full-strength
+  semantic ink on the pale soft chip failed (WAIT 1.98:1). **Fixed** (owner chose
+  neutral ink 2026-08-12) — label now `--text-primary` (AA both modes, 13.6:1);
+  coloured border + soft tint + word carry the semantic. The 11px size is a
+  separate DR-3/D-003 item, not blocking legibility now.
+- **↪ "New item" / primary buttons** (brand-primary × text-on-primary): 3.89
+  (Pesto) – 12+. Button labels sit between the 3:1 UI floor and the 4.5:1 text
+  floor; darkening brand-primary changes every primary button + toolbar.
+  **Owner call: leave** (revisit only as a deliberate brand-darkening).
+- **↪ Wordmark** (yellow-on-green, ~2.8:1): **leave** — WCAG 1.4.3 exempts
+  logotypes/brand names from contrast requirements.
+- **⟳ Essential stat + brand-secondary rethink → [[FU-621]].** The Essential
+  footer count renders in **brand-secondary as text**, invisible on dark themes
+  (Cherry-Cola-Dark 1.10:1). Root cause = the dark-theme `--brand-secondary`
+  values are near-black mud (e.g. `hsl(2 16% 19%)` on a `hsl(2 16% 16%)` card),
+  and secondary is asked to be both a dark toolbar bg (light themes) AND a
+  legible accent — incompatible in one value. Owner (2026-08-12) opened this as a
+  brand rethink ("secondary has felt off"). Tracked as **FU-621** (lift the
+  dark-theme secondaries into legible accents; give the Essential stat a proper
+  ink); to be driven with a visual options board, not a blind edit.
 
 ### DR-2 · Stock-level scale + row legend (D-001, D-013) — P1
 Out of stock → negative red; Low → warning amber; grey reserved for
@@ -34,29 +66,77 @@ or remove the undecodable states (dimmed row, cream tint — first *identify*
 them in code). **Accept:** every row visual state is either self-labelled or in
 the legend; both-theme screenshots. **Refs:** FU-578 #33/44, critique §3.1.
 
-### DR-3 · De-Quasar detail audit (D-005, D-008) — P1
+### DR-3 · De-Quasar detail audit (D-005, D-008) — ✅ DONE 2026-08-12
 `no-caps` app-wide (audit every dialog for casing); replace the padlock
 open/sealed glyph with a domain metaphor; aria-label + tooltip sweep over
 icon-only buttons (the open-toggle first); disambiguate the two cart glyphs;
 style the bulk-bar disabled state. **Accept:** zero uppercase dialog buttons;
 no icon-only control without name+tooltip (axe/a11y spec extended to pin).
 **Refs:** FU-578 #3/15c/34/53, critique §9.
+**Shipped:** **Casing** — swept every `$q.dialog` for uppercase buttons:
+converted all `cancel: true` / string-shorthand `ok:`/`cancel:` to
+`{ label, noCaps: true }` objects across ~15 files (settings CRUD, meal
+planner, shopping list, stocktake, stock overview/detail, vocab editor); the
+one raw uppercase template button (`RecipeCookMode` "Pause") became a
+`BaseButton` (`variant="primary"` + `color="warning"` override) — also closing
+the R-001 componentisation gap its inline comment flagged. New rule **R-039**
+(dialog buttons must set `noCaps`) added so this can't drift back. **#15c/#3
+glyph + a11y** — new `ICONS.sealed`/`ICONS.opened` (`package-variant-closed` →
+`package-variant`) replace `lock`/`lock_open` on the stock-row open toggle;
+added the missing `aria-label` (was tooltip-only). **#34** — cart glyphs were
+already resolved (distinct icon + colour + tooltip + aria per state); no change.
+**#53** — disabled state for flat/outline `BaseButton` variants now pins
+`--text-muted` (Quasar's opacity-only dim left ghost buttons reading near-white
+on the bulk bar); filled variants keep white-on-fill + opacity. vue-tsc +
+eslint clean. Running-app visual walk queued in DORA_VERIFY.
 
-### DR-4 · Copy & leakage sweep (D-014, D-006) — P1
+### DR-4 · Copy & leakage sweep (D-014, D-006) — ✅ DONE 2026-08-12
 Fix "expires expired" (`generators.py:113`); "(s)" plurals in alerts; "Add
 (file)" labels; raw UUID off the Account page; display-name greeting
 ("Good afternoon, dora"); "$1 saves vs rrp"; dedupe "Dessert · Dessert" chips;
 batch-cook onboarding explainer in plain words. **Accept:** grep-able tells
 gone; copy reads in Dora's register. **Refs:** FU-578 #1/10/12/13/14/21/22/38.
+**Shipped:** #1 (each expiry branch carries its own verb); #10 (new shared
+`dora_api.infrastructure.utils.pluralize` — routed `get_alerts.py`,
+`generators.py`, `confirm_actions.py`; `test_pluralize.py` pins it); #12
+(`ImageUploadField`/`StoresSettings`/`RecipeStepImagesEditor` now "Take a photo"
++ natural pick labels); #13 already fixed by the 2026-08-11 account redesign (no
+UUID rendered); #14 (`RecipeCard.metaLine` case-insensitive dedupe); #17
+(essential-out alert copy made action-neutral); #21 (`DashboardPage.firstName`
+capitalises); #22 ("saved vs RRP"); #38 (`AdminSystemCookingSettings` Batch
+explainer de-jargoned). Backend 36 tests green, vue-tsc + eslint clean. Live
+browser walk queued in DORA_VERIFY. **#49 (uneven `/settings/stores` alias) —
+won't-do (owner, 2026-08-12):** the finding was "one legacy path redirects, the
+sibling 404s". Pre-release has no real bookmarks/back-compat obligation, so the
+correct direction is *no* back-compat redirects, not adding one. Left both dead
+legacy paths 404-ing; a wholesale strip of the existing legacy-redirect block is
+a separate call (see FU-578 note).
 
 ## Wave 2 — interaction correctness
 
-### DR-5 · Open-toggle mutation trap (D-008) — P1
+### DR-5 · Open-toggle mutation trap (D-008) — ✅ DONE 2026-08-12
 Defer the `is_open` PATCH until dialog resolution (Skip/Update both confirm;
 add Cancel + Escape close = no mutation), or keep eager-mutate but add Cancel
 that reverts + an Undo toast. Pick the defer option unless code archaeology
 shows a reason. **Accept:** backdrop/Escape dismissal leaves server state
 untouched (extend the FU-507 e2e spec to pin). **Refs:** FU-578 #2.
+**Shipped (defer option).** The mutation is now a *product* of the dialog, not
+a precursor to it. The old two-button `$q.dialog` prompt couldn't express the
+needed three outcomes — native `$q.dialog` collapses the Cancel button, Escape
+and backdrop-click all into one `onCancel`, so "Skip" and "abort" were
+indistinguishable. Replaced with a promise-based component dialog
+(`MarkOpenExpiryDialog.vue`, via `useDialogPluginComponent`) with three explicit
+buttons: **Cancel** / **Skip** (open, keep expiry) / **Update expiry** (open +
+set); Escape/backdrop resolve as abort. The decision → PATCH mapping is a pure
+helper (`src/composables/openToggle.ts` `buildOpenTogglePatch`) that returns
+`null` on abort ⇒ caller writes nothing; the shared orchestration
+(`useStockItemActions.planOpenToggle`) is reused by both the row and the detail
+page (killed the duplicated FU-507 prompt logic — R-003). **Pinned by Vitest**
+(`test/unit/openToggle.spec.ts`, 7 cases: abort ⇒ no mutation, skip/update/seal
+mappings) rather than a Playwright spec, per the repo's manual-first stance
+(no FU-507 frontend e2e existed — the FU-507 refs are backend router tests).
+vue-tsc + eslint clean; full unit suite 419 green. Interaction walk queued in
+DORA_VERIFY. **Refs:** FU-578 #2.
 
 ### DR-6 · Finish-modal restock review (FU-582) — ✅ CLOSED 2026-07-22, cut confirmed
 **Do not build the per-item level picker.** Owner cut it deliberately in commit
@@ -68,12 +148,34 @@ contract has since been removed server-side too, and a test now pins that a
 stale override body is rejected rather than ignored. **Refs:** FU-582 (resolved,
 see `DORA_FOLLOWUPS_RESOLVED.md`).
 
-### DR-7 · Toast & helper-bubble placement budget (D-009) — P2
+### DR-7 · Toast & helper-bubble placement budget (D-009) — ➗ DONE-with-carve-out 2026-08-12
 Single toast column; toasts die on route change; dock the mascot/tip bubble so
 nothing overlaps content (safe-area aware on mobile); explain or remove the
 "6" badge; tip auto-dismisses. **Accept:** screenshots on stock/detail/reports/
 alerts/cook-mode show zero overlap; toast gone after navigation.
 **Refs:** FU-578 #6/31/35/41.
+**Shipped.** **#41 congestion** — Quasar toasts default to the bottom-right
+corner, the same corner as the Dora launcher, so they piled on the mascot. A
+global rule lifts `.q-notifications__list--bottom-right` clear of the launcher
+(safe-area aware), so toasts stack in one clean column above Dora. **#6/#31
+tip** — the first-time "Hi! I'm Dora" hint now **auto-dismisses** after ~9s
+(transient; the X is still the permanent ack) instead of lingering over content;
+the launcher root now uses `env(safe-area-inset-*)` so it clears the mobile home
+indicator. **#35 copy** — the greeting **capitalises the username**
+(`doraIntents.ts`, `runIntent` — "Hi, Dora!" not "Hi, dora!", pinned by 2 new
+`doraIntents.spec` cases) and the cryptic "Burger online" line became "Dora
+reporting for pantry duty". **"6" badge** — already carries an explanatory
+tooltip ("Dora has N suggestions for you"); the disabled AI segment already
+surfaces a reason via `modeSliderDisabledReason` ("Pick a provider in Settings →
+Assistant first" etc.) — both left as-is. vue-tsc + eslint clean; full unit
+suite 421 green.
+**Carve-out → [[FU-624]]:** the other half of #41 — a toast fired just before
+navigation still **persists onto the next route**. The robust fix (a single
+`notify()` wrapper tracking dismiss handles + a `router.afterEach` clear) needs
+migrating ~296 `$q.notify` call sites, so it's its own unit. A boot-level
+`Notify.create` monkeypatch was rejected (`$q.notify` binds the original
+reference at install, before boot files run, so the wrapper is bypassed).
+**Verify:** placement walk queued in DORA_VERIFY.
 
 ### DR-8 · Loading-state unification (D-007) — P2
 Dashboard cards get skeletons (kill "Loading…" strings); reserve belief-chip /

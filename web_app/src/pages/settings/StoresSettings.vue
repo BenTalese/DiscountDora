@@ -105,8 +105,8 @@
                     <div class="row items-center q-gutter-sm">
                         <ImageSourcePicker
                             variant="secondary"
-                            :take-photo-label="pickerVerb + ' (camera)'"
-                            :pick-label="pickerVerb + ' (file)'"
+                            take-photo-label="Take a photo"
+                            :pick-label="pickerVerb"
                             accept="image/png,image/jpeg,image/webp"
                             @pick="onPickImage"
                             @error="onPickError"
@@ -281,7 +281,7 @@
             title: `Delete ${store.name}?`,
             message:
                 "Stock items and shopping-list lines that referenced this store will keep working — their reference is just cleared. Products linked to this store would be orphaned and the delete will be rejected.",
-            cancel: true,
+            cancel: { noCaps: true },
             ok: { label: 'Delete', color: 'negative', noCaps: true, flat: true },
         }).onOk(() => {
             storesStore

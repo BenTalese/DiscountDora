@@ -1467,6 +1467,60 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-039 — Quasar `$q.dialog` buttons must set `noCaps`
+- **Rule:** any `$q.dialog({...})` call that renders native `ok`/`cancel`
+  buttons must pass each as an **object with `noCaps: true`**
+  (`ok: { label: '…', noCaps: true }`, `cancel: { noCaps: true }`). Never use
+  the `cancel: true` shorthand or a string-shorthand `ok: '…'` / `cancel: '…'`
+  — those render the button **ALL-CAPS**, breaking the app's sentence-case
+  voice (D-005). Component dialogs (`{ component }`) are exempt: they render
+  their own `BaseButton`s, which are already `no-caps`.
+- **Why:** `BaseButton` (the app's standard) hard-codes `no-caps`, but the
+  `$q.dialog` **plugin** is a separate render path whose buttons default to
+  uppercase. Every dialog author has to remember to opt out, one button at a
+  time — the DR-3 audit found ~15 files that hadn't, shouting "CANCEL" / "SKIP"
+  / "GOT IT".
+- **Apply:** when writing a confirm/prompt dialog, spell out `ok`/`cancel` as
+  objects with `noCaps: true`. Grep-tell for a violation: `cancel: true`,
+  `ok: '`, `cancel: '` inside a `.dialog(` block.
+- **Violation signal:** an uppercase button in a running dialog; a `cancel: true`
+  or string-shorthand `ok`/`cancel` in a `$q.dialog` call.
+- **Source:** ADR-035; the DR-3 dialog-casing sweep (2026-08-12). A `$q.dialog`
+  wrapper that injects the default is the proper single-source enforcement,
+  deferred as FU-623.
+
+---
+
+### R-040 — A side effect gated by a dialog is a *product* of the dialog's outcome, never eager-then-confirm
+- **Rule:** when a mutation (PATCH/POST, navigation, delete) depends on a user's
+  answer in a dialog, do **not** perform it before the dialog resolves and then
+  let the dialog "adjust" it. Compute the action from the dialog's *result*:
+  confirm ⇒ act, dismissal (Cancel button **and** Escape **and** backdrop) ⇒ do
+  nothing. If the dialog has more than two outcomes (e.g. "confirm A" / "confirm
+  B" / "abort"), a native two-button `$q.dialog` **cannot** express it —
+  Cancel/Escape/backdrop all collapse into one `onCancel` — so use a
+  `useDialogPluginComponent` component dialog with explicit buttons, resolved as
+  a promise. Prefer returning a pure "plan" (the patch body, or `null` for
+  abort) that the caller executes, so the decision→effect mapping is unit-
+  testable without mounting.
+- **Why:** eager-mutate-then-confirm silently commits on dismissal — the exact
+  FU-578 #2 trap, where marking an item "open" PATCHed first and Escape/backdrop
+  left it opened with no undo. It also contradicts the A3/D-008 dialog contract
+  ("dismissal is always a cancel — never a commit"). Making the write a product
+  of the outcome means there is one commit path and it fires only on an explicit
+  yes.
+- **Apply:** the shape is `const plan = await promptX(); if (!plan) return;
+  await mutate(plan);`. Pin the mapping with a Vitest over the pure planner
+  (abort ⇒ no write). Reference: `openToggle.ts` / `planOpenToggle` /
+  `MarkOpenExpiryDialog.vue`.
+- **Violation signal:** a store mutation before an `await $q.dialog(...)`; a
+  dialog whose `onDismiss`/`onCancel` path leaves already-written state; a
+  three-outcome decision forced through native `ok`/`cancel`.
+- **Source:** ADR-036; DR-5 open-toggle trap (2026-08-12). Complements the D-008
+  design rule; distinct from R-039 (casing).
+
+---
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -2440,6 +2494,55 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   Establishes that AppSetting can carry an any-member-editable field (not only admin config).
   Pre-release hard migration — the three `User` columns dropped, no data preserved.
 - **Promotes rule:** R-038.
+
+### ADR-035 — Quasar Dialog-plugin buttons must set `noCaps` (promotes R-039)
+- **Date / task:** 2026-08-12 (DR-3 de-Quasar detail audit — dialog casing)
+- **Status:** accepted
+- **Context:** the app standardised on sentence-case buttons everywhere via
+  `BaseButton` (which hard-codes `no-caps`), but the **`$q.dialog(...)` plugin**
+  is a separate render path: its `ok`/`cancel` buttons default to **ALL-CAPS**
+  unless each is passed as an object with `noCaps: true`. The DR-3 audit found
+  ~15 files where confirm/prompt dialogs still shouted ("CANCEL", "SKIP", "GOT
+  IT") — every `cancel: true` shorthand and every string-shorthand
+  `ok: 'Label'` renders uppercase. This is pure drift: nothing enforces the
+  app-wide casing on the one button surface that isn't `BaseButton`.
+- **Decision:** Promote **R-039**. Any `$q.dialog({...})` call that renders
+  native `ok`/`cancel` buttons must pass them as objects with `noCaps: true`
+  (never `cancel: true` or `ok: '…'` string shorthand). Component dialogs
+  (`{ component }`) are exempt — they render their own `BaseButton`s.
+  *Enforcement is by-convention today (matching the ~15 existing explicit
+  `noCaps` sites).* A thin `$q.dialog` wrapper that injects the default is the
+  proper single-source fix and is logged as **FU-623** (opportunistic) rather
+  than retrofitted mid-audit — a half-migrated wrapper would be worse than the
+  consistent explicit pattern.
+- **Consequences:** dialog buttons match the app's sentence-case voice (D-005);
+  new dialogs that forget `noCaps` are a reviewable R-039 violation.
+- **Promotes rule:** R-039.
+
+### ADR-036 — Dialog-gated side effects are a product of the outcome, not eager-then-confirm (promotes R-040)
+- **Date / task:** 2026-08-12 (DR-5 open-toggle mutation trap — FU-578 #2)
+- **Status:** accepted
+- **Context:** the stock-row "mark as open" flow PATCHed `is_open=true`
+  *immediately* on click, then opened a prompt that only governed the effective
+  expiry. So "Skip", Escape, and backdrop-click **all** left the item opened,
+  with no way to abort and no undo — a silent commit on dismissal. The clean fix
+  was blocked by a Quasar constraint: native `$q.dialog` collapses the Cancel
+  button, Escape, and backdrop into a single `onCancel`, so a two-button prompt
+  cannot distinguish "Skip (confirm-open, keep expiry)" from "abort".
+- **Decision:** Promote **R-040**. Gate the side effect on the dialog's outcome:
+  replace the two-button prompt with a promise-based `useDialogPluginComponent`
+  component dialog (`MarkOpenExpiryDialog.vue`) exposing three explicit buttons
+  (Cancel / Skip / Update expiry); Escape/backdrop resolve as abort. The
+  decision→PATCH mapping is a pure helper (`openToggle.ts buildOpenTogglePatch`)
+  returning `null` on abort so the caller writes nothing; shared orchestration
+  (`useStockItemActions.planOpenToggle`) is reused by the row and detail page
+  (removing the duplicated FU-507 prompt — R-003). Pinned by
+  `test/unit/openToggle.spec.ts` (abort ⇒ no mutation). Introduces the
+  `useDialogPluginComponent` pattern to the repo for promise-based shared prompts.
+- **Consequences:** one commit path that fires only on explicit confirmation;
+  dialog dismissal never mutates. The decision logic is unit-testable without
+  mounting. Sets the template for any future multi-outcome confirm dialog.
+- **Promotes rule:** R-040.
 
 ---
 

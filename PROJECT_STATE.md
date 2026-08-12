@@ -17,27 +17,24 @@ Status key: ✅ done · ➗ done, with skipped/deferred items · 🟡 in progres
 
 ## Where we are right now
 
-Phases **0** and **2** are effectively done: foundations, and the
-ingestion API + standalone companion. **Phase 1** just closed a big
-outstanding piece — the **stocktake-mode redesign shipped end-to-end**
-(new engagement gate + cadence bands + Auto self-tuning; runner rebuilt
-around Still-correct/Change-level primaries + Skip/Push/Mute
-secondaries + completion-screen batch add-to-list; Settings block +
-Stock Overview "Needs check" filter + pulsing outline on overdue rows).
-That closes SK-1..11 from the feedback pass; loop-progression items
-FU-450 + FU-451 shipped 2026-07-09 (deal-quality + budget-defense recipe swaps);
-FU-452/351/352 remain. **Phase 3 sits at ~95%** — the champion
-sequence `P8-01 → P8-02 → P8-05 → P8-06 → ⭐ P8-07 → P8-08 → P8-09 →
-P8-10` is fully built. Nothing champion is left to construct; three
-surfaces still need a browser walk (P8-07 flagship, P8-08 Kitchen
-health card + P8-09 Memory reports, P8-10 Native Android).
-**Next up:** either a **browser-verify sweep** across the pending
-surfaces (P8-07 flagship + the two new stocktake redesign blocks +
-P8-10 native), or **Phase 4 kick-off** (commercialisation report →
-per-recommendation FUs; email setup; multi-tenant readiness). Also
-worth grabbing while surfaces are open: FU-464 auto-add re-verify
-(fixed this session but e2e-only coverage) and FU-355 sign-out
-list-state clear.
+Phases **0** and **2** are effectively done (foundations; ingestion API +
+standalone companion, both backend-green). **Phase 1** is now in good shape —
+the stocktake-mode redesign shipped end-to-end and the P6 loop tail closed out
+(FU-450 deal-quality, FU-451 budget-defense swaps, FU-452 put-away all
+**resolved**), and the planner-freeze blocker **FU-595 is fixed**. **Phase 3
+(champion) sits at ~95%, fully built** — nothing champion is left to construct;
+four surfaces (P8-07 Zero-Input Pantry, P8-08 Kitchen health, P8-09 Memory
+reports, P8-10 native Android APK) still need a real-device / browser walk.
+Recent work has been a steady **Settings/UX polish stream** (household budget,
+AI master-switch removal, Region & locale merge, Account/Kitchen-setup
+redesigns, cook-batches meal planner, Build-my-week auto-planner) plus test-infra
+hardening. The whole security thread (CSRF + email-change + the residual
+assistant findings) is **closed** — FU-447/515/197/620 all resolved.
+**Next up:** either a **browser-verify sweep** of the four unverified
+champion/native surfaces, or **Phase 4 open-source release readiness**
+(README/showcase + release process + donation/support stand-up —
+FU-406/608/557); the largest live design backlog is triaging the **FU-578
+UX/UI review** into fix units.
 
 ---
 
@@ -45,11 +42,11 @@ list-state clear.
 
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
-| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish clusters (FU-360/363/431/432); FU-359 + FU-421 + FU-430 + **FU-361 (help content — absorbed into FINALISATION_PLAN)** closed to `_RESOLVED`. |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~90% | **Stocktake mode redesign shipped end-to-end** (Chunks 1–3 + housekeeping); SK-1..11 resolved. **FU-449 closed** — P6-07 cook→consume `ConsumptionEvent` persists. **FU-351 shipped** — P6-10 "Draft my shop" one-click dashboard card on top of the existing `/auto-generate` engine (2026-07-07). **FU-352 closed** — P6-12 briefing / P8-08 Score coexistence decided (2026-07-07: keep both cards, no fold). Remaining P6 gaps: **FU-450** P6-03 `fake_markdown` (shipped; `good_deal` alert cut same day); **FU-451** P6-09 budget-defense swaps; **FU-452** P6-11 put-away + expiry-by-location grouping. |
-| **2 — Ingestion API + companion** | `/api/ingest` seam; extract scraper to standalone companion; Merchant→Store rename | ✅ done (backend-green) | Browser-verify pending (FU-214 + Phase-0/F verify FUs). |
-| **3 — Champion** | Zero-Input Pantry (flagship), buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | **Champion sequence P8-01..P8-10 complete.** ⭐ P8-07 Zero-Input Pantry, P8-08 Dora Score, P8-09 Culinary memory, and P8-10 Native mobile app all BUILT (Capacitor 8 wraps the SPA; Android scaffolded locally, iOS scaffolded for a Mac session; runtime backend URL + first-run gate; wake-lock in cook + shop mode). P8-01/02/05/06 shipped earlier. P8-03 + P8-04 formally cut (§7 Decisions 6/7). Only remaining: browser-verify the four unverified surfaces (P8-07/08/09/10). Native FCM push deferred as [[FU-465]]. |
-| **4 — ~~Commercialize~~ → Open-source release** | ~~Tenancy, billing, compliance~~ → README/showcase + release process + support channel (Postgres already done) | ⚪ ~0% | **Not being sold (reversed 2026-07-31): donation-funded, open-source, MIT kept, all features free.** Billing/tiers/relicense are **won't-do** (FU-562/FU-567 RESOLVED); no billing code ever existed. Remaining Phase-4 work is **open-source *release* readiness** — FU-406 (README + GitHub Releases process + Sponsors link) + FU-557 (best-effort GitHub-issues support). **Postgres done + default** (FU-045). SaaS/hosted parked (OPTIONAL_SAAS). |
+| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish only; FU-025/346/609 etc. now closed. |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~95% | Stocktake redesign shipped; **P6 tail FU-450/451/452 all resolved**; **FU-595 planner-freeze fixed**. Residual browser-verify only. Meal-reconcile Chunk 6 (settings row/copy) pending. |
+| **2 — Ingestion API + companion** | `/api/ingest` seam; standalone companion; Merchant→Store rename | ✅ done (backend-green) | Product-surface browser-verify pending (FU-214). |
+| **3 — Champion** | Zero-Input Pantry, buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | Sequence P8-01..P8-10 **fully built**. Only browser/device-verify of P8-07/08/09/10 remains; native FCM push deferred (FU-465). |
+| **4 — Open-source release** (was Commercialize) | README/showcase + release process + support channel (Postgres done) | ⚪ ~0% | **Not sold — donation/OSS/MIT, all free** (billing/tenancy won't-do). Remaining: FU-406 (README+release), FU-608 (donation/OSS infra), FU-557 (support channel). SaaS/hosted parked (OPTIONAL_SAAS). |
 
 ---
 
@@ -57,52 +54,66 @@ list-state clear.
 
 | Workstream | Status | Where it's at | Governing doc |
 |---|---|---|---|
-| Products-as-overlay | ➗ | Phases 0–F code-complete; tail (FU-210, FU-214 bulk-select/hard-delete) **browser-verify pending** | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
-| Ingestion API | ✅ | Backend green (401/401 tests), bearer-auth lane, admin keys page | [PROPOSAL](docs/04_proposals/PROPOSAL_INGESTION_API.md) |
+| Products-as-overlay | ➗ | Phases 0–E code-complete; Phase-F tail (FU-214 browser-verify + L197 hard-delete decision + L205/206 bulk-select) pending | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
+| Ingestion API | ✅ | Backend green, bearer-auth lane, admin keys page | [PROPOSAL](docs/04_proposals/PROPOSAL_INGESTION_API.md) |
 | Standalone companion | ✅ | Runs standalone (`../dora-companion`); round-trip tests pass | RUNBOOK Phase C |
 | Merchant→Store rename | ✅ | `usual_store_id` + Stores page shipped | RUNBOOK Phase E |
 | Shopping Lists | ✅ | 8/8 bullets; DRAFT→SHOPPING→DONE loop | [PROPOSAL](docs/04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md) |
-| Cook Mode | ✅ | Chunks 1–6 (84% of feedback) | `C_big_rock_design_briefs.md` |
-| Cookbook | ➗ | Chunks 1–10 shipped; 5 Recipe-Detail bullets remain (FU-432); tag-taxonomy needs env verify (FU-085) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
-| Stock Overview | ✅ | 32/41 bullets; 3-band StockLevel; buy-verdict badge wired; new "Needs check" filter + pulsing overdue outline (FU-226 tail) | `PROPOSAL_STOCK_OVERVIEW` |
-| **Stocktake Mode redesign** | ✅ | **Built end-to-end 2026-07-04.** Chunk 1 backend engine (new engagement gate, cadence bands, Auto self-tuning, grace-period baseline, Push snooze endpoint) + Chunk 2 SPA runner (Still-correct/Change-level primaries + Skip/Push/Mute secondaries + `(?)` help + completion-screen batch add-to-list; landing page retired) + Chunk 3 Settings + Overview surfacing. Housekeeping pass extracted `resolve_overdue_map` shared authority for alerts feed (was a two-authority R-003 drift) and deleted the dead `locations/attention.py` heatmap system. Alembic `d1f9c3a8b2e4` + `e5c8b3a1f4d2`. 18/18 cadence pytest green. SK-1..11 feedback resolved. | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
-| ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end (belief service `pantry_belief.py` + `ConsumptionEvent`/FU-449 + `/stock-items/beliefs` + additive `PantryBeliefChip` + `pantry_check` quick-check + per-user pref). **Browser verify pending.** | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
-| Buy-verdict oracle (P8-05 + P8-06) | ✅ | Row + shopping-line badges + full `BuyVerdictCard` wired into stock-item detail overview (FU-437 closed); P8-06 `wait_hint` on `wait` verdicts (FU-438 closed); one-tap `mark_stocked` + `remove_from_list` actions wired (FU-454). | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
-| Barcode-to-add (P8-02) | ✅ | OFF lookup for unknown EANs, gated by `scanning_enabled` | [PROPOSAL](docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md) |
-| Native mobile app (P8-10) | 🟡 | Capacitor 8 wraps the SPA; Android scaffolded on this Linux dev box (adaptive icons, `CAMERA/WAKE_LOCK/VIBRATE/POST_NOTIFICATIONS` manifest, `allowMixedContent` for LAN self-hosts); iOS scaffolded for a Mac session. Runtime backend URL persists to `@capacitor/preferences`; first-run `/setup/backend` gate; wake-lock in cook + shop mode. **Final APK build + on-device browser-verify pending** (no Android SDK on this dev box). FCM push deferred as [[FU-465]]. | [BUILD_NATIVE.md](packaging/BUILD_NATIVE.md) |
-| Onboarding | 🟡 | Per-name picks + paste-rows shipped; **verify pending**; preferred-stores step not built (FU-383) | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
-| Meal Plans | ➗ | **Built end-to-end** (3 pages, 13 components, board/calendar/templates/shortfall + backend). Waiting on **your screen-style pick + feedback**, not construction | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) + `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
-| Alerts control centre | ✅ | **Fully built**: `/alerts` hub, `ALERT_ROUTER` API, price-watch + email-digest + push delivery. `stocktake_overdue` alert kind now routes through the shared `resolve_overdue_map` (FU-464 housekeeping — was drifting from the runner's authority). | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
-| Assistant surface | ✅ | Per-user rate limits wired (FU-458) — `/ask` 20/min, `/act` + `/confirm` 60/min. `rate_limit` helper extended with a `subject` override so a shared household IP doesn't cross-count users. | `ask_assistant.py`, `auth_helpers.py` |
-| Data/Backup admin | ✅ | Collapsed under Settings→Admin→Data; backup library + admin-gating (code committed) | FU-341/342/198 |
-| Auth shell | ➗ | Shared `AuthShell.vue` + `AuthButton.vue` across 8 pre-auth surfaces (no standalone register page) | `PROPOSAL_AUTH_SHELL.md` |
-| Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed | `configuration_manager.py` |
-| Recipe importer (paste-based rebuild) | ✅ | **All six chunks landed 2026-07-04.** Parser green on 20/20 corpus; schema migration for unlinked-ingredient tri-state cookability; paste importer replaces the URL fetcher (FU-104 + FU-199 closed); bulk-linker page + PWA share target. Browser-verify pending. | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
-| ~~Commercialization~~ → Open-source release (P7) | ⚪ | **Not sold — donation/open-source/all-free (reversed 2026-07-31).** No billing/tenancy code, none planned. Remaining: README/showcase, release process, support channel (FU-406/557). | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
-| **Finalisation sweep** | 🔵 | **Designed, not started (2026-07-10; model revised 2026-07-13).** 20 feature chunks, **strict two-stage**: **Stage 1 — Analysis** (read file-by-file; 4 written tracks — FST / help & guides / senior code review / test-plan; the review record is *execution-ready*: exact file:line + change per finding; **no code changed**), then **Stage 2 — Execution** (apply the exact changes from the record — DRY/dead-code/componentisation/placement/naming/standards + verified bugs — test-guarded, **no re-investigation**). **North-star (owner directive):** the app must be hand-maintainable by one person with no AI. Feature-rewrites / contract / large-blast-radius items → new proposal/FU, not in scope. Rolls in FU-361/320/395 (fully), FU-510 Phase 1 + safe Phase-2 swaps, FU-406/404 (partially), FU-010/224 (ride-along). Runs late-game before Phase 4 close-out. | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
+| Cook Mode | ✅ | Chunks 1–6 shipped | `C_big_rock_design_briefs.md` |
+| Cookbook | ➗ | Chunks 1–10 shipped; recipe-detail residuals; tag-taxonomy env-verify (FU-085) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
+| Stock Overview | ✅ | 3-band StockLevel, buy-verdict badge, Needs-check filter, overdue pulse | `PROPOSAL_STOCK_OVERVIEW` |
+| Stocktake Mode redesign | ✅ | Built end-to-end (Chunks 1–3 + housekeeping); SK-1..11 resolved | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
+| ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end; **browser-verify pending** | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
+| Buy-verdict oracle (P8-05/06) | ✅ | Row + line badges + `BuyVerdictCard`; wait-hints; one-tap actions | [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
+| Barcode-to-add (P8-02) | ✅ | OFF lookup for unknown EANs, gated by `scanning_enabled`; real-barcode register shipped (FU-373) | [PROPOSAL](docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md) |
+| Native mobile app (P8-10) | 🟡 | Capacitor 8 wraps SPA; Android/iOS scaffolded; **final APK build + on-device verify pending** | [BUILD_NATIVE.md](packaging/BUILD_NATIVE.md) |
+| Onboarding | ➗ | Per-name picks + paste-rows; slimmer bar + dark look; preferred-stores step done (FU-383); **verify pending** | [PROPOSAL](docs/04_proposals/PROPOSAL_ONBOARDING.md) |
+| Meal Plans | ➗ | Built end-to-end **+ extended**: Build-my-week auto-planner, day/meal toggles, week-duplicate, cook batches (Part 2) all shipped + verified live. Residual browser-verify only | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) + `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
+| Meal reconcile | ➗ | "Stocktake for meals" — Chunks 1–5 shipped; Chunk 6 (settings row/copy polish) pending | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md) |
+| Alerts control centre | ✅ | `/alerts` hub, ALERT_ROUTER, price-watch + email-digest + push; shared `resolve_overdue_map` | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
+| Assistant surface | ✅ | Per-user rate limits; SLM default AI path; Basic-mode `add_to_list` verb; AI master-switch removed (per-user only) | `ask_assistant.py` |
+| Settings & config polish | 🟡 | Active stream: household budget (value-driven), AI master-switch removed, Region & locale merged, Account/Kitchen-setup redesigns, encryption-key banner+generator. Several new DORA_VERIFY walks queued | `CHANGELOG [Unreleased]` |
+| Data/Backup admin | ✅ | Under Settings→Admin→Data; backup library + admin-gating | FU-341/342/198 |
+| Auth shell | ➗ | Shared `AuthShell`/`AuthButton` across pre-auth surfaces | `PROPOSAL_AUTH_SHELL.md` |
+| Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed; suite green on PG | `configuration_manager.py` |
+| Recipe importer (paste-based) | ✅ | Six chunks landed; parser green 20/20; bulk-linker + PWA share target; **verify pending** | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
+| Open-source release (P7) | ⚪ | Not sold — donation/OSS/all-free. Remaining: README/showcase, release process, support channel (FU-406/557/608) | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
+| Test suite | ➗ | Backend + frontend Vitest + property + PG all green (~1616 collected; ~412 vitest). Sole remnant: Postgres **CI wiring**, blocked on FU-405 | [PROPOSAL](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) |
+| Finalisation sweep | 🔵 | Designed, not started — 20 chunks, two-stage, single-maintainer north-star | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
 
 ---
 
 ## ⚠️ Needs your attention now
 
-Full backlog is **~60 open items** in `DORA_FOLLOWUPS.md`; these are the
-ones that want a decision or a running-app check *now*, most important
-first.
+**Total open backlog is 18 items in `DORA_FOLLOWUPS.md`** (the old "~60"
+figure was badly stale). These are the ones wanting a decision or a
+running-app check, most important first.
 
-0. **🔴 BLOCKER — [FU-595](DORA_FOLLOWUPS.md) a past meal you didn't cook FREEZES the whole week.** Found 2026-07-22 walking the planner. If a week holds a past-dated entry with no `consumed_at`, **every** attempt to add a meal to that week returns 400 and **hard-crashes the planner to the error screen**. The server preserves history by `consumed_at is not None` but rejects submissions by `scheduled_for < today`, so a past-but-unconsumed entry can neither be kept by the server nor resent by the client — and the client resends it. Reachable two first-class ways: **auto-drain OFF**, and **reconcile → "Didn't cook"**. Needs a contract decision (preserve past entries regardless of consumption / ignore-rather-than-reject unchanged past entries / stop sending them) — three viable shapes, so it wasn't a safe drive-by fix. The secondary half — a 400 taking down the whole screen instead of a toast — is worth fixing either way. **This also blocks further planner verification:** any week with an unreconciled past meal can't be walked for adds.
+1. **Continue the UX/UI review remediation (DR units).** A large owner-requested critical-drive bundle (~50 findings), mapped to DR-1..DR-16. **Done: DR-6, DR-4 (copy/leakage), DR-1 muted-contrast ramp** (all 10 themes ≥4.5:1), **DR-1b badges** (alerts + verdict, AA-verified), **DR-3** (dialog casing sweep + open-toggle glyph/a11y + bulk-bar disabled state; R-039/ADR-035 added), **DR-5** (open-toggle mutation trap — deferred PATCH + 3-outcome dialog, Vitest-pinned). **DR-7** (toast/helper-bubble placement — de-congested the toast corner, tip auto-dismiss, greeting copy; toast-die-on-route carved to FU-624). Remaining DR units: DR-8 (loading polish), then layout/redesigns; DR-10/DR-16 need an owner call. **A brand-secondary rethink spun out as FU-621** (owner: secondary "feels off" + it's invisible as text on dark themes — wants a visual options board, logged FU-622). [FU-578](DORA_FOLLOWUPS.md)
+2. **Products-overlay Phase-F verify + hard-delete call.** Product surfaces need a running-app walk with real data; L197 hard-delete is still an undecided design call and L205/206 bulk-select is unbuilt — the runbook's Phase-F blocker. [FU-214](DORA_FOLLOWUPS.md)
+3. **⭐ Verify the champion sequence in-browser.** Four surfaces stacked and untested on this dev box — P8-07 Zero-Input Pantry, P8-08 Kitchen health, P8-09 Memory reports, plus P8-10 native Android (APK build + device walk). Pairs with the queued Settings-rework `DORA_VERIFY.md` sections.
+4. **Open-source release readiness.** README/showcase + GitHub Releases process + Sponsors link — the Phase-4 gate to publishing publicly; needs your call on scope/timing. [FU-406](DORA_FOLLOWUPS.md)
+5. **Stand up donation + OSS infrastructure, then swap in-app placeholders.** Owner-external checklist: make repo public, set up Sponsors / Buy-Me-a-Coffee / PayPal.me, then one placeholder-swap pass. [FU-608](DORA_FOLLOWUPS.md)
+6. **Stand up the support channel.** Pick + create the (recommended) public GitHub-issues channel; a one-line config change then lights up Help / error-report / DoraBot. Pairs with FU-406/608. [FU-557](DORA_FOLLOWUPS.md)
+7. **Cross-cutting feedback bundle — 4 items still open.** Final QA regression doc, UI-polish/uniqueness pass, cross-user push notifications, general UI consistency — mostly Phase-4 gates needing your steer on when. [FU-363](DORA_FOLLOWUPS.md)
+8. **Real-device mobile / PWA field test.** A hands-on device pass; natural to fold into the P8-10 native verify. [FU-389](DORA_FOLLOWUPS.md)
+9. **Late-game holistic theme/colour review.** Eyes-on-app pass across the full theme set (Pesto suspected over-dulled); needs the running app. [FU-010](DORA_FOLLOWUPS.md)
+10. **App-wide colour-usage assessment** (primary vs secondary/accent/info). Needs eyes-on-app judgement, not a code walk. [FU-224](DORA_FOLLOWUPS.md)
+11. **Ops / CI / observability (Phase 4).** Deliberately-disabled CI, backups, staging still unplanned — and CI must not be silently re-enabled; a Phase-4 decision that also unblocks FU-520 (Postgres CI) and FU-404. [FU-405](DORA_FOLLOWUPS.md)
 
-0. **✅ RELIABILITY — [FU-549](DORA_FOLLOWUPS_RESOLVED.md) fresh-install migration boot — FIXED 2026-07-13.** The empty-DB `upgrade head` crash (`a3e9f6c2d8b4`, Alembic batch/BINARY) is fixed (UUIDType-column renames pass `sa.BINARY(16)`); the full 116-migration chain now applies cleanly from empty, `alembic` is pinned, and 2 migration tests (from-empty upgrade + schema-vs-model match) now run + guard it. **Residual:** a one-time operator smoke on a real fresh `pip install` (DORA_VERIFY §Operator), and [[FU-553]] — a downgrade-only (`downgrade base`) SQLite CHECK-drop issue that doesn't affect boot.
-0. **🔴 SECURITY — unfixed HIGH + MEDIUM findings.** `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md` records a **HIGH CSRF** flaw and a **MEDIUM email-change** flaw with no fix logged. Surfaced by the 2026-07-02 doc audit — decide whether to fix now before more champion work. Tracked as [FU-447](DORA_FOLLOWUPS.md).
-1. **🔴 Meal Plans — pick the screen style + give feedback.** The feature is **built** (board/calendar/templates all shipped); it's waiting on *your* UX-direction call, not on engineering.
-2. **🔴 FU-346 — Admin settings "feel hidden."** You raised this. Short direction call needed (stay put / header icon / `/admin` route) before any code moves.
-3. **🔴 FU-353 — Rename GitHub repo + local checkout to DashyDora.** Your action (`gh repo rename` + `mv`); until then release-check URLs + README badges 404.
-4. **⭐ Verify the champion sequence in-browser.** Four surfaces stacked and untested on this dev box: **P8-07 Zero-Input Pantry** (walk `DORA_VERIFY.md §Stock`); **P8-08 Kitchen health card**; **P8-09 Memory reports**; **P8-10 Native Android APK** (final build + device walk). The stocktake redesign's Chunks 2 + 3 verify blocks in `DORA_VERIFY.md` also want the same walk.
-5. **FU-085 — Cookbook tag-taxonomy never run in a real env.** Verify the migration on SQLite + Postgres before building on it.
-6. **FU-214/FU-208 — Products-overlay verify mostly cleared (2026-07-24).** My Products + Price History walked on the money seed (mark-inactive, Link…, price chart — with FU-605 fixed en route). What's left is the **FU-606 decision** below and the onboarding-wizard walk; hard-delete is confirmed a deliberate non-feature (soft-deactivate only, ingestion model).
-6b. **🔴 FU-606 — quick yes/no: My Products bulk-select.** Confirm the generic "Select on-deal" bulk suffices (recommended) vs. building stock-level-aware variants ("low-stock-on-deal" / "out-of-stock-on-deal"). Recommend **won't-do** — stock-aware buying is already served by Draft-my-shop / buy-verdict / auto-add-on-low.
-7. **FU-429 — Assistant-architecture proposal collides with in-flight SLM work.** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` proposes a capability registry that the SLM pivot may supersede; needs a reconcile-or-close decision.
-7b. **🔴 FU-612 — quick decision: what happens to the `meals_per_week` preference?** The meal-plan builder's count slider was its only consumer and is now gone, so the Settings → Preferences row saves a value nothing reads. Either delete it end-to-end, or repurpose it (e.g. seed the builder's default day selection instead of defaulting to every remaining day).
-8. **FU-025 follow-on — component labels ignore the text-scale tokens.** Button/input/toggle labels don't track the A6 scale; small global sweep.
+**Lower-priority / trigger-gated** (listed for completeness, not urgent):
+FU-520 (Postgres CI — waits on FU-405), FU-404 (compliance — activates
+only when hosting user data), FU-576 (uploads spec — needs a bundled-Chromium
+run), FU-579 (quasar-dev checker overlay — re-test), FU-575
+(name-uniqueness/whitespace — opportunistic), FU-358 (Aldi scraper — when
+Aldi data is next needed). *(FU-584 e2e-flake resolved 2026-08-12 — the specs it
+named were deleted in the Playwright cull.)*
+
+> **Cleared since last review:** every item the previous PROJECT_STATE listed
+> under "Needs attention" is now in `DORA_FOLLOWUPS_RESOLVED.md` — FU-595
+> (planner freeze), the whole security thread (FU-447/515/197), FU-620
+> (email-change removal), FU-612/609/346/353/606/085/429/025/549/464/355/383,
+> and the P6 loop tail FU-450/451/452. Do not reintroduce them as live.
 
 ---
 
@@ -110,7 +121,7 @@ first.
 
 - **`DORA_WORKLOG.md`** — per-session handoff narrative (what ran, decisions, what's next).
 - **`CHANGELOG.md`** — product/code changes that shipped.
-- **`DORA_FOLLOWUPS.md`** — the full ~60-item open backlog (this dashboard shows only the top).
+- **`DORA_FOLLOWUPS.md`** — the full 18-item open backlog (this dashboard shows only the top).
 - **`DORA_VERIFY.md`** — your browser-verify checklist (walk + delete as you confirm).
 - **The full per-doc register is below** — every planning doc's verified state.
 - **Charter / how & why:** `docs/01_charter/` (vision, standards, master plan).
@@ -119,7 +130,7 @@ first.
 **Do not trust as current** (kept for history only): the old `STATUS.md`
 (retired to `06_legacy_prompt_plans/`), `99_scratch/PROGRESS_REPORT_2026-06-12.md`
 and `FEEDBACK_AUDIT_2026-06-12.md` (June snapshots — say Phase 2/3 = 0%, both wrong
-now), `docs/00_DOC_GRAPH.md` (stale, FU-428), and `00_original_spec/` (historical,
+now), `docs/00_DOC_GRAPH.md` (stale stub, FU-428), and `00_original_spec/` (historical,
 pre-dates the current codebase).
 
 ---
@@ -127,114 +138,185 @@ pre-dates the current codebase).
 # Document register
 
 Complete per-doc state map — every active planning doc opened, classified, and
-cross-checked against `DORA_WORKLOG.md` + `CHANGELOG.md` + git (verified
-2026-07-02). This is the "everything accounted for" backing for the dashboard
-above; the dashboard is the rollup, this is the per-doc truth. **You don't need to
-read this** — it's the audit trail. 107 active docs across 7 folders; the 157
-`docs/00_original_spec/` files are charter-designated historical (one bucket, see
-end).
+cross-checked against `DORA_WORKLOG.md` + `CHANGELOG.md` + code reality (verified
+2026-08-12 via a 5-agent fan-out). This is the "everything accounted for" backing
+for the dashboard above; the dashboard is the rollup, this is the per-doc truth.
+**You don't need to read this** — it's the audit trail. **127 active docs** across 8
+folders; the 157 `docs/00_original_spec/` files are charter-designated historical
+(one bucket, see end).
 
 State key: ✅ done-clean · ➗ done-with-carve-outs · 🟡 active · 🔵 designed-not-built ·
 ⚪ not-started · 🕸 stale · 📦 superseded (successor named) · 🗄 historical.
 Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 stale.
 
-## Systemic findings (from the 2026-07-02 audit)
+## Systemic findings (from the 2026-08-12 re-audit)
 
-1. **🕸 `docs/00_DOC_GRAPH.md` is stale (FU-428/446).** Indexes ~25 of 48 proposals; cites 2 files that don't exist. Now shrunk to a stub.
-2. **🕸 Stale "no code yet" headers on ~15 shipped docs (FU-445).** Bodies are accurate records; only the top status line lies. Judge by this register.
-3. **🔴 Security (FU-447).** `AUTH_ASSISTANT_SECURITY_FINDINGS` has an unfixed HIGH CSRF + MEDIUM email-change flaw.
-4. **~23 docs orphaned** from the (now-retired) indexes — real, mostly-shipped records.
+1. **✅ Security thread closed.** `AUTH_ASSISTANT_SECURITY_FINDINGS` is now a triaged standing register — the HIGH CSRF + MEDIUM email-change were fixed under FU-197 (2026-06-30); the 8 residual Medium/Low findings went to FU-515 (resolved); the orphan audit-follow-up FU-447 was reconciled + closed. A.5/A.6/A.7 are accepted risks (A.6 → Phase-4). Nothing open.
+2. **🕸 Stale "no code yet" / "designed-not-built" headers on ~15 shipped docs (FU-445).** Bodies are accurate records; only the top status line lies (e.g. IMPL_PLAN_ALERTS, IMPL_PLAN_MEAL_RECONCILE). Judge by this register, not the header.
+3. **🕸 `docs/00_DOC_GRAPH.md` is a retired stub (FU-428).** Superseded by this doc + the CLAUDE.md anti-drift rule.
+4. **Backlog right-sized.** The old dashboard cited "~60 open items"; the ledger actually holds **17**. Most of the prior attention list had long since moved to `_RESOLVED`.
 
-## 01_charter — governance (5)
+## 01_charter — governance (6)
 
 | Doc | Type | State | Purpose | Evidence |
 |---|---|---|---|---|
-| DASHY_DORA_CHAMPION_PLAN.md | Charter | 🟢 authoritative | Vision + 12-principle Decision Charter + P8 prompts | Cited library-wide as arbiter |
-| ENGINEERING_STANDARDS.md | Standards | 🟢 authoritative | Code/architecture rubric R-001..R-026 + ADR log | Enforced by CLAUDE.md close-gate |
-| RECONCILED_FINISHING_PLAN.md | Master-plan | 🟢 authoritative | 5-phase order, scope, §7 resolved decisions | Self-maintaining |
-| FINALISATION_PLAN.md | End-plan | 🔵 designed, not started (2026-07-10; model revised 2026-07-13) | End-of-project sweep, 20 chunks, **strict two-stage** (Stage 1 analysis → execution-ready written findings; Stage 2 execution from the record, no re-investigation) under the single-maintainer north-star; FU rollup for FU-361/320/395/510/406/404/010/224 | Two-stage model 2026-07-13 |
-| FINALISATION_COVERAGE.md | Register | 🔵 blank (2026-07-10) | Per-chunk × per-track status matrix for the finalisation plan | Companion to FINALISATION_PLAN.md |
+| DASHY_DORA_CHAMPION_PLAN.md | Charter / vision | 🟢 authoritative | Part 8 vision + 12-principle Decision Charter + operating procedure | Governing rubric cited across CLAUDE.md |
+| RECONCILED_FINISHING_PLAN.md | Master plan | 🟢 authoritative | Phases 0–4, resolved decisions §7, scope arbiter | "Active — all decisions resolved"; owns order/scope |
+| ENGINEERING_STANDARDS.md | Rules / ADR log | 🟢 authoritative | R-001..R-040 code rubric + ADR log, checked every task | Living; R-039/040 + ADR-035/036 (dialog noCaps + dialog-gated mutations) added 2026-08-12 |
+| DESIGN_STYLE_GUIDE.md | Design spec | 🟢 authoritative | Prescriptive D-rules token/component spec, enforced via R-035 | Authoritative since 2026-07-18; D-019 in [Unreleased] |
+| FINALISATION_PLAN.md | Late-game plan | 🔵 designed-not-built | Two-stage code-walk sweep (FST/Help/Review/Tests) | Self-labelled "designed, not started"; verify campaign has since covered similar ground ad hoc |
+| FINALISATION_COVERAGE.md | Coverage register | 🔵 designed-not-built | Per-chunk × per-track status matrix for the sweep | All 20 chunk rows ⬜ |
 
 ## 02_feedback — inputs (3)
 
 | Doc | State | Purpose | Evidence |
 |---|---|---|---|
-| Feedback _ Fixes - as of [06-Jun-2026].md | 🟢 authoritative | Raw user feedback — source of truth | Named SoT in CLAUDE.md |
-| COVERAGE_GAPS.md | 🟡 active-living | Tracker: feedback bullets lacking a home | Updated through 2026-06-16 |
-| FEEDBACK_TRIAGE_AND_PLAN.md | 📦 superseded (partial) | Feedback→work map | Superseded for sequencing by RECONCILED plan |
+| Feedback _ Fixes - as of [06-Jun-2026].md | 🟢 authoritative | Raw user feedback — source of truth for coverage tables | Named SoT in CLAUDE.md |
+| COVERAGE_GAPS.md | 🟡 active-living | Tracker: feedback bullets lacking a brief/proposal home | Living; entries flip gap→covered as briefs land |
+| FEEDBACK_TRIAGE_AND_PLAN.md | 📦 superseded (RECONCILED_FINISHING_PLAN) | Feedback→work map | Superseded for sequencing/strategy; retains what/why map |
 
-## docs/ root — navigation & guides
+## docs/ root — navigation & guides (2)
 
 | Doc | State | Purpose | Notes |
 |---|---|---|---|
-| 00_DOC_GRAPH.md | 🕸 stale→stub | Per-prompt required-reading map | Shrunk to a stub (FU-428/446) |
-| INGESTION_GUIDE.md | 🟢 authoritative | Admin guide: sourcing data via /api/ingest | Matches shipped C-10.x |
+| 00_DOC_GRAPH.md | 📦 superseded → stub | Former per-prompt required-reading map | Retired (FU-428); CLAUDE.md calls it a legacy stub |
+| INGESTION_GUIDE.md | ✅ done-clean | Power-user guide: sourcing data via `POST /api/ingest` | Matches shipped ingestion API (C-10.5) |
 
 ## 03_prompts — executable prompts (19)
 
+The whole pack is a historical execution map — live state lives here in
+PROJECT_STATE.md. Index banner (verified 2026-07-02): all Wave-A + Wave-B
+prompts shipped; every Wave-C brief produced its proposal (most now built via
+IMPL_PLAN_*); INV prompts produced their reports.
+
 | Doc | State | Evidence |
 |---|---|---|
-| 00_INDEX.md | 🕸 stale (banner added) | Status column pre-dates shipped code |
-| A1 / A1b / A3 / A6 / A8 | ✅ done | Theme, token-tuning, modal, text-size, renames — all shipped |
-| A2 / A4 / A5 / A7 | ➗ carve-outs | Button, filter, skeleton, footer — shipped w/ opportunistic tails (FU-006/011-013/023/024) |
-| B1 / B3 / B4 / B5 / B7 / B8 | ✅ done | All bug clusters shipped (CHANGELOG B-series) |
-| B9 | ➗ carve-outs | Shipped; item 4 (command palette) deliberately cancelled |
-| C_big_rock_design_briefs.md | 🔵→built | 14 briefs → proposals; most built via IMPL_PLANs |
-| INV_investigations.md | 🔵→done | INV-1..8,10 produced memos; INV-9 superseded |
+| 00_INDEX.md | 🗄 historical (banner added) | "Status column is stale… read as historical execution map" |
+| A1 / A1b / A2 / A3 / A4 / A5 / A6 / A7 / A8 | 🗄 historical | Wave-A foundation sweeps (tokens, button/modal/filter, skeletons, text-scale, footer, renames) — all shipped |
+| B1 / B3 / B4 / B5 / B7 / B8 / B9 | 🗄 historical | Wave-B bug clusters — all shipped (B2/B6 folded); B9 item 4 (command palette) cancelled |
+| C_big_rock_design_briefs.md | 🗄 historical | Big-rock briefs → proposals → IMPL_PLANs; C-6/C-8 companion-scope |
+| INV_investigations.md | 🗄 historical | INV-1..10 → reports; INV-9 (palette) superseded |
 
-## 04_proposals — designs, impl-plans, runbook (49)
+## 04_proposals — designs, impl-plans, runbook (63)
 
-| Doc | State | Notes |
-|---|---|---|
-| PROPOSAL_STOCK_OVERVIEW / _MEAL_PLANS / _COOK_MODE / _COOKBOOK / _CART_BUTTON / _ALERTS / _INGESTION_API / _CONFIG_AND_OPTINS | ✅ done | Big-rock C-1/2/3/4/7/9/10/cross designs — all built via IMPL_PLANs |
-| PROPOSAL_STOCK_OVERVIEW / _AUTH_SHELL / _BUY_VERDICT_ORACLE | ✅ done | Auth-shell + buy-verdict shipped 2026-07-02 (⚠️ stale headers, FU-445) |
-| PROPOSAL_STOCK_ITEM_DETAIL / _ONBOARDING / _BARCODE_SCANNING / DORA_ASSISTANT_ARCHITECTURE | ➗ carve-outs | Mostly shipped; named deferrals |
-| PROPOSAL_COOKBOOK_CARD_REVISION / _RECIPE_IMAGE_STEPS / _WASTE_MINIMISATION / _SHOPPING_LIST_UX_V2 | ✅ done | Shipped; were orphaned from indexes |
-| STATE_OWNERSHIP_REFACTOR_PROPOSAL | ✅ done | R-003 authority; IMPL executed |
-| PROPOSAL_PRODUCTS_AS_OVERLAY / IMPL_PLAN_PRODUCTS_AS_OVERLAY / PRODUCTS_OVERLAY_RUNBOOK | 🟡 active | Phase F in progress; RUNBOOK is the ⭐ live driver |
-| PROPOSAL_HELP_OVERLAY | 📦 superseded | Overlay mechanism retired 2026-07-06 → executed as targeted `(?)` chips per `IMPL_PLAN_HELP_CHIPS.md` (FU-503 / FU-044 both resolved) |
-| PROPOSAL_SUPPORT_CHANNEL | ➗ built (dormant) | FU-370: code half shipped off-by-default; hardcoded author-controlled switch, never an admin AppSetting (settled, FU-558; §4.1/§4.2 withdrawn). Channel stand-up = FU-557 |
-| PROPOSAL_TEST_SUITE_IMPROVEMENTS | ➗ carve-outs | Built across ~9 sessions (FU-371 resolved 2026-07-13); Phases 1-3 done, Phase 4 (FU-520) all but item 1. `useOfflineQueue` spec (2026-07-15) drained item 3's last surface; frontend Vitest 385/30. Sole carve-out left: **Postgres CI + coverage gate, blocked on CI-off (FU-405)** — suite already green on PG via `DORA_TEST_DB` selector. (scraper tests live in companion repo, FU-161) |
-| IMPL_PLAN_HELP_CHIPS | ✅ done | Executed 2026-07-06 (FU-503) |
-| PROPOSAL_LOCALE_I18N | ➗ carve-outs | Layers A + B shipped 2026-07-06 (FU-043); Layer C (full UI translation) explicitly parked as someday |
-| PROPOSAL_SIMPLE_MODE | 📦 superseded | → products-as-overlay |
-| SHOPPING_LIST_REDESIGN_PROPOSAL | 📦 superseded | v1 shipped (P6-01) → UX_V2 presentation |
-| IMPL_PLAN_* (Alerts, Cart, Cookbook, Cook-Mode, Dashboard, Error-Handling, Ingestion, Meal-Plans, Meal-Plans-Rebuild, State-Ownership, Stock-Item-Detail, Stock-Overview, Waste, Your-Prices, Settings-Rebuild, Shopping-Lists, Shopping-List-Receipts, Config, Auth-Shell) | ✅ done | All executed & shipped. ~13 carry stale "no code yet" headers (FU-445). MEAL_PLANS_REBUILD is the live meal-plans authority. |
-| IMPL_PLAN_RECIPE_IMPORTER | 🔵 designed | 2026-07-04. Six-chunk paste-based rebuild; supersedes IMPL_PLAN_COOKBOOK §Chunk 7's URL-importer scope. Closes FU-104 / FU-199 / FU-396 (importer half). |
-| PLAY_STORE_LISTING | 🔵 designed | 2026-07-04 (P8-10). Play Store copy draft, 6-shot screenshot plan, adaptive-icon note. **No submission** — reference for the day one happens. |
-| PROPOSAL_STOCKTAKE_MODE | ✅ done | 2026-07-04. Full stocktake-mode redesign — decisions-locked brief AND shipped end-to-end (Chunks 1–3 backend engine + SPA runner + Settings/Overview surfacing + housekeeping). Anchor for FU-226/430 close-out; SK-1..11 feedback resolved. |
-| PROPOSAL_MEAL_PLANS_PART_2 | ✅ built | 2026-08-11. **Cook batches** — one cook feeds several days. **BUILT END-TO-END + verified live** (FU-617 resolved). Backend: `CookBatch` entity/table/migration `d5a9f27c4e18`, `cook_key` grouping+validation, derived read view. Manual UI: "Cook · serves N"/"Leftovers" markers + link/unlink menu + day-picker, gated on the Batch cook-style. Builder: "Build my week" proposes cooks (one recipe per 3-day run for Batch households; ties off FU-611). `test_cook_batches.py` 10 + `test_build_week.py` +3; consolidated gate 59 green; verified live (18 markers → 6 CookBatch rows). Proposal Phases 2/3 dropped as no-ops (Σ-yield batch-invariance, pinned by test). One light owner-walk queued (the manual day-picker dialog). (same recipe+slot, distinct days). First-class `CookBatch` + `MealPlanEntry.cook_batch_id`; `cook_key` grouping on the write path; batch = demand unit (counted once at total yield), entry = consumption unit; 6 aggregation impact points listed; reconcile cook-once-drain-many; per-entry linked-cook UI (no layout rebuild); builder auto-proposals for Batch households (also the honest FU-611 fix). Folds into the existing `batch_features_enabled` cook-style. Open decisions all closed; grounded in a 4-agent code investigation. Build = **FU-617**. No code yet. |
-| PROPOSAL_MEAL_RECONCILE | 🔵 designed | 2026-07-09. "Stocktake mode for meals" — per-user auto-drain setting + new `/meal-plans/reconcile` surface + `MealPlanReconcileReceipt` audit table + `meal_reconcile_overdue` alert. Anchor for FU-317 close-out (F5/F6 magic-audit resolution). **Decisions locked; four residuals answered in the impl-plan.** No code yet. |
-| IMPL_PLAN_MEAL_RECONCILE | 🟡 in-progress | 2026-07-09. Six-chunk executable plan. **Chunks 1-5 ✅ shipped 2026-07-09** — schema + receipt writer + sweep rewrite (Ch 1); R-003 pool-helper collapse (Ch 2); queue + verb endpoints (Ch 3); `meal_reconcile_overdue` alert + `reconcile_meals_pending` suggestion sharing one `reconcile_overdue_signal` authority (Ch 4); **UX shipped Ch 5** — `/meal-plans/reconcile` runner page + dashboard `ReconcilePastMealsChip` + meal-plans header nudge + `useReconcileQueue.ts` composable. **Chunk 6** (settings row + copy polish + COVERAGE_GAPS flip) is the last thing pending. |
+**IMPL plans & runbook (A–M):**
 
-## 05_investigations — reports (18)
+| Doc | Type | State | Purpose | Evidence |
+|---|---|---|---|---|
+| DESIGN_REMEDIATION_PLAN | Design backlog | 🟡 active | Action the 2026-07-18 UX/design audit (DR-1…16) | DR-1/1b/3/4/5/6 done, DR-7 ➗ (toast-route carve-out FU-624); DR-8 next; rest phased |
+| DORA_ASSISTANT_ARCHITECTURE_PROPOSAL | Proposal | ➗ carve-outs | Unify assistant capability model + LLM config | §2.2 registry deliberately not built; §7 multi-provider shipped |
+| IMPL_PLAN_ALERTS | Impl plan | ✅ done | Alerts control-centre (C-9) | Digest+push+prefs shipped; header stale |
+| IMPL_PLAN_AUTH_SHELL | Impl plan | ✅ done | Extract shared AuthShell + AuthButton (C-19) | `AuthShell.vue`/`AuthButton.vue` exist |
+| IMPL_PLAN_CART_BUTTON | Impl plan | ✅ done | Unify add-to-list into one cart control (C-7) | `AddToListButton` in use |
+| IMPL_PLAN_CONFIG_AND_OPTINS | Impl plan | ✅ done | Feature-flag/opt-in spine (C-cross) | `useFeatureFlags`/health flags shipped |
+| IMPL_PLAN_COOKBOOK | Impl plan | ✅ done | Recipe domain rebuild (C-4) | Structured steps/tags shipped |
+| IMPL_PLAN_COOK_MODE | Impl plan | ✅ done | Cook-mode rebuild (C-3) | `RecipeCookMode.vue` live |
+| IMPL_PLAN_DASHBOARD_REBUILD | Rebuild brief | ✅ done | Rebuild DashboardPage around savings | `DashboardPage.vue` rebuilt |
+| IMPL_PLAN_ENV_TO_APPSETTING | Impl plan | ✅ done | Promote 12 env vars to AppSetting (FU-333B) | Header "SHIPPED 2026-07-05/06" |
+| IMPL_PLAN_ERROR_HANDLING | Impl plan | ➗ carve-outs | App-wide error-message polish (FU-099) | `apiErrorHandler.ts` live; full 166-catch sweep unconfirmed |
+| IMPL_PLAN_HELP_CHIPS | Impl plan | ✅ done | Add (?) hover-help chips (FU-044) | `help_outline` tooltip pattern across pages |
+| IMPL_PLAN_INGESTION_API | Impl plan | ➗ carve-outs | Ingestion `/api/ingest` + Your-Prices (C-10) | Built; browser-verify pending |
+| IMPL_PLAN_MEAL_PLANS | Impl plan | ✅ done | Build meal-plans surface (C-2) | Rebuild doc: all F1–F49 shipped |
+| IMPL_PLAN_MEAL_PLANS_REBUILD | Critique+rebuild | ✅ done | Re-critique + rebuild the C-2 result | `useMealPlanner.ts` + components exist |
+| IMPL_PLAN_MEAL_RECONCILE | Impl plan | 🟡 in-progress | Manual meal-plan reconcile (FU-317) | Chunks 1–5 shipped; Chunk 6 pending; header stale |
+| IMPL_PLAN_ONBOARDING | Impl plan | ✅ done | Onboarding redesign + de-persona (C-5/FU-210) | Onboarding pages live |
+| IMPL_PLAN_PRODUCTS_AS_OVERLAY | Impl plan | ➗ carve-outs | Chunk detail for products overlay | Phases 0–E done; Phase-F tail open |
+| IMPL_PLAN_RECIPE_IMPORTER | Impl plan | ✅ done | Paste-based recipe importer (FU-104/199/396) | Importer machinery present |
+| IMPL_PLAN_SETTINGS_REBUILD | Rebuild brief | ✅ done | Rebuild settings shell + sections | "COMPLETE (Phases 1–5 landed)"; reworked since |
+| IMPL_PLAN_SHOPPING_LISTS | Impl plan | ✅ done | Shopping-list status-model rebuild (P6-01) | Cited "landed" across surfaces |
+| IMPL_PLAN_SHOPPING_LIST_RECEIPTS | Impl plan | ✅ done | Attach receipt photos (FU-334) | "Built 2026-06-30" |
+| IMPL_PLAN_STATE_OWNERSHIP | Impl plan | ✅ done | Server-owned derived facts refactor | cookable/missing/allocation SSOT landed |
+| IMPL_PLAN_STOCK_ITEM_DETAIL | Impl plan | ✅ done | Stock-item detail polish (C-1b) | Detail page live |
+| IMPL_PLAN_STOCK_OVERVIEW | Impl plan | ✅ done | Stock overview redesign (C-1) | `StockOverview.vue`/`StockItemRow.vue` |
+| IMPL_PLAN_WASTE_MINIMISATION | Impl plan | ✅ done | Waste-minimisation cluster (C-waste) | `wasteApiService.ts` + mark-as-wasted |
+| IMPL_PLAN_YOUR_PRICES | Impl plan | ✅ done | "Your prices" intelligence (Phase F) | "All 8 chunks landed (FU-227/425)" |
+| OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT | Option doc | 🔵 deferred | Parked multi-tenant SaaS / managed-host option | Deferred 2026-07-14; kept parked post-pivot |
+| PLAY_STORE_LISTING | Listing draft | 🔵 designed | Play Store copy + screenshot plan | "Draft copy; no submission yet" |
+| PRODUCTS_OVERLAY_RUNBOOK | Runbook/status | 🟡 active | Drive products-overlay end-to-end | Phases 0–E done, Phase F in progress |
 
-| Doc | State | Notes |
-|---|---|---|
-| DATA_MODEL_SANITY_SWEEP_FU393 | ✅ done | P5-08 whole-schema sweep (2026-07-14). Found model↔migration index drift (1 vs 32), 42 unindexed FK cols, 3 Product nullability mismatches → remediation FU-563/564. Read-only. **Fully remediated 2026-07-15** — FU-563 (index drift closed + 43 FK indexes), FU-564 (Product nullability), FU-565 (6 FK ondelete); schema-match test now enforces tables+columns+nullability+index/unique+FK-ondelete (R-034/ADR-030). No residual |
-| PERF_SCALE_SWEEP_FU388 | ✅ done | P5-03 perf sweep — no N+1s; `/api/health` query fix; residual axes → FU-560 |
-| AUTH_ASSISTANT_SECURITY_FINDINGS | 🟡 open | 🔴 HIGH CSRF + MEDIUM email-change unfixed (FU-447) |
-| STOCK_OVERVIEW_PERF / ORPHANED_FIELDS_AUDIT / FEATURE_CLARIFICATIONS / MAGIC_BEHAVIOUR_AUDIT / PLATFORM_BUILDS_AUDIT / Distribution Spec | 🟡 open | Findings stand; tracked (FU-411/415/416/417/418) |
-| EMAIL_SETUP_FINDINGS (INV-4) | ✅ shipped | Proposal (admin SMTP-on-AppSetting + hide forgot-password when unconfigured) shipped via FU-333; verified + closed FU-413 (2026-07-14) |
-| COMMAND_PALETTE / ESSENTIAL_FLAG / HISTORY_TAB / LOGGING_AND_DATA_LAYOUT / RECIPE_COMPARISON | ✅ closed | Recommendations actioned |
-| COMMERCIALIZATION_REPORT / MULTI_USER_READINESS | 🗄 historical (monetization) | **Selling reversed 2026-07-31 → donation/open-source/all-free.** The report's whole monetization thread (billing/tiers/relicense/freemium) is now historical; its productionization findings (§3–4) still stand + shipped. FU-400/401/399/398/403/402 stay parked in OPTIONAL_SAAS below |
-| SELF_HOST_COMMERCIALIZATION_PLAN (04_proposals) | 📦 superseded | **Superseded 2026-07-31** (banner added) — sequenced the paid tracks; FU-562 (billing) + FU-567 (relicense) RESOLVED won't-do. Residual = open-source *release* readiness (FU-406/557) |
-| OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT (04_proposals) | 🔵 deferred option | "Revisit later" bucket for multi-tenant SaaS (Path A) + managed single-tenant (Path B) + scale/billing. Even less likely post-pivot (donation/OSS) but **kept parked, not closed** (owner, 2026-07-31). Created 2026-07-14 |
-| SUBSTITUTE_SWAP_ASSESSMENT | 🕸 stale | Rec obsoleted by Shop-Mode merge |
+**Proposals (N–Z):**
 
-## 06_legacy_prompt_plans — historical (8)
+| Doc | Type | State | Purpose | Evidence |
+|---|---|---|---|---|
+| PROPOSAL_ALERTS | Proposal (C-9) | ✅ done | Design the alerts control-centre | Realized by IMPL_PLAN_ALERTS |
+| PROPOSAL_AUTH_SHELL | Design brief (C-19) | ➗ carve-outs | Shared AuthShell for pre-auth pages | Built; header "no code" stale |
+| PROPOSAL_BARCODE_SCANNING | Proposal (P6-02) | ➗ carve-outs | Fix scan data model, gate off-by-default | Implemented; §5.2 ingestion auto-populate deferred |
+| PROPOSAL_BUDGET_AWARE_LISTS | Proposal (P2-05 tail) | 🔵 designed | Budget-aware auto shopping-list optimizer | Header "Draft"; no budget logic in `auto_generate.py` |
+| PROPOSAL_BUDGET_DEFENSE_SWAPS | Design brief (FU-451/450) | ➗ carve-outs | Over-budget swaps + deal-quality signal | `swap_suggestions.py`/`deal_quality.py` shipped; good_deal alert + product swaps CUT |
+| PROPOSAL_BUY_VERDICT_ORACLE | Proposal (P8-05) | ✅ done | In-aisle "should I buy this?" verdict | Leaned on as shipped by adjacent docs |
+| PROPOSAL_CART_BUTTON | Proposal (C-7) | ✅ done | Unify all add-to-list controls | `IMPL_PLAN_CART_BUTTON.md` |
+| PROPOSAL_CONFIG_AND_OPTINS | Design brief (C-cross) | ➗ carve-outs | Cross-cutting config/opt-in editors | Chunks shipped; chunk 6 verify-only |
+| PROPOSAL_COOKBOOK | Proposal (C-4) | ✅ done | Recipe/cookbook domain redesign | `IMPL_PLAN_COOKBOOK.md`; comparison cut per INV-6 |
+| PROPOSAL_COOKBOOK_CARD_REVISION | Proposal (FU-088) | ✅ done | Recipe card redesign + optional ingredients | "BUILT — A+B+C shipped" |
+| PROPOSAL_COOK_MODE | Proposal (C-3) | ✅ done | Cook mode / finish-loop redesign | `IMPL_PLAN_COOK_MODE.md` |
+| PROPOSAL_HELP_OVERLAY | Design brief (C-help) | 📦 superseded (IMPL_PLAN_HELP_CHIPS) | Opt-in contextual help overlay | Superseded 2026-07-06 → help chips |
+| PROPOSAL_INGESTION_API | Proposal (C-10) | ➗ carve-outs | Inbound ingest endpoint + "your prices" | Built; register-against-product deferred Phase 2 |
+| PROPOSAL_LOCALE_I18N | Design brief (C-locale) | ➗ carve-outs | De-AU currency/format neutrality | Region/currency shipped; full translation out-of-scope |
+| PROPOSAL_MEAL_PLANS | Proposal (C-2) | ✅ done | Meal-plan surface redesign | `IMPL_PLAN_MEAL_PLANS(_REBUILD).md` |
+| PROPOSAL_MEAL_PLANS_PART_2 | Proposal (FU-617) | ✅ built | Cook batches (one cook, several days) | CHANGELOG "cook batches" 2026-08-11 |
+| PROPOSAL_MEAL_RECONCILE | Proposal | ✅ done | Manual meal-plan reconcile | `MealReconcilePage.vue`; header stale |
+| PROPOSAL_ONBOARDING | Proposal (C-5) | ✅ done | First-run on-ramp redesign | `IMPL_PLAN_ONBOARDING.md`; personas cut |
+| PROPOSAL_PRODUCTS_AS_OVERLAY | Proposal | 🟡 active | Products as data-presence-gated overlay | Runbook-tracked; Phase-F tail |
+| PROPOSAL_RECIPE_IMAGE_STEPS | Proposal (C-4 add-on) | ✅ done | Photo-based recipe steps mode | "BUILT 2026-06-25" |
+| PROPOSAL_SHOPPING_LIST_UX_V2 | Proposal | ✅ done | Single-page shopping experience | "BUILT 2026-06-12" |
+| PROPOSAL_SIMPLE_MODE | Proposal | 📦 superseded (PRODUCTS_AS_OVERLAY) | Minimal-user workflow / pricing substrate | Spine superseded; substrate shipped |
+| PROPOSAL_STOCKTAKE_MODE | Proposal (FU-430) | ✅ done | Walk-the-pantry stocktake redesign | Decisions locked + shipped end-to-end |
+| PROPOSAL_STOCK_ITEM_DETAIL | Proposal (C-1b) | ✅ done | Stock-item detail polish/timeline | `IMPL_PLAN_STOCK_ITEM_DETAIL.md` |
+| PROPOSAL_STOCK_OVERVIEW | Proposal (C-1) | ✅ done | Stock overview redesign | Reconciled against shipped reality |
+| PROPOSAL_SUPPORT_CHANNEL | Action plan | ➗ built (dormant) | In-app support/feedback channel | Built off-by-default (FU-370); admin-editor half won't-build; stand-up = FU-557 |
+| PROPOSAL_TEST_SUITE_IMPROVEMENTS | Engineering proposal | ➗ carve-outs | Test coverage/quality/cleanup | Built across ~8 sessions; Postgres CI carve-out open (FU-405) |
+| PROPOSAL_USAGE_TELEMETRY | Proposal | 📦 superseded (OPTIONAL_SAAS) | Privacy-first usage analytics | Parked hosted-only; self-host won't-do |
+| PROPOSAL_WASTE_MINIMISATION | Proposal (C-waste) | ✅ done | Dissolve waste page, keep signal | `IMPL_PLAN_WASTE_MINIMISATION.md` |
+| PROPOSAL_ZERO_INPUT_PANTRY | Proposal (P8-07) | ✅ built (verify pending) | Inferred inventory / confidence beliefs | "Built 2026-07-03 server+SPA" |
+| SELF_HOST_COMMERCIALIZATION_PLAN | Plan | 📦 superseded | Sequence to sell self-hosted Dora | Reversed 2026-07-31 → donation/OSS (FU-562/567 won't-do) |
+| SHOPPING_LIST_REDESIGN_PROPOSAL | Proposal (v1) | 📦 superseded (SHOPPING_LIST_UX_V2) | Shopping-list lifecycle redesign | Structural work shipped as P6-01 |
+| STATE_OWNERSHIP_REFACTOR_PROPOSAL | Proposal | ➗ carve-outs | Server-vs-client state ownership refactor | `IMPL_PLAN_STATE_OWNERSHIP.md`; §8 addendum binding |
 
-All 🗄 historical & correctly retired: `PROMPT_PLAN.md`, `PROMPT_PLAN_PART_2..7`,
-`STATUS.md` (self-labels retired 2026-05-27). Superseded by `03_prompts/`.
+## 05_investigations — reports (21)
 
-## 99_scratch — raw notes (5)
+| Doc | Type | State | Purpose/Notes | Evidence |
+|---|---|---|---|---|
+| DATA_MODEL_SANITY_SWEEP_FU393 | Schema sweep | ✅ closed-actioned | Whole-schema sanity; remediation spawned FU-563/564/565 | Fully remediated 2026-07-15; schema-match test enforces (R-034) |
+| PERF_SCALE_SWEEP_FU388 | Perf sweep | ✅ closed-clean | Query-scale at 500/2000 items — no N+1s | "DB/query-scale pass done (clean)" |
+| AUTH_ASSISTANT_SECURITY_FINDINGS | Security audit | ➗ closed-with-carve-outs | Auth+assistant register; re-audited 2026-07-13 | HIGH/MED fixed (FU-197/442/515); A.5/A.6/A.7 accepted |
+| EMAIL_SETUP_FINDINGS (INV-4) | INV memo | ✅ closed-actioned | Password-reset flow + admin email-setup | Shipped via R-030/FU-413 |
+| LOGGING_AND_DATA_LAYOUT (INV-3) | INV memo | ✅ closed-actioned | Time-based rotation + data/cache split | `logging_setup.py` uses TimedRotatingFileHandler (FU-027) |
+| ESSENTIAL_FLAG_FINDINGS (INV-10) | INV memo | ✅ closed-actioned | `is_flagged`→`is_essential` wire-up + rename | CHANGELOG 2026-08-08 (migration `f4a2c7e9b1d3`) |
+| RECIPE_COMPARISON_ASSESSMENT (INV-6) | INV memo | ✅ closed-actioned | Compare tool — verdict CUT | Comparison UI gone from RecipesOverview; §4 cut |
+| COMMAND_PALETTE_ASSESSMENT (INV-9) | INV memo | ✅ closed-actioned | Ctrl-K palette — SHRINK→CUT | Palette/registry/recents removed (FU-029) |
+| CROWD_PRICES_ASSESSMENT (INV-11) | INV memo | ✅ closed-actioned | P8-04 crowd price graph — verdict CUT | RECONCILED §7 Decision 6; unblocked FU-438 |
+| MAGIC_BEHAVIOUR_AUDIT (FU-092) | Audit | ✅ closed-actioned | All implicit "magic" behaviours; spun FU-315..319 | "Complete; verdicts gathered 2026-06-28" |
+| ORPHANED_FIELDS_AUDIT (INV-1) | Audit | ➗ closed-with-carve-outs | Fields set-but-unread; delta-checked FU-416 | Feeds DATA_MODEL_SANITY_SWEEP |
+| STOCK_OVERVIEW_PERF (INV-2) | INV memo | ➗ closed-with-carve-outs | Mount cost + latent page-1-only fetch bug (logged FU) | Broader scale cleared by FU-388 |
+| PLATFORM_BUILDS_AUDIT (FU-327) | Report | ➗ closed-with-carve-outs | Delivery-target audit; real blocker = dead CI | Report-only; gaps spun as FUs; FU-327 scoped-open |
+| UX_DESIGN_CRITIQUE_2026-07-18 | Design critique | ➗ closed-with-carve-outs | Synthesis of FU-578 UX passes; system-vs-screens gap | Feeds DESIGN_STYLE_GUIDE + DESIGN_REMEDIATION_PLAN |
+| FEATURE_CLARIFICATIONS (INV-5) | INV memo | 🔵 informational | QR vs register-barcode, product-search, expiry↔open | Partly superseded by barcode-on-Product (FU-373) |
+| HISTORY_TAB_ASSESSMENT (INV-7) | INV memo | 🟡 open | Stock-item History tab weak → REWORK | No matching CHANGELOG entry found |
+| SUBSTITUTE_SWAP_ASSESSMENT (INV-8) | INV memo | 🟡 open | List-level substitute swap → REWORK (move to Shop Mode) | Swap still lives in list ⋮ menu |
+| FU_512_UNIT_OF_WORK_SWEEP_RUNBOOK | Runbook | 🟡 open (analysis-only) | Mechanical UoW refactor guide (10 handlers) | "Analysis-only, no code changes yet" |
+| Distribution Spec - Desktop & Mobile Client | Spec/plan | 🔵 designed (partial) | Desktop (PyInstaller) + mobile packaging plan | Desktop/gunicorn shipped (FU-397); mobile Capacitor scaffolded |
+| MULTI_USER_READINESS | Pre-flight checklist | 🔵 informational | Single-tenant assumptions to dismantle before multi-user | "Draft for discussion"; Phase-4; ties FU-045 |
+| COMMERCIALIZATION_REPORT | Strategy report | 🗄 historical / 📦 partly superseded | Monetization analysis; selling reversed 2026-07-31 | Productionization findings (§3–4) shipped; monetization thread historical |
+
+## 06_legacy_prompt_plans — historical (9)
+
+All 🗄 historical — the original pre-charter plan library, retired 2026-06-12;
+superseded by `docs/03_prompts/` (active prompts) and, for state, `CHANGELOG.md`
++ `DORA_WORKLOG.md`. Files: `PROMPT_PLAN.md`, `PROMPT_PLAN_PART_2..4.md`,
+`PROMPT_PLAN_PART_5_OPTIONAL.md`, `PROMPT_PLAN_PART_6_POLISH.md`,
+`PROMPT_PLAN_PART_7_COMMERCIALIZATION.md`, `STATUS.md` (🕸 stale, last regen
+2026-05-27, self-labelled non-authoritative), and
+`PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` (✅ fully executed via
+IMPL_PLAN_YOUR_PRICES — FU-227, delta-checked FU-425).
+
+## 99_scratch — raw notes (4)
 
 | Doc | State | Recommendation |
 |---|---|---|
-| PROGRESS_REPORT_2026-06-12 / FEEDBACK_AUDIT_2026-06-12 | 🗄 historical | Delete — superseded by this doc (kept briefly for FU cross-refs) |
-| PRICING_SYSTEM_REASSESSMENT_HANDOFF | 📦 superseded | Executed into IMPL_PLAN_YOUR_PRICES; archive/delete (FU-425) |
-| SENIOR_REVIEW_2026-06-16 | 🗄 historical | Keep — still cited by open FUs |
-| MINIMAL_USER_PRODUCTS_OFF_FRICTION | 🗒 untriaged | Only genuinely untriaged note — promote or keep |
+| MINIMAL_USER_PRODUCTS_OFF_FRICTION | 🗒 untriaged | Fuss-free (products-off) talk-time audit; promote or keep (FU-181) |
+| SENIOR_REVIEW_2026-06-16 | 🗄 historical | "Is it sellable?" static review; findings already spun to FUs; LOC metrics dated |
+| PROGRESS_REPORT_2026-06-12 | 🕸 stale / 🗄 historical | Point-in-time snapshot; superseded by this doc — safe to delete |
+| FEEDBACK_AUDIT_2026-06-12 | 🕸 stale / 🗄 historical | 309-bullet snapshot, stale as of 2026-07-01; evidence pointers only |
 
 ## docs/00_original_spec — historical bucket (157 files)
 

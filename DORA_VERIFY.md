@@ -22,6 +22,43 @@ top-to-bottom.
 
 ---
 
+## Toast & helper-bubble placement (design-remediation DR-7, 2026-08-12) — origin FU-578
+- [ ] Trigger a bottom-right toast (e.g. add a stock item to a list) — it appears in a column **above** the Dora mascot, not overlapping it. Fire a few in a row → they stack cleanly, clear of the launcher.
+- [ ] Fresh account / cleared `dora.helpHintDismissed*`: the first-time "Hi! I'm Dora" tip appears, then **auto-dismisses after ~9s** without needing a click; it doesn't sit over stock rows / detail Level controls indefinitely.
+- [ ] Open the Dora chat and send "hi" → greeting reads **"Hi, Dora!"** (name capitalised), never "Hi, dora!"; no "Burger online" line.
+- [ ] Mobile viewport / device with a home indicator: the mascot launcher sits above the safe area (not tucked under the indicator or a rounded corner).
+- [ ] *(Known carve-out, not a fail — FU-624)* a toast fired right before navigating can still linger onto the next page; the column placement above is what's under test here.
+
+## Open-toggle can be cancelled (design-remediation DR-5, 2026-08-12) — origin FU-578
+- [ ] On a **sealed** stock item, click the open toggle → the "Marking … as open" dialog shows **three** buttons: Cancel / Skip / Update expiry. Press **Escape** (or click the backdrop) → the item **stays sealed** (row glyph unchanged, no toast). Same via the **Cancel** button.
+- [ ] Click open again → **Skip** → item flips to open, expiry unchanged. Toggle it sealed, open again → **Update expiry**, pick a new date → item opens *and* the effective expiry updates.
+- [ ] Repeat the Escape/Cancel check on the **stock item detail page** open/in-use toggle: dismissing leaves the toggle in its prior position (it snaps back, no write).
+
+## De-Quasar detail: dialog casing, open-toggle glyph, bulk-bar disabled (design-remediation DR-3, 2026-08-12) — origin FU-578
+- [ ] Trigger a few confirm/prompt dialogs and check **no button is ALL-CAPS**: delete a store / stock location / recipe tag (Cancel + Delete), mark a stock item "open" (the "Skip" / "Update expiry" expiry prompt), the meal-planner "Clear this week", a bulk "Add to list…". Buttons read sentence-case ("Cancel", "Delete", "Skip", "Update expiry", "Got it").
+- [ ] On a stock row, the **open / in-use toggle** shows a **box** glyph (sealed closed-box → open-box when toggled), not a padlock. Hovering still shows "Mark as open / in-use" ↔ "Mark as sealed".
+- [ ] Enter **bulk-select** on Stock Overview with **nothing selected**: the action buttons ("Add to list…", "Remove from list…", "Move location", "Restock", "Log waste…") render clearly **greyed/disabled**, visibly different from the enabled "Select visible" — not the same white as enabled. Selecting an item un-greys them.
+- [ ] Cook mode timer: the **Pause** button (while a timer runs) reads sentence-case "Pause" and matches the app's button styling (warning tone).
+
+## Low-contrast badge fixes (design-remediation DR-1b, 2026-08-12) — origin FU-578
+- [ ] The **notifications bell count badge** (red circle with a number) is clearly legible in every theme, light and dark — the number reads as white on a deep red, not a washed-out light red.
+- [ ] The **Buy / Wait / Skip verdict badge** (stock item row / detail) reads clearly in all themes: the label is dark on light themes / light on dark, sitting on the coloured tinted chip. "Wait" in particular is no longer faint amber-on-cream. The coloured border still signals buy(green)/wait(amber)/skip(red).
+
+## Muted-text contrast retune (design-remediation DR-1, 2026-08-12) — origin FU-578
+- [ ] In each of the 5 light themes (Pesto, Lemon Tart, Blueberry, Cherry Cola, Sourdough), the **muted/caption text** (footer stats, timestamps, chip captions, "Based on N samples" lines) is comfortably legible — no longer faint. It should still read as *quieter* than body text, not equal to it.
+- [ ] In the dark themes, muted text is unchanged-to-slightly-clearer (Lemon Tart Dark + Blueberry Dark lifted a touch); nothing looks washed out or over-bright.
+- [ ] Spot-check the dashboard, stock overview, and a shopping-list detail in a couple of themes (light + dark) — the muted ramp reads consistently. *(Ratio probe already confirmed ≥4.5:1 on every surface; this is an aesthetic sanity pass.)*
+
+## Copy & wording sweep (design-remediation DR-4, 2026-08-12) — origin FU-578
+- [ ] An item that expired reads **"… expired 3 days ago"** in the use-soon suggestion (dashboard/DoraBot) — NOT "expires expired". A single-day case reads "expired 1 day ago".
+- [ ] Alert details pluralise: an item **out N days** shows "Expired N days ago" (or "1 day"), a low/overdue item "Overdue by N days" / "1 day" — no literal "day(s)".
+- [ ] Dashboard greeting shows your name **capitalised** ("Good afternoon, Dora"), not the raw lowercase handle.
+- [ ] The savings stat under the primary shopping list reads **"saved vs RRP"**.
+- [ ] A recipe whose cuisine and category are the same word shows the meta chip **once** ("Dessert"), not "Dessert · Dessert".
+- [ ] Image uploads (recipe hero, recipe step images, profile picture, store logo) show **"Take a photo"** and a natural add label ("Add image" / "Add images" / "Add logo") — no "Add (file)" / "Add (camera)".
+- [ ] An **essential item that's out of stock** shows an action-neutral alert detail ("Out of stock and flagged as essential — worth restocking") that doesn't contradict the row's "Mark restocked" button.
+- [ ] Settings → System → Cooking: the **Batch** cooking-style explainer reads in plain words (no "cook pool" / "shortfall" jargon).
+
 ## AI master switch removed + encryption-key banner + generator (2026-08-12)
 - [ ] The **Admin → System** sidebar no longer lists **AI assistant**; visiting `/settings/admin/system/assistant` 404s (no redirect — pre-release). AI mode still works: turn it on for your account on Settings → Assistant with no install-wide gate blocking it.
 - [ ] The Dora chat mode slider (Basic/AI) enables purely off your own provider config — no "disabled install-wide" reason ever appears.

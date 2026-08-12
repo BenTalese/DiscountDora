@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest';
 import {
     detectIntent,
     extractAddToListItems,
+    runIntent,
+    type DoraContext,
     type DoraIntentId,
 } from 'src/services/doraIntents';
 
@@ -137,5 +139,26 @@ describe('extractAddToListItems — add-to-list parsing corpus', () => {
 
     it('lower-cases and trims consistently', () => {
         expect(extractAddToListItems('  ADD  Milk  ')).toEqual(['milk']);
+    });
+});
+
+describe('runIntent — greeting name (DR-7 / FU-578 #35)', () => {
+    const ctx = (username?: string): DoraContext => ({ currentPath: '/', username });
+
+    it('capitalises the username in the greeting (never the raw lowercase handle)', async () => {
+        // pick() is random across 5 variants; loop so we exercise several.
+        for (let i = 0; i < 12; i++) {
+            const reply = await runIntent('greet', ctx('dora'));
+            expect(reply.text).toContain('Dora');
+            expect(reply.text).not.toContain(', dora');
+        }
+    });
+
+    it('greets cleanly when no username is set (no ", undefined" / dangling comma)', async () => {
+        for (let i = 0; i < 12; i++) {
+            const reply = await runIntent('greet', ctx(undefined));
+            expect(reply.text).not.toContain('undefined');
+            expect(reply.text).not.toMatch(/Hi, !/);
+        }
     });
 });

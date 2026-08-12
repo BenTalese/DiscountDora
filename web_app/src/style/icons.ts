@@ -271,6 +271,12 @@ export const ICONS = {
     user: 'mdi-account-circle',
     scan: 'mdi-qrcode-scan',
     alert: 'mdi-bell',
+    // DR-3 (D-005) — the stock row's open / in-use toggle. A sealed vs
+    // opened box reads as the domain state (an opened jar / packet) and
+    // drops the padlock's security connotation (`lock`/`lock_open` above
+    // stay for auth/permission surfaces).
+    sealed: 'mdi-package-variant-closed',
+    opened: 'mdi-package-variant',
 
     // C-waste — reason tiles on the Mark-as-wasted modal. One per
     // reason from `WASTE_REASON_*`. Glyphs picked to read at a glance

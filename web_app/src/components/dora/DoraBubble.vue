@@ -192,8 +192,29 @@
         isAiOffline.value = offline;
     }
 
+    // DR-7 (FU-578 #6/#31) — the first-time hint used to sit over page content
+    // until clicked. Auto-hide it after a read-length beat so it stops
+    // lingering. Auto-hide is *transient* (no persist) — clicking the X
+    // (dismissHint) is the permanent acknowledge; an ignored hint may resurface
+    // next session, which is fine for a discoverability nudge.
+    const HINT_AUTO_HIDE_MS = 9000;
+    let hintAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
+    function clearHintAutoHide() {
+        if (hintAutoHideTimer !== null) {
+            clearTimeout(hintAutoHideTimer);
+            hintAutoHideTimer = null;
+        }
+    }
+    function armHintAutoHide() {
+        clearHintAutoHide();
+        hintAutoHideTimer = setTimeout(() => {
+            showFirstTimeHint.value = false;
+        }, HINT_AUTO_HIDE_MS);
+    }
+
     function dismissHint() {
         showFirstTimeHint.value = false;
+        clearHintAutoHide();
         try {
             localStorage.setItem(hintDismissedKey(), '1');
         } catch {
@@ -294,7 +315,10 @@
                 // Tiny delay so the hint doesn't fight with the initial page
                 // load animation.
                 setTimeout(() => {
-                    if (!open.value) showFirstTimeHint.value = true;
+                    if (!open.value) {
+                        showFirstTimeHint.value = true;
+                        armHintAutoHide();
+                    }
                 }, 1500);
             }
         } catch {
@@ -333,14 +357,17 @@
     onMounted(armSleepTimer);
     onBeforeUnmount(() => {
         if (sleepTimer !== null) clearTimeout(sleepTimer);
+        clearHintAutoHide();
     });
 </script>
 
 <style scoped>
     .dora-bubble-root {
         position: fixed;
-        right: 18px;
-        bottom: 18px;
+        /* DR-7 (FU-578 #6) — respect the mobile safe area so the launcher
+           doesn't tuck under a home indicator / rounded corner. */
+        right: max(18px, env(safe-area-inset-right, 0px));
+        bottom: max(18px, env(safe-area-inset-bottom, 0px));
         z-index: 3000;
         display: flex;
         flex-direction: column;

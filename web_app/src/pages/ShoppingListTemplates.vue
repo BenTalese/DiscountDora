@@ -286,7 +286,7 @@
                 title: 'New template',
                 message: 'What is this template called? (e.g. "Weekly essentials")',
                 prompt: { model: '', type: 'text' },
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk((v: string) => resolve(v.trim()))
                 .onCancel(() => resolve(null))
@@ -339,7 +339,7 @@
             $q.dialog({
                 title: `Delete "${template.name}"?`,
                 message: 'This removes the template. Shopping lists previously created from it are unaffected.',
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

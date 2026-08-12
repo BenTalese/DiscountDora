@@ -231,11 +231,20 @@
     });
 
     const metaLine = computed(() => {
+        // DR-4 (FU-578 #14): dedupe case-insensitively so a recipe whose cuisine
+        // and category are the same word doesn't render "Dessert · Dessert".
+        const seen = new Set<string>();
         const parts = [
             props.recipe.cuisine_name,
             props.recipe.category_name,
             props.recipe.time_of_day,
-        ].filter((p): p is string => Boolean(p));
+        ].filter((p): p is string => Boolean(p))
+            .filter((p) => {
+                const key = p.toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
         return parts.join(' · ');
     });
 

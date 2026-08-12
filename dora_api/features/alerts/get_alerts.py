@@ -54,6 +54,7 @@ from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.features.stocktake.stocktake import resolve_overdue_map
 from dora_api.infrastructure.api_response import ok
+from dora_api.infrastructure.utils import pluralize
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -191,7 +192,7 @@ class GetAlertsHandler:
                         stock_item_id = item.id,
                         stock_item_name = item.name,
                         message = f"{item.name} has expired",
-                        detail = f"Expired {abs(days_remaining)} day(s) ago.",
+                        detail = f"Expired {abs(days_remaining)} {pluralize(days_remaining, 'day')} ago.",
                         related_date = item.expiry_date.isoformat(),
                     ))
                 elif days_remaining <= window:
@@ -205,7 +206,7 @@ class GetAlertsHandler:
                         detail = (
                             f"Expires today."
                             if days_remaining == 0
-                            else f"Expires in {days_remaining} day(s)."
+                            else f"Expires in {days_remaining} {pluralize(days_remaining, 'day')}."
                         ),
                         related_date = item.expiry_date.isoformat(),
                     ))
@@ -223,7 +224,10 @@ class GetAlertsHandler:
                             stock_item_id = item.id,
                             stock_item_name = item.name,
                             message = f"Essential {item.name} is out of stock",
-                            detail = "Add it to your shopping list — you've flagged this as essential.",
+                            # DR-4 (FU-578 #17): action-neutral — the bell offers
+                            # both "Mark restocked" (per row) and "Add to list"
+                            # (footer), so the copy shouldn't prescribe one.
+                            detail = "Out of stock and flagged as essential — worth restocking.",
                             related_date = None,
                         ))
                     else:
@@ -278,7 +282,7 @@ class GetAlertsHandler:
                 stock_item_id = item.id,
                 stock_item_name = item.name,
                 message = f"{item.name} needs a stocktake",
-                detail = f"Overdue by {info.days} day(s).",
+                detail = f"Overdue by {info.days} {pluralize(info.days, 'day')}.",
                 related_date = None,
             ))
 
@@ -416,7 +420,7 @@ class GetAlertsHandler:
             severity = SEVERITY_LOW,
             message = f"{signal.unresolved_count} past meals need confirming",
             detail = (
-                f"Oldest is {signal.oldest_days_back} day(s) back — "
+                f"Oldest is {signal.oldest_days_back} {pluralize(signal.oldest_days_back, 'day')} back — "
                 f"a quick pass keeps your pool honest."
             ),
             related_date = head_iso,

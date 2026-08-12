@@ -40,12 +40,16 @@
 
             <SettingsSection>
                 <template #title>Cooking style</template>
+                <!-- DR-4 (FU-578 #38): plain-words explainer — the old copy
+                     leaked internal terms ("cook pool", "± / log-cook",
+                     "shortfall"). Say what the user gets, not the mechanism. -->
                 <template #description>
-                    <strong>Fresh</strong> keeps the meal planner pure
-                    scheduling. <strong>Batch</strong> adds the cook pool
-                    (per-recipe ± / log-cook), the cook-shortfall warning, and
-                    the "to cook by" sidebar line — for households that cook
-                    once and eat it across several days.
+                    <strong>Fresh</strong> keeps the meal planner as simple
+                    scheduling — one entry per meal. <strong>Batch</strong> is
+                    for households that cook once and eat it across several
+                    days: the planner tracks how many servings each cook makes,
+                    tells you when you've planned more meals than you've cooked,
+                    and shows what's still left to cook.
                 </template>
 
                 <SettingsRow label="Cooking style">

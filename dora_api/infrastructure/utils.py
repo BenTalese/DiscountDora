@@ -91,6 +91,18 @@ def field_of(model: type[BaseModel], field: str) -> str:
     return field
 
 
+def pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    '''
+    Return the correct noun form for `count`: `singular` when |count| == 1,
+    otherwise `plural` (defaulting to `singular` + "s").
+
+    DR-4 (FU-578 #10) — single source for noun pluralisation so user-facing
+    copy never ships the lazy "day(s)" placeholder. Call sites keep control of
+    the number and surrounding words: f"{n} {pluralize(n, 'day')} ago".
+    '''
+    return singular if abs(count) == 1 else (plural or f"{singular}s")
+
+
 def get_request_body() -> Any:
     '''
     Retrieves the request body from the current Flask request context.

@@ -533,7 +533,7 @@
                 model: items.filter((i) => covered.has(dayOf(i.value))).map((i) => i.value),
                 items,
             },
-            cancel: true,
+            cancel: { noCaps: true },
             persistent: false,
         }).onOk((picked: string[]) => {
             void planner.setCookDays(entry, picked);

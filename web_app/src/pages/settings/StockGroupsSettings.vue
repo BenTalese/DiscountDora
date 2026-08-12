@@ -116,7 +116,7 @@
                 title: 'New stock group',
                 message: 'What is this group called? (e.g. "Dairy", "Snacks")',
                 prompt: { model: '', type: 'text' },
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk((v: string) => resolve(v.trim()))
                 .onCancel(() => resolve(null))
@@ -176,7 +176,7 @@
                               count === 1 ? '' : 's'
                           } currently in this group will lose their group tag. The items themselves stay.`
                         : 'Nothing currently uses this group.',
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

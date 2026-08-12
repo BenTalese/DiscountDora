@@ -20,7 +20,19 @@ const h = vi.hoisted(() => ({
     stockItems: [] as { stock_item_id: string; expiry_date: string | null }[],
 }));
 
-vi.mock('quasar', () => ({ useQuasar: () => ({ notify: h.notify }) }));
+// useStockItemActions now transitively imports MarkOpenExpiryDialog.vue, whose
+// `defineEmits([...useDialogPluginComponent.emits])` reads `.emits` at import —
+// so the mock must expose it even though these tests never open the dialog.
+vi.mock('quasar', () => {
+    const useDialogPluginComponent = () => ({
+        dialogRef: { value: null },
+        onDialogHide: () => {},
+        onDialogOK: () => {},
+        onDialogCancel: () => {},
+    });
+    useDialogPluginComponent.emits = ['ok', 'hide'];
+    return { useQuasar: () => ({ notify: h.notify }), useDialogPluginComponent };
+});
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 // storeToRefs is only used to pluck refs off the level/auth stores; the
 // fakes below already hold refs, so identity is a faithful stand-in.

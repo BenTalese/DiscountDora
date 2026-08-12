@@ -48,6 +48,7 @@ from dora_api.features.stock_items.move_stock_item import (
     MoveStockItemHandler, MoveStockItemRequest)
 from dora_api.features.stock_items.update_stock_item import (
     UpdateStockItemHandler, UpdateStockItemRequest)
+from dora_api.infrastructure.utils import pluralize
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -280,7 +281,7 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
     base = item.expiry_date or household_today(SqlAlchemyRepository())
     new_expiry = base + timedelta(days=days)
     direction = "back" if days < 0 else "forward"
-    delta = f"{abs(days)} day{'s' if abs(days) != 1 else ''}"
+    delta = f"{abs(days)} {pluralize(days, 'day')}"
     base_phrase = item.expiry_date.isoformat() if item.expiry_date else f"today ({base.isoformat()})"
     return {
         "type": "push_expiry",

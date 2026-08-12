@@ -392,7 +392,7 @@
             $q.dialog({
                 title: 'Reset password',
                 message: `Generate a new one-time password for "${user.username}"?`,
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))
@@ -485,7 +485,7 @@
                     `Their sessions, alert preferences and push subscriptions ` +
                     `will be removed. Household-shared things they touched ` +
                     `(recipes, shopping lists) stay in the household.`,
-                cancel: true,
+                cancel: { noCaps: true },
                 persistent: true,
                 ok: { color: 'negative', label: 'Delete' },
             })

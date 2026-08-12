@@ -572,7 +572,7 @@ export function useMealPlanner() {
                         + `${result.unlinked_skipped.length === 1 ? 'it' : 'them'} to the list. `
                         + 'Add them by hand or link them from the recipe next time:\n\n'
                         + lines,
-                    ok: 'Got it',
+                    ok: { label: 'Got it', noCaps: true },
                 });
             }
             if (result.shopping_list_id) {
@@ -610,7 +610,7 @@ export function useMealPlanner() {
         $q.dialog({
             title: 'Clear this week',
             message: `Remove all meals from the week of ${formatDate(plan.start_date)}?`,
-            cancel: true,
+            cancel: { noCaps: true },
         }).onOk(() => void doClearWeek(plan.meal_plan_id));
     }
     async function doClearWeek(planId: string) {

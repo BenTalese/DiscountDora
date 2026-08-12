@@ -130,7 +130,7 @@
                 title: `New ${props.noun}`,
                 message: `What is this ${props.noun} called?`,
                 prompt: { model: '', type: 'text' },
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk((v: string) => resolve(v.trim()))
                 .onCancel(() => resolve(null))
@@ -163,7 +163,7 @@
                     count > 0
                         ? usageMessage
                         : `Nothing currently uses this ${props.noun}.`,
-                cancel: true,
+                cancel: { noCaps: true },
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

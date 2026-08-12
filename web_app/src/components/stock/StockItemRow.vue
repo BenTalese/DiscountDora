@@ -255,9 +255,10 @@
 
             <!-- Open / in-use toggle. Primary when open so the state pops. -->
             <RowActionButton
-                :icon="item.is_open ? ICONS.lock_open : ICONS.lock"
+                :icon="item.is_open ? ICONS.opened : ICONS.sealed"
                 :color="item.is_open ? 'primary' : undefined"
                 :loading="openBusy"
+                :aria-label="item.is_open ? 'Mark as sealed' : 'Mark as open / in-use'"
                 @click.stop="onToggleOpen"
             >
                 <q-tooltip>
@@ -572,47 +573,20 @@
     // ── Open / in-use toggle ────────────────────────────────────────────
     const openBusy = ref(false);
     async function onToggleOpen() {
-        const next = !props.item.is_open;
-        // FU-507 — when marking a sealed item as opened, prompt for an
-        // updated effective expiry. Opened milk shortens fast; opened jam
-        // barely moves — a universal rule is wrong per-item, so we ask.
-        // Cancel = open the item but leave expiry alone (the default-
-        // unchanged shape). OK saves both in one PATCH.
-        let expiryPatch: string | null | undefined = undefined;
-        if (next) {
-            const currentExpiry = props.item.expiry_date ?? '';
-            const picked = await new Promise<string | null | undefined>((resolve) => {
-                $q.dialog({
-                    title: `Marking "${props.item.name}" as open`,
-                    message: 'Update its effective expiry? Leave as-is if opening doesn\'t change how fast it goes off.',
-                    prompt: {
-                        model: currentExpiry,
-                        type: 'date',
-                        isValid: (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v),
-                    },
-                    cancel: 'Skip',
-                    ok: 'Update expiry',
-                    persistent: false,
-                })
-                    .onOk((val: string) => resolve(val || null))
-                    .onCancel(() => resolve(undefined))
-                    .onDismiss(() => {});
-            });
-            if (picked !== undefined && picked !== currentExpiry) {
-                expiryPatch = picked;
-            }
-        }
+        // DR-5 (FU-578 #2) — opening prompts for an updated effective expiry
+        // (opened milk shortens fast, opened jam barely moves — a universal
+        // rule is wrong per-item). The mutation is now a *product* of the
+        // dialog: a null plan means the user dismissed/cancelled it, so we
+        // write nothing and leave the item sealed.
+        const patch = await actions.planOpenToggle(props.item);
+        if (!patch) return;
         openBusy.value = true;
         try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: props.item.stock_item_id,
-                is_open: next,
-                ...(expiryPatch !== undefined ? { expiry_date: expiryPatch } : {}),
-            });
+            await stockItemStore.updateStockItemAsync(patch);
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: next
+                message: patch.is_open
                     ? `Marked "${props.item.name}" as open.`
                     : `Marked "${props.item.name}" as sealed.`,
             });

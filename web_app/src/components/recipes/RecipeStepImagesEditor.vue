@@ -59,8 +59,8 @@
         <div class="row q-gutter-sm q-mt-sm items-center">
             <ImageSourcePicker
                 variant="secondary"
-                :take-photo-label="`${addVerb} (camera)`"
-                :pick-label="`${addVerb} (files)`"
+                take-photo-label="Take a photo"
+                :pick-label="addVerb"
                 multiple
                 accept="image/jpeg,image/png,image/webp"
                 :loading="busy"

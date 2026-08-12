@@ -223,7 +223,7 @@ function pageSummary(path: string): { text: string; mood: DoraMood } {
 // ── Reply banks ────────────────────────────────────────────────────────
 
 const GREETING_REPLIES = (name: string) => [
-    `Hi${name}! Burger online. What's the move?`,
+    `Hi${name}! Dora reporting for pantry duty. What's the move?`,
     `Heyyy${name}. Ready to be unreasonably helpful. Or at least entertaining.`,
     `Oh hi${name}! I was just rearranging the imaginary spice rack. Whatcha need?`,
     `${name ? `${name.replace(', ', '')}!` : 'Hello!'} I'm Dora, professional pantry-rememberer. Fire away.`,
@@ -919,7 +919,13 @@ export async function runIntent(
     context: DoraContext,
     rawText?: string,
 ): Promise<DoraReply> {
-    const name = context.username ? `, ${context.username}` : '';
+    // DR-7 (FU-578 #35) — capitalise the username so greetings read
+    // "Hi, Dora!" not the raw lowercase handle "Hi, dora!". Mirrors the
+    // dashboard greeting fix (DR-4). Comma-prefixed so reply banks can drop it
+    // inline (`Hi${name}!`).
+    const handle = context.username?.trim();
+    const displayName = handle ? handle.replace(/^\w/, (c) => c.toUpperCase()) : '';
+    const name = displayName ? `, ${displayName}` : '';
 
     switch (id) {
         case 'greet': {

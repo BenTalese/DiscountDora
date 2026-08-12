@@ -1474,39 +1474,13 @@
     }
     async function onToggleOpen() {
         if (!detail.value) return;
-        const next = !detail.value.is_open;
-        // FU-507 — prompt for an updated effective expiry when marking as
-        // opened (default: unchanged). Mirrors StockItemRow.onToggleOpen.
-        let expiryPatch: string | null | undefined = undefined;
-        if (next) {
-            const currentExpiry = detail.value.expiry_date ?? '';
-            const picked = await new Promise<string | null | undefined>((resolve) => {
-                $q.dialog({
-                    title: `Marking "${detail.value!.name}" as open`,
-                    message: 'Update its effective expiry? Leave as-is if opening doesn\'t change how fast it goes off.',
-                    prompt: {
-                        model: currentExpiry,
-                        type: 'date',
-                        isValid: (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v),
-                    },
-                    cancel: 'Skip',
-                    ok: 'Update expiry',
-                })
-                    .onOk((val: string) => resolve(val || null))
-                    .onCancel(() => resolve(undefined))
-                    .onDismiss(() => {});
-            });
-            if (picked !== undefined && picked !== currentExpiry) {
-                expiryPatch = picked;
-            }
-        }
-        await withBusyReload(() =>
-            stockItemStore.updateStockItemAsync({
-                stock_item_id: stockItemId.value,
-                is_open: next,
-                ...(expiryPatch !== undefined ? { expiry_date: expiryPatch } : {}),
-            }),
-        );
+        // DR-5 (FU-578 #2) — mirrors StockItemRow.onToggleOpen. Opening
+        // prompts for the effective expiry; a null plan means the prompt was
+        // dismissed/cancelled, so we write nothing (the toggle snaps back
+        // since its model is bound one-way to `detail.is_open`).
+        const patch = await actions.planOpenToggle(detail.value);
+        if (!patch) return;
+        await withBusyReload(() => stockItemStore.updateStockItemAsync(patch));
     }
     async function onAddToList() {
         await withBusyReload(() => actions.addToList(stockItemId.value));
@@ -2101,7 +2075,7 @@
         $q.dialog({
             title: 'Delete stock item',
             message: `Delete "${item.name}"?`,
-            cancel: true,
+            cancel: { noCaps: true },
         }).onOk(() => void doDelete(item.stock_item_id));
     }
     async function doDelete(id: string) {

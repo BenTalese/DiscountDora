@@ -22,8 +22,8 @@
         <div class="row q-gutter-sm q-mt-sm items-center">
             <ImageSourcePicker
                 variant="secondary"
-                :take-photo-label="`${actionVerb} (camera)`"
-                :pick-label="`${actionVerb} (file)`"
+                take-photo-label="Take a photo"
+                :pick-label="`${actionVerb} image`"
                 @pick="onPick"
                 @error="onError"
             />

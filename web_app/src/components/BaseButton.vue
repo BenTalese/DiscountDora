@@ -118,6 +118,20 @@
     .dora-btn--ghost {
         color: var(--text-primary);
     }
+    /* DR-3 / FU-578 #53 — flat/outline variants hard-set their text to a
+       full-strength colour, so Quasar's opacity-only disabled dim left
+       them reading near-white on the bulk-bar (indistinguishable from
+       enabled). Pin a muted colour on the disabled state so the "not
+       available yet" affordance is unmistakable. Filled variants
+       (primary/danger/positive) keep white-on-fill + the opacity dim —
+       greying their label would fight the fill — so they're excluded. */
+    .dora-btn--ghost.disabled,
+    .dora-btn--secondary.disabled,
+    .dora-btn--icon.disabled,
+    .dora-btn--danger-ghost.disabled,
+    .dora-btn--danger-icon.disabled {
+        color: var(--text-muted);
+    }
     /* Attention modifier — pulsing accent glow around the button to draw
        the eye. Used for one-off CTAs (stocktake glow, etc.). The button
        fill tint pulses in sync with the surrounding glow so the whole

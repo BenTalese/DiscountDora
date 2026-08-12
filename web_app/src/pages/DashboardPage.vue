@@ -374,7 +374,7 @@
                             <div class="dora-stat-num">
                                 <AnimatedNumber :value="primaryListStats.savings" :prefix="dashCurrencySymbol" />
                             </div>
-                            <div class="dora-stat-label">saves vs rrp</div>
+                            <div class="dora-stat-label">saved vs RRP</div>
                         </div>
                     </div>
                     <div v-else class="dora-empty q-mt-sm">
@@ -1429,7 +1429,12 @@
     const upcoming = ref<Upcoming | null>(null);
     const selectedCalDate = ref<string | null>(null);
 
-    const firstName = computed(() => currentUser.value?.username ?? '');
+    // DR-4 (FU-578 #21): present the username capitalised so the greeting reads
+    // "Good afternoon, Dora" not the raw lowercase handle "dora".
+    const firstName = computed(() => {
+        const name = currentUser.value?.username ?? '';
+        return name ? name.charAt(0).toUpperCase() + name.slice(1) : '';
+    });
 
     const greeting = computed(() => {
         const h = new Date().getHours();

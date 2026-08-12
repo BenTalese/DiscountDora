@@ -1,5 +1,12 @@
 import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
+import MarkOpenExpiryDialog from 'src/components/stock/MarkOpenExpiryDialog.vue';
+import {
+    buildOpenTogglePatch,
+    type OpenExpiryDecision,
+    type OpenToggleTarget,
+    type OpenTogglePatch,
+} from 'src/composables/openToggle';
 import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
 import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -122,7 +129,7 @@ export function useStockItemActions() {
                                   }))
                                 : [],
                         },
-                        cancel: true,
+                        cancel: { noCaps: true },
                         persistent: false,
                     })
                         .onOk((val: string) => resolve(val))
@@ -221,6 +228,39 @@ export function useStockItemActions() {
         }
     }
 
+    /**
+     * DR-5 (FU-578 #2) — plan an open/seal toggle. Sealing returns its patch
+     * immediately; opening first prompts for the effective expiry via
+     * {@link MarkOpenExpiryDialog}. Returns the PATCH body to send, or `null`
+     * when the user dismissed/cancelled the prompt — in which case the caller
+     * performs NO mutation (server state stays untouched). Callers own the
+     * actual write + any toast, since the row and detail page mutate
+     * differently (direct vs. busy-reload).
+     */
+    async function planOpenToggle(target: OpenToggleTarget): Promise<OpenTogglePatch | null> {
+        const opening = !target.is_open;
+        if (!opening) return buildOpenTogglePatch(target, null); // seal, no prompt
+        const decision = await new Promise<OpenExpiryDecision>((resolve) => {
+            $q.dialog({
+                component: MarkOpenExpiryDialog,
+                componentProps: {
+                    itemName: target.name,
+                    currentExpiry: target.expiry_date ?? '',
+                },
+            })
+                // Skip / Update → confirmed open (with/without expiry).
+                .onOk((payload: { expiry: string | null | undefined }) =>
+                    resolve({ open: true, expiry: payload.expiry }),
+                )
+                // Cancel button, and Escape/backdrop (onDismiss) → abort. Both
+                // resolve false; Promise.resolve is idempotent so whichever
+                // fires first for a given close wins.
+                .onCancel(() => resolve({ open: false }))
+                .onDismiss(() => resolve({ open: false }));
+        });
+        return buildOpenTogglePatch(target, decision);
+    }
+
     function openDetail(stockItemId: string) {
         void router.push(`/stock/${stockItemId}`);
     }
@@ -239,6 +279,7 @@ export function useStockItemActions() {
         addToList,
         markRestocked,
         pushExpiry,
+        planOpenToggle,
         openDetail,
         findSubstitutes,
         seeRecipesUsing,

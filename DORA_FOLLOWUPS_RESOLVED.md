@@ -10,6 +10,12 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
+- **Raised:** 2026-07-19 (verify Batch 10) · **Resolved:** 2026-08-12 — **obviated by the Playwright feature-flow cull.**
+- **Type:** finding
+- **What:** ~12 detail-page specs (`history-tab`, `detail-recipes-tab`, `detail-products-tab`, `recipe-deeplink`, `stock-pickers`, one `buy-verdict`, plus the warm-history `dashboard-next-cook` case) flaked on full-suite runs because a two-step `goto('/#/')` → `goto('/#/stock/<id>')` hash change doesn't reliably drive vue-router under load. Proposed fix was a shared `gotoDetail()` helper across those specs.
+- **Resolution:** every spec this FU names was **deleted 2026-07-20** in the owner-directed Playwright feature-flow cull (LEAN verification stance, `DORA_VERIFY_TRIAGE.md` banner: Playwright is a minimal `auth.setup`+`login`+`smoke` layer only; feature-flow specs were removed as slow + flaky). Verified 2026-08-12: `web_app/e2e/` now holds only `login.spec.ts` + `smoke.spec.ts`; none of the named specs (or a `gotoDetail` helper) exist. The flake cannot occur, and the proposed fix (re-add the specs with a helper) is explicitly against the standing stance ("do NOT add feature-flow Playwright specs"). No code change — the FU was resolved by circumstance; closing it rather than leaving a stale gate-repair task.
+
 ## [RESOLVED] FU-620 — remove the now-orphaned verified email-change flow
 - **Raised:** 2026-08-11 (Account settings redesign). · **Resolved:** 2026-08-12
 - **Type:** finding

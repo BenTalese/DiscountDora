@@ -950,7 +950,7 @@
                 title,
                 message,
                 ok: { label: ok, color: 'primary' },
-                cancel: true,
+                cancel: { noCaps: true },
                 persistent: true,
             }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false));
         });

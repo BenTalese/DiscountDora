@@ -92,7 +92,9 @@
     /* ────────────────────────────── Text ─────────────────────────── */
     --text-primary: hsl(168 28% 12%);
     --text-secondary: hsl(168 12% 32%);
-    --text-muted: hsl(168 10% 42%);
+    /* DR-1 (FU-578 #7 / D-002): muted must clear 4.5:1 as text. Mirrors the
+       Pesto override below (AA on the worst surface). */
+    --text-muted: hsl(168 8% 39%);
     --text-inverse: var(--palette-neutral-0);
     --text-on-primary: var(--palette-neutral-0);
     --text-on-accent: hsl(168 28% 12%);

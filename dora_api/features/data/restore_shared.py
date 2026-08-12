@@ -125,11 +125,12 @@ SECTIONS: tuple[Section, ...] = (
         # Never ship credentials. Restoring users without hashes means they
         # can't log in until an admin resets them — that's the explicit
         # trade-off for being able to back up account preferences.
-        # `llm_api_key_encrypted` excluded on the same defence-in-depth
-        # rationale as the AppSetting secrets above (FU-387).
+        # The per-user LLM API key moved to the `UserLlmProvider` table
+        # (2026-08-12), which is not a backup section at all — so the key
+        # (and the rest of the provider config) never leaves the install
+        # via a backup; there's nothing to exclude on User any more.
         excluded_columns=frozenset({
             "password_hash",
-            "llm_api_key_encrypted",
         }),
     ),
     Section(

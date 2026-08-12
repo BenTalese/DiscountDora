@@ -22,6 +22,26 @@ top-to-bottom.
 
 ---
 
+## Zero-Input Pantry hint redesign — disagreement-only hint + demo data (2026-08-12)
+_(Needs a destructive re-seed to load the "Belief: …" demo items — restart the backend with `DORA_ALLOW_DESTRUCTIVE=true`, e.g. the `dora-verify-backend-linux` launch config.)_
+- [ ] Stock Overview shows amber **"Dora thinks …"** hints ONLY on the disagreement items — expect: **Belief: Weet-Bix** → "Dora thinks low" (hover: high confidence); **Belief: Tuna Tins** → "Dora thinks out" (medium); **Belief: Greek Yoghurt** → "Dora thinks low" (medium); **Belief: Passata** → "Dora thinks low" (hover reason mentions "cooked with 2× since"); **Belief: Stir-fry Veg** → "Dora thinks out" (low conf, reason mentions cooking); **Belief: Orange Juice** → "Dora thinks stocked" (recorded Out, just restocked).
+- [ ] **Belief: Crackers (agrees, silent)** shows **no** hint — the control proving agreement stays silent. The ~22 ordinary curated items (no purchase cadence) also show no hint.
+- [ ] The hint icon reads as a **lightbulb-with-question** (a hunch), NOT a magic wand.
+- [ ] Hint text is dark/legible on the soft-amber pill (not amber-on-amber); hover → reason + **"Confidence: …"** + the "Differs from your recorded level" note.
+- [ ] Stock item detail (open one of the Belief items): the hint sits under the level picker; open a silent item (e.g. Crackers) and confirm **no** empty gap above the "Updated …" line.
+- [ ] Help → Guides → Stock → **"The 'Dora thinks…' hint"** entry reads clearly and the arrow deep-links to `/stock`.
+- [ ] Settings → Preferences toggle still turns the whole hint off across overview + detail.
+
+## Assistant settings redesign — Mode dropdown + multi-provider (2026-08-12)
+- [ ] Settings → Assistant: title reads **"Assistant"** (no "(AI mode)"); intro mentions D.O.R.A. with a **"here"** link that opens the assistant help page (`/help/dora`).
+- [ ] **Show digital assistant chat bubble** is a single row (label + toggle) — no heading/description above it. Toggling it hides/shows the corner bubble.
+- [ ] **Providers**: all four blocks render (Ollama / OpenAI / Anthropic / Gemini), each with a status chip. Enter your Ollama base URL → chip goes **Checking… → Connected**, and the **Model field becomes a dropdown of installed models** (pinged from `/api/tags`). Enter a bad URL → chip shows **Couldn't connect** with a reason.
+- [ ] Enter details for **two** providers (e.g. Ollama + one paid with a real key) → both can reach **Connected** independently; switching between them doesn't wipe the other's fields.
+- [ ] **Mode** dropdown lists **Basic (built-in)** + only the **Connected** providers. Pick a provider → toast "AI mode on (…)", the Dora bubble's Basic/AI slider becomes enabled. Pick **Basic** → back to Basic.
+- [ ] With no verified provider, the Dora chat's mode slider is disabled with the reason **"Connect a language model in Settings → Assistant first."**
+- [ ] Paid provider: **Remove key** clears the saved key (placeholder returns to "Paste your key here") and drops the provider out of the Mode list.
+- [ ] Edit a **Connected** provider's model → chip resets and re-checks; if the provider was the active Mode and verification now fails, AI mode can't stay selectable.
+
 ## Toast & helper-bubble placement (design-remediation DR-7, 2026-08-12) — origin FU-578
 - [ ] Trigger a bottom-right toast (e.g. add a stock item to a list) — it appears in a column **above** the Dora mascot, not overlapping it. Fire a few in a row → they stack cleanly, clear of the launcher.
 - [ ] Fresh account / cleared `dora.helpHintDismissed*`: the first-time "Hi! I'm Dora" tip appears, then **auto-dismisses after ~9s** without needing a click; it doesn't sit over stock rows / detail Level controls indefinitely.

@@ -32,6 +32,7 @@ from dora_api.domain.entities.user import (
     LLM_PROVIDERS_REQUIRING_API_KEY,
     User,
 )
+from dora_api.domain.entities.user_llm_provider import UserLlmProvider
 from dora_api.infrastructure.llm.anthropic_client import AnthropicClient
 from dora_api.infrastructure.llm.gemini_client import GeminiClient
 from dora_api.infrastructure.security.secret_encryption import (
@@ -81,26 +82,31 @@ class _UnavailableClient(LlmClient):
         raise LlmUnavailable(self._reason)
 
 
-def build_assistant_client(user: User) -> LlmClient:
-    """Construct an LlmClient for the given user.
+def build_assistant_client(user: User, config: UserLlmProvider | None) -> LlmClient:
+    """Construct an LlmClient for the given user + active-provider config.
 
     AI mode is gated solely by the user's own ``llm_enabled`` opt-in — there
-    is no install-wide master switch (removed 2026-08-12).
+    is no install-wide master switch (removed 2026-08-12). ``config`` is the
+    user's ``UserLlmProvider`` row for ``user.llm_provider`` (the active
+    provider); the caller loads it. None means the active provider has no
+    saved config.
     """
     if not user.llm_enabled:
         return _UnavailableClient("AI mode is off for this user.")
     if not user.llm_provider:
         return _UnavailableClient("AI mode is on but no provider is configured.")
+    if config is None:
+        return _UnavailableClient("AI mode is on but the provider isn't configured yet.")
 
     provider = user.llm_provider
 
     if provider in LLM_PROVIDERS_REQUIRING_API_KEY:
-        if not user.llm_api_key_encrypted:
+        if not config.api_key_encrypted:
             return _UnavailableClient(
                 f"AI mode is on but the {provider} API key is missing."
             )
         try:
-            api_key = decrypt(user.llm_api_key_encrypted)
+            api_key = decrypt(config.api_key_encrypted)
         except (EncryptionUnavailable, EncryptionFailed) as exc:
             _Logger.warning("API-key decryption failed for user %s: %s", user.id, exc)
             return _UnavailableClient(str(exc))
@@ -109,8 +115,8 @@ def build_assistant_client(user: User) -> LlmClient:
 
     return build_assistant_client_from_provider(
         provider=provider,
-        model=user.llm_model or "",
-        base_url=user.llm_base_url or None,
+        model=config.model or "",
+        base_url=config.base_url or None,
         api_key=api_key,
     )
 

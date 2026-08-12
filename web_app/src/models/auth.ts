@@ -121,16 +121,15 @@ export type AuthenticatedUser = {
     // dashboard to seed card order/visibility; persisted via PATCH /auth/me so
     // it survives a cache clear and follows the user across devices.
     dashboard_layout: string | null;
-    // per-user assistant config. `llm_provider` picks
-    // which client family to build server-side; the relevant of
-    // {`llm_base_url`, `llm_model`, `has_llm_api_key`} are required per
-    // provider. `has_llm_api_key` is derived server-side from whether an
-    // encrypted blob exists — the plaintext key never travels back.
+    // per-user assistant config. `llm_enabled` is the AI-mode opt-in and
+    // `llm_provider` the active provider (or null for Basic). Per-provider
+    // details live in the `UserLlmProvider` table, read/edited via the
+    // `/assistant/providers` endpoints (see AssistantApiService). `assistant_
+    // ready` is the derived bit the SPA needs inline: the active provider has
+    // a verified config, so AI mode can actually run.
     llm_enabled: boolean;
     llm_provider: 'ollama' | 'openai' | 'anthropic' | 'gemini' | null;
-    llm_base_url: string | null;
-    llm_model: string | null;
-    has_llm_api_key: boolean;
+    assistant_ready: boolean;
     // FU-360.6 — whether the Dora helper bubble is mounted at all. Default
     // true; distinct from `llm_enabled` (that switches AI mode only).
     show_assistant: boolean;

@@ -185,11 +185,11 @@
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
                                             </span>
                                         </div>
-                                        <!-- inferred level (additive;
-                                             beside the recorded level above). -->
-                                        <div v-if="belief" class="q-mt-xs">
-                                            <PantryBeliefChip :belief="belief" />
-                                        </div>
+                                        <!-- inferred level (additive; beside the
+                                             recorded level above). The margin rides
+                                             on the chip root via fall-through, so it
+                                             adds no gap when the hint stays silent. -->
+                                        <PantryBeliefChip :belief="belief" class="q-mt-xs" />
                                     </q-item-section>
                                 </q-item>
 

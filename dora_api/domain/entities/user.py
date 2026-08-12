@@ -256,22 +256,16 @@ class User(BaseEntity):
     # presentation belongs to the client) — we persist it verbatim so it
     # survives a cache clear and follows the user across devices.
     dashboard_layout: str | None = None
-    # per-user assistant config. Replaces the
-    # singleton AppSetting.llm_* row. `llm_enabled` is the user's own
-    # opt-in and the sole gate on AI mode — there is no install-wide master
-    # switch (removed 2026-08-12). `llm_provider` is a
-    # closed-set sentinel (R-010, ALLOWED_LLM_PROVIDERS). For Ollama,
-    # `llm_base_url` + `llm_model` are required; for OpenAI / Anthropic /
-    # Gemini, `llm_api_key_encrypted` + `llm_model` are required and the
-    # base URL is optional (only used to point at a self-hosted relay).
-    # The api-key blob is Fernet ciphertext — see
-    # `infrastructure/security/secret_encryption.py`. Plaintext never leaves the
-    # handler that writes it; reads return `has_llm_api_key: bool`.
+    # per-user assistant config. `llm_enabled` is the user's own opt-in and
+    # the sole gate on AI mode — there is no install-wide master switch
+    # (removed 2026-08-12). `llm_provider` names the *active* provider
+    # (closed-set sentinel, R-010 / ALLOWED_LLM_PROVIDERS) or NULL for
+    # Basic mode. The per-provider details (base URL / model / API key /
+    # verified) live in the `UserLlmProvider` child table so a user can
+    # configure several providers and flip between them — this column just
+    # points at the one in use.
     llm_enabled: bool = False
     llm_provider: str | None = None
-    llm_base_url: str | None = None
-    llm_model: str | None = None
-    llm_api_key_encrypted: bytes | None = None
     # FU-360.6 — per-user "show the Dora helper bubble at all" opt-out.
     # **Default True** (Charter P1 Effortless — the helper is discoverable by
     # default). Distinct from `llm_enabled`: that switches the AI *mode*; this
@@ -309,7 +303,4 @@ class User(BaseEntity):
         DASHBOARD_LAYOUT = "dashboard_layout"
         LLM_ENABLED = "llm_enabled"
         LLM_PROVIDER = "llm_provider"
-        LLM_BASE_URL = "llm_base_url"
-        LLM_MODEL = "llm_model"
-        LLM_API_KEY_ENCRYPTED = "llm_api_key_encrypted"
         SHOW_ASSISTANT = "show_assistant"

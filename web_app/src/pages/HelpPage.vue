@@ -302,6 +302,12 @@
                     dialog: 'attention-rules',
                 },
                 {
+                    title: 'The "Dora thinks…" hint',
+                    summary:
+                        'Dora quietly infers what you actually have — a coarse Out / Low / Stocked belief worked out from your purchases, how often you rebuy, and what you\'ve cooked, decayed by time since the last real signal. It never changes your recorded level; that stays the source of truth for shopping and cooking. She only speaks up when it\'s worth it: when her belief differs from what you recorded, a small amber "Dora thinks low/out/stocked" appears beside the item — hover for the reason and how sure she is, then a quick check sets things straight. When she agrees with you she stays silent. Turn the hint off entirely in Settings → Preferences.',
+                    path: '/stock',
+                },
+                {
                     title: 'Link a product to a stock item',
                     summary:
                         'On the detail page, link a product to your stock item so its offers + price history ride alongside your pantry record.',

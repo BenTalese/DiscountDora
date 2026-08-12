@@ -98,4 +98,12 @@ def login():
         entity_id=_Response.user.id,
         payload={"username": _Response.user.username},
     )
-    return ok(AuthenticatedUserDto.from_entity(_Response.user))
+    from dora_api.features.assistant.providers import get_provider_config
+    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+    _ActiveProvider = (
+        get_provider_config(
+            SqlAlchemyRepository(), _Response.user.id, _Response.user.llm_provider,
+        )
+        if _Response.user.llm_provider else None
+    )
+    return ok(AuthenticatedUserDto.from_entity(_Response.user, _ActiveProvider))

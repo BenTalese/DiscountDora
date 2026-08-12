@@ -53,6 +53,15 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-625 — Per-user LLM provider config is not round-tripped by shared backups
+- **Raised:** 2026-08-12 (Assistant redesign / multi-provider).
+- **Type:** finding (backup coverage gap).
+- **What:** The Assistant redesign moved per-user LLM config off the `User` row into a new `UserLlmProvider` table. That table is **not** a section in `restore_shared.py SECTIONS`, so a shared backup no longer round-trips a user's provider settings (base URL, model). The **API key was never backed up** (deliberately excluded, FU-387) and still isn't — no secret regression. Only the non-secret provider prefs are now dropped from backups; before, they rode along in the `User` section.
+- **Why deferred:** minor pre-release preference loss; adding a `UserLlmProvider` backup section (with `api_key_encrypted` in `excluded_columns` for the same FU-387 defence-in-depth) is a clean but out-of-scope addition, and the restore-time secret-exclusion pattern must be mirrored.
+- **Recommended resolution:** opportunistic — when next touching `restore_shared.py` or backup coverage. Add a `UserLlmProvider` section keyed on (user, provider) with `api_key_encrypted` excluded.
+
+---
+
 ## [OPEN] FU-624 — Toast lifecycle: single-column `notify()` wrapper + dismiss-on-route-change
 - **Raised:** 2026-08-12 (FU-578 DR-7 carve-out).
 - **Type:** deferred job (cross-cutting tidy).

@@ -47,6 +47,7 @@ Response:
     }
 """
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import logging
 from uuid import UUID
 
@@ -57,6 +58,7 @@ from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.user import (ALLOWED_LLM_PROVIDERS,
                                            LLM_PROVIDERS_REQUIRING_API_KEY,
                                            User)
+from dora_api.features.assistant.providers import get_provider_config
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.routers import ASSISTANT_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
@@ -121,6 +123,11 @@ class ProbeAssistantHandler:
                 reason=f"Unknown provider '{provider}'.",
             )
 
+        # The saved row is the source of truth for details + where the
+        # verified flag lives; the request may carry draft overrides (the
+        # user is testing before/while saving).
+        row = get_provider_config(self.repository, user_id, provider)
+
         # API-key resolution: prefer the body's plaintext (user is
         # testing a freshly-typed value), fall back to the saved
         # encrypted blob (user is testing what they already saved).
@@ -128,9 +135,9 @@ class ProbeAssistantHandler:
         if provider in LLM_PROVIDERS_REQUIRING_API_KEY:
             if request.api_key is not None and request.api_key.strip():
                 api_key = request.api_key.strip()
-            elif user.llm_api_key_encrypted is not None:
+            elif row is not None and row.api_key_encrypted is not None:
                 try:
-                    api_key = decrypt_api_key(user.llm_api_key_encrypted)
+                    api_key = decrypt_api_key(row.api_key_encrypted)
                 except EncryptionUnavailable as exc:
                     return ProbeAssistantResponse(available=False, reason=str(exc))
                 except EncryptionFailed as exc:
@@ -141,14 +148,30 @@ class ProbeAssistantHandler:
                     reason=f"{provider} needs an API key — paste one or save it first.",
                 )
 
-        base_url = (request.base_url or "").strip() or None
-        model = (request.model or "").strip()
+        base_url = (request.base_url or "").strip() or (row.base_url if row else None)
+        model = (request.model or "").strip() or (row.model if row else "") or ""
         if not model:
             return ProbeAssistantResponse(
                 available=False,
                 reason="A model name is required to probe.",
             )
 
+        result = self._probe(provider, model, base_url, api_key)
+
+        # Persist the outcome onto the saved row so the Mode picker knows
+        # which providers are usable. A successful probe verifies the row;
+        # a failure clears the flag (settings drifted or the server went
+        # away). No row yet (pure draft test) → nothing to persist.
+        if row is not None:
+            row.verified = result.available
+            row.verified_at = datetime.now(timezone.utc) if result.available else None
+            self.repository.save_changes()
+
+        return result
+
+    def _probe(
+        self, provider: str, model: str, base_url: str | None, api_key: str
+    ) -> ProbeAssistantResponse:
         client = build_assistant_client_from_provider(
             provider=provider,
             model=model,

@@ -50,4 +50,9 @@ def get_me():
         session.clear()
         return unauthorized()
 
-    return ok(AuthenticatedUserDto.from_entity(user))
+    from dora_api.features.assistant.providers import get_provider_config
+    active_provider = (
+        get_provider_config(SqlAlchemyRepository(), user.id, user.llm_provider)
+        if user.llm_provider else None
+    )
+    return ok(AuthenticatedUserDto.from_entity(user, active_provider))

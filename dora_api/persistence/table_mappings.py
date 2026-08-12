@@ -59,6 +59,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.entities.user import User
+from dora_api.domain.entities.user_llm_provider import UserLlmProvider
 
 _mapper_registry = SARegistry()
 _mappings_configured = False
@@ -567,6 +568,25 @@ def configure_mappings(db: SQLAlchemy):
         Column("tier_override", String(16), nullable=True),
     )
 
+    # per-user LLM-provider config. One row per (user_id, provider) —
+    # a user configures several providers and flips the active one via
+    # `User.llm_provider`. Single source of truth for provider details;
+    # `verified` is flipped True only by a successful live probe and reset
+    # by any edit. `api_key_encrypted` is Fernet ciphertext, deferred at
+    # the mapper (same shape as `User.image`) so list reads don't haul it.
+    user_llm_provider_table = Table(
+        "UserLlmProvider", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, ForeignKey("User.id", ondelete="CASCADE"), nullable=False),
+        Column("provider", String(16), nullable=False),
+        Column("base_url", String(500), nullable=True),
+        Column("model", String(255), nullable=True),
+        Column("api_key_encrypted", LargeBinary, nullable=True),
+        Column("verified", Boolean, nullable=False, server_default=false()),
+        Column("verified_at", DateTime(timezone=True), nullable=True),
+        UniqueConstraint("user_id", "provider", name="uq_user_llm_provider_user_provider"),
+    )
+
     # C-waste — append-only log of discarded food. FK is SET NULL (not
     # CASCADE) so deleting a stock item doesn't wipe waste history; the
     # denormalised name on the row keeps insights readable. Capture is
@@ -1027,17 +1047,14 @@ def configure_mappings(db: SQLAlchemy):
         # Postgres/SQLite portability (R-005/006). Not deferred — it's tiny and
         # read on the /me path; never selected on user-list rows in practice.
         Column("dashboard_layout", Text, nullable=True),
-        # per-user assistant config. `llm_provider`
-        # is a closed-set sentinel ('ollama' | 'openai' | 'anthropic' |
-        # 'gemini') validated at update_me. API key blob is Fernet
-        # ciphertext (see infrastructure/security/secret_encryption.py); deferred
-        # below so list endpoints never haul the bytes per row, same shape
-        # as `image`.
+        # per-user assistant config. `llm_enabled` is the AI-mode opt-in and
+        # `llm_provider` the active provider (closed-set sentinel 'ollama' |
+        # 'openai' | 'anthropic' | 'gemini', validated at update_me). The
+        # per-provider *details* (base URL / model / API key) live in the
+        # `UserLlmProvider` child table — a user configures several providers
+        # and this column just points at the one in use.
         Column("llm_enabled", Boolean, nullable=False, server_default=false()),
         Column("llm_provider", String(16), nullable=True),
-        Column("llm_base_url", String(500), nullable=True),
-        Column("llm_model", String(255), nullable=True),
-        Column("llm_api_key_encrypted", LargeBinary, nullable=True),
         # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Default
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
@@ -1247,10 +1264,14 @@ def configure_mappings(db: SQLAlchemy):
         # `has_image`. The `/users/<id>/image` route loads it on access;
         # list `has_image` is hydrated via a separate IS-NOT-NULL select.
         "image": deferred(user_table.c.image),
-        # defer the api-key ciphertext too; only the assistant
-        # request path needs the bytes. The /me DTO surfaces a derived
-        # `has_llm_api_key: bool` instead.
-        "llm_api_key_encrypted": deferred(user_table.c.llm_api_key_encrypted),
+    })
+
+    _mapper_registry.map_imperatively(UserLlmProvider, user_llm_provider_table, properties={
+        "_id_col": user_llm_provider_table.c.id,
+        "id": user_llm_provider_table.c.id,
+        # Defer the api-key ciphertext; only the assistant request path +
+        # probe need the bytes. Reads surface a derived `has_api_key: bool`.
+        "api_key_encrypted": deferred(user_llm_provider_table.c.api_key_encrypted),
     })
 
     _mapper_registry.map_imperatively(ProductOffer, product_offer_table, properties={

@@ -71,7 +71,7 @@ UX/UI review** into fix units.
 | Meal Plans | ➗ | Built end-to-end **+ extended**: Build-my-week auto-planner, day/meal toggles, week-duplicate, cook batches (Part 2) all shipped + verified live. Residual browser-verify only | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) + `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
 | Meal reconcile | ➗ | "Stocktake for meals" — Chunks 1–5 shipped; Chunk 6 (settings row/copy polish) pending | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md) |
 | Alerts control centre | ✅ | `/alerts` hub, ALERT_ROUTER, price-watch + email-digest + push; shared `resolve_overdue_map` | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
-| Assistant surface | ✅ | Per-user rate limits; SLM default AI path; Basic-mode `add_to_list` verb; AI master-switch removed (per-user only) | `ask_assistant.py` |
+| Assistant surface | ✅ | Per-user rate limits; SLM default AI path; Basic-mode `add_to_list` verb; AI master-switch removed (per-user only); **multi-provider config + Mode-dropdown settings redesign** (`UserLlmProvider` table; browser-verify owed) | `ask_assistant.py`, `AssistantSettings.vue` |
 | Settings & config polish | 🟡 | Active stream: household budget (value-driven), AI master-switch removed, Region & locale merged, Account/Kitchen-setup redesigns, encryption-key banner+generator. Several new DORA_VERIFY walks queued | `CHANGELOG [Unreleased]` |
 | Data/Backup admin | ✅ | Under Settings→Admin→Data; backup library + admin-gating | FU-341/342/198 |
 | Auth shell | ➗ | Shared `AuthShell`/`AuthButton` across pre-auth surfaces | `PROPOSAL_AUTH_SHELL.md` |

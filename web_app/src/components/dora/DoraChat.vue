@@ -870,11 +870,8 @@
     const canConfigureAi = computed(() => {
         const u = props.currentUser;
         if (!u) return false;
-        if (u.llm_enabled) return true;
-        if (!u.llm_provider) return false;
-        if (!u.llm_model) return false;
-        if (u.llm_provider === 'ollama') return !!u.llm_base_url;
-        return u.has_llm_api_key;
+        // Already on, or a provider is configured + verified (server-derived).
+        return u.llm_enabled || u.assistant_ready;
     });
 
     const canToggleMode = computed(() => {
@@ -885,13 +882,8 @@
     const modeSliderDisabledReason = computed(() => {
         const u = props.currentUser;
         if (!u) return '';
-        if (!u.llm_provider) return 'Pick a provider in Settings → Assistant first.';
-        if (!u.llm_model) return 'Save a model name in Settings → Assistant first.';
-        if (u.llm_provider === 'ollama' && !u.llm_base_url) {
-            return 'Save a base URL in Settings → Assistant first.';
-        }
-        if (u.llm_provider !== 'ollama' && !u.has_llm_api_key) {
-            return 'Save an API key in Settings → Assistant first.';
+        if (!u.assistant_ready) {
+            return 'Connect a language model in Settings → Assistant first.';
         }
         return '';
     });

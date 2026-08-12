@@ -4,11 +4,13 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader
-            title="Assistant (AI mode)"
-            description="Connect Dora's chat to a language model. Pick a provider, enter the bits it needs, and turn on AI mode. When off, Dora uses its built-in rule-based replies."
-            :icon="ICONS.smart_toy"
-        />
+        <SettingsPageHeader title="Assistant" :icon="ICONS.smart_toy">
+            <template #description>
+                Settings to control D.O.R.A., your personal assistant in the
+                kitchen. Learn more about using her capabilities
+                <router-link to="/help/dora" class="settings-page__link">here</router-link>.
+            </template>
+        </SettingsPageHeader>
 
         <!-- Warns (and offers to generate a key) when the install hasn't set
              DORA_SECRET_ENCRYPTION_KEY — a paid-provider API key can't be
@@ -16,15 +18,7 @@
         <EncryptionKeyBanner secret-label="a paid provider's API key" />
 
         <SettingsSection>
-            <template #title>Show the Dora helper</template>
-            <template #description>
-                The floating Dora bubble sits in the corner of every page and
-                answers questions, points you around, and takes quick actions.
-                Turn it off to hide it completely for your account — you can
-                switch it back on here any time.
-            </template>
-
-            <SettingsRow label="Show Dora on every page">
+            <SettingsRow label="Show digital assistant chat bubble">
                 <q-toggle
                     :model-value="currentUser.show_assistant !== false"
                     @update:model-value="onShowAssistantChange"
@@ -35,214 +29,163 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
-            <template #title>Enable AI mode</template>
+            <template #title>Mode</template>
             <template #description>
-                Basic mode (the default, no setup needed) answers questions
-                about your pantry, meals, and lists — and can add items to your
-                list when you type things like "add milk". AI mode routes
-                <em>tool-able requests</em> through your configured provider for
-                richer, multi-step help (disambiguating items, expiry rescue,
-                price stats). Most people are fine on Basic mode; AI mode is the
-                power-up if you run a language model.
+                <strong>Basic</strong> (the default, no setup) answers questions
+                about your pantry, meals, and lists and can add items when you
+                type things like "add milk". Selecting a language model routes
+                <em>tool-able requests</em> through it for richer, multi-step
+                help. Only providers you've connected below can be picked.
             </template>
 
-            <SettingsRow label="Use AI mode for this account">
-                <q-toggle
-                    :model-value="currentUser.llm_enabled"
-                    :disable="!canEnable"
-                    @update:model-value="onEnabledChange"
+            <SettingsRow label="Mode">
+                <q-select
+                    :model-value="modeValue"
+                    :options="modeOptions"
+                    emit-value
+                    map-options
+                    outlined
+                    dense
+                    style="min-width: 220px"
+                    @update:model-value="onModeChange"
                 />
             </SettingsRow>
-            <div
-                v-if="!canEnable && !currentUser.llm_enabled"
-                class="settings-page__note dora-text-muted"
-            >
-                {{ enableBlockedReason }}
-            </div>
         </SettingsSection>
 
         <hr class="settings-divider" />
 
         <SettingsSection>
-            <template #title>Provider</template>
+            <template #title>Providers</template>
             <template #description>
-                <strong>Ollama</strong> runs locally on a machine you
-                control (no key needed). <strong>OpenAI</strong>,
+                Connect one or more language models. <strong>Ollama</strong>
+                runs locally (no key needed); <strong>OpenAI</strong>,
                 <strong>Anthropic</strong>, and <strong>Google Gemini</strong>
-                are paid hosted APIs — bring your own key.
+                are paid hosted APIs — bring your own key. Details are checked
+                the moment you enter them.
             </template>
 
-            <SettingsRow label="Provider">
-                <DoraSegmented
-                    :model-value="providerDraft ?? 'ollama'"
-                    :options="providerOptions"
-                    @update:model-value="onProviderChange"
-                />
-            </SettingsRow>
+            <div
+                v-for="provider in PROVIDERS"
+                :key="provider"
+                class="provider-card"
+            >
+                <div class="provider-card__head">
+                    <h3 class="provider-card__name">{{ providerDisplayName(provider) }}</h3>
+                    <div class="provider-card__status">
+                        <q-spinner
+                            v-if="state[provider].status === 'checking'"
+                            size="14px"
+                            color="primary"
+                        />
+                        <q-icon
+                            v-else
+                            :name="statusIcon(provider)"
+                            :color="statusColor(provider)"
+                            size="16px"
+                        />
+                        <span :class="`text-${statusColor(provider)}`">
+                            {{ statusLabel(provider) }}
+                        </span>
+                        <BaseButton
+                            v-if="canTest(provider)"
+                            variant="ghost"
+                            :icon="ICONS.wifi_tethering"
+                            label="Test"
+                            :disable="state[provider].status === 'checking'"
+                            @click="onTest(provider)"
+                        />
+                    </div>
+                </div>
+
+                <div class="provider-card__body">
+                    <!-- Ollama: base URL + model (model becomes a picker of
+                         installed models once a probe succeeds). No API key. -->
+                    <template v-if="provider === 'ollama'">
+                        <SettingsRow label="Base URL" stacked>
+                            <q-input
+                                v-model="state.ollama.base_url"
+                                outlined
+                                dense
+                                placeholder="http://localhost:11434"
+                                @blur="onOllamaBaseUrlBlur"
+                                @keydown.enter.prevent="onOllamaBaseUrlBlur"
+                            />
+                        </SettingsRow>
+                        <SettingsRow label="Model" stacked>
+                            <q-select
+                                v-if="state.ollama.models.length"
+                                v-model="state.ollama.model"
+                                :options="state.ollama.models"
+                                outlined
+                                dense
+                                use-input
+                                fill-input
+                                hide-selected
+                                new-value-mode="add-unique"
+                                input-debounce="0"
+                                placeholder="qwen2.5:7b"
+                                @update:model-value="onOllamaModelCommit"
+                                @blur="onOllamaModelBlur"
+                            />
+                            <q-input
+                                v-else
+                                v-model="state.ollama.model"
+                                outlined
+                                dense
+                                placeholder="qwen2.5:7b"
+                                hint="Enter your Ollama base URL first to list installed models."
+                                @blur="onOllamaModelBlur"
+                                @keydown.enter.prevent="onOllamaModelBlur"
+                            />
+                        </SettingsRow>
+                    </template>
+
+                    <!-- Paid providers: API key (write-only) + model + optional
+                         base URL (a self-hosted relay). Gemini has no base URL. -->
+                    <template v-else>
+                        <SettingsRow label="API key" stacked>
+                            <q-input
+                                v-model="state[provider].api_key"
+                                outlined
+                                dense
+                                type="password"
+                                autocomplete="off"
+                                :placeholder="state[provider].has_api_key ? '••••••••• (saved)' : 'Paste your key here'"
+                                @blur="onApiKeyBlur(provider)"
+                                @keydown.enter.prevent="onApiKeyBlur(provider)"
+                            />
+                            <BaseButton
+                                v-if="state[provider].has_api_key"
+                                variant="danger-ghost"
+                                :icon="ICONS.delete"
+                                label="Remove key"
+                                @click="onClearApiKey(provider)"
+                            />
+                        </SettingsRow>
+                        <SettingsRow label="Model" stacked>
+                            <q-input
+                                v-model="state[provider].model"
+                                outlined
+                                dense
+                                :placeholder="modelPlaceholder(provider)"
+                                @blur="onPaidModelBlur(provider)"
+                                @keydown.enter.prevent="onPaidModelBlur(provider)"
+                            />
+                        </SettingsRow>
+                        <SettingsRow v-if="provider !== 'gemini'" label="Base URL (optional)" stacked>
+                            <q-input
+                                v-model="state[provider].base_url"
+                                outlined
+                                dense
+                                :placeholder="defaultBaseUrl(provider)"
+                                @blur="onPaidBaseUrlBlur(provider)"
+                                @keydown.enter.prevent="onPaidBaseUrlBlur(provider)"
+                            />
+                        </SettingsRow>
+                    </template>
+                </div>
+            </div>
         </SettingsSection>
-
-        <template v-if="providerDraft === 'ollama'">
-            <hr class="settings-divider" />
-            <SettingsSection>
-                <template #title>Ollama server</template>
-                <template #description>
-                    The host address of your Ollama install. The Dora
-                    backend reaches this URL (not your browser); on a
-                    household NAS deployment you may need port-forwarding
-                    so the backend can see the LLM.
-                </template>
-
-                <SettingsRow label="Base URL">
-                    <q-input
-                        v-model="baseUrlDraft"
-                        outlined
-                        dense
-                        placeholder="http://localhost:11434"
-                        style="max-width: 360px"
-                        @blur="onBaseUrlBlur"
-                        @keydown.enter.prevent="onBaseUrlBlur"
-                    />
-                </SettingsRow>
-                <SettingsRow label="Model">
-                    <q-input
-                        v-model="modelDraft"
-                        outlined
-                        dense
-                        placeholder="qwen2.5:7b"
-                        style="max-width: 360px"
-                        @blur="onModelBlur"
-                        @keydown.enter.prevent="onModelBlur"
-                    />
-                </SettingsRow>
-
-                <!-- Test connection. Probes the saved config
-                     (or the in-flight draft values if the user hasn't
-                     blurred yet) via /api/assistant/probe. Rate-limited
-                     server-side at 10/min and audit-logged. -->
-                <SettingsRow label="">
-                    <div class="row q-gutter-sm items-center">
-                        <BaseButton
-                            variant="secondary"
-                            :icon="ICONS.wifi_tethering"
-                            label="Test connection"
-                            :loading="probing"
-                            :disable="saving || !baseUrlDraft.trim() || !modelDraft.trim()"
-                            @click="onTest"
-                        />
-                        <span
-                            v-if="probeResult"
-                            class="text-caption"
-                            :class="probeResult.available ? 'text-positive' : 'text-negative'"
-                        >
-                            <q-icon
-                                :name="probeResult.available ? ICONS.check_circle : ICONS.warning"
-                                size="14px"
-                                class="q-mr-xs"
-                            />
-                            <template v-if="probeResult.available">
-                                Connected.
-                                <span v-if="probeResult.models?.length">
-                                    {{ probeResult.models.length }}
-                                    model{{ probeResult.models.length === 1 ? '' : 's' }}
-                                    detected.
-                                </span>
-                            </template>
-                            <template v-else>{{ probeResult.reason ?? "Couldn't reach the provider." }}</template>
-                        </span>
-                    </div>
-                </SettingsRow>
-            </SettingsSection>
-        </template>
-
-        <template v-else>
-            <hr class="settings-divider" />
-            <SettingsSection>
-                <template #title>API key</template>
-                <template #description>
-                    Bring your own
-                    {{ providerDisplayName(providerDraft) }} API key.
-                    Stored encrypted at rest; never echoed back to the
-                    browser.
-                </template>
-
-                <SettingsRow label="API key">
-                    <q-input
-                        v-model="apiKeyDraft"
-                        outlined
-                        dense
-                        type="password"
-                        autocomplete="off"
-                        :placeholder="currentUser.has_llm_api_key ? '••••••••• (saved)' : 'Paste your key here'"
-                        style="max-width: 360px"
-                        @blur="onApiKeyBlur"
-                        @keydown.enter.prevent="onApiKeyBlur"
-                    />
-                </SettingsRow>
-                <SettingsRow v-if="currentUser.has_llm_api_key" label="">
-                    <BaseButton
-                        variant="danger-ghost"
-                        :icon="ICONS.delete"
-                        label="Remove saved key"
-                        :disable="saving"
-                        @click="onClearApiKey"
-                    />
-                </SettingsRow>
-
-                <SettingsRow label="Model">
-                    <q-input
-                        v-model="modelDraft"
-                        outlined
-                        dense
-                        :placeholder="modelPlaceholder"
-                        style="max-width: 360px"
-                        @blur="onModelBlur"
-                        @keydown.enter.prevent="onModelBlur"
-                    />
-                </SettingsRow>
-                <SettingsRow v-if="providerDraft !== 'gemini'" label="Base URL (optional)">
-                    <q-input
-                        v-model="baseUrlDraft"
-                        outlined
-                        dense
-                        :placeholder="defaultBaseUrl"
-                        style="max-width: 360px"
-                        @blur="onBaseUrlBlur"
-                        @keydown.enter.prevent="onBaseUrlBlur"
-                    />
-                </SettingsRow>
-
-                <!-- Test connection for paid providers. Uses
-                     the saved encrypted key (server falls back to it
-                     when the body's api_key is null); if the user just
-                     typed a new key into the masked field, that takes
-                     precedence so they can test pre-save. -->
-                <SettingsRow label="">
-                    <div class="row q-gutter-sm items-center">
-                        <BaseButton
-                            variant="secondary"
-                            :icon="ICONS.wifi_tethering"
-                            label="Test connection"
-                            :loading="probing"
-                            :disable="saving || !modelDraft.trim() || !canTestPaidProvider"
-                            @click="onTest"
-                        />
-                        <span
-                            v-if="probeResult"
-                            class="text-caption"
-                            :class="probeResult.available ? 'text-positive' : 'text-negative'"
-                        >
-                            <q-icon
-                                :name="probeResult.available ? ICONS.check_circle : ICONS.warning"
-                                size="14px"
-                                class="q-mr-xs"
-                            />
-                            <template v-if="probeResult.available">Connected.</template>
-                            <template v-else>{{ probeResult.reason ?? "Couldn't reach the provider." }}</template>
-                        </span>
-                    </div>
-                </SettingsRow>
-            </SettingsSection>
-        </template>
     </div>
 </template>
 
@@ -250,58 +193,64 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
-    import type { LlmProvider } from 'src/models/auth';
-    import AssistantApiService from 'src/services/api/assistantApiService';
+    import AssistantApiService, {
+        type LlmProviderName,
+        type ProviderConfig,
+    } from 'src/services/api/assistantApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { computed, ref, watch } from 'vue';
+    import { computed, onMounted, reactive } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
-    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
     import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const assistantApi = new AssistantApiService();
+    const { update } = useSettingsSave();
 
-    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
-    const { saving, update } = useSettingsSave();
-    // Test connection. `probing` gates the button; `probeResult`
-    // mirrors the last probe outcome inline next to the button so the
-    // user sees the verdict without a toast for the (frequent) "try a
-    // few URLs in a row" workflow. Cleared on any field edit so a stale
-    // green tick can't mislead.
-    const probing = ref(false);
-    const probeResult = ref<{ available: boolean; reason: string | null; models: string[] | null } | null>(null);
+    const PROVIDERS: LlmProviderName[] = ['ollama', 'openai', 'anthropic', 'gemini'];
 
-    // Local drafts mirror the per-row controls; each saves on blur (or on
-    // change for the provider segmented). Pattern matches MoneySettings.vue
-    // (R-020 carve-out: save-on-blur surfaces don't need the unsaved-changes
-    // guard — every blur fires the API).
-    const providerDraft = ref<LlmProvider | null>(currentUser.value?.llm_provider ?? null);
-    const baseUrlDraft = ref<string>(currentUser.value?.llm_base_url ?? '');
-    const modelDraft = ref<string>(currentUser.value?.llm_model ?? '');
-    const apiKeyDraft = ref<string>('');
+    // 'empty' — nothing entered; 'unverified' — details saved but no successful
+    // probe yet; 'checking' — probe in flight; 'connected' — probe succeeded;
+    // 'error' — last probe failed. Only 'connected' providers are selectable as
+    // a Mode (mirrors the server-side guard on `llm_enabled`).
+    type ProviderStatus = 'empty' | 'unverified' | 'checking' | 'connected' | 'error';
 
-    watch(currentUser, (u) => {
-        if (!u) return;
-        providerDraft.value = u.llm_provider;
-        baseUrlDraft.value = u.llm_base_url ?? '';
-        modelDraft.value = u.llm_model ?? '';
-        // Don't reset the api-key draft — the saved blob is opaque to the
-        // SPA; a watch firing on every PATCH would wipe an in-flight type.
-    }, { deep: true });
+    interface ProviderUiState {
+        base_url: string;
+        model: string;
+        api_key: string;       // draft plaintext; cleared once saved
+        has_api_key: boolean;  // a key is on file server-side
+        verified: boolean;
+        status: ProviderStatus;
+        reason: string | null;
+        models: string[];      // Ollama models discovered by the last probe
+    }
 
-    const providerOptions: DoraSegmentedOption<LlmProvider>[] = [
-        { label: 'Ollama (local)', value: 'ollama' },
-        { label: 'OpenAI', value: 'openai' },
-        { label: 'Anthropic', value: 'anthropic' },
-        { label: 'Gemini', value: 'gemini' },
-    ];
+    function emptyState(): ProviderUiState {
+        return {
+            base_url: '',
+            model: '',
+            api_key: '',
+            has_api_key: false,
+            verified: false,
+            status: 'empty',
+            reason: null,
+            models: [],
+        };
+    }
 
-    function providerDisplayName(p: LlmProvider | null): string {
+    const state = reactive<Record<LlmProviderName, ProviderUiState>>({
+        ollama: emptyState(),
+        openai: emptyState(),
+        anthropic: emptyState(),
+        gemini: emptyState(),
+    });
+
+    function providerDisplayName(p: LlmProviderName): string {
         switch (p) {
             case 'openai': return 'OpenAI';
             case 'anthropic': return 'Anthropic';
@@ -310,57 +259,203 @@
         }
     }
 
-    const defaultBaseUrl = computed(() => {
-        switch (providerDraft.value) {
+    function defaultBaseUrl(p: LlmProviderName): string {
+        switch (p) {
             case 'openai': return 'https://api.openai.com/v1';
             case 'anthropic': return 'https://api.anthropic.com';
             default: return '';
         }
-    });
+    }
 
-    const modelPlaceholder = computed(() => {
-        switch (providerDraft.value) {
+    function modelPlaceholder(p: LlmProviderName): string {
+        switch (p) {
             case 'openai': return 'gpt-4o-mini';
             case 'anthropic': return 'claude-3-5-sonnet-20241022';
             case 'gemini': return 'gemini-2.0-flash';
             default: return 'qwen2.5:7b';
         }
-    });
+    }
 
-    // "Can enable AI mode right now?" — checks the per-provider
-    // prerequisites match what's saved server-side, so the toggle
-    // doesn't go on with a half-finished config.
-    const canEnable = computed(() => {
-        const u = currentUser.value;
-        if (!u) return false;
-        if (u.llm_enabled) return true;
-        if (!u.llm_provider) return false;
-        if (!u.llm_model) return false;
-        if (u.llm_provider === 'ollama') {
-            return !!u.llm_base_url;
+    function seedFrom(configs: ProviderConfig[]) {
+        for (const cfg of configs) {
+            const s = state[cfg.provider];
+            if (!s) continue;
+            s.base_url = cfg.base_url ?? '';
+            s.model = cfg.model ?? '';
+            s.has_api_key = cfg.has_api_key;
+            s.verified = cfg.verified;
+            const configured = !!(cfg.base_url || cfg.model || cfg.has_api_key);
+            s.status = cfg.verified ? 'connected' : configured ? 'unverified' : 'empty';
         }
-        return u.has_llm_api_key;
-    });
+    }
 
-    const enableBlockedReason = computed(() => {
-        const u = currentUser.value;
-        if (!u) return '';
-        if (!u.llm_provider) return 'Pick a provider first.';
-        if (u.llm_provider === 'ollama') {
-            if (!u.llm_base_url) return 'Save a base URL first.';
-            if (!u.llm_model) return 'Save a model name first.';
-            return '';
+    onMounted(async () => {
+        try {
+            const { providers } = await assistantApi.getProvidersAsync();
+            seedFrom(providers);
+        } catch (err) {
+            // Non-fatal — the page still renders with empty fields the user
+            // can fill; the toast explains the fetch failure.
+            toastCaption(err);
         }
-        if (!u.has_llm_api_key) return 'Save an API key first.';
-        if (!u.llm_model) return 'Save a model name first.';
-        return '';
     });
 
-    async function onEnabledChange(value: boolean) {
-        await update(
-            value ? 'AI mode turned on.' : 'AI mode turned off.',
-            () => authStore.updateMeAsync({ llm_enabled: value }),
-        );
+    // ----- status chip -----
+
+    function statusLabel(p: LlmProviderName): string {
+        const s = state[p];
+        switch (s.status) {
+            case 'checking': return 'Checking…';
+            case 'connected': return 'Connected';
+            case 'error': return s.reason ?? "Couldn't connect";
+            case 'unverified': return 'Not tested';
+            default: return 'Not configured';
+        }
+    }
+
+    function statusColor(p: LlmProviderName): string {
+        switch (state[p].status) {
+            case 'connected': return 'positive';
+            case 'error': return 'negative';
+            case 'unverified': return 'warning';
+            default: return 'grey';
+        }
+    }
+
+    function statusIcon(p: LlmProviderName): string {
+        switch (state[p].status) {
+            case 'connected': return ICONS.check_circle;
+            case 'error': return ICONS.warning;
+            case 'unverified': return ICONS.help_outline;
+            default: return ICONS.help_outline;
+        }
+    }
+
+    function canTest(p: LlmProviderName): boolean {
+        // A manual re-check is useful once details exist (e.g. the server
+        // came back up). Nothing to test on an empty provider.
+        return state[p].status !== 'empty' && state[p].status !== 'checking';
+    }
+
+    // ----- save + probe -----
+
+    async function saveProvider(p: LlmProviderName, patch: Record<string, unknown>): Promise<boolean> {
+        try {
+            const cfg = await assistantApi.updateProviderAsync(p, patch);
+            state[p].has_api_key = cfg.has_api_key;
+            state[p].verified = false;
+            return true;
+        } catch (err) {
+            state[p].status = 'error';
+            state[p].reason = toastCaption(err) ?? 'Save failed.';
+            return false;
+        }
+    }
+
+    async function probe(p: LlmProviderName) {
+        state[p].status = 'checking';
+        state[p].reason = null;
+        try {
+            const r = await assistantApi.probeAsync({
+                provider: p,
+                base_url: state[p].base_url.trim() || null,
+                model: state[p].model.trim() || null,
+                // Plaintext (just typed) takes precedence; null falls back to
+                // the saved key server-side.
+                api_key: state[p].api_key.trim() || null,
+            });
+            if (r.available) {
+                state[p].status = 'connected';
+                state[p].verified = true;
+                if (r.models) state[p].models = r.models;
+            } else {
+                state[p].status = 'error';
+                state[p].reason = r.reason ?? "Couldn't connect";
+                state[p].verified = false;
+            }
+        } catch (err) {
+            state[p].status = 'error';
+            state[p].reason = toastCaption(err) ?? "Couldn't reach the server.";
+            state[p].verified = false;
+        }
+        // Keep the Mode dropdown + DoraChat's readiness in sync with the new
+        // verified state.
+        await authStore.refreshAsync();
+    }
+
+    async function onTest(p: LlmProviderName) {
+        await probe(p);
+    }
+
+    // Ollama handlers
+    async function onOllamaBaseUrlBlur() {
+        if (await saveProvider('ollama', { base_url: state.ollama.base_url.trim() || null })) {
+            if (state.ollama.base_url.trim()) await probe('ollama');
+            else state.ollama.status = state.ollama.model ? 'unverified' : 'empty';
+        }
+    }
+    async function onOllamaModelBlur() {
+        if (await saveProvider('ollama', { model: state.ollama.model.trim() || null })) {
+            if (state.ollama.base_url.trim() && state.ollama.model.trim()) await probe('ollama');
+        }
+    }
+    async function onOllamaModelCommit() {
+        // q-select add-unique commits without a blur; persist + probe.
+        await onOllamaModelBlur();
+    }
+
+    // Paid-provider handlers
+    async function onApiKeyBlur(p: LlmProviderName) {
+        const next = state[p].api_key.trim();
+        if (!next) return;
+        if (await saveProvider(p, { api_key: next })) {
+            state[p].api_key = '';  // masked; placeholder now shows "(saved)"
+            await probe(p);
+        }
+    }
+    async function onClearApiKey(p: LlmProviderName) {
+        if (await saveProvider(p, { clear_api_key: true })) {
+            state[p].api_key = '';
+            state[p].status = state[p].model ? 'unverified' : 'empty';
+            await authStore.refreshAsync();
+        }
+    }
+    async function onPaidModelBlur(p: LlmProviderName) {
+        if (await saveProvider(p, { model: state[p].model.trim() || null })) {
+            if (state[p].has_api_key && state[p].model.trim()) await probe(p);
+        }
+    }
+    async function onPaidBaseUrlBlur(p: LlmProviderName) {
+        await saveProvider(p, { base_url: state[p].base_url.trim() || null });
+        if (state[p].has_api_key && state[p].model.trim()) await probe(p);
+    }
+
+    // ----- Mode -----
+
+    const modeOptions = computed(() => {
+        const opts: { label: string; value: LlmProviderName | null }[] = [
+            { label: 'Basic (built-in)', value: null },
+        ];
+        for (const p of PROVIDERS) {
+            if (state[p].verified) opts.push({ label: providerDisplayName(p), value: p });
+        }
+        return opts;
+    });
+
+    const modeValue = computed<LlmProviderName | null>(() =>
+        currentUser.value?.llm_enabled ? (currentUser.value.llm_provider ?? null) : null,
+    );
+
+    async function onModeChange(value: LlmProviderName | null) {
+        if (value === null) {
+            await update('Switched to Basic mode.', () =>
+                authStore.updateMeAsync({ llm_enabled: false }),
+            );
+        } else {
+            await update(`AI mode on (${providerDisplayName(value)}).`, () =>
+                authStore.updateMeAsync({ llm_provider: value, llm_enabled: true }),
+            );
+        }
     }
 
     async function onShowAssistantChange(value: boolean) {
@@ -369,112 +464,47 @@
             () => authStore.updateMeAsync({ show_assistant: value }),
         );
     }
-
-    async function onProviderChange(value: LlmProvider) {
-        // Drafts that don't apply to the new provider are kept (the user
-        // might be flipping between providers to compare); the server
-        // just doesn't care about fields the chosen provider ignores.
-        const previous = providerDraft.value;
-        providerDraft.value = value;
-        const result = await update('Provider updated.', () =>
-            authStore.updateMeAsync({ llm_provider: value }),
-        );
-        if (result === null) providerDraft.value = previous;
-    }
-
-    async function onBaseUrlBlur() {
-        const next = baseUrlDraft.value.trim();
-        if ((currentUser.value?.llm_base_url ?? '') === next) return;
-        const previous = currentUser.value?.llm_base_url ?? null;
-        const result = await update('Base URL updated.', () =>
-            authStore.updateMeAsync({ llm_base_url: next || null }),
-        );
-        if (result === null) baseUrlDraft.value = previous ?? '';
-    }
-
-    async function onModelBlur() {
-        const next = modelDraft.value.trim();
-        if ((currentUser.value?.llm_model ?? '') === next) return;
-        const previous = currentUser.value?.llm_model ?? null;
-        const result = await update('Model updated.', () =>
-            authStore.updateMeAsync({ llm_model: next || null }),
-        );
-        if (result === null) modelDraft.value = previous ?? '';
-    }
-
-    async function onApiKeyBlur() {
-        const next = apiKeyDraft.value.trim();
-        if (!next) return;
-        const result = await update('API key saved.', () =>
-            authStore.updateMeAsync({ llm_api_key: next }),
-        );
-        if (result !== null) {
-            // Clear the visible field after save so the placeholder
-            // ("••••••••• (saved)") tells the user the key is on file.
-            apiKeyDraft.value = '';
-        }
-    }
-
-    async function onClearApiKey() {
-        await update('API key removed.', () =>
-            authStore.updateMeAsync({ clear_llm_api_key: true }),
-        );
-        probeResult.value = null;
-    }
-
-    // guard the paid-provider Test button: must either have a
-    // saved key OR a freshly-typed plaintext to send.
-    const canTestPaidProvider = computed(() => {
-        if (providerDraft.value === 'ollama') return true;
-        return !!apiKeyDraft.value.trim() || !!currentUser.value?.has_llm_api_key;
-    });
-
-    async function onTest() {
-        if (!providerDraft.value) return;
-        probing.value = true;
-        probeResult.value = null;
-        try {
-            const result = await assistantApi.probeAsync({
-                provider: providerDraft.value,
-                base_url: baseUrlDraft.value.trim() || null,
-                model: modelDraft.value.trim() || null,
-                // Plaintext takes precedence; null falls back to the
-                // saved encrypted blob server-side. Either way, the
-                // raw plaintext is dropped from the SPA state once
-                // the probe responds (no need to keep it).
-                api_key: apiKeyDraft.value.trim() || null,
-            });
-            probeResult.value = result;
-        } catch (err) {
-            probeResult.value = {
-                available: false,
-                reason: toastCaption(err) ?? "Couldn't reach the server.",
-                models: null,
-            };
-        } finally {
-            probing.value = false;
-        }
-    }
-
-    // Clear the inline probe result when the user edits any field —
-    // a stale "Connected" tick next to a now-different URL is worse
-    // than no tick at all.
-    watch([providerDraft, baseUrlDraft, modelDraft, apiKeyDraft], () => {
-        probeResult.value = null;
-    });
 </script>
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
-    .settings-page__note {
-        font-size: 0.8125rem;
-        line-height: 1.4;
-        margin-top: 4px;
-    }
+    .settings-page__link { color: var(--brand-primary); font-weight: 600; }
     .settings-divider {
         border: 0;
         height: 1px;
         background: color-mix(in srgb, var(--text-primary) 8%, transparent);
         margin: 0;
+    }
+    .provider-card {
+        border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+        border-radius: 12px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .provider-card__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .provider-card__name {
+        margin: 0;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .provider-card__status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8125rem;
+    }
+    .provider-card__body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
     }
 </style>

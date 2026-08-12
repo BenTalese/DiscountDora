@@ -11,6 +11,8 @@ from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine)
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.consumption_event import (
+    CONSUMPTION_SOURCE_COOK, ConsumptionEvent)
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.stock_item_expiry_event import (
     EXPIRY_EVENT_PUSHED, EXPIRY_EVENT_SET, StockItemExpiryEvent,
@@ -721,6 +723,91 @@ def seed_dev_data(
             for recipe, tool in _tool_links
         ],
     )
+
+    # ---------------- ZERO-INPUT PANTRY BELIEF DEMO (P8-07) ------------------ #
+    # The belief hint only surfaces when Dora's inference DISAGREES with the
+    # recorded level, so the curated items above (no purchase cadence → thin
+    # data → belief just echoes the recorded level) stay silent. These items
+    # carry tailored purchase histories (+ some cook-consumption) engineered to
+    # land in every visible state: Dora thinking out / low / stocked against the
+    # recorded level, across high / medium / low confidence, including two
+    # cases where cooking (not the calendar) is what draws the belief down. One
+    # agreeing control is included to prove the hint stays silent when it agrees.
+    #
+    # Numbers are chosen against the model in
+    # dora_api/features/stock_items/pantry_belief.py — cadence = mean gap of the
+    # purchase dates; progress = days-since-last-buy / cadence + 0.34 per cook
+    # since; band cut-points 0.75 (low) / 1.15 (out); confidence rises with more
+    # purchases and with being closer to a fresh buy.
+    def belief_shops(item, offsets_prices):
+        """Give `item` one finished, priced shop per (days_ago, price) — each a
+        purchase date the belief model reads. Mirrors the QA-cheese fixture."""
+        shops = []
+        for _i, (_days_ago, _price) in enumerate(offsets_prices):
+            _sl = ShoppingList(
+                name=f"{item.name} shop {_i + 1}",
+                created_at=now - timedelta(days=_days_ago + 1),
+                completed_at=now - timedelta(days=_days_ago),
+                status=SHOPPING_LIST_STATUS_DONE,
+            )
+            repo.add(_sl)
+            shops.append(_sl)
+        repo.save_changes()  # list lines FK to persisted ids
+        for _sl, (_days_ago, _price) in zip(shops, offsets_prices):
+            line(_sl.id, item, 0, ticked=True, actual_unit_price=_price)
+        builders.harvest_price_observations({_sl.id: _sl.completed_at for _sl in shops})
+
+    def cook_consume(item, days_ago, from_seq, to_seq):
+        """A cook-sourced consumption event — the depletion leg (P6-07) that
+        draws the belief down faster than the calendar alone."""
+        repo.add(ConsumptionEvent(
+            stock_item_id=item.id, stock_item_name=item.name,
+            recipe_id=None, recipe_name=None, source=CONSUMPTION_SOURCE_COOK,
+            from_sequence=from_seq, to_sequence=to_seq,
+            occurred_at=now - timedelta(days=days_ago),
+        ))
+
+    # recorded Stocked · bought every ~20d, 16d in (progress ~0.8) → Dora
+    # thinks LOW at HIGH confidence (5 buys = rich history).
+    b_weetbix = make_item(name="Belief: Weet-Bix", group=g_pantry, level=stocked,
+                          location=top_shelf, updated_days_ago=30)
+    # recorded Stocked · every ~14d, 17d in (past a full cycle) → Dora thinks
+    # OUT at MEDIUM confidence.
+    b_tuna = make_item(name="Belief: Tuna Tins", group=g_pantry, level=stocked,
+                       location=middle_right, updated_days_ago=30)
+    # recorded Stocked · every ~14d, exactly one cycle in → Dora thinks LOW,
+    # MEDIUM confidence.
+    b_yoghurt = make_item(name="Belief: Greek Yoghurt", group=g_dairy, level=stocked,
+                          location=fridge, updated_days_ago=25)
+    # recorded Stocked · only 10d since a buy (calendar alone = stocked) but
+    # cooked with 2× since → belief drawn down to LOW. Shows the cooking signal.
+    b_passata = make_item(name="Belief: Passata (cooked down)", group=g_pantry,
+                          level=stocked, location=middle_left, updated_days_ago=25)
+    # recorded Low · calendar ~2/3 through, plus 2 cooks → belief pushed all the
+    # way to OUT. LOW confidence (thin history, deep extrapolation).
+    b_stirfry = make_item(name="Belief: Stir-fry Veg (cooked out)", group=g_frozen,
+                          level=low, location=freezer, updated_days_ago=25)
+    # recorded Out (stale, 30d ago) but bought again 5d ago → Dora thinks
+    # STOCKED. A reassuring disagreement — you're covered.
+    b_oj = make_item(name="Belief: Orange Juice (just restocked)", group=g_dairy,
+                     level=out, location=fridge, updated_days_ago=30)
+    # recorded Low and Dora agrees it's Low → hint stays SILENT (the control).
+    b_crackers = make_item(name="Belief: Crackers (agrees, silent)", group=g_pantry,
+                           level=low, location=middle_left, updated_days_ago=25)
+    repo.save_changes()  # items need ids before their shops / consumption
+
+    belief_shops(b_weetbix, [(96, 6.50), (76, 6.50), (56, 6.00), (36, 6.00), (16, 6.50)])
+    belief_shops(b_tuna, [(59, 1.20), (45, 1.20), (31, 1.10), (17, 1.20)])
+    belief_shops(b_yoghurt, [(42, 5.00), (28, 5.50), (14, 5.00)])
+    belief_shops(b_passata, [(70, 2.00), (40, 2.20), (10, 2.00)])
+    cook_consume(b_passata, 8, 0, 0)
+    cook_consume(b_passata, 4, 0, 1)
+    belief_shops(b_stirfry, [(50, 7.00), (20, 7.50)])
+    cook_consume(b_stirfry, 15, 1, 1)
+    cook_consume(b_stirfry, 6, 1, 2)
+    belief_shops(b_oj, [(40, 4.00), (5, 4.20)])
+    belief_shops(b_crackers, [(42, 3.00), (28, 3.00), (14, 3.20)])
+    repo.save_changes()
 
     # ---------------- QA FIXTURES (browser-E2E deterministic states) --------- #
     # Mirrors the hand-engineered "QA Verdict Cheese" fixture the 2026-07-17

@@ -70,6 +70,10 @@ export const ICONS = {
     home: 'mdi-home',
     info: 'mdi-information',
     install_desktop: 'mdi-monitor-arrow-down',
+    // Dora's inferred-stock hint (Zero-Input Pantry) — a "hunch that questions
+    // your recorded level". Deliberately NOT auto_awesome, which maps to the
+    // magic-wand glyph.
+    inferred_hunch: 'mdi-lightbulb-question-outline',
     kitchen: 'mdi-fridge',
     lightbulb: 'mdi-lightbulb',
     light_mode: 'mdi-weather-sunny',

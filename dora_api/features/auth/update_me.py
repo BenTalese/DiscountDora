@@ -10,11 +10,9 @@ from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
                                            ALLOWED_LLM_PROVIDERS,
                                            ALLOWED_THEMES,
                                            ALLOWED_VOICE_ENGINES,
-                                           LLM_PROVIDERS_REQUIRING_API_KEY,
                                            NUTRITION_MODE_COMPLEX,
                                            NUTRITION_MODE_VALUES, User)
-from dora_api.infrastructure.llm import (EncryptionUnavailable,
-                                         encrypt_api_key)
+from dora_api.features.assistant.providers import get_provider_config
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.tts.voice_catalog import VOICE_IDS
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
@@ -94,19 +92,14 @@ class UpdateMeRequest(BaseModel):
     # the default layout. Opaque to the backend (client view-state); the cap is
     # generous for the small JSON but bounds abuse.
     dashboard_layout: str | None = Field(default=None, max_length=20_000)
-    # per-user assistant config. Provider is a
-    # closed-set sentinel (R-010, validated below against
-    # ALLOWED_LLM_PROVIDERS). API key is write-only: clients send the
-    # plaintext on `llm_api_key`, the handler encrypts and stores it;
-    # reads return `has_llm_api_key: bool`, never the value.
-    # `clear_llm_api_key: true` removes the saved key (separate flag,
-    # same shape as `clear_image`).
+    # per-user assistant Mode. `llm_enabled` is the AI-mode opt-in and
+    # `llm_provider` the active provider (closed-set sentinel, R-010,
+    # validated below against ALLOWED_LLM_PROVIDERS). The per-provider
+    # details (base URL / model / API key) are edited via the
+    # `/assistant/providers` endpoints, not here. Enabling AI mode requires
+    # the active provider to already be verified (see the guard below).
     llm_enabled: bool | None = None
     llm_provider: str | None = Field(default=None, max_length=16)
-    llm_base_url: str | None = Field(default=None, max_length=500)
-    llm_model: str | None = Field(default=None, max_length=255)
-    llm_api_key: str | None = Field(default=None, max_length=512)
-    clear_llm_api_key: bool = False
     # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Plain bool;
     # null is ignored (leave untouched). Independent of `llm_enabled`.
     show_assistant: bool | None = None
@@ -274,19 +267,14 @@ class UpdateMeHandler:
         if "dashboard_layout" in _SetFields:
             _User.dashboard_layout = request.dashboard_layout
 
-        # per-user assistant config. Provider is a
-        # closed-set sentinel; URL/model/api_key are partial fields the
-        # SPA edits in place. The plaintext API key is encrypted on
-        # write (Fernet, see infrastructure.security.secret_encryption); the
-        # ciphertext is what lands on the column. `clear_llm_api_key`
-        # is a separate flag (same shape as clear_image) so the SPA
-        # can wipe the key without round-tripping the value.
+        # per-user assistant Mode selection. `llm_provider` picks the active
+        # provider (or None → Basic); `llm_enabled` is the AI opt-in. Details
+        # for each provider live in the `UserLlmProvider` table, edited via
+        # `/assistant/providers`.
         # FU-360.6 — show/hide the Dora helper bubble. Plain bool; null ignored.
         if "show_assistant" in _SetFields and request.show_assistant is not None:
             _User.show_assistant = request.show_assistant
 
-        if "llm_enabled" in _SetFields and request.llm_enabled is not None:
-            _User.llm_enabled = request.llm_enabled
         if "llm_provider" in _SetFields:
             provider = request.llm_provider
             if provider is not None:
@@ -296,32 +284,29 @@ class UpdateMeHandler:
                 elif provider not in ALLOWED_LLM_PROVIDERS:
                     return None, f"Invalid LLM provider '{provider}'."
             _User.llm_provider = provider
-        if "llm_base_url" in _SetFields:
-            url = request.llm_base_url
-            _User.llm_base_url = (url or "").strip() or None
-        if "llm_model" in _SetFields:
-            model = request.llm_model
-            _User.llm_model = (model or "").strip() or None
-        if request.clear_llm_api_key:
-            _User.llm_api_key_encrypted = None
-        elif "llm_api_key" in _SetFields and request.llm_api_key is not None:
-            plaintext = request.llm_api_key.strip()
-            if plaintext:
-                try:
-                    _User.llm_api_key_encrypted = encrypt_api_key(plaintext)
-                except EncryptionUnavailable as exc:
-                    return None, str(exc)
-        # Cross-field validation: enabling AI mode with a paid provider
-        # requires an API key (saved here or in this same request).
-        if _User.llm_enabled and _User.llm_provider in LLM_PROVIDERS_REQUIRING_API_KEY:
-            if _User.llm_api_key_encrypted is None:
+        if "llm_enabled" in _SetFields and request.llm_enabled is not None:
+            _User.llm_enabled = request.llm_enabled
+
+        # Cross-field validation: turning AI mode on requires an active
+        # provider whose config has been verified (a live probe succeeded).
+        # The Mode picker only offers verified providers, so this guards
+        # direct/stale API calls.
+        if _User.llm_enabled:
+            if not _User.llm_provider:
+                return None, "Pick a provider before enabling AI mode."
+            active = get_provider_config(self.repository, user_id, _User.llm_provider)
+            if active is None or not active.verified:
                 return None, (
-                    f"{_User.llm_provider} needs an API key — save the key "
-                    f"before enabling AI mode."
+                    f"{_User.llm_provider} isn't verified yet — test the "
+                    f"connection in Settings → Assistant before enabling AI mode."
                 )
 
         self.repository.save_changes()
-        return AuthenticatedUserDto.from_entity(_User), None
+        active_provider = (
+            get_provider_config(self.repository, user_id, _User.llm_provider)
+            if _User.llm_provider else None
+        )
+        return AuthenticatedUserDto.from_entity(_User, active_provider), None
 
 
 @AUTH_ROUTER.route("/me", methods=["PATCH"])

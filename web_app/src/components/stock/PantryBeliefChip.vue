@@ -1,27 +1,26 @@
 <template>
     <!--
-        P8-07 — the Zero-Input Pantry belief chip. ADDITIVE: it sits beside
+        P8-07 — the Zero-Input Pantry belief hint. ADDITIVE: it sits beside
         the recorded level, never replaces it (the recorded level stays the
-        source of truth for shopping + cooking). Shows what Dora infers, its
-        confidence, and — via the tooltip — the plain-English reason
-        (Charter 3/7: honest + explainable). Hidden unless the belief is a
-        genuine inference worth surfacing.
+        source of truth for shopping + cooking).
+
+        Design (2026-08-12): the hint surfaces ONLY when Dora's inference
+        DISAGREES with the recorded level — the one case that's worth a
+        glance. Agreement (confident or not) says nothing new, so it stays
+        silent; there's no "Dora agrees" state (anti-creep, Charter 10).
+        When it does show it's a soft-amber pill "Dora thinks low/out/stocked"
+        with a hunch icon; the band, confidence, and plain-English reason live
+        in the tooltip (Charter 3/7: honest + explainable).
     -->
-    <span
-        v-if="belief && belief.is_inferred"
-        class="belief-chip"
-        :class="[`belief-chip--${belief.believed_band}`, { 'belief-chip--differs': belief.differs_from_recorded }]"
-    >
-        <q-icon :name="ICONS.auto_awesome" size="13px" class="belief-chip__icon" />
-        <span class="belief-chip__dot" :class="`belief-chip__dot--${belief.believed_band}`" />
-        <span class="belief-chip__text">Dora: {{ bandLabel }}</span>
-        <span class="belief-chip__conf">· {{ belief.confidence_band }}</span>
+    <span v-if="belief && shouldShow" class="belief-hint">
+        <q-icon :name="ICONS.inferred_hunch" size="14px" class="belief-hint__icon" />
+        <span class="belief-hint__text">Dora thinks {{ bandWord }}</span>
         <q-tooltip max-width="260px" anchor="top middle" self="bottom middle">
             {{ belief.reason }}
-            <template v-if="belief.differs_from_recorded">
-                <br />
-                <span class="belief-chip__tip-note">Differs from your recorded level — a quick check helps.</span>
-            </template>
+            <br />
+            <span class="belief-hint__tip-conf">Confidence: {{ belief.confidence_band }}</span>
+            <br />
+            <span class="belief-hint__tip-note">Differs from your recorded level — a quick check helps.</span>
         </q-tooltip>
     </span>
 </template>
@@ -35,62 +34,52 @@
         belief: PantryBelief | null;
     }>();
 
-    // The chip only surfaces genuine inferences (is_inferred) — a belief that
-    // merely echoes a freshly-confirmed level carries no new information, so
-    // the row stays uncluttered (Charter 10). That gate lives in the template
-    // `v-if` so vue-tsc narrows `belief` to non-null for the bindings.
+    // Show only a genuine inference (is_inferred) that DIFFERS from the recorded
+    // level. Everything else — agreement, or a belief that merely echoes a
+    // freshly-confirmed level — carries no new information, so the row stays
+    // uncluttered.
+    const shouldShow = computed(
+        () => !!props.belief && props.belief.is_inferred && props.belief.differs_from_recorded,
+    );
 
-    const BAND_LABEL: Record<string, string> = {
-        out: '~Out',
-        low: '~Low',
-        stocked: 'Stocked',
+    const BAND_WORD: Record<string, string> = {
+        out: 'out',
+        low: 'low',
+        stocked: 'stocked',
     };
-    const bandLabel = computed(() =>
-        props.belief ? (BAND_LABEL[props.belief.believed_band] ?? props.belief.believed_band) : '',
+    const bandWord = computed(() =>
+        props.belief ? (BAND_WORD[props.belief.believed_band] ?? props.belief.believed_band) : '',
     );
 </script>
 
 <style scoped>
-    /* Compact, muted by default — an ambient hint, not a loud badge. All
-       colour rides semantic tokens (R-002). */
-    .belief-chip {
+    /* A soft-amber pill — the disagreement is the one case worth pulling the
+       eye. Text is --text-primary on the soft fill (NOT full-strength warning
+       ink — that's the D-002 1.98:1 contrast fail BuyVerdictBadge already
+       corrected); the warning tint lives in the fill, border, and (as a
+       graphical, non-text indicator) the hunch icon. All colour rides
+       semantic tokens (R-002). */
+    .belief-hint {
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        padding: 1px 7px 1px 5px;
+        padding: 1px 7px;
         border-radius: 10px;
         font-size: 0.72rem;
         line-height: 1.4;
-        color: var(--text-secondary);
-        background: var(--surface-sunken);
-        border: 1px solid transparent;
+        background: var(--semantic-warning-soft);
+        border: 1px solid var(--semantic-warning);
+        color: var(--text-primary);
         white-space: nowrap;
         cursor: default;
     }
-    .belief-chip__icon {
-        color: var(--brand-primary);
+    .belief-hint__icon {
+        color: var(--semantic-warning);
+    }
+    .belief-hint__tip-conf {
         opacity: 0.85;
     }
-    .belief-chip__dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-    .belief-chip__dot--stocked { background: var(--semantic-positive); }
-    .belief-chip__dot--low { background: var(--semantic-warning); }
-    .belief-chip__dot--out { background: var(--semantic-negative); }
-    .belief-chip__conf {
-        color: var(--text-muted, var(--text-secondary));
-        opacity: 0.8;
-    }
-    /* When Dora's inference disagrees with the recorded level, outline the
-       chip in a warning tint so it reads as "worth a look". */
-    .belief-chip--differs {
-        border-color: var(--semantic-warning);
-        background: var(--semantic-warning-soft);
-    }
-    .belief-chip__tip-note {
+    .belief-hint__tip-note {
         opacity: 0.85;
         font-style: italic;
     }

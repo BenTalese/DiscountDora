@@ -72,11 +72,48 @@ export type CommitResult = {
     answer: string;
 };
 
+export type LlmProviderName = 'ollama' | 'openai' | 'anthropic' | 'gemini';
+
+// One provider's saved config. `has_api_key` is derived server-side (the
+// plaintext key never travels back); `verified` is true only after a live
+// probe reached the provider with these exact settings.
+export type ProviderConfig = {
+    provider: LlmProviderName;
+    base_url: string | null;
+    model: string | null;
+    has_api_key: boolean;
+    verified: boolean;
+    verified_at: string | null;
+};
+
+export type UpdateProviderCommand = {
+    base_url?: string | null;
+    model?: string | null;
+    api_key?: string | null;
+    clear_api_key?: boolean;
+};
+
 export default class AssistantApiService {
     private httpClient = new AxiosHttpClient();
 
     getStatusAsync = async (): Promise<{ ai_available: boolean; reason: string | null }> =>
         await this.httpClient.get<{ ai_available: boolean; reason: string | null }>('/assistant/status');
+
+    /** This user's saved config for every provider (unconfigured ones come
+     *  back with empty fields + `verified: false`). */
+    getProvidersAsync = async (): Promise<{ providers: ProviderConfig[] }> =>
+        await this.httpClient.get<{ providers: ProviderConfig[] }>('/assistant/providers');
+
+    /** Upsert one provider's details. Any edit resets `verified` server-side —
+     *  re-probe to re-verify. Returns the updated provider config. */
+    updateProviderAsync = async (
+        provider: LlmProviderName,
+        command: UpdateProviderCommand,
+    ): Promise<ProviderConfig> =>
+        await this.httpClient.patch<ProviderConfig, UpdateProviderCommand>(
+            `/assistant/providers/${provider}`,
+            command,
+        );
 
     /** FU-332 — per-user "Test connection" probe. `api_key === null`
      *  (or omitted) falls back to the user's saved encrypted key for

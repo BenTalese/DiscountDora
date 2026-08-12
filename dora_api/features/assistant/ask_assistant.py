@@ -249,7 +249,14 @@ def _build_client_for_current_user() -> LlmClient:
     if user is None:
         from dora_api.infrastructure.llm.factory import _UnavailableClient
         return _UnavailableClient("User not found.")
-    return build_assistant_client(user)
+    # The per-provider details live in UserLlmProvider (source of truth);
+    # load the active provider's row for the factory.
+    from dora_api.features.assistant.providers import get_provider_config
+    config = (
+        get_provider_config(repo, user_id, user.llm_provider)
+        if user.llm_provider else None
+    )
+    return build_assistant_client(user, config)
 
 
 class AskAssistantHandler:

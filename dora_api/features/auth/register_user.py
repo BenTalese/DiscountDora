@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.auth_token import PURPOSE_VERIFY_EMAIL
 from dora_api.domain.entities.user import User
+from dora_api.domain.entities.user_llm_provider import UserLlmProvider
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
@@ -107,24 +108,25 @@ class AuthenticatedUserDto:
     # hidden set), or None when the user hasn't customised. The SPA parses it
     # to seed the dashboard; the backend treats it as an opaque string.
     dashboard_layout: str | None
-    # per-user assistant config. Plaintext API key
-    # is never echoed back — the wire-side carries a derived
-    # `has_llm_api_key: bool` (same shape as `has_image`). The other
-    # four fields round-trip directly so the Settings page can show /
-    # edit them; the actual provider client is built server-side per
-    # request (factory.build_assistant_client).
+    # per-user assistant config. `llm_enabled` is the AI-mode opt-in and
+    # `llm_provider` the active provider (or None for Basic mode). The
+    # per-provider details live in `UserLlmProvider` and are read/edited via
+    # the `/assistant/providers` endpoints, not this DTO. `assistant_ready`
+    # is the one derived bit the SPA needs here: the active provider has a
+    # verified config, so AI mode can actually run (drives DoraChat's
+    # Basic/AI slider gate).
     llm_enabled: bool
     llm_provider: str | None
-    llm_base_url: str | None
-    llm_model: str | None
-    has_llm_api_key: bool
+    assistant_ready: bool
     # FU-360.6 — whether to mount the Dora helper bubble at all. Default
     # True; distinct from `llm_enabled` (AI mode). When False the SPA hides
     # the launcher entirely.
     show_assistant: bool
 
     @classmethod
-    def from_entity(cls, user: User) -> "AuthenticatedUserDto":
+    def from_entity(
+        cls, user: User, active_provider: "UserLlmProvider | None" = None,
+    ) -> "AuthenticatedUserDto":
         return AuthenticatedUserDto(
             user_id=user.id,
             username=user.username,
@@ -156,9 +158,7 @@ class AuthenticatedUserDto:
             dashboard_layout=user.dashboard_layout,
             llm_enabled=bool(user.llm_enabled),
             llm_provider=user.llm_provider,
-            llm_base_url=user.llm_base_url,
-            llm_model=user.llm_model,
-            has_llm_api_key=user.llm_api_key_encrypted is not None,
+            assistant_ready=bool(active_provider is not None and active_provider.verified),
             show_assistant=bool(user.show_assistant),
         )
 

@@ -99,7 +99,6 @@ def login():
         payload={"username": _Response.user.username},
     )
     from dora_api.features.assistant.providers import get_provider_config
-    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
     _ActiveProvider = (
         get_provider_config(
             SqlAlchemyRepository(), _Response.user.id, _Response.user.llm_provider,

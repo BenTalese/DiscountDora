@@ -755,7 +755,9 @@ def seed_dev_data(
         repo.save_changes()  # list lines FK to persisted ids
         for _sl, (_days_ago, _price) in zip(shops, offsets_prices):
             line(_sl.id, item, 0, ticked=True, actual_unit_price=_price)
+        repo.save_changes()  # line ids on the wire before the harvest FK (classic mapper won't order the child insert after its parent — see repo.flush docstring)
         builders.harvest_price_observations({_sl.id: _sl.completed_at for _sl in shops})
+        repo.save_changes()  # observations committed before the next item's batch
 
     def cook_consume(item, days_ago, from_seq, to_seq):
         """A cook-sourced consumption event — the depletion leg (P6-07) that
@@ -838,6 +840,7 @@ def seed_dev_data(
         repo.save_changes()
         for _seq, (_l, _price) in enumerate(qa_lists):
             line(_l.id, qa_cheese, _seq, ticked=True, actual_unit_price=_price)
+        repo.save_changes()  # line ids on the wire before the harvest FK (classic mapper won't order the child insert after its parent)
         builders.harvest_price_observations(
             {_l.id: _l.completed_at for _l, _ in qa_lists}
         )

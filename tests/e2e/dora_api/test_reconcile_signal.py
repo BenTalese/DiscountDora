@@ -32,6 +32,18 @@ def _trigger_sweep() -> None:
     assert resp.status_code == 200, resp.text
 
 
+def _set_auto_drain(value: bool) -> None:
+    resp = requests.patch(APP_SETTINGS, json={"auto_drain_past_meals": value})
+    assert resp.status_code == 200, resp.text
+
+
+# The overdue nudge is a MANUAL-mode concept (owner 2026-08-13): in auto mode
+# `unresolved_auto` entries aren't pending, so the signal is intentionally
+# suppressed (covered by `test__auto_mode_suppresses_the_overdue_nudge`). Every
+# firing test below therefore pins manual mode so the sweep leaves genuinely
+# pending `unresolved_manual` entries for the threshold logic to act on.
+
+
 def _pick_recipe_id() -> str:
     items = requests.get(f"{RECIPES}?limit=1").json()["items"]
     assert items, "seed expected to have a recipe"
@@ -126,6 +138,7 @@ def _find_suggestion(kind: str):
 def test__below_threshold_count__neither_alert_nor_suggestion_fires(api):
     """Two unresolved entries — count < 3 → no fire, either surface."""
     _clear_test_receipts_and_plans()
+    _set_auto_drain(False)
     recipe_id = _pick_recipe_id()
     _bump_pool_to(recipe_id, target=10)
     plan_ids = []
@@ -146,6 +159,7 @@ def test__above_count_but_all_recent__neither_surface_fires(api):
     """Four unresolved entries but ALL scheduled 2 days ago (< 4 days-back
     threshold) → no fire."""
     _clear_test_receipts_and_plans()
+    _set_auto_drain(False)
     recipe_id = _pick_recipe_id()
     _bump_pool_to(recipe_id, target=10)
     plan_ids = []
@@ -169,6 +183,7 @@ def test__above_threshold__both_alert_and_suggestion_fire(api):
     The `alert_id` scope is `meal:...`, and the suggestion payload
     carries the same counts."""
     _clear_test_receipts_and_plans()
+    _set_auto_drain(False)
     recipe_id = _pick_recipe_id()
     _bump_pool_to(recipe_id, target=10)
     plan_ids = []
@@ -231,6 +246,7 @@ def test__resolving_all_queue_entries_clears_both_surfaces(api):
     """After the threshold fires, resolving every entry (verb `cooked`)
     should clear the queue → neither surface fires."""
     _clear_test_receipts_and_plans()
+    _set_auto_drain(False)
     recipe_id = _pick_recipe_id()
     _bump_pool_to(recipe_id, target=10)
     plan_ids: list[str] = []
@@ -246,6 +262,31 @@ def test__resolving_all_queue_entries_clears_both_surfaces(api):
         for eid in entry_ids:
             r = requests.post(f"{MEAL_PLANS}/reconcile/{eid}", json={"verb": "cooked"})
             assert r.status_code == 200, r.text
+
+        assert _find_alert("meal_reconcile_overdue") is None
+        assert _find_suggestion("reconcile_meals_pending") is None
+    finally:
+        for pid in plan_ids:
+            requests.delete(f"{MEAL_PLANS}/{pid}")
+
+
+# ── Auto mode suppresses the nudge (owner 2026-08-13) ───────────────────
+
+def test__auto_mode_suppresses_the_overdue_nudge(api):
+    """In auto-drain mode Dora handles past meals silently, so even a queue
+    that WOULD trip the threshold in manual mode (3 entries, oldest 5 days
+    back) fires neither the alert nor the suggestion — the auto-drained
+    entries aren't 'pending'. They live in the read-only log instead."""
+    _clear_test_receipts_and_plans()
+    _set_auto_drain(True)
+    recipe_id = _pick_recipe_id()
+    _bump_pool_to(recipe_id, target=10)
+    plan_ids = []
+    try:
+        for days_ago in (5, 5, 5):
+            plan_id, _ = _create_past_day_entry(recipe_id, days_ago=days_ago)
+            plan_ids.append(plan_id)
+        _trigger_sweep()
 
         assert _find_alert("meal_reconcile_overdue") is None
         assert _find_suggestion("reconcile_meals_pending") is None

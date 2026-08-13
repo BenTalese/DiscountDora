@@ -40,7 +40,6 @@
                 label="Password"
                 :type="showPassword ? 'text' : 'password'"
                 :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-                :hint="mode === 'register' ? 'At least 8 characters — a passphrase works well.' : undefined"
                 :error="!!fieldErrors.password"
                 :error-message="fieldErrors.password"
                 @update:model-value="clearField('password')"

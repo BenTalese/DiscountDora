@@ -83,10 +83,6 @@ export type AuthenticatedUser = {
     // FU-615 — `batch_features_enabled` moved to the install-wide AppSetting
     // (read via `useCookingPolicy()` / `useBatchEnabled()`, edited by an admin
     // in Settings → System → Cooking). No longer a per-user field.
-    // when true, `useQuickAddTargetPick` skips the remembered pick
-    // so the "which list?" prompt fires every quick-add for users with more
-    // than one draft. Default false = current behaviour (session-remembered).
-    always_ask_which_shopping_list: boolean;
     // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;

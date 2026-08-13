@@ -10,14 +10,15 @@
         />
 
         <SettingsSection>
-            <template #title>Microphone</template>
-            <SettingsRow label="Enable voice input">
+            <template #title>Enable microphone voice input</template>
+            <template #actions>
                 <q-toggle
                     :model-value="currentUser.voice_input_enabled"
                     :disable="!voiceInputAvailable"
+                    aria-label="Enable microphone voice input"
                     @update:model-value="onVoiceInputChange"
                 />
-            </SettingsRow>
+            </template>
             <div v-if="!voiceInputAvailable" class="settings-page__note dora-text-muted">
                 Your browser doesn't expose the Web Speech API for
                 recognition. Try Chrome or Edge.
@@ -27,14 +28,15 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
-            <template #title>Spoken replies</template>
-            <SettingsRow label="Let Dora speak her replies">
+            <template #title>Let Dora speak her replies</template>
+            <template #actions>
                 <q-toggle
                     :model-value="currentUser.voice_output_enabled"
                     :disable="!voiceOutputAvailable"
+                    aria-label="Let Dora speak her replies"
                     @update:model-value="onVoiceOutputChange"
                 />
-            </SettingsRow>
+            </template>
             <div v-if="!voiceOutputAvailable" class="settings-page__note dora-text-muted">
                 Your browser doesn't expose SpeechSynthesis.
             </div>
@@ -46,19 +48,8 @@
             <template #title>Dora's voice</template>
             <template #description>
                 Choose how Dora sounds when she speaks her replies and reads cook-mode steps.
-                Download a neural voice you like — they're free, run on your server, and you can keep more than one.
+                Download a neural voice you like and select it, or use the default device text-to-speech voice.
             </template>
-
-            <SettingsRow
-                label="Voice engine"
-                help="Dora's voice is a natural neural voice. Browser uses the built-in voice on your device."
-            >
-                <DoraSegmented
-                    :model-value="currentUser.voice_engine"
-                    :options="engineOptions"
-                    @update:model-value="onEngineChange"
-                />
-            </SettingsRow>
 
             <div v-if="!piperAvailable" class="settings-page__note dora-text-muted">
                 Dora's neural-voice engine isn't installed on this server, so
@@ -78,7 +69,9 @@
                     :model-value="currentUser.voice_id"
                     :voices="voices"
                     :piper-available="piperAvailable"
+                    :device-default-active="currentUser.voice_engine === 'browser'"
                     @update:model-value="onVoiceChange"
+                    @select-device-default="onSelectDeviceDefault"
                     @download="onDownload"
                 />
             </div>
@@ -93,12 +86,9 @@
     import { useVoiceInput } from 'src/composables/useVoiceInput';
     import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
-    import type { VoiceEngine } from 'src/models/auth';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
-    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
-    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
     import VoicePicker from 'src/components/settings/VoicePicker.vue';
 
     const authStore = useAuthStore();
@@ -112,20 +102,6 @@
     const piperAvailable = ref(false);
 
     const anyVoiceReady = computed(() => voices.value.some((v) => v.status === 'ready'));
-
-    const engineOptions = computed<DoraSegmentedOption<VoiceEngine>[]>(() => [
-        {
-            label: "Dora's voice",
-            value: 'piper',
-            // R-029 carve-out: this is the voice settings screen (the one
-            // legitimate place the disabled Piper option shows the "engine
-            // binary isn't present on this install" state — every other
-            // surface just hides voice affordances when off).
-            disabled: !piperAvailable.value,
-        },
-        { label: 'Browser', value: 'browser' },
-    ]);
-
 
     const voiceProbeInput = useVoiceInput();
     const voiceProbeOutput = useSpeechOutput();
@@ -145,16 +121,21 @@
             () => authStore.updateMeAsync({ voice_output_enabled: value }),
         );
     }
-    async function onEngineChange(value: VoiceEngine) {
-        await update(
-            value === 'piper' ? "Using Dora's neural voice." : 'Using the browser voice.',
-            () => authStore.updateMeAsync({ voice_engine: value }),
-        );
-    }
+    // Picking a neural voice card both selects it AND switches Dora onto the
+    // neural engine — the standalone engine toggle was removed, so selection is
+    // the one place engine intent is expressed (owner feedback). Both fields go
+    // in one save.
     async function onVoiceChange(value: string) {
         await update(
             'Voice updated.',
-            () => authStore.updateMeAsync({ voice_id: value }),
+            () => authStore.updateMeAsync({ voice_id: value, voice_engine: 'piper' }),
+        );
+    }
+    // "Device default voice" card → the browser/device engine.
+    async function onSelectDeviceDefault() {
+        await update(
+            'Using your device voice.',
+            () => authStore.updateMeAsync({ voice_engine: 'browser' }),
         );
     }
 

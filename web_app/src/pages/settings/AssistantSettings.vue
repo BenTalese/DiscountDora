@@ -29,6 +29,33 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
+            <template #title>Zero-Input Pantry</template>
+            <template #description>
+                Dora can infer each item's stock level from your shopping,
+                cooking, and buying rhythm — showing what it thinks beside the
+                level you last recorded, and asking a quick check only when it's
+                unsure. Your recorded level always stays the source of truth for
+                shopping and cooking.
+                <router-link
+                    :to="{ path: '/help', query: { q: 'Dora thinks' } }"
+                    class="settings-page__link"
+                >Learn more</router-link>.
+            </template>
+
+            <SettingsRow
+                label="Infer stock levels"
+                help="When on, Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels."
+            >
+                <q-toggle
+                    :model-value="currentUser.inferred_pantry_enabled"
+                    @update:model-value="onInferredPantryChange"
+                />
+            </SettingsRow>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
             <template #title>Mode</template>
             <template #description>
                 <strong>Basic</strong> (the default, no setup) answers questions
@@ -462,6 +489,17 @@
         await update(
             value ? 'Dora helper shown.' : 'Dora helper hidden.',
             () => authStore.updateMeAsync({ show_assistant: value }),
+        );
+    }
+
+    // Zero-Input Pantry opt-out (moved here from Appearance). Default true on
+    // a fresh account. Same shared-toast shape as the toggles above.
+    async function onInferredPantryChange(value: boolean) {
+        await update(
+            value
+                ? 'Dora will infer your stock levels.'
+                : 'Inference off — levels are now manual.',
+            () => authStore.updateMeAsync({ inferred_pantry_enabled: value }),
         );
     }
 </script>

@@ -127,7 +127,10 @@ def _entry_consumed_at(entry_id: str):
 # ── Queue endpoint ──────────────────────────────────────────────────────
 
 def test__queue_lists_only_entries_with_unresolved_latest_receipt(api):
-    _set_auto_drain(True)
+    # Manual mode: the sweep leaves the entry pending (unresolved_manual), which
+    # is the queue-filter's job to surface. (Auto mode intentionally does NOT
+    # queue its auto-drained entries — covered by the log test below.)
+    _set_auto_drain(False)
     recipe = _pick_recipe()
     _bump_pool(recipe["recipe_id"], target=5)
     plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
@@ -150,12 +153,27 @@ def test__queue_lists_only_entries_with_unresolved_latest_receipt(api):
         requests.delete(f"{MEAL_PLANS}/{plan_id}")
 
 
-def test__include_resolved_flag_returns_empty_in_mvp(api):
-    """Impl-plan Chunk 3: history view is out of scope for MVP — the
-    param is accepted but returns empty until Chunk 5 wires it."""
-    resp = requests.get(f"{MEAL_PLANS}/reconcile-queue?include_resolved=true")
-    assert resp.status_code == 200
-    assert resp.json() == {"entries": [], "next_cursor": None, "total": 0}
+def test__auto_drained_entry_is_not_in_queue_but_appears_in_the_log(api):
+    """Owner 2026-08-13 — in auto mode Dora silently drains past meals, so an
+    auto-drained entry is NOT pending work (absent from the queue → no chip /
+    no nudge), but it IS recorded in the read-only log (`include_resolved=true`)
+    with its `unresolved_auto` state so the user can see what happened."""
+    _set_auto_drain(True)
+    recipe = _pick_recipe()
+    _bump_pool(recipe["recipe_id"], target=5)
+    plan_id, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=2, servings=1)
+    try:
+        _trigger_sweep()
+        queue = requests.get(f"{MEAL_PLANS}/reconcile-queue").json()
+        assert entry_id not in {e["entry_id"] for e in queue["entries"]}, queue
+
+        log = requests.get(f"{MEAL_PLANS}/reconcile-queue?include_resolved=true").json()
+        assert entry_id in {e["entry_id"] for e in log["entries"]}, log
+        assert log["total"] >= 1
+        row = next(e for e in log["entries"] if e["entry_id"] == entry_id)
+        assert row["receipt"]["state"] == "unresolved_auto", row
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
 
 
 # ── Verb: cooked (as planned) ───────────────────────────────────────────

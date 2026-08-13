@@ -1,15 +1,54 @@
 <template>
     <div class="voice-picker" role="radiogroup" aria-label="Dora's voice">
+        <!-- Device default (browser) voice — always available, no download.
+             Selecting it switches Dora to the browser/device engine. -->
+        <div
+            class="voice-card voice-card--selectable"
+            :class="{ 'voice-card--active': deviceDefaultActive }"
+            role="radio"
+            :aria-checked="deviceDefaultActive === true"
+            tabindex="0"
+            @click="onDeviceDefaultClick"
+            @keydown.enter.prevent="onDeviceDefaultClick"
+            @keydown.space.prevent="onDeviceDefaultClick"
+        >
+            <div class="voice-card__head">
+                <span class="voice-card__name">Device default voice</span>
+                <q-icon
+                    v-if="deviceDefaultActive"
+                    :name="ICONS.check_circle"
+                    size="18px"
+                    class="voice-card__check"
+                />
+            </div>
+            <div class="voice-card__desc">
+                Uses your device or browser's built-in text-to-speech. Always
+                available — no download.
+            </div>
+            <div v-if="browserTtsAvailable" class="voice-card__actions">
+                <button
+                    type="button"
+                    class="voice-card__btn voice-card__btn--ghost"
+                    :disabled="disabled"
+                    :aria-label="'Preview device default voice'"
+                    @click.stop="onDeviceDefaultPreview"
+                >
+                    <q-icon :name="ICONS.play_arrow" size="16px" />
+                    <span>{{ browserPreviewing ? 'Playing…' : 'Preview' }}</span>
+                </button>
+            </div>
+        </div>
+
         <div
             v-for="voice in voices"
             :key="voice.id"
             class="voice-card"
             :class="{
-                'voice-card--active': voice.id === modelValue && voice.status === 'ready',
+                'voice-card--active': !deviceDefaultActive && voice.id === modelValue && voice.status === 'ready',
                 'voice-card--selectable': voice.status === 'ready',
             }"
             :role="voice.status === 'ready' ? 'radio' : undefined"
-            :aria-checked="voice.status === 'ready' ? voice.id === modelValue : undefined"
+            :aria-checked="voice.status === 'ready' ? (!deviceDefaultActive && voice.id === modelValue) : undefined"
             :tabindex="voice.status === 'ready' ? 0 : undefined"
             @click="onCardClick(voice)"
             @keydown.enter.prevent="onCardClick(voice)"
@@ -19,7 +58,7 @@
                 <span class="voice-card__name">{{ voice.label }}</span>
                 <span class="voice-card__gender">{{ genderLabel(voice.gender) }}</span>
                 <q-icon
-                    v-if="voice.id === modelValue && voice.status === 'ready'"
+                    v-if="!deviceDefaultActive && voice.id === modelValue && voice.status === 'ready'"
                     :name="ICONS.check_circle"
                     size="18px"
                     class="voice-card__check"
@@ -90,15 +129,23 @@
     import { ICONS } from 'src/style/icons';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { primeAudioForGesture } from 'src/utils/audioUnlock';
 
     const props = defineProps<{
+        // The selected neural voice id (only meaningful when a neural voice is
+        // active). Device-default selection is signalled separately via
+        // `deviceDefaultActive` so this component never has to invent a
+        // sentinel id for the browser engine.
         modelValue: string;
         voices: TtsVoice[];
         piperAvailable: boolean;
+        // True when the user is on the browser/device voice (engine = browser).
+        deviceDefaultActive?: boolean;
         disabled?: boolean;
     }>();
     const emit = defineEmits<{
         (e: 'update:modelValue', value: string): void;
+        (e: 'select-device-default'): void;
         (e: 'download', voiceId: string): void;
     }>();
 
@@ -112,6 +159,34 @@
     const playingId = ref<string | null>(null);
     let audio: HTMLAudioElement | null = null;
     let audioUrl: string | null = null;
+
+    // Browser/device-voice preview uses the Web Speech API (gesture-safe on
+    // mobile), separate from the neural <audio> path below.
+    const browserTtsAvailable =
+        typeof window !== 'undefined' && 'speechSynthesis' in window;
+    const browserPreviewing = ref(false);
+
+    function onDeviceDefaultClick() {
+        if (props.disabled || props.deviceDefaultActive) return;
+        emit('select-device-default');
+    }
+
+    function onDeviceDefaultPreview() {
+        if (!browserTtsAvailable) return;
+        const synth = window.speechSynthesis;
+        if (browserPreviewing.value) {
+            synth.cancel();
+            browserPreviewing.value = false;
+            return;
+        }
+        stopPlayback(); // stop any neural preview first
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(SAMPLE);
+        utter.onend = () => { browserPreviewing.value = false; };
+        utter.onerror = () => { browserPreviewing.value = false; };
+        browserPreviewing.value = true;
+        synth.speak(utter);
+    }
 
     function genderLabel(gender: TtsVoice['gender']): string {
         if (gender === 'female') return 'Female';
@@ -148,15 +223,26 @@
         if (playingId.value === voice.id) { stopPlayback(); return; }
         stopPlayback();
         loadingId.value = voice.id;
+
+        // Create + prime the audio element INSIDE the click gesture, before the
+        // synth `await`. Mobile browsers (Android Chrome/Firefox, iOS) block a
+        // play() that first runs after an await because the user-activation is
+        // gone by then — which is why the preview worked on the server's own
+        // desktop browser but errored on a phone. Priming the same element now
+        // grants it activation; we swap in the real src once the blob arrives.
+        const el = new Audio();
+        audio = el;
+        primeAudioForGesture(el);
+
         try {
             const blob = await ttsApi.synthesizeAsync(SAMPLE, voice.id);
-            if (loadingId.value !== voice.id) return; // superseded by a newer click
+            if (loadingId.value !== voice.id || audio !== el) return; // superseded
             audioUrl = URL.createObjectURL(blob);
-            audio = new Audio(audioUrl);
-            audio.onended = stopPlayback;
-            audio.onerror = stopPlayback;
+            el.src = audioUrl;
+            el.onended = stopPlayback;
+            el.onerror = stopPlayback;
             playingId.value = voice.id;
-            await audio.play();
+            await el.play();
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -170,7 +256,10 @@
         }
     }
 
-    onBeforeUnmount(stopPlayback);
+    onBeforeUnmount(() => {
+        stopPlayback();
+        if (browserTtsAvailable) window.speechSynthesis.cancel();
+    });
 </script>
 
 <style scoped lang="scss">

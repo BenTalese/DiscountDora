@@ -25,7 +25,6 @@ const m = vi.hoisted(() => ({
     removeFromList: vi.fn(),
     removeFromAllLists: vi.fn(),
     openQuickAdd: vi.fn(),
-    pickLoad: vi.fn(),
     addLineAsync: vi.fn(),
     refreshAsync: vi.fn(),
     state: {
@@ -46,9 +45,6 @@ vi.mock('src/composables/useShoppingListActions', () => ({
 }));
 vi.mock('src/composables/useQuickAdd', () => ({
     useQuickAdd: () => ({ openQuickAdd: m.openQuickAdd }),
-}));
-vi.mock('src/composables/useQuickAddTargetPick', () => ({
-    useQuickAddTargetPick: () => ({ load: m.pickLoad, save: vi.fn(), clear: vi.fn() }),
 }));
 // The component reads both stores through storeToRefs. Pinia's
 // storeToRefs re-wraps computeds as `() => store[key]`, which only
@@ -125,7 +121,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     m.state.membership = null;
     m.state.stockItems = [];
-    m.pickLoad.mockReturnValue(null);
+    m.addToList.mockResolvedValue(null);
     m.addLineAsync.mockResolvedValue({ already_on_list: false });
 });
 
@@ -320,12 +316,13 @@ describe('AddToListButton — bulk variant', () => {
         expect(wrapper.emitted('bulk-done')).toHaveLength(1);
     });
 
-    it('on the ambiguous path, resolves via item 1 then batches the rest into the remembered pick', async () => {
+    it('on the ambiguous path, resolves via item 1 then batches the rest into the picked list', async () => {
         // No inferred target (2+ drafts) — the first item goes through the
-        // prompting single-item flow; items 2..N must follow the
-        // sessionStorage-remembered pick (the original silently-dropped bug).
+        // prompting single-item flow, which returns the list it landed on;
+        // items 2..N must follow that same list (the original silently-dropped
+        // bug when the target was read from now-removed session memory).
         m.state.membership = membershipWith();
-        m.pickLoad.mockReturnValue('L2');
+        m.addToList.mockResolvedValue('L2');
         const wrapper = mountButton({ variant: 'bulk', items: ['a', 'b', 'c'] });
 
         await wrapper.find('button').trigger('click');

@@ -106,6 +106,9 @@
                  browser says we're offline). Sticky so it stays visible
                  while the user keeps scrolling/working. -->
             <OfflineBanner />
+            <!-- A newer frontend build is cached and one reload away.
+                 Dismissible, shown to every user. -->
+            <UpdateBanner />
             <!-- No mode="out-in" here. Once the page roots became <q-page>
                  (FU-609 / R-036), out-in started wedging the transition state
                  machine: the leaving page unmounts but the entering page never
@@ -151,6 +154,7 @@
     import UserAvatar from 'src/components/UserAvatar.vue';
     import DoraBubble from 'src/components/dora/DoraBubble.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
+    import UpdateBanner from 'src/components/UpdateBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
     import LogPriceSheet from 'src/components/LogPriceSheet.vue';

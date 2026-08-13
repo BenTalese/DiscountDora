@@ -22,6 +22,33 @@ top-to-bottom.
 
 ---
 
+## Meal reconciliation: auto-mode log vs manual runner (2026-08-13)
+_(Backend covered by e2e: `test_reconcile_verbs` auto-not-in-queue-but-in-log, `test_reconcile_signal` auto-suppression + manual-fire — all green. These are the running-app UI checks.)_
+- [ ] **Auto mode** (Settings → Admin → System → Meal reconciliation, Auto-drain ON): open `/meal-plans/reconcile` → shows the **read-only log** (rows grouped by day, newest first, status pill per row: "Logged as cooked" etc.), **not** the confirm-each runner. Dashboard shows **no** "Reconcile N past meals" chip; no "reconcile overdue" alert.
+- [ ] **Manual mode** (Auto-drain OFF): the same URL shows the **runner** (walk one at a time). With ≥3 past-day unconfirmed meals oldest ≥4 days back, the dashboard chip + overdue alert reappear.
+- [ ] **Settings flip:** toggling Auto-drain on the settings page flips the surface **without a full reload** (the second section relabels "View meal log" ↔ "Go to reconcile").
+
+## Settings shell: mobile header + scrollbar gap (2026-08-13)
+- [ ] **Desktop:** on a Settings page long enough to scroll (e.g. Account, a long admin page), there's a **visible gap between the form content and the vertical scrollbar** — the bar no longer overlaps the content. Content width doesn't jump when moving between a short (no-scroll) and long (scroll) page.
+- [ ] **Mobile (narrow ~320–400px, incl. as an admin):** the Settings top row **fits with no horizontal scroll** — the donate button is gone (still present in the app's main top bar), **Sign out is icon-only**, and the Settings/Admin toggle fits. Tapping the sign-out icon still signs out.
+
+## Voice settings rework + mobile preview fix (2026-08-13) — origin FU-628
+- [ ] **⚠️ Mobile preview (the reported bug):** on a **phone** (Android Chrome **and** Firefox), Settings → Voice → tap **Preview** on a downloaded neural voice → it **plays** (no error toast). This is the FU-628 fix; desktop already worked.
+- [ ] **Device default card:** the voice grid shows a **"Device default voice"** card. Selecting it switches Dora to the browser voice (card shows the check); its **Preview** speaks via the browser voice. Selecting a **neural** card switches back (and moves the check to it).
+- [ ] Mic + Spoken-replies sections are **heading + toggle only** ("Enable microphone voice input" / "Let Dora speak her replies"); the old "Voice engine" segmented control is gone.
+
+## Notifications settings rework + version-prompt banner (2026-08-13)
+- [ ] **Products OFF (no product data):** Settings → Notifications has **no "Weekly deals email" section**, and Settings → Admin → Users shows **no "Deals email" toggle** per user. Turn products ON (ingest product data) → both reappear.
+- [ ] **SMTP not configured:** the deals-email + alerts-digest toggles are **disabled** and each shows a **warning card** (not a faint grey line). As a **non-admin** the card says "ask an admin…"; as an **admin** it shows a **"Set up email"** button that navigates to Settings → System → Email. Same for **Push** when VAPID isn't set (admin sees "Set up push" → System → Push).
+- [ ] Alerts digest + Push sections show **only a heading + toggle** (no paragraph blurb, no repeated row label). Toggle still reachable/announced by a screen reader (aria-label present).
+- [ ] **Version prompt false-positive gone:** in dev, navigating to Settings → Notifications does **not** pop a "new version available" prompt on a normal session. When a genuinely new build is deployed and the SW updates, the **dismissible banner** appears under the header with **Reload** + **✕**; Reload applies the update, ✕ hides it for the session.
+
+## Shopping-list quick-add always asks (memory removed) (2026-08-13)
+_(Appearance/Assistant page structure already agent-verified via read_page — those lines aren't listed here. This is the one runtime flow worth an eyes-on.)_
+- [ ] With **two or more draft** shopping lists open, quick-add an item from Stock (the cart / "Add to list" action) → the **"Which list?" picker fires every time**, even on a second add of a different item (no silent reuse of the last pick).
+- [ ] With exactly **one draft**, quick-add still drops the item straight in with **no** picker.
+- [ ] **Bulk** add (select several stock items → "Add to list") with 2+ drafts: pick a list once for the first item → the **rest of the batch** lands in that same list.
+
 ## Zero-Input Pantry hint redesign — disagreement-only hint + demo data (2026-08-12)
 _(Needs a destructive re-seed to load the "Belief: …" demo items — restart the backend with `DORA_ALLOW_DESTRUCTIVE=true`, e.g. the `dora-verify-backend-linux` launch config.)_
 - [ ] Stock Overview shows amber **"Dora thinks …"** hints ONLY on the disagreement items — expect: **Belief: Weet-Bix** → "Dora thinks low" (hover: high confidence); **Belief: Tuna Tins** → "Dora thinks out" (medium); **Belief: Greek Yoghurt** → "Dora thinks low" (medium); **Belief: Passata** → "Dora thinks low" (hover reason mentions "cooked with 2× since"); **Belief: Stir-fry Veg** → "Dora thinks out" (low conf, reason mentions cooking); **Belief: Orange Juice** → "Dora thinks stocked" (recorded Out, just restocked).
@@ -30,7 +57,7 @@ _(Needs a destructive re-seed to load the "Belief: …" demo items — restart t
 - [ ] Hint text is dark/legible on the soft-amber pill (not amber-on-amber); hover → reason + **"Confidence: …"** + the "Differs from your recorded level" note.
 - [ ] Stock item detail (open one of the Belief items): the hint sits under the level picker; open a silent item (e.g. Crackers) and confirm **no** empty gap above the "Updated …" line.
 - [ ] Help → Guides → Stock → **"The 'Dora thinks…' hint"** entry reads clearly and the arrow deep-links to `/stock`.
-- [ ] Settings → Preferences toggle still turns the whole hint off across overview + detail.
+- [ ] Settings → **Assistant** → Zero-Input Pantry toggle still turns the whole hint off across overview + detail.
 
 ## Assistant settings redesign — Mode dropdown + multi-provider (2026-08-12)
 - [ ] Settings → Assistant: title reads **"Assistant"** (no "(AI mode)"); intro mentions D.O.R.A. with a **"here"** link that opens the assistant help page (`/help/dora`).

@@ -53,6 +53,43 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-630 — Assess inline corrections in the auto-mode meal-reconcile log
+- **Raised:** 2026-08-13 (meal-reconcile auto-mode log; owner decision).
+- **Type:** follow-up (deferred scope).
+- **What:** The new auto-mode reconcile **log** (`MealReconcileLog.vue`, view `/meal-plans/reconcile` when `reconcile_policy.auto_drain` is true) is **view-only** by owner call — a record of what Dora did, no per-row actions. If a user spots a wrong auto-assumption ("Dora logged this cooked but I didn't"), there's currently **no correction path in auto mode** (the runner, which carries the verbs, only shows in manual mode). Assess whether the log needs a lightweight per-row correction (at least "Didn't cook" / "Adjust"), which would call the existing `POST /meal-plans/reconcile/<entry_id>` verb endpoint (the backend already supports correcting an `unresolved_auto` entry — see `submit_verb`). The verb API + receipt model already handle this; it's purely a UI addition.
+- **Why deferred:** owner chose "view-only first, assess need for corrections later" — ship the log, see if corrections are actually wanted before adding per-row action affordances.
+- **Recommended resolution:** when the owner has used the log a while, or a wrong auto-log is hit in practice. Add per-row "Didn't cook / Adjust" to `MealReconcileLog.vue` wired to `submitReconcileVerbAsync`.
+
+## [OPEN] FU-628 — Confirm the neural-voice Preview now plays on mobile
+- **Raised:** 2026-08-13 (Voice settings feedback, item 4 — reported defect).
+- **Type:** finding (reported bug, fix applied, unverified on the failing platform).
+- **What:** Owner reported the Settings → Voice **neural-voice Preview** worked on the server's own desktop browser but **errored on his phone (Firefox + Chrome)**. Root cause found: `VoicePicker.onPreview` did `fetch → await synth → new Audio → play()` with no audio-unlock, so the mobile autoplay policy blocked the post-`await` `play()` (the user-gesture activation is gone by then). Fixed by creating + priming the `<audio>` element **inside the click gesture** (silent-WAV prime via new `utils/audioUnlock.primeAudioForGesture`), then swapping in the synth blob. Desktop was unaffected (sticky activation) so this can only be confirmed on a real phone.
+- **Why deferred:** no mobile device in this session; static analysis is not proof the mobile browser now allows it.
+- **Recommended resolution:** confirm in browser — on a phone (Android Chrome + Firefox), open Settings → Voice, tap Preview on a downloaded neural voice → it should play, not error. Also added to `DORA_VERIFY.md`. Flip to RESOLVED once walked.
+
+## [OPEN] FU-629 — Neural voice in chat / cook-mode may fall back to browser voice on mobile
+- **Raised:** 2026-08-13 (Voice settings feedback, item 4 — related root cause).
+- **Type:** finding.
+- **What:** Same mobile-autoplay wall as FU-628, but for `useSpeechOutput.playPiper` (Dora chat replies + cook-mode narration). Those `speak()` calls are **not inside a user gesture** (they fire after an LLM round-trip, or off a cook-mode timer), so the same-element in-gesture trick can't apply — only the session-level silent-WAV primer, which claims iOS credit but doesn't grant Chrome/Android unmuted-playback credit. Net: on mobile, neural TTS may silently **fall back to the browser voice** (graceful — the user still hears a reply, just not the neural one), so it degrades rather than errors (which is why only the Preview surfaced as a visible bug).
+- **Why deferred:** inherent mobile-autoplay limitation for non-gesture playback; a real fix needs Web Audio (AudioContext resumed at gesture time) — a heavier rework. Degrades gracefully today.
+- **Recommended resolution:** opportunistic / only if owner wants neural voice guaranteed on mobile. Would pair with a gesture-time `AudioContext.resume()` primer.
+
+## [OPEN] FU-626 — Admin "a newer Dora release is available to deploy" notification
+- **Raised:** 2026-08-13 (Notifications settings feedback, item 10).
+- **Type:** deferred job (new feature).
+- **What:** Distinct from the in-app "reload for the new frontend" banner shipped this unit (that's the *already-deployed* build activating). This is the **operator-facing** signal the owner wants: "the Dora project has published a newer release than the one this server runs — admin, go update the deployment." Owner's shape: an **admin-only banner on the Settings page**, plus a **flashy attention affordance on the Settings nav/menu button for admins** to draw them to it. Needs a source of truth for "latest available release" (e.g. poll GitHub Releases / a version manifest) compared against `CURRENT_VERSION` from `/api/health`; must degrade gracefully when the check is unavailable or disabled (self-host / air-gapped), and probably be an opt-in check (don't phone home by default). `BaseButton` already has an `attention` pulse modifier that could drive the nav-button glow.
+- **Why deferred:** genuinely new feature with a design fork (where does "latest release" come from? is the check opt-in? how does it behave offline / self-host?) — out of scope for a settings-copy/gating polish unit. Owner explicitly acknowledged this is its own task.
+- **Recommended resolution:** later — needs a short design note first (release-source + opt-in posture), then build. Check §7.5 distribution-posture (no phone-home by default).
+
+## [OPEN] FU-627 — Per-user deals-email opt-in ignores the install-wide `deals_email` admin flag
+- **Raised:** 2026-08-13 (Notifications settings feedback, item 2).
+- **Type:** finding.
+- **What:** The deals-email section (NotificationsSettings) + the admin users-page column are now gated on `products` (data-presence) and SMTP, per owner feedback. But neither honours the separate install-wide `deals_email_enabled` AppSetting flag (admin toggle in Settings → System → Features, surfaced as `features.deals_email`). So with products present + SMTP configured but the admin master switch **off**, users can still toggle a deals-email subscription that the feature won't act on. Pre-existing (the section never gated on it); products-gating was what the feedback asked for.
+- **Why deferred:** owner's item 2 specified `products` as the gate, not the master flag; adding a second gate is a scope-adjacent correctness call better made deliberately. Decide whether `deals_email` install-flag should also hide the section (likely yes) or whether `products` presence is intended to subsume it.
+- **Recommended resolution:** opportunistic — when next touching deals-email. Fold `features.deals_email` into the `v-if` alongside `productsEnabled` if kept as a real master switch.
+
+---
+
 ## [OPEN] FU-625 — Per-user LLM provider config is not round-tripped by shared backups
 - **Raised:** 2026-08-12 (Assistant redesign / multi-provider).
 - **Type:** finding (backup coverage gap).

@@ -115,6 +115,21 @@ export default class MealPlanApiService {
         );
     };
 
+    /** The read-only reconcile **log** (`include_resolved=true`): every
+     *  past-day meal with a receipt, whatever its outcome, newest-first. This
+     *  is what auto mode shows instead of the confirm-each runner. Same page
+     *  shape as the queue. */
+    getReconcileLogAsync = async (
+        params: { cursor?: string; limit?: number } = {},
+    ): Promise<ReconcileQueue> => {
+        const query = new URLSearchParams({ include_resolved: 'true' });
+        if (params.cursor) query.set('cursor', params.cursor);
+        if (params.limit != null) query.set('limit', String(params.limit));
+        return await this.httpClient.get<ReconcileQueue>(
+            `/meal-plans/reconcile-queue?${query.toString()}`,
+        );
+    };
+
     submitReconcileVerbAsync = async (
         entryId: string, command: ReconcileVerbCommand,
     ): Promise<ReconcileVerbResult> =>

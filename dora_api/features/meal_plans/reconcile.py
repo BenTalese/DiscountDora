@@ -113,6 +113,31 @@ _UNRESOLVED_STATES = (STATE_UNRESOLVED_AUTO, STATE_UNRESOLVED_MANUAL,
                       STATE_RESOLVED_DEFERRED)
 
 
+def _auto_drain_enabled() -> bool:
+    """Read the install-wide `auto_drain_past_meals` posture. In auto mode Dora
+    silently drains past-day meals, so an `unresolved_auto` receipt is *not*
+    pending work — it's just a line in the log. Defaults True (matches the sweep
+    + the AppSetting entity). Wrapped so a read hiccup can't 500 a queue GET."""
+    from dora_api.features.app_settings.access import get_or_create_app_setting
+    try:
+        setting = get_or_create_app_setting(SqlAlchemyRepository())
+        return bool(getattr(setting, "auto_drain_past_meals", True))
+    except Exception:
+        return True
+
+
+def _pending_states(auto_drain: bool) -> tuple[str, ...]:
+    """The receipt states that count as "needs your attention" — the one
+    authority (R-003) behind the runner queue, the dashboard chip count, and the
+    overdue nudge. In **auto** mode `unresolved_auto` drops out: Dora already
+    drained those, so they surface only in the read-only log, and dropping them
+    empties all three pending surfaces — auto mode stops nagging (owner call).
+    **Manual** mode keeps the full set (there the user must confirm each)."""
+    if auto_drain:
+        return (STATE_UNRESOLVED_MANUAL, STATE_RESOLVED_DEFERRED)
+    return _UNRESOLVED_STATES
+
+
 # ── Session helpers ─────────────────────────────────────────────────────
 
 def _current_user_id() -> Optional[UUID]:
@@ -203,8 +228,12 @@ def reconcile_overdue_signal(today: date) -> ReconcileOverdueSignal:
     R-003: alert + suggestion both call this; they never re-derive the
     threshold. Change the constants above and both surfaces move
     together.
+
+    Mode-aware (owner 2026-08-13): in auto-drain mode `unresolved_auto` isn't
+    pending (Dora handled it), so it's excluded from the count here too — which
+    is what stops the overdue alert + suggestion firing in auto mode.
     """
-    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    states_in = ", ".join(f"'{s}'" for s in _pending_states(_auto_drain_enabled()))
     row = db.session.execute(
         text(
             'SELECT COUNT(*) AS n, MIN(mpe.scheduled_for) AS oldest '
@@ -275,11 +304,13 @@ def _stringify_entry_id(row_id) -> str:
     return str(row_id)
 
 
-def _fetch_queue(today: date, cursor: Optional[str], limit: int) -> tuple[list[dict], Optional[str]]:
-    """Cursor-paged fetch of unresolved-latest-receipt past-day entries.
+def _fetch_queue(today: date, cursor: Optional[str], limit: int,
+                 pending_states: tuple[str, ...]) -> tuple[list[dict], Optional[str]]:
+    """Cursor-paged fetch of pending-latest-receipt past-day entries.
     The latest-per-entry filter is a `NOT EXISTS` subquery keyed on
     `created_at`, which sidesteps SQLite's older-version lack of window
     functions (Postgres accepts the same shape). One row per entry.
+    `pending_states` is mode-aware (see `_pending_states`).
     """
     params: dict = {"today": today, "limit": limit + 1}
     cursor_clause = ""
@@ -289,7 +320,7 @@ def _fetch_queue(today: date, cursor: Optional[str], limit: int) -> tuple[list[d
             params["cursor_date"] = cursor_date
             cursor_clause = "AND mpe.scheduled_for > :cursor_date "
 
-    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    states_in = ", ".join(f"'{s}'" for s in pending_states)
     query = text(
         'SELECT mpe.id AS entry_id, mpe.scheduled_for, mpe.slot, mpe.servings, '
         '       mpe.recipe_id, rec.name AS recipe_name, '
@@ -323,12 +354,14 @@ def _fetch_queue(today: date, cursor: Optional[str], limit: int) -> tuple[list[d
     return rows_list, next_cursor
 
 
-def _count_queue(today: date) -> int:
-    """Exact count of unresolved-latest-receipt past-day entries.
+def _count_queue(today: date, pending_states: tuple[str, ...]) -> int:
+    """Exact count of pending-latest-receipt past-day entries.
     Cheaper than a page walk for the dashboard chip + meal-plans header
     nudge (Chunk 5) — one aggregate query hits the same JOIN + NOT EXISTS
-    the paged query does."""
-    states_in = ", ".join(f"'{s}'" for s in _UNRESOLVED_STATES)
+    the paged query does. `pending_states` is mode-aware (see `_pending_states`),
+    so this is 0 in auto mode once the auto-drained entries are excluded — which
+    hides the dashboard chip without any client-side change."""
+    states_in = ", ".join(f"'{s}'" for s in pending_states)
     query = text(
         'SELECT COUNT(*) '
         'FROM "MealPlanEntry" mpe '
@@ -338,6 +371,72 @@ def _count_queue(today: date) -> int:
         '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
         '    WHERE r2.meal_plan_entry_id = mpe.id '
         # FU-529: deterministic (created_at, id) "newer" — matches _latest_receipt.
+        '      AND (r2.created_at > r.created_at '
+        '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
+        '  ) '
+        '  AND mpe.scheduled_for < :today'
+    )
+    return int(db.session.execute(query, {"today": today}).scalar_one())
+
+
+def _fetch_log(today: date, cursor: Optional[str], limit: int) -> tuple[list[dict], Optional[str]]:
+    """Cursor-paged fetch for the read-only **reconcile log** (owner 2026-08-13):
+    every past-day entry that has a receipt, *whatever* its latest state
+    (auto-logged, confirmed, adjusted, not-cooked, deferred), **newest-first** —
+    the "what happened to my meals" view auto mode shows instead of the runner.
+    Same latest-per-entry `NOT EXISTS` shape as the queue, minus the pending-state
+    filter and with the order reversed. Cursor is the last page's *min*
+    scheduled_for; the next page filters `scheduled_for < cursor` (descending).
+    Same-day-tie caveat as the queue cursor (negligible at household scale)."""
+    params: dict = {"today": today, "limit": limit + 1}
+    cursor_clause = ""
+    if cursor:
+        cursor_date = _decode_cursor(cursor)
+        if cursor_date is not None:
+            params["cursor_date"] = cursor_date
+            cursor_clause = "AND mpe.scheduled_for < :cursor_date "
+
+    query = text(
+        'SELECT mpe.id AS entry_id, mpe.scheduled_for, mpe.slot, mpe.servings, '
+        '       mpe.recipe_id, rec.name AS recipe_name, '
+        '       r.state, r.original_servings, r.actual_servings, r.cooked_on, '
+        '       r.created_at '
+        'FROM "MealPlanEntry" mpe '
+        'JOIN "MealPlanReconcileReceipt" r ON r.meal_plan_entry_id = mpe.id '
+        'JOIN "Recipe" rec ON rec.id = mpe.recipe_id '
+        'WHERE NOT EXISTS ('
+        '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
+        '    WHERE r2.meal_plan_entry_id = mpe.id '
+        '      AND (r2.created_at > r.created_at '
+        '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
+        '  ) '
+        '  AND mpe.scheduled_for < :today '
+        f'  {cursor_clause}'
+        'ORDER BY mpe.scheduled_for DESC, mpe.id DESC '
+        'LIMIT :limit'
+    )
+
+    rows = db.session.execute(query, params).mappings().all()
+    rows_list = list(rows)
+    next_cursor: Optional[str] = None
+    if len(rows_list) > limit:
+        last = rows_list[limit - 1]
+        next_cursor = _encode_cursor(last["scheduled_for"])
+        rows_list = rows_list[:limit]
+    return rows_list, next_cursor
+
+
+def _count_log(today: date) -> int:
+    """Exact count of past-day entries that have a receipt (any latest state) —
+    the log's total. Same JOIN + latest-per-entry NOT EXISTS as `_count_queue`,
+    without the pending-state filter."""
+    query = text(
+        'SELECT COUNT(*) '
+        'FROM "MealPlanEntry" mpe '
+        'JOIN "MealPlanReconcileReceipt" r ON r.meal_plan_entry_id = mpe.id '
+        'WHERE NOT EXISTS ('
+        '    SELECT 1 FROM "MealPlanReconcileReceipt" r2 '
+        '    WHERE r2.meal_plan_entry_id = mpe.id '
         '      AND (r2.created_at > r.created_at '
         '           OR (r2.created_at = r.created_at AND r2.id > r.id))'
         '  ) '
@@ -376,12 +475,6 @@ def get_reconcile_queue():
     if user_id is None:
         return unauthorized()
 
-    include_resolved = _flask_request.args.get("include_resolved") == "true"
-    if include_resolved:
-        # Impl-plan Chunk 3: "add the param but return empty until Chunk 5
-        # wires it." No history view in MVP.
-        return ok({"entries": [], "next_cursor": None, "total": 0})
-
     try:
         limit = int(_flask_request.args.get("limit", _DEFAULT_LIMIT))
     except ValueError:
@@ -390,8 +483,19 @@ def get_reconcile_queue():
     cursor = _flask_request.args.get("cursor")
 
     today = household_today(SqlAlchemyRepository())
-    rows, next_cursor = _fetch_queue(today, cursor, limit)
-    total = _count_queue(today)
+
+    # `include_resolved=true` → the read-only reconcile **log** (every past-day
+    # meal with a receipt, whatever its outcome, newest-first). This is the view
+    # auto mode shows instead of the confirm-each runner (owner 2026-08-13;
+    # finishes the deferred FU-317 Chunk 5 history seam). Without it → the
+    # pending **queue** (mode-aware: `unresolved_auto` isn't pending in auto mode).
+    if _flask_request.args.get("include_resolved") == "true":
+        rows, next_cursor = _fetch_log(today, cursor, limit)
+        total = _count_log(today)
+    else:
+        pending_states = _pending_states(_auto_drain_enabled())
+        rows, next_cursor = _fetch_queue(today, cursor, limit, pending_states)
+        total = _count_queue(today, pending_states)
 
     return ok({
         "entries": [_row_to_dict(r) for r in rows],

@@ -17,7 +17,6 @@
                 type="password"
                 label="New password"
                 autocomplete="new-password"
-                hint="At least 8 characters — a passphrase works well."
                 :error="!!fieldError"
                 :error-message="fieldError"
                 @update:model-value="fieldError = ''"

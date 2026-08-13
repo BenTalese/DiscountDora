@@ -79,10 +79,14 @@
                             @update:model-value="onToggleAdmin(user, $event)"
                         >
                             <q-tooltip v-if="user.user_id === currentUserId">
-                                Use Preferences to manage your own account.
+                                Use Account settings to manage your own account.
                             </q-tooltip>
                         </q-toggle>
+                        <!-- Deals email is a products-only feature (product
+                             data is its source). With no product data ingested,
+                             hide the per-user column entirely (owner feedback). -->
                         <q-toggle
+                            v-if="productsEnabled"
                             :model-value="user.deals_email_enabled"
                             label="Deals email"
                             dense
@@ -269,6 +273,7 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, onMounted, reactive, ref } from 'vue';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -276,6 +281,8 @@
     const api = new UserAdminApiService();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+    // Deals email is products-gated (see the toggle's template comment).
+    const { products: productsEnabled } = useFeatureFlags();
 
     const users = ref<AdminUser[]>([]);
     const loading = ref(false);

@@ -39,14 +39,22 @@
             <h1 v-else class="settings-shell__title">Settings</h1>
 
             <div class="settings-shell__header-actions">
-                <DonateButton variant="settings" />
+                <!-- Mobile packs this row tight (esp. the admin Settings/Admin
+                     toggle), squishing sign-out and letting the page scroll
+                     sideways. The app's main top bar already carries a donate
+                     button, so this one is a duplicate on <md — hide it, and
+                     drop sign-out to icon-only, to free the row (owner call). -->
+                <DonateButton v-if="!$q.screen.lt.md" variant="settings" />
                 <BaseButton
                     variant="danger-ghost"
                     :icon="ICONS.logout"
-                    label="Sign out"
+                    :label="$q.screen.lt.md ? undefined : 'Sign out'"
                     :loading="signingOut"
+                    aria-label="Sign out"
                     @click="onSignOut"
-                />
+                >
+                    <q-tooltip v-if="$q.screen.lt.md">Sign out</q-tooltip>
+                </BaseButton>
             </div>
         </header>
 
@@ -74,6 +82,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
+    import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
     import { useUnlinkedIngredientsStore } from 'src/stores/unlinkedIngredientsStore';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -96,7 +105,7 @@
 
     const accountSections: SettingsNavEntry[] = [
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
-        { path: '/settings/preferences', label: 'Preferences', icon: ICONS.tune },
+        { path: '/settings/preferences', label: 'Appearance', icon: ICONS.tune },
         { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
         { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
         { path: '/settings/nutrition', label: 'Nutrition', icon: ICONS.restaurant },
@@ -195,6 +204,7 @@
         { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
     ]);
 
+    const $q = useQuasar();
     const authStore = useAuthStore();
     const { isAdmin } = storeToRefs(authStore);
 
@@ -382,6 +392,14 @@
            the viewport edge; the shell itself has padding: 0 on the bottom
            so the scrollbar runs the full height. */
         padding-bottom: 28px;
+        /* Gap between the page content and the scrollbar (same fix as the
+           Stock Overview list): the bar is painted at this scroller's outer
+           edge, so a right pad holds the content clear of it instead of the
+           bar overlapping the form. `scrollbar-gutter: stable` reserves the
+           space so content width doesn't jump between short (no-scroll) and
+           long (scroll) pages. */
+        padding-right: var(--space-4);
+        scrollbar-gutter: stable;
     }
 
     // §6.3 — the mobile tab strip is hidden on desktop; the sidebar shows.
@@ -400,6 +418,19 @@
             height: auto !important;
             padding: 20px;
             display: block;
+        }
+        /* Keep the header row within the viewport: let the flex children shrink
+           (min-width:0) and trim the admin mode-toggle so [Settings|Admin] +
+           icon-only sign-out fit even on a ~320px screen — no sideways scroll. */
+        .settings-shell__header,
+        .settings-shell__header-actions,
+        .settings-shell__mode-toggle {
+            min-width: 0;
+        }
+        .settings-shell__header { gap: 12px; }
+        .settings-shell__mode-btn {
+            font-size: 1rem;
+            padding: 6px 14px;
         }
         .settings-shell__nav { display: none; }
         .settings-shell__mnav {

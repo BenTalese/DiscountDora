@@ -43,7 +43,6 @@
                 label="Password"
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="new-password"
-                hint="At least 8 characters — a passphrase works well."
                 :error="!!fieldErrors.password"
                 :error-message="fieldErrors.password"
                 @update:model-value="clearField('password')"

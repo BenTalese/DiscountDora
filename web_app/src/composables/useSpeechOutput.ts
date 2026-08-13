@@ -1,6 +1,7 @@
 import { onBeforeUnmount, ref } from 'vue';
 import { useAuthStore } from 'src/stores/authStore';
 import TtsApiService from 'src/services/api/ttsApiService';
+import { SILENT_WAV_DATA_URL } from 'src/utils/audioUnlock';
 
 /**
  * Speech output for Dora — used by Cook mode (announces the current step) and
@@ -57,13 +58,11 @@ function probePiperConfigured(): Promise<boolean> {
 // platform this is a harmless no-op (Chrome/Firefox/Android don't gate
 // on gesture-per-play for muted audio).
 //
-// A 44-byte WAV header + one zero PCM sample encoded as a data URL.
-// Chosen over `AudioContext.createBuffer` because AudioContext.resume()
-// hits the same iOS gesture wall and adds a heavier dep for a one-time
-// primer. Keeping it as a data URL means no fetch, no CORS, no delay.
-const SILENT_WAV_DATA_URL =
-    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-
+// The silent-WAV primer + the per-element primitive both live in
+// `utils/audioUnlock` now (R-003 — the settings Preview reuses them). This
+// primer plays the silent blob once per session on the first gesture to prime
+// iOS's per-session credit; `AudioContext.resume()` was rejected as it hits the
+// same iOS gesture wall for a heavier dep.
 let audioUnlocked = false;
 let audioUnlockRegistered = false;
 function unlockAudioOnFirstGesture(): void {

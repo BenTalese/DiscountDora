@@ -236,7 +236,7 @@ const routes: RouteRecordRaw[] = [
                         // Phase 2: Appearance-only after the split below.
                         path: 'preferences',
                         component: () => import('pages/settings/PreferencesSettings.vue'),
-                        meta: { title: 'Preferences' }
+                        meta: { title: 'Appearance' }
                     },
                     {
                         path: 'notifications',

@@ -160,8 +160,8 @@
                 // pattern, not R-029 hide-when-off.
                 return null;
             case 'budget':
-                // The budget input lives in Preferences → Money.
-                return { to: '/settings/preferences', label: 'Set a budget' };
+                // The budget input lives in Settings → Money.
+                return { to: '/settings/money', label: 'Set a budget' };
             case 'freshness':
                 // Filter stock to expiring / expired items so the user
                 // can act. The stock overview reads ?expiring=1.

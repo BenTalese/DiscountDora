@@ -4,81 +4,86 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader
-            title="Notifications"
-            description="Choose how Dashy Dora reaches you about deals, alerts, and push messages on this device."
-        />
+        <SettingsPageHeader title="Notifications" />
 
-        <SettingsSection>
-            <template #title>Weekly deals email</template>
-            <template #description>
-                A digest of the latest deals once a week.
-            </template>
+        <!-- Weekly deals email. Gated on `products` (data-presence): with no
+             product data ingested there's no deal source, so the whole feature
+             is hidden — settings + the admin users-page column (owner feedback).
+             Also SMTP-gated, same barrier as the alerts digest below. -->
+        <template v-if="productsEnabled">
+            <SettingsSection>
+                <template #title>Weekly deals email</template>
+                <template #description>
+                    If you have a tool that regularly pushes product deal data
+                    into Dora, you can turn on an automated deals email — one
+                    message a week summarising deals based on that data. For
+                    best results, keep the data flowing in regularly.
+                </template>
 
-            <SettingsRow
-                label="Subscribe me to the weekly deals email"
-                help="One email per week summarising deals at your stores."
-            >
-                <q-toggle
-                    :model-value="currentUser.deals_email_enabled"
-                    @update:model-value="onDealsEnabledChange"
-                />
-            </SettingsRow>
-
-            <template v-if="currentUser.deals_email_enabled">
-                <SettingsRow label="Send on">
-                    <q-select
-                        v-model="sendDealsOnDay"
-                        :options="dayOptions"
-                        option-value="value"
-                        option-label="label"
-                        emit-value
-                        map-options
-                        outlined
-                        dense
-                        style="min-width: 180px"
-                        @update:model-value="onSendDealsOnDayChange"
-                    />
-                </SettingsRow>
-
-                <SettingsRow
-                    label="Compact format"
-                    help="One line per deal (item, price, store). Off = expanded card per deal with images and store logos."
-                >
+                <SettingsRow label="Subscribe me to the weekly deals email">
                     <q-toggle
-                        :model-value="currentUser.deals_email_compact"
-                        @update:model-value="onDealsCompactChange"
+                        :model-value="currentUser.deals_email_enabled"
+                        :disable="!emailSmtpConfigured"
+                        @update:model-value="onDealsEnabledChange"
                     />
                 </SettingsRow>
-            </template>
-        </SettingsSection>
+                <ChannelSetupNote
+                    v-if="!emailSmtpConfigured"
+                    channel="email"
+                    :is-admin="isAdmin"
+                />
 
-        <hr class="settings-divider" />
+                <template v-if="currentUser.deals_email_enabled">
+                    <SettingsRow label="Send on">
+                        <q-select
+                            v-model="sendDealsOnDay"
+                            :options="dayOptions"
+                            option-value="value"
+                            option-label="label"
+                            emit-value
+                            map-options
+                            outlined
+                            dense
+                            style="min-width: 180px"
+                            @update:model-value="onSendDealsOnDayChange"
+                        />
+                    </SettingsRow>
+
+                    <SettingsRow
+                        label="Compact format"
+                        help="One line per deal (item, price, store). Off = expanded card per deal with images and store logos."
+                    >
+                        <q-toggle
+                            :model-value="currentUser.deals_email_compact"
+                            @update:model-value="onDealsCompactChange"
+                        />
+                    </SettingsRow>
+                </template>
+            </SettingsSection>
+
+            <hr class="settings-divider" />
+        </template>
 
         <!-- Alerts email digest. SMTP-gated. R-029 carve-out: this screen
-             owns the per-user opt-in, so the disabled toggle + "ask an
-             admin" hint legitimately render here (and only here). -->
+             owns the per-user opt-in, so the disabled toggle + setup card
+             legitimately render here (and only here). Title + toggle only
+             (owner: drop the descriptive blurbs). -->
         <SettingsSection>
             <template #title>Alerts email digest</template>
-            <template #description>
-                Email me my actionable alerts on a daily or weekly cadence.
-                The same alert won't email again until it clears and re-fires.
-            </template>
-
-            <SettingsRow label="Email me a digest of my alerts">
+            <template #actions>
                 <q-toggle
                     :model-value="currentUser.alerts_email_enabled"
                     :disable="!emailSmtpConfigured"
+                    aria-label="Email me a digest of my alerts"
                     @update:model-value="onAlertsEmailEnabledChange"
                 />
-            </SettingsRow>
-            <div
+            </template>
+
+            <ChannelSetupNote
                 v-if="!emailSmtpConfigured"
-                class="settings-page__note dora-text-muted"
-            >
-                Email isn't set up on this install yet — ask an admin to
-                configure SMTP and this toggle will unlock.
-            </div>
+                channel="email"
+                :is-admin="isAdmin"
+            />
 
             <template v-if="currentUser.alerts_email_enabled">
                 <SettingsRow label="Cadence">
@@ -109,28 +114,24 @@
         <hr class="settings-divider" />
 
         <!-- Push notifications. VAPID-gated. R-029 carve-out — same
-             pattern as the email row above. -->
+             pattern as the email row above. Title + toggle only
+             (owner: drop the descriptive blurb). -->
         <SettingsSection>
             <template #title>Push notifications</template>
-            <template #description>
-                System notifications on this device the moment a new
-                actionable alert fires. Subscribe on every device you want.
-            </template>
-
-            <SettingsRow label="Send me push notifications on this device">
+            <template #actions>
                 <q-toggle
                     :model-value="pushSubscribed"
                     :disable="!pushVapidConfigured || !pushSupported || pushLoading"
+                    aria-label="Send me push notifications on this device"
                     @update:model-value="onPushToggle"
                 />
-            </SettingsRow>
-            <div
+            </template>
+
+            <ChannelSetupNote
                 v-if="!pushVapidConfigured"
-                class="settings-page__note dora-text-muted"
-            >
-                Push isn't set up on this install yet — ask an admin to
-                generate VAPID keys and this toggle will unlock.
-            </div>
+                channel="push"
+                :is-admin="isAdmin"
+            />
             <div
                 v-else-if="!pushSupported"
                 class="settings-page__note dora-text-muted"
@@ -171,12 +172,18 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import ChannelSetupNote from 'src/components/settings/ChannelSetupNote.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
-    const { emailSmtpConfigured, pushVapidConfigured } = useFeatureFlags();
+    // `products` is a data-presence gate (true iff product data has been
+    // ingested) — the deals-email feature's whole information source. No data
+    // ⇒ the deals section is hidden here and the column is dropped on the
+    // admin users page (owner feedback).
+    const { emailSmtpConfigured, pushVapidConfigured, products: productsEnabled } = useFeatureFlags();
+    const isAdmin = computed(() => currentUser.value?.is_admin === true);
     type AlertsCadence = 'daily' | 'weekly';
     const alertsCadenceOptions: DoraSegmentedOption<AlertsCadence>[] = [
         { label: 'Daily', value: 'daily' },

@@ -124,7 +124,6 @@
                         type="password"
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
-                        hint="At least 8 characters — a passphrase works well."
                         :error="newPassword.length > 0 && newPassword.length < 8"
                         :error-message="newPassword.length > 0 && newPassword.length < 8
                             ? 'At least 8 characters' : ''"

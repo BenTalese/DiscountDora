@@ -1020,10 +1020,6 @@ def configure_mappings(db: SQLAlchemy):
         # (AppSetting.money_enabled); there is no per-user money layer.
         # FU-615 — `batch_features_enabled` moved off User to AppSetting
         # (install-wide cook-style; a household has one cook-style).
-        # per-user "always ask which draft list on quick-add" flag.
-        # Default False; when True the SPA skips the remembered pick so the
-        # picker fires every time (see useStockItemActions.addToList).
-        Column("always_ask_which_shopping_list", Boolean, nullable=False, server_default=false()),
         # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),

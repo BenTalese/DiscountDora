@@ -60,8 +60,6 @@ class UpdateMeRequest(BaseModel):
     # money opt-in removed — money is one install-wide flag now.
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
     # edited via PATCH /app-settings, not here.
-    # per-user "always ask which draft list on quick-add" toggle.
-    always_ask_which_shopping_list: bool | None = None
     # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
@@ -198,11 +196,6 @@ class UpdateMeHandler:
         # money opt-in removed — money is a single install-wide flag
         # (AppSetting.money_enabled); there is no per-user money layer.
         # FU-615 — batch cook-style moved to AppSetting (install-wide).
-        if (
-            "always_ask_which_shopping_list" in _SetFields
-            and request.always_ask_which_shopping_list is not None
-        ):
-            _User.always_ask_which_shopping_list = request.always_ask_which_shopping_list
         # Zero-Input Pantry opt-out.
         if (
             "inferred_pantry_enabled" in _SetFields

@@ -258,6 +258,22 @@ def _budget_policy(setting) -> dict:
     return {"amount": amount, "period": period}
 
 
+def _reconcile_policy(setting) -> dict:
+    """Install-wide meal-reconcile posture, surfaced here (not on `/app-settings`,
+    which is admin-gated) because every logged-in user's client needs it to pick
+    the right `/meal-plans/reconcile` surface: **auto** ⇒ a read-only log of what
+    Dora did; **manual** ⇒ the confirm-each runner (owner 2026-08-13). `auto_drain`
+    defaults True (matches the sweep + AppSetting). Wrapped so a read hiccup can't
+    500 the probe."""
+    auto_drain = True
+    try:
+        if setting is not None:  # shared singleton, fetched once by health_check
+            auto_drain = bool(getattr(setting, "auto_drain_past_meals", True))
+    except Exception:
+        pass
+    return {"auto_drain": auto_drain}
+
+
 def _support_channel() -> dict[str, str]:
     """FU-370 — install's support/report-an-issue channel, surfaced here (not
     on `/app-settings`) because every logged-in user's browser needs it to
@@ -303,5 +319,6 @@ def health_check():
         "locale_policy": _locale_policy(setting),
         "cooking_policy": _cooking_policy(setting),
         "budget_policy": _budget_policy(setting),
+        "reconcile_policy": _reconcile_policy(setting),
         "support": _support_channel(),
     }), 200

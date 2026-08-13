@@ -48,9 +48,6 @@ export type UpdateMeCommand = {
      *  validates the voice id against its catalog (GET /api/tts/voices). */
     voice_engine?: VoiceEngine;
     voice_id?: string;
-    /** FU-316 — when true, quick-add prompts every time (skips the
-     *  session-remembered pick). Only matters when the user has >1 draft. */
-    always_ask_which_shopping_list?: boolean;
     /** P8-07 — Zero-Input Pantry opt-out. `false` hides the inferred-level
      *  belief overlay; default `true`. */
     inferred_pantry_enabled?: boolean;

@@ -205,10 +205,6 @@ class User(BaseEntity):
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide
     # cook-style; a household has one cook-style, not one per person).
     # per-user "always ask which draft list on quick-add" toggle.
-    # Default False → the SPA's `useQuickAddTargetPick` remembers the picked
-    # list for the tab session (current behaviour). True → the picker fires
-    # every quick-add when more than one draft exists.
-    always_ask_which_shopping_list: bool = False
     # Zero-Input Pantry opt-out. Default True: inferred stock
     # levels (the belief overlay) are the headline experience. Charter 10 —
     # some users want purely manual control, so this toggle switches the
@@ -292,7 +288,6 @@ class User(BaseEntity):
         VOICE_OUTPUT_ENABLED = "voice_output_enabled"
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
-        ALWAYS_ASK_WHICH_SHOPPING_LIST = "always_ask_which_shopping_list"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"

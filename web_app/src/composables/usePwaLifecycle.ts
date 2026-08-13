@@ -4,13 +4,13 @@
  *     prompt so we can surface it via our own "Install Dora" button.
  *   - `appinstalled`         — clear the deferred prompt + record state.
  *   - `controllerchange` on `navigator.serviceWorker` — a new service
- *     worker has activated; surface a Notify with a "Reload" button.
+ *     worker has taken control; flag `updateAvailable` so the app shell
+ *     can offer a reload (UpdateBanner).
  *
  * Designed to be idempotent so multiple call sites (App.vue mounting,
  * Settings page surfacing the install button) share state via the
  * module-level refs without double-binding listeners.
  */
-import { Notify } from 'quasar';
 import { computed, ref } from 'vue';
 
 // Augment the standard BeforeInstallPromptEvent (TS lib doesn't ship one).
@@ -22,7 +22,28 @@ interface BeforeInstallPromptEvent extends Event {
 const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null);
 const installed = ref(false);
 let lifecycleInstalled = false;
-let updateToastShown = false;
+
+// A newer frontend build is cached and one reload away from taking effect.
+// Surfaced as a dismissible in-app banner (UpdateBanner) for every user, not
+// a toast — the toast fired once and was easy to miss (owner feedback).
+const updateAvailable = ref(false);
+const updateDismissed = ref(false);
+
+/** True once a genuinely new SW has replaced the one that was controlling
+ *  the page at boot, and the user hasn't dismissed the prompt. */
+export function updateAvailablePrompt() {
+    return computed(() => updateAvailable.value && !updateDismissed.value);
+}
+
+/** Reload to activate the already-cached new build. */
+export function applyUpdateReload(): void {
+    if (typeof window !== 'undefined') window.location.reload();
+}
+
+/** Dismiss the update banner for this page load. */
+export function dismissUpdate(): void {
+    updateDismissed.value = true;
+}
 
 export function isIosSafari(): boolean {
     if (typeof navigator === 'undefined') return false;
@@ -82,28 +103,21 @@ export function installPwaLifecycle(): void {
         // Ancient browsers without matchMedia — ignored.
     }
 
-    // Service-worker update flow: when the new SW activates and takes
-    // control of this client, offer a reload via Notify rather than
-    // hard-reloading mid-interaction.
+    // Service-worker update flow: when a new SW activates and takes control
+    // of this client, flag an update so the shell can offer a reload rather
+    // than hard-reloading mid-interaction.
+    //
+    // False-positive guard: `controllerchange` also fires the FIRST time any
+    // SW claims a client that booted uncontrolled — e.g. the Notifications
+    // page registering the push SW on a fresh session (dev especially). That
+    // initial claim is NOT a new version. We only treat it as an update when a
+    // controller was already in place at boot, i.e. an existing SW was
+    // genuinely replaced.
     if ('serviceWorker' in navigator) {
+        const hadControllerAtBoot = !!navigator.serviceWorker.controller;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (updateToastShown) return;
-            updateToastShown = true;
-            Notify.create({
-                type: 'info',
-                position: 'top',
-                message: 'New version available.',
-                caption: 'Reload to pick up the latest Dora.',
-                timeout: 0,
-                actions: [
-                    {
-                        label: 'Reload',
-                        color: 'white',
-                        handler: () => window.location.reload(),
-                    },
-                    { label: 'Later', color: 'white' },
-                ],
-            });
+            if (!hadControllerAtBoot) return; // initial claim, not an upgrade
+            updateAvailable.value = true;
         });
     }
 }

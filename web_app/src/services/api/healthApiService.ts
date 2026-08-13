@@ -54,6 +54,13 @@ export interface HealthInfo {
         amount: number | null;
         period: 'weekly' | 'monthly';
     };
+    // install-wide meal-reconcile posture. Every client reads it to pick the
+    // right /meal-plans/reconcile surface: auto ⇒ a read-only log of what Dora
+    // did; manual ⇒ the confirm-each runner. Optional in the type because older
+    // backends won't emit it; callers default to auto (matches the sweep).
+    reconcile_policy?: {
+        auto_drain: boolean;
+    };
     // FU-370 — install's support / report-an-issue channel. Optional in the
     // type because older backends won't emit it; both strings empty ⇒ dormant
     // (no report affordance renders). `url` wins over `email` when both set.

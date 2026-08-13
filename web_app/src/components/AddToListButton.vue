@@ -121,7 +121,6 @@
     import RowActionButton from 'src/components/RowActionButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
-    import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { cartStateFor, type ActiveListInfo, type Membership } from 'src/models/shoppingList';
@@ -312,20 +311,16 @@
                 emit('bulk-done');
                 return;
             }
-            // Ambiguous / no-draft path — let the single-item flow
-            // resolve the target (it prompts + remembers in
-            // sessionStorage). After the first item lands, batch the
-            // rest into the now-known target. Read the *remembered pick*
-            // — `quick_add_target_list_id` only fires when exactly one
-            // draft exists, so it stays null here and would silently
-            // drop items 2..N (the original bug).
-            const pick = useQuickAddTargetPick();
-            await actions.addToList(ids[0]!);
-            const targetAfter =
-                pick.load() ?? (membership.value?.quick_add_target_list_id ?? null);
-            if (targetAfter && ids.length > 1) {
+            // Ambiguous / no-draft path — let the single-item flow resolve
+            // the target on the FIRST item (it prompts when 2+ drafts exist).
+            // Its return value is the list the item landed on; batch the rest
+            // into that same list. `quick_add_target_list_id` only fires when
+            // exactly one draft exists, so it stays null here and can't stand
+            // in for the picked list.
+            const chosen = await actions.addToList(ids[0]!);
+            if (chosen && ids.length > 1) {
                 await listActions.addItems(
-                    targetAfter,
+                    chosen,
                     ids.slice(1).map((id) => ({ stock_item_id: id })),
                 );
             }

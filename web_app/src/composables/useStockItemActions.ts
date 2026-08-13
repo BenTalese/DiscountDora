@@ -8,9 +8,7 @@ import {
     type OpenTogglePatch,
 } from 'src/composables/openToggle';
 import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
-import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
-import { useAuthStore } from 'src/stores/authStore';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import { useStockItemStore } from 'src/stores/stockItemStore';
 import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -32,9 +30,7 @@ export function useStockItemActions() {
     const stockItemStore = useStockItemStore();
     const shoppingListStore = useShoppingListStore();
     const stockLevelStore = useStockLevelStore();
-    const authStore = useAuthStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { currentUser } = storeToRefs(authStore);
 
     // resolve a shopping list's display name from the store's
     // hydrated summaries. Falls back to a generic label so we never
@@ -56,24 +52,25 @@ export function useStockItemActions() {
             ...(caption ? { caption } : {}),
         });
 
-    /** Add to the inferred quick-add target (default) or a specific list.
-     *  Chunk 2: handles the discriminated `QuickAddResult` — `no_draft` opens
-     *  the lists overview to create one; `ambiguous` prompts the user to pick
-     *  from the candidate drafts (and remembers the pick in sessionStorage). */
+    /** Add to a specific list, or resolve the quick-add target. When more than
+     *  one draft list exists Dora always asks which one — the pick is never
+     *  remembered across separate adds (owner call 2026-08-13: multiple lists
+     *  are deliberate, so silently reusing the last pick was more annoying than
+     *  helpful). `no_draft` opens the lists overview to create one.
+     *
+     *  Returns the shopping-list id the item landed on, or `null` when nothing
+     *  was added (no draft, or the user cancelled the picker). A bulk caller
+     *  uses the return value to batch the remaining items into the same list. */
     async function addToList(
         stockItemId: string,
         listId?: string | null,
         options?: { silent?: boolean },
-    ) {
+    ): Promise<string | null> {
         // callers running this in a bulk loop pass silent:true and
         // emit one summary toast themselves instead of N per-item ones.
         const silent = options?.silent ?? false;
         const ok = (msg: string) => { if (!silent) notifyOk(msg); };
         const err = (msg: string, caption?: string) => { if (!silent) notifyErr(msg, caption); };
-        const pick = useQuickAddTargetPick();
-        // when the user has opted into "always ask", ignore any
-        // session-remembered pick so the picker fires every add.
-        const alwaysAsk = currentUser.value?.always_ask_which_shopping_list ?? false;
         try {
             if (listId) {
                 const result = await shoppingListApi.addLineAsync(listId, {
@@ -87,19 +84,12 @@ export function useStockItemActions() {
                         ? `Already on ${listNameFor(listId)}.`
                         : `Added to ${listNameFor(listId)}.`,
                 );
-                return;
+                return listId;
             }
-            const remembered = alwaysAsk ? null : pick.load();
-            let outcome = await shoppingListApi.quickAddToPrimaryAsync(
-                stockItemId, remembered ?? undefined,
-            );
-            // A stale sessionStorage pick (the list got finished/deleted) →
-            // the server replies with `hint_invalid` as a 422; treat as a
-            // re-prompt by retrying without the hint.
-            if ((outcome as { result?: string }).result === undefined) {
-                // axios threw on the 422 — fall through to catch.
-                throw new Error('hint_invalid');
-            }
+            // No explicit list — resolve the quick-add target. We never send a
+            // remembered hint, so with 2+ drafts the server replies `ambiguous`
+            // and we always ask which list.
+            let outcome = await shoppingListApi.quickAddToPrimaryAsync(stockItemId);
             if (outcome.result === 'no_draft') {
                 $q.dialog({
                     title: 'No draft list',
@@ -108,15 +98,13 @@ export function useStockItemActions() {
                     ok: { label: 'Open lists', noCaps: true, color: 'primary' },
                     cancel: { noCaps: true },
                 }).onOk(() => void router.push('/shopping-lists'));
-                return;
+                return null;
             }
             if (outcome.result === 'ambiguous') {
                 const choice = await new Promise<string | null>((resolve) => {
                     $q.dialog({
                         title: 'Which list?',
-                        message: alwaysAsk
-                            ? 'You have multiple draft lists — pick one. Dora will ask again next time (you can change this in Preferences).'
-                            : 'You have multiple draft lists — pick one. We\'ll remember it for the rest of this tab.',
+                        message: 'You have multiple draft lists — pick one.',
                         options: {
                             type: 'radio',
                             model: outcome.result === 'ambiguous'
@@ -136,16 +124,11 @@ export function useStockItemActions() {
                         .onCancel(() => resolve(null))
                         .onDismiss(() => resolve(null));
                 });
-                if (!choice) return;
-                // always save the pick so the bulk-add caller in
-                // AddToListButton can read it and batch items 2..N into
-                // the same list. When "always ask" is on we clear it at
-                // the end of this call so the *next* quick-add re-prompts.
-                pick.save(choice);
+                if (!choice) return null;
                 outcome = await shoppingListApi.quickAddToPrimaryAsync(stockItemId, choice);
                 if (outcome.result !== 'added') {
                     err('Could not add to the chosen list.');
-                    return;
+                    return null;
                 }
             }
             await shoppingListStore.refreshAsync();
@@ -158,22 +141,12 @@ export function useStockItemActions() {
                         ? `Already on ${listName}.`
                         : `Added to ${listName}.`,
                 );
+                return outcome.shopping_list_id;
             }
+            return null;
         } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            if (message === 'hint_invalid') {
-                // The remembered pick no longer applies — clear and retry once
-                // fresh so the resolver re-evaluates from scratch.
-                pick.clear();
-                await addToList(stockItemId, listId, options);
-                return;
-            }
             err('Could not add to list.', String(e));
-        } finally {
-            // with "always ask" on, wipe the pick so the next
-            // quick-add re-prompts. The current call already used it for
-            // any bulk-follow-up read in AddToListButton.
-            if (alwaysAsk) pick.clear();
+            return null;
         }
     }
 

@@ -4,36 +4,24 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader
-            title="Appearance"
-            description="Theme, font, and text size for this account."
-        />
+        <SettingsPageHeader title="Appearance" />
 
         <SettingsSection>
-            <template #title>Mode</template>
-            <template #description>
-                <strong>System</strong> follows your browser's
-                <code>prefers-color-scheme</code>. <strong>Light</strong> and
-                <strong>Dark</strong> lock the mode regardless of the OS.
-            </template>
+            <template #title>Theme mode</template>
 
-            <DoraSegmented
-                :model-value="modeDraft"
-                :options="modeOptions"
-                @update:model-value="onModeChange"
-            />
+            <div class="appearance-choice">
+                <DoraSegmented
+                    :model-value="modeDraft"
+                    :options="modeOptions"
+                    @update:model-value="onModeChange"
+                />
+            </div>
         </SettingsSection>
 
         <hr class="settings-divider" />
 
         <SettingsSection>
             <template #title>Theme</template>
-            <template #description>
-                Pick a palette. The swatch shows the
-                {{ modeDraft === 'system'
-                    ? `variant your OS is currently set to (${osCurrentlyDark ? 'dark' : 'light'})`
-                    : modeDraft + ' variant' }}.
-            </template>
 
             <div class="theme-grid">
                 <button
@@ -69,73 +57,30 @@
         <hr class="settings-divider" />
 
         <SettingsSection>
-            <template #title>Typography</template>
-            <template #description>
-                Font family and text size apply across the whole app.
-            </template>
+            <template #title>Font family</template>
 
-            <SettingsRow label="Font family">
+            <div class="appearance-choice">
                 <DoraSegmented
                     :model-value="fontFamilyDraft"
                     :options="fontFamilyOptions"
                     @update:model-value="onFontFamilyChange"
                 />
-            </SettingsRow>
+            </div>
+        </SettingsSection>
 
-            <SettingsRow label="Text size">
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Text size</template>
+
+            <div class="appearance-choice">
                 <DoraSegmented
                     :model-value="fontSizeDraft"
                     :options="fontSizeOptions"
                     @update:model-value="onFontSizeChange"
                 />
-            </SettingsRow>
+            </div>
         </SettingsSection>
-
-        <hr class="settings-divider" />
-
-        <SettingsSection>
-            <template #title>Shopping lists</template>
-            <template #description>
-                Controls how quick-add ("Add to list") behaves when you have
-                more than one draft shopping list open.
-            </template>
-
-            <SettingsRow
-                label="Always ask which list"
-                help="When on, the picker fires every time — Dora won't remember the last list you picked for the tab session."
-            >
-                <q-toggle
-                    :model-value="currentUser.always_ask_which_shopping_list"
-                    @update:model-value="onAlwaysAskChange"
-                />
-            </SettingsRow>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
-
-        <SettingsSection>
-            <template #title>Pantry</template>
-            <template #description>
-                The <strong>Zero-Input Pantry</strong> infers each item's level
-                from your shopping, cooking, and buying rhythm — so you don't
-                have to keep it up to date by hand. Dora shows what it thinks
-                beside the level you last recorded, with its confidence and
-                reasoning, and only asks a quick check when a decision depends
-                on something it's unsure about.
-            </template>
-
-            <SettingsRow
-                label="Infer stock levels"
-                help="When on, Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels — your recorded level is always what's used to shop and cook."
-            >
-                <q-toggle
-                    :model-value="currentUser.inferred_pantry_enabled"
-                    @update:model-value="onInferredPantryChange"
-                />
-            </SettingsRow>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
 
     </div>
 </template>
@@ -162,41 +107,11 @@
     import { ref, watch } from 'vue';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
-    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
-
-    // "always ask which list" quick-add opt-in. Optimistic flip
-    // with rollback on error, same shape as the other single-toggle prefs
-    // on this page.
-    async function onAlwaysAskChange(value: boolean) {
-        try {
-            await authStore.updateMeAsync({ always_ask_which_shopping_list: value });
-            notifySuccess(
-                value ? 'Dora will always ask which list.' : 'Dora will remember your pick.',
-            );
-        } catch (err) {
-            notifyError('Could not save shopping-list preference.', err);
-        }
-    }
-
-    // Zero-Input Pantry opt-out. Same optimistic-flip shape as the
-    // other single-toggle prefs. Default true on a fresh account.
-    async function onInferredPantryChange(value: boolean) {
-        try {
-            await authStore.updateMeAsync({ inferred_pantry_enabled: value });
-            notifySuccess(
-                value
-                    ? 'Dora will infer your stock levels.'
-                    : 'Inference off — levels are now purely manual.',
-            );
-        } catch (err) {
-            notifyError('Could not save pantry preference.', err);
-        }
-    }
 
     const themeFamilies = THEME_FAMILIES;
     type ThemeMode = 'system' | 'light' | 'dark';
@@ -257,10 +172,8 @@
     );
     const fontSizeDraft = ref<FontSizePreference>(currentUser.value?.font_size ?? 'md');
 
-    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave). This
-    // page also keeps its own bespoke per-toggle handlers, which use correct,
-    // hand-written noun messages via notifySuccess/notifyError.
-    const { notifySuccess, notifyError, update } = useSettingsSave();
+    // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
+    const { update } = useSettingsSave();
 
     watch(currentUser, (u) => {
         if (!u) return;
@@ -329,6 +242,14 @@
         height: 1px;
         background: color-mix(in srgb, var(--text-primary) 8%, transparent);
         margin: 0;
+    }
+
+    /* Keeps the inline-flex segmented control hugging its content on the left.
+       Without a wrapper the control is a direct child of the section body
+       (a column flex, default align-items: stretch) and its background box
+       would stretch edge-to-edge — the reported "outline to the page edge". */
+    .appearance-choice {
+        display: flex;
     }
 
     .theme-grid {

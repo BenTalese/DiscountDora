@@ -53,9 +53,6 @@ vi.mock('src/stores/authStore', () => ({
     useAuthStore: () => ({ currentUser: ref(null) }),
 }));
 vi.mock('src/composables/useBuyVerdict', () => ({ invalidateBuyVerdict: vi.fn() }));
-vi.mock('src/composables/useQuickAddTargetPick', () => ({
-    useQuickAddTargetPick: () => ({}),
-}));
 vi.mock('src/services/api/shoppingListApiService', () => ({ default: class {} }));
 
 import { useStockItemActions } from 'src/composables/useStockItemActions';

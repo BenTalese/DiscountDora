@@ -18,6 +18,269 @@ next.
 
 ---
 
+## 2026-08-13 — Meal reconciliation: auto-mode log instead of the runner
+
+Owner feature (approved + 2 decisions: **view-only log first** (inline corrections →
+FU-630), **stop nudging in auto mode**). In auto-drain mode the runner used to present
+every auto-drained meal as a to-do, and the chip/alert nagged — defeating "auto". Now
+auto mode shows a read-only **log**; manual mode keeps the runner.
+
+**Discovery:** the append-only `MealPlanReconcileReceipt` audit trail already existed, and
+`include_resolved=true` was a scoped-but-unbuilt seam ("no history view in MVP" / FU-317
+Chunk 5). This finishes it.
+
+**Backend (`reconcile.py`):**
+- Mode-aware **pending states** — new `_pending_states(auto_drain)` (R-003, one authority):
+  auto ⇒ `unresolved_auto` is **not** pending (Dora handled it), so the queue count → 0,
+  which empties the runner queue + dashboard chip; manual ⇒ full set. `_fetch_queue`/
+  `_count_queue` take it; `reconcile_overdue_signal` reads the flag → **alert + suggestion
+  suppressed in auto mode**.
+- New **log** fetch/count (`_fetch_log`/`_count_log`) — all past-day entries with a receipt,
+  any state, **newest-first**; wired to `include_resolved=true`.
+- `_auto_drain_enabled()` reads the AppSetting.
+- **`health_check.py`:** new `reconcile_policy: {auto_drain}` block so every client can pick
+  the surface.
+
+**Frontend:**
+- `useReconcilePolicy.ts` (health-backed, mirrors useCookingPolicy) + `refreshReconcilePolicy`.
+- `mealPlanApiService.getReconcileLogAsync` (`include_resolved=true`).
+- Split the page: `MealReconcileRunner.vue` (= old runner, unchanged) + new
+  `MealReconcileLog.vue` (read-only, grouped-by-day, status pills, load-older, help) +
+  `MealReconcilePage.vue` now a **switcher** (spinner until policy loaded → log vs runner).
+- `healthApiService.ts` type; settings copy + dynamic button label ("View meal log" vs
+  "Go to reconcile"); settings save calls `refreshReconcilePolicy()` so the surface flips
+  without reload.
+
+**Tests (all green):** updated the queue-listing test to manual mode + added
+**auto-not-in-queue-but-in-log**; pinned the 4 signal firing tests to manual mode + added
+**auto-suppression**. Regenerated `dto_snapshots.json` (health gained `reconcile_policy`).
+Ran: `test_reconcile_verbs` + `test_reconcile_signal` + `test_reconcile_receipts` +
+`test_meal_plan_router` = **49 pass**; `test_dto_contracts` **27**; `test_suggestion_selection`
+**4**. Frontend `vue-tsc` 0 / eslint 0 on touched+new files. **UI not driven live** — deferred
+to `DORA_VERIFY.md` (needs the running app; backend logic is covered by the e2e above).
+
+**Deferred:** **FU-630** — assess per-row inline corrections in the log (verb API already
+supports it; owner wanted view-only first).
+
+**Standards close-gate:** R-003 (one `_pending_states` authority; health-policy composable
+pattern; reused ReconcileEntry type + runner CSS shape), portable raw SQL (SQLite+PG, same
+`text()` shape as the existing queries). No violations. No new ADR (mode-aware pending is a
+localised concept, well-commented).
+
+**Next up:** owner to walk the Meal-reconcile DORA_VERIFY checks (auto log vs manual runner).
+
+---
+
+## 2026-08-13 — Settings shell: mobile header overflow + scrollbar gap
+
+Owner feedback (2 items) on the Settings shell chrome (`SettingsShell.vue`). Both done.
+
+**Scrollbar overlapping content (all settings pages):** `.settings-shell__main` is the shared
+desktop scroller for every settings page. Added `padding-right: var(--space-4)` +
+`scrollbar-gutter: stable` — the exact pattern StockOverview's `.stock-list` uses (bar painted
+at the scroller's outer edge, so the right pad holds content clear; gutter reserved so width
+doesn't jump between short/long pages). One fix covers every settings page.
+
+**Mobile header overflow (owner chose "hide donate + icon-only sign-out"):** the top row packed
+too tight on <md (esp. the admin Settings/Admin toggle), squishing sign-out and allowing
+horizontal scroll. Fix (all scoped to the existing `@media (max-width: 1023px)` block +
+`$q.screen.lt.md`):
+- Donate button hidden on mobile (`v-if="!$q.screen.lt.md"`) — redundant with MainLayout's
+  header donate button; kept on desktop.
+- Sign-out → icon-only on mobile (`:label` undefined) with `aria-label` + a tooltip for a11y.
+- Admin mode-toggle trimmed on mobile (font 1rem, padding 6px 14px) + `min-width:0` shrink
+  guards on header/actions/toggle so the row fits to ~320px with no sideways scroll.
+- Added `useQuasar` to the shell for `$q.screen`.
+
+**Checks:** `vue-tsc` 0 errors; eslint 0 on `SettingsShell.vue`. **Not driven live** (settings
+shell needs a full stack + login to reach) — deferred to `DORA_VERIFY.md` (desktop scrollbar
+gap + mobile header checks).
+
+**Standards close-gate:** theme token (`--space-4`), responsive via `$q.screen` (same pattern as
+MainLayout), desktop path untouched. No violations. Note: the `padding-right + scrollbar-gutter:
+stable` scroller pattern is now in 2 places (StockOverview, SettingsShell) — if a 3rd appears,
+worth promoting to a shared utility class/ADR; not yet.
+
+**Next up:** owner to walk the two DORA_VERIFY checks (esp. mobile as an admin).
+
+---
+
+## 2026-08-13 — Voice settings feedback (rework + mobile preview bug)
+
+Owner feedback batch on **Settings → Voice** (4 items). All done in one pass.
+
+**VoiceSettings.vue:**
+- Mic + Spoken-replies sections → **heading + toggle** (item 1): titles "Enable microphone
+  voice input" / "Let Dora speak her replies", toggles moved to the section `#actions` slot
+  with `aria-label` for a11y. Row labels dropped.
+- **Removed the "Voice engine" segmented control** (item 3) + its help line. Choice is now
+  expressed by **voice selection**: a new **"Device default voice"** card in VoicePicker
+  (browser engine) alongside the neural voices. Picking a neural voice sets
+  `voice_engine='piper' + voice_id` in one save; picking Device default sets
+  `voice_engine='browser'`. New section description per owner copy.
+- Removed now-unused imports (`DoraSegmented`, `SettingsRow`, `VoiceEngine`) + the
+  `engineOptions`/`onEngineChange` block.
+
+**VoicePicker.vue:**
+- Added the **device-default card** (`deviceDefaultActive` prop + `select-device-default`
+  emit); neural cards' active/checked state now also requires `!deviceDefaultActive`.
+  Device-default card has a browser-voice **Preview** via `speechSynthesis`.
+- **Fixed the mobile preview bug (item 4 — reported defect).** Root cause: `onPreview` did
+  `fetch → await synth → new Audio → play()`; the post-`await` `play()` is blocked by the
+  mobile autoplay policy (gesture activation gone). Now creates + **primes the `<audio>`
+  element inside the click gesture** (silent-WAV) via new `utils/audioUnlock.ts`, then swaps
+  in the synth blob. Desktop worked already (sticky activation), so **can't confirm the fix
+  without a phone** → logged **FU-628** + a ⚠️ `DORA_VERIFY` mobile check.
+
+**Shared:** new `utils/audioUnlock.ts` (`SILENT_WAV_DATA_URL` + `primeAudioForGesture`);
+`useSpeechOutput.ts` refactored to import the constant from it (pure move, R-003, chat/cook
+path logic untouched).
+
+**Item 2 answer (per-user?):** yes — `voice_engine`, `voice_id`, `voice_input_enabled`,
+`voice_output_enabled` are all `User` fields. The downloaded voice **models** are shared
+server-side; the *selection* is per-account.
+
+**Also logged:** **FU-629** — `useSpeechOutput.playPiper` (chat/cook narration) hits the same
+mobile wall but has **no gesture** to prime from, so on mobile it may fall back to the browser
+voice (graceful, not an error). Inherent limitation; real fix needs a gesture-time AudioContext.
+
+**Checks:** `vue-tsc` 0 errors; eslint 0 on all touched/new files. **Not driven live** (needs a
+phone for the headline bug + a running stack for the picker) — deferred to `DORA_VERIFY.md`.
+
+**Standards close-gate:** R-003 (shared `audioUnlock` util; device-default folded into the
+existing VoicePicker rather than a parallel widget), theme-tokens-only, per-user reads via
+`currentUser`. No violations. No new ADR.
+
+**Next up:** owner to walk the Voice DORA_VERIFY checks (esp. FU-628 on a phone).
+
+---
+
+## 2026-08-13 — Notifications settings feedback + version-prompt rework
+
+Owner feedback batch on **Settings → Notifications** (10 items). All done in one pass.
+
+**NotificationsSettings.vue:**
+- Removed the page subtitle (item 1/7 — it claimed "on this device", misleading for
+  server-side per-account email settings).
+- **Weekly deals email** section now gated on `features.products` (data-presence — the
+  deal source): hidden entirely when no product data. New section description folds
+  items 2/5/6/8 (product-data dependency + "keep data flowing"). Added the **SMTP
+  barrier** (`:disable` on `!emailSmtpConfigured`) like the alerts digest. Dropped the
+  redundant row help.
+- **Alerts digest** + **Push** trimmed to **title + toggle** (item 9): descriptions +
+  repeated row labels removed; toggles moved to the section-header `#actions` slot with
+  `aria-label` kept for a11y.
+- **Setup notices → warning cards** (item 3) + **admin-aware** (item 4): new shared
+  `components/settings/ChannelSetupNote.vue` (`channel: email|push`, `isAdmin`) renders a
+  `dora-bg-warning-soft` card; admins get a **"Set up email/push"** button to
+  `/settings/admin/system/{email,push}` instead of "ask an admin". Used in all three
+  channel sections (deals, alerts, push). R-003 componentisation.
+
+**UsersAdminSettings.vue:** per-user "Deals email" toggle column now `v-if="productsEnabled"`
+(item 2 — hidden when products off).
+
+**Version-available prompt (item 10):** owner clarified two distinct things.
+- *This unit:* the existing SW `controllerchange` prompt = "a newer frontend build is
+  cached, reload to apply". Reworked `usePwaLifecycle.ts`: replaced the one-shot `Notify`
+  toast with a reactive `updateAvailable` + `applyUpdateReload`/`dismissUpdate`, surfaced
+  via new `components/UpdateBanner.vue` (dismissible banner under the header in
+  MainLayout, next to OfflineBanner, all users). **Fixed the dev false-positive** the owner
+  spotted: the Notifications page is the only SW-registering page (push), so on a fresh
+  session its registration made the *first* SW claim the tab → `controllerchange` fired →
+  false "new version". Guarded with `hadControllerAtBoot` — only prompt when a controller
+  was already in place (genuine replacement), not the initial claim.
+- *Deferred:* the operator-facing "a newer Dora **release** is available to deploy" admin
+  banner + flashy Settings-nav affordance → **FU-626** (new feature, needs a release-source
+  + opt-in/no-phone-home design fork first).
+
+**Also logged:** **FU-627** — the per-user deals opt-in still ignores the install-wide
+`deals_email` admin master flag (pre-existing; owner asked for `products` gating
+specifically). Finding, opportunistic.
+
+**Checks:** `vue-tsc` 0 errors; eslint 0 on all touched/new files. No unit tests reference
+the old toast. **Not driven live** — full verification (products on/off, SMTP/VAPID
+present/absent, admin/non-admin, SW update) needs backend data-state juggling; deferred to
+`DORA_VERIFY.md` (new "Notifications settings rework + version-prompt banner" section).
+
+**Standards close-gate:** R-003 (two new shared components), theme-tokens-only, server-derived
+`products`/`is_admin` reads — no violations introduced. No new ADR (SW prior-controller guard
+is a one-off).
+
+**Next up:** owner to walk the DORA_VERIFY checks; FU-626 (admin release-update notif) when
+prioritised.
+
+---
+
+## 2026-08-13 — Remove standing "At least 8 characters" password hint
+
+Owner: the inline validation message is enough. Removed the `hint` prop
+("At least 8 characters — a passphrase works well.") from all four new-password
+fields — `LoginPage.vue` (register), `SetupAdminPage.vue`, `ResetPasswordPage.vue`,
+`AccountSettings.vue`. Validation rules / error-messages left intact (Login + Setup
+keep their `v.length >= 8` rule message; Account keeps its length error-message;
+Reset relies on the server error as before). eslint clean on the four files. Pure
+prop removal — no browser spin-up (nothing to verify beyond "helper text gone").
+
+---
+
+## 2026-08-13 — Settings feedback: Appearance page rework + shopping-list memory removal
+
+Owner feedback batch on the settings area. All 11 items done in one pass.
+
+**Appearance page (`PreferencesSettings.vue`) — items 1-9:**
+- Page renamed **Preferences → Appearance** end-to-end: nav label (`SettingsShell.vue`),
+  route meta title (`routes.ts`), and stale copy refs (`HelpPage.vue` theme guide,
+  `UsersAdminSettings.vue` tooltip → "Account settings").
+- Removed the page subtitle and **all** section descriptions (Mode/Theme/Typography blurbs).
+- **"Mode" → "Theme mode"**. **Font family** + **Text size** promoted out of the
+  "Typography" wrapper into their own top-level `SettingsSection` headings.
+- **Left-aligned** the three segmented controls (they were right-aligned inside
+  `SettingsRow`) by making them section-level, each wrapped in `.appearance-choice`.
+- **Fixed the "outline to the page edge" bug** (item 4): a `DoraSegmented` placed
+  directly in the section body (a column flex, default `align-items: stretch`) had its
+  background pill stretched full-width. The `.appearance-choice` wrapper (`display:flex`)
+  lets the inline-flex control hug its content. Browser-measured: 264px pill in a 937px
+  wrapper, left-aligned. Commented in place naming the cause.
+
+**Zero-Input Pantry toggle → Assistant (item 11):** moved `inferred_pantry_enabled`
+toggle from Appearance to `AssistantSettings.vue` as its own **Zero-Input Pantry** section
+(tightened copy + a **Learn more** link → `/help?q=Dora thinks`). Seeded `HelpPage`'s
+guide filter from `route.query.q` (~3 lines) so the link lands on the "Dora thinks…"
+guide; updated that guide's copy "Settings → Preferences" → "Settings → Assistant".
+
+**Shopping-list add-to-list memory removed (item 10)** — owner: multiple lists are
+deliberate, always ask. Full removal:
+- Frontend: dropped the "Always ask which list" section + `always_ask_which_shopping_list`
+  from `models/auth.ts` + `authApiService.ts`. Rewrote `useStockItemActions.addToList` to
+  never send a remembered hint (server → `ambiguous` on 2+ drafts → always prompt) and to
+  **return the chosen list id**; `AddToListButton` bulk path now batches items 2..N from
+  that return value instead of the sessionStorage pick. **Deleted `useQuickAddTargetPick.ts`.**
+- Backend: dropped the field from `user.py` entity + `_Field` enum, `update_me.py`,
+  `register_user.py` DTO (`AuthenticatedUserDto`), `table_mappings.py`. New migration
+  `e2b7c9f4a6d1_20260813_drop_user_always_ask_list.py` (single head, verified).
+
+**Also fixed (spotted in passing, R-scope):** the dashboard "Set a budget" nudge
+(`DoraScoreCard.vue`) linked to `/settings/preferences` (Appearance) instead of
+`/settings/money` where the budget input lives — a genuine misroute, fixed inline.
+
+**Checks — all green.** `vue-tsc` 0 errors, eslint 0 on touched files; frontend unit
+tests (addToListButton, useStockItemActions*, shoppingList*, useStockFilters) 101 pass;
+backend `test_dto_contracts` + `test_auth_flows` + `test_primary_target_inference` 62 pass;
+`test_migrations` 5 pass (1 pre-existing xfail = SQLite downgrade CHECK-constraint, not mine).
+Browser-verified the Appearance + Assistant pages + help deep-link via read_page (screenshots
+unavailable — pane not composited this session).
+
+**DTO snapshot note:** `dto_snapshots.json[auth_me]` regenerated. Besides my `always_ask`
+removal it folded in **pre-existing in-flight drift** from the `user_llm_provider` work
+(added `assistant_ready`; removed `has_llm_api_key`/`llm_base_url`/`llm_model`) — the snapshot
+had never been refreshed after that DTO changed, so the contract test was already red on this
+branch. Regeneration was scoped to the single `auth_me` case; flagged for whoever owns that WIP.
+
+**Next up:** none pending from this batch. One browser-verify owed (multi-draft always-ask
+flow) added to `DORA_VERIFY.md`.
+
+---
+
 ## 2026-08-12 — Belief hint: iteration 2 (disagreement-only, icon, demo seed data)
 
 Owner feedback on iteration 1 (entry below): (1) all seeded items just read

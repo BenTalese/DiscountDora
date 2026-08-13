@@ -1483,7 +1483,7 @@
         await withBusyReload(() => stockItemStore.updateStockItemAsync(patch));
     }
     async function onAddToList() {
-        await withBusyReload(() => actions.addToList(stockItemId.value));
+        await withBusyReload(async () => { await actions.addToList(stockItemId.value); });
         // the verdict's stock-band + open-list state both
         // changed. Invalidate so a re-render fetches a fresh answer.
         buyVerdictInvalidate();

@@ -80,8 +80,6 @@ class AuthenticatedUserDto:
     # (AppSetting.money_enabled); there is no per-user money layer.
     # FU-615 — `batch_features_enabled` moved to AppSetting (install-wide);
     # clients read the cook-style via /api/health.cooking_policy.
-    # "always ask which draft list on quick-add".
-    always_ask_which_shopping_list: bool
     # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
@@ -147,7 +145,6 @@ class AuthenticatedUserDto:
             voice_output_enabled=bool(user.voice_output_enabled),
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
-            always_ask_which_shopping_list=bool(user.always_ask_which_shopping_list),
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),

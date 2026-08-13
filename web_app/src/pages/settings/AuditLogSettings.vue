@@ -244,6 +244,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
@@ -305,7 +306,7 @@
 
     function formatWhen(iso: string): string {
         try {
-            return new Date(iso).toLocaleString();
+            return formatLocaleDateTime(iso) || iso;
         } catch {
             return iso;
         }

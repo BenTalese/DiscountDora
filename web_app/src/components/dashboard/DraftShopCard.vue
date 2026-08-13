@@ -53,6 +53,7 @@
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -73,7 +74,7 @@
         const startIso = localTodayIso();
         // Human-readable list name — the server's default is "Auto N ·
         // <date>" which reads generic. This one names the intent.
-        const nameDate = new Date(startIso).toLocaleDateString(undefined, {
+        const nameDate = formatLocaleDate(startIso, {
             weekday: 'short', day: 'numeric', month: 'short',
         });
         try {

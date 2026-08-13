@@ -58,13 +58,39 @@ compiles clean. Hierarchy preserved (muted stays lighter than secondary).
   dark-theme secondaries into legible accents; give the Essential stat a proper
   ink); to be driven with a visual options board, not a blind edit.
 
-### DR-2 · Stock-level scale + row legend (D-001, D-013) — P1
+### DR-2 · Stock-level scale + row legend (D-001, D-013) — ✅ DONE 2026-08-13
 Out of stock → negative red; Low → warning amber; grey reserved for
 unknown/disabled. Add the row-state legend (filter panel section or edge
 tooltips): on-list edge, attention outline, expiring tint, open/sealed. Explain
 or remove the undecodable states (dimmed row, cream tint — first *identify*
 them in code). **Accept:** every row visual state is either self-labelled or in
 the legend; both-theme screenshots. **Refs:** FU-578 #33/44, critique §3.1.
+**Shipped.** **D-001 (the core bug)** — the level colour map was *inverted*:
+`stockLevelLogic.colourForSequence` had Low → `negative` (red) and Out → `null`
+(grey), so "out" read calmer than "low" and grey squares were
+indistinguishable from disabled rows (FU-578 #33). Retuned to the D-001 ramp:
+Stocked → positive, **Low → warning (amber)**, **Out → negative (red)**; `null`
+now means *unknown/not-set only*. This map is the single authority behind ~10
+surfaces (stock rows, detail, pickers, cook mode, quick-add, stocktake runner,
+recipes), so the one edit fixes them all; the neutral-token fallback (`R-002`
+`dora-bg-neutral` / `dora-text-muted`) now fires only for genuinely-unknown
+levels. The **footer counts** (`useStockFilters.toneForLevelSequence`) held a
+hand-copied second copy of the same (wrong) mapping — rewired to *derive* from
+`colourForSequence` (`R-003`, one authority) so it can never drift again.
+`stockStatus.spec.ts` re-pinned to the D-001 ramp (10 green). **D-013 legend** —
+new `StockRowLegend.vue` (R-001) placed in the Stock-overview filter panel,
+documenting the whole row colour language: the level squares (derived from the
+household's real level rows + `colourForSequence`, so renamed seeds stay
+accurate) and the row highlights — essential left-stripe, amber "attention soon"
+outline, red "attention now" outline, the **dimmed row** (the undecodable state
+from #33, now labelled "out of stock, not marked essential"), and the stocktake
+pulse. No "cream tint" / "on-list edge" state exists in current code (audit
+mis-read); the dim was the only undecodable one. **Verified live** (seeded verify
+backend, DOM + computed-style probe): footer Stocked `rgb(53,151,102)` green /
+Low `rgb(251,174,81)` amber / Out `rgb(235,112,96)` red; legend swatches match by
+construction. vue-tsc + eslint clean. Cross-theme pixel walk queued in
+DORA_VERIFY (row buttons are virtual-scrolled + the pane couldn't composite —
+see the DR-8 splash-wedge note).
 
 ### DR-3 · De-Quasar detail audit (D-005, D-008) — ✅ DONE 2026-08-12
 `no-caps` app-wide (audit every dialog for casing); replace the padlock
@@ -177,15 +203,45 @@ migrating ~296 `$q.notify` call sites, so it's its own unit. A boot-level
 reference at install, before boot files run, so the wrapper is bypassed).
 **Verify:** placement walk queued in DORA_VERIFY.
 
-### DR-8 · Loading-state unification (D-007) — P2
+### DR-8 · Loading-state unification (D-007) — ✅ DONE 2026-08-13
 Dashboard cards get skeletons (kill "Loading…" strings); reserve belief-chip /
 verdict-badge space (or reflow-free fade-in); investigate the >2s warm splash
 (what does it await?) + give splash dismissal a non-paint-gated fallback
 (fixes the background-tab wedge risk). **Refs:** FU-578 #15/23/26/52.
+**Shipped.** **#23 (the wedge — headline).** Root cause found: `App.vue` faded the
+splash with a Vue `<Transition>`, and Vue toggles the `-leave-to` class inside a
+`requestAnimationFrame`. A backgrounded / occluded / throttled tab never composites
+a frame, so rAF never fires — the leave wedges at full opacity (`z-9000`,
+`pointer-events:auto`), covering the app **and eating clicks** (observed first-hand
+last unit — the DR-2 verify pane couldn't composite and the splash stuck at
+`splash-fade-leave-active`). Replaced the `<Transition>` with a plain
+`splashVisible` flag + a CSS transition: the fade rides `--motion-slow`, but unmount
+is driven by a **`setTimeout` (paint-independent)**, and the `--leaving` class drops
+`pointer-events` immediately so a lingering node can never block the app.
+**Live-verified**: in the same non-compositing pane that wedged the old build, the
+new `splash-host` is *removed* on handoff (`setTimeout` fires where rAF didn't).
+**#15 (dashboard skeletons).** The main load state was a lone centred `AppSpinner`
+and the primary-list card showed a literal **"Loading totals…"** string. Both now
+render **content-shaped skeletons** (`AppSkeleton`, the B10 primitive): the load
+branch is a 4-card grid reusing the real `DashboardCard` shell (title line + 3 body
+lines each), and the totals slot is a skeleton stat-grid that reserves the same
+space the numbers fade into. **Live-verified**: dashboard renders 4 skeleton cards +
+16 pulsing blocks, **zero "Loading…" strings**. **#52 (belief-chip / verdict
+reflow).** The stock-row second line (location + async belief chip) now reserves a
+`min-height` so a late-arriving belief pill can't grow the row after paint, and both
+`PantryBeliefChip` and `BuyVerdictBadge` **fade in** (`--motion-fast`, ~0 under
+reduced-motion) instead of hard-popping. **#26 (>2s warm splash) — investigated, no
+code change.** The boot awaits exactly two lightweight probes (`bootstrapRequired`
+COUNT → `/auth/me`); the >2s warm-*reload* delay is Vite recompilation + backend
+cold-start, **not app work** — a production build doesn't pay it. Documented; the
+actionable half of #26 (the wedge) is the #23 fix above. vue-tsc + eslint clean.
+Belief-chip/verdict visual + the authenticated dashboard skeleton transition queued
+in DORA_VERIFY (virtual-scroll rows + the harness's cross-origin session need a
+painting browser).
 
 ## Wave 3 — layout
 
-### DR-9 · Toolbar & grid composition pass (D-011) — P2
+### DR-9 · Toolbar & grid composition pass (D-011) — ➗ DONE-with-carve-outs 2026-08-13
 Shopping-list toolbar wraps/collapses to More (fixes the 255px mobile overflow
 AND the 1280px title collision); dashboard + reports grids stop stranding
 half-width cards; mobile stock rows: collapse the three trailing icons into an
@@ -193,10 +249,36 @@ overflow menu so names stop truncating at ~10 chars; belief chip placement on
 chip-bearing rows. Tap-target pass to D-004 on stock rows/toolbars.
 **Accept:** no horizontal scroll at 375px anywhere; no lone card beside dead
 air; row names readable on mobile. **Refs:** FU-578 #4/19/30/40/15b.
+**Shipped (the accept criteria — toolbar overflow + mobile name readability).**
+Root cause of #4/#40 found in the *shared* `PageToolbar`: `.page-toolbar-actions`
+was `flex-shrink: 0`, so the ~930px shopping-list action cluster kept its width and
+either overflowed the viewport (mobile, ~255px of horizontal scroll) or shoved the
+title into a mid-word wrap that collided with it (1280px). Fixed at the component so
+**every** PageToolbar benefits: the actions now wrap (drop onto their own line[s]
+below the title) and the title cell gets `min-width: 0`. **Live-verified**: shopping-
+list detail at **375px → 0 horizontal scroll** (was ~255px); at **1280px** the title
+"Shopping lists" stays one line, un-wrapped, actions cleanly below — no collision.
+For the mobile stock rows, the item **name now wraps to two lines under 600px**
+(`-webkit-line-clamp: 2`) instead of truncating at ~10 chars ("Barilla Pa…"), so
+names are readable; desktop keeps the one-line ellipsis. vue-tsc + eslint clean.
+**Carve-out → [[FU-631]]** (three redesign-scope pieces, each its own risk): the
+shopping-list toolbar is now overflow-free but tall on mobile (a cleaner *collapse
+of grouping/Refresh/Select into the existing More menu* is deferred); the stock-row
+**trailing-icon → ⋮ overflow menu** (#15b) + strict **44px tap-target pass** (#19)
+are deferred because each trailing button carries a rich nested interaction; and the
+dashboard/reports **stranded half-width card** packing (#30) needs per-zone odd-count
+logic against the CSS-`order` zone system, not a pure-CSS rule. Same split pattern as
+DR-7 → FU-624.
 
-### DR-10 · Nav labelling (D-005) — P2, needs owner taste call
+### DR-10 · Nav labelling (D-005) — ✅ CLOSED 2026-08-13, owner chose "leave as-is"
 Give the icon strip labels (under-icon at desktop, keep hamburger on mobile) or
 at minimum active-page label + tooltips. **Refs:** FU-578 #5, critique §4.
+**Decision (owner, 2026-08-13):** shown a live 3-way mockup — Current (icon-only,
+labels on strip-hover) vs Option 1 (always-on under-icon labels) vs Option 2 (active-
+page label + hover tooltips). Owner chose **leave the nav as-is**. No code change. The
+existing desktop strip already reveals labels on hover + carries a sliding accent
+active-indicator; the mobile hamburger drawer shows full labels. FU-578 #5 is resolved
+as won't-change by owner call, not a defect.
 
 ## Wave 4 — surface redesigns (one session each, design-first)
 
@@ -214,13 +296,33 @@ cells) or moves below; same treatment for the meal-plans mini-month.
 Collapse repeated kinds ("Pushed expiry ×50 over 3 months"), per-kind filter
 chips, one date format via the DR-14 formatter. **Refs:** FU-578 #32.
 
-### DR-14 · Locale/format authority (D-006) — P2
+### DR-14 · Locale/format authority (D-006) — ➗ DONE-with-carve-outs 2026-08-13
 Single date/currency formatter module (household locale+tz); replace direct
 `toLocaleDateString` calls; onboarding SETUP gains the one-line "Use this
 device" region derivation (backend already has the endpoint + admin override).
 Also reconcile the two theme mechanisms (`body--dark` vs raw media queries) —
 same "one authority" principle, fixes the split render. **Refs:** FU-578
 #9/48/51, 7b.
+**Shipped (the date authority + the visible #9 bug).** The *currency/locale* authority
+already existed (`useMoney`, reads the install's `locale_policy`); the missing half was
+**dates** — 26 sites across 22 files called `.toLocaleDateString()` / `.toLocaleString()`
+with no locale, so they rendered in the *browser's* locale ("7/17/2026" US on an AU
+install). New **`useDateFormat`** module (`formatDate` + `formatDateTime`, Intl-options
+passthrough) reads the **same** household locale as `useMoney` via two new shared exports
+(`currentLocale()` / `ensureLocalePolicy()`) — one locale source for money *and* dates, so
+they can't drift (R-003). Migrated **all 26 sites** (local `formatDate` helpers delegate;
+inline calls swapped) — grep confirms zero direct date `toLocale*` calls remain (only two
+`.toLocaleString()` on *numbers* stay, correctly). **Verified:** vue-tsc + eslint clean
+across all 24 files; `Intl` confirms the household locale now yields **"17/07/2026"** (en-AU)
+where the old browser path gave "7/17/2026". The locale defaults to en-AU, so the fix holds
+even when the server sends no policy. **Carve-out → [[FU-632]]:** (1) **#48 first-boot region
+derivation** — `locale_policy` comes back *null* on a fresh install (locale/tz never asked);
+wire a browser-derived locale+tz at first boot / a SETUP step, persisted, keeping the admin
+override (also add tz to the policy so datetime renders are household-tz correct). (2) **#7b
+theme-mechanism reconciliation** — `body--dark` vs raw `prefers-color-scheme` disagree until
+reload; pick one authority. Both are separable units (onboarding+backend, and theming). #51
+(reconcile-queue date vs meal-grid date) is now resolved in passing — both routes go through
+`useDateFormat`.
 
 ### DR-15 · Micro-motion pass (D-010) — P3
 `--motion-fast` feedback on level change / tick / add-to-list / chip toggles;

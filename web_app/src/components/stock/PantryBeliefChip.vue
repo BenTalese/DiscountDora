@@ -72,6 +72,15 @@
         color: var(--text-primary);
         white-space: nowrap;
         cursor: default;
+        /* DR-8 (#52): beliefs load async, after the row paints. Fade the pill
+           in rather than hard-popping it; the row already reserves the line
+           height so this doesn't reflow neighbours. --motion-fast collapses to
+           ~0 under prefers-reduced-motion (motion.scss), so this self-respects. */
+        animation: belief-hint-in var(--motion-fast) var(--motion-ease);
+    }
+    @keyframes belief-hint-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     .belief-hint__icon {
         color: var(--semantic-warning);

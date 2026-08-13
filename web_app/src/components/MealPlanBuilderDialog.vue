@@ -755,7 +755,7 @@
         margin-bottom: 1rem;
     }
     .builder-field__label {
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 500;
         margin-bottom: 0.35rem;
     }
@@ -768,7 +768,7 @@
         background: var(--surface-sunken);
         border: 1px solid var(--border-default);
         border-radius: 8px;
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
         line-height: 1.35;
     }
@@ -781,7 +781,7 @@
         margin-top: 0.75rem;
     }
     .builder-day__label {
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
         color: var(--text-secondary);
         margin-bottom: 0.25rem;
@@ -815,7 +815,7 @@
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
         color: var(--brand-primary);
     }

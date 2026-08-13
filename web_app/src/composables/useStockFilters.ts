@@ -1,10 +1,8 @@
 import {
     isLowStockSequence,
     isOutOfStockSequence,
-    OUT_OF_STOCK_SEQUENCE,
-    LOW_STOCK_SEQUENCE,
-    STOCKED_SEQUENCE,
 } from 'src/helpers/stockStatus';
+import { colourForSequence } from 'src/helpers/stockLevelLogic';
 import type { PageCount } from 'src/components/PageCountsFooter.vue';
 import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
 import type { Recipe } from 'src/models/recipe';
@@ -339,17 +337,16 @@ export function useStockFilters(sources: {
     });
 
     // ── Sticky-footer counts (A7) — reflect the FILTERED view ───────────
-    // Feedback 2026-06-18 (round 2): the footer level palette mirrors the
-    // picker palette in `stockLevelLogic.colourForSequence` exactly:
-    // Stocked = positive (green), Low = negative (red), Out = muted
-    // (grey). Anything else (custom level) maps to muted.
+    // R-003: the footer level palette *derives* from the one colour
+    // authority (`stockLevelLogic.colourForSequence`) rather than
+    // hand-copying it — so the D-001 escalation (Stocked green, Low amber,
+    // Out red; grey = unknown only) can never drift between the row squares
+    // and the footer counts. `colourForSequence` returns a Quasar semantic
+    // name or `null` for unknown; the null case maps to the footer's
+    // `muted` tone. The names it returns ('positive'|'warning'|'negative')
+    // are all valid `PageCount['tone']` values.
     function toneForLevelSequence(seq: number): NonNullable<PageCount['tone']> {
-        switch (seq) {
-            case STOCKED_SEQUENCE: return 'positive';
-            case LOW_STOCK_SEQUENCE: return 'negative';
-            case OUT_OF_STOCK_SEQUENCE: return 'muted';
-            default: return 'muted';
-        }
+        return (colourForSequence(seq) as PageCount['tone']) ?? 'muted';
     }
     const footerCounts = computed<PageCount[]>(() => {
         const items = filteredStockItems.value;

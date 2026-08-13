@@ -108,6 +108,20 @@ export function currentMoneyPolicy(): MoneyPolicy {
     return policy.value;
 }
 
+/** The install's BCP-47 display locale (e.g. 'en-AU'). Shared source of
+ *  truth for both money and DATE formatting — `useDateFormat` reads this so
+ *  a household never has two disagreeing locales (R-003 / D-006). Reads the
+ *  reactive ref, so a template calling it re-renders when the policy loads. */
+export function currentLocale(): string {
+    return policy.value.locale;
+}
+
+/** Kick the shared locale/currency probe (idempotent). `useDateFormat` calls
+ *  this so date rendering doesn't need its own health round-trip. */
+export function ensureLocalePolicy(): Promise<void> {
+    return load();
+}
+
 /** Force-reload from the server. The admin UI calls this after saving
  *  a new currency/locale so subsequent renders pick it up without a
  *  full page reload. */

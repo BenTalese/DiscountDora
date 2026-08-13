@@ -440,6 +440,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -762,7 +763,7 @@
     function formatDate(iso: string | null): string {
         if (!iso) return 'an unknown time';
         try {
-            return new Date(iso).toLocaleString();
+            return formatLocaleDateTime(iso) || iso;
         } catch {
             return iso;
         }
@@ -920,7 +921,7 @@
     function formatBackupTimestamp(iso: string | null): string {
         if (!iso) return 'unknown';
         try {
-            return new Date(iso).toLocaleString();
+            return formatLocaleDateTime(iso) || iso;
         } catch {
             return iso;
         }

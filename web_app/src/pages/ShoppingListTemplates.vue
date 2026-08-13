@@ -213,6 +213,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -258,7 +259,7 @@
 
     function formatDate(iso: string): string {
         try {
-            return new Date(iso).toLocaleDateString();
+            return formatLocaleDate(iso) || iso;
         } catch {
             return iso;
         }

@@ -6,15 +6,19 @@ import {
 import type { ThemePalette } from 'src/services/themeService';
 import nameOf from './nameOf';
 
-// "Out of stock" / unknown returns `null` so callers route the neutral
-// branch through the theme-token class `dora-bg-neutral` (mid-grey via
-// --text-muted, stays visible on both themes) per R-002, rather than a
-// Quasar `grey-N` literal. The saturated branches stay on Quasar
-// semantics — those are theme-stable.
+// D-001 (DESIGN_STYLE_GUIDE) — level colour escalates with urgency:
+// Stocked = positive (green), Low = warning (amber), Out of stock =
+// negative (red). Grey/muted is reserved for "unknown / not-set" ONLY and
+// must never stand for a real level — the pre-DR-2 map had Out rendering
+// grey (calmer than Low's red) and Low rendering red, which read backwards
+// (FU-578 #33). Only genuinely-unknown sequences fall through to `null`,
+// where callers apply the neutral theme token (`dora-bg-neutral` /
+// `dora-text-muted`) rather than a Quasar `grey-N` literal (R-002). The
+// saturated branches ride Quasar semantics — those are theme-stable.
 const COLOUR_BY_SEQUENCE: Record<number, string | null> = {
     [STOCKED_SEQUENCE]: nameOf<ThemePalette>('positive'),
-    [LOW_STOCK_SEQUENCE]: nameOf<ThemePalette>('negative'),
-    [OUT_OF_STOCK_SEQUENCE]: null,
+    [LOW_STOCK_SEQUENCE]: nameOf<ThemePalette>('warning'),
+    [OUT_OF_STOCK_SEQUENCE]: nameOf<ThemePalette>('negative'),
 };
 
 /** Canonical colour — keyed to the level's sequence so renaming a level
@@ -22,9 +26,11 @@ const COLOUR_BY_SEQUENCE: Record<number, string | null> = {
  *  was retired in FU-050; every caller now routes through this
  *  sequence-keyed entry point.
  *
- *  Returns `null` for the neutral / out-of-stock / unknown case so the
- *  caller can apply `dora-text-muted` / `dora-bg-sunken` instead of a
- *  hardcoded grey palette literal (R-002). */
+ *  Returns `null` only for the unknown / not-set case (a missing sequence
+ *  or a custom level beyond the seeded three) so the caller can apply
+ *  `dora-text-muted` / `dora-bg-sunken` instead of a hardcoded grey palette
+ *  literal (R-002). Out-of-stock is a *real* level and now maps to red
+ *  (negative) per D-001 — it no longer routes through this null branch. */
 export function colourForSequence(sequence: number | null | undefined): string | null {
     if (sequence === null || sequence === undefined) return null;
     return COLOUR_BY_SEQUENCE[sequence] ?? null;

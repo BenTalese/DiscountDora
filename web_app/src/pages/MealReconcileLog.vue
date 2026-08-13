@@ -127,6 +127,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { computed, onMounted, ref } from 'vue';
@@ -165,8 +166,7 @@
     });
 
     function formatDay(iso: string): string {
-        const d = new Date(iso);
-        return d.toLocaleDateString(undefined, {
+        return formatLocaleDate(iso, {
             weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
         });
     }

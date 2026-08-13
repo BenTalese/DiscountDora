@@ -1090,6 +1090,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
@@ -2253,7 +2254,7 @@
         try {
             const d = new Date(isoDate);
             if (Number.isNaN(d.getTime())) return 'recently';
-            return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+            return formatLocaleDate(d, { day: 'numeric', month: 'short', year: 'numeric' });
         } catch {
             return 'recently';
         }

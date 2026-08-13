@@ -1235,6 +1235,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
@@ -1895,7 +1896,7 @@
 
     function formatDate(iso: string): string {
         try {
-            return new Date(iso).toLocaleDateString();
+            return formatLocaleDate(iso) || iso;
         } catch {
             return iso;
         }

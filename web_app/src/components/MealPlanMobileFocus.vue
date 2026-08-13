@@ -182,6 +182,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import { ICONS } from 'src/style/icons';
@@ -243,7 +244,7 @@
     const focusedDayLongLabel = computed(() => {
         const day = props.weekDays.find((d) => d.iso === focusedDayIso.value);
         if (!day) return '';
-        return new Date(day.iso).toLocaleDateString(undefined, {
+        return formatLocaleDate(day.iso, {
             weekday: 'long',
             day: 'numeric',
             month: 'long',

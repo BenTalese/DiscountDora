@@ -71,6 +71,7 @@
      * deliberately — lists are finished or deleted (§12 Q2).
      */
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import type { ShoppingListSummary } from 'src/models/shoppingList';
     import { computed } from 'vue';
@@ -111,7 +112,7 @@
 
     const effectiveDateLabel = computed(() => {
         try {
-            return new Date(`${props.summary.effective_date}T00:00:00`).toLocaleDateString();
+            return formatLocaleDate(`${props.summary.effective_date}T00:00:00`);
         } catch {
             return props.summary.effective_date;
         }

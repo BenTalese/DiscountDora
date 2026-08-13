@@ -132,6 +132,7 @@
     import { useRouter } from 'vue-router';
     import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -170,7 +171,7 @@
 
     function dayLabel(iso: string): string {
         const d = new Date(iso + 'T00:00:00');
-        return d.toLocaleDateString(undefined, { weekday: 'long' });
+        return formatLocaleDate(d, { weekday: 'long' });
     }
 
     async function load() {

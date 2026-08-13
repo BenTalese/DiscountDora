@@ -221,6 +221,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import AlertList from 'src/components/AlertList.vue';
@@ -299,8 +300,8 @@
 
     function formatDate(iso: string): string {
         if (!iso) return '';
-        const d = new Date(iso);
-        return Number.isFinite(d.getTime()) ? d.toLocaleDateString() : iso;
+        // DR-14: household-locale date (falls back to the raw value if unparseable).
+        return formatLocaleDate(iso) || iso;
     }
 
     function snoozedUntilOf(alert: Alert): string {

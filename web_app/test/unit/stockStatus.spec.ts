@@ -83,17 +83,17 @@ describe('findLevelBySequence — resolving a level row by canonical status', ()
     });
 });
 
-describe('colourForSequence — sequence-keyed level palette', () => {
-    it('maps stocked → positive and low → negative', () => {
+describe('colourForSequence — sequence-keyed level palette (D-001)', () => {
+    // D-001: colour escalates with urgency — stocked green, low amber, out
+    // red. Grey/null is reserved for unknown ONLY. This pins the DR-2 fix
+    // (previously low→red and out→grey, which read backwards — FU-578 #33).
+    it('escalates stocked → positive, low → warning, out → negative', () => {
         expect(colourForSequence(STOCKED_SEQUENCE)).toBe('positive');
-        expect(colourForSequence(LOW_STOCK_SEQUENCE)).toBe('negative');
+        expect(colourForSequence(LOW_STOCK_SEQUENCE)).toBe('warning');
+        expect(colourForSequence(OUT_OF_STOCK_SEQUENCE)).toBe('negative');
     });
 
-    it('returns null for out-of-stock so callers route the neutral theme token (R-002)', () => {
-        expect(colourForSequence(OUT_OF_STOCK_SEQUENCE)).toBeNull();
-    });
-
-    it('returns null for unknown / custom / missing sequences', () => {
+    it('returns null ONLY for unknown / custom / missing sequences (grey = unknown)', () => {
         expect(colourForSequence(42)).toBeNull();
         expect(colourForSequence(null)).toBeNull();
         expect(colourForSequence(undefined)).toBeNull();

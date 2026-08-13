@@ -1030,6 +1030,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -2120,7 +2121,7 @@
     }
     function formatDateTime(iso: string): string {
         if (!iso) return '';
-        return new Date(iso).toLocaleString();
+        return formatLocaleDateTime(iso);
     }
     // relativeTime extracted to src/helpers/relativeTime.ts (R-003) — see
     // imports at the top of the script block.

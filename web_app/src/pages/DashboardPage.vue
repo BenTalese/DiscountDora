@@ -195,8 +195,27 @@
         </transition>
 
         <FadeTransition mode="out-in">
-        <div v-if="loading && !summary" key="dash-loading" class="row justify-center q-pa-xl">
-            <AppSpinner size="48px" />
+        <!-- D-007 (DR-8): a content-shaped skeleton of the card grid, not a
+             lone centred spinner — the dashboard settles into its own shape
+             rather than flashing empty then popping. Reuses the real
+             DashboardCard shell so the placeholders match the loaded cards by
+             construction. -->
+        <div
+            v-if="loading && !summary"
+            key="dash-loading"
+            class="row q-col-gutter-md dora-cards"
+            aria-hidden="true"
+        >
+            <div v-for="n in 4" :key="n" class="col-12 col-lg-6">
+                <DashboardCard>
+                    <template #title>
+                        <AppSkeleton type="line" width="45%" />
+                    </template>
+                    <AppSkeleton type="line" width="92%" class="dash-skel-line" />
+                    <AppSkeleton type="line" width="78%" class="dash-skel-line" />
+                    <AppSkeleton type="line" width="64%" class="dash-skel-line" />
+                </DashboardCard>
+            </div>
         </div>
 
         <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
@@ -377,8 +396,14 @@
                             <div class="dora-stat-label">saved vs RRP</div>
                         </div>
                     </div>
-                    <div v-else class="dora-empty q-mt-sm">
-                        Loading totals…
+                    <!-- D-007 (DR-8): skeleton mirrors the stat grid so the
+                         totals fade into reserved space instead of replacing a
+                         "Loading totals…" string and shoving the layout. -->
+                    <div v-else class="dora-stat-grid q-mt-sm" aria-hidden="true">
+                        <div v-for="n in 2" :key="n" class="dora-stat">
+                            <AppSkeleton type="line" width="34px" height="1.5em" class="dash-skel-line" />
+                            <AppSkeleton type="line" width="44px" />
+                        </div>
                     </div>
                     <router-link
                         v-if="otherActiveListCount > 0"
@@ -1128,8 +1153,9 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
-    import AppSpinner from 'src/components/AppSpinner.vue';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
     import AnimatedNumber from 'src/components/AnimatedNumber.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
@@ -1784,9 +1810,9 @@
         if (diff === 0) return 'Today';
         if (diff === 1) return 'Tomorrow';
         if (diff > 1 && diff < 7) {
-            return target.toLocaleDateString(undefined, { weekday: 'long' });
+            return formatLocaleDate(target, { weekday: 'long' });
         }
-        return target.toLocaleDateString();
+        return formatLocaleDate(target);
     }
 
     function goTo(path: string) {
@@ -2339,6 +2365,11 @@
     /* ───── Cards ────────────────────────────────────────────────────── */
     .dora-cards {
         animation: dora-fade-up 0.4s ease-out both;
+    }
+    /* DR-8 loading skeleton — spacing between the placeholder body lines so a
+       skeleton card reads with the same rhythm as a populated one. */
+    .dash-skel-line {
+        margin-bottom: 10px;
     }
     /* Zone band header — a full-width flex item; CSS `order` (set inline)
        places it just before its zone's cards, and being full-width it forces

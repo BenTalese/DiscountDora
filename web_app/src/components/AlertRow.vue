@@ -82,6 +82,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { ICONS } from 'src/style/icons';
     import { actionsFor, colorFor, iconFor, type Alert, type AlertAction } from 'src/models/alert';
     import { computed } from 'vue';
@@ -120,8 +121,8 @@
     });
 
     function formatDate(iso: string): string {
-        const d = new Date(iso);
-        return Number.isFinite(d.getTime()) ? d.toLocaleDateString() : iso;
+        // DR-14: household-locale date (falls back to the raw value if unparseable).
+        return formatLocaleDate(iso) || iso;
     }
 </script>
 

@@ -277,6 +277,12 @@
                 style="min-width: 180px"
             />
             </div>
+
+            <!-- DR-2 / D-013 — decode the row colour language (level
+                 squares, essential stripe, attention outlines, dimmed
+                 "out" row, stocktake pulse) right where the user is already
+                 looking at filters. -->
+            <StockRowLegend :levels="stockLevels" />
             </template>
         </FilterBar>
 
@@ -585,6 +591,7 @@
     import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import StockRowLegend from 'src/components/stock/StockRowLegend.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';

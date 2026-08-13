@@ -1,6 +1,7 @@
 import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
 import { useListState } from 'src/composables/useListState';
+import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
 import { useMealPlanExport } from 'src/composables/useMealPlanExport';
 import { useReducedMotion } from 'src/composables/useReducedMotion';
 import { useStockStatus } from 'src/composables/useStockStatus';
@@ -591,7 +592,7 @@ export function useMealPlanner() {
     }
 
     function formatDate(iso: string): string {
-        return new Date(iso).toLocaleDateString();
+        return formatLocaleDate(iso);
     }
     async function loadIngredients() {
         const id = focusedPlan.value?.meal_plan_id;

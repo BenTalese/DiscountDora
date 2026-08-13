@@ -44,6 +44,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { isoDate, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
@@ -123,8 +124,7 @@
 
     const monthBanner = computed(() => {
         const [y, m, d] = focusedMonday.value.split('-').map(Number);
-        return new Date(Date.UTC(y!, m! - 1, d))
-            .toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        return formatLocaleDate(new Date(Date.UTC(y!, m! - 1, d)), { month: 'long', year: 'numeric' })
             .toUpperCase();
     });
 
@@ -132,7 +132,7 @@
         focusedMonday.value = monday;
     }
     function formatDate(iso: string): string {
-        return new Date(iso).toLocaleDateString();
+        return formatLocaleDate(iso);
     }
 
     // R-Phase 6 §4.6 — text alternatives for the colour-only status (1.4.1).

@@ -53,6 +53,70 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-632 — DR-14 carve-outs: first-boot region derivation (#48) + theme-mechanism reconciliation (#7b)
+- **Raised:** 2026-08-13 (design-remediation DR-14; carved from FU-578 #48/#7b).
+- **Type:** follow-up (two distinct concerns split from the DR-14 date-format authority).
+- **What:** DR-14 shipped the date-format authority (`useDateFormat`, reads the shared
+  household locale via `useMoney`'s `locale_policy`) and migrated all 26 call sites, so
+  dates now render in the household locale (en-AU default) not the browser's US format
+  (#9 fixed). Two adjacent pieces from the DR-14 backlog remain:
+  1. **First-boot region derivation (#48).** The health `locale_policy` comes back
+     **null** on a fresh install — locale/timezone are never asked. Onboarding SETUP has
+     no region step, while Admin → System → Timezone already has a "Use this device"
+     one-click derivation that nothing invokes at first run. So money/date formats rely
+     on the en-AU *default* until an admin finds that page. Wire a first-boot
+     derivation (browser `Intl.DateTimeFormat().resolvedOptions()` → locale + tz) or a
+     one-line SETUP step, persisted server-side, keeping the admin override. Backend
+     endpoint already exists. **Also add a timezone to `locale_policy`** so datetime
+     renders (currently browser-tz) become household-tz correct.
+  2. **Theme-mechanism reconciliation (#7b).** `body--dark` (Quasar Dark plugin) and raw
+     `prefers-color-scheme` CSS are two sources of theme truth that disagree until a full
+     reload — boot dark + flip the OS to light with no reload and the header/row cards go
+     light while the page bg/toolbar/footer stay dark (screenshot-confirmed). Pick one
+     authority (drive everything off the Quasar dark state, or off the media query, not
+     both). R-002/R-003-adjacent.
+- **Why deferred:** DR-14's core (D-006 "one date/number authority" + the visible #9
+  bug) is shipped and verified; these two are separable — #48 spans onboarding +
+  backend, #7b is a theming-system fix — each its own focused unit. Same split pattern
+  as DR-7 → FU-624, DR-9 → FU-631.
+- **Recommended resolution:** #48 opportunistically or in a Phase-4 onboarding pass; #7b
+  in a theming turn. Cross-ref: `DESIGN_REMEDIATION_PLAN.md` DR-14, D-006, [[FU-578]].
+
+## [OPEN] FU-631 — DR-9 carve-outs: mobile toolbar tidy, stock-row overflow menu, stranded dashboard cards
+- **Raised:** 2026-08-13 (design-remediation DR-9; carved from FU-578 #15b/#19/#30).
+- **Type:** follow-up (redesign-scope layout work carved from DR-9).
+- **What:** DR-9 shipped the core toolbar-overflow fix (shared `PageToolbar` now
+  wraps its actions — verified: 0 horizontal scroll at 375px, no title collision at
+  1280px) + a mobile stock-row **name 2-line wrap** so names stop truncating at ~10
+  chars. Three heavier pieces from the DR-9 backlog are carved here because each is
+  a mini-redesign with real interaction/layout risk that deserves its own focused
+  unit:
+  1. **Shopping-list toolbar mobile tidy (#4 refinement).** The wrap fix removed the
+     overflow, but at 375px the action cluster wraps to ~165px of stacked toolbar
+     chrome (Quick add · [No grouping|Location|Store] segmented · Refresh deals ·
+     Select · More). Cleaner: on mobile collapse the secondary actions (grouping,
+     Refresh deals, Select) into the existing **More** menu so only Quick add + More
+     stay inline. Needs per-page work in `ShoppingListDetail.vue` (the segmented
+     grouping control is the widest offender).
+  2. **Stock-row trailing-icon overflow menu (#15b).** On phones the expiry / open /
+     cart cluster still squeezes the row; the prescribed fix is to collapse the
+     trailing action buttons into a single ⋮ overflow menu on mobile. Deferred
+     because each button carries a rich nested interaction (expiry date-picker +
+     push-menu, open→dialog, cart=`AddToListButton`) that a naive menu-in-menu would
+     regress. **Tap-target pass (#19)** rides with it: `RowActionButton` is `size="md"`
+     (~36px); D-004 wants ≥44px on touch surfaces.
+  3. **Dashboard / reports stranded half-width cards (#30).** A lone `col-lg-6` card
+     at the end of a zone sits beside dead air (D-011). The dashboard uses a CSS
+     `order`-based zone system, so "make a lone last-in-zone card full-width" needs
+     per-zone odd-count logic (the page already computes `zoneHasVisibleCards`), not
+     a pure-CSS rule — hence its own unit.
+- **Why deferred:** DR-9's accept criteria ("no horizontal scroll at 375px; row
+  names readable on mobile") are met by the shipped toolbar wrap + name wrap; these
+  three are quality refinements, each redesign-scope and higher-risk. Splitting keeps
+  the shipped fix clean and verifiable (mirrors DR-7 → FU-624).
+- **Recommended resolution:** opportunistic, or a dedicated mobile-layout turn. Cross-ref:
+  `DESIGN_REMEDIATION_PLAN.md` DR-9, D-011/D-004, [[FU-578]].
+
 ## [OPEN] FU-630 — Assess inline corrections in the auto-mode meal-reconcile log
 - **Raised:** 2026-08-13 (meal-reconcile auto-mode log; owner decision).
 - **Type:** follow-up (deferred scope).

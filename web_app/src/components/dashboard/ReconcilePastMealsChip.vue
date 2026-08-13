@@ -65,7 +65,7 @@
     }
 
     .reconcile-chip__caption {
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-muted);
     }
 

@@ -126,6 +126,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { ICONS } from 'src/style/icons';
     import { mondayOf, shiftDays } from 'src/helpers/weekDates';
     import AlertApiService from 'src/services/api/alertApiService';
@@ -206,7 +207,7 @@
 
     function formatLong(iso: string): string {
         const [y, m, dd] = iso.split('-').map(Number);
-        return new Date(Date.UTC(y!, m! - 1, dd)).toLocaleDateString(undefined, {
+        return formatLocaleDate(new Date(Date.UTC(y!, m! - 1, dd)), {
             weekday: 'long', day: 'numeric', month: 'long',
         });
     }

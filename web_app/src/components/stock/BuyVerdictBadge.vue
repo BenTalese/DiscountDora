@@ -136,6 +136,14 @@
         padding: 0 8px;
         height: 22px;
         border: 1px solid transparent;
+        /* DR-8 (#52): the verdict loads async — fade it in rather than
+           hard-popping into the row. --motion-fast is ~0 under
+           prefers-reduced-motion (motion.scss). */
+        animation: buy-verdict-in var(--motion-fast) var(--motion-ease);
+    }
+    @keyframes buy-verdict-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     /* DR-1b (FU-578 #7 / D-002): the label used the full-strength semantic ink
        on its soft chip, but that ink is too light on the pale tint (WAIT hit

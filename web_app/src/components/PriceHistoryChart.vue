@@ -171,6 +171,7 @@
 <script lang="ts" setup>
     import { computed, ref } from 'vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { formatMoney } from 'src/composables/useMoney';
     import type { PriceHistorySeries } from 'src/services/api/priceHistoryApiService';
 
@@ -350,7 +351,7 @@
     const xLabels = computed(() => {
         const tb = timeBounds.value;
         if (!tb) return [];
-        const fmt = (ms: number) => new Date(ms).toLocaleDateString(undefined, {
+        const fmt = (ms: number) => formatLocaleDate(ms, {
             month: 'short', day: 'numeric',
         });
         const mid = (tb.min + tb.max) / 2;
@@ -419,7 +420,7 @@
         }
         hover.value = {
             x: projectX(targetTime),
-            dateLabel: new Date(targetTime).toLocaleDateString(),
+            dateLabel: formatLocaleDate(targetTime),
             byProduct,
         };
     }

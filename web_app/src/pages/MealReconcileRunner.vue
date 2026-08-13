@@ -243,6 +243,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';
@@ -304,8 +305,7 @@
 
     function formatScheduledFor(iso: string): string {
         // "Mon 7 Jul" — same shape stocktake uses inline.
-        const d = new Date(iso);
-        return d.toLocaleDateString(undefined, {
+        return formatLocaleDate(iso, {
             weekday: 'short', day: 'numeric', month: 'short',
         });
     }

@@ -591,7 +591,7 @@
         padding: 0.35rem 0.75rem;
         color: var(--brand-primary);
         text-decoration: none;
-        font-size: var(--font-size-sm);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 500;
         border-radius: var(--radius-sm);
         transition: background 120ms ease;

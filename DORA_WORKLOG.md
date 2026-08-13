@@ -18,6 +18,224 @@ next.
 
 ---
 
+## 2026-08-13 — Design remediation DR-10 (closed, owner call) + DR-14 (date-format authority)
+
+**DR-10 (nav labelling) — CLOSED, no code.** Owner wanted to *see* the options, so built a
+live 3-way mockup (visualize widget): Current (icon-only, labels on strip-hover) vs Option 1
+(always-on under-icon labels) vs Option 2 (active-page label + hover tooltips). Owner chose
+**leave the nav as-is**. FU-578 #5 resolved as won't-change (owner taste), not a defect. The
+desktop strip already reveals labels on hover + has a sliding accent active-indicator; the
+mobile drawer shows full labels.
+
+**DR-14 (locale/format authority, D-006) — ➗ w/ carve-out.** The *currency/locale* authority
+already existed (`useMoney` → `locale_policy`); the missing half was **dates**. 26 sites across
+22 files called `.toLocaleDateString()`/`.toLocaleString()` with **no locale**, so they rendered
+in the *browser's* locale — US "7/17/2026" on an AU install (FU-578 #9). Built **`useDateFormat`**
+(`formatDate` + `formatDateTime`, Intl-options passthrough) that reads the **same** household
+locale as money via two new `useMoney` exports (`currentLocale()` / `ensureLocalePolicy()`) —
+one locale source for both (R-003, can't drift). Migrated **all 26 sites**: files with a local
+`formatDate`/`formatWhen`/`formatDay` helper now delegate to the aliased shared fn (template
+call sites unchanged); inline `new Date(x).toLocaleDateString(...)` swapped to `formatLocaleDate(x, ...)`.
+Grep confirms **zero** direct date `toLocale*` calls remain (the two survivors are `.toLocaleString()`
+on *numbers* — counts — correctly left).
+
+**Verification.** vue-tsc 0 / eslint 0 across all 24 touched files. `Intl` confirms the household
+locale now yields **"17/07/2026"** (en-AU) vs the old browser "7/17/2026". Locale defaults to en-AU,
+so the fix holds even when the server sends no policy — which it doesn't: **health `locale_policy`
+comes back `null`** on the seed install (that's #48 — locale never asked; the en-AU default masks it
+for the AU market). Full eyes-on "every surface shows AU dates" walk → DORA_VERIFY (SPA render +
+cross-origin session friction).
+
+**Carve-out → FU-632:** (1) #48 first-boot region derivation (browser-derive locale+tz at first
+boot / a SETUP step, persist, keep admin override; add tz to `locale_policy` so datetime renders
+are household-tz correct); (2) #7b theme-mechanism reconciliation (`body--dark` vs raw
+`prefers-color-scheme` disagree until reload — pick one authority). #51 (reconcile-queue vs
+meal-grid date mismatch) resolved in passing — both now route through `useDateFormat`.
+
+**Standards close-gate.** R-003 (one locale source shared by money+dates; the whole point),
+R-001 (`useDateFormat` is the single reusable module; local helpers delegate to it rather than
+each re-implementing), R-002 n/a. D-006 satisfied for dates (currency already was). **No new
+ADR** — this *is* R-003/D-006 applied. No violations.
+
+**Next up:** the Wave-4 surface redesigns — DR-11 (recipe-detail read-mode + the "0 unallocated of
+1 cooked" contradiction), DR-12 (alerts order + calendar diet), DR-13 (history grouping), DR-15
+(micro-motion), DR-16 (onboarding activation — owner call). DR-11/12 are the natural next picks.
+
+---
+
+## 2026-08-13 — Design remediation DR-9: toolbar & grid composition (D-011) — ➗ w/ carve-out
+
+Actioned DR-9 (FU-578 #4/#40/#15b/#19/#30). Shipped the accept criteria; carved the
+redesign-scope remainder to **FU-631**.
+
+**#4/#40 — toolbar overflow (headline).** Root cause in the *shared* `PageToolbar`:
+`.page-toolbar-actions` was `flex-shrink: 0`, so the ~930px shopping-list action
+cluster kept its width and either overflowed the viewport (mobile, ~255px h-scroll,
+last actions unreachable) or squeezed the title into a mid-word wrap colliding with
+the buttons at 1280px. Fixed at the component (benefits every PageToolbar): actions
+`flex-wrap: wrap` + drop below the title when they don't fit, title cell
+`min-width: 0`, `row-gap` for the wrapped rows. **Live-verified** on shopping-list
+detail: **375px → docScrollWidth == clientWidth (0 overflow**, was ~255px); **1280px
+→** title "Shopping lists" one line, un-wrapped, actions cleanly below, no collision.
+
+**#15b — mobile stock-row names.** Names truncated at ~10 chars on phones because the
+trailing action cluster eats the name column. Added a `max-width: 600px` rule letting
+`.stock-row__name` wrap to **two lines** (`-webkit-line-clamp: 2`); desktop keeps the
+one-line ellipsis. (Couldn't live-verify — rows are virtual-scrolled and need paint;
+queued in DORA_VERIFY. CSS is trivial.)
+
+**Carved to FU-631** (three redesign-scope pieces, each its own risk): (1) the mobile
+shopping-list toolbar is now overflow-free but ~165px tall — a cleaner *collapse of
+grouping/Refresh/Select into the existing More menu* is deferred; (2) the stock-row
+**trailing-icon → ⋮ overflow menu** (#15b) + strict **44px tap targets** (#19) —
+deferred because each trailing button has a rich nested interaction (expiry
+date-picker + push-menu, open→dialog, cart=AddToListButton) a naive menu-in-menu
+would regress; (3) dashboard/reports **stranded half-width cards** (#30) — needs
+per-zone odd-count logic against the CSS-`order` zone system, not a pure-CSS rule.
+Same split pattern as DR-7 → FU-624.
+
+**Verification.** vue-tsc 0 / eslint 0 (PageToolbar, StockItemRow). Toolbar wrap
+live-measured at 375/1280 (above). Form-login path from the DR-8 note worked again
+([[reference-dev-verify-browser-login]]).
+
+**Standards close-gate.** R-002 (token `--space-2`/`row-gap`; media query only),
+R-001 (fix lives in the shared PageToolbar, not copied per page), D-011 satisfied for
+the toolbar. No violations. **No new ADR** — flex-shrink-forces-overflow is a
+one-off CSS bug, not a recurring decision.
+
+**Next up:** DR-10 (nav labelling — needs an owner taste call: under-icon labels vs
+active-page label + tooltips), then the Wave-4 surface redesigns DR-11..DR-16.
+
+---
+
+## 2026-08-13 — Design remediation DR-8: loading-state unification (D-007)
+
+Actioned DR-8 (FU-578 #15/23/26/52). Four threads, all shipped.
+
+**#23 — the splash wedge (headline; I hit it first-hand last unit).** Root cause:
+`App.vue` faded the splash via a Vue `<Transition>`, which toggles the `-leave-to`
+class inside a `requestAnimationFrame`. A backgrounded/occluded/throttled tab never
+composites → rAF never fires → the leave wedges at opacity 1, `z-9000`,
+`pointer-events:auto`, covering the app and **eating clicks**. Replaced the
+`<Transition>` with a plain `splashVisible` ref + CSS transition; unmount is driven
+by a **`setTimeout`** (SPLASH_REMOVAL_MS=360, ~`--motion-slow`+buffer, paint-
+independent) and the `--leaving` class drops `pointer-events` immediately. Error
+path unaffected (keyed on `isBootstrapped`, which stays false on bootstrap error, so
+the Retry splash still holds). **Live-proof:** in the same non-compositing verify
+pane that wedged the old build, the new `splash-host` is *removed* on handoff —
+because `setTimeout` fires there where `rAF` doesn't (confirmed both empirically).
+
+**#15 — dashboard skeletons.** Main load state was a lone centred `AppSpinner`;
+primary-list card showed literal **"Loading totals…"**. Both → `AppSkeleton` (B10):
+load branch is a 4-card grid reusing the real `DashboardCard` shell (title + 3 body
+lines); totals slot is a skeleton stat-grid reserving the numbers' space. Swapped
+the dead `AppSpinner` import for `AppSkeleton`. **Live-proof:** dashboard renders 4
+skeleton cards + 16 pulsing blocks (theme-mixed bg + `app-skeleton-pulse`), **zero
+"Loading…" strings**.
+
+**#52 — belief-chip / verdict reflow.** `StockItemRow`'s meta line (location + async
+belief chip) got a `min-height` (moved the inline `gap` to a `.stock-row__meta`
+class too) so a late belief pill can't grow the row post-paint; `PantryBeliefChip` +
+`BuyVerdictBadge` now **fade in** (`--motion-fast`, ~0 under reduced-motion) instead
+of hard-popping.
+
+**#26 — >2s warm splash: investigated, no code change.** `authStore.runBootstrap`
+awaits exactly two light probes (`bootstrapRequiredAsync` COUNT → `getMeAsync`). The
+>2s warm-*reload* time is Vite recompilation + backend cold-start, not app work — a
+prod build doesn't pay it. The actionable half of #26 (the wedge) is the #23 fix.
+
+**Verification.** vue-tsc 0 / eslint 0 (App.vue, DashboardPage, StockItemRow,
+PantryBeliefChip, BuyVerdictBadge). Live-drove the seeded backend: splash-handoff +
+dashboard-skeleton confirmed as above. **Harness note (for next time):** the SPA at
+`:5174` talks to the backend at `:5170` cross-origin (no `.env`, so it uses the
+`http://<host>:5170/api` fallback + hash router). A `fetch(..., {credentials:
+'include'})` login works, but the app's own XHRs don't carry the session cookie on a
+cookie-only reload → bootstrap `/me` 401s and it routes to `#/login`. Reliable path:
+submit the real login **form** (sets `currentUser` in memory + navigates in); data
+XHRs may still 401 cross-origin, which is why the dashboard skeleton couldn't be
+watched transitioning to loaded content and belief-chip rows (virtual-scroll, need
+paint) went to DORA_VERIFY.
+
+**Standards close-gate.** R-002 (all new CSS on tokens — `--motion-*`, `--space-*`,
+skeleton uses theme-mixed surface), R-001 (skeleton reuses `DashboardCard`/
+`AppSkeleton`, no bespoke shell), R-003 n/a. D-007 satisfied; D-010 (motion tokens,
+no literal ms; reduced-motion respected via motion.scss). **No new ADR** — though the
+rAF-gated-transition-wedge is a real reusable lesson; noted inline in `App.vue` so the
+`<Transition>` isn't reintroduced for boot-critical overlays. No violations.
+
+**Next up:** DR-9 (toolbar & grid composition — shopping-list toolbar mobile overflow,
+stranded half-width cards, mobile stock-row icon overflow, tap targets to D-004).
+
+---
+
+## 2026-08-13 — Tidy: fix invalid bare `var(--font-size-*)` declarations (D-017)
+
+Cleared the DR-2 side-finding. `--font-size-xs/sm/...` in `tokens.scss` are **unitless
+ratios** (`0.875`) meant as `calc(var(--font-size-sm) * 1rem)`; six sites used the bare
+`font-size: var(--font-size-sm)` form — invalid CSS, silently dropped, so the text fell back
+to inherited (body) size instead of the intended 14px. Grep confirmed exactly six (every
+other usage app-wide already used the `calc(... * 1rem)` idiom): `MealPlanBuilderDialog.vue`
+(×4 — label/hint/day-label/cook marker), `MealPlansOverview.vue` (reconcile nudge),
+`ReconcilePastMealsChip.vue` (caption). All → `calc(... * 1rem)`. vue-tsc 0 / eslint 0;
+grep now finds zero bare occurrences. Visual-only, deterministic — no browser walk warranted
+(the correct idiom is already proven in `BaseToggleGroup`/`DoraModeSlider`/`app.scss`).
+
+**Standards close-gate:** D-017 (snap to the font-size scale). No new rule — this is D-017
+enforcement, already a standing rule; the recurring shape (unitless ratio tokens need the
+`calc(* 1rem)` wrapper) is worth a lint guard someday but not worth an ADR now.
+
+---
+
+## 2026-08-13 — Design remediation DR-2: stock-level colour semantics (D-001) + row legend (D-013)
+
+Actioned DR-2 from `DESIGN_REMEDIATION_PLAN.md` (FU-578 #33/#44). Two parts, both shipped
++ **live-verified in the running app**.
+
+**Part 1 — D-001 colour SSOT (the core bug).** `stockLevelLogic.colourForSequence` had the
+level→colour map *inverted*: Low → `negative` (red), Out → `null` (grey). So "out" read
+calmer than "low", and grey squares were indistinguishable from disabled rows. Retuned to
+the D-001 urgency ramp: Stocked → positive, **Low → warning (amber)**, **Out → negative
+(red)**; `null` now means *unknown/not-set only*. This map is the single authority behind
+~10 surfaces (rows, detail, `StockLevelDot` pickers, cook mode, quick-add, stocktake runner,
+recipes) — one edit corrects them all. The **footer counts** held a hand-copied second copy
+(`useStockFilters.toneForLevelSequence`, same wrong mapping) — rewired to **derive** from
+`colourForSequence(seq) ?? 'muted'` (R-003, one authority; can't drift again). Dropped the
+now-unused `STOCKED/LOW/OUT_OF_STOCK_SEQUENCE` imports there. `stockStatus.spec.ts`
+re-pinned to the ramp (10 green).
+
+**Part 2 — D-013 legend + decode the dim.** New **`StockRowLegend.vue`** (R-001) in the
+Stock-overview filter panel. *Stock level* group renders the household's real level rows
+(so renamed seeds stay accurate) coloured via the same `colourForSequence` + `bg-*` classes
+the row button uses (derived, can't drift) + a dashed "Level not set". *Row highlights*
+group decodes essential left-stripe, amber "attention soon" outline, red "attention now"
+outline, the **dimmed row** (the #33 undecodable state — now labelled "out of stock, not
+marked essential"), and the stocktake pulse. The audit's "cream tint"/"on-list edge" states
+**don't exist** in current code (mis-read); the dim was the only undecodable one.
+
+**Verification.** vue-tsc 0 / eslint 0 on touched+new files; `stockStatus.spec` 10 green.
+**Drove the seeded verify backend live** (login needs the absolute `:5170` origin — no Vite
+proxy + hash router; documented for next time). DOM/computed-style probe confirmed: footer
+Stocked `rgb(53,151,102)` green / Low `rgb(251,174,81)` amber / Out `rgb(235,112,96)` red;
+legend swatches match by construction. **Couldn't get a pixel screenshot** — the Browser
+pane wasn't compositing frames, so the paint-gated **splash-fade-leave transition wedged**
+(App.vue gates router-view on `isBootstrapped`; virtual-scroll rows also need paint). That
+wedge *is* live confirmation of the DR-8 #23/26 "non-paint-gated splash dismissal" concern —
+already in DR-8 scope, no new FU. Cross-theme pixel walk queued in DORA_VERIFY.
+
+**Standards close-gate.** R-003 (single colour authority; footer + legend both now derive),
+R-002 (neutral token still used for unknown; no grey literal reintroduced), R-001 (legend is
+a proper component). D-001/D-013 satisfied; D-017 (used `calc(var(--font-size-*) * 1rem)`,
+`--space-*`, `--radius-sm`). No violations. **No new ADR** — "domain-colour maps derive from
+one authority" is just R-003 applied. **Finding logged** (spawned task chip): several
+components set `font-size: var(--font-size-sm)` bare — invalid CSS (the token is a unitless
+ratio), silently ignored → text renders at inherited size. Sites: `ReconcilePastMealsChip`,
+`MealPlanBuilderDialog` (×4), `MealPlansOverview`. Out of DR-2 scope; cites D-017.
+
+**Next up:** DR-8 (loading-state unification — dashboard skeletons, reserve belief-chip/
+verdict space, and *fix the >2s paint-gated splash wedge* this session hit first-hand).
+
+---
+
 ## 2026-08-13 — Meal reconciliation: auto-mode log instead of the runner
 
 Owner feature (approved + 2 decisions: **view-only log first** (inline corrections →

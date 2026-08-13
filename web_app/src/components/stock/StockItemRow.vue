@@ -105,8 +105,10 @@
             <div class="stock-row__name-zone column items-start">
                 <div class="stock-row__name">{{ item.name }}</div>
                 <!-- flex `gap` (not q-gutter) so the wrapper can't collide
-                     with any parent gutter scheme — R-027/ADR-023. -->
-                <div class="row items-center no-wrap" style="gap: 6px">
+                     with any parent gutter scheme — R-027/ADR-023. Reserves a
+                     stable min-height (DR-8 #52) so the async belief chip fades
+                     into existing space instead of growing the row after paint. -->
+                <div class="row items-center no-wrap stock-row__meta">
                     <button
                         v-if="locationName"
                         type="button"
@@ -831,6 +833,15 @@
         flex: 1 1 auto;
         min-width: 0; /* allow ellipsis inside flex */
     }
+    /* Second line under the name (location zone + async belief chip). The
+       reserved min-height keeps the row a constant height whether or not a
+       belief chip has arrived yet, so a late chip fades in without reflowing
+       neighbours (DR-8 / FU-578 #52). `gap` lives here (not inline) so the
+       chip and zone never touch. */
+    .stock-row__meta {
+        gap: 6px;
+        min-height: 20px;
+    }
     .stock-row__name {
         font-weight: 600;
         font-size: 1.05rem;
@@ -839,6 +850,19 @@
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 100%;
+    }
+    /* DR-9 (FU-578 #15b): on phones the trailing action cluster squeezes the
+       name column so hard that names truncate at ~10 chars ("Barilla Pa…").
+       Let the name wrap to two lines there instead of a single ellipsised line
+       so it's actually readable; desktop keeps the one-line ellipsis. */
+    @media (max-width: 600px) {
+        .stock-row__name {
+            white-space: normal;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
     }
     .stock-row__zone {
         all: unset;

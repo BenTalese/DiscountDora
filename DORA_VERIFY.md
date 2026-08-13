@@ -87,6 +87,24 @@ _(Needs a destructive re-seed to load the "Belief: …" demo items — restart t
 - [ ] Enter **bulk-select** on Stock Overview with **nothing selected**: the action buttons ("Add to list…", "Remove from list…", "Move location", "Restock", "Log waste…") render clearly **greyed/disabled**, visibly different from the enabled "Select visible" — not the same white as enabled. Selecting an item un-greys them.
 - [ ] Cook mode timer: the **Pause** button (while a timer runs) reads sentence-case "Pause" and matches the app's button styling (warning tone).
 
+## Region date format everywhere (design-remediation DR-14, 2026-08-13) — origin FU-578
+- [ ] Walk the app (shopping list, meal plans, alerts, dashboard, a recipe's "last made", a stock item's history, price chart, and the settings audit log / API keys / backups timestamps) — every date reads in the install's regional format (AU default = day/month/year, "17/07/2026"), never US month-first ("7/17/2026"). *(Confirmed in principle: all 26 sites route through the one household-locale formatter; tsc/eslint green; this is the eyes-on pass across surfaces.)*
+- [ ] If you change the install's region (Settings → Admin → Region & locale), the dates update app-wide without needing a hard reload of individual pages.
+
+## Toolbar overflow + mobile stock-row names (design-remediation DR-9, 2026-08-13) — origin FU-578
+- [ ] **Stock list on a phone (≤600px):** a long item name (e.g. "Barilla Passata Tomato Sauce") wraps to **two lines** and is readable, rather than truncating to "Barilla Pa…". Desktop still shows the single-line ellipsis. *(Toolbar overflow at 375px + title collision at 1280px already code-verified live: 0px horizontal scroll, title uncollided.)*
+- [ ] Spot-check a couple of other pages that use the shared page toolbar (e.g. a stock-item detail, a recipe) at phone width — no page scrolls sideways; the title keeps its own line and the actions wrap below it.
+
+## Loading states: splash / dashboard skeletons / chip fade-in (design-remediation DR-8, 2026-08-13) — origin FU-578
+- [ ] **Splash handoff:** cold-load the app in a **backgrounded tab** (open, switch away ~3s, switch back) and on a phone — the "Waking up Dora…" splash is gone once the app is ready, never frozen on top of the loaded page eating taps. *(The core wedge fix is code-verified live: the splash node is removed even in a non-compositing pane where the old build stuck.)*
+- [ ] **Dashboard skeletons:** on a slow/first dashboard load, the cards show pulsing skeleton placeholders (not a lone spinner, no "Loading…" / "Loading totals…" text), then fade into real content. *(Skeleton render confirmed live; the "fade into real content" transition needs a painting browser + a loaded session.)*
+- [ ] **Belief chip / verdict badge:** on the stock list, scroll so rows with a "Dora thinks low/out" pill or a Buy/Wait/Skip badge come into view — the pill/badge fades in and the row does **not** jump taller or shove its name/location line sideways as they arrive.
+
+## Stock-level colours + row legend (design-remediation DR-2, 2026-08-13) — origin FU-578
+- [ ] On Stock Overview, the level square on each row escalates correctly: **Stocked = green, Low = amber, Out of stock = red**, and an item with **no level set** is a grey dashed box (not a solid grey that could be mistaken for "out"). Check in **both** a light and a dark theme.
+- [ ] Same colours flow through the other surfaces that show a level dot: the level **picker** dropdown (row + detail header), **cook mode** / recipe ingredient status, the **stocktake runner**, and the **footer counts** (Stocked green / Low amber / Out red).
+- [ ] Open the Stock Overview **filter panel** → the **"What the row colours mean"** legend renders at the bottom: a *Stock level* group (your real level names + the dashed "Level not set") and a *Row highlights* group (essential left-stripe, amber "attention soon" outline, red "attention now" outline, dimmed "out, not essential" row, pulsing "due for stocktake" box). The swatches visually match the actual rows. *(Live DOM/computed-style probe already confirmed the colour values in one dark theme; this is the eyes-on pixel + light-theme pass.)*
+
 ## Low-contrast badge fixes (design-remediation DR-1b, 2026-08-12) — origin FU-578
 - [ ] The **notifications bell count badge** (red circle with a number) is clearly legible in every theme, light and dark — the number reads as white on a deep red, not a washed-out light red.
 - [ ] The **Buy / Wait / Skip verdict badge** (stock item row / detail) reads clearly in all themes: the label is dark on light themes / light on dark, sitting on the coloured tinted chip. "Wait" in particular is no longer faint amber-on-cream. The coloured border still signals buy(green)/wait(amber)/skip(red).

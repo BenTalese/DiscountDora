@@ -78,6 +78,7 @@
 
 <script setup lang="ts">
     import BaseButton from 'src/components/BaseButton.vue';
+    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import type { BuyVerdict } from 'src/services/api/buyVerdictApiService';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
@@ -107,7 +108,7 @@
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const days = Math.round((target.getTime() - today.getTime()) / 86_400_000);
-        const dateLabel = target.toLocaleDateString(undefined, {
+        const dateLabel = formatLocaleDate(target, {
             month: 'short', day: 'numeric',
         });
         if (days <= 0) return `Expect a dip around ${dateLabel}`;

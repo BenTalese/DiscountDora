@@ -313,6 +313,7 @@
 
 <script lang="ts" setup>
     import AppSpinner from 'src/components/AppSpinner.vue';
+    import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
@@ -437,7 +438,7 @@
     }
 
     function formatDate(iso: string) {
-        return new Date(iso).toLocaleString();
+        return formatLocaleDateTime(iso);
     }
 
     function openCreate() {

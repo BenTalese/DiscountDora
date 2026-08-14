@@ -254,14 +254,17 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Voice' }
                     },
                     {
+                        // `/settings/nutrition` retired 2026-08-14 — nutrition
+                        // is install-wide, configured at
+                        // /settings/admin/system/nutrition. Redirect so old
+                        // links and bookmarks land somewhere sensible rather
+                        // than 404ing.
                         path: 'nutrition',
-                        component: () => import('pages/settings/NutritionSettings.vue'),
-                        meta: { title: 'Nutrition' }
+                        redirect: '/settings/admin/system/nutrition'
                     },
                     {
                         // per-user Assistant config (provider + URL/model/API
-                        // key) + per-user AI-mode opt-in. Sibling to
-                        // MoneySettings / NutritionSettings. There is no
+                        // key) + per-user AI-mode opt-in. There is no
                         // install-wide master switch — AI mode is per-user only.
                         path: 'assistant',
                         component: () => import('pages/settings/AssistantSettings.vue'),
@@ -391,6 +394,14 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/system/features',
                         component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
                         meta: { title: 'System: Features' }
+                    },
+                    {
+                        // Nutrition is install-wide (2026-08-14) — mode +
+                        // complex-mode source config live here, not on a
+                        // per-user page.
+                        path: 'admin/system/nutrition',
+                        component: () => import('pages/settings/AdminSystemNutritionSettings.vue'),
+                        meta: { title: 'System: Nutrition' }
                     },
                     // four focused System pages carrying the
                     // operational config that used to live in DORA_* env vars.

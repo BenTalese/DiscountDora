@@ -11,7 +11,11 @@
 import { computed, ref } from 'vue';
 import HealthApiService from 'src/services/api/healthApiService';
 
-type FeatureFlagMap = Record<string, boolean>;
+// Mostly booleans, but `nutrition_mode` publishes a three-state string
+// (2026-08-14) — the install's nutrition depth is a mode, not a flag, and
+// forcing it through a bool is what produced the old two-switch mess.
+// `readFlag` coerces, so boolean call sites are unaffected.
+type FeatureFlagMap = Record<string, boolean | string>;
 
 const flagsRaw = ref<FeatureFlagMap>({});
 const loaded = ref(false);
@@ -85,9 +89,17 @@ export function useFeatureFlags() {
         // Onboarding C-5.3 — products feature (linked products, price history,
         // ingestion). Per-surface gating when off is FU-182.
         products: computed(() => readFlag('products')),
-        // C-cross Chunk 3 — derived capability (admin configured a
-        // nutrition source). Gates the per-user `complex` mode toggle.
-        nutritionComplexAvailable: computed(() => readFlag('nutrition_complex_available')),
+        // Nutrition depth, install-wide (2026-08-14). `nutrition` above stays
+        // the plain "on at all" gate most surfaces want; this carries the
+        // depth for the ones that differ between simple and complex.
+        nutritionMode: computed<'off' | 'simple' | 'complex'>(() => {
+            const raw = flagsRaw.value['nutrition_mode'];
+            return raw === 'simple' || raw === 'complex' ? raw : 'off';
+        }),
+        // Complex is selected AND at least one source can actually answer
+        // (a dataset is imported / a key is set / OFF is permitted). Derived
+        // server-side from installed reality — see features/nutrition/sources.py.
+        nutritionComplexUsable: computed(() => readFlag('nutrition_complex_usable')),
         refresh,
     };
 }

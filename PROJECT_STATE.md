@@ -1,6 +1,6 @@
 # Dashy Dora — Project State
 
-**Last reviewed: 2026-08-12.** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
+**Last reviewed: 2026-08-14.** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
 This is the single front door: where every phase and workstream is up
 to, and what needs your attention. For *where things stand* this doc
@@ -72,34 +72,42 @@ UX/UI review** into fix units.
 | Meal reconcile | ➗ | "Stocktake for meals" — Chunks 1–5 shipped; Chunk 6 (settings row/copy polish) pending | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md) |
 | Alerts control centre | ✅ | `/alerts` hub, ALERT_ROUTER, price-watch + email-digest + push; shared `resolve_overdue_map` | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
 | Assistant surface | ✅ | Per-user rate limits; SLM default AI path; Basic-mode `add_to_list` verb; AI master-switch removed (per-user only); **multi-provider config + Mode-dropdown settings redesign** (`UserLlmProvider` table; browser-verify owed) | `ask_assistant.py`, `AssistantSettings.vue` |
-| Settings & config polish | 🟡 | Active stream: household budget (value-driven), AI master-switch removed, Region & locale merged, Account/Kitchen-setup redesigns, encryption-key banner+generator. Several new DORA_VERIFY walks queued | `CHANGELOG [Unreleased]` |
+| Nutrition (complex mode) | 🟡 | Install-wide collapse + schema + USDA importer + admin page + unified lookup + stock-item picker landed 2026-08-14 (charter cut reversed by owner). Recipe rollup + coverage remains — complex behaves like simple until they land | [FU-635](DORA_FOLLOWUPS.md) |
+| Settings & config polish | 🟡 | Active stream: household budget (value-driven), AI master-switch removed, Region & locale merged, Account/Kitchen-setup redesigns, encryption-key banner+generator, **Stock-locations rebuilt as zone cards**, **settings nav regrouped** (Account / Preferences / Kitchen setup / About), voice-picker selection bug + deals-email opt-in default (all owner-initiated, outside the DR bundle). Several new DORA_VERIFY walks queued | `CHANGELOG [Unreleased]` |
 | Data/Backup admin | ✅ | Under Settings→Admin→Data; backup library + admin-gating | FU-341/342/198 |
 | Auth shell | ➗ | Shared `AuthShell`/`AuthButton` across pre-auth surfaces | `PROPOSAL_AUTH_SHELL.md` |
 | Postgres datastore | ✅ | Implemented + **default** (SQLite fallback via `DORA_DB_PATH`); FU-045 closed; suite green on PG | `configuration_manager.py` |
 | Recipe importer (paste-based) | ✅ | Six chunks landed; parser green 20/20; bulk-linker + PWA share target; **verify pending** | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_RECIPE_IMPORTER.md) |
 | Open-source release (P7) | ⚪ | Not sold — donation/OSS/all-free. Remaining: README/showcase, release process, support channel (FU-406/557/608) | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
-| Test suite | ➗ | Backend + frontend Vitest + property + PG all green (~1616 collected; ~412 vitest). Sole remnant: Postgres **CI wiring**, blocked on FU-405 | [PROPOSAL](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) |
+| Test suite | 🔴 | Frontend Vitest is **red**: 2 failures in `stockLevelDot.spec.ts` (FU-634, needs a D-001 intent call), 426 passing / 34 files. Backend + property + PG green (~1616 collected). Other remnant: Postgres **CI wiring**, blocked on FU-405 | [PROPOSAL](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) |
 | Finalisation sweep | 🔵 | Designed, not started — 20 chunks, two-stage, single-maintainer north-star | [PLAN](docs/01_charter/FINALISATION_PLAN.md) + [COVERAGE](docs/01_charter/FINALISATION_COVERAGE.md) |
 
 ---
 
 ## ⚠️ Needs your attention now
 
-**Total open backlog is 18 items in `DORA_FOLLOWUPS.md`** (the old "~60"
+**Total open backlog is 20 items in `DORA_FOLLOWUPS.md`** (the old "~60"
 figure was badly stale). These are the ones wanting a decision or a
 running-app check, most important first.
 
-1. **Continue the UX/UI review remediation (DR units).** A large owner-requested critical-drive bundle (~50 findings), mapped to DR-1..DR-16. **Done: DR-6, DR-4 (copy/leakage), DR-1 muted-contrast ramp** (all 10 themes ≥4.5:1), **DR-1b badges** (alerts + verdict, AA-verified), **DR-2** (level-colour SSOT fix — Low→amber/Out→red, footer derives from the one authority; new filter-panel row legend, live-verified), **DR-3** (dialog casing sweep + open-toggle glyph/a11y + bulk-bar disabled state; R-039/ADR-035 added), **DR-5** (open-toggle mutation trap — deferred PATCH + 3-outcome dialog, Vitest-pinned). **DR-7** (toast/helper-bubble placement — de-congested the toast corner, tip auto-dismiss, greeting copy; toast-die-on-route carved to FU-624), **DR-8** (loading polish — splash rAF-wedge fix, dashboard skeletons, belief-chip/verdict reflow-free fade-in; #26 warm-splash investigated = dev-only), **DR-9 ➗** (shared PageToolbar wrap — 0 h-scroll@375px / no title-collision@1280px, verified; mobile stock-row 2-line names; toolbar-More-collapse + row-icon-overflow + stranded-cards carved to FU-631), **DR-10 closed** (owner saw a 3-way nav mockup, chose leave-as-is), **DR-14 ➗** (new `useDateFormat` date authority sharing `useMoney`'s household locale; all 26 `toLocale*` date sites migrated → AU format not browser-US; first-boot region derivation #48 + theme-split #7b carved to FU-632). Remaining DR units: the Wave-4 surface redesigns DR-11/12/13/15/16. **A brand-secondary rethink spun out as FU-621** (owner: secondary "feels off" + it's invisible as text on dark themes — wants a visual options board, logged FU-622). [FU-578](DORA_FOLLOWUPS.md)
-2. **Products-overlay Phase-F verify + hard-delete call.** Product surfaces need a running-app walk with real data; L197 hard-delete is still an undecided design call and L205/206 bulk-select is unbuilt — the runbook's Phase-F blocker. [FU-214](DORA_FOLLOWUPS.md)
-3. **⭐ Verify the champion sequence in-browser.** Four surfaces stacked and untested on this dev box — P8-07 Zero-Input Pantry, P8-08 Kitchen health, P8-09 Memory reports, plus P8-10 native Android (APK build + device walk). Pairs with the queued Settings-rework `DORA_VERIFY.md` sections.
-4. **Open-source release readiness.** README/showcase + GitHub Releases process + Sponsors link — the Phase-4 gate to publishing publicly; needs your call on scope/timing. [FU-406](DORA_FOLLOWUPS.md)
-5. **Stand up donation + OSS infrastructure, then swap in-app placeholders.** Owner-external checklist: make repo public, set up Sponsors / Buy-Me-a-Coffee / PayPal.me, then one placeholder-swap pass. [FU-608](DORA_FOLLOWUPS.md)
-6. **Stand up the support channel.** Pick + create the (recommended) public GitHub-issues channel; a one-line config change then lights up Help / error-report / DoraBot. Pairs with FU-406/608. [FU-557](DORA_FOLLOWUPS.md)
-7. **Cross-cutting feedback bundle — 4 items still open.** Final QA regression doc, UI-polish/uniqueness pass, cross-user push notifications, general UI consistency — mostly Phase-4 gates needing your steer on when. [FU-363](DORA_FOLLOWUPS.md)
-8. **Real-device mobile / PWA field test.** A hands-on device pass; natural to fold into the P8-10 native verify. [FU-389](DORA_FOLLOWUPS.md)
-9. **Late-game holistic theme/colour review.** Eyes-on-app pass across the full theme set (Pesto suspected over-dulled); needs the running app. [FU-010](DORA_FOLLOWUPS.md)
-10. **App-wide colour-usage assessment** (primary vs secondary/accent/info). Needs eyes-on-app judgement, not a code walk. [FU-224](DORA_FOLLOWUPS.md)
-11. **Ops / CI / observability (Phase 4).** Deliberately-disabled CI, backups, staging still unplanned — and CI must not be silently re-enabled; a Phase-4 decision that also unblocks FU-520 (Postgres CI) and FU-404. [FU-405](DORA_FOLLOWUPS.md)
+1. **The frontend test suite is red.** 2 pre-existing failures in
+   `stockLevelDot.spec.ts` (out-of-stock resolves to `bg-negative`, spec expects
+   `dora-bg-neutral`) — everything else green (426/34 files). Needs a D-001 intent
+   call: grey is reserved for *unknown*, so out-of-stock arguably *should* be red
+   and the spec is the stale half. A red suite masks the next real failure.
+   [FU-634](DORA_FOLLOWUPS.md)
+2. **Finish nutrition complex-mode (3 of 6 chunks left).** Owner reversed the charter's "off + simple only" cut on 2026-08-14 after finding `complex` had shipped as a fake seam. Landed: install-wide collapse, schema, USDA importer, admin page, unified lookup, stock-item link picker. Remaining: recipe rollup + coverage — until those land, `complex` behaves like `simple` outside the admin page. All design calls settled. [FU-635](DORA_FOLLOWUPS.md)
+3. **Continue the UX/UI review remediation (DR units).** A large owner-requested critical-drive bundle (~50 findings), mapped to DR-1..DR-16. **Done: DR-6, DR-4 (copy/leakage), DR-1 muted-contrast ramp** (all 10 themes ≥4.5:1), **DR-1b badges** (alerts + verdict, AA-verified), **DR-2** (level-colour SSOT fix — Low→amber/Out→red, footer derives from the one authority; new filter-panel row legend, live-verified), **DR-3** (dialog casing sweep + open-toggle glyph/a11y + bulk-bar disabled state; R-039/ADR-035 added), **DR-5** (open-toggle mutation trap — deferred PATCH + 3-outcome dialog, Vitest-pinned). **DR-7** (toast/helper-bubble placement — de-congested the toast corner, tip auto-dismiss, greeting copy; toast-die-on-route carved to FU-624), **DR-8** (loading polish — splash rAF-wedge fix, dashboard skeletons, belief-chip/verdict reflow-free fade-in; #26 warm-splash investigated = dev-only), **DR-9 ➗** (shared PageToolbar wrap — 0 h-scroll@375px / no title-collision@1280px, verified; mobile stock-row 2-line names; toolbar-More-collapse + row-icon-overflow + stranded-cards carved to FU-631), **DR-10 closed** (owner saw a 3-way nav mockup, chose leave-as-is), **DR-14 ➗** (new `useDateFormat` date authority sharing `useMoney`'s household locale; all 26 `toLocale*` date sites migrated → AU format not browser-US; first-boot region derivation #48 + theme-split #7b carved to FU-632), **DR-11** (recipe detail now opens as a read view + explicit Edit toggle; #11 "on hand" contradiction fixed; nested-substep read display a minor follow-up). Remaining DR units: DR-12 (alerts order + calendars), DR-13 (history grouping), DR-15 (micro-motion), DR-16 (onboarding activation — owner call). **A brand-secondary rethink spun out as FU-621** (owner: secondary "feels off" + it's invisible as text on dark themes — wants a visual options board, logged FU-622). [FU-578](DORA_FOLLOWUPS.md)
+4. **Products-overlay Phase-F verify + hard-delete call.** Product surfaces need a running-app walk with real data; L197 hard-delete is still an undecided design call and L205/206 bulk-select is unbuilt — the runbook's Phase-F blocker. [FU-214](DORA_FOLLOWUPS.md)
+5. **⭐ Verify the champion sequence in-browser.** Four surfaces stacked and untested on this dev box — P8-07 Zero-Input Pantry, P8-08 Kitchen health, P8-09 Memory reports, plus P8-10 native Android (APK build + device walk). Pairs with the queued Settings-rework `DORA_VERIFY.md` sections.
+6. **Open-source release readiness.** README/showcase + GitHub Releases process + Sponsors link — the Phase-4 gate to publishing publicly; needs your call on scope/timing. [FU-406](DORA_FOLLOWUPS.md)
+7. **Stand up donation + OSS infrastructure, then swap in-app placeholders.** Owner-external checklist: make repo public, set up Sponsors / Buy-Me-a-Coffee / PayPal.me, then one placeholder-swap pass. [FU-608](DORA_FOLLOWUPS.md)
+8. **Stand up the support channel.** Pick + create the (recommended) public GitHub-issues channel; a one-line config change then lights up Help / error-report / DoraBot. Pairs with FU-406/608. [FU-557](DORA_FOLLOWUPS.md)
+9. **Cross-cutting feedback bundle — 4 items still open.** Final QA regression doc, UI-polish/uniqueness pass, cross-user push notifications, general UI consistency — mostly Phase-4 gates needing your steer on when. [FU-363](DORA_FOLLOWUPS.md)
+10. **Real-device mobile / PWA field test.** A hands-on device pass; natural to fold into the P8-10 native verify. [FU-389](DORA_FOLLOWUPS.md)
+11. **Late-game holistic theme/colour review.** Eyes-on-app pass across the full theme set (Pesto suspected over-dulled); needs the running app. [FU-010](DORA_FOLLOWUPS.md)
+12. **App-wide colour-usage assessment** (primary vs secondary/accent/info). Needs eyes-on-app judgement, not a code walk. [FU-224](DORA_FOLLOWUPS.md)
+13. **Ops / CI / observability (Phase 4).** Deliberately-disabled CI, backups, staging still unplanned — and CI must not be silently re-enabled; a Phase-4 decision that also unblocks FU-520 (Postgres CI) and FU-404. [FU-405](DORA_FOLLOWUPS.md)
 
 **Lower-priority / trigger-gated** (listed for completeness, not urgent):
 FU-520 (Postgres CI — waits on FU-405), FU-404 (compliance — activates
@@ -153,8 +161,8 @@ Investigations: ✅ closed-actioned · 🟡 open · 🔵 informational · 🕸 s
 
 1. **✅ Security thread closed.** `AUTH_ASSISTANT_SECURITY_FINDINGS` is now a triaged standing register — the HIGH CSRF + MEDIUM email-change were fixed under FU-197 (2026-06-30); the 8 residual Medium/Low findings went to FU-515 (resolved); the orphan audit-follow-up FU-447 was reconciled + closed. A.5/A.6/A.7 are accepted risks (A.6 → Phase-4). Nothing open.
 2. **🕸 Stale "no code yet" / "designed-not-built" headers on ~15 shipped docs (FU-445).** Bodies are accurate records; only the top status line lies (e.g. IMPL_PLAN_ALERTS, IMPL_PLAN_MEAL_RECONCILE). Judge by this register, not the header.
-3. **🕸 `docs/00_DOC_GRAPH.md` is a retired stub (FU-428).** Superseded by this doc + the CLAUDE.md anti-drift rule.
-4. **Backlog right-sized.** The old dashboard cited "~60 open items"; the ledger actually holds **17**. Most of the prior attention list had long since moved to `_RESOLVED`.
+4. **🕸 `docs/00_DOC_GRAPH.md` is a retired stub (FU-428).** Superseded by this doc + the CLAUDE.md anti-drift rule.
+5. **Backlog right-sized.** The old dashboard cited "~60 open items"; the ledger actually holds **17**. Most of the prior attention list had long since moved to `_RESOLVED`.
 
 ## 01_charter — governance (6)
 
@@ -203,7 +211,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 
 | Doc | Type | State | Purpose | Evidence |
 |---|---|---|---|---|
-| DESIGN_REMEDIATION_PLAN | Design backlog | 🟡 active | Action the 2026-07-18 UX/design audit (DR-1…16) | DR-1/1b/2/3/4/5/6/8/10 done (10=owner leave-as-is), DR-7 ➗ (FU-624), DR-9 ➗ (FU-631), DR-14 ➗ (FU-632); remaining: DR-11/12/13/15/16 redesigns |
+| DESIGN_REMEDIATION_PLAN | Design backlog | 🟡 active | Action the 2026-07-18 UX/design audit (DR-1…16) | DR-1/1b/2/3/4/5/6/8/10/11 done (10=owner leave-as-is), DR-7 ➗ (FU-624), DR-9 ➗ (FU-631), DR-14 ➗ (FU-632); remaining: DR-12/13/15/16 |
 | DORA_ASSISTANT_ARCHITECTURE_PROPOSAL | Proposal | ➗ carve-outs | Unify assistant capability model + LLM config | §2.2 registry deliberately not built; §7 multi-provider shipped |
 | IMPL_PLAN_ALERTS | Impl plan | ✅ done | Alerts control-centre (C-9) | Digest+push+prefs shipped; header stale |
 | IMPL_PLAN_AUTH_SHELL | Impl plan | ✅ done | Extract shared AuthShell + AuthButton (C-19) | `AuthShell.vue`/`AuthButton.vue` exist |

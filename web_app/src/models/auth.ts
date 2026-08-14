@@ -86,10 +86,9 @@ export type AuthenticatedUser = {
     // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;
-    // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
-    // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
-    // the composable layers this with install `features.nutrition`.
-    nutrition_mode: 'off' | 'simple' | 'complex';
+    // `nutrition_mode` removed (2026-08-14) — nutrition is install-wide.
+    // Read it with `useNutritionMode()`, which sources it from
+    // /api/health `features.nutrition_mode`.
     // C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
     // Defaults true. Use `useImagePrefs()` to read + write. FU-508
     // dropped the stock-image companion.

@@ -51,6 +51,7 @@
             <!-- L289 — the name is its own clearly-editable field (matching
                  the stock-item screen), not a heading masquerading as one. -->
             <q-input
+                v-if="editing"
                 v-model="form.name"
                 outlined
                 dense
@@ -60,6 +61,9 @@
                 :error-message="nameError ?? undefined"
                 @update:model-value="onNameInput"
             />
+            <!-- DR-11 (D-015): in the read view the name is the page title, not
+                 a field masquerading as a heading. -->
+            <h1 v-else class="recipe-read__title q-mb-md">{{ form.name || 'Untitled recipe' }}</h1>
 
             <!-- L308 — actions across the top (sticky), never stranded at the
                  bottom on mobile. Mark cooked is the prominent action and sits
@@ -91,13 +95,31 @@
                     @click="onPrint"
                 />
                 <q-space />
+                <!-- DR-11 (D-015): explicit read/edit toggle. Read mode shows
+                     Edit; edit mode shows Save + Done (Done just collapses the
+                     editor — Save is the persistence action). -->
                 <BaseButton
+                    v-if="!editing"
+                    variant="primary"
+                    :icon="ICONS.edit"
+                    label="Edit"
+                    @click="editing = true"
+                />
+                <BaseButton
+                    v-if="editing"
                     variant="primary"
                     :icon="ICONS.save"
                     label="Save"
                     :disable="!isDirty"
                     :loading="saving"
                     @click="onSave"
+                />
+                <BaseButton
+                    v-if="editing"
+                    variant="ghost"
+                    :icon="ICONS.check"
+                    label="Done"
+                    @click="editing = false"
                 />
                 <BaseButton variant="icon" :icon="ICONS.more_vert">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
@@ -130,8 +152,131 @@
             <div class="row q-col-gutter-lg">
                 <!-- â”€â”€ Main editor column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
                 <div class="col-12 col-md-8">
+                    <!-- ── DR-11 (D-015) read view ─────────────────────────
+                         Default reading surface. Renders the same `form` model
+                         the editor writes, so it can't drift; the Edit toggle
+                         swaps to the cards below. "Available meals" (a status +
+                         stepper action) stays visible in both modes. -->
+                    <div v-if="!editing" class="recipe-read">
+                        <q-img
+                            v-if="imagePreviewUrl"
+                            :src="imagePreviewUrl"
+                            :ratio="16 / 9"
+                            class="recipe-read__hero q-mb-md"
+                        />
+                        <div class="row items-center q-gutter-sm q-mb-md">
+                            <q-chip v-if="readCuisine" dense square :icon="ICONS.restaurant_menu">{{ readCuisine }}</q-chip>
+                            <q-chip v-if="readCategory" dense square>{{ readCategory }}</q-chip>
+                            <q-chip v-if="form.time_of_day" dense square :icon="ICONS.schedule">{{ form.time_of_day }}</q-chip>
+                            <q-chip v-if="form.difficulty" dense square :icon="ICONS.trending_up">{{ form.difficulty }}</q-chip>
+                            <q-chip v-if="form.servings" dense square :icon="ICONS.restaurant">
+                                {{ form.servings }} {{ form.servings === 1 ? 'serving' : 'servings' }}
+                            </q-chip>
+                            <q-chip v-if="readTimeLabel" dense square :icon="ICONS.timer">{{ readTimeLabel }}</q-chip>
+                            <q-chip v-if="nutritionEnabled && form.kcal" dense square :icon="ICONS.monitor_heart">{{ form.kcal }} kcal</q-chip>
+                        </div>
+                        <div v-if="readTags.length > 0 || readTools.length > 0" class="q-mb-md">
+                            <q-chip v-for="t in readTags" :key="`tag-${t}`" dense outline size="sm">{{ t }}</q-chip>
+                            <q-chip v-for="t in readTools" :key="`tool-${t}`" dense outline size="sm" :icon="ICONS.restaurant">{{ t }}</q-chip>
+                        </div>
+
+                        <q-card flat bordered class="q-mb-md">
+                            <q-card-section>
+                                <div class="text-subtitle1 q-mb-sm">Ingredients</div>
+                                <div v-if="form.ingredients.length === 0" class="dora-text-muted text-caption">
+                                    No ingredients listed.
+                                </div>
+                                <template v-for="(grp, gi) in readIngredientGroups" :key="`ig-${gi}`">
+                                    <div v-if="grp.name" class="text-caption text-weight-medium dora-text-secondary q-mt-sm">
+                                        {{ grp.name }}
+                                    </div>
+                                    <ul class="recipe-read__ings">
+                                        <li
+                                            v-for="(ing, ii) in grp.rows"
+                                            :key="`ig-${gi}-${ii}`"
+                                            :class="{ 'recipe-read__ing--optional': ing.is_optional }"
+                                        >
+                                            <span v-if="ing.quantity" class="text-weight-medium">
+                                                {{ ing.quantity }}{{ ing.unit ? ' ' + ing.unit : '' }}
+                                            </span>
+                                            {{ ingredientDisplayName(ing) }}
+                                            <span v-if="ing.notes" class="dora-text-muted">— {{ ing.notes }}</span>
+                                            <span v-if="ing.is_optional" class="dora-text-muted text-caption q-ml-xs">(optional)</span>
+                                            <q-chip
+                                                v-if="ing.stock_item_id && isMissingItem(ing.stock_item_id)"
+                                                dense
+                                                square
+                                                size="sm"
+                                                color="negative"
+                                                text-color="white"
+                                                class="q-ml-xs"
+                                            >
+                                                Missing
+                                            </q-chip>
+                                        </li>
+                                    </ul>
+                                </template>
+                            </q-card-section>
+                        </q-card>
+
+                        <q-card flat bordered class="q-mb-md">
+                            <q-card-section>
+                                <div class="text-subtitle1 q-mb-sm">Instructions</div>
+                                <ol
+                                    v-if="form.steps_mode === 'structured' && readSteps.length > 0"
+                                    class="recipe-read__steps"
+                                >
+                                    <li v-for="s in readSteps" :key="s.client_id">
+                                        {{ s.text }}
+                                        <div v-if="s.hint" class="text-caption dora-text-muted">{{ s.hint }}</div>
+                                    </li>
+                                </ol>
+                                <ol
+                                    v-else-if="readFreeformLines.length > 0"
+                                    class="recipe-read__steps"
+                                >
+                                    <li v-for="(line, li) in readFreeformLines" :key="`step-${li}`">{{ line }}</li>
+                                </ol>
+                                <div
+                                    v-else-if="form.steps_mode === 'image' && form.step_images.length > 0"
+                                    class="column q-gutter-sm"
+                                >
+                                    <img
+                                        v-for="img in form.step_images"
+                                        :key="img.client_id"
+                                        :src="img.preview_url"
+                                        alt="Recipe step"
+                                        class="recipe-read__stepimg"
+                                    />
+                                </div>
+                                <div v-else class="dora-text-muted text-caption">No instructions yet.</div>
+                            </q-card-section>
+                        </q-card>
+
+                        <q-card v-if="form.source" flat bordered class="q-mb-md">
+                            <q-card-section class="row items-center q-gutter-sm no-wrap">
+                                <q-icon :name="ICONS.link" class="dora-text-muted" />
+                                <a
+                                    v-if="form.source.startsWith('http')"
+                                    :href="form.source"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="text-primary ellipsis"
+                                >{{ form.source }}</a>
+                                <span v-else class="ellipsis">{{ form.source }}</span>
+                            </q-card-section>
+                        </q-card>
+
+                        <q-card v-if="form.notes" flat bordered class="q-mb-md">
+                            <q-card-section>
+                                <div class="text-caption dora-text-muted q-mb-xs">Notes</div>
+                                <div class="recipe-read__notes">{{ form.notes }}</div>
+                            </q-card-section>
+                        </q-card>
+                    </div>
+
                     <!-- recipe image (FU-039). -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section>
                             <ImageUploadField
                                 :preview-url="imagePreviewUrl"
@@ -143,7 +288,7 @@
                         </q-card-section>
                     </q-card>
 
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section>
                             <div class="row q-col-gutter-sm">
                                 <q-select
@@ -289,8 +434,13 @@
                             <div>
                                 <div class="text-subtitle1">Available meals</div>
                                 <div class="text-caption dora-text-muted">
+                                    <!-- DR-11 (FU-578 #11): "cooked" implied a cook event
+                                         and clashed with "Last cooked: Never" — the pool is
+                                         raisable via the stepper without ever cooking. "on
+                                         hand" matches the card title + the tooltip's "in
+                                         your pool" wording, so the two widgets agree. -->
                                     {{ recipe.unallocated_meals }} unallocated
-                                    of {{ recipe.available_meals }} cooked
+                                    of {{ recipe.available_meals }} on hand
                                     <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
                                         <q-tooltip>
                                             Portions of this recipe already in your
@@ -315,7 +465,7 @@
                          behaviour). Rows are assigned to a section via the
                          per-ingredient picker below. Renaming/reordering is
                          in-place; deleting a section unsections its rows. -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section class="row items-center q-pb-sm">
                             <div class="text-subtitle1">
                                 Sections
@@ -376,7 +526,7 @@
                     </q-card>
 
                     <!-- â”€â”€ Ingredients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section class="row items-center q-pb-sm">
                             <div class="text-subtitle1">
                                 Ingredients
@@ -623,7 +773,7 @@
                     </q-card>
 
                     <!-- ── Instructions ─ Structured steps + freeform fallback ─ -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section>
                             <div class="row items-center q-mb-sm">
                                 <div class="text-subtitle1">Instructions</div>
@@ -692,7 +842,7 @@
                     </q-card>
 
                     <!-- ── C-4 Chunk 7 — Source URL (optional) ────────────── -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section>
                             <q-input
                                 v-model="form.source"
@@ -718,7 +868,7 @@
                     </q-card>
 
                     <!-- ── RD-29 — Personal notes (optional) ──────────────── -->
-                    <q-card flat bordered class="q-mb-md">
+                    <q-card v-if="editing" flat bordered class="q-mb-md">
                         <q-card-section>
                             <q-input
                                 v-model="form.notes"
@@ -1734,6 +1884,75 @@
         tools.value.map((t) => ({ label: t.name, value: t.tool_id })),
     );
 
+    // ── DR-11 (D-015): read view state + display derivations ──────────────
+    // The page defaults to a READ view; an explicit Edit toggle reveals the
+    // form (a detail page is never an always-editable form — the cook-mode
+    // surface already proved a reading view is the right shape). These
+    // derivations map the same `form` model + option lists + stock helpers the
+    // editor uses, so read and edit can't drift.
+    const editing = ref(false);
+
+    function labelOf(
+        opts: ReadonlyArray<{ value: string | null; label: string }>,
+        id: string | null | undefined,
+    ): string | null {
+        if (!id) return null;
+        return opts.find((o) => o.value === id)?.label ?? null;
+    }
+    const readCuisine = computed(() => labelOf(cuisineOptions.value, form.cuisine_id));
+    const readCategory = computed(() => labelOf(categoryOptions.value, form.category_id));
+    const readTags = computed(() =>
+        form.dietary_tag_ids
+            .map((id) => labelOf(dietaryTagOptions.value, id))
+            .filter((x): x is string => !!x),
+    );
+    const readTools = computed(() =>
+        form.tool_ids
+            .map((id) => labelOf(toolOptions.value, id))
+            .filter((x): x is string => !!x),
+    );
+    const readTimeLabel = computed(() => {
+        const parts: string[] = [];
+        if (form.prep_time_minutes) parts.push(`${form.prep_time_minutes} min prep`);
+        if (form.cook_time_minutes) parts.push(`${form.cook_time_minutes} min cook`);
+        return parts.join(' · ');
+    });
+    function ingredientDisplayName(ing: typeof form.ingredients[number]): string {
+        if (ing.stock_item_id) {
+            return stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id)?.name
+                ?? '(unknown ingredient)';
+        }
+        return (ing.raw_text ?? '').trim() || '(ingredient)';
+    }
+    // Ingredients grouped by named section (section order), unsectioned last.
+    const readIngredientGroups = computed(() => {
+        const sections = [...form.sections].sort((a, b) => a.sequence - b.sequence);
+        const groups: Array<{ name: string | null; rows: typeof form.ingredients }> = [];
+        for (const sec of sections) {
+            const rows = form.ingredients.filter((i) => i.section_client_id === sec.client_id);
+            if (rows.length > 0) groups.push({ name: sec.name || 'Section', rows });
+        }
+        const known = new Set(sections.map((s) => s.client_id));
+        const loose = form.ingredients.filter(
+            (i) => !i.section_client_id || !known.has(i.section_client_id),
+        );
+        if (loose.length > 0) groups.push({ name: null, rows: loose });
+        return groups;
+    });
+    // Structured steps for the read list: top-level (no parent), by sequence.
+    const readSteps = computed(() =>
+        [...form.steps]
+            .filter((s) => !s.parent_client_id)
+            .sort((a, b) => a.sequence - b.sequence),
+    );
+    // Freeform instructions → non-empty lines for an ordered read list.
+    const readFreeformLines = computed(() =>
+        (form.instructions ?? '')
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0),
+    );
+
     // What the image field shows: a freshly-picked data URL while
     // editing, otherwise the saved image via the endpoint (cache-busted),
     // else nothing.
@@ -2341,5 +2560,41 @@
         z-index: 2;
         background: var(--surface-page);
         padding: 6px 0;
+    }
+
+    /* ── DR-11 (D-015) read view ──────────────────────────────────────── */
+    .recipe-read__title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin: 0;
+    }
+    .recipe-read__hero {
+        border-radius: var(--radius-lg, 12px);
+        max-height: 320px;
+    }
+    .recipe-read__ings {
+        margin: 0;
+        padding-left: var(--space-5, 20px);
+        line-height: 1.6;
+    }
+    .recipe-read__ing--optional {
+        color: var(--text-secondary);
+    }
+    .recipe-read__steps {
+        margin: 0;
+        padding-left: var(--space-5, 20px);
+        line-height: 1.6;
+    }
+    .recipe-read__steps li {
+        margin-bottom: var(--space-2, 8px);
+    }
+    .recipe-read__stepimg {
+        max-width: 100%;
+        border-radius: var(--radius-md, 8px);
+    }
+    .recipe-read__notes {
+        white-space: pre-wrap;
+        line-height: 1.5;
     }
 </style>

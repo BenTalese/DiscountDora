@@ -18,6 +18,7 @@ from pathlib import Path
 
 from flask import jsonify
 
+from dora_api.domain.entities.app_setting import NUTRITION_MODE_OFF
 from dora_api.features.help.version_info import CURRENT_VERSION
 from dora_api.features.routers import HEALTH_ROUTER
 
@@ -124,11 +125,13 @@ def _feature_flags(setting) -> dict[str, bool]:
         # true iff product data has been ingested — not an admin/user
         # flag. Conservative default false; derived from Product rows below.
         "products": False,
-        # C-cross Chunk 3 — derived capability. True when an admin has
-        # configured a nutrition source (reserved seam — the integration
-        # itself ships later). The per-user Settings page gates the
-        # `complex` toggle on this flag; never leaks the source string.
-        "nutrition_complex_available": False,
+        # Nutrition depth, install-wide. `nutrition` above stays the plain
+        # "on at all" gate; `nutrition_mode` carries the depth; and
+        # `nutrition_complex_usable` is derived from sources that are actually
+        # installed (see features/nutrition/sources.py) — never from a config
+        # string, which is what the retired `nutrition_complex_available` did.
+        "nutrition_mode": NUTRITION_MODE_OFF,
+        "nutrition_complex_usable": False,
     }
     # AppSettings drives every install-wide flag at runtime. Wrapped so a
     # DB hiccup doesn't take the health probe down with it.
@@ -141,14 +144,20 @@ def _feature_flags(setting) -> dict[str, bool]:
             flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
             flags["meal_planning"] = bool(setting.meal_planning_enabled)
             flags["money"] = bool(setting.money_enabled)
-            flags["nutrition"] = bool(setting.nutrition_enabled)
             flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
             flags["deals_email"] = bool(setting.deals_email_enabled)
-            # C-cross Chunk 3 — derived from the seam value; never publish the
-            # source string itself.
-            flags["nutrition_complex_available"] = bool(
-                (setting.nutrition_db_source or "").strip()
+            # Nutrition is install-wide now (2026-08-14). `nutrition` keeps its
+            # boolean meaning for the many gates that only ask "is it on at
+            # all"; `nutrition_mode` carries the depth for the surfaces that
+            # differ between simple and complex. `nutrition_complex_usable` is
+            # derived from real installed sources, never from a config string.
+            from dora_api.features.nutrition.sources import (
+                complex_is_usable, nutrition_mode,
             )
+            _Mode = nutrition_mode(setting)
+            flags["nutrition"] = _Mode != NUTRITION_MODE_OFF
+            flags["nutrition_mode"] = _Mode
+            flags["nutrition_complex_usable"] = complex_is_usable(repo, setting)
         # products is on iff product data exists (data-presence gate),
         # not an AppSetting flag. R-003: one server-derived fact via /health.
         from dora_api.domain.entities.product import Product

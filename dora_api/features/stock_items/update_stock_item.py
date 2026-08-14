@@ -59,6 +59,13 @@ class UpdateStockItemRequest(BaseModel):
     # clear-vs-unset pattern as ShoppingListLine fields).
     usual_store_id: UUID | None = None
     clear_usual_store: bool = False
+    # Nutrition complex-mode link (the food whose per-100g values describe this
+    # item). Same clear-vs-unset shape as `usual_store_id` above: send a UUID to
+    # bind, omit to leave alone, `clear_nutrition_food=true` to unlink. Only
+    # ever set from the picker's explicit confirm — a name match is a
+    # suggestion, never a saved link (P12 No-invent).
+    nutrition_food_id: UUID | None = None
+    clear_nutrition_food: bool = False
     # Explicit clear flags for location and group — the relationships are
     # mapped `lazy="noload"`, so assigning the relationship-side to None
     # is a silent no-op (the FK column never goes dirty). The clear-flag
@@ -240,6 +247,15 @@ class UpdateStockItemHandler:
             _StockItem.usual_store_id = None
         elif "usual_store_id" in _SetFields and request.usual_store_id is not None:
             _StockItem.usual_store_id = request.usual_store_id
+
+        # Nutrition food link — same clear-flag pattern, and the same reasoning
+        # about not re-validating the target: the FK is SET NULL ondelete, so a
+        # dataset re-import that drops the row leaves the item unlinked rather
+        # than broken.
+        if request.clear_nutrition_food:
+            _StockItem.nutrition_food_id = None
+        elif "nutrition_food_id" in _SetFields and request.nutrition_food_id is not None:
+            _StockItem.nutrition_food_id = request.nutrition_food_id
 
         # stock_group: nullable FK with the same lazy="noload" trap — see
         # the comment on stock_location above. Explicit `clear_stock_group`

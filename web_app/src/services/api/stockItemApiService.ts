@@ -236,6 +236,11 @@ export type UpdateStockItemCommand = {
      *  doesn't actually persist. The SPA sends these from the picker's X. */
     clear_stock_location?: boolean;
     clear_stock_group?: boolean;
+    /** Nutrition complex-mode — the catalogue food whose per-100g values
+     *  describe this item. UUID to bind; `clear_nutrition_food` to unlink.
+     *  Only ever sent from the picker's explicit confirm. */
+    nutrition_food_id?: string;
+    clear_nutrition_food?: boolean;
     /** P8-07 / FU-449 — consumption context. When a level DROP is the result
      *  of cooking (or another depletion), the server records a
      *  ConsumptionEvent so run-out prediction + the belief blend cooking with

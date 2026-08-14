@@ -21,7 +21,8 @@ from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
     StockLocation)
-from dora_api.domain.entities.user import NUTRITION_MODE_SIMPLE, User
+from dora_api.domain.entities.app_setting import NUTRITION_MODE_SIMPLE
+from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.infrastructure.auth_helpers import hash_password
 from dora_api.persistence.seed_builders import SeedBuilders
@@ -35,10 +36,10 @@ def seed_dev_data(
 
     ``money_on`` (FU-592 — verify tooling) boots the dataset with the money +
     nutrition features already enabled: the install money flag
-    (``AppSetting.money_enabled``) plus a household grocery budget, and the dev
-    user's nutrition opt-in (``nutrition_mode="simple"``; nutrition still has a
-    per-user mode). Money is a single install-wide concern now (no per-user
-    opt-in). Those surfaces (Chunk 9 cost/kcal cards, buy-verdict, budget) read
+    (``AppSetting.money_enabled``) plus a household grocery budget, and
+    ``AppSetting.nutrition_mode = "simple"``. Both are single install-wide
+    concerns now (no per-user opt-in for either). Those surfaces (Chunk 9
+    cost/kcal cards, buy-verdict, budget) read
     their gating layer once at cold mount, so an agent verifying them in the
     hidden browser pane needs them on from boot — flipping
     mid-session doesn't re-render. Off by default (env ``DORA_SEED_MONEY_ON``; the
@@ -966,13 +967,13 @@ def seed_dev_data(
 
     # FU-592 — verify-seed knob: turn money + nutrition on so the flag-gated UI
     # (Chunk 9 cost/kcal cards, buy-verdict, budget) is agent-verifiable in a
-    # cold-mount browser pane, where mid-session flips don't re-render. Money is
-    # install-wide now (flag + household budget); nutrition keeps a per-user mode.
+    # cold-mount browser pane, where mid-session flips don't re-render. Both are
+    # install-wide now; nutrition seeds to `simple` (the depth that needs no
+    # dataset, so a fresh verify box has a working nutrition surface offline).
     if money_on:
-        dev_user.nutrition_mode = NUTRITION_MODE_SIMPLE
         app_setting = get_or_create_app_setting(repo)
         app_setting.money_enabled = True
-        app_setting.nutrition_enabled = True
+        app_setting.nutrition_mode = NUTRITION_MODE_SIMPLE
         app_setting.budget_amount = 200.0
         app_setting.budget_period = "weekly"
         repo.save_changes()

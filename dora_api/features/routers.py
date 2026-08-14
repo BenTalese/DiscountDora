@@ -47,6 +47,10 @@ WASTE_ROUTER = Blueprint("WASTE_ROUTER", __name__, url_prefix="/api/waste")
 SUGGESTIONS_ROUTER = Blueprint("SUGGESTIONS_ROUTER", __name__, url_prefix="/api/suggestions")
 TTS_ROUTER = Blueprint("TTS_ROUTER", __name__, url_prefix="/api/tts")
 
+# Nutrition complex-mode: source status, dataset import, and the unified
+# food lookup that the stock-item picker searches.
+NUTRITION_ROUTER = Blueprint("NUTRITION_ROUTER", __name__, url_prefix="/api/nutrition")
+
 # admin CRUD over IngestionSource (session-cookie, admin-only).
 INGESTION_SOURCE_ROUTER = Blueprint(
     "INGESTION_SOURCE_ROUTER", __name__, url_prefix="/api/ingestion-sources"

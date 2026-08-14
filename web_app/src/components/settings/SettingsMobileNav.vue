@@ -53,6 +53,10 @@
         label: string;
         icon?: string;
         items: SettingsNavEntry[];
+        // Desktop-only: suppresses the sidebar eyebrow. The mobile strip still
+        // shows the group as a tab — it needs one per group to reach the
+        // destinations underneath.
+        headerless?: boolean;
     }
 
     const props = defineProps<{ groups: SettingsNavGroupDef[] }>();

@@ -8,7 +8,8 @@
         <header class="settings-shell__header">
             <!-- FU-346: for admins, the h1 becomes a two-mode segmented
                  toggle. "Settings" holds the personal groups (Account,
-                 Kitchen setup); "Admin" holds the admin sections. The
+                 Preferences, Kitchen setup, About); "Admin" holds the
+                 admin sections. The
                  sidebar underneath is filtered to only the active mode's
                  groups — Admin is a peer mode, not a buried third group.
                  Non-admins see the plain h1. Sign-out is the header's
@@ -69,6 +70,7 @@
                     :label="group.label"
                     :items="group.items"
                     :icon="group.icon"
+                    :headerless="group.headerless"
                 />
             </aside>
 
@@ -95,7 +97,7 @@
     import { computed, nextTick, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
-    // IMPL_PLAN_SETTINGS_REBUILD §2.1 — three top-level groups, Account first.
+    // IMPL_PLAN_SETTINGS_REBUILD §2.1 — top-level groups, Account first.
     // §6.5 (user pick): nested groupings render as an indented sub-list under a
     // non-clickable sub-header (Recipe taxonomies under Kitchen setup; System
     // under Admin). Captions dropped — label + icon only.
@@ -103,13 +105,24 @@
     // top tab strip). Both navs read the SAME `navGroups` definition (R-003 —
     // one source for the IA), so they can't drift.
 
+    // Owner call 2026-08-14 — "Account" used to be a catch-all holding your
+    // identity, five unrelated preference pages, and About (which isn't
+    // personal at all). Account is its own destination now, the preferences
+    // sit under their own header, and About is a standalone entry at the
+    // bottom. Both standalone groups are `headerless` — they're single
+    // destinations, not categories.
     const accountSections: SettingsNavEntry[] = [
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
+    ];
+
+    const preferenceSections: SettingsNavEntry[] = [
         { path: '/settings/preferences', label: 'Appearance', icon: ICONS.tune },
         { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
         { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
-        { path: '/settings/nutrition', label: 'Nutrition', icon: ICONS.restaurant },
         { path: '/settings/assistant', label: 'Assistant', icon: ICONS.smart_toy },
+    ];
+
+    const aboutSections: SettingsNavEntry[] = [
         { path: '/settings/about', label: 'About', icon: ICONS.info },
     ];
 
@@ -172,6 +185,7 @@
             { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
             { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
             { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
+            { path: '/settings/admin/system/nutrition', label: 'Nutrition', icon: ICONS.monitor_heart },
             { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
         ];
         items.push(
@@ -270,8 +284,10 @@
             return [{ label: 'Admin · global', items: adminSections.value, icon: ICONS.shield }];
         }
         return [
-            { label: 'Account', items: accountSections },
+            { label: 'Account', items: accountSections, headerless: true },
+            { label: 'Preferences', items: preferenceSections },
             { label: 'Kitchen setup', items: kitchenSetupSections.value },
+            { label: 'About', items: aboutSections, headerless: true },
         ];
     });
 

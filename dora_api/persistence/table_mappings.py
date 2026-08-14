@@ -27,6 +27,8 @@ from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.price_alert import PriceAlert
 from dora_api.domain.entities.preferred_buy import PreferredBuy
+from dora_api.domain.entities.nutrition_food import NutritionFood
+from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.barcode import Barcode
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
@@ -98,13 +100,18 @@ def configure_mappings(db: SQLAlchemy):
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
         Column("money_enabled", Boolean, nullable=False, server_default=false()),
-        Column("nutrition_enabled", Boolean, nullable=False, server_default=false()),
         Column("companion_ingestion_enabled", Boolean, nullable=False, server_default=false()),
         Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
         # `products_enabled` column dropped (migration f1a2b3c4d5e6) —
         # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).
-        # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
-        Column("nutrition_db_source", String(255), nullable=False, server_default=""),
+        # Nutrition, install-wide (owner call 2026-08-14). Replaces the
+        # `nutrition_enabled` bool + the per-user `User.nutrition_mode`, and
+        # retires the dead `nutrition_db_source` seam — complex-mode
+        # availability is derived from what's actually installed/configured
+        # now, not asserted by a magic string.
+        Column("nutrition_mode", String(10), nullable=False, server_default="off"),
+        Column("nutrition_usda_api_key", String(255), nullable=False, server_default=""),
+        Column("nutrition_off_lookup_enabled", Boolean, nullable=False, server_default=true()),
         # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
         Column("timezone", String(64), nullable=False, server_default="UTC"),
         # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
@@ -267,6 +274,48 @@ def configure_mappings(db: SQLAlchemy):
         # usual store hint. SET NULL on store delete so the item
         # survives the store going away (R-005 referential safety).
         Column("usual_store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
+        # Nutrition complex-mode link. SET NULL so dropping/re-importing a
+        # dataset can't cascade into the pantry (R-005 referential safety).
+        Column(
+            "nutrition_food_id", UUIDType,
+            ForeignKey("NutritionFood.id", ondelete="SET NULL"), nullable=True,
+        ),
+    )
+
+    # Nutrition catalogue — a cache of foods from the configured sources.
+    # `(source, source_ref)` is unique so re-importing a dataset updates rows
+    # in place rather than duplicating the catalogue. `name` and `barcode` are
+    # indexed because every lookup keystroke hits one or the other.
+    nutrition_food_table = Table(
+        "NutritionFood", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("source", String(32), nullable=False, index=True),
+        Column("source_ref", String(64), nullable=False),
+        Column("name", String(512), nullable=False, index=True),
+        Column("brand", String(255), nullable=True),
+        Column("barcode", String(64), nullable=True, index=True),
+        Column("kcal_per_100g", Float, nullable=True),
+        Column("protein_g_per_100g", Float, nullable=True),
+        Column("carbs_g_per_100g", Float, nullable=True),
+        Column("fat_g_per_100g", Float, nullable=True),
+        Column("imported_at", DateTime(timezone=True), nullable=True),
+        UniqueConstraint("source", "source_ref", name="uq_nutrition_food_source_ref"),
+    )
+
+    # Household measures → gram weights, from USDA's `food_portion`. This is
+    # what lets a recipe's "2 cups flour" become grams; without a matching row
+    # an ingredient is reported unconvertible rather than guessed.
+    nutrition_portion_table = Table(
+        "NutritionPortion", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column(
+            "nutrition_food_id", UUIDType,
+            ForeignKey("NutritionFood.id", ondelete="CASCADE"),
+            nullable=False, index=True,
+        ),
+        Column("amount", Float, nullable=False),
+        Column("measure", String(255), nullable=False),
+        Column("gram_weight", Float, nullable=False),
     )
 
     # hybrid `Barcode` table: real EANs can attach to a Product
@@ -994,7 +1043,11 @@ def configure_mappings(db: SQLAlchemy):
         # `_KNOWN_NULLABILITY_DRIFT` / `_KNOWN_UNIQUE_DRIFT` so it can't grow.
         Column("username", String(255), nullable=False, unique=True),
         Column("is_admin", Boolean, nullable=False, default=False, server_default=false()),
-        Column("deals_email_enabled", Boolean, nullable=False, server_default=true()),
+        # Opt-in, matching `alerts_email_enabled` — a fresh install has no SMTP,
+        # so nobody should land pre-subscribed to mail the server can't send.
+        # (Was `true()` to carry pre-existing subscribers over the column's
+        # introducing migration; pre-release, that no longer applies.)
+        Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
         Column("deals_email_compact", Boolean, nullable=False, server_default=false()),
         Column("theme", String(20), nullable=False, server_default="system"),
         Column("font_family", String(20), nullable=False, server_default="default"),
@@ -1023,8 +1076,8 @@ def configure_mappings(db: SQLAlchemy):
         # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
-        # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
-        Column("nutrition_mode", String(16), nullable=False, server_default="off"),
+        # `nutrition_mode` moved to AppSetting (2026-08-14) — install-wide,
+        # see the nutrition block in the AppSetting table above.
         # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
         # Default True. FU-508 dropped the stock-image companion column.
         Column("show_recipe_images", Boolean, nullable=False, server_default=true()),
@@ -1306,6 +1359,11 @@ def configure_mappings(db: SQLAlchemy):
         # usual_store_id is a real domain attribute on the entity,
         # mapped publicly so it round-trips through generic CRUD.
         "usual_store_id": stock_item_table.c.usual_store_id,
+        # Plain UUID like usual_store_id — no relationship object. The
+        # nutrition rollup batch-loads foods by id rather than walking a
+        # per-item relationship (R-032: nothing reads a noload relationship
+        # off an un-included load).
+        "nutrition_food_id": stock_item_table.c.nutrition_food_id,
         "stock_group": relationship(StockGroup, lazy="noload"),
         "stock_level": relationship(StockLevel, lazy="noload"),
         "stock_location": relationship(StockLocation, lazy="noload"),
@@ -1313,6 +1371,17 @@ def configure_mappings(db: SQLAlchemy):
         # Substitutes (StockItemSubstitute) are a self-referential m2m accessed
         # via the association table directly — no relationship is mapped because
         # the generic query builder can't self-join StockItem to itself.
+    })
+
+    _mapper_registry.map_imperatively(NutritionFood, nutrition_food_table, properties={
+        "_id_col": nutrition_food_table.c.id,
+        "id": nutrition_food_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(NutritionPortion, nutrition_portion_table, properties={
+        "_id_col": nutrition_portion_table.c.id,
+        "id": nutrition_portion_table.c.id,
+        "nutrition_food_id": nutrition_portion_table.c.nutrition_food_id,
     })
 
     _mapper_registry.map_imperatively(StockLevelChange, stock_level_change_table, properties={

@@ -88,8 +88,12 @@ def test__get_app_settings__CoreFields__PresentAndTyped(api):
     body = _get_settings()
 
     for flag in ("scanning_enabled", "meal_planning_enabled",
-                 "money_enabled", "nutrition_enabled", "auto_drain_past_meals"):
+                 "money_enabled", "nutrition_off_lookup_enabled",
+                 "auto_drain_past_meals"):
         assert isinstance(body[flag], bool), flag
+    # Nutrition is a three-state install-wide mode, not a bool (2026-08-14 —
+    # the old `nutrition_enabled` flag + per-user mode collapsed into this).
+    assert body["nutrition_mode"] in {"off", "simple", "complex"}
     assert isinstance(body["expiring_soon_window_days"], int)
     assert body["auto_add_mode"] in {"off", "essential_only", "all"}
     assert body["stocktake_default_cadence_band"] in {"weekly", "fortnightly", "monthly"}

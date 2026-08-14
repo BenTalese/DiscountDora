@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.app_setting import NUTRITION_MODE_VALUES
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import is_valid_timezone
 from dora_api.features.app_settings.get_app_settings import AppSettingsDto, _to_dto
@@ -30,13 +31,13 @@ class UpdateAppSettingsRequest(BaseModel):
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool | None = None
     money_enabled: bool | None = None
-    nutrition_enabled: bool | None = None
     companion_ingestion_enabled: bool | None = None
     deals_email_enabled: bool | None = None
-    # C-cross Chunk 3 — reserved seam for nutrition complex-mode. Empty
-    # string is allowed (and is the default-seam state); the actual
-    # source schema lands when the complex-mode integration ships.
-    nutrition_db_source: str | None = Field(default=None, max_length=255)
+    # Nutrition, install-wide. `nutrition_mode` is validated against
+    # NUTRITION_MODE_VALUES below (R-010 carve-out — one boundary point).
+    nutrition_mode: str | None = Field(default=None, max_length=10)
+    nutrition_usda_api_key: str | None = Field(default=None, max_length=255)
+    nutrition_off_lookup_enabled: bool | None = None
     # Meal Plans C-2.K — household IANA timezone (validated below).
     timezone: str | None = Field(default=None, max_length=64)
     # Alerts C-9.2 — household-wide expiring-soon window (bounds double as
@@ -137,18 +138,27 @@ class UpdateAppSettingsHandler:
         for _Attr in (
             "meal_planning_enabled",
             "money_enabled",
-            "nutrition_enabled",
             "companion_ingestion_enabled",
             "deals_email_enabled",
+            "nutrition_off_lookup_enabled",
         ):
             if _Attr in set_fields:
                 value = getattr(request, _Attr)
                 if value is not None:
                     setattr(setting, _Attr, value)
-        # C-cross Chunk 3 — nutrition source seam. Free-form for now;
-        # later complex-mode work parses it. Strip on save.
-        if "nutrition_db_source" in set_fields:
-            setting.nutrition_db_source = (request.nutrition_db_source or "").strip()
+
+        # Nutrition depth. R-010 carve-out: the one place the closed set is
+        # checked. Deliberately NOT gated on a source being available —
+        # `complex` with nothing installed yet is a legitimate intermediate
+        # state (you pick the mode, then the page offers you the download),
+        # and the lookup/rollup degrade honestly when no source answers.
+        if "nutrition_mode" in set_fields and request.nutrition_mode is not None:
+            _Mode = request.nutrition_mode.strip()
+            if _Mode not in NUTRITION_MODE_VALUES:
+                return None, f"Invalid nutrition mode '{_Mode}'."
+            setting.nutrition_mode = _Mode
+        if "nutrition_usda_api_key" in set_fields:
+            setting.nutrition_usda_api_key = (request.nutrition_usda_api_key or "").strip()
 
         # Meal Plans C-2.K — household timezone. Validate against the IANA
         # database so an unparseable zone can't silently degrade the "today"

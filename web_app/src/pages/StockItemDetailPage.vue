@@ -281,6 +281,60 @@
                                     </q-item-section>
                                 </q-item>
 
+                                <!-- Nutrition complex-mode only. In simple mode
+                                     kcal is typed per-recipe and stock items
+                                     have nothing to link, so the row is hidden
+                                     rather than shown disabled (R-029). -->
+                                <q-item v-if="nutritionIsComplex">
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Nutrition</q-item-section>
+                                    <q-item-section>
+                                        <div v-if="detail.nutrition_food" class="row items-center q-gutter-xs">
+                                            <div class="column items-start" style="min-width: 0">
+                                                <span class="dora-text-primary ellipsis">
+                                                    {{ detail.nutrition_food.name }}
+                                                </span>
+                                                <span class="dora-text-muted" style="font-size: 0.75rem">
+                                                    <template v-if="detail.nutrition_food.kcal_per_100g !== null">
+                                                        {{ Math.round(detail.nutrition_food.kcal_per_100g) }} kcal / 100g ·
+                                                    </template>
+                                                    {{ detail.nutrition_food.source_label }}
+                                                </span>
+                                            </div>
+                                            <q-space />
+                                            <BaseButton
+                                                variant="ghost"
+                                                dense
+                                                size="sm"
+                                                label="Change"
+                                                :disable="busy"
+                                                @click="foodPickerOpen = true"
+                                            />
+                                            <BaseButton
+                                                variant="danger-icon"
+                                                size="sm"
+                                                :icon="ICONS.close"
+                                                :disable="busy"
+                                                aria-label="Unlink food"
+                                                @click="onUnlinkFood"
+                                            >
+                                                <q-tooltip>Unlink</q-tooltip>
+                                            </BaseButton>
+                                        </div>
+                                        <div v-else class="row items-center q-gutter-xs">
+                                            <span class="dora-text-muted">Not linked</span>
+                                            <q-space />
+                                            <BaseButton
+                                                variant="ghost"
+                                                dense
+                                                size="sm"
+                                                label="Find a food"
+                                                :disable="busy"
+                                                @click="foodPickerOpen = true"
+                                            />
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
                                 <q-item>
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Expiry</q-item-section>
                                     <q-item-section>
@@ -1025,6 +1079,13 @@
                     </q-list>
                 </q-card-section>
         </BaseDialog>
+
+        <NutritionFoodPicker
+            v-if="nutritionIsComplex && detail"
+            v-model="foodPickerOpen"
+            :item-name="detail.name"
+            @picked="onFoodPicked"
+        />
     </component>
 </template>
 
@@ -1046,6 +1107,8 @@
     import { storeToRefs } from 'pinia';
     import { QPage, useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
+    import NutritionFoodPicker from 'src/components/stock/NutritionFoodPicker.vue';
+    import { useNutritionMode } from 'src/composables/useNutritionMode';
     import RecipeCard from 'src/components/RecipeCard.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
@@ -1150,6 +1213,10 @@
     // page just consumes the flag.
     const { products: productsEnabled } = useFeatureFlags();
     const { moneyEnabled } = useMoneyEnabled();
+    // Only complex mode gives stock items a food to link; simple mode's kcal
+    // is typed on the recipe, so the row is hidden entirely below that (R-029).
+    const { isComplex: nutritionIsComplex } = useNutritionMode();
+    const foodPickerOpen = ref(false);
     const showQrOpen = ref(false);
     const qrSrc = computed(() => {
         const baseUrl = resolveBaseURL();
@@ -1295,6 +1362,9 @@
         // relationship-only null assignment doesn't dirty the FK column.
         clear_stock_location?: boolean;
         clear_stock_group?: boolean;
+        // Nutrition complex-mode link, same clear-vs-unset shape as the store.
+        nutrition_food_id?: string;
+        clear_nutrition_food?: boolean;
     };
     async function saveField(patch: FieldPatch) {
         if (!detail.value) return;
@@ -1361,6 +1431,16 @@
     }
     async function onToggleFlagged(value: boolean) {
         await saveField({ is_essential: value });
+    }
+
+    // Nutrition complex-mode link. The picker has already persisted the food
+    // (resolving a live suggestion server-side if needed) and hands back its
+    // id; all that's left here is binding it to this item.
+    async function onFoodPicked(foodId: string) {
+        await saveField({ nutrition_food_id: foodId });
+    }
+    async function onUnlinkFood() {
+        await saveField({ clear_nutrition_food: true });
     }
     function shiftExpiry(days: number) {
         // From the current expiry if set, otherwise from today. Date math in

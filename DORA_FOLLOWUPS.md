@@ -53,6 +53,91 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-635 — Nutrition complex-mode: 1 of 6 build chunks remains (recipe rollup + coverage)
+- **Raised:** 2026-08-14 (owner-directed complex-mode build; reverses the charter's nutrition cut — see `RECONCILED_FINISHING_PLAN.md` §7 decision 3).
+- **Type:** deferred job (in-progress feature, stopped at a clean boundary).
+- **What:** Landed this session — **(1)** nutrition collapsed to one install-wide
+  `AppSetting.nutrition_mode` (per-user mode + the second install bool both gone);
+  the dead `nutrition_db_source` seam retired. **(2)** `NutritionFood` +
+  `NutritionPortion` schema, `StockItem.nutrition_food_id`, migration
+  `b9e3f1a7c4d2`. **(3)** USDA FDC bulk importer (download → parse → replace),
+  parser pytest-pinned 9/9 incl. the kcal-vs-kJ trap.
+  **(4)** `Admin → System → Nutrition` page + `GET /api/nutrition/sources` +
+  `POST /api/nutrition/datasets/import`, verified live.
+  **(5)** unified lookup — `GET /api/nutrition/lookup` fans out across local
+  datasets + OFF + USDA API, barcode-aware, every result badged by source,
+  failed sources reported rather than swallowed; plus
+  `POST /api/nutrition/foods/resolve` which persists a picked live suggestion
+  by re-fetching it server-side (the client sends only source + ref, so it
+  can't write arbitrary numbers). 32 tests (21 unit + 11 e2e), verified live
+  against the real OFF API.
+  **(6)** stock-item link picker — `NutritionFoodPicker.vue` (search-and-confirm
+  dialog, results badged by source, barcode-aware, never auto-matches),
+  `StockItem.nutrition_food_id` bound through the existing update endpoint with
+  the same clear-vs-unset shape as `usual_store_id`, and the linked food echoed
+  on the detail DTO with its source label. 4 more e2e (link / unlink / null
+  default / unrelated-patch-leaves-it-alone).
+  **Still to build:** the recipe per-serving rollup + coverage line.
+- **Why deferred:** stopped at a coherent boundary rather than leaving a
+  half-written surface — everything shipped is green and usable (an admin can
+  set the mode and download a dataset), but no *user-facing* complex surface
+  exists yet, so `complex` currently behaves like `simple` for everyone except
+  the admin page.
+- **Recommended resolution:** now — the feature isn't user-visible until the
+  remaining three chunks land. Design decisions are all settled (owner picks,
+  2026-08-14): per-serving figure + always-visible coverage line; partial
+  totals shown, clearly marked; no reparenting of the amounts problem onto
+  per-100g (it needs the same gram conversion *plus* an unknowable cooking
+  yield — see the worklog entry for the reasoning).
+
+## [OPEN] FU-636 — USDA Foundation dataset URL carries a release date and will eventually 404
+- **Raised:** 2026-08-14 (nutrition complex-mode build).
+- **Type:** finding.
+- **What:** FDC bulk-download filenames embed the release date
+  (`FoodData_Central_foundation_food_csv_2026-04-30.zip`). SR Legacy is frozen
+  so its URL is stable forever, but Foundation ships a couple of times a year,
+  so the built-in default will 404 after the next release.
+- **Why deferred:** handled defensively rather than solved — the import endpoint
+  accepts a `url` override, and a 404 is caught and rewritten to "that release
+  has probably been superseded; paste the current CSV link". No schema column
+  was added for it (R-007).
+- **Recommended resolution:** opportunistic — if it bites, either expose the
+  override in the admin UI (the API already supports it) or scrape the current
+  link from the downloads page at import time.
+
+## [OPEN] FU-634 — `stockLevelDot.spec.ts` fails on 2 assertions (pre-existing, unrelated to locations work)
+- **Raised:** 2026-08-14 (stock-locations settings redesign — hit while running the suite).
+- **Type:** finding.
+- **What:** `npx vitest run` is red: 2 failures in `web_app/test/unit/stockLevelDot.spec.ts`
+  ("falls back to the sunken neutral for out-of-stock and unknown") — the avatar resolves to
+  `bg-negative` where the spec expects `dora-bg-neutral`. Rest of the suite is green
+  (426 passing / 34 files).
+- **Why deferred:** unrelated surface — nothing in this unit touched `StockLevelDot.vue` or
+  its spec (both untouched in the working tree; last commit on them is a3b82644, 2026-07-13).
+  Fixing it blind risks papering over a real D-001 regression: the question is whether
+  out-of-stock is *supposed* to be red now (spec is stale) or neutral (component regressed),
+  and that's a D-001 colour-semantics call, not a test tweak.
+- **Recommended resolution:** now-ish — a red suite masks the next real failure. Decide the
+  D-001 intent first: grey is reserved for *unknown* (D-001), so an out-of-stock level
+  arguably *should* be red and the spec is the stale half.
+
+## [OPEN] FU-633 — Stock locations has no "not stored anywhere" row (items with no location are invisible)
+- **Raised:** 2026-08-14 (stock-locations settings redesign).
+- **Type:** deferred job.
+- **What:** Deleting a location unassigns its items ("the items themselves stay in your
+  stock"), and items can be created without a location — but no surface counts or lists
+  them, so they silently fall out of the location view entirely. The redesign's mockup
+  had a "Not stored anywhere — N items → Review" row at the foot of the zone list; it
+  was cut from the build for want of the data.
+- **Why deferred:** needs a server-side count (R-003 — the client must not sum stock items
+  to derive it). `GET /locations` returns a bare `List[LocationNodeDto]`, so adding
+  `unassigned_item_count` means either an envelope (breaking the picker + StockOverview,
+  which both consume the bare list) or a separate small endpoint. Out of scope for a
+  layout redesign — R-007.
+- **Recommended resolution:** opportunistic — next time the locations API is touched.
+  Note `get_location_tree.py:62` already says "None = unassigned, surfaced separately in
+  the UI", which was never true.
+
 ## [OPEN] FU-632 — DR-14 carve-outs: first-boot region derivation (#48) + theme-mechanism reconciliation (#7b)
 - **Raised:** 2026-08-13 (design-remediation DR-14; carved from FU-578 #48/#7b).
 - **Type:** follow-up (two distinct concerns split from the DR-14 date-format authority).

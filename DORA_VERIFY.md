@@ -22,6 +22,40 @@ top-to-bottom.
 
 ---
 
+## Nutrition: stock-item food picker (2026-08-14) — origin FU-635
+_(API layer verified: 15 e2e incl. link / unlink / null-default / unrelated-patch round-trips, plus live lookup against the real OFF API. **The picker's visual render could not be verified** — `#/stock/<id>` won't mount in the agent's browser pane at all (dashboard + Settings routes do); that's a pane limitation, not a code fault. These are eyes-on checks.)_
+- [ ] With nutrition on **complex**, a stock item's detail shows a **Nutrition** row reading "Not linked" with a **Find a food** button. On **simple** or **off**, the row is absent entirely (not greyed out).
+- [ ] **Find a food** → type "banana": results appear, each with a **source badge** on the right (e.g. "Open Food Facts", "USDA SR Legacy") and a kcal/100g line. Nothing is selected until you click a row.
+- [ ] Type a **barcode** (e.g. `3017620422003`): the icon flips to a QR glyph, a "Looking that up as a barcode" hint shows, and the match is labelled **barcode match**.
+- [ ] Pick a result → dialog closes, the row shows the food name + "N kcal / 100g · <source>", and it survives a page reload.
+- [ ] **Change** reopens the picker; the **×** unlinks and the row returns to "Not linked".
+- [ ] With every source switched off in System → Nutrition, searching says nothing found *and* mentions that no food source is set up.
+
+## Nutrition install-wide + dataset download (2026-08-14) — origin FU-635
+_(Verified live and deleted: the admin page renders and saves the mode; the mode reaches `/api/health` as `nutrition_mode`; dataset rows render with Download buttons; `complex` with no source shows the "nothing can answer a lookup yet" note; `GET /api/nutrition/sources` returns both datasets with correct default URLs. Not walked: an actual download — it pulls ~4-7MB from USDA and takes a while.)_
+- [ ] **Dataset download:** Admin → System → Nutrition → complex → Download on **USDA SR Legacy**. *(This path had a fatal `create_app` import bug fixed on 2026-08-14 — it has still never been run end-to-end, so this check is the real proof.)* It should move through Downloading → Reading the data → Saving foods, then settle on "Installed and searchable" with a food count in the thousands. (SR Legacy first — its URL is frozen; Foundation's carries a release date and may 404, see FU-636.)
+- [ ] **Import survives a restart:** after it finishes, restart the backend and confirm the count is still there (rows are durable; only the progress phase is in-memory).
+- [ ] **Bad URL:** trigger an import with a deliberately wrong URL via the API and confirm the page shows the "that release has probably been superseded" message rather than a bare stack trace.
+- [ ] **Old link:** `/settings/nutrition` redirects to the admin page rather than 404ing, and no Nutrition entry remains under the personal Preferences group.
+
+## Voice picker: built-in vs neural (2026-08-14)
+_(The selection guard is now Vitest-pinned in `voicePicker.spec.ts` — 8 cases incl. the exact regression. The grouping renders correctly on the dev box. These need a **downloaded** voice, which the dev box doesn't have.)_
+- [ ] Download a neural voice → select it → pick **Device default voice** → click that same neural voice again: it **selects** (this was the bug). Repeat for a second downloaded voice.
+- [ ] With a neural voice active, clicking that same card again does nothing (no redundant save toast).
+- [ ] The "Built-in" card and the "Neural voices" grid read as two clearly different kinds of thing at a glance — including on a phone and in a dark theme.
+
+## Settings nav regrouping (2026-08-14)
+_(Verified live and deleted: desktop sidebar renders Account / PREFERENCES / KITCHEN SETUP / About with eyebrows only on the middle two; mobile shows 4 tabs, active tab tracks the route, no h-scroll at 375px.)_
+- [ ] Nothing feels lost: every page you used to reach under the old "Account" heading is still one click away, and deep links / browser back still land on the right nav highlight.
+
+## Stock locations settings redesign — zone cards (2026-08-14)
+_(Verified live this session and deleted from this list: cards render per zone with areas as rows + sections as chips; expand/collapse persists across a full reload; search narrows to matching zones/areas/sections and auto-opens them; search text resets on reload (R-026); "0 areas · N items" copy fix; 375px = no horizontal scroll, chips + "+ Section" both 44px tall; dark-theme tokens all resolve, meta text 6.6:1 on the card. Remaining below are the round-trips the preview pane can't drive reliably.)_
+- [ ] **Create:** "New zone" → names a zone; "+ Area" on a zone card → the new area appears **and its zone is open** (not hidden behind a chevron); "+ Section" on an area row → the chip appears in that row.
+- [ ] **Rename:** the "…" menu → Rename opens a **dialog** pre-filled with the current name (not the old inline field). Clicking elsewhere mid-edit **cancels** — it must not silently save.
+- [ ] **Delete:** the confirm still names what's lost ("N items … will become unassigned"), and after deleting the card/row/chip disappears without a stale count left behind.
+- [ ] **Count click-through:** clicking an area's "N items" (or "View items" in a zone/section menu) lands on the stock list **filtered to that location**.
+- [ ] **Light theme:** the zone card reads as a raised surface against the settings page background, and the section chips read as sunken *inside* it — not the reverse, and not three near-identical greys.
+
 ## Meal reconciliation: auto-mode log vs manual runner (2026-08-13)
 _(Backend covered by e2e: `test_reconcile_verbs` auto-not-in-queue-but-in-log, `test_reconcile_signal` auto-suppression + manual-fire — all green. These are the running-app UI checks.)_
 - [ ] **Auto mode** (Settings → Admin → System → Meal reconciliation, Auto-drain ON): open `/meal-plans/reconcile` → shows the **read-only log** (rows grouped by day, newest first, status pill per row: "Logged as cooked" etc.), **not** the confirm-each runner. Dashboard shows **no** "Reconcile N past meals" chip; no "reconcile overdue" alert.
@@ -86,6 +120,12 @@ _(Needs a destructive re-seed to load the "Belief: …" demo items — restart t
 - [ ] On a stock row, the **open / in-use toggle** shows a **box** glyph (sealed closed-box → open-box when toggled), not a padlock. Hovering still shows "Mark as open / in-use" ↔ "Mark as sealed".
 - [ ] Enter **bulk-select** on Stock Overview with **nothing selected**: the action buttons ("Add to list…", "Remove from list…", "Move location", "Restock", "Log waste…") render clearly **greyed/disabled**, visibly different from the enabled "Select visible" — not the same white as enabled. Selecting an item un-greys them.
 - [ ] Cook mode timer: the **Pause** button (while a timer runs) reads sentence-case "Pause" and matches the app's button styling (warning tone).
+
+## Recipe detail read view + Edit toggle (design-remediation DR-11, 2026-08-13) — origin FU-578
+- [ ] Open a recipe from the cookbook — it shows a **read view** (title heading, photo, chips, ingredients grouped by section, numbered instructions, source, notes), NOT an editable form. Tap **Edit** → the form appears (name input, ingredient rows, steps editor, etc.); **Save** persists, **Done** returns to the read view. "Mark cooked" / "Cook mode" / the meals stepper work in both.
+- [ ] Read view is faithful: ingredient qty/unit/name/notes + optional & missing markers render; instructions show correctly for a structured-steps recipe, a freeform recipe, and an image-steps recipe. *(Code-verified: compiles, mounts without error, tsc/eslint green — but recipe data wouldn't load in the verify pane, so this needs a real eyes-on pass.)*
+- [ ] Check a recipe with **named sections** (ingredients grouped under headings) and one with **nested sub-steps** (read view lists top-level steps; confirm that's acceptable — sub-steps still edit fine).
+- [ ] The **"Available meals"** card reads "N unallocated of M **on hand**" (not "cooked"), and no longer looks like it contradicts "Last cooked: Never".
 
 ## Region date format everywhere (design-remediation DR-14, 2026-08-13) — origin FU-578
 - [ ] Walk the app (shopping list, meal plans, alerts, dashboard, a recipe's "last made", a stock item's history, price chart, and the settings audit log / API keys / backups timestamps) — every date reads in the install's regional format (AU default = day/month/year, "17/07/2026"), never US month-first ("7/17/2026"). *(Confirmed in principle: all 26 sites route through the one household-locale formatter; tsc/eslint green; this is the eyes-on pass across surfaces.)*

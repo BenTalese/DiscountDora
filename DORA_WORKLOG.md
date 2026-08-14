@@ -18,6 +18,350 @@ next.
 
 ---
 
+## 2026-08-14 — Nutrition chunk 5: stock-item food picker (FU-635)
+
+Owner: "do the stock item link picker."
+
+**Built.** `NutritionFoodPicker.vue` — a search-and-confirm dialog over the
+chunk-3 lookup. Results are badged with the catalogue they came from, barcode
+input flips the affordance and labels exact matches, and **nothing is written
+until the user clicks a row** (P12 No-invent — food matching is exactly where
+silent auto-matching produces confidently wrong calories, so there is no
+best-guess path). Live suggestions are persisted via `resolve` on pick; local
+rows already have an id and skip that.
+
+Binding reuses what exists rather than adding a surface: `nutrition_food_id` +
+`clear_nutrition_food` on the existing stock-item update endpoint, following the
+`usual_store_id` clear-vs-unset pattern verbatim, and the detail DTO gains a
+resolved `nutrition_food` object (with its source label) so the page renders the
+link without a second round-trip. The row is `v-if`'d on complex mode — in
+simple mode kcal is typed per-recipe and a stock item has nothing to link, so it
+is hidden rather than shown disabled (R-029).
+
+**Three of my own mistakes, caught by the gates rather than shipped.**
+`FieldPatch` rejected the new fields until I added them (the type gate doing its
+job); my e2e hit `/stock-items/<id>` instead of `/stock-items/<id>/detail` — two
+different DTOs; and I hand-rolled a stock-item factory that assumed
+`/stock-levels` returned a bare list when it's enveloped under `items` (the
+shared `make_stock_item` factory already existed and is now used).
+
+**What I could not verify, and why.** The picker's *visual* render is unproven:
+`#/stock/<id>` will not mount in the agent's browser pane at all — it sits on
+the pre-mount splash, while the dashboard and every Settings route mount fine,
+and a fresh tab doesn't help. That's a pane limitation, not a code fault, but it
+means the dialog has never been looked at. Handed to `DORA_VERIFY.md` as an
+eyes-on section. Also learned (and written to memory): restarting the backend
+wedges an already-open SPA tab, and raw `fetch` PATCHes get 403 on CSRF — state
+changes have to go through the real UI control.
+
+**Evidence that does exist:** 4 new e2e covering link, unlink, the null default,
+and "an unrelated PATCH leaves the link alone" — all through real HTTP against
+the real repository. Backend **1668 passed**. `vue-tsc` + eslint clean.
+
+**Next up:** the last chunk — recipe per-serving rollup + coverage line.
+
+---
+
+## 2026-08-14 — Nutrition chunk 3: unified food lookup (FU-635)
+
+Owner: "tackle unified lookup next."
+
+**Built.** `GET /api/nutrition/lookup?q=` fans out across every enabled source
+and merges: local imported datasets first (always answers, works offline), then
+Open Food Facts, then the USDA live API when a key is set. Plus
+`POST /api/nutrition/foods/resolve`, the explicit persist-on-confirm step for a
+picked live suggestion.
+
+Three design points worth keeping:
+- **Every result carries its source label** (the owner's ask). Three catalogues
+  can disagree about a banana; hiding which one answered would be dishonest.
+- **A failed source is reported, not swallowed.** `sources_failed` exists
+  because a search that quietly drops OFF looks identical to "no such food",
+  which would send someone off to type numbers by hand.
+- **`resolve` re-fetches server-side** and takes only `(source, source_ref)`
+  from the client, so a tampered request can't inject arbitrary nutrition
+  numbers into the catalogue.
+
+Barcode handling is length-gated to real EAN/UPC/ITF-14 lengths (8/12/13/14) —
+"500" is someone searching for a 500g thing, not scanning. Exact barcode hits
+outrank name matches; already-local outranks live; prefix beats mid-string;
+kcal-less rows sink (they can't feed a rollup).
+
+**Caught a live defect in chunk 2's importer.** `dataset_import._run_import`
+did `from dora_api.app import create_app` — there is no such factory, `app` is
+a module-level Flask instance. The worker thread would have died on the first
+download with an ImportError, i.e. **the download button was broken** and the
+unit tests couldn't see it (they exercise the pure parser). Found only because
+the local-search verification needed an app context and hit the same wall.
+Fixed to `from dora_api.app import app`.
+
+**Also fixed a test-hygiene problem I introduced.** The first green e2e run took
+11s because every text lookup was reaching Open Food Facts *for real* — a
+network-dependent, machine-dependent suite. The e2e seeding now switches the
+live sources off (local query path is what those tests are for; the fan-out is
+stub-pinned in the unit suite). 11s → 3.4s and hermetic.
+
+**Tests:** 21 unit (ranking, barcode detection, source fan-out, failure
+reporting) + 11 e2e (the real repository query path — `contains`/`Or`/`in_` —
+auth posture, portion batch-loading, barcode match). Backend **1664 passed**.
+
+**Verified live** against the real OFF API: `banana` → 10 results all badged
+"Open Food Facts" with real kcal; EAN `3017620422003` → exact barcode match
+"Nutella"; `500` → text not barcode; single char → asks nothing.
+
+**Next up:** FU-635's last two chunks — the stock-item link picker (UI over
+this lookup) and the recipe per-serving rollup + coverage line.
+
+---
+
+## 2026-08-14 — Nutrition: install-wide collapse + complex-mode foundation (chunks 1/2/4 of 6)
+
+Owner asked two questions about Nutrition ("feels like it belongs with admin
+settings"; "what is the state of this currently? seems half baked"), then on the
+findings directed: collapse to install-wide, and **build complex for real**.
+
+**The finding that drove it.** Complex wasn't half-built — it was a *fake seam*.
+`AppSetting.nutrition_db_source` was a free-form string with **no UI anywhere**,
+whose only job was to gate a mode with **zero implementation**; since nothing
+could set it, `complexAvailable` was permanently false, which is why the owner
+couldn't try it. Whole feature surface was: one hand-typed `Recipe.kcal`, a chip,
+a read-only card, and a cookbook filter. No nutrition data on stock items at all.
+Meanwhile the charter had *cut* complex (§7 decision 3), so the greyed-out button
+was advertising something decided against — the R-029 nag pattern.
+
+**Charter reversal, recorded.** §7's "off + simple only" is now struck through in
+place with the reasoning: the original cut rested on a feasibility worry the owner
+raised in the 06-Jun feedback (quantity→nutrition conversion), and that picture
+changed — USDA FDC is **CC0**, its two generic-food datasets are only **~10MB
+zipped**, and it ships a `food_portion` table mapping "1 cup" / "1 medium" to gram
+weights, which answers most of the worry. Facts were web-verified, not recalled:
+sizes, licensing, the api.data.gov rate limit, and OFF's ODbL share-alike (which
+is why USDA, not OFF, is the redistributable download).
+
+**Design calls the owner made after discussion.** Per-serving figure **+ an
+always-visible coverage line** ("from 9 of 12 ingredients"), partials shown and
+marked rather than hidden. Notably the owner floated per-100g-of-recipe as a way
+to dodge the amounts problem — it doesn't: it needs the *same* gram conversion
+plus a cooking-yield factor (stews reduce, pasta absorbs) that nobody can know
+without weighing the pot, whereas per-serving divides by a number already typed in.
+Per-100g **of raw ingredients** is well-defined and was offered as the comparison
+unit; owner took per-serving + coverage.
+
+**Landed (3 of 6 chunks), all green.** (1) `AppSetting.nutrition_mode` replaces
+`nutrition_enabled` + `User.nutrition_mode`; `nutrition_db_source` retired;
+complex availability now **derived** from installed reality
+(`features/nutrition/sources.py`) instead of asserted by a string. Personal
+Settings → Nutrition page deleted, old route redirects, nutrition dropped from the
+Features panel. (2) `NutritionFood` + `NutritionPortion` + `StockItem.nutrition_food_id`,
+migration `b9e3f1a7c4d2` (carries `nutrition_enabled=1` → `simple`). (3) USDA FDC
+importer — download → parse → whole-dataset replace, on a daemon thread with the
+same in-memory-status shape as the Piper voice download. (4) `Admin → System →
+Nutrition` page + `GET /api/nutrition/sources` + admin-gated
+`POST /api/nutrition/datasets/import`.
+
+**Two live-verification catches a static read would have missed.** A stale
+`nutrition_complex_available` default sitting in a *separate* defaults dict in
+`health_check.py` that grep hadn't surfaced from the edited line — caught by
+probing the running endpoint. And the Flask reloader does **not** pick up a
+brand-new module in a package, so the new router 404'd until a hard restart;
+worth remembering, because the earlier 401 looked like success (the middleware
+rejects before routing, so a 401 never proves a route exists).
+
+**Engineering-standards close-gate.** R-038 was the interesting one: it does *not*
+force nutrition install-wide (mode suppresses your own view without producing
+contradictory results over shared data, so it sits with image-display). The
+argument that carried was the **money precedent** — identical double-switch,
+removed by owner call 2026-08-12 — plus the fact that per-user depth over a
+*shared* recipe's kcal is incoherent. R-034 drove a real migration rather than a
+model-only edit. R-010 (closed-set sentinel, one boundary point in
+`update_app_settings`), R-003, R-005 (`SET NULL` so a dataset re-import can't
+cascade into the pantry), R-007 (no schema column for the URL override — the
+endpoint takes it as a param instead), R-032. A new security-pinning test
+(`PINNED_ADMIN_ENDPOINTS`) correctly failed on the new admin endpoint until it was
+enumerated — good gate, worked as designed. No new ADR.
+
+**Suites:** backend **1632 passed**. Frontend 434 passed / 2 failed — still only
+the pre-existing `stockLevelDot` pair (FU-634). `vue-tsc` + eslint clean. Parser
+pinned 9/9 against a synthetic FDC archive (BOM, nested release-dated directory,
+kcal-vs-kJ, None-vs-zero, energy-less foods dropped).
+
+**Next up:** FU-635 — the three remaining chunks (unified lookup, stock-item link
+picker, recipe rollup + coverage). Until they land, `complex` behaves like
+`simple` for everyone but the admin page. FU-636 tracks the dated USDA URL.
+
+---
+
+## 2026-08-14 — Owner bundle: settings IA regroup + voice-picker bug + deals-email default
+
+Three owner-reported items, all Settings-surface, all landed this unit.
+
+**1. Settings IA (owner: "weird having all this stuff under Account").** The
+"Account" group was a catch-all: identity + five preference pages + About (which
+isn't personal at all). Offered four shapes; owner picked **Account standalone ·
+PREFERENCES · KITCHEN SETUP · About standalone**, About as a bottom item (not a
+footer link), Kitchen setup explicitly **left alone** (the flat taxonomy list was a
+deliberate earlier call). Needed a new `headerless` flag on `SettingsNavGroup` —
+the group keeps its `label` (it's the a11y name *and* the mobile tab strip's
+identity, which both navs key on) but skips drawing the eyebrow. Both navs still
+read the one `navGroups` definition (R-003), so mobile picked up 4 tabs for free.
+
+**2. Voice picker (owner: BUG).** Real, and precisely as described — "you can
+download and pick one of the *other* neural voices" was the tell. `onSelectDeviceDefault`
+writes only `voice_engine: 'browser'`, deliberately keeping `voice_id` so switching
+back remembers your voice. But `onCardClick`'s no-op guard was a bare
+`voice.id === props.modelValue`, which then matched that retained id — so the one
+card you could never re-select was the voice you'd been using, and only that one.
+The template's `voice-card--active` binding already had the right condition
+(`!deviceDefaultActive && …`); the handler didn't. Fixed to match. **Pinned in
+Vitest** (`voicePicker.spec.ts`, 8 cases) rather than left as a manual check —
+reproducing it live needs a downloaded ~60MB model, which is exactly the
+"expensive to re-check by hand" case the lean-verification stance carves out for
+a test. Second half of the report (no visual distinction) — the device card was
+literally a peer tile in the neural grid; it now sits above it under a "Built-in"
+eyebrow, sunken + dashed + device icon, with "Neural voices" labelling the grid.
+
+**3. Weekly deals default (owner: "Dev data issue?").** No — the entity default.
+`User.deals_email_enabled` shipped `= True` / `server_default=true()`, from a
+migration-era "keep existing subscribers" rationale that is dead pre-release. So
+every new user landed pre-subscribed to mail a fresh install (no SMTP) cannot
+send — and the toggle is `:disable`d without SMTP, so they couldn't turn it off
+either. Flipped to opt-in, matching its sibling `alerts_email_enabled = False`
+(PROPOSAL_ALERTS §5 "email off (opt-in)"). Model + `table_mappings` + a new
+migration (`a7f4d2c8e1b6`) that alters the default **and** resets existing rows —
+pre-release hard change, since leaving them True preserves the exact surprise
+being fixed. Seed never set the field, so seeded users inherit the new default.
+
+**Engineering-standards close-gate.** R-034 (model is schema truth) drove the
+migration rather than a model-only edit — `test_migrations` only compares
+tables/columns/nullability/indexes, *not* server defaults, so a model-only change
+would have drifted silently past the gate. R-003 (one IA definition feeding both
+navs) preserved. R-001, R-002, D-015/018 checked on the voice grouping. No new ADR.
+
+**Verified live:** sidebar renders the 4 picked groups (eyebrows only on the middle
+two); mobile 4 tabs + active-tab-tracks-route + no h-scroll at 375px; voice page
+renders "Built-in" / "Neural voices" with the device card outside the grid;
+Notifications now shows the deals toggle **off + disabled**, consistent with the
+alerts-digest and push toggles beside it.
+
+**Suites:** backend **1623 passed** (the 53 errors + 1 property failure on the
+first run were a sandbox artifact — pytest's `tmp_path` base dir doesn't exist
+here; green with `--basetemp`). Frontend 434 passed / 2 failed — the same
+pre-existing `stockLevelDot` pair from FU-634, untouched. `vue-tsc` + eslint clean.
+
+**Next up:** owner walks the three new `DORA_VERIFY.md` sections (the voice one
+needs a downloaded model). FU-634 still wants its D-001 call.
+
+---
+
+## 2026-08-14 — Stock locations settings redesign: zone cards (owner-initiated)
+
+Owner opened with "not really a fan of the current design of stock locations settings page —
+redesign ideas?". Critiqued the page, offered three directions, owner picked the first
+("zone cards") with two amendments: **no reparenting**, and the page description must say
+"use whatever structure fits your needs".
+
+**The diagnosis.** `StockLocationsSettings` + `LocationRow` rendered a *generic recursive
+tree* for a taxonomy that is fixed at exactly three levels. Every level looked identical, so
+depth lived in 24px of indent alone; a grey `zone`/`area`/`section` chip repeated on every
+row to compensate (and grey is D-001's *unknown* colour); the disclosure was keyed off
+`children.length > 0`, so an empty zone rendered as a leaf and there was no way to learn it
+could hold areas; the kind icon rendered in the avatar slot *or* inline in the label
+depending on that same flag, so rows didn't share a gutter (D-018); three always-visible
+icon buttons per row × N rows fought the name for width on a phone (D-011/B5).
+
+**The build.** One visual per level instead of one visual for all three:
+`LocationZoneCard` (card) → `LocationAreaRow` (row) → `LocationSectionChip` (chip). Depth is
+carried by the container, so the kind chip is gone entirely and the per-row buttons collapse
+to one "…" menu. `LocationRow.vue` deleted (self-referencing only; no other consumer).
+Also landed on this page: search (new pure helper `filterLocationTree`, 8 Vitest cases —
+survival rule is match-self **or** matching-descendant, and a self-match keeps its whole
+subtree); cross-session expand state; click-through from counts to `/stock?location_id=`;
+a "+ Section" affordance on *every* area including empty ones; B9 empty state; and rename
+moved from the old inline field (which saved **on blur** — clicking any other control
+committed whatever you'd typed) to the `$q.dialog` prompt the sibling taxonomy pages already
+use (D-015).
+
+**Two things the live walk caught that a static read wouldn't.** (1) `0 areas · 9 items` on
+a flat zone reads like a defect — a flat zone is a legitimate shape, so the meta now states
+just what it holds. (2) While searching, the zone meta said "1 area · 39 items": the area
+count follows the filter, the item count is a *server-side rollup over the whole subtree*.
+Re-summing client-side to make them agree would be exactly the cross-entity aggregate
+R-003 forbids, so the card says **"Matches only"** instead of a number that's half true.
+
+**Engineering-standards close-gate.** R-026 was the live one: search text migrated onto
+`useListState('settings-stock-locations')` (survives navigation, resets on hard reload —
+confirmed both ways in the pane). The expanded-zones `localStorage` is an explicit,
+commented **R-026 carve-out** on the `useFilterPanelExpanded`/FU-121 precedent: an ambient
+display preference, not a filter value — and a stale collapsed zone can't strand anyone,
+since the card, its name and its counts all still render. R-001 (three components, not one
+recursive do-everything row), R-002 (tokens only — verified resolved at runtime, no literal
+colours), R-003, R-007 (reparenting *and* the unassigned row both stayed out — see FUs),
+D-002/003/004/011/015/017/018 checked. No new ADR: R-026 already covers the
+filter-vs-preference split, and "render a fixed-depth taxonomy per level" isn't yet a
+recurring decision — it's the only fixed-depth tree in the app.
+
+**Verified live** (backend + SPA in the Browser pane, seed `dora`/`dora`): render, expand
+state across a full reload, search + auto-expand, the meta fixes, 375px with no page
+h-scroll and 44px chip targets, dark-theme token resolution (meta 6.6:1 on the card).
+Mutation round-trips + light theme left for the owner in `DORA_VERIFY.md`.
+
+**Not clean:** `npx vitest run` is red — 2 pre-existing failures in `stockLevelDot.spec.ts`,
+unrelated surface, untouched by this unit → **FU-634** (it's a D-001 intent call: is
+out-of-stock meant to be red or neutral?). Everything else green: 426 passed / 34 files,
+including the 8 new helper cases. `vue-tsc` and eslint clean.
+
+**Next up:** owner walks the `DORA_VERIFY.md` section. FU-633 (no "not stored anywhere"
+row — items with no location are invisible app-wide) is the one real functional gap this
+redesign surfaced but couldn't close without a server-side count.
+
+---
+
+## 2026-08-13 — Design remediation DR-11: recipe-detail read view + Edit mode (D-015)
+
+Owner said "start the read-mode redesign now" (accepting it may span a follow-up). Built
+it additively to keep risk low on this core ~1090-line-template page.
+
+**Read view + Edit toggle (D-015).** `RecipeDetailPage` was "an edit form wearing a detail
+page's clothes" (critique §8.1). Added an `editing` ref (default **false** → read view).
+Read view (new inline `v-if="!editing"` block at the top of the main column) renders from
+the same `form` model the editor writes — so read/edit can't drift — covering: hero image,
+name as a **title heading** (not a field), meta chips (cuisine/category/time-of-day/
+difficulty/servings/prep+cook/kcal/tags/tools), ingredients **grouped by section** (new
+`readIngredientGroups`, qty·unit·name·notes + optional/missing markers via the existing
+stock helpers), instructions (structured `readSteps` / `readFreeformLines` / image-mode
+`step_images`), source link, notes. New display computeds (`readCuisine/Category/Tags/
+Tools/TimeLabel`, `ingredientDisplayName`, `readIngredientGroups`, `readSteps`,
+`readFreeformLines`) reuse the option lists + stock helpers (no prop-threading, no drift).
+The 7 editor cards (image, meta, sections, ingredients, instructions, source, notes) gated
+behind `v-if="editing"`; **Available meals** stepper stays visible in both modes. Toolbar:
+**Edit** (read) → **Save + Done** (edit).
+
+**#11 contradiction fixed.** "of N *cooked*" implied a cook event, clashing with "Last
+cooked: Never" (the pool is raisable via the stepper without cooking). → "of N **on hand**",
+matching the card title + tooltip.
+
+**Verification.** vue-tsc 0 / eslint 0; all ICONS keys verified present; the updated
+component **mounts + renders its loading skeleton without a compile/render crash** (live).
+Could NOT get the recipe data to load in the verify pane — the app's XHRs 401 on `/auth/me`
+(the cross-origin session cookie isn't carried; same harness limitation as the dashboard/
+belief-chip walks — `withCredentials:true` is set but the pane won't send the cookie). Full
+read-view visual walk queued in DORA_VERIFY.
+
+**Known limitations (minor, in DORA_VERIFY + plan):** read view lists **top-level steps
+only** (nested substeps show in edit mode; most recipes are flat); per-step ingredient/tool
+associations aren't surfaced in read mode (the ingredient list covers them).
+
+**Standards close-gate.** R-002 (read-view CSS on tokens — `--space-*`, `--radius-*`;
+theme-safe), R-001 (read view is inline reusing page-local computeds/helpers rather than a
+child needing ~12 threaded props — a deliberate call for a page-specific view; noted). D-015
+satisfied (read-view + explicit edit; no always-editable "detail"). D-006 (avoided a "(s)"
+plural in the servings chip via an inline ternary). No violations. **No new ADR.**
+
+**Next up:** DR-12 (alerts: actionable list first + calendar diet), DR-13 (history grouping),
+DR-15 (micro-motion), DR-16 (onboarding activation — owner call). DR-12 is the natural next.
+
+---
+
 ## 2026-08-13 — Design remediation DR-10 (closed, owner call) + DR-14 (date-format authority)
 
 **DR-10 (nav labelling) — CLOSED, no code.** Owner wanted to *see* the options, so built a

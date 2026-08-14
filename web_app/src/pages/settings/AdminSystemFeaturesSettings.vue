@@ -136,13 +136,11 @@
     type FeatureFlagKey =
         | 'meal_planning_enabled'
         | 'money_enabled'
-        | 'nutrition_enabled'
         | 'companion_ingestion_enabled'
         | 'deals_email_enabled';
     const featureFlags = reactive<Record<FeatureFlagKey, boolean>>({
         meal_planning_enabled: true,
         money_enabled: false,
-        nutrition_enabled: false,
         companion_ingestion_enabled: false,
         deals_email_enabled: false,
     });
@@ -157,15 +155,12 @@
         {
             key: 'money_enabled' as const,
             label: 'Money & budgets',
-            caption: 'Per-recipe cost estimates, budget tracking on the dashboard, and shopping-list totals. Per-user opt-in still applies.',
+            // Stale copy fixed in passing: the per-user money opt-in it
+            // referred to was removed on 2026-08-12 — this is the only switch.
+            caption: 'Per-recipe cost estimates, budget tracking on the dashboard, and shopping-list totals. This is the only switch — there is no per-user opt-in.',
             value: featureFlags.money_enabled,
         },
-        {
-            key: 'nutrition_enabled' as const,
-            label: 'Nutrition',
-            caption: 'Per-recipe kcal field + filters. Per-user opt-in still applies.',
-            value: featureFlags.nutrition_enabled,
-        },
+
         {
             key: 'companion_ingestion_enabled' as const,
             label: 'Companion ingestion',
@@ -274,7 +269,6 @@
         buy_verdict_enabled?: boolean;
         meal_planning_enabled?: boolean;
         money_enabled?: boolean;
-        nutrition_enabled?: boolean;
         companion_ingestion_enabled?: boolean;
         deals_email_enabled?: boolean;
         product_search_url?: string;
@@ -292,7 +286,6 @@
         // always come through; the optional types keep the frontend tolerant.
         if (s.meal_planning_enabled !== undefined) featureFlags.meal_planning_enabled = s.meal_planning_enabled;
         if (s.money_enabled !== undefined) featureFlags.money_enabled = s.money_enabled;
-        if (s.nutrition_enabled !== undefined) featureFlags.nutrition_enabled = s.nutrition_enabled;
         if (s.companion_ingestion_enabled !== undefined) featureFlags.companion_ingestion_enabled = s.companion_ingestion_enabled;
         if (s.deals_email_enabled !== undefined) featureFlags.deals_email_enabled = s.deals_email_enabled;
     }

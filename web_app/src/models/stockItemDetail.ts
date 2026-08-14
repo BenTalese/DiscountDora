@@ -237,6 +237,23 @@ export type StockItemDetail = {
      *  timeline as a synthetic Checked entry when it differs from the
      *  most recent level change. Null = never checked. */
     last_checked_at?: string | null;
+    /** Nutrition complex-mode — the catalogue food this item is linked to.
+     *  Null when unlinked, which is the honest default: a link only exists
+     *  because a human confirmed one in the picker. Carries its source so the
+     *  page can say where the numbers came from. */
+    nutrition_food?: LinkedNutritionFood | null;
+};
+
+export type LinkedNutritionFood = {
+    nutrition_food_id: string;
+    name: string;
+    brand: string | null;
+    source: string;
+    source_label: string;
+    kcal_per_100g: number | null;
+    protein_g_per_100g: number | null;
+    carbs_g_per_100g: number | null;
+    fat_g_per_100g: number | null;
 };
 
 export type PricePoint = {

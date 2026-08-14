@@ -82,9 +82,8 @@ class AuthenticatedUserDto:
     # clients read the cook-style via /api/health.cooking_policy.
     # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
-    # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
-    # `complex` (complex requires admin-configured nutrition source).
-    nutrition_mode: str
+    # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
+    # clients read it from /api/health `features.nutrition_mode`.
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
     # Default True. FU-508 dropped the stock-image companion.
     show_recipe_images: bool
@@ -146,7 +145,6 @@ class AuthenticatedUserDto:
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
-            nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
             alerts_email_enabled=bool(user.alerts_email_enabled),
             alerts_email_cadence=user.alerts_email_cadence,

@@ -10,6 +10,25 @@ BUDGET_PERIOD_WEEKLY = "weekly"
 BUDGET_PERIOD_MONTHLY = "monthly"
 ALLOWED_BUDGET_PERIODS = (BUDGET_PERIOD_WEEKLY, BUDGET_PERIOD_MONTHLY)
 
+# Nutrition depth, install-wide (owner call 2026-08-14 — moved off `User`,
+# where it had been a per-user mode layered on a second install-wide bool).
+# R-010 carve-out: closed-set string sentinel, single validation point in
+# `update_app_settings.py`, named constants at every read. SQLite-portable.
+#
+#   off      — the whole feature is hidden.
+#   simple   — one hand-typed kcal number per recipe. No data source involved.
+#   complex  — stock items link to foods in a nutrition catalogue, and recipe
+#              nutrition rolls up from those links. Needs at least one source
+#              available; see `features/nutrition/sources.py`.
+NUTRITION_MODE_OFF = "off"
+NUTRITION_MODE_SIMPLE = "simple"
+NUTRITION_MODE_COMPLEX = "complex"
+NUTRITION_MODE_VALUES = (
+    NUTRITION_MODE_OFF,
+    NUTRITION_MODE_SIMPLE,
+    NUTRITION_MODE_COMPLEX,
+)
+
 
 @dataclass
 class AppSetting(BaseEntity):
@@ -47,7 +66,6 @@ class AppSetting(BaseEntity):
     # the meal-plan feature on first boot post-deploy.
     meal_planning_enabled: bool = True
     money_enabled: bool = False
-    nutrition_enabled: bool = False
     companion_ingestion_enabled: bool = False
     deals_email_enabled: bool = False
     # `products_enabled` removed —
@@ -55,13 +73,27 @@ class AppSetting(BaseEntity):
     # server-side from whether any `Product` row exists (see health_check), not
     # from an admin/persona flag. The column is dropped in migration
     # f1a2b3c4d5e6.
-    # C-cross Chunk 3 — reserved seam for the nutrition `complex` mode
-    # (proposal §2.3). Stores the admin-configured nutrition data source
-    # (a free-form string for now — the actual schema lands when the
-    # complex-mode integration ships). Empty string ⇒ no source ⇒ a
-    # user cannot save `nutrition_mode='complex'` (rejected at the
-    # `update_me.py` boundary).
-    nutrition_db_source: str = ""
+    # Nutrition (owner call 2026-08-14). Two things changed at once here:
+    #
+    # 1. `nutrition_enabled` (install bool) + `User.nutrition_mode` (per-user
+    #    off/simple/complex) collapsed into this **single install-wide** field.
+    #    Two switches answering "is nutrition on?" was the money-settings shape
+    #    the owner already had removed on 2026-08-12; nutrition kept it until
+    #    now. `off` here means the whole feature is hidden.
+    # 2. The dead `nutrition_db_source` seam is gone. It was a free-form string
+    #    with no UI anywhere, whose only job was to gate a `complex` mode that
+    #    had zero implementation. Complex is real now, and its availability is
+    #    *derived* (do we hold a dataset / is a key set / is OFF reachable)
+    #    rather than asserted by a magic string.
+    nutrition_mode: str = NUTRITION_MODE_OFF
+    # Optional api.data.gov key for querying USDA live instead of holding the
+    # bulk dataset on disk. Empty ⇒ that provider is simply not offered.
+    nutrition_usda_api_key: str = ""
+    # Whether lookups may reach Open Food Facts for barcoded products. On by
+    # default (it needs no key and the app already calls OFF for barcode-to-add),
+    # but an offline or air-gapped install turns it off so the lookup stops
+    # trying to reach the network.
+    nutrition_off_lookup_enabled: bool = True
     # Meal Plans C-2.K — household IANA timezone (e.g. "Australia/Sydney").
     # The "today" date boundary is evaluated here, not server-local, so a
     # household is correct regardless of where the server is hosted. Default
@@ -216,10 +248,11 @@ class AppSetting(BaseEntity):
         BUY_VERDICT_ENABLED = "buy_verdict_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
-        NUTRITION_ENABLED = "nutrition_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
-        NUTRITION_DB_SOURCE = "nutrition_db_source"
+        NUTRITION_MODE = "nutrition_mode"
+        NUTRITION_USDA_API_KEY = "nutrition_usda_api_key"
+        NUTRITION_OFF_LOOKUP_ENABLED = "nutrition_off_lookup_enabled"
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         PRODUCT_SEARCH_URL = "product_search_url"

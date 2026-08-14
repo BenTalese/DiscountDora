@@ -282,10 +282,30 @@ as won't-change by owner call, not a defect.
 
 ## Wave 4 — surface redesigns (one session each, design-first)
 
-### DR-11 · Recipe detail read-mode (D-015) — P2
+### DR-11 · Recipe detail read-mode (D-015) — ✅ DONE 2026-08-13
 Read view (hero/meta chips/ingredients/instructions) + explicit Edit mode;
 fix the "0 unallocated of 1 cooked" vs "Last cooked: Never" contradiction while
 in there. **Refs:** FU-578 #11, critique §8.1.
+**Shipped.** `RecipeDetailPage` was "an edit form wearing a detail page's clothes"
+(critique §8.1) — every field a permanently-live input. It now **defaults to a read
+view** and an explicit **Edit** toggle reveals the form (D-015; cook mode already
+proved the reading-surface pattern). Read view renders from the same `form` model the
+editor writes (can't drift): hero image, the name as a **title heading** (not a field),
+meta chips (cuisine/category/time-of-day/difficulty/servings/prep+cook/kcal/tags/tools),
+ingredients **grouped by section** (qty·unit·name·notes, optional + missing markers),
+instructions (structured steps / freeform lines / step images), source link, notes. The
+editor cards are gated behind `v-if="editing"`; the **Available meals** stepper stays
+visible in both modes (it's a status+action, not an edit field). Toolbar shows **Edit**
+in read mode, **Save + Done** in edit. **#11 contradiction fixed**: "of N *cooked*"
+(which implied a cook event, clashing with "Last cooked: Never") → "of N **on hand**",
+matching the card title + tooltip's "in your pool" wording — the pool is raisable via the
+stepper without ever cooking. vue-tsc + eslint clean; all ICONS verified; the updated
+component mounts without a compile/render crash. **Known limitations → DORA_VERIFY /
+minor follow-up:** read view lists **top-level steps only** (nested substeps aren't shown
+in read mode — most recipes are flat; edit mode still shows them); per-step
+ingredient/tool associations aren't surfaced in read mode (the ingredient list covers
+them). Full visual walk queued in DORA_VERIFY (recipe data won't load in the verify pane
+— the app's XHRs don't carry the cross-origin session cookie).
 
 ### DR-12 · Alerts page order + calendar diet (D-012) — P2
 Actionable list first; calendar becomes a labelled 14-day strip (counts on

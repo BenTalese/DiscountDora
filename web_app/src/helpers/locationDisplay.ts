@@ -33,3 +33,30 @@ export function locationHasDetail(
 ): boolean {
     return !!breadcrumb && breadcrumb.length > 1;
 }
+
+/** Narrow a location tree to the nodes matching `query` (case-insensitive
+ *  substring on the name), keeping the shape intact.
+ *
+ *  A node survives if it matches itself **or** has a surviving descendant —
+ *  otherwise a matching "Left" section would vanish along with the "Top
+ *  shelf" area that doesn't match. A node that matches keeps its whole
+ *  subtree, so you can see what's inside the thing you searched for.
+ *
+ *  Display-only (the settings page's filter box); the store keeps the
+ *  unfiltered tree. */
+export function filterLocationTree<
+    T extends { name: string; children: T[] },
+>(nodes: readonly T[], query: string): T[] {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [...nodes];
+
+    const walk = (node: T): T | null => {
+        if (node.name.toLowerCase().includes(needle)) return node;
+        const children = node.children
+            .map(walk)
+            .filter((child): child is T => child !== null);
+        return children.length > 0 ? { ...node, children } : null;
+    };
+
+    return nodes.map(walk).filter((node): node is T => node !== null);
+}

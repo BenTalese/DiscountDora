@@ -32,6 +32,14 @@ class StockItem(BaseEntity):
     # store delete so removing a store doesn't break the items that referenced
     # it — they fall back to "no usual store".
     usual_store_id: UUID | None = None
+    # Nutrition complex-mode — the food in the nutrition catalogue whose
+    # per-100g values describe this item. Set only by explicit human
+    # confirmation through the lookup (P12 No-invent: a fuzzy name match is a
+    # *suggestion*, never a saved link). Plain UUID, no relationship object,
+    # SET NULL on food delete so re-importing or dropping a dataset can't take
+    # stock items with it — the link just goes quiet and the item shows as
+    # unlinked again.
+    nutrition_food_id: UUID | None = None
     # FU-511 — per-item `auto_add_when_low` was collapsed into
     # `AppSetting.auto_add_mode` (off / essential_only / all). Auto-add
     # now derives from that install-wide setting + this item's
@@ -81,3 +89,4 @@ class StockItem(BaseEntity):
         LAST_CHECKED_AT = "last_checked_at"
         SNOOZED_UNTIL = "snoozed_until"
         USUAL_STORE_ID = "usual_store_id"
+        NUTRITION_FOOD_ID = "nutrition_food_id"

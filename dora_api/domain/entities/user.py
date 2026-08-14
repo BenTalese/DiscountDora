@@ -89,18 +89,10 @@ ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL)
 # BUDGET_PERIOD_*). This "grocery budget belongs to the household, not the
 # person" move mirrors FU-615 (household_headcount / batch_features_enabled).
 
-# C-cross Chunk 3 — nutrition mode (proposal §2.3). R-010 carve-out:
-# closed-set string sentinel backed by `NUTRITION_MODE_VALUES`, a
-# single validation point in `update_me.py`, and named constants for
-# every read. SQLite-portable (no CHECK constraint).
-NUTRITION_MODE_OFF = "off"
-NUTRITION_MODE_SIMPLE = "simple"
-NUTRITION_MODE_COMPLEX = "complex"
-NUTRITION_MODE_VALUES = (
-    NUTRITION_MODE_OFF,
-    NUTRITION_MODE_SIMPLE,
-    NUTRITION_MODE_COMPLEX,
-)
+# Nutrition mode moved to `AppSetting` (owner call 2026-08-14) — it was a
+# per-user mode layered on a second install-wide bool, the same double-switch
+# shape money shed on 2026-08-12. Constants now live in
+# `entities/app_setting.py`; `User.nutrition_mode` is dropped.
 
 # Voice — which speech engine speaks Dora's replies / cook-mode steps and,
 # for the Piper engine, which catalog voice. R-010 carve-out: closed-set
@@ -158,10 +150,18 @@ class User(BaseEntity):
     send_deals_on_day: int
     username: str
     is_admin: bool = False
-    # Opt-out flag so users can disable the weekly deals email without losing
-    # their preferred send day; defaults to True so existing users keep
-    # receiving emails unless they explicitly turn it off.
-    deals_email_enabled: bool = True
+    # Opt-IN flag for the weekly deals email; the preferred send day
+    # (`send_deals_on_day`) is kept independently so toggling off and back on
+    # doesn't lose it.
+    #
+    # Was `True` when this column was added, to keep pre-existing subscribers
+    # receiving mail across the migration. That rationale is dead (pre-release,
+    # no real users) and the default was actively wrong: a fresh install has no
+    # SMTP, so every new user landed pre-subscribed to an email the server
+    # cannot send — and the Notifications toggle is `:disable`d without SMTP, so
+    # they couldn't even turn it off. Now matches its sibling
+    # `alerts_email_enabled` below: email channels are opt-in (P10 Anti-creep).
+    deals_email_enabled: bool = False
     deals_email_compact: bool = False
     theme: str = THEME_SYSTEM
     font_family: str = FONT_FAMILY_DEFAULT
@@ -210,13 +210,6 @@ class User(BaseEntity):
     # some users want purely manual control, so this toggle switches the
     # belief chip + inference-driven quick-checks off.
     inferred_pantry_enabled: bool = True
-    # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
-    # `off` | `simple` | `complex`; default `off`. `complex` is a
-    # reserved seam (validated against `AppSetting.nutrition_db_source`
-    # being non-empty) — the DB integration ships later. Layered with
-    # the install-wide `nutrition_enabled` AppSetting via
-    # `useNutritionMode()` (ADR-005).
-    nutrition_mode: str = NUTRITION_MODE_OFF
     # C-cross Chunk 5 — per-user image-display opt-in (proposal §2.8).
     # **Default True** — Charter P1 Effortless leans toward visual
     # richness; users who prefer a text-only UI flip it via the inline
@@ -289,7 +282,6 @@ class User(BaseEntity):
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
-        NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"

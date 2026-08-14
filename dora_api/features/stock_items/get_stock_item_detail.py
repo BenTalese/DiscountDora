@@ -247,6 +247,22 @@ class YourPricesDto:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkedNutritionFoodDto:
+    """The nutrition-catalogue food a stock item is linked to. Carries its
+    source so the detail page can say where the numbers came from — the same
+    honesty the lookup picker applies (P3)."""
+    nutrition_food_id: UUID
+    name: str
+    brand: str | None
+    source: str
+    source_label: str
+    kcal_per_100g: float | None
+    protein_g_per_100g: float | None
+    carbs_g_per_100g: float | None
+    fat_g_per_100g: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class StockItemDetailDto:
     stock_item_id: UUID
     name: str
@@ -313,6 +329,12 @@ class StockItemDetailDto:
     # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
     # the timeline whenever it differs from the most recent level change.
     last_checked_at: datetime | None = None
+    # Nutrition complex-mode: the food this item is linked to, if any. Sent as
+    # a resolved object rather than a bare id so the detail page can render the
+    # link (name + source + per-100g) without a second round-trip. Null when
+    # unlinked — which is the honest default, since a link only ever exists
+    # because a human confirmed one.
+    nutrition_food: 'LinkedNutritionFoodDto | None' = None
 
 
 # 2026-06-30 — one number, one policy. Every event-kind projection
@@ -811,6 +833,28 @@ class GetStockItemDetailHandler:
                 ))
         _Barcodes.sort(key=lambda b: (b.source != "direct", b.barcode))
 
+        # Nutrition link. One targeted fetch, only when the item actually has
+        # one — the FK is a plain UUID with no relationship object (R-032), so
+        # nothing is loaded implicitly.
+        _NutritionFood = None
+        if getattr(_StockItem, "nutrition_food_id", None) is not None:
+            from dora_api.domain.entities.nutrition_food import (
+                NUTRITION_SOURCE_LABELS, NutritionFood,
+            )
+            _Food = self.repository.get(NutritionFood).by_id(_StockItem.nutrition_food_id)
+            if _Food is not None:
+                _NutritionFood = LinkedNutritionFoodDto(
+                    nutrition_food_id = _Food.id,
+                    name = _Food.name,
+                    brand = _Food.brand,
+                    source = _Food.source,
+                    source_label = NUTRITION_SOURCE_LABELS.get(_Food.source, _Food.source),
+                    kcal_per_100g = _Food.kcal_per_100g,
+                    protein_g_per_100g = _Food.protein_g_per_100g,
+                    carbs_g_per_100g = _Food.carbs_g_per_100g,
+                    fat_g_per_100g = _Food.fat_g_per_100g,
+                )
+
         return StockItemDetailDto(
             stock_item_id = _StockItem.id,
             name = _StockItem.name,
@@ -847,6 +891,7 @@ class GetStockItemDetailHandler:
             barcodes = _Barcodes,
 
             last_checked_at = _StockItem.last_checked_at,
+            nutrition_food = _NutritionFood,
             level_history = _LevelHistory,
         )
 

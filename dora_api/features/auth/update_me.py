@@ -9,11 +9,8 @@ from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
                                            ALLOWED_FONT_SIZES,
                                            ALLOWED_LLM_PROVIDERS,
                                            ALLOWED_THEMES,
-                                           ALLOWED_VOICE_ENGINES,
-                                           NUTRITION_MODE_COMPLEX,
-                                           NUTRITION_MODE_VALUES, User)
+                                           ALLOWED_VOICE_ENGINES, User)
 from dora_api.features.assistant.providers import get_provider_config
-from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.tts.voice_catalog import VOICE_IDS
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
                                                   SESSION_USER_ID_KEY)
@@ -62,10 +59,8 @@ class UpdateMeRequest(BaseModel):
     # edited via PATCH /app-settings, not here.
     # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
-    # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
-    # Validated against NUTRITION_MODE_VALUES at the boundary
-    # (R-010 carve-out for closed-set sentinels).
-    nutrition_mode: str | None = None
+    # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
+    # edited via PATCH /app-settings, not here.
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
     # FU-508 dropped the stock-image companion.
     show_recipe_images: bool | None = None
@@ -202,25 +197,6 @@ class UpdateMeHandler:
             and request.inferred_pantry_enabled is not None
         ):
             _User.inferred_pantry_enabled = request.inferred_pantry_enabled
-
-        # C-cross Chunk 3 — per-user nutrition mode. R-010 carve-out: a
-        # closed-set sentinel validated at this single boundary point
-        # against `NUTRITION_MODE_VALUES`. `complex` is additionally
-        # gated by the install-wide `AppSetting.nutrition_db_source`
-        # being non-empty — a user can't pick a mode the install
-        # can't support.
-        if "nutrition_mode" in _SetFields and request.nutrition_mode is not None:
-            mode = request.nutrition_mode
-            if mode not in NUTRITION_MODE_VALUES:
-                return None, f"Invalid nutrition mode '{mode}'."
-            if mode == NUTRITION_MODE_COMPLEX:
-                _Setting = get_or_create_app_setting(self.repository)
-                if not _Setting.nutrition_db_source:
-                    return None, (
-                        "Complex nutrition mode needs a nutrition data "
-                        "source configured by an admin first."
-                    )
-            _User.nutrition_mode = mode
 
         # C-cross Chunk 5 — recipe-image opt-in. Plain bool; null is
         # ignored. Saved image bytes survive a toggle (only the render

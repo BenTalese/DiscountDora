@@ -1,9 +1,13 @@
 <template>
-    <div class="voice-picker" role="radiogroup" aria-label="Dora's voice">
+    <div role="radiogroup" aria-label="Dora's voice">
         <!-- Device default (browser) voice — always available, no download.
-             Selecting it switches Dora to the browser/device engine. -->
+             Selecting it switches Dora to the browser/device engine.
+             It is a different *kind* of thing from the neural voices (a
+             different engine, not a different voice), so it sits on its own
+             above them rather than as one more card in their grid. -->
+        <div class="voice-picker__group-label">Built-in</div>
         <div
-            class="voice-card voice-card--selectable"
+            class="voice-card voice-card--basic voice-card--selectable"
             :class="{ 'voice-card--active': deviceDefaultActive }"
             role="radio"
             :aria-checked="deviceDefaultActive === true"
@@ -13,6 +17,7 @@
             @keydown.space.prevent="onDeviceDefaultClick"
         >
             <div class="voice-card__head">
+                <q-icon :name="ICONS.phone_iphone" size="18px" class="voice-card__kind-icon" />
                 <span class="voice-card__name">Device default voice</span>
                 <q-icon
                     v-if="deviceDefaultActive"
@@ -23,7 +28,8 @@
             </div>
             <div class="voice-card__desc">
                 Uses your device or browser's built-in text-to-speech. Always
-                available — no download.
+                available — no download, but it sounds robotic next to the
+                neural voices.
             </div>
             <div v-if="browserTtsAvailable" class="voice-card__actions">
                 <button
@@ -39,6 +45,11 @@
             </div>
         </div>
 
+        <div class="voice-picker__group-label voice-picker__group-label--neural">
+            Neural voices
+            <span class="voice-picker__group-hint">Natural-sounding, run on your server</span>
+        </div>
+        <div class="voice-picker">
         <div
             v-for="voice in voices"
             :key="voice.id"
@@ -118,6 +129,7 @@
                 </button>
                 <span v-if="voice.error" class="voice-card__error">{{ voice.error }}</span>
             </div>
+        </div>
         </div>
     </div>
 </template>
@@ -200,7 +212,13 @@
 
     function onCardClick(voice: TtsVoice) {
         if (props.disabled || voice.status !== 'ready') return;
-        if (voice.id === props.modelValue) return;
+        // Bail only when this card is *actually* the live selection. Selecting
+        // the device default keeps `voice_id` (so switching back remembers the
+        // voice), which means a bare `voice.id === modelValue` test also
+        // swallowed the click on the very voice you were last using — the one
+        // neural card you could never get back to, while every other one
+        // worked. Same condition the template uses for `voice-card--active`.
+        if (!props.deviceDefaultActive && voice.id === props.modelValue) return;
         emit('update:modelValue', voice.id);
     }
 
@@ -268,6 +286,41 @@
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 10px;
         width: 100%;
+    }
+    // Section labels separating the built-in engine from the neural catalogue.
+    // Matches the settings side-nav eyebrow (11px / uppercase / muted).
+    .voice-picker__group-label {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .voice-picker__group-label--neural { margin-top: 18px; }
+    .voice-picker__group-hint {
+        font-size: 0.75rem;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--text-muted);
+    }
+    // The built-in voice is a different kind of thing from the neural ones, so
+    // it reads as a full-width sunken row rather than a peer tile in their grid.
+    .voice-card--basic {
+        background: var(--surface-sunken);
+        border-style: dashed;
+    }
+    .voice-card--basic.voice-card--active {
+        border-style: solid;
+    }
+    .voice-card__kind-icon {
+        color: var(--text-muted);
+        flex: 0 0 auto;
     }
     .voice-card {
         box-sizing: border-box;

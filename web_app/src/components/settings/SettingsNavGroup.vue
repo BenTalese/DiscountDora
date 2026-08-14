@@ -1,6 +1,11 @@
 <template>
     <nav class="settings-nav-group" :aria-label="label">
-        <div class="settings-nav-group__eyebrow">
+        <!-- `headerless` groups still carry a label — it names the group for
+             screen readers and identifies it to the mobile tab strip — they
+             just don't draw the eyebrow. Used for the standalone Account and
+             About entries, which are single destinations rather than
+             categories (owner call 2026-08-14). -->
+        <div v-if="!headerless" class="settings-nav-group__eyebrow">
             <q-icon v-if="icon" :name="icon" size="12px" class="q-mr-xs" />
             {{ label }}
         </div>
@@ -65,6 +70,9 @@
         // `| undefined` so a computed nav-group list can pass an absent icon
         // under exactOptionalPropertyTypes.
         icon?: string | undefined;
+        // Suppress the eyebrow header (see template). The label is still
+        // required — it's the group's accessible name and its mobile tab id.
+        headerless?: boolean | undefined;
     }>();
 
     function entryKey(e: SettingsNavEntry): string {

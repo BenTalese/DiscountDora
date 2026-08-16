@@ -256,10 +256,33 @@ class LinkedNutritionFoodDto:
     brand: str | None
     source: str
     source_label: str
+    # Per 100g, sodium in mg. The set is defined in
+    # `features/nutrition/nutrients.py`; NULL means "this source didn't say",
+    # and the UI renders that as an absent row rather than a zero.
     kcal_per_100g: float | None
     protein_g_per_100g: float | None
     carbs_g_per_100g: float | None
+    sugars_g_per_100g: float | None
     fat_g_per_100g: float | None
+    saturated_fat_g_per_100g: float | None
+    fibre_g_per_100g: float | None
+    sodium_mg_per_100g: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestedNutritionFoodDto:
+    """A food the matcher thinks *might* describe this item. Nothing is stored
+    — this is computed per read and disappears the moment the item is linked or
+    ignored. `confidence` travels so the UI can visibly hedge a weak guess
+    (P3 Honest); the client never re-derives the band from it (R-003)."""
+    nutrition_food_id: UUID
+    name: str
+    brand: str | None
+    source: str
+    source_label: str
+    kcal_per_100g: float | None
+    confidence: float
+    is_strong: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,6 +358,14 @@ class StockItemDetailDto:
     # unlinked — which is the honest default, since a link only ever exists
     # because a human confirmed one.
     nutrition_food: 'LinkedNutritionFoodDto | None' = None
+    # The auto-matcher's best guess, present only when the item is unlinked and
+    # hasn't been waved off. Computed on the read rather than fetched by the SPA
+    # so the suggestion arrives with the page instead of popping in after it.
+    nutrition_suggestion: 'SuggestedNutritionFoodDto | None' = None
+    # Whether the user has said "never suggest a food for this one". Drives the
+    # detail page's undo affordance — without it, an ignored item looks
+    # identical to one nothing has been suggested for.
+    nutrition_ignored: bool = False
 
 
 # 2026-06-30 — one number, one policy. Every event-kind projection
@@ -348,7 +379,26 @@ class GetStockItemDetailHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
+    def _nutrition_is_complex(self) -> bool:
+        """Whether this install runs complex nutrition — gates the suggestion
+        below, so off/simple installs don't pay a catalogue query per read.
+
+        **Must be called before the stock item is loaded.** `get_or_create_app_
+        setting` can commit, and a commit expires every object in the session;
+        the StockItem's `stock_level` / `stock_location` relationships are
+        mapped `lazy="noload"`, so a re-fetch after expiry silently yields None
+        rather than reloading. Calling this mid-handler blanked the level and
+        location on every detail read (caught by `test_patch_semantics`).
+        """
+        from dora_api.domain.entities.app_setting import NUTRITION_MODE_COMPLEX
+        from dora_api.features.app_settings.access import get_or_create_app_setting
+        setting = get_or_create_app_setting(self.repository)
+        return getattr(setting, "nutrition_mode", None) == NUTRITION_MODE_COMPLEX
+
     def handle(self, stock_item_id: UUID) -> StockItemDetailDto | None:
+        # Read before the entity load — see the docstring above.
+        _NutritionIsComplex = self._nutrition_is_complex()
+
         _StockItem: StockItem | None = (
             self.repository
             .get(StockItem)
@@ -852,7 +902,34 @@ class GetStockItemDetailHandler:
                     kcal_per_100g = _Food.kcal_per_100g,
                     protein_g_per_100g = _Food.protein_g_per_100g,
                     carbs_g_per_100g = _Food.carbs_g_per_100g,
+                    sugars_g_per_100g = _Food.sugars_g_per_100g,
                     fat_g_per_100g = _Food.fat_g_per_100g,
+                    saturated_fat_g_per_100g = _Food.saturated_fat_g_per_100g,
+                    fibre_g_per_100g = _Food.fibre_g_per_100g,
+                    sodium_mg_per_100g = _Food.sodium_mg_per_100g,
+                )
+
+        # Auto-match suggestion — only worth computing when there's nothing to
+        # link to yet and the user hasn't waved this item off. A linked item
+        # needs no guess, and an ignored one has already answered the question.
+        _NutritionIgnored = bool(getattr(_StockItem, "nutrition_ignored", False))
+        # Gated on complex mode: in off/simple there is no catalogue to match
+        # against, so computing one would be a wasted query on every read of
+        # every stock item for installs that never turned nutrition on.
+        _NutritionSuggestion = None
+        if _NutritionFood is None and not _NutritionIgnored and _NutritionIsComplex:
+            from dora_api.features.nutrition.suggestions import suggest_for_name
+            _Suggested = suggest_for_name(self.repository, _StockItem.name)
+            if _Suggested is not None:
+                _NutritionSuggestion = SuggestedNutritionFoodDto(
+                    nutrition_food_id = _Suggested.nutrition_food_id,
+                    name = _Suggested.name,
+                    brand = _Suggested.brand,
+                    source = _Suggested.source,
+                    source_label = _Suggested.source_label,
+                    kcal_per_100g = _Suggested.kcal_per_100g,
+                    confidence = _Suggested.confidence,
+                    is_strong = _Suggested.is_strong,
                 )
 
         return StockItemDetailDto(
@@ -892,6 +969,8 @@ class GetStockItemDetailHandler:
 
             last_checked_at = _StockItem.last_checked_at,
             nutrition_food = _NutritionFood,
+            nutrition_suggestion = _NutritionSuggestion,
+            nutrition_ignored = _NutritionIgnored,
             level_history = _LevelHistory,
         )
 

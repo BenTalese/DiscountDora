@@ -52,43 +52,268 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-651 — Stray editor temp file committed-adjacent in `web_app/src/pages/`
+- **Raised:** 2026-08-16 (stock-overview filter feedback).
+- **Type:** leftover.
+- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87` (138KB,
+  untracked, dated 2026-08-16 16:56) is sitting next to the real page — an editor/agent
+  temp file from the previous unit that never got cleaned up. It is not imported, but it
+  IS inside the SPA source tree.
+- **Why deferred:** not mine to delete unreviewed — it may be a copy the owner kept
+  deliberately, and it's 138KB of page source, not scratch.
+- **Recommended resolution:** now — confirm it's junk and `rm` it (it's untracked, so
+  nothing is lost from git either way).
 
-## [OPEN] FU-635 — Nutrition complex-mode: 1 of 6 build chunks remains (recipe rollup + coverage)
-- **Raised:** 2026-08-14 (owner-directed complex-mode build; reverses the charter's nutrition cut — see `RECONCILED_FINISHING_PLAN.md` §7 decision 3).
-- **Type:** deferred job (in-progress feature, stopped at a clean boundary).
-- **What:** Landed this session — **(1)** nutrition collapsed to one install-wide
-  `AppSetting.nutrition_mode` (per-user mode + the second install bool both gone);
-  the dead `nutrition_db_source` seam retired. **(2)** `NutritionFood` +
-  `NutritionPortion` schema, `StockItem.nutrition_food_id`, migration
-  `b9e3f1a7c4d2`. **(3)** USDA FDC bulk importer (download → parse → replace),
-  parser pytest-pinned 9/9 incl. the kcal-vs-kJ trap.
-  **(4)** `Admin → System → Nutrition` page + `GET /api/nutrition/sources` +
-  `POST /api/nutrition/datasets/import`, verified live.
-  **(5)** unified lookup — `GET /api/nutrition/lookup` fans out across local
-  datasets + OFF + USDA API, barcode-aware, every result badged by source,
-  failed sources reported rather than swallowed; plus
-  `POST /api/nutrition/foods/resolve` which persists a picked live suggestion
-  by re-fetching it server-side (the client sends only source + ref, so it
-  can't write arbitrary numbers). 32 tests (21 unit + 11 e2e), verified live
-  against the real OFF API.
-  **(6)** stock-item link picker — `NutritionFoodPicker.vue` (search-and-confirm
-  dialog, results badged by source, barcode-aware, never auto-matches),
-  `StockItem.nutrition_food_id` bound through the existing update endpoint with
-  the same clear-vs-unset shape as `usual_store_id`, and the linked food echoed
-  on the detail DTO with its source label. 4 more e2e (link / unlink / null
-  default / unrelated-patch-leaves-it-alone).
-  **Still to build:** the recipe per-serving rollup + coverage line.
-- **Why deferred:** stopped at a coherent boundary rather than leaving a
-  half-written surface — everything shipped is green and usable (an admin can
-  set the mode and download a dataset), but no *user-facing* complex surface
-  exists yet, so `complex` currently behaves like `simple` for everyone except
-  the admin page.
-- **Recommended resolution:** now — the feature isn't user-visible until the
-  remaining three chunks land. Design decisions are all settled (owner picks,
-  2026-08-14): per-serving figure + always-visible coverage line; partial
-  totals shown, clearly marked; no reparenting of the amounts problem onto
-  per-100g (it needs the same gram conversion *plus* an unknowable cooking
-  yield — see the worklog entry for the reasoning).
+## [OPEN] FU-650 — Two `stockLevelDot` unit tests fail on `main`-as-of-this-branch
+- **Raised:** 2026-08-16 (stock-overview filter feedback).
+- **Type:** finding.
+- **What:** `web_app/test/unit/stockLevelDot.spec.ts` has 2 failing assertions — it
+  expects `bg-negative` for the out-of-stock sequence and `dora-bg-neutral` for
+  out-of-stock *and* unknown; the component now renders `bg-negative` for out-of-stock
+  and reserves `dora-bg-neutral` for unknown only. Confirmed pre-existing: the same two
+  fail with this session's changes stashed. Everything else is green (434 passing).
+- **Why deferred:** out of scope — it's the D-001 escalation (Out = red) landing in the
+  component without the test following, not a regression from this unit.
+- **Recommended resolution:** opportunistic — decide which is right (the test looks
+  stale against D-001) and fix the losing side.
+
+## [OPEN] FU-649 — Buy-verdict quick filter on Stock Overview needs a bulk verdicts endpoint
+- **Raised:** 2026-08-16 (stock-overview filter feedback — owner deferred).
+- **Type:** deferred job.
+- **What:** the owner asked whether a quick filter for buy-verdict rows is worth adding.
+  It can't be built client-side: `useBuyVerdict` fetches **one verdict per item, lazily,
+  as each row mounts**, so the page only knows verdicts for rows already rendered —
+  filtering on that would silently miss everything below the fold. The honest version is
+  a bulk `GET /api/stock-items/buy-verdicts` (id + verdict + confidence for the pantry,
+  computed with batched queries rather than looping `_gather_inputs`), which would drive
+  the filter *and* pre-warm the row badges — killing the current one-request-per-row
+  pattern at the same time.
+- **Why deferred:** owner said "skip this for now" when asked (the other four items in
+  the batch were pure UI).
+- **Recommended resolution:** when the buy-verdict surface is next opened — pair it with
+  the N-request cleanup, since they're the same endpoint.
+
+## [OPEN] FU-652 — Sweep the remaining `secondary` colour uses against D-020
+- **Raised:** 2026-08-16 (stock-overview dark-mode colour fix).
+- **Type:** follow-up.
+- **What:** D-020 (new) says an indicator painted in `secondary` must read
+  `--brand-secondary-strong`, not the surface-grade token. This unit converted the three
+  Stock-Overview marks (row stripe, filter chips, footer count). Not swept: the
+  `color="secondary"` icons in `RecipeDetailPage.vue:643`, `RecipeCookMode.vue:314`,
+  `AdminSystemRegionSettings.vue:40,104`, and `DoraChat.vue:617`'s
+  `background: var(--q-secondary)` scrollbar thumb. Each needs a look at whether it's a
+  mark-on-page (convert) or genuinely surface-ish (leave).
+- **Why deferred:** scope — the owner reported two specific surfaces; converting the
+  rest unasked is exactly the drive-by the standards warn against.
+- **Recommended resolution:** opportunistic — next time one of those files is open.
+
+## [OPEN] FU-648 — QR fix shipped without reproducing the reported failure
+- **Raised:** 2026-08-16 (stock-item detail feedback batch).
+- **Type:** finding.
+- **What:** the owner reported "QR button doesn't work — empty modal and a 404 on Print
+  one". A static read did **not** reproduce it: both endpoints exist, both route, and
+  both answer 401-not-404 to an unauthenticated curl against the running dev backend.
+  The fix shipped (R-045 / ADR-041 — fetch through `AxiosHttpClient`, open a blob,
+  inline the sheet's images as data: URIs) removes the whole class of failure, since
+  the previous form could only work if the browser volunteered the session cookie. But
+  **the specific 404 was never explained** — a 404 rather than a 401 suggests the
+  request didn't reach those routes at all, which would point at the backend base URL
+  the owner's install resolves (`envDefault()` hardcodes `:5170`, which is wrong for a
+  single-port container deployment) rather than at auth.
+- **Why it matters:** if the base URL is the real cause, it's broken for more than QR
+  and the fix here would mask one symptom. Worth 2 minutes with devtools open.
+- **Recommended resolution:** confirm in browser — open the QR dialog on the owner's
+  actual install; if it now works, check what `localStorage['dora.backendBaseUrl']` /
+  the network tab show for the API origin and close this out. See DORA_VERIFY → Stock.
+
+## [OPEN] FU-647 — `print-view` and the CSV export still build API URLs by hand (R-045)
+- **Raised:** 2026-08-16 (QR fix — noticed in the same composable).
+- **Type:** finding.
+- **What:** `useStockOverviewExport.openPrintView` still does
+  `window.open(`${baseUrl}/stock-items/print-view…`)`, which is the exact pattern
+  R-045 now forbids and the exact pattern that broke the QR sheet. `downloadCsv` uses
+  `fetch(..., { credentials: 'include' })`, which is *correct* but is a second
+  hand-rolled auth path next to `AxiosHttpClient`. Other server-rendered print views
+  (shopping list, recipe) likely have the same shape — not surveyed.
+- **Why deferred:** out of scope for a stock-item-detail feedback batch, and the QR
+  path was the one actually reported broken. Converting print-view needs the same
+  server-side treatment (any `/api/...` asset it references must be inlined), so it's
+  its own small unit.
+- **Recommended resolution:** opportunistic — grep for `resolveBaseURL` /
+  `getBackendBaseUrl` in templates and `window.open` calls, convert the document
+  endpoints to the `useQrLabels` shape, and route `downloadCsv` through the client.
+
+## [OPEN] FU-646 — The recipe nutrition rollup still aggregates only the original four nutrients
+- **Raised:** 2026-08-16 (nutrition macros+ build).
+- **Type:** deferred job.
+- **What:** `NutritionFood` now stores sugars, saturated fat, fibre and sodium, and the
+  stock-item detail page displays them. `features/nutrition/recipe_rollup.py` still sums
+  only kcal/protein/carbs/fat, so a recipe's nutrition card can't show the new four.
+- **Why deferred:** the feedback was about the stock-item detail page. The rollup has
+  its own coverage/uncounted contract (R-041) that every added nutrient has to satisfy,
+  and it feeds the meal planner's per-day figures — a bigger blast radius than this
+  unit was scoped for.
+- **Recommended resolution:** when the recipe nutrition card is next touched. Note the
+  data caveat: existing catalogue rows have NULL for all four until the dataset is
+  re-imported, so the rollup would report them as uncounted for a while.
+
+## [OPEN] FU-645 — Existing nutrition catalogue rows have no sugars/saturates/fibre/sodium until re-import
+- **Raised:** 2026-08-16 (nutrition macros+ build).
+- **Type:** follow-up.
+- **What:** migration `d3a7f2b91c60` adds four nullable columns with no backfill —
+  correct, because the values were never downloaded and inventing them would be a lie
+  (P12). Any install that imported a USDA dataset before today shows blanks in the new
+  Details table until it re-runs the import under System → Nutrition. Nothing in the UI
+  currently says so.
+- **Why deferred:** needs a product call on how loud to be — a one-line hint on the
+  admin Nutrition page ("re-import to pick up newly-tracked nutrients") is probably
+  enough; a banner would be over-nagging for a display-only gap.
+- **Recommended resolution:** now-ish, alongside any next visit to the admin Nutrition
+  page. Cheap either way.
+
+## [OPEN] FU-644 — Preferred buys are hidden when Products is on, with no migration path for existing rows
+- **Raised:** 2026-08-16 (stock-item detail feedback batch — owner decision).
+- **Type:** finding.
+- **What:** the owner ruled the two systems mutually exclusive and chose "Products
+  wins". Implemented as a pure `v-if` — rows are kept, never deleted, and reappear if
+  Products is switched off. But an install that has been curating preferred buys and
+  then enables Products loses sight of that text with no notice and no way to carry it
+  across into a real product link.
+- **Why deferred:** the right answer isn't obvious (a one-time "you have N preferred
+  buys hidden — review them?" nudge? a read-only list on the Products tab? nothing at
+  all?) and it only bites installs that used both, which may be none.
+- **Recommended resolution:** when the Products overlay's Phase-F tail is next picked
+  up (alongside FU-214). Decide then; nothing is lost in the meantime.
+
+## [OPEN] FU-643 — The nutrition matcher has no vocabulary layer: regional synonyms score zero
+- **Raised:** 2026-08-15 (nutrition auto-suggest build).
+- **Type:** finding.
+- **What:** matching is set-overlap on de-pluralised words, so two names for the same
+  food never meet. "Tinned tomatoes" vs USDA's "Tomatoes, canned" scores 0.40 and is
+  rejected; the same goes for aubergine/eggplant, coriander/cilantro, mince/ground
+  beef, prawns/shrimp, capsicum/bell pepper — the whole AU/UK-vs-US split, against a
+  catalogue that is entirely US-vocabulary. The user isn't stranded (Search still
+  finds it), but this is the largest single source of "no match" on an AU pantry,
+  which is the app's primary audience.
+- **Why deferred:** a synonym table is its own design call — where it lives (code
+  constant vs seeded table vs per-install editable), whether it's regional or global,
+  and how it interacts with `AppSetting.locale`. Out of scope for the build, and
+  guessing at it would be worse than the honest gap.
+- **Recommended resolution:** when the owner has walked the matching page against a
+  real USDA import (see the `DORA_VERIFY.md` item) and can say how often it actually
+  bites — that read should decide whether this is a 30-word constant or a real feature.
+
+## [OPEN] FU-642 — `stockLevelDot.spec.ts` has 2 failing tests on the working tree
+- **Raised:** 2026-08-15 (mobile-header task — hit while running the frontend suite).
+- **Type:** finding.
+- **What:** `web_app/test/unit/stockLevelDot.spec.ts` fails 2 of 3 cases: the
+  out-of-stock / unknown avatar is expected to carry `dora-bg-neutral` but renders
+  `bg-negative`. Suite is otherwise green (434 passing).
+- **Why deferred:** Pre-existing — reproduced identically on a `git stash`ed tree,
+  so it belongs to the in-flight stock-row work, not the header change. Out of scope
+  to fix blind (the spec or the component is the stale one; that's a call for whoever
+  owns the current `StockLevelDot` colour semantics, and D-001 governs it).
+- **Recommended resolution:** now — it's a red suite, and whoever is mid-flight on
+  the stock-row rework can settle it in a minute.
+
+## [OPEN] FU-641 — Header icon buttons sit at 36px, under the D-004 44px touch floor
+- **Raised:** 2026-08-15 (mobile-header task).
+- **Type:** finding.
+- **What:** `BaseButton`'s `icon` / `danger-icon` / `filled-icon` variants set
+  `min-height: 36px; min-width: 36px` (`web_app/src/components/BaseButton.vue`), so
+  the mobile toolbar's hamburger, alerts bell and account avatar are 36×36 effective —
+  below the **D-004** 44×44 floor. `DonateButton` next to them is 44px, so the row is
+  also inconsistent. Not introduced here: the mobile shrink deliberately touched only
+  glyph/avatar font-size and left the hit boxes alone, so nothing regressed.
+- **Why deferred:** `dora-btn--icon` is app-wide — raising it to 44px re-flows every
+  toolbar, table row and card action in the app, which is its own unit with its own
+  browser pass. Way outside a header tweak.
+- **Recommended resolution:** later — fold into the next design-remediation pass, or
+  whenever the FU-578 UX/UI review is triaged into fix units.
+
+## [OPEN] FU-640 — A user-visible failure produced an empty log bundle: 4xx responses aren't logged
+- **Raised:** 2026-08-15 (FU-639 investigation — the owner's log bundle contained nothing useful).
+- **Type:** finding.
+- **What:** The owner hit two hard failures (dataset download, food linking) and
+  collected logs. The bundle held: `compose-logs.txt` = 7 lines of boot output,
+  `app-logs/dapi.log` = **0 bytes**, health = ok. Cause: both failures were
+  **400 responses**, and a `bad_request(...)` return isn't logged at all — while
+  the container's default `DORA_LOG_LEVEL=ERROR` suppresses the INFO request
+  line that would at least have shown the endpoint being hit. So the app failed
+  loudly in the UI and left no trace on disk, and the diagnosis had to be done
+  by reproducing locally instead.
+- **Why deferred:** the fix is a policy call, not a bug fix — (a) log 4xx on
+  mutating endpoints at WARNING with the reason, and/or (b) raise the container's
+  default log level to WARNING. Both change operator-facing behaviour and touch
+  R-030 territory, so they're the owner's call rather than something to slip in
+  alongside a bug hunt.
+- **Recommended resolution:** now-ish — this is the difference between a log
+  bundle that answers the question and one that costs a session. Pairs naturally
+  with FU-405 (ops/observability).
+
+## [OPEN] FU-639 — Camera scanning needs HTTPS on the **web** build; pick the self-host TLS story
+- **Raised:** 2026-08-15 (stock-overview feedback round)
+- **Type:** deferred job
+- **What:** `navigator.mediaDevices` only exists in a **secure context**, so on a
+  self-hosted install reached at `http://192.168.x.x:PORT` in a *browser* the
+  scan overlay can never open the camera. **Scope confirmed 2026-08-15 — this is
+  web-only:** Capacitor sets `androidScheme: "https"`
+  (`src-capacitor/capacitor.config.json`), so the Android app's WebView origin is
+  `https://localhost` — a secure context — and `allowMixedContent: true` lets it
+  keep talking to a plain-http backend. `android.permission.CAMERA` is already in
+  the manifest. **So the Android app can scan against any instance**, and there is
+  no desktop build to consider (`quasar.config.ts` carries an Electron block but
+  there is no `src-electron/`, so it has never been built).
+  Communication is done (2026-08-15): shared `helpers/cameraAvailability.ts`
+  drives an explainer panel in the scan overlay, a live warning under the admin
+  Scanning toggle, and a Help guide entry. **What's left is the capability
+  itself** — options, none yet chosen: optional self-signed TLS in the container,
+  a documented reverse proxy (Caddy gets a cert in one line), or leaning on
+  Tailscale/`*.ts.net` which serves HTTPS for free. Same constraint gates push
+  notifications and PWA install, so one decision covers all three.
+- **Why deferred:** it's a deployment/distribution decision, not a code fix, and
+  it wants the same answer as the Phase-4 self-host release story rather than a
+  one-off patch. Out of scope for a UI feedback round.
+- **Recommended resolution:** later during Phase 4 (open-source release
+  readiness — bundle with FU-406's README/release work). Not urgent for the owner
+  personally: the Android app already covers his phone-scanning case.
+
+## [OPEN] FU-640 — iOS Capacitor shell has no `NSCameraUsageDescription`
+- **Raised:** 2026-08-15 (while scoping FU-639)
+- **Type:** finding
+- **What:** `src-capacitor/ios/App/App/Info.plist` declares no camera usage
+  string. iOS *hard-terminates* an app that touches the camera without one, so
+  the scan overlay would kill the app rather than fail softly. Android's manifest
+  has its `CAMERA` permission; iOS was never given the equivalent.
+- **Why deferred:** the iOS target is unbuilt Capacitor scaffolding — P8-10
+  shipped an **Android** APK only, and nothing has ever run this code on iOS. It
+  is a latent trap, not a live bug.
+- **Recommended resolution:** when an iOS build is first attempted — add the key
+  before the first device run, not after the first crash.
+
+## [OPEN] FU-638 — Cookbook renders "No recipes match the current filters" while its own footer counts 11 shown
+- **Raised:** 2026-08-14 (FU-637 — spotted while verifying the kcal badge).
+- **Type:** finding.
+- **What:** On `#/cookbook` in the agent's browser pane, the grid renders the
+  empty state (`filteredRecipes.length === 0`) while the sticky footer — reading
+  **the same computed** — shows "11 Shown / 8 Cookable now / 1 Favourites".
+  Zero `.recipe-group` and zero `.recipe-card` nodes in the DOM; **no console
+  error** of any kind (console capture verified working — Vite/Quasar messages
+  come through). `GET /api/recipes` returns all 11 rows correctly.
+- **Why deferred / not attributed:** **not caused by the FU-637 changes** —
+  reproduced with `nutrition_mode = off`, where the new filter path isn't
+  reached at all, and observed earlier in the same session before
+  `RecipesOverview.vue` was touched. Reproduced in a fresh tab (so not the
+  known stale-tab-after-backend-restart trap) and after a hard reload. Could
+  not be attributed further from a static read: two readers of one computed
+  disagreeing, with nothing thrown, points at either a render-time wedge
+  (`FadeTransition mode="out-in"` wraps the grid — the R-037/FU-609 blank-page
+  signature) or something specific to the agent's embedded browser.
+- **Recommended resolution:** **confirm in browser** — open the cookbook in a
+  real browser (dev *and* a production build) and see whether recipe cards
+  render. If they do, this is an agent-pane artifact and can be closed with a
+  note; if they don't, it's a live cookbook regression and the transition
+  wrapper is the first suspect.
 
 ## [OPEN] FU-636 — USDA Foundation dataset URL carries a release date and will eventually 404
 - **Raised:** 2026-08-14 (nutrition complex-mode build).
@@ -104,6 +329,11 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — if it bites, either expose the
   override in the admin UI (the API already supports it) or scrape the current
   link from the downloads page at import time.
+- **Update 2026-08-15 (FU-639):** still open, but the *host* was wrong too and is
+  now fixed (`www.usda.gov` 403s automated downloads; `fdc.nal.usda.gov` serves
+  them). The 2026-04-30 Foundation release is currently live on the correct host,
+  so this is still a future-dated risk rather than a present break, and the 404
+  path now has an actionable message pointing at the downloads page.
 
 ## [OPEN] FU-634 — `stockLevelDot.spec.ts` fails on 2 assertions (pre-existing, unrelated to locations work)
 - **Raised:** 2026-08-14 (stock-locations settings redesign — hit while running the suite).

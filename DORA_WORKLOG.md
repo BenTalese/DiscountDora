@@ -18,6 +18,944 @@ next.
 
 ---
 
+## 2026-08-16 (later) — Stock Overview: filter feedback (mobile toolbar, scroll row, dark-mode secondary)
+**Status:** code-complete, green, **agent-verified live with measurements**. vue-tsc clean;
+vitest 434 passing / 2 failing, both pre-existing (see FU-650 — confirmed failing with this
+session's changes stashed). One look-and-feel line added to DORA_VERIFY.
+
+**What ran:** five owner bullets on the Stock Overview. Four were built; the fifth (a
+buy-verdict quick filter) the owner deferred after being told what it actually costs —
+logged as **FU-649**.
+
+**The one that mattered — "Open/in-use chip too dark in dark mode, same issue as the
+essential indicator".** The owner's instinct that the two shared a cause was right, and
+the cause is broader than either surface: `--brand-secondary` is **surface-grade**. In
+every dark theme it IS `--surface-toolbar` (19–47% lightness), so anything painting a
+*mark on the page* in it sits at the page's own darkness. Measured against the sunken
+filter panel: **1.45–4.74:1 across the five dark themes** (cherry-cola-dark's `#442220`
+being the 1.45 — invisible, not merely dim). Fixed at the token layer rather than
+per-surface: a new `--brand-secondary-strong`, declared once on `:root` as
+`var(--brand-secondary)` and overridden with a lifted tone in the five dark blocks only.
+Now **7.31–8.48:1** everywhere. Three call sites converted — the row's essential stripe,
+the Essential/Open filter chips, and the Essential footer count — and the pattern written
+up as **D-020**.
+
+Two things a static read would have got wrong, both caught by probing the running app:
+- **The chip was never a filled chip.** `QChip` with `outline` sets `text = color ||
+  textColor` and emits **no** `bg-` class, so `:color="secondary"` + `text-color="white"`
+  rendered as transparent-background, secondary-coloured *text and border* — the
+  `text-color` was being ignored entirely. FilterChip now resolves its active tone
+  through an explicit tone→token map and sets `color` directly; the other four tones map
+  to the same semantics they already used, so nothing else moved.
+- **`--q-secondary` reads `#006a80` on `documentElement` even in pesto-dark.** Looks
+  like a broken theme sync; isn't. Quasar's `setCssVar` writes to `document.body`, so the
+  root keeps the SCSS-baked value. Read palette vars off an element inside `<body>`.
+
+**The other three.** `FilterToggleButton` gained a `compact` prop (page owns the
+breakpoint — it's the page that knows how crowded its toolbar is), matching how every
+other button on that toolbar already collapses. The input-filter row got the
+quick-filter row's exact treatment (`no-wrap` + `overflow-x: auto` + hidden scrollbar),
+which turned three wrapped lines into one 42px line at 375px. Its children are pinned to
+`flex: 0 0 180px` — needed because a flex item shrinks past its own `min-width` once the
+row scrolls, and because the Location picker is a `use-input` QSelect capped at
+`width: 100%` by yesterday's global rule, which in a scrolling row resolves to the whole
+visible strip (it measured 311px next to its 180px siblings).
+
+The stripe/level-picker gap **shipped too wide first and was corrected by the owner** —
+worth recording, because the mistake is a general one. The reported symptom was "too
+squished"; I bumped the left padding on *both* breakpoints (12→17px desktop, 8→14px
+mobile) without checking whether desktop was ever squished. It wasn't: desktop had always
+been a symmetric 12px (≈8px of gap), and the 2026-08-15 mobile squeeze had tightened
+phones to 8px, leaving **3px**. So the defect was mobile-only and had a known cause — the
+generic fix widened a surface nobody complained about and opened an asymmetric padding
+that didn't need to exist. Corrected to: phones use the desktop 12px left padding
+(the other three sides keep the tightened phone values), desktop CSS untouched. Measured
+after: 8px gap at 375px, identical to desktop's 8px. **The lesson is the same one the
+previous unit logged** — when a report names a surface, find where the defect actually
+lives before generalising the fix; here "where" meant which *breakpoint*.
+
+**Verification.** Scratch install (backend :5185 + own SQLite + own CORS origin, SPA
+:5188, both torn down; `.claude/launch.json` restored). Everything above is a measured
+number, not a judgement — see `DORA_VERIFY_TRIAGE.md` for the table. **Three harness
+gotchas worth carrying forward**, on top of the known rAF one: screenshots time out on
+this page; `q-virtual-scroll` renders **zero** rows in the hidden pane (filter under the
+50-item threshold to reach the plain list path before measuring); and **`$q.screen` does
+not react to `resize_window`** — it holds the width the page loaded at, so every
+`$q.screen.lt.sm` branch renders desktop and a mobile check silently passes on desktop
+markup. Reload after resizing and assert `$q.screen.width` first.
+
+**Close-gate.** Engineering standards: no violations introduced — the fix went in at the
+token layer per theme-tokens-only, the tone map is explicit rather than reflective (house
+no-magic rule), and `FilterToggleButton`'s new prop keeps the breakpoint with the page
+that owns it. ADR evaluation → **D-020 added** to the design style guide (indicator-grade
+vs surface-grade brand colour); no new R-rule, since this is a design-token rule and R-035
+already routes UI work through the D-rules. **New FUs:** 649 (buy-verdict bulk endpoint,
+deferred by owner), 650 (pre-existing stockLevelDot test failures), 651 (stray 138KB
+`.vue.tmp` file in `web_app/src/pages/`), 652 (sweep the remaining `secondary` uses
+against D-020).
+
+**Next up:** the owner's call — FU-651 is a 10-second cleanup; otherwise the largest live
+item is still the FU-578 UX/UI review triage.
+
+---
+
+## 2026-08-16 — Stock-item detail: feedback batch (bugs + UI + nutrition depth)
+**Status:** code-complete, green. The **Location-overflow fix is agent-verified live**
+(measured at 375px and 320px on a scratch install); the rest is **browser-verify owed**
+— see DORA_VERIFY → "Stock-item detail: feedback batch".
+
+**Process note for the next session — this unit shipped the same fix three times.**
+Wrong mechanism (a no-op), then right mechanism but wrong scope (one page out of
+thirteen), then right. Both misses share a cause: reasoning about CSS instead of
+rendering it, and fixing where the report came from instead of where the defect lives.
+The
+Location-overflow fix went out on a plausible-sounding CSS theory without ever being
+rendered, and it was a no-op. What made it verifiable in the end was standing up a
+scratch instance (own backend on 5175 + own SQLite + own CORS origin, all torn down
+afterwards) and *measuring* `getBoundingClientRect` per row rather than reasoning about
+flexbox. **Harness gotcha worth knowing:** the Browser pane's document stays
+`document.hidden`, so `requestAnimationFrame` never fires and any Vue `<Transition>`
+never settles — this page's `FadeTransition mode="out-in"` leaves it frozen on the
+loading skeleton forever, and no CSS injection fixes it (it's rAF, not CSS duration).
+The workaround was to temporarily swap `<FadeTransition>` for a plain `<div>`, measure,
+then restore (verified restored via `git diff`). Same trick will be needed for any
+future measurement on a page wrapped in a transition.
+
+**What ran:** the owner pasted ~25 bullets of hands-on feedback on the stock-item
+detail page. Four owner decisions were taken up front rather than guessed:
+triage-and-implement (not a proposal doc); **keep QR on the detail page, icon-only on
+mobile, fix the breakage**; nutrition extends to **the common macros+** (not the full
+USDA nutrient table, not "leave as-is"); **preferred buys hide when Products is on**.
+
+**Bugs, with root causes:**
+- **Spaces eaten while searching.** `NutritionFoodPicker.onQueryChange` wrote the
+  *trimmed* text back into `query`, so a trailing space could never survive to the next
+  keystroke — "greek yoghurt" became "greekyoghurt". Trim for the search only.
+- **Location field overflowing its row on mobile.** **Fixed twice — the first
+  diagnosis was wrong, and the wrong fix was dead code.** First guess: flex
+  `min-width: auto` letting the `<input>`'s intrinsic width win, fixed with
+  `min-width: 0`. That did nothing, because Quasar **already** sets `min-width: 0` on
+  both `.q-item__section--main` and `.q-field__native` — the rule I added could never
+  have had an effect, and I shipped it without measuring. Owner reported it still
+  broken ("the arrow is being pushed too far to the right"), which is the precise
+  symptom. **Actual mechanism, measured at 375px:** `q-item-section` is a *column*
+  flex container, and `.q-field` inside it has `max-width: none`, so it sizes to its
+  own content instead of its parent — 236px of field inside a 136px section, arrow
+  landing at x=402 in a 375px viewport. Quasar's `max-width: 100%` doesn't save it:
+  that lives on `.q-field__control`, whose 100% resolves against the already-oversized
+  `.q-field`. Fix is `width/max-width: 100%` on `.q-field` itself.
+  **Then fixed a third time — scope, not mechanism.** The owner asked "what's the
+  difference between this input and the others?", and answering it properly is what
+  showed the second fix was still wrong-shaped: the difference is `use-input`, which
+  is the *only* prop that makes QSelect render a real `<input>` (`QSelect.js`
+  `getInput`) — and **13 files use it**, three of them location pickers
+  (`CreateStockItemDialog`, `BulkMoveLocationDialog`, the stock filters). A rule
+  scoped to `.dora-inline-edit` on one page left all of them broken. The cap now
+  lives in `css/app.scss` on `.q-select--with-input`; the page-scoped rule stays only
+  for the non-`use-input` fields in that list (Stock group).
+  **Verified:** detail page at 375px — every field now ends at its column edge (327),
+  Location field 236→136px, arrow 402→327, row overflow 85→0px; clean at 320px.
+  Global rule A/B'd on `AdminSystemRegionSettings` (a `use-input` select outside any
+  inline-edit list): rule off → field 275px overflowing its 284 parent by 3px; rule
+  on → 272px, flush. So it is load-bearing beyond the reported page.
+- **QR dialog empty + "Print one" 404.** `<img :src="apiUrl">` and
+  `window.open(apiUrl)` are unauthenticated by construction. Rewritten to fetch through
+  `AxiosHttpClient` (new `getBlob`) and open a blob; the server now inlines the sheet's
+  QRs as data: URIs, because a relative back-reference can't resolve from a blob origin.
+  Two other call sites (Kitchen-setup QR labels, stock-overview bulk sheet) had the
+  identical fault and were converted through one new `useQrLabels` module.
+  **Honest caveat: the reported 404 was never reproduced** — see below.
+- **No un-mute on the detail page.** Stock-take's Mute dialog promises "un-mute later
+  from the item's detail page"; `stocktake_alerts_are_enabled` was in the DTO and in
+  the PATCH contract but had no control anywhere. Added as an Overview row.
+
+**UI, per the feedback:** `PantryBeliefCard` (new) always renders on this page — the
+row-form chip stays disagreement-only, because 200 "Dora agrees" pills in a list is
+noise while one on the page you deliberately opened is the point. `BuyVerdictCard`
+became collapsed-by-default, lost its stock-level-coloured dot for a cart/clock icon,
+lost "Personal data only", renamed "Add to primary list" → "Add to list", and says
+"shopping trips" not "shops". Expiry's Set button leads the row carrying the overview's
+glyph — extracted to `helpers/expiryIndicator` rather than copied (R-002). Nutrition:
+search is an always-present icon, "Not a food" only where a suggestion exists, "Not
+tracked" → "Ignored", full nutrient table behind a Details disclosure.
+
+**Nutrition depth:** four nutrients added (sugars, saturated fat, fibre, sodium-in-mg)
+across entity, mapping, migration `d3a7f2b91c60`, the CSV importer, the live USDA-API
+path, OFF, and the detail DTO. New `features/nutrition/nutrients.py` owns which
+nutrients exist and how each source names them, because that mapping was previously
+duplicated three ways and a nutrient added to the importer but not the API path would
+have been silently blank. **DTO field copies were left explicit** (no
+`getattr`-over-a-list) per the house no-magic rule — the shared table covers the drift
+risk that matters, which is source naming, not field lists.
+
+**Follow-on (same day) — "was something broken with nutrition? Dora was suggesting
+close matches before."** Investigated as a suspected regression from this unit's
+nutrition work. **It isn't one.** The 36 suggestion tests pass, the SPA's
+`v-if/v-else-if/v-else` chain on the detail page is intact (a comment between branches
+is legal), and nothing in the changed code touches the matcher. The cause is design
+meeting an empty install: `suggestions.py` is **local-catalogue-only** — a deliberate
+2026-08-15 decision, because the bulk page scores the whole pantry at once and a live
+lookup per item would be hundreds of round-trips through a source known to flap. With
+no dataset downloaded there are no candidates, so `suggest_for_name` returns None for
+every item and `unmatched_items` yields a list with every `suggestion: null`. That
+renders identically to "everything is already matched".
+
+The owner's call: **say so in the settings area.** Implemented as a real state, not
+static copy — `/nutrition/unmatched-items` now returns `catalogue_size` (new
+`local_catalogue_size` in `sources.py`), so the matching page distinguishes "nothing
+left to match" from "nothing to match *against*" and leads with a banner + a "Set up
+food data" button for admins. The admin Nutrition page gained the explanation under
+Food datasets and — the important bit — a **second, separate** warning for the case
+the existing one misses: `any_available` is satisfied by Open Food Facts alone, so on
+an OFF-enabled install with no dataset the old banner went quiet while auto-matching
+was still dead. That was precisely the silent state. Two e2e tests pin the new field,
+including that the simple-mode short-circuit branch carries it (a missing key reads as
+`undefined`, which is not `=== 0`, so the banner would never fire).
+
+Also fixed in passing: `/nutrition/foods/resolve` was still returning only the original
+four nutrients — missed when the new columns went in. Harmless (the picker reads only
+`id`) but inconsistent.
+
+**Decisions worth recording:**
+- **OFF states sodium in grams; we store milligrams.** Handled with an explicit
+  per-nutrient `off_scale` and pinned by its own test — a silent 1000× on a number
+  people actually watch was the failure mode worth paying a test for.
+- **Rejected making the QR endpoints public** to keep the `<img src>` form working. A
+  QR payload is a stock-item id; unauthenticated enumeration of a household's ids is
+  not a trade worth a print button.
+- **The rollup was left alone** (FU-646). Extending it means satisfying R-041's
+  coverage contract and touching the meal planner's per-day figures — not this unit.
+
+**Files touched:** `web_app/src/pages/StockItemDetailPage.vue`,
+`components/stock/{BuyVerdictCard,NutritionFoodPicker,StockItemRow}.vue`,
+`components/stock/{PantryBeliefCard,NutritionFactsList}.vue` (new),
+`composables/useQrLabels.ts` (new), `helpers/expiryIndicator.ts` (new),
+`composables/useStockOverviewExport.ts`, `pages/settings/QrLabels.vue`,
+`services/api/axiosHttpClient.ts`, `models/stockItemDetail.ts`;
+`dora_api/features/nutrition/{nutrients.py (new),lookup,dataset_import}.py`,
+`features/data/barcodes.py`, `features/stock_items/get_stock_item_detail.py`,
+`domain/entities/nutrition_food.py`, `persistence/table_mappings.py`, migration
+`d3a7f2b91c60`; `tests/{test_nutrition_lookup,test_nutrition_dataset_import}.py`,
+`tests/e2e/dora_api/test_data_router.py`.
+
+**Verification:** backend **1772 passed** / 1 skipped / 1 xfail (up 4 — new OFF/USDA
+nutrient tests), including the migration-head and ORM-schema-match gates, which is what
+confirms the four new columns and the migration agree. `vue-tsc` clean, `eslint` clean
+across `src/`, `vitest` 434 pass with the **2 known pre-existing** `stockLevelDot.spec.ts`
+failures (FU-634/642), untouched here. One existing test was **deliberately inverted**:
+`test__qr_sheet__html_response` asserted the sheet points back at `/api/.../qr`, which is
+exactly the behaviour that broke; it now asserts the data: URI and asserts the old
+back-reference is absent.
+
+**What I could NOT confirm — read this before closing FU-648.** The QR failure did not
+reproduce in a static read: both routes exist, both are registered, and both answer
+**401, not 404**, to an unauthenticated curl against the running dev backend. The fix
+removes the whole class of failure and is right on its own merits, but a 404 suggests
+the request never reached those routes — which would point at the backend base URL the
+owner's install resolves (`envDefault()` hardcodes `:5170`) rather than at auth. If so,
+more than QR is broken there and this fix masks one symptom. Logged as **FU-648** with a
+browser check, per the reported-defect rule.
+
+**Standards close-gate:** R-002 (expiry indicator + nutrient mapping extracted, not
+copied; `useQrLabels` shared by three call sites), R-003 (confidence band, verdict and
+nutrient values all server-owned; the client only formats), R-019/no-magic (explicit DTO
+field lists; readable per-nutrient table over reflection), R-029 (nutrition row hidden,
+not disabled, outside complex mode), R-035/D-002 (belief card keeps the warning tint out
+of the text ink), D-004 (both new disclosure controls are real buttons at a 44px min
+height). **New: R-045 / ADR-041** — never reach an authenticated endpoint from
+`<img src>`/`window.open`. Pre-existing violations of that new rule found and *not*
+fixed here are logged as **FU-647** (`print-view`, CSV export) rather than left silent.
+New follow-ups: FU-644..648.
+
+---
+
+## 2026-08-15 — Nutrition auto-suggest: match on name, offer it, never save it
+**Status:** complete (code + full live browser verify).
+
+**What changed:** owner ask — "people don't like having to manually input data and
+set stuff up. If a stock item isn't linked to any nutrition data, auto search and
+best-match on the name and show it as a suggested link — accept, ignore, or search
+yourself. It shouldn't get in the way, and it should be obvious it's a suggestion."
+
+Owner answered three scoping questions up front: **local catalogue only** (no live
+OFF/USDA per item), **stock-item detail + a bulk page** shaped like the existing
+Unlinked-ingredients screen, and a **persisted per-item opt-out** — with the explicit
+addition that the opt-out is "ignore nutrition for this item" ("you'd never want it
+to bug you about toilet paper"), so the two collapse into one flag.
+
+- **`features/nutrition/suggestions.py`** (new) — the matcher. Readable formula, not a
+  fuzzy library (R-019): recall over the item's words, minus a fraction for the
+  catalogue name's surplus words, with an exact-token-set short circuit. Two entry
+  points sharing one scorer — a targeted `contains`-per-token query for the single
+  detail page, and a read-the-catalogue-once inverted index for the bulk page.
+- **`features/nutrition/text_matching.py`** (new) — `singular` / `tokens` /
+  `normalised`, extracted from `recipe_rollup._singular` so the rollup and the matcher
+  can't drift on what counts as the same word (R-002). `recipe_rollup` now imports it.
+- **Schema** — `StockItem.nutrition_ignored` (bool, indexed) + migration
+  `c1d5e8b3f704`. Entity, table mapping, `update_stock_item`, detail DTO.
+- **Endpoints** — `GET /nutrition/unmatched-items` (+`?include_ignored=1`) and
+  `POST /nutrition/suggestions/accept-all`; `nutrition_suggestion` +
+  `nutrition_ignored` added to the stock-item detail read. Accepting is the ordinary
+  link PATCH — there is no accept verb, because a suggestion is only ever a candidate
+  on screen.
+- **SPA** — new `NutritionMatchingSettings.vue` at
+  `/settings/kitchen-setup/nutrition-matching` (nav entry gated on complex mode);
+  a dashed, tagged suggestion block on `StockItemDetailPage`; `NutritionFoodPicker`'s
+  copy corrected (it promised "nothing is matched automatically", which is no longer
+  true — it's now "nothing is *linked* without you", which is).
+
+**Decisions made:**
+- **Suggest, never apply.** `nutrition_food_id` is still only written by an explicit
+  human action. Promoted to **R-043 / ADR-039** — the confidence band is server-owned
+  and travels with the suggestion, and the bulk verb recomputes matches rather than
+  accepting a client-supplied list.
+- **`STRONG_CONFIDENCE` tuned to 0.78, not 0.70.** It's the only band "Accept all"
+  touches. At 0.70 a catalogue missing the obvious row promotes its next-best into a
+  one-click mass-accept — "Banana chips, sweetened" scored 0.73 for "Bananas" in
+  calibration. 0.78 keeps those in the tap-to-confirm band.
+- **A `MIN_RECALL` floor of "more than half the item's words".** Without it every
+  two-word household item finds a one-word food sharing a word: "Toilet paper" matched
+  "Toilet" and "Dish soap" matched "Soap" at exactly 0.50. Costs the odd real match
+  ("Basmati rice" → "Rice, white, long-grain"); a missing suggestion costs one search,
+  a wrong one costs wrong calories on every recipe downstream.
+- **No nav badge on the matching entry.** Unlinked-ingredients has one, but a count of
+  a backlog the user opted into is not an alert, and nagging is the opposite of the ask.
+- **One flag, not two.** "Reject this suggestion" and "never track nutrition here"
+  collapse into `nutrition_ignored`; linking a food explicitly clears it, since the two
+  are contradictory answers to the same question.
+
+**Files touched:** `dora_api/features/nutrition/{suggestions,text_matching}.py` (new),
+`recipe_rollup.py`, `nutrition_endpoints.py`, `domain/entities/stock_item.py`,
+`persistence/table_mappings.py`, migration `c1d5e8b3f704`,
+`features/stock_items/{update_stock_item,get_stock_item_detail}.py`,
+`web_app/src/pages/settings/NutritionMatchingSettings.vue` (new),
+`StockItemDetailPage.vue`, `SettingsShell.vue`, `router/routes.ts`,
+`services/api/{nutritionApiService,stockItemApiService}.ts`, `models/stockItemDetail.ts`,
+`components/stock/NutritionFoodPicker.vue`, `tests/test_nutrition_suggestions.py` (new),
+`tests/e2e/dora_api/test_nutrition_suggestions.py` (new), `ENGINEERING_STANDARDS.md`.
+
+**Verification:** backend **1768 passed** / 1 skipped / 1 xfail (up 10 — the new e2e
+file), including the migration head + ORM-schema-match gates. 26 new unit tests pin the
+scoring, with the false positives pinned as hard as the true positives. `vue-tsc` clean,
+`eslint` clean on all touched files, `vitest` 434 pass with the **2 known pre-existing**
+`stockLevelDot.spec.ts` failures (FU-634/642), untouched by this work.
+
+Driven **live end to end** on a scratch install stood up for the purpose (own backend on
+5171, own SQLite DB, 20-food catalogue, 14 pantry items chosen to span the cases) — the
+5170 dev server belongs to another session and its DB is schema-stale, so it was left
+alone. Confirmed: the nav entry appears only in complex mode; 5 confident / 4 possible /
+5 no-match, sorted confident-first; **"Accept all 5" linked exactly the confident five
+and left all four "Possible match" rows unlinked**; "Not a food" removed Dish soap and
+surfaced "Show 1 set-aside item" → "Track again"; the detail page's dashed suggestion
+panel reads "matched on the name, not saved yet", "Use this" turned it into a real link
+and the panel disappeared; "Not a food" flipped the row to "Not tracked" + "Track again".
+All five non-food items (toilet paper, dish soap, washing powder, bin liners, batteries)
+correctly matched nothing. Zero console errors. Scratch server, scratch DB and the
+temporary launch.json entry all removed afterwards.
+
+**One real bug caught by the suite, worth recording:** gating the suggestion on complex
+mode with a `get_or_create_app_setting` call placed *next to the code that used it*
+blanked `stock_level` and `stock_location` on **every** stock-item detail response.
+`get_or_create_app_setting` can commit; a commit expires the session; the relationships
+are `lazy="noload"`, so they re-read as None rather than reloading. Silent — no
+exception, no log. Caught only because `test_patch_semantics` compares a whole
+before/after DTO rather than the field under test. Fixed by hoisting the read above the
+entity load, with the constraint stated in the docstring. Promoted to **R-044 / ADR-040**.
+
+**Standards close-gate:** R-002 (shared `singular` rather than a second copy), R-003
+(scoring, counts, ordering and the confidence band all server-owned), R-019 (readable
+formula, no fuzzy-match library), R-029 (nav entry hidden, not disabled), R-032/R-034
+(plain-UUID FK; schema-match test green), R-035/D-rules (theme tokens only, no raw
+colours; the suggestion tag reuses `--surface-sunken`/`--text-secondary`). Two new rules
+added per the ADR evaluation: **R-043** (ADR-039) and **R-044** (ADR-040). No unexplained
+violations.
+
+**Next up:** owner's call. The honest gap is **FU-643** — no synonym layer, so
+"Tinned tomatoes" never meets "Tomatoes, canned", which is the AU-pantry-vs-US-catalogue
+split and likely the biggest source of "no match" in real use. Best decided after the
+`DORA_VERIFY.md` walk against a real USDA import, which is also the first true read on
+match quality and on load time at ~7,800 rows rather than 20.
+
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-08-15 — Mobile header: mascot out, dashboard into the drawer, bar shrunk
+**Status:** complete (code + live browser verify).
+
+**What changed:** owner reported long page titles not showing on mobile, and
+asked for the mascot hidden, the dashboard moved into the hamburger, and the
+bar/buttons shrunk a little.
+
+The reported symptom had a specific cause worth recording: `PageTitle` passed
+Quasar's `shrink` prop, which is `flex: 0 0 auto`. A long title therefore
+claimed its full ~278px content width in a 367px bar already holding four
+buttons — so it overflowed rather than truncating, and the title read as
+"missing". Dropping `shrink` lets `q-toolbar__title`'s built-in ellipsis do its
+job. That fix is independent of the mascot removal; the mascot removal is what
+buys the width back.
+
+- `MainLayout.vue` — `ApplicationLogo` behind `$q.screen.gt.sm`; `Dashboard`
+  prepended to `linksList` under `$q.screen.lt.md` (same conditional shape the
+  Help entry already used, so the desktop strip is unchanged); the mobile
+  `q-space` filler now only renders when the route has **no** title (with the
+  title flexing, a second growing sibling halved the width it could use); the
+  right-cluster `q-mr-sm`/`q-mr-xs` are desktop-only, worth 12px; mobile bar
+  52px/gap 2/pad 4 (from 64/8/12) with glyph 22px and avatar 26px.
+- `PageTitle.vue` — `shrink` dropped, `min-width: 0`, and one token step down
+  (`2xl` → `xl`) under 1023px.
+
+**Decisions made:**
+- **Tap targets deliberately not shrunk.** `dora-btn--icon` is already 36×36,
+  under the D-004 44px floor, so the "shrink the buttons" ask was taken as
+  *visual* size only — glyph and avatar font-size — leaving the hit boxes alone
+  rather than pushing further under the floor. Logged as **FU-641** (app-wide
+  fix, its own unit).
+- **Ellipsis accepted for deep pages.** With the reclaimed width the title gets
+  207px at 375px wide. Measured every route title: all eight main-menu titles
+  fit outright; the ones that don't ("Shopping List Templates", "System: Meal
+  Reconciliation", …) are settings/template sub-pages and now truncate cleanly.
+  Stepping the font to `lg` would have bought two more and made every top-level
+  title smaller — not worth it.
+- Dashboard `link: '/'` is safe against `useMenuLinkActive`'s prefix match —
+  `path === '/'` matches only the dashboard, and `startsWith('//')` never fires.
+  Confirmed live (active on `/`, not on `/shopping-lists/templates`).
+
+**Files touched:** `web_app/src/layouts/MainLayout.vue`,
+`web_app/src/components/menu/PageTitle.vue`.
+
+**Verification:** driven live at 375×812 against `dora-verify-backend-linux` +
+`dora-spa`, signed in as dora/dora. Mobile: no `.dora-brand` in the DOM, bar
+52px, drawer lists Dashboard first (48px rows) and highlights it only on `/`,
+"Shopping List Templates" truncates with **0px horizontal page overflow**, title
+box 195→207px after the margin change. Desktop re-checked at 1400px: wordmark
+back, main menu strip its original six links (no Dashboard duplicate), 64px bar,
+8px margins restored, no page title, no drawer. `vue-tsc` clean, `eslint` clean
+on both files. `vitest` 434 pass / **2 pre-existing failures** in
+`stockLevelDot.spec.ts` — reproduced identically on a stashed tree, logged as
+**FU-642**. Screenshots were not obtainable — `computer{screenshot}` timed out
+repeatedly against this preview pane — so all evidence above is DOM measurement.
+
+**Standards close-gate:** R-035/D-rules checked. D-004 pre-existing violation
+flagged (FU-641), not deepened. D-003 type floor respected (title steps to
+20.6px). No new tokens, no raw colours, no new state. No ADR warranted — this is
+a layout tweak, not a recurring decision.
+
+**Next up:** owner's call. If the truncation on the settings sub-pages grates,
+the options are shorter `meta.title` strings (e.g. drop the "System: " prefix,
+which the sidebar already conveys) or a tooltip on truncation.
+
+---
+
+## 2026-08-15 (later) — Camera secure-context comms + explanations for the two new rings
+
+Owner follow-up to the feedback round: (a) can we tell the user about the camera
+constraint clearly, is there another way at it, and is it web-only? (b) the two
+new ring indicators need explaining wherever the other stock-overview UI is
+explained.
+
+**Platform scope — answered from the config, not from memory.** It is
+**web-only**. `src-capacitor/capacitor.config.json` sets
+`androidScheme: "https"`, so the Android WebView's origin is `https://localhost`
+— a secure context — and `allowMixedContent: true` keeps its plain-http API calls
+working. `android.permission.CAMERA` is already declared. So the **Android app
+can scan against any instance**, which turns out to be the most useful thing we
+can tell someone stuck on the web build, and it's now what the messages point at.
+There is **no desktop build**: `quasar.config.ts` carries an Electron block but
+there's no `src-electron/`, so it has never been built. Two findings fell out:
+iOS has no `NSCameraUsageDescription` (**FU-640** — iOS hard-terminates on camera
+access without it; latent, since the iOS target is unbuilt scaffolding), and
+FU-639 was rewritten to record the now-confirmed scope.
+
+**Comms: one authority, three surfaces.** `helpers/cameraAvailability.ts` answers
+"can the camera run here, and if not why" — the scan overlay and the admin
+Scanning toggle both read it, so they can't tell two stories. The overlay now
+treats this as a *situation* rather than a fault: a readable centred panel where
+the viewfinder would be, the crosshair suppressed (a targeting box over a
+permanently black rectangle promises a camera that isn't coming), the manual
+barcode box untouched below. The **admin toggle** gained a live warning shown
+only when the browser reading that page is actually on an insecure origin — the
+point of "when relevant/accurate" was that an operator on localhost, or in the
+app, must see nothing. Verified both ways. Plus a Help → Guides entry on
+scanning, which didn't exist at all.
+
+**Explanations for the rings.** The previous unit moved "Dora thinks" and the buy
+verdict onto the level picker and cart button, which quietly removed their words
+— the old chips *said* "Dora thinks low" and "BUY". Now: `StockRowLegend` gained a
+"Rings on the buttons" section with swatches built from the same offset-ring
+recipe the real controls use (D-013 — the language stays decodable, visually);
+`AttentionRulesDialog` gained a prose section for both, including where to turn
+each off; `HelpPage`'s existing "Dora thinks…" guide was **corrected** (it still
+described the retired pill "beside the item"); and a Buy/Wait/Skip guide entry
+was added — there had never been one, even before this change.
+
+**Shared-backend hazard worth knowing.** Another chat's `dora-verify-backend-linux`
+held port 5170, and its session had left
+`localStorage['dora.backendBaseUrl'] = 'http://localhost:5171/api'` — the SPA
+showed "Can't reach Dora's brain" while `/api/health` returned 200, which reads
+like a backend fault and isn't. Clearing that key fixed it. I enabled
+`scanning_enabled` on *their* backend to reach the overlay and **restored it to
+false** (verified by re-reading).
+
+**Engineering-standards close-gate.** R-003 (one camera-availability authority
+feeding both surfaces; the legend swatches mirror the real recipes rather than
+re-inventing them), R-002 (semantic tokens only in the new swatches and panel),
+R-029 (the Scan button is not disabled on an insecure origin — manual entry still
+works, so hiding/disabling would remove a working path), D-013 (both new
+indicators are decodable in-UI). No new ADR. `vue-tsc` clean, `eslint` clean,
+434/436 vitest (the 2 = FU-634).
+
+**Next up:** unchanged — the owner's `DORA_VERIFY.md` walk, chiefly the 50+ item
+scroll on a real device. FU-639's remaining half (an actual HTTPS story for
+self-host) is Phase-4 work and is not blocking him, since the Android app scans.
+
+---
+
+## 2026-08-15 — Stock overview feedback round (19 items, one pass)
+
+Owner handed over a list of 19 observations from using the stock overview on a
+phone. Two forks were his to call and were asked up front: the mobile
+search/filter shape (he picked a second full-width row over an expanding search
+icon) and how wide to take "for all filter areas" (stock overview only for now —
+`FilterBar` keeps no `#quick-filters` slot yet, so that rollout is still open if
+he wants it).
+
+**The theme underneath most of it: the row had grown extra elements to say
+things its existing controls already owned.** "Dora thinks low" was a pill beside
+the level picker; the Buy/Wait/Skip chip sat beside the cart button. Both are
+commentary on the adjacent control's decision, so both became chrome *on* that
+control — an offset amber ring plus a menu header for the belief, a
+verdict-toned ring plus a merged tooltip for the verdict. That deleted two
+row-width consumers and let `verdict-action` (row emit → page handler →
+`useBuyVerdictActions`) go with them: the cart button's own click already
+performs the one-tap action the chip's popover offered. `BuyVerdictBadge` and
+`useBuyVerdictActions` survive untouched for the detail page and shopping list.
+
+**The jumpy scrolling had a real cause and I could not verify the fix.**
+`virtual-scroll-item-size` was 72 against a 64px row, so Quasar re-measured
+mid-scroll and re-padded the spacer — the "snapping" he described. The row is
+now a *fixed* height fed by `--stock-row-height`, and both that and the
+virtual-scroll prop read one constant (`helpers/stockRowMetrics`). But the
+virtualised branch renders **zero rows in the agent's browser pane**: the pane is
+`document.hidden`, so `requestAnimationFrame` never fires, and
+`setVirtualScrollSliceRange`'s deliberate two-step (`tempTo` first, then a rAF to
+finish) never completes. I reproduced that on unmodified code before concluding
+it was the harness — worth knowing for the next session, because it looks
+exactly like a product bug. Handed to `DORA_VERIFY.md` as the one thing that
+needs a real device.
+
+**Two harness workarounds worth reusing.** Screenshots time out in this pane
+(known), and `$q.screen` does *not* follow `resize_window` — Quasar's `Screen`
+reads `visualViewport.width`, which the CDP viewport override doesn't update, so
+every `$q.screen.lt.*` gate silently stayed on the desktop branch while CSS media
+queries were correctly on mobile. Redefining `visualViewport.width` and firing a
+resize makes `$q.screen` honest and the JS-gated mobile behaviour testable. I
+kept `$q.screen` rather than swapping in a `matchMedia` composable — the failure
+is the harness, not the pattern, and R-019 says follow the established one.
+
+**The camera bug was a misdiagnosis, not a camera fault.**
+`navigator.mediaDevices is undefined` means non-secure context: he's reaching the
+app over plain http on a LAN address. The generic `catch` was telling him to
+check a camera that was never involved. There's now an explicit pre-flight with
+two branches (both verified live by stubbing `mediaDevices` and
+`isSecureContext`). **This does not make scanning work for him** — that needs
+HTTPS on the install, logged as **FU-639** rather than quietly implied fixed.
+
+**One real bug in the filter composable:** `needsCheckOnly` was missing from both
+`activeFilterCount` and `clearFilters`, so the filter narrowed the list while the
+badge read zero and "Clear filters" never appeared. Verified fixed live.
+
+**Dev data:** I flipped `scanning_enabled` on to reach the scan overlay and
+**flipped it back to false** at the end (confirmed by re-reading the setting) —
+per the lesson from the 2026-08-14 entry about mutating shared dev fixtures.
+
+**Not done / deliberately left:** the `FilterToggleButton` keeps its "Filters"
+label on mobile, because that's the layout he picked. The `stockLevelDot.spec.ts`
+pair still fails — pre-existing, already **FU-634**, confirmed by stashing this
+work and re-running.
+
+**Engineering-standards close-gate.** R-003 (row geometry is one constant read by
+both the CSS and the virtual scroller, rather than a number copied into two
+places; the belief predicate moved wholesale rather than being re-derived), R-002
+(every new colour is a semantic token — `--semantic-warning`, `--semantic-*`,
+`--surface-component`), R-001 (the verdict ring lives on `AddToListButton` as a
+prop so the detail page can adopt it, not hand-rolled in the row), R-007 (no new
+entity, no new setting), D-013 (the row-colour legend still exists and is
+decodable — it moved to Help rather than being deleted, and replaced a hardcoded
+three-level table there that couldn't survive a renamed level). No unexplained
+violations; no new ADR. `vue-tsc` clean, `eslint` clean, 434/436 vitest (the 2 =
+FU-634).
+
+**Next up:** owner walks `DORA_VERIFY.md`'s new stock-overview section — chiefly
+the 50+ item scroll on a real device. If the quick-filter pattern reads well, the
+open question is whether to promote it into `FilterBar` for every list page.
+
+---
+
+## 2026-08-15 — FU-639: nutrition download + food linking were broken in production (four bugs)
+
+Owner reported both nutrition write paths failing on the container, with a log
+bundle. **The bundle was empty** — `dapi.log` 0 bytes, compose logs 7 lines of
+boot — so the first finding is that the app failed loudly in the UI and left no
+trace on disk (logged as FU-640; both failures were 400s, which nothing logs,
+under a container default of `DORA_LOG_LEVEL=ERROR`). The container wasn't
+reachable from the agent sandbox either, so everything below was root-caused by
+reproducing locally against the **real** USDA release rather than by reading.
+
+**Four distinct bugs, each of which alone would have broken the feature.**
+
+1. **Wrong host.** The built-in dataset URLs pointed at
+   `www.usda.gov/fdc-datasets/…`, which is Akamai-fronted and answers **403** to
+   any programmatic client regardless of User-Agent. `fdc.nal.usda.gov` serves
+   the identical files (verified: 200, `application/zip`, 3.8MB / 6.1MB). This
+   is *not* FU-636's dated-filename risk — that release is still live; the host
+   was simply wrong from day one.
+2. **The request body never arrived.** Both `POST /nutrition/datasets/import`
+   and `POST /nutrition/foods/resolve` read `get_request_body()` **without**
+   `@has_request_body(...)`. The middleware only parses for endpoints that
+   register a schema, so the body was always `None` → every download became
+   "Unknown nutrition dataset ''" and every food-link became "source and
+   source_ref are required". **This is the bug the owner actually saw on both
+   surfaces.** A repo-wide sweep found these were the only two offenders.
+3. **The import threw the whole dataset away at the last step.**
+   `repository.add()` assigns a **fresh id to every entity**, discarding the one
+   it was constructed with — so the 14,449 portions the parser had linked to
+   parse-time `food.id` values all dangled, and the flush died on
+   `FOREIGN KEY constraint failed` *after* downloading and parsing 7,793 foods.
+   Fixed by having the pure parser emit `ParsedPortion(fdc_id=…)` — USDA's own
+   natural key, which cannot go stale — and resolving it to real ids after the
+   foods are committed.
+4. **OFF's search endpoint flaps.** On a fresh install with no dataset, Open
+   Food Facts is the only searchable source, and its legacy `cgi/search.pl`
+   returns 200 / 503 / 200 within seconds (observed directly). Now retried once
+   on transient statuses, and an HTML "temporarily unavailable" page no longer
+   surfaces as a raw JSON decode error.
+
+**Why the tests didn't catch any of it**, which is the part worth remembering:
+- The import test asserted **400 and nothing else** — so it passed *because* the
+  body was ignored (`''` is an unknown dataset). A status-code assertion with no
+  "why" can't distinguish a working guard from a severed pipe. It now asserts the
+  rejected name is echoed back.
+- The parser tests are database-free, and the seeded e2e fixtures read `food.id`
+  *after* `repo.add(food)` — accidentally the correct order, so the id-reassignment
+  trap was invisible.
+- Nothing had ever run a real import end to end. It has now: **7,793 foods +
+  14,449 portions stored, zero dangling**, searched, and linked to a stock item
+  through the real HTTP path.
+
+**New tests:** the import/resolve body regressions (including a hermetic
+"already-local resolve" that needs no network), an e2e that drives
+`_replace_dataset` through the real repository and asserts each portion lands
+against *its own* food, plus unit cover for the URL host, the 403/404 messages
+and the retry policy.
+
+**Engineering-standards close-gate.** New **R-042 + ADR-038**: *`repository.add()`
+assigns the id; never capture an entity's id before adding it* — links between
+new entities resolve after the parent is saved, and a pure layer carries the
+natural key instead of a fictional FK. This one earned a rule: it type-checks,
+reads correctly, and fails only against real data. Also fixed in passing: the
+importer's User-Agent claimed `openfoodfacts.org` while calling USDA
+(copy-paste), and failed sources now carry their human label so the picker stops
+saying "Couldn't reach off".
+
+**Suites:** backend **1732 passed**. `vue-tsc` + eslint clean. Dev DB restored
+(imported dataset removed, diagnostic rows deleted, mode back to off).
+
+**Next up:** the owner re-tests **in the container** — a `DORA_VERIFY.md` section
+is queued for it, since the fixes are server-side and need a rebuilt image. FU-640
+(4xx logging) wants a policy call. FU-638 (cookbook grid) and FU-634 (D-001)
+still open.
+
+---
+
+## 2026-08-14 — "Find a lighter option" swap axis (FU-637 display work complete)
+
+Last item on the agreed nutrition list. Built as a **second axis over the
+existing swap machine**, not a new feature: budget defence and lighter
+alternatives now share the household-affinity rule, the apply/undo path and the
+`MealPlanSwapLedger`; only the ranking metric and the chip vocabulary differ.
+
+**The design constraint that shaped it.** The owner cut stored calorie targets
+("this app is not an intake tracker"), which means there is **no threshold at
+which Dora would raise this herself** — unlike budget defence, where going over
+is a fact she can see. So it's per-entry and on-demand: a menu item on the meal,
+a dialog, an answer. That asymmetry is now written into the module docstring so
+the next person doesn't "helpfully" wire it into a nag.
+
+**Refactor first, feature second.** `_chip_for` was returning budget-flavoured
+chips *and* deciding household affinity in one step. Split into `_affinity_for`
+(the shared fact: cookable now / same style / cooked before) plus a per-axis
+chip map — because "Cheaper — uses stock you have" and "Lighter — uses stock you
+have" are different sentences about the same fact. The nine existing swap tests
+passed untouched through that change, which is the point of doing it that way.
+
+**A gate that would have shipped the feature dead.** `apply-swap` refused
+outright when `money_enabled` was false — correct for budget swaps, inherited by
+accident for lighter ones, and it would have made the whole thing silently
+inoperative on any install that doesn't track spend. Rather than deleting the
+gate I scoped it: `ApplySwapRequest.reason` ('budget' | 'lighter', defaulting to
+budget so existing callers are unchanged), the money check applies only to
+budget, and the reason is recorded on the ledger so the audit trail says which
+question the user was answering. There's an e2e whose entire job is that case.
+
+**R-041 where it bites hardest.** Both sides of a comparison must carry a
+*reliable* figure. "Lighter than an estimate we don't trust" is not an answer,
+and the menu item hides itself when the meal's own figure isn't solid — no
+disabled-with-a-tooltip nag (R-029).
+
+**Verified live** through the running app's session: from a 900 kcal meal the
+endpoint returned three candidates ranked by reduction (600 / 480 / 240 kcal)
+with the right chips — and incidentally confirmed the already-planned skip, since
+the two mid-weight recipes sitting on the same week were correctly absent.
+**What I could not verify: the menu item and the dialog have never been
+rendered.** Quasar's `q-menu` doesn't open for synthetic events, and coordinate
+clicking needs a screenshot, which times out in this pane. Handed to
+`DORA_VERIFY.md` as the eyes-on half rather than claimed.
+
+**⚠️ Dev-data damage I could not fully undo.** Seeding the fixture, I set
+`cuisine = Italian` on the **first six seeded recipes** to give them affinity —
+and I didn't record their originals first, so Egg Fried Rice / Veggie Stir Fry
+etc. are now Italian on the dev box. The kcal values I set are cleared and the
+mode is back to off, but the cuisines are wrong. A dev reseed fixes it; flagged
+to the owner rather than left to be discovered. Lesson for next time: snapshot
+before mutating shared dev fixtures, not just the fields you plan to change.
+
+**Engineering-standards close-gate.** R-003 (one affinity rule, one apply path),
+R-010 (`SWAP_REASONS` closed set validated at the boundary), R-041 (reliability
+required on both sides), R-029 (hide, don't disable), D-015 (the mobile rich
+card got the same action as the desktop chip — one anatomy per job), R-007 (no
+new entity, no new setting; the ledger absorbed the reason as payload rather
+than a column). One inline carve-out comment explains why flask's `request` is
+aliased in the new endpoint (this module binds the parsed body to that name).
+No new ADR.
+
+**Suites:** backend **1721 passed** (10 new ranker unit tests + 7 new e2e).
+Frontend 434 passed / 2 failed — the pre-existing `stockLevelDot` pair (FU-634).
+`vue-tsc` + eslint clean.
+
+**Next up:** the agreed nutrition display work is **done** (cookbook, recipe
+detail, planner, picker, swaps). Open: FU-638 (real-browser cookbook check),
+FU-634 (D-001 call), and the eyes-on verify items for the picker, rollup card
+and this dialog.
+
+---
+
+## 2026-08-14 — Nutrition on the meal planner (per-day calories + picker badge)
+
+Owner: "continue" — the planner surfaces from the agreed sequence.
+
+**Built.** Each day card in the week view carries "one serving of each meal
+planned for this day", and the meal-plan recipe picker shows kcal per serving
+next to every recipe. Both come from the server: `MealPlanEntryDto` gained
+`kcal_per_serving` / `kcal_is_reliable`, and `MealPlanDto` a `day_nutrition[]`
+row per day with `counted_meals` / `total_meals`. Summing a fetched collection
+is exactly the cross-entity aggregate the state-ownership rule keeps out of the
+client, so the client only *looks up* its day's row.
+
+**The consolidation this chunk forced, and I think it's the real win.** Last
+chunk I put the "which kcal does this mode carry, and may I judge on it"
+decision in a client helper (`recipeKcal.ts`). Adding a third consumer made that
+obviously wrong — the planner would have needed the same rule again, in another
+language, over a different DTO. So the decision moved server-side as
+`effective_kcal_per_serving`, `RecipeDto` gained `kcal_per_serving` +
+`kcal_is_reliable`, and the helper (plus its spec) was **deleted**. Cookbook
+card, kcal filter/sort, planner day totals and the picker now read one
+server-computed field. That's R-003 as intended rather than as decorated; the
+rule's own text ("no domain constant lives in two languages") was pointing at
+the helper the whole time.
+
+**One rule the tests earned:** a complex-mode rollup whose basis is the *whole
+recipe* (no servings typed in) yields **no** per-serving figure rather than a
+divided-by-something guess — dividing by a serving count nobody stated would
+invent precisely the number being asked for. Pinned.
+
+**Honest-shortfall handling, again.** A day sums only the meals whose figure is
+reliable and reports `counted/total`; nothing counted gives `null`, not `0` —
+"a day of no calories" is a different claim from "we couldn't count it". The
+day card renders "(1/2)" rather than hiding the gap.
+
+**Verified live** (this page *does* mount in the agent pane, unlike the cookbook
+and recipe detail): Mon–Sat each showed their single meal's per-serving figure
+(320 / 590 / 320 / 410 / 590 / 320 — note Sat's ×4 servings correctly did **not**
+multiply the per-serving number), a deliberately mixed Sunday showed
+**"500 kcal (1/2)"**, the picker tray listed "320 kcal per serving" per recipe,
+and with nutrition **off** the string "kcal" appeared **zero** times on the page
+(R-029). Screenshots time out in this pane, so the evidence is rendered
+innerText. Dev DB restored afterwards (Sunday entries removed, typed kcal
+cleared, mode back to off).
+
+**Engineering-standards close-gate.** R-003 — the point of the chunk; one
+server-owned figure, client helper deleted. R-041 — day rows carry
+`counted_meals`/`total_meals` and null-not-zero. R-032 — the plan endpoint
+loads recipes-with-ingredients as an explicit extra query rather than reading
+through a noload relationship. R-029 — nothing renders when nutrition is off,
+and the endpoint skips the work entirely. R-007 — no stored calorie target
+(owner's call), so still no new setting anywhere. No violations to flag; no new
+ADR (this is R-003/R-041 applied, not a new decision).
+
+**Suites:** backend **1704 passed** (6 new meal-plan e2e incl. a query-count
+guard; 6 new unit cases for the effective-figure rule). Frontend 434 passed / 2
+failed — the pre-existing `stockLevelDot` pair (FU-634); the count dropped by 6
+because the deleted helper took its spec with it. `vue-tsc` + eslint clean. Both
+DTO snapshots refreshed.
+
+**Next up:** the "lighter alternative" swap axis (the last item on the agreed
+list — `swap_suggestions.py` already ranks a candidate pool, so nutrition is
+another axis over existing machinery). Then FU-638 wants a real-browser look at
+the cookbook, and FU-634 still wants its D-001 call.
+
+---
+
+## 2026-08-14 — FU-637: nutrition on the cookbook list (kcal badge + filter/sort)
+
+Owner settled the design fork first: **no stored calorie target** — "this app is
+not an intake tracker" — so the feature is *display at decision points* only.
+That cut is what makes the rest simple: with nothing to persist, the per-user
+vs install-wide question **disappears entirely** (no new `AppSetting`, no `User`
+column; `nutrition_mode` stays the only switch). Also settled: no per-person
+intake tracking, ever — `MealPlanEntry` has no eater (it's recipe + date + slot +
+servings), so Dora plans pots of food, not plates for people, and the honest unit
+is "a serving of this meal", not "your intake".
+
+**Built.** The rollup was restructured around a **batch core**:
+`rollup_recipes_nutrition` takes a flat `RecipeNutritionInput` per recipe and
+answers the whole page in **three queries** (stock-item links → foods →
+portions), regardless of recipe count. Both callers now flatten to the same
+`IngredientInput` — the detail path from loaded entities, the list path from its
+DTOs — so there's one arithmetic path rather than two that drift. The old
+single-recipe entry point survives as a thin adapter over the batch.
+
+**The honesty problem this chunk actually had to solve.** A card badge is
+harmless, but a *filter* judges: excluding a recipe from "≤ 500 kcal" on the
+strength of a 1-of-8 estimate misleads exactly the person filtering by calories,
+and silently. So the rollup now ships `is_reliable`, derived from one server-side
+threshold (`RELIABLE_COVERAGE_RATIO`). Display never gates on it — a thin figure
+still shows, marked "(part)" with a tooltip — but the filter lets unreliable rows
+**pass through** rather than hiding them (matching how unannotated recipes have
+always behaved), and the sort ranks them last alongside "no figure at all".
+R-041 gained a clause for this: if a surface *acts* on an aggregate, the server
+also says whether it may.
+
+Client-side, the mode→field choice (`simple` = typed number, `complex` = rollup)
+is one shared helper, `recipeKcal`, read by the card, the filter and the sort —
+Vitest-pinned (6 cases), because the failure mode is silent.
+
+**Verified live**, and one thing worth the next session knowing: the cookbook
+grid **would not render in the agent's browser pane** — empty state showing while
+the page's own footer counted "11 Shown" from the same computed, zero cards in
+the DOM, **no console error**. I did not hand-wave it: reproduced in a fresh tab,
+after a hard reload, and — decisively — with `nutrition_mode = off`, where the
+new filter path is never reached. It also predates the edit (same state observed
+earlier in the session). So it's **not this change**; logged as **FU-638** with
+"confirm in browser", since a static read can't tell an agent-pane artifact from
+a real cookbook regression, and the `FadeTransition mode="out-in"` wrapping the
+grid is the R-037/FU-609 blank-page signature. What I *could* prove live: the
+list endpoint returns the rollup correctly for both cases — a 3/3 recipe at 530
+kcal/serving `is_reliable: true`, and a 2/5 one at 463 marked false.
+
+Dev DB restored again afterwards (demo foods deleted, 3 stock-item links
+cleared, ingredient amounts and mode back).
+
+**Engineering-standards close-gate.** R-041 amended (above) rather than a new
+ADR — same rule, one more clause. R-003: the coverage threshold lives on the
+server alone; the client reads a boolean. R-001: the mode choice went into a
+helper, not a third copy in `RecipesOverview`. R-019: one query path for list and
+detail instead of a fast path and a slow path that could disagree. R-032: the
+`stock_item → food` hop is an explicit batch query, never a relationship read.
+No violations to flag.
+
+**Suites:** backend **1692 passed** (5 new e2e incl. a query-count guard: the
+list costs the same whether the page holds 2 recipes or 500). Frontend 440
+passed / 2 failed — still only the pre-existing `stockLevelDot` pair (FU-634).
+`vue-tsc` + eslint clean. `recipes` DTO snapshot refreshed for `is_reliable`.
+
+**Next up:** the planner surfaces (per-day / per-week kcal on the calendar, and
+kcal in the meal-plan recipe picker), then the "lighter alternative" swap axis.
+FU-638 wants a real-browser look at the cookbook; FU-634 still wants its D-001
+call.
+
+---
+
+## 2026-08-14 — Nutrition chunk 6: recipe rollup + coverage — FU-635 CLOSED
+
+Owner: "lets finish off the last in progress work."
+
+**Built.** `features/nutrition/recipe_rollup.py` — per-serving nutrition summed
+from the foods a recipe's ingredients are linked to, surfaced as
+`RecipeDto.nutrition` on the **detail endpoint only** (the list stays cheap,
+mirroring `estimated_cost`) and rendered by `RecipeNutritionCard.vue`.
+
+**The whole design question was what to do when a link breaks**, and there are
+four places it can: the ingredient has no stock item, the stock item has no
+food, the amount can't be converted to grams, or the food has no kcal. Every
+tempting shortcut — skip it quietly, borrow a similar portion's weight, treat a
+missing macro as 0, assume 4 servings — produces a number that *looks* complete
+and is wrong invisibly. So the rollup **refuses rather than guesses**, and every
+refusal is named: `uncounted` is a per-reason count that the card renders as a
+bullet list under an always-visible coverage line. Nutrients are `None`, never
+`0`, when nobody supplied them (0 g fat is a measurement, not a silence). No
+servings typed in ⇒ the figure is labelled **whole recipe** rather than divided
+by a guess.
+
+**Gram conversion ladder.** Mass converts outright through the existing units
+table. Volume prefers **the food's own USDA portion row** ("1 cup" → 125g)
+over the shared density table — the portion was measured, the density is
+modelled — and only falls back to density when no portion mentions the measure.
+Counts ("2 bananas") need a whole-item portion row and are otherwise reported
+unconvertible. Portion matching takes the **least-qualified** measure, because a
+recipe saying "1 cup" means a plain cup, not `cup, chopped`; ties break on the
+measure text so nothing depends on row order. Plurals are de-pluralised on both
+sides (a test caught "3 cloves" missing a `clove` row). No new density or unit
+constant was introduced — R-003 keeps that table the sole authority.
+
+**Two surfaces went quiet rather than lying.** The typed "kcal per serving"
+field is hidden in complex mode (two numbers, one question), and the Cookbook's
+"Kcal ≤" filter + "Kcal" sort — which read that typed field — are now gated on
+`isSimple` instead of `nutritionEnabled`. A list-level rollup is real work (a
+join across every recipe's ingredients → foods → portions), so it's **FU-637**
+rather than a speculative query.
+
+**Verified live** against the running app, not just the suite: a real
+3-ingredient recipe with two ingredients linked returned `469` kcal/serving
+(200g flour @364 + 2×118g banana @89, over 2 servings) with the third correctly
+reported as `no_conversion`. The **card's visual render is still unseen** — the
+agent's browser pane won't mount `#/cookbook/<id>` (same limitation chunk 5 hit
+on `#/stock/<id>`; the dashboard and Settings routes mount fine). Handed to
+`DORA_VERIFY.md` as an eyes-on section. Dev DB was restored to its pre-session
+state afterwards (demo foods deleted, ingredient amounts and links reverted,
+mode back to `off`).
+
+**Also worth knowing for the next session:** the dev backend resolves SQLite
+(`data/dora.dev.db`) while a bare `python -m` process defaults to the Postgres
+URL — and *that* Postgres database is badly stale (16-column `AppSetting`, no
+`alembic_version`). A setup script that talks to the running dev instance must
+pass `DORA_DB_PATH=data/dora.dev.db` or it will fail confusingly against the
+wrong, ancient database.
+
+**Engineering-standards close-gate.** New **R-041 + ADR-037**: *a derived
+aggregate ships with its coverage; a partial total never renders bare.* Two
+independent aggregates arrived at the same shape (`estimated_cost` +
+`priced/total`, and this rollup + `counted/total` + `uncounted`), which is what
+made it a rule rather than a coincidence. Also checked: R-001 (card extracted,
+not inlined into the 2000-line detail page), R-003 (all math server-side; units
+table untouched), R-007 (no schema change; the list axis was gated, not
+rebuilt), R-010 (closed-set reason ids both sides), R-029 (rollup is `None`
+outside complex; the typed field hides rather than nags), R-032 (foods +
+portions gathered explicitly — the mapping has no relationship object),
+D-014/D-015 (card reuses the cost-card anatomy and voice). No violations to
+flag.
+
+**Suites:** backend **1687 passed** + 20 new (16 unit / 4 e2e); the `recipes`
+DTO snapshot was refreshed for the new field (that diff *is* the contract
+change). Frontend 434 passed / 2 failed — still only the pre-existing
+`stockLevelDot` pair (FU-634). `vue-tsc` + eslint clean.
+
+**Next up:** owner walks the two nutrition `DORA_VERIFY.md` sections (the rollup
+card needs a dataset imported + a couple of stock items linked). FU-634 still
+wants its D-001 call. Nutrition complex mode is now **built end to end**.
+
+---
+
 ## 2026-08-14 — Nutrition chunk 5: stock-item food picker (FU-635)
 
 Owner: "do the stock item link picker."

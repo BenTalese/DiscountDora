@@ -94,6 +94,14 @@ export default class MealPlanApiService {
             `/meal-plans/${mealPlanId}/apply-swap`, command,
         );
 
+    /** FU-637 — lighter alternatives for one planned meal. On demand only. */
+    getLighterAlternativesAsync = async (
+        mealPlanId: string, entryId: string,
+    ): Promise<LighterAlternatives> =>
+        await this.httpClient.get<LighterAlternatives>(
+            `/meal-plans/${mealPlanId}/lighter-alternatives?entry_id=${entryId}`,
+        );
+
     undoSwapAsync = async (
         mealPlanId: string, swapLedgerId: string,
     ): Promise<UndoSwapResult> =>
@@ -168,6 +176,28 @@ export type ApplySwapCommand = {
     entry_id: string;
     to_recipe_id: string;
     expected_from_recipe_id?: string;
+    /** FU-637 — which axis suggested this. Omitted = 'budget' (the original
+     *  caller). Decides which feature gate the server applies: a lighter swap
+     *  is unrelated to money and must work with spend-tracking off. */
+    reason?: 'budget' | 'lighter';
+};
+
+/** FU-637 — one lighter alternative for a planned meal. */
+export type LighterAlternative = {
+    to_recipe_id: string;
+    to_recipe_name: string;
+    kcal_per_serving: number;
+    saved_kcal: number;
+    reason_chip: string;
+    missing_ingredient_names: string[];
+};
+
+export type LighterAlternatives = {
+    entry_id: string;
+    from_recipe_id: string;
+    from_recipe_name: string;
+    from_kcal_per_serving: number | null;
+    candidates: LighterAlternative[];
 };
 
 export type ApplySwapResult = {

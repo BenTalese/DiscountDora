@@ -17,24 +17,20 @@
                 exactly what the count is counting.
             </p>
 
-            <!-- ── Levels ─────────────────────────────────────────── -->
-            <h6 class="q-mt-md q-mb-sm">Stock levels (the colour dot / picker)</h6>
-            <p class="text-body2 q-mb-sm dora-text-secondary">
-                Picks up the same colour whether it's the row's level
-                button, the picker in the basics list, or the footer
-                count.
-            </p>
-            <q-list bordered separator class="rounded-borders">
-                <q-item v-for="row in levelRows" :key="row.label">
-                    <q-item-section avatar>
-                        <q-avatar :color="row.colour" size="20px" />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label class="text-weight-medium">{{ row.label }}</q-item-label>
-                        <q-item-label caption>{{ row.summary }}</q-item-label>
-                    </q-item-section>
-                </q-item>
-            </q-list>
+            <!-- ── At-a-glance legend ─────────────────────────────────
+                 2026-08-15 feedback: this used to live in the stock
+                 overview's filter panel, which is not where a reference
+                 belongs — but its visual examples were the good part, so
+                 the component moves here intact rather than being
+                 reworded into prose.
+                 It also replaces the hand-written level table that sat
+                 here: that table hardcoded three level names and their
+                 colours, so a household that renamed a level (or added a
+                 fourth) was read the wrong thing. StockRowLegend derives
+                 both from the live level rows via the same
+                 `colourForSequence` authority the row itself uses (R-003),
+                 so this page cannot drift from what it documents. -->
+            <StockRowLegend :levels="stockLevels" />
 
             <!-- ── Outlines & dim ─────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Row outline (amber warn / red alert)</h6>
@@ -99,6 +95,63 @@
                 isn't quieted by the fade.
             </p>
 
+            <!-- ── Rings (2026-08-15) ─────────────────────────────────
+                 These two indicators used to be chips with their own words
+                 sitting beside the buttons. They're now rings ON those
+                 buttons, so the words have to live somewhere — here, next to
+                 the other row-language rules, and in the legend above. -->
+            <h6 class="q-mt-lg q-mb-sm">Rings around the buttons</h6>
+            <p class="text-body2 q-mb-sm dora-text-secondary">
+                A ring means something is being said about the button it
+                surrounds — not about the item as a whole. There are two, and
+                they never mean the same thing:
+            </p>
+            <q-list bordered separator class="rounded-borders">
+                <q-item>
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.inferred_hunch" color="warning" size="22px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label class="text-weight-medium">
+                            Amber ring on the level box — "Dora thinks…"
+                        </q-item-label>
+                        <q-item-label caption>
+                            Dora works out what you probably have from your
+                            purchases, how often you rebuy, and what you've
+                            cooked. When that <strong>disagrees</strong> with the
+                            level you recorded, the level box gets an amber ring.
+                            Open the picker and its header tells you what she
+                            thinks and why. She never changes your recorded level
+                            — that stays the source of truth — and when she
+                            agrees with you she says nothing at all. Turn the
+                            hint off in Settings → Assistant.
+                        </q-item-label>
+                    </q-item-section>
+                </q-item>
+                <q-item>
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.shopping_cart" color="positive" size="22px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label class="text-weight-medium">
+                            Coloured ring on the cart button — should you buy it?
+                        </q-item-label>
+                        <q-item-label caption>
+                            Green means <strong>worth buying now</strong>, amber
+                            <strong>might be worth waiting</strong>, red
+                            <strong>probably skip</strong>. It's worked out from
+                            your own price history, how fast you get through the
+                            item, and what you've thrown away — no outside data.
+                            Hover the button for the headline, the reasons, and
+                            how confident she is; there's no ring at all when
+                            she isn't confident enough to be useful. Turn it off
+                            in Settings → Admin → System ("Should I buy?"
+                            oracle).
+                        </q-item-label>
+                    </q-item-section>
+                </q-item>
+            </q-list>
+
             <!-- ── Cheat sheet ────────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Cheat sheet</h6>
             <table class="dora-attention-table">
@@ -146,18 +199,25 @@
 </template>
 
 <script setup lang="ts">
+    import { onMounted } from 'vue';
+    import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import StockRowLegend from 'src/components/stock/StockRowLegend.vue';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { ICONS } from 'src/style/icons';
 
     defineProps<{ modelValue: boolean }>();
     const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 
-    const levelRows = [
-        { label: 'Stocked', colour: 'positive', summary: 'You have enough.' },
-        { label: 'Low', colour: 'negative', summary: 'Running short. If essential, the row outlines amber.' },
-        { label: 'Out', colour: 'grey', summary: 'Gone. If essential, the row outlines red; otherwise the row dims.' },
-    ];
+    // The legend renders the household's REAL level rows (renames included),
+    // so this dialog has to have them. Help is reachable without visiting
+    // Stock first, so it can't assume the store is already hydrated.
+    const stockLevelStore = useStockLevelStore();
+    const { stockLevels } = storeToRefs(stockLevelStore);
+    onMounted(() => {
+        void stockLevelStore.ensureLoadedAsync();
+    });
 
     type CheatRow = {
         state: string;

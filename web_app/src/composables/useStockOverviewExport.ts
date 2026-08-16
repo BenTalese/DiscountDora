@@ -5,6 +5,7 @@
  */
 import { Notify } from 'quasar';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+import { openQrSheetAsync } from 'src/composables/useQrLabels';
 import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useStockOverviewExport() {
@@ -52,10 +53,7 @@ export function useStockOverviewExport() {
 
     function openQrSheet(ids: string[]): void {
         if (ids.length === 0) return;
-        const url =
-            `${baseUrl}/stock-items/qr/sheet` +
-            `?layout=a4-21up&ids=${encodeURIComponent(ids.join(','))}`;
-        window.open(url, '_blank', 'noopener');
+        void openQrSheetAsync({ layout: 'a4-21up', ids });
     }
 
     return { downloadCsv, openPrintView, openQrSheet };

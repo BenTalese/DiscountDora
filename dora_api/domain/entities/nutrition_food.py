@@ -75,10 +75,19 @@ class NutritionFood(BaseEntity):
     # Per 100g. Nullable throughout: a source can know a food's protein but
     # not its fibre, and inventing a 0 would be a lie (P12 No-invent).
     # `kcal_per_100g` is the only one the UI treats as load-bearing.
+    #
+    # The set is defined once in `features/nutrition/nutrients.py` — that
+    # module owns which nutrients exist and how each source names them; these
+    # are the columns it fills. Sodium is stored in MILLIgrams (how packs
+    # state it); every other value is grams.
     kcal_per_100g: float | None = None
     protein_g_per_100g: float | None = None
     carbs_g_per_100g: float | None = None
+    sugars_g_per_100g: float | None = None
     fat_g_per_100g: float | None = None
+    saturated_fat_g_per_100g: float | None = None
+    fibre_g_per_100g: float | None = None
+    sodium_mg_per_100g: float | None = None
     imported_at: datetime | None = None
 
     class Fields(BaseEntity.Fields):
@@ -90,5 +99,9 @@ class NutritionFood(BaseEntity):
         KCAL_PER_100G = "kcal_per_100g"
         PROTEIN_G_PER_100G = "protein_g_per_100g"
         CARBS_G_PER_100G = "carbs_g_per_100g"
+        SUGARS_G_PER_100G = "sugars_g_per_100g"
         FAT_G_PER_100G = "fat_g_per_100g"
+        SATURATED_FAT_G_PER_100G = "saturated_fat_g_per_100g"
+        FIBRE_G_PER_100G = "fibre_g_per_100g"
+        SODIUM_MG_PER_100G = "sodium_mg_per_100g"
         IMPORTED_AT = "imported_at"

@@ -173,7 +173,17 @@
                                 {{ form.servings }} {{ form.servings === 1 ? 'serving' : 'servings' }}
                             </q-chip>
                             <q-chip v-if="readTimeLabel" dense square :icon="ICONS.timer">{{ readTimeLabel }}</q-chip>
-                            <q-chip v-if="nutritionEnabled && form.kcal" dense square :icon="ICONS.monitor_heart">{{ form.kcal }} kcal</q-chip>
+                            <q-chip v-if="isSimple && form.kcal" dense square :icon="ICONS.monitor_heart">{{ form.kcal }} kcal</q-chip>
+                            <!-- FU-635 — in complex mode the headline number
+                                 is the rollup, not the typed field. -->
+                            <q-chip
+                                v-else-if="isComplex && recipe?.nutrition?.kcal"
+                                dense
+                                square
+                                :icon="ICONS.monitor_heart"
+                            >
+                                {{ Math.round(recipe.nutrition.kcal) }} kcal
+                            </q-chip>
                         </div>
                         <div v-if="readTags.length > 0 || readTools.length > 0" class="q-mb-md">
                             <q-chip v-for="t in readTags" :key="`tag-${t}`" dense outline size="sm">{{ t }}</q-chip>
@@ -365,12 +375,14 @@
                                     class="col-6 col-sm-2"
                                     @update:model-value="markDirty"
                                 />
-                                <!-- simple nutrition (kcal).
-                                     Gated on C-cross nutrition opt-in being
-                                     in `simple` (or `complex` once that
-                                     ships); hidden when `off`. -->
+                                <!-- simple nutrition (kcal). Hidden when
+                                     nutrition is `off`, and when it's
+                                     `complex` — there the figure is rolled up
+                                     from the ingredients' linked foods, and a
+                                     typed number beside it would be a second
+                                     answer nobody could reconcile (R-029). -->
                                 <q-input
-                                    v-if="nutritionEnabled"
+                                    v-if="isSimple"
                                     v-model.number="form.kcal"
                                     outlined
                                     dense
@@ -981,11 +993,20 @@
                         </q-card-section>
                     </q-card>
 
+                    <!-- FU-635 — complex mode replaces the typed number with
+                         the rollup over the ingredients' linked foods. Two
+                         nutrition cards would be two answers to one question,
+                         so this and the kcal card below are alternatives. -->
+                    <RecipeNutritionCard
+                        v-if="isComplex && recipe && recipe.nutrition"
+                        :nutrition="recipe.nutrition"
+                    />
+
                     <!-- kcal card. Read-only echo of the
                          editor field; renders only when nutrition is in
-                         simple/complex mode AND the recipe has a value. -->
+                         simple mode AND the recipe has a value. -->
                     <q-card
-                        v-if="nutritionEnabled && recipe && recipe.kcal !== null && recipe.kcal !== undefined"
+                        v-if="!isComplex && nutritionEnabled && recipe && recipe.kcal !== null && recipe.kcal !== undefined"
                         flat
                         bordered
                         class="q-mb-md"
@@ -1245,6 +1266,7 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
@@ -1314,7 +1336,7 @@
     // surfaces. Both render-only; consumers fall back to no-render when
     // either flag is off.
     const { moneyEnabled } = useMoneyEnabled();
-    const { nutritionEnabled } = useNutritionMode();
+    const { nutritionEnabled, isSimple, isComplex } = useNutritionMode();
     const stockItemApi = new StockItemApiService();
     const { addItems } = useShoppingListActions();
 

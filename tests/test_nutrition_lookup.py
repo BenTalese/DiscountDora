@@ -185,9 +185,15 @@ def test__search__LiveSourceFails__IsReportedNotSwallowed(monkeypatch):
     result = search_foods(_NoLocalRepo(), _Setting(), "banana")
 
     # The whole search still succeeds — but it says OFF didn't answer, so the
-    # UI can distinguish "no such food" from "one source is down".
+    # UI can distinguish "no such food" from "one source is down". The human
+    # label travels with it: the picker was rendering the raw id
+    # ("Couldn't reach off").
     assert result["sources_failed"] == [
-        {"source": NUTRITION_SOURCE_OFF, "error": "couldn't reach the service"},
+        {
+            "source": NUTRITION_SOURCE_OFF,
+            "source_label": "Open Food Facts",
+            "error": "couldn't reach the service",
+        },
     ]
 
 
@@ -199,5 +205,142 @@ def test__search__EveryResultCarriesItsSourceLabel(monkeypatch):
     result = search_foods(_NoLocalRepo(), _Setting(), "banana")
 
     assert all(r["source_label"] for r in result["results"])
+
+#endregion
+
+
+#region transient-failure retry
+
+
+def test__is_transient__ServiceUnavailable__IsWorthRetrying():
+    # Open Food Facts' search endpoint flaps between 200 and 503 within
+    # seconds; a single retry turns most of that into a normal result instead
+    # of an empty picker.
+    from dora_api.features.nutrition.lookup import _is_transient
+
+    assert _is_transient("couldn't reach the service (HTTP Error 503: ...)") is True
+    assert _is_transient("couldn't reach the service (HTTP Error 429: ...)") is True
+    assert _is_transient("timed out") is True
+
+
+def test__is_transient__NotFoundOrBadPayload__IsNotRetried():
+    from dora_api.features.nutrition.lookup import _is_transient
+
+    assert _is_transient("couldn't reach the service (HTTP Error 404: ...)") is False
+    assert _is_transient("unexpected response shape") is False
+
+
+def test__fetch_json__RetriesOnceThenSucceeds(monkeypatch):
+    from dora_api.features.nutrition import lookup as lookup_module
+
+    calls = {"n": 0}
+
+    def flaky(_url, _purpose):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("couldn't reach the service (HTTP Error 503: nope)")
+        return {"ok": True}
+
+    monkeypatch.setattr(lookup_module, "_fetch_json_once", flaky)
+    monkeypatch.setattr(lookup_module, "_RETRY_DELAY_SECONDS", 0)
+
+    assert lookup_module._fetch_json("http://x", "test") == {"ok": True}
+    assert calls["n"] == 2
+
+
+def test__fetch_json__GivesUpAfterOneRetry(monkeypatch):
+    from dora_api.features.nutrition import lookup as lookup_module
+
+    calls = {"n": 0}
+
+    def always_down(_url, _purpose):
+        calls["n"] += 1
+        raise RuntimeError("couldn't reach the service (HTTP Error 503: nope)")
+
+    monkeypatch.setattr(lookup_module, "_fetch_json_once", always_down)
+    monkeypatch.setattr(lookup_module, "_RETRY_DELAY_SECONDS", 0)
+
+    with pytest.raises(RuntimeError):
+        lookup_module._fetch_json("http://x", "test")
+    # Two attempts, not an unbounded stall in front of a type-ahead.
+    assert calls["n"] == 2
+
+
+#endregion
+
+
+#region nutrient extraction
+
+def test__off_result__NutrientKeys__AreReadFromTheSharedMapping():
+    result = lookup_module._off_result({
+        "code": "9300675024235",
+        "product_name": "Greek yoghurt",
+        "brands": "Someone",
+        "nutriments": {
+            "energy-kcal_100g": 97,
+            "proteins_100g": 9.0,
+            "carbohydrates_100g": 3.6,
+            "sugars_100g": 3.6,
+            "fat_100g": 5.0,
+            "saturated-fat_100g": 3.3,
+            "fiber_100g": 0.0,
+            "sodium_100g": 0.036,
+        },
+    })
+
+    assert result is not None
+    assert result.kcal_per_100g == pytest.approx(97)
+    assert result.sugars_g_per_100g == pytest.approx(3.6)
+    assert result.saturated_fat_g_per_100g == pytest.approx(3.3)
+    # A stated zero is a fact ("this has no fibre") and survives; only an
+    # absent key becomes None.
+    assert result.fibre_g_per_100g == pytest.approx(0.0)
+
+
+def test__off_result__Sodium__IsConvertedFromGramsToMilligrams():
+    result = lookup_module._off_result({
+        "code": "1",
+        "product_name": "Salty thing",
+        # OFF states sodium in GRAMS per 100g; we store milligrams, the unit
+        # packs use. Getting this wrong is a silent 1000x error on a number
+        # people actually watch.
+        "nutriments": {"energy-kcal_100g": 10, "sodium_100g": 0.4},
+    })
+
+    assert result is not None
+    assert result.sodium_mg_per_100g == pytest.approx(400.0)
+
+
+def test__off_result__MissingNutrients__StayNoneRatherThanZero():
+    result = lookup_module._off_result({
+        "code": "1",
+        "product_name": "Sparse entry",
+        "nutriments": {"energy-kcal_100g": 10},
+    })
+
+    assert result is not None
+    assert result.protein_g_per_100g is None
+    assert result.sodium_mg_per_100g is None
+
+
+def test__usda_api_foods__MatchOnNameAndUnit__NotOnNameAlone():
+    results = lookup_module._parse_usda_foods({"foods": [{
+        "fdcId": 1,
+        "description": "Bananas, raw",
+        "foodNutrients": [
+            {"nutrientName": "Energy", "unitName": "KCAL", "value": 89},
+            # Same nutrient name, different unit — must not overwrite kcal.
+            {"nutrientName": "Energy", "unitName": "kJ", "value": 371},
+            {"nutrientName": "Sodium, Na", "unitName": "MG", "value": 1},
+            {"nutrientName": "Fiber, total dietary", "unitName": "G", "value": 2.6},
+            {"nutrientName": "Ash", "unitName": "G", "value": 0.82},
+        ],
+    }]})
+
+    assert len(results) == 1
+    assert results[0].kcal_per_100g == pytest.approx(89)
+    assert results[0].sodium_mg_per_100g == pytest.approx(1)
+    assert results[0].fibre_g_per_100g == pytest.approx(2.6)
+
 
 #endregion

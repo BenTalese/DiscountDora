@@ -99,6 +99,7 @@
                 @adjust="(d: number) => emit('entryAdjust', entry, d)"
                 @link="emit('entryLink', entry)"
                 @unlink="emit('entryUnlink', entry)"
+                @lighter="emit('entryLighter', entry)"
             />
             <button
                 v-if="!isPastDay(focusedDayIso)"
@@ -213,6 +214,7 @@
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
         (e: 'entryLink', entry: MealPlanEntry): void;
         (e: 'entryUnlink', entry: MealPlanEntry): void;
+        (e: 'entryLighter', entry: MealPlanEntry): void;
         (e: 'addToSlot', dayIso: string, slot: string): void;
         (e: 'generateList'): void;
         (e: 'goPrevWeek'): void;

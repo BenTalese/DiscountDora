@@ -39,7 +39,11 @@ _NUTRIENT_CSV = (
     "1003,Protein,G\n"
     "1004,\"Total lipid (fat)\",G\n"
     "1005,\"Carbohydrate, by difference\",G\n"
-    "1079,Fiber,G\n"
+    "2000,\"Total Sugars\",G\n"
+    "1258,\"Fatty acids, total saturated\",G\n"
+    "1079,\"Fiber, total dietary\",G\n"
+    "1093,\"Sodium, Na\",MG\n"
+    "1007,Ash,G\n"
 )
 
 _FOOD_CSV = (
@@ -56,9 +60,13 @@ _FOOD_NUTRIENT_CSV = (
     "3,111,1003,1.09\n"
     "4,111,1004,0.33\n"
     "5,111,1005,22.84\n"
-    "6,111,1079,2.6\n"       # fibre — not a tracked nutrient
+    "6,111,1079,2.6\n"       # fibre
     "7,222,1008,364.0\n"     # flour kcal
     "8,333,1003,0.0\n"       # water has protein but no energy
+    "9,111,2000,12.23\n"     # sugars
+    "10,111,1258,0.112\n"    # saturated fat
+    "11,111,1093,1.0\n"      # sodium, in mg
+    "12,111,1007,0.82\n"     # ash — real USDA nutrient we deliberately skip
 )
 
 _MEASURE_UNIT_CSV = (
@@ -114,6 +122,16 @@ def test__parse__TrackedMacros__AreMappedAndUntrackedOnesIgnored():
     assert banana.protein_g_per_100g == pytest.approx(1.09)
     assert banana.fat_g_per_100g == pytest.approx(0.33)
     assert banana.carbs_g_per_100g == pytest.approx(22.84)
+    # 2026-08-16 — the four added on the owner's "is that the only nutrition
+    # data we can pull?" The USDA row names differ between Foundation and SR
+    # Legacy for sugars, which is why the mapping carries aliases.
+    assert banana.sugars_g_per_100g == pytest.approx(12.23)
+    assert banana.saturated_fat_g_per_100g == pytest.approx(0.112)
+    assert banana.fibre_g_per_100g == pytest.approx(2.6)
+    assert banana.sodium_mg_per_100g == pytest.approx(1.0)
+    # Ash is a real USDA nutrient we deliberately don't store — the mapping is
+    # an allow-list, not "everything in the file".
+    assert not hasattr(banana, "ash_g_per_100g")
 
 
 def test__parse__MacroWithNoValueInSource__StaysNoneRatherThanZero():
@@ -136,7 +154,7 @@ def test__parse__FoodWithNoEnergyValue__IsDropped():
 def test__parse__Portions__ResolveMeasureNamesAndSkipWeightlessRows():
     foods, portions = _parse()
     flour = next(f for f in foods if f.source_ref == "222")
-    flour_portions = [p for p in portions if p.nutrition_food_id == flour.id]
+    flour_portions = [p for p in portions if p.fdc_id == flour.source_ref]
 
     assert {(p.measure, p.gram_weight) for p in flour_portions} == {
         ("cup", 125.0), ("tbsp", 7.8),
@@ -147,7 +165,7 @@ def test__parse__UndeterminedMeasureUnit__FallsBackToTheModifier():
     foods, portions = _parse()
     banana = next(f for f in foods if f.source_ref == "111")
 
-    banana_portions = [p for p in portions if p.nutrition_food_id == banana.id]
+    banana_portions = [p for p in portions if p.fdc_id == banana.source_ref]
     assert [(p.measure, p.gram_weight) for p in banana_portions] == [("medium", 118.0)]
 
 
@@ -168,3 +186,33 @@ def test__parse__NoPortionFile__StillImportsFoods():
 
     assert len(foods) == 2
     assert portions == []
+
+
+#region error messages (what an admin actually reads under a dead button)
+
+
+def test__friendly_error__Forbidden__NamesTheHostThatBlocksDownloads():
+    # The shipped default URL pointed at www.usda.gov, which is Akamai-fronted
+    # and answers 403 to any programmatic client — the download button's
+    # original failure. Only 404 had a friendly message, so admins saw a raw
+    # urllib string that told them nothing.
+    from dora_api.features.nutrition.dataset_import import _friendly_error
+
+    message = _friendly_error("HTTP Error 403: Forbidden")
+    assert "fdc.nal.usda.gov" in message
+
+
+def test__friendly_error__NotFound__PointsAtTheDownloadsPage():
+    from dora_api.features.nutrition.dataset_import import _friendly_error
+
+    assert "superseded" in _friendly_error("HTTP Error 404: Not Found")
+
+
+def test__default_urls__PointAtTheOriginNotTheAkamaiMirror():
+    from dora_api.features.nutrition.dataset_import import default_url
+
+    for source in ("usda_foundation", "usda_sr_legacy"):
+        assert default_url(source).startswith("https://fdc.nal.usda.gov/"), source
+
+
+#endregion

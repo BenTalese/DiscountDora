@@ -51,6 +51,7 @@
                     @entry-adjust="planner.adjustEntryServings"
                     @entry-link="onEntryLink"
                     @entry-unlink="onEntryUnlink"
+                    @entry-lighter="onEntryLighter"
                     @add-to-slot="onMobileAddToSlot"
                     @generate-list="planner.generateListForWeek"
                     @open-builder="builderOpen = true"
@@ -204,6 +205,7 @@
                                 :hovered-recipe-ids="planner.hoveredRecipeIds.value"
                                 :format-date="planner.formatDate"
                                 :show-all-slots="showAllSlots"
+                                :nutrition="planner.dayNutrition(day.iso)"
                                 @select-slot="(slot: string) => planner.selectSlot(day.iso, slot)"
                                 @drop-on-slot="(slot: string) => planner.onDropOnSlot(day.iso, slot)"
                                 @entry-view="planner.goToRecipe"
@@ -212,6 +214,7 @@
                                 @entry-adjust="planner.adjustEntryServings"
                                 @entry-link="onEntryLink"
                                 @entry-unlink="onEntryUnlink"
+                                @entry-lighter="onEntryLighter"
                             />
                         </div>
                     </transition>
@@ -287,6 +290,15 @@
             @cancel-target="planner.clearFocusedTarget"
             @recipe-pick="planner.pickRecipe"
             @palette-meal-adjust="planner.adjustPaletteMeals"
+        />
+
+        <!-- FU-637 — "find a lighter option" for one meal. Opened from the
+            meal's own menu; Dora never raises it herself. -->
+        <MealPlanLighterDialog
+            v-model="lighterOpen"
+            :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
+            :entry="lighterEntry"
+            @swapped="onLighterSwapped"
         />
 
         <!-- Templates drawer (R-Phase 5 / §9-E). Apply + manage in-place;
@@ -383,6 +395,7 @@
     import MealPlanShoppingSummary from 'src/components/MealPlanShoppingSummary.vue';
     import MealPlanSkeleton from 'src/components/MealPlanSkeleton.vue';
     import MealPlanTemplatesDrawer from 'src/components/MealPlanTemplatesDrawer.vue';
+    import MealPlanLighterDialog from 'src/components/MealPlanLighterDialog.vue';
     import MealPlanWeekDayCard from 'src/components/MealPlanWeekDayCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import MealPlanBuilderDialog from 'components/MealPlanBuilderDialog.vue';
@@ -508,6 +521,22 @@
     function onMobileAddToSlot(dayIso: string, slot: string) {
         planner.selectSlot(dayIso, slot);
         if (planner.focusedTarget.value) pickerSheetOpen.value = true;
+    }
+
+    // FU-637 — lighter-alternative dialog for a single meal.
+    const lighterOpen = ref(false);
+    const lighterEntry = ref<MealPlanEntry | null>(null);
+    function onEntryLighter(entry: MealPlanEntry) {
+        lighterEntry.value = entry;
+        lighterOpen.value = true;
+    }
+    async function onLighterSwapped() {
+        // Same refresh the budget axis uses — one applied-swap path, one reload.
+        await onSwapApplied();
+        $q.notify({
+            type: 'positive', position: 'bottom-right',
+            message: 'Swapped for the lighter meal.',
+        });
     }
 
     // PROPOSAL_MEAL_PLANS_PART_2 — link/unlink a cook batch (one cook, several

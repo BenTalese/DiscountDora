@@ -11,8 +11,30 @@
             <video ref="videoRef" class="scan-video" muted playsinline autoplay />
 
             <!-- ── Dim overlay + crosshair box ──────────────────────── -->
-            <div class="scan-mask">
+            <!-- Suppressed when the camera can't run at all: a viewfinder
+                 crosshair over a black rectangle promises a camera that is
+                 never going to arrive. -->
+            <div v-if="!cameraUnavailable" class="scan-mask">
                 <div class="scan-target" :class="{ flash: flashKind }" :data-flash="flashKind" />
+            </div>
+
+            <!-- ── Camera-unavailable explainer ─────────────────────────
+                 2026-08-15: this case is a *situation*, not a failure — the
+                 browser is withholding the camera API because the page isn't
+                 on a secure origin. It gets a readable panel where the
+                 viewfinder would be (with the fix named) rather than a
+                 one-line red error squeezed into the top bar, and the manual
+                 barcode box directly below stays fully usable. -->
+            <div v-if="cameraUnavailable" class="scan-unavailable">
+                <div class="scan-unavailable__card">
+                    <q-icon :name="ICONS.info_outline" size="28px" class="q-mb-sm" />
+                    <div class="scan-unavailable__title">
+                        {{ cameraUnavailable.kind === 'insecure-context'
+                            ? 'The camera needs a secure connection'
+                            : 'Camera not available here' }}
+                    </div>
+                    <div class="scan-unavailable__body">{{ cameraUnavailable.message }}</div>
+                </div>
             </div>
 
             <!-- ── Recent-decode banner (auto-fades) ────────────────── -->
@@ -47,7 +69,10 @@
             <!-- ── Top bar ──────────────────────────────────────────── -->
             <div class="scan-topbar">
                 <div class="scan-status">
-                    <span v-if="cameraError" class="scan-error">{{ cameraError }}</span>
+                    <!-- The unavailable case owns the centre panel, so the top
+                         bar just names it rather than repeating the paragraph. -->
+                    <span v-if="cameraUnavailable">Type a barcode below</span>
+                    <span v-else-if="cameraError" class="scan-error">{{ cameraError }}</span>
                     <span v-else-if="!cameraReady">Starting camera…</span>
                     <span v-else>Point at a barcode or QR</span>
                 </div>
@@ -103,6 +128,10 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import {
+        getCameraAvailability,
+        type CameraAvailability,
+    } from 'src/helpers/cameraAvailability';
     import { ICONS } from 'src/style/icons';
     import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
     import { ref, watch, onBeforeUnmount, computed } from 'vue';
@@ -136,6 +165,11 @@
     const videoRef = ref<HTMLVideoElement | null>(null);
     const cameraReady = ref(false);
     const cameraError = ref<string | null>(null);
+    // Set when the camera can't be opened for environmental reasons (non-secure
+    // origin, or no camera API at all) rather than because a start attempt
+    // failed. Kept separate from `cameraError` so the two can be presented
+    // differently: this one is an explanation, that one is a fault.
+    const cameraUnavailable = ref<Exclude<CameraAvailability, { kind: 'available' }> | null>(null);
     const flashKind = ref<'' | 'good' | 'bad'>('');
     const manualValue = ref('');
     const torchSupported = ref(false);
@@ -184,6 +218,21 @@
         cameraError.value = null;
         cameraReady.value = false;
         torchOn.value = false;
+        cameraUnavailable.value = null;
+        // 2026-08-15 mobile bug report: "can't access property getUserMedia,
+        // navigator.mediaDevices is undefined". That isn't a camera failure —
+        // browsers only expose `navigator.mediaDevices` in a secure context,
+        // so it's simply absent when the app is reached over plain http on a
+        // LAN address (the normal self-host case). zxing then threw a
+        // TypeError that fell through to the generic branch below and told the
+        // user to check a camera that was never the problem. Ask the shared
+        // authority instead of probing here, so the admin toggle that turns
+        // scanning on gives the identical diagnosis.
+        const availability = getCameraAvailability();
+        if (availability.kind !== 'available') {
+            cameraUnavailable.value = availability;
+            return;
+        }
         try {
             const { BrowserMultiFormatReader } = await import('@zxing/browser');
             codeReader = new BrowserMultiFormatReader();
@@ -244,6 +293,7 @@
         torchOn.value = false;
         torchSupported.value = false;
         cameraReady.value = false;
+        cameraUnavailable.value = null;
     }
 
     function handleDecoded(text: string) {
@@ -400,6 +450,37 @@
     .scan-target.flash[data-flash='bad'] {
         border-color: #ef5350;
         box-shadow: 0 0 0 9999px rgba(80, 0, 0, 0.45);
+    }
+    /* Camera-unavailable explainer. Occupies the viewfinder area (the video
+       element behind it is black — no stream ever starts), centred and
+       readable, sitting above the manual-entry bar which remains the working
+       path. Text is inverse-on-scrim like the rest of this overlay's chrome. */
+    .scan-unavailable {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        pointer-events: none;
+    }
+    .scan-unavailable__card {
+        max-width: 420px;
+        text-align: center;
+        color: var(--text-inverse);
+        background: var(--overlay-scrim);
+        border-radius: 12px;
+        padding: 20px 22px;
+    }
+    .scan-unavailable__title {
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+    .scan-unavailable__body {
+        font-size: 14px;
+        line-height: 1.5;
+        opacity: 0.92;
     }
     .scan-topbar {
         position: absolute;

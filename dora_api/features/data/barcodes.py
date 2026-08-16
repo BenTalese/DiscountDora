@@ -17,6 +17,7 @@ precedence prefers the most specific signal — direct stock-item linkage
 wins over a Product traversal. Scanning is a navigation aid only; it never
 does live deal lookup.
 """
+import base64
 import io
 import logging
 import re
@@ -81,6 +82,9 @@ DORA_SCHEME_PREFIX = "dora://stock-item/"
 QR_DEFAULT_SIZE = 256
 QR_MAX_SIZE = 1024
 QR_MIN_SIZE = 64
+# Per-cell QR size on the print sheet. Small enough that a 100-label sheet of
+# inlined data: URIs stays a sane page weight, large enough to scan reliably.
+QR_SHEET_CELL_SIZE = 180
 
 
 def _qr_payload_for_item(stock_item_id: UUID) -> str:
@@ -201,7 +205,7 @@ _SHEET_TEMPLATE = """<!doctype html>
     <div class="grid">
       {% for item in items %}
         <div class="cell">
-          <img src="/api/stock-items/{{ item.id }}/qr?size=180" alt="QR" />
+          <img src="{{ item.qr_data_uri }}" alt="QR" />
           <div class="caption">
             <div class="name">{{ item.name }}</div>
             <div class="level">{{ item.level_name or '' }}</div>
@@ -220,6 +224,18 @@ class _SheetItem:
     id: UUID
     name: str
     level_name: str | None
+    # The QR travels inside the HTML as a data: URI rather than as an
+    # <img src="/api/..."> back-reference. The sheet is opened as a blob in
+    # the SPA (so the fetch carries the session cookie the way every other
+    # call does); a relative back-reference can't resolve from a blob origin,
+    # and an absolute one would be an unauthenticated subresource. Self-
+    # contained also means the page still prints correctly if it's saved.
+    qr_data_uri: str
+
+
+def _qr_data_uri(stock_item_id: UUID, size: int) -> str:
+    png = _render_qr_png(_qr_payload_for_item(stock_item_id), size)
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
 def _iter_requested_ids(raw: str) -> Iterable[UUID]:
@@ -253,6 +269,7 @@ def stock_item_qr_sheet():
             _SheetItem(
                 id=i.id, name=i.name,
                 level_name=i.stock_level.name if i.stock_level else None,
+                qr_data_uri=_qr_data_uri(i.id, QR_SHEET_CELL_SIZE),
             )
             for i in sorted(all_items, key=lambda x: x.name.lower())
         ]
@@ -267,6 +284,7 @@ def stock_item_qr_sheet():
             _SheetItem(
                 id=i.id, name=i.name,
                 level_name=i.stock_level.name if i.stock_level else None,
+                qr_data_uri=_qr_data_uri(i.id, QR_SHEET_CELL_SIZE),
             )
             # Honour the order the caller specified.
             for i in (by_id[rid] for rid in requested if rid in by_id)

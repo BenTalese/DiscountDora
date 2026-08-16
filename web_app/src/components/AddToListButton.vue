@@ -97,10 +97,32 @@
         :icon="iconFor"
         :color="iconColour ?? undefined"
         :loading="busy"
-        :aria-label="tooltip"
+        :aria-label="ariaLabel"
+        :class="verdict ? ['dora-cart-verdict', `is-${verdict.verdict}`] : undefined"
         @click.stop="onPrimaryClick"
     >
-        <q-tooltip>{{ tooltip }}</q-tooltip>
+        <!-- 2026-08-15 feedback: the buy verdict used to be its own chip
+             sitting next to this button, spending row width to comment on
+             the decision this button makes. It's now chrome ON the button —
+             a verdict-toned ring — with the chip's headline + reasons folded
+             into this tooltip. The chip's one-tap action isn't reproduced
+             because clicking the button already performs it. -->
+        <q-tooltip>
+            <div>{{ tooltip }}</div>
+            <template v-if="verdict">
+                <div class="dora-cart-verdict__headline">{{ verdictHeadline }}</div>
+                <div
+                    v-for="(reason, i) in verdict.reasons"
+                    :key="i"
+                    class="dora-cart-verdict__reason"
+                >
+                    {{ reason.label }}
+                </div>
+                <div class="dora-cart-verdict__conf">
+                    {{ verdict.confidence }} confidence
+                </div>
+            </template>
+        </q-tooltip>
         <q-popup-proxy
             v-if="multiPopoverOpen"
             v-model="multiPopoverOpen"
@@ -117,6 +139,7 @@
     import { storeToRefs } from 'pinia';
     import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator, useQuasar } from 'quasar';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import type { BuyVerdict } from 'src/services/api/buyVerdictApiService';
     import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
     import { ICONS } from 'src/style/icons';
@@ -150,8 +173,14 @@
             variant?: 'row' | 'toolbar' | 'menu' | 'bulk' | 'inline-product';
             /** Optional override for the row tooltip / toolbar / menu label. */
             label?: string;
+            /** `row` variant only — Dora's buy/wait/skip verdict for this
+             *  item, rendered as a ring on the button plus its reasoning in
+             *  the tooltip. The caller decides whether a verdict is worth
+             *  showing at all (confidence floor, feature flag); pass null to
+             *  render the plain button. */
+            verdict?: BuyVerdict | null;
         }>(),
-        { variant: 'row' },
+        { variant: 'row', verdict: null },
     );
 
     const $q = useQuasar();
@@ -257,6 +286,24 @@
                 return 'Add to a list';
         }
     });
+    // Same wording BuyVerdictBadge's popover used, so the concept reads
+    // identically wherever it surfaces.
+    const VERDICT_HEADLINE: Record<BuyVerdict['verdict'], string> = {
+        buy: 'Worth buying now',
+        wait: 'Might be worth waiting',
+        skip: 'Probably skip',
+        unsure: 'No strong signal',
+    };
+    const verdictHeadline = computed(() =>
+        props.verdict ? VERDICT_HEADLINE[props.verdict.verdict] : '',
+    );
+    // Screen readers get the verdict inline — the ring is decorative.
+    const ariaLabel = computed(() =>
+        props.verdict
+            ? `${tooltip.value}. ${verdictHeadline.value}`
+            : tooltip.value,
+    );
+
     const toolbarLabel = computed(() => {
         if (props.label) return props.label;
         switch (cartState.value) {
@@ -586,3 +633,49 @@
         },
     };
 </script>
+
+<style scoped>
+    /* Buy-verdict ring (2026-08-15 feedback). The round cart button gets a
+       verdict-toned halo instead of a separate chip beside it: an offset
+       ring so the line sits clear of the button edge, plus a soft outer
+       glow so it reads at a glance in a list. Semantic tokens only (R-002);
+       `unsure` deliberately has no ring — a shrug isn't worth decoration.
+       The class falls through onto the q-btn RowActionButton renders, and
+       Vue stamps this component's scope id on that root, so plain selectors
+       reach it. */
+    .dora-cart-verdict.is-buy {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 4px var(--semantic-positive),
+            0 0 8px 2px color-mix(in srgb, var(--semantic-positive) 40%, transparent);
+    }
+    .dora-cart-verdict.is-wait {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 4px var(--semantic-warning),
+            0 0 8px 2px color-mix(in srgb, var(--semantic-warning) 40%, transparent);
+    }
+    .dora-cart-verdict.is-skip {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 4px var(--semantic-negative),
+            0 0 8px 2px color-mix(in srgb, var(--semantic-negative) 40%, transparent);
+    }
+</style>
+
+<style>
+    /* Tooltip body — unscoped because q-tooltip teleports to body. */
+    .dora-cart-verdict__headline {
+        font-weight: 600;
+        margin-top: 4px;
+    }
+    .dora-cart-verdict__reason,
+    .dora-cart-verdict__conf {
+        opacity: 0.85;
+        font-size: 0.9em;
+    }
+    .dora-cart-verdict__conf {
+        font-style: italic;
+        margin-top: 2px;
+    }
+</style>

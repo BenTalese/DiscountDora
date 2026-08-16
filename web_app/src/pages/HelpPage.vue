@@ -304,7 +304,19 @@
                 {
                     title: 'The "Dora thinks…" hint',
                     summary:
-                        'Dora quietly infers what you actually have — a coarse Out / Low / Stocked belief worked out from your purchases, how often you rebuy, and what you\'ve cooked, decayed by time since the last real signal. It never changes your recorded level; that stays the source of truth for shopping and cooking. She only speaks up when it\'s worth it: when her belief differs from what you recorded, a small amber "Dora thinks low/out/stocked" appears beside the item — hover for the reason and how sure she is, then a quick check sets things straight. When she agrees with you she stays silent. Turn the hint off entirely in Settings → Assistant.',
+                        'Dora quietly infers what you actually have — a coarse Out / Low / Stocked belief worked out from your purchases, how often you rebuy, and what you\'ve cooked, decayed by time since the last real signal. It never changes your recorded level; that stays the source of truth for shopping and cooking. She only speaks up when it\'s worth it: when her belief differs from what you recorded, the item\'s coloured level box picks up an amber ring — open the level picker and its header tells you what she thinks, why, and how sure she is, so a quick check sets things straight. When she agrees with you she stays silent. Turn the hint off entirely in Settings → Assistant.',
+                    path: '/stock',
+                },
+                {
+                    title: 'The Buy / Wait / Skip ring on the cart button',
+                    summary:
+                        'Dora can tell you whether an item is worth buying right now, using only your own history — what you\'ve paid for it before, how fast you get through it, and how often it ends up thrown away. No outside data, no crowd pricing. The answer rides the cart button as a coloured ring: green for "worth buying now", amber for "might be worth waiting", red for "probably skip". Hover it for the headline, the reasons behind it, and how confident she is. When she isn\'t confident enough to be useful there\'s no ring at all — she\'d rather say nothing than guess. Turn it off in Settings → Admin → System ("Should I buy?" oracle).',
+                    path: '/stock',
+                },
+                {
+                    title: 'Scanning barcodes and QR labels',
+                    summary:
+                        'When scanning is switched on (Settings → Admin → System), the Stock page grows a Scan button: point it at a product barcode to jump straight to the matching stock item, or at one of Dora\'s own printed QR labels. It is navigation only — scanning never looks up live prices. One thing to know if you use Dora on your phone: web browsers only allow camera access over a secure connection, so if you reach your instance at a plain http:// address the camera cannot open, and the scanner will tell you so and offer you a box to type the barcode into instead. Two ways round it — use the Dashy Dora Android app, which scans against any instance, or serve Dora over HTTPS. QR label printing and typing a barcode by hand work either way.',
                     path: '/stock',
                 },
                 {

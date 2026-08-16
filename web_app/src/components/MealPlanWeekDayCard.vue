@@ -4,6 +4,24 @@
             <div class="text-weight-bold">{{ day.label }}</div>
             <div class="text-caption q-ml-sm dora-text-muted">{{ formatDate(day.iso) }}</div>
             <q-badge v-if="isToday" color="primary" class="q-ml-sm" label="Today" />
+            <q-space />
+            <!-- FU-637 — a serving of each meal planned for this day. Not an
+                 intake figure: the plan schedules food, not plates for named
+                 people. Shows the shortfall when some meals couldn't be
+                 counted, so a light-looking day can't be a half-counted one. -->
+            <div v-if="nutrition && nutrition.kcal_per_serving !== null" class="text-caption dora-text-muted">
+                {{ Math.round(nutrition.kcal_per_serving) }} kcal
+                <span v-if="nutrition.counted_meals < nutrition.total_meals">
+                    ({{ nutrition.counted_meals }}/{{ nutrition.total_meals }})
+                </span>
+                <q-tooltip>
+                    One serving of each meal planned for {{ day.label }}<template
+                        v-if="nutrition.counted_meals < nutrition.total_meals"
+                    >, counting {{ nutrition.counted_meals }} of
+                    {{ nutrition.total_meals }} meals — the rest don't have a
+                    calorie figure yet</template>.
+                </q-tooltip>
+            </div>
         </q-card-section>
         <q-card-section class="q-pa-sm column q-gutter-xs">
             <!-- R-Phase 6 §4.6 — slot row is a real <button> so it's
@@ -38,6 +56,7 @@
                         @cook="emit('entryCook', entry.recipe_id)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                        @lighter="emit('entryLighter', entry)"
                         @link="emit('entryLink', entry)"
                         @unlink="emit('entryUnlink', entry)"
                     />
@@ -66,6 +85,7 @@
                         @cook="emit('entryCook', entry.recipe_id)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                        @lighter="emit('entryLighter', entry)"
                         @link="emit('entryLink', entry)"
                         @unlink="emit('entryUnlink', entry)"
                     />
@@ -103,7 +123,7 @@
 <script lang="ts" setup>
     import MealPlanEntryChip from 'components/MealPlanEntryChip.vue';
     import { ICONS } from 'src/style/icons';
-    import type { MealPlanEntry } from 'src/models/mealPlan';
+    import type { MealPlanDayNutrition, MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
     import { computed } from 'vue';
 
@@ -119,6 +139,9 @@
         hoveredRecipeIds: Set<string>;
         formatDate: (iso: string) => string;
         showAllSlots: boolean;
+        /** FU-637 — this day's server-summed calories. Null when nutrition is
+         *  off or nothing on the day could be counted. */
+        nutrition?: MealPlanDayNutrition | null;
     }>();
 
     const emit = defineEmits<{
@@ -130,6 +153,7 @@
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
         (e: 'entryLink', entry: MealPlanEntry): void;
         (e: 'entryUnlink', entry: MealPlanEntry): void;
+        (e: 'entryLighter', entry: MealPlanEntry): void;
     }>();
 
     // Q2 — used slots default. When showAllSlots is on, every household slot

@@ -131,6 +131,100 @@ device packs for hardware items.
 
 ---
 
+## Verified live — Stock-overview filter feedback (2026-08-16)
+
+Four owner-reported items, all walked on a scratch install (own backend on :5185 with
+its own SQLite + own CORS origin, SPA on :5188, both torn down after). No new
+`DORA_VERIFY.md` lines were owed for these — only the cross-theme look call, which is
+the one item that got added.
+
+| Check | Measured |
+|---|---|
+| Filters + Clear icon-only on mobile | 375px, both buttons 57px wide, no label text, `aria-label` intact, the active-count badge still on Filters. Search input gained the freed width (206px). |
+| Filter options scroll like the quick-filter chips | Input row: `scrollWidth 744 / clientWidth 311`, `overflow-x: auto`, `flex-wrap: nowrap`, height **42px = one line** (previously wrapped to three). |
+| Space between the level picker and the essential stripe | **Mobile-only** — desktop was never the problem (owner correction). Phone left padding 8→12px, matching desktop; stripe→button gap 3px→8px at 375px, identical to desktop's 8px. Desktop CSS untouched. |
+| Open/in-use + Essential too dark in dark mode | Active chip vs the sunken filter panel in pesto-dark: **2.80:1 → 8.48:1**. Across all five dark themes the indicator tone went **1.45–4.74:1 → 7.31–8.48:1** (cherry-cola-dark was the 1.45 — effectively invisible). |
+
+Two things worth keeping:
+
+- **The `--brand-secondary-strong` cascade was verified per theme, not assumed.** It's
+  declared once on `:root` as `var(--brand-secondary)` and overridden only in the five
+  dark blocks. Probing all ten themes confirmed each *light* theme resolves its own
+  secondary (not Pesto's) — which works because `themeService` puts `data-theme` on
+  `document.documentElement`, the same element `:root` matches, so the reference
+  re-resolves per theme instead of freezing at the default.
+- **A red herring: `--q-secondary` reads `#006a80` on `documentElement` even in
+  pesto-dark.** That is not a theme-sync bug — Quasar's `setCssVar` writes to
+  `document.body` by default, so the root still carries the SCSS-baked value. Read
+  Quasar palette vars off an element inside `<body>`, or you'll chase a ghost.
+
+**Harness notes (additive to the rAF recipe above).** Screenshots time out on this page
+— every measurement here is `getBoundingClientRect` / `getComputedStyle` instead. Two
+new gotchas: (1) `q-virtual-scroll` renders **zero rows** in the hidden pane, so filter
+the list under `VIRTUAL_SCROLL_THRESHOLD` (50) to reach the plain `ListTransition` path
+before measuring a row; (2) `$q.screen` does **not** react to `resize_window` — it stays
+at whatever width the page loaded with, so `compactToolbar` reads false and every
+mobile-only branch renders desktop. **Reload after resizing**, then assert
+`$q.screen.width` before trusting anything. Synthetic `form_input`/click on the login
+form also didn't reach Vue's model; `fetch('/api/auth/login', {credentials:'include'})`
+then a reload works.
+
+---
+
+## Verified + deleted — Location field overflow, stock-item detail (2026-08-16)
+
+**Item deleted from `DORA_VERIFY.md`:** "Location field on a phone — confirm the page
+no longer scrolls sideways."
+
+**Why it's here at all:** the fix shipped earlier the same day was **wrong and
+untested** — `min-width: 0` on the item sections, which Quasar already sets, so the
+rule was a no-op. The owner reported it still broken. This is the record of the second,
+measured fix.
+
+**Method:** scratch install stood up for the purpose (own backend on 5175, own SQLite,
+own CORS origin, `VITE_API_BASE_URL` pointed at it) so the other session's server and DB
+were untouched; all of it removed afterwards, including the temporary `launch.json`
+entries. Measured with `getBoundingClientRect` per row, not by eye.
+
+**Evidence (Location row, viewport 375px):**
+
+| | before | after |
+|---|---|---|
+| `.q-field` width | 236px | 136px (= its section) |
+| field right edge | 428 | 327 |
+| dropdown arrow right edge | 402 | 327 (aligned with every other row) |
+| row `scrollWidth - clientWidth` | 85px | 0 |
+
+Also clean at **320px** (field right edge 272, page `scrollWidth` == viewport). Stock
+group had the same defect at 23px and is fixed by the same rule. The only elements
+still exceeding the viewport at 320px are `.dora-tabs__tab`, inside a container with
+`overflow-x: auto` — scrollable by design, not a regression.
+
+**Second miss — scope (2026-08-16, same day).** The measured fix above was correct but
+scoped to `.dora-inline-edit` on one page, and the owner reported it *still* broken.
+`use-input` is what makes QSelect render a real `<input>`, and **13 files use it** —
+including `CreateStockItemDialog`, `BulkMoveLocationDialog` and the stock filters, i.e.
+two more location pickers. The cap now lives in `css/app.scss` on
+`.q-select--with-input`. A/B'd on `AdminSystemRegionSettings` at 320px (a `use-input`
+select outside any inline-edit list): rule off → 275px field overflowing its 284px
+parent; rule on → 272px, flush. **Lesson: fix where the defect lives, not where the
+report came from.**
+
+**Root cause (recorded so it isn't re-diagnosed):** `q-item-section` is a *column*
+flex container; `.q-field` inside it has `max-width: none` and so sizes to its own
+content, and the Location row is the only one rendering a real `<input>` (~180px
+intrinsic, independent of content — which is why clearing the locations list changed
+nothing). Quasar's `max-width: 100%` sits on `.q-field__control` and resolves against
+the already-oversized `.q-field`, so the cap has to go on `.q-field`.
+
+**Harness note:** the Browser pane's document is `document.hidden`, so `rAF` never
+fires and this page's `FadeTransition mode="out-in"` never settles — it sits on the
+loading skeleton forever and no CSS injection helps. Measuring required temporarily
+swapping the transition for a plain `<div>`, then restoring it (confirmed via
+`git diff`).
+
+---
+
 ## The numbers (2026-07-16 snapshot)
 
 | Slice | Lines | Items | A | V | H | Stale-suspect |

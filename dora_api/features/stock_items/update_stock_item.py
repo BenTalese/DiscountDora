@@ -66,6 +66,11 @@ class UpdateStockItemRequest(BaseModel):
     # suggestion, never a saved link (P12 No-invent).
     nutrition_food_id: UUID | None = None
     clear_nutrition_food: bool = False
+    # "Never suggest a food for this one" — the opt-out behind the auto-matcher
+    # (dish soap has no calories). A plain tri-state bool rather than a clear
+    # flag: unlike the FK above there's no difference between "set it to false"
+    # and "clear it", so the omitted-means-leave-alone default is enough.
+    nutrition_ignored: bool | None = None
     # Explicit clear flags for location and group — the relationships are
     # mapped `lazy="noload"`, so assigning the relationship-side to None
     # is a silent no-op (the FK column never goes dirty). The clear-flag
@@ -256,6 +261,15 @@ class UpdateStockItemHandler:
             _StockItem.nutrition_food_id = None
         elif "nutrition_food_id" in _SetFields and request.nutrition_food_id is not None:
             _StockItem.nutrition_food_id = request.nutrition_food_id
+
+        # Linking a food and ignoring the item are mutually exclusive answers to
+        # the same question, so an explicit link clears the opt-out — otherwise
+        # an item ignored months ago and later linked by hand would keep its
+        # stale "don't ask" flag and read as ignored on the matching page.
+        if request.nutrition_ignored is not None:
+            _StockItem.nutrition_ignored = request.nutrition_ignored
+        elif _StockItem.nutrition_food_id is not None:
+            _StockItem.nutrition_ignored = False
 
         # stock_group: nullable FK with the same lazy="noload" trap — see
         # the comment on stock_location above. Explicit `clear_stock_group`

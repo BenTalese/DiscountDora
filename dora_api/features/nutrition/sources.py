@@ -49,6 +49,19 @@ def dataset_counts(repository: Repository) -> dict[str, int]:
     return counts
 
 
+def local_catalogue_size(repository: Repository) -> int:
+    """How many foods are held locally, from any source.
+
+    This — not `any_source_available` — is what the name-matcher can actually
+    work with. The matcher is local-catalogue-only by design (see
+    `suggestions.py`), so an install with Open Food Facts switched on but no
+    dataset downloaded reports a source as "available" while the matcher has
+    nothing to match against and silently suggests nothing. The matching page
+    uses this to say so out loud instead of looking broken.
+    """
+    return repository.get(NutritionFood).count()
+
+
 def source_statuses(repository: Repository, setting) -> List[NutritionSourceStatus]:  # noqa: ANN001
     counts = dataset_counts(repository)
     statuses = [

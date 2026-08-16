@@ -18,27 +18,34 @@
                 <template v-else>{{ detail?.name || 'Stock item' }}</template>
             </div>
             <q-space />
+            <!-- Feedback 2026-08-16: on a phone the labelled QR + Delete
+                 buttons wrapped the header onto a second line. Below `sm`
+                 both drop to icon-only so they sit on the item-name line;
+                 the label survives as the tooltip, so nothing is lost. -->
             <BaseButton
                 v-if="detail && scanningEnabled"
                 variant="secondary"
                 icon="qr_code_2"
-                label="Show QR"
-                @click="showQrOpen = true"
+                :label="compactHeader ? undefined : 'Show QR'"
+                @click="openQrDialog"
             >
                 <q-tooltip max-width="280px">
-                    Prints Dora's own label for this item — a scannable QR
-                    that opens this page. It's *not* the product's real
+                    Show QR — Dora's own label for this item, a scannable
+                    code that opens this page. It's *not* the product's real
                     EAN/UPC barcode (barcodes register a Product, and any
                     linkage to this stock item is managed on this page).
+                    Print a batch under Settings → Kitchen setup → QR labels.
                 </q-tooltip>
             </BaseButton>
             <BaseButton
                 v-if="detail"
                 variant="danger-ghost"
                 :icon="ICONS.delete"
-                label="Delete"
+                :label="compactHeader ? undefined : 'Delete'"
                 @click="confirmDelete"
-            />
+            >
+                <q-tooltip v-if="compactHeader">Delete</q-tooltip>
+            </BaseButton>
         </div>
 
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
@@ -61,7 +68,17 @@
             <!-- ── QR dialog ────────────────────────────────────────── -->
             <BaseDialog v-model="showQrOpen" :title="detail.name" closable card-style="min-width: 280px; max-width: 400px">
                     <q-card-section class="text-center">
+                        <AppSkeleton
+                            v-if="qrLoading"
+                            type="rect"
+                            width="256px"
+                            height="256px"
+                        />
+                        <div v-else-if="qrError" class="dora-text-muted text-caption">
+                            {{ qrError }}
+                        </div>
                         <img
+                            v-else-if="qrSrc"
                             :src="qrSrc"
                             alt="QR code"
                             style="width: 256px; height: 256px; max-width: 100%;"
@@ -104,6 +121,9 @@
                          FU-437). The card no-ops when the composable hasn't
                          resolved yet or the install-wide flag is off, so
                          the overview stays quiet on thin data. -->
+                    <!-- Feedback 2026-08-16: Dora's opinion sits above the buy
+                         verdict, both as collapsed coloured cards. -->
+                    <PantryBeliefCard :belief="belief" class="q-mb-md" />
                     <BuyVerdictCard
                         v-if="buyVerdict"
                         :verdict="buyVerdict"
@@ -185,11 +205,13 @@
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
                                             </span>
                                         </div>
-                                        <!-- inferred level (additive; beside the
-                                             recorded level above). The margin rides
-                                             on the chip root via fall-through, so it
-                                             adds no gap when the hint stays silent. -->
-                                        <PantryBeliefChip :belief="belief" class="q-mt-xs" />
+                                        <!-- The inferred-level hint moved out of this
+                                             row into `PantryBeliefCard` at the top of
+                                             the tab (feedback 2026-08-16), where it can
+                                             show the reasoning for agreeing as well as
+                                             for disagreeing. The row form
+                                             (`PantryBeliefChip`) is still what the stock
+                                             overview uses. -->
                                     </q-item-section>
                                 </q-item>
 
@@ -288,49 +310,161 @@
                                 <q-item v-if="nutritionIsComplex">
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Nutrition</q-item-section>
                                     <q-item-section>
-                                        <div v-if="detail.nutrition_food" class="row items-center q-gutter-xs">
-                                            <div class="column items-start" style="min-width: 0">
+                                        <!-- Feedback 2026-08-16: the full nutrient table
+                                             would push every section below it off the
+                                             screen, so it lives behind a disclosure on
+                                             the summary line. Collapsed shows the one
+                                             number that matters (kcal) and where it came
+                                             from. -->
+                                        <div v-if="detail.nutrition_food">
+                                            <div class="row items-center q-gutter-xs">
+                                                <div class="column items-start" style="min-width: 0">
+                                                    <span class="dora-text-primary ellipsis">
+                                                        {{ detail.nutrition_food.name }}
+                                                    </span>
+                                                    <span class="dora-text-muted" style="font-size: 0.75rem">
+                                                        <template v-if="detail.nutrition_food.kcal_per_100g !== null">
+                                                            {{ Math.round(detail.nutrition_food.kcal_per_100g) }} kcal / 100g ·
+                                                        </template>
+                                                        {{ detail.nutrition_food.source_label }}
+                                                    </span>
+                                                </div>
+                                                <q-space />
+                                                <BaseButton
+                                                    variant="ghost"
+                                                    dense
+                                                    size="sm"
+                                                    :icon="nutritionExpanded ? ICONS.collapse : ICONS.expand"
+                                                    label="Details"
+                                                    @click="nutritionExpanded = !nutritionExpanded"
+                                                />
+                                                <BaseButton
+                                                    variant="ghost"
+                                                    dense
+                                                    size="sm"
+                                                    :icon="ICONS.search"
+                                                    :disable="busy"
+                                                    aria-label="Search for a different food"
+                                                    @click="foodPickerOpen = true"
+                                                >
+                                                    <q-tooltip>Link a different food</q-tooltip>
+                                                </BaseButton>
+                                                <BaseButton
+                                                    variant="danger-icon"
+                                                    size="sm"
+                                                    :icon="ICONS.close"
+                                                    :disable="busy"
+                                                    aria-label="Unlink food"
+                                                    @click="onUnlinkFood"
+                                                >
+                                                    <q-tooltip>Unlink</q-tooltip>
+                                                </BaseButton>
+                                            </div>
+                                            <NutritionFactsList
+                                                v-if="nutritionExpanded"
+                                                :food="detail.nutrition_food"
+                                                class="q-mt-sm"
+                                            />
+                                        </div>
+                                        <!-- Unlinked, but the matcher found something.
+                                             Framed as a question with the guess visibly
+                                             marked "Suggested" rather than pre-filled into
+                                             the row: the user must be able to tell at a
+                                             glance that nothing has been saved yet
+                                             (P12 No-invent). -->
+                                        <div
+                                            v-else-if="detail.nutrition_suggestion"
+                                            class="nutrition-suggestion"
+                                        >
+                                            <div class="row items-center q-gutter-xs no-wrap">
+                                                <q-badge
+                                                    class="nutrition-suggestion__tag"
+                                                    :label="detail.nutrition_suggestion.is_strong
+                                                        ? 'Suggested' : 'Possible match'"
+                                                />
                                                 <span class="dora-text-primary ellipsis">
-                                                    {{ detail.nutrition_food.name }}
-                                                </span>
-                                                <span class="dora-text-muted" style="font-size: 0.75rem">
-                                                    <template v-if="detail.nutrition_food.kcal_per_100g !== null">
-                                                        {{ Math.round(detail.nutrition_food.kcal_per_100g) }} kcal / 100g ·
-                                                    </template>
-                                                    {{ detail.nutrition_food.source_label }}
+                                                    {{ detail.nutrition_suggestion.name }}
                                                 </span>
                                             </div>
-                                            <q-space />
-                                            <BaseButton
-                                                variant="ghost"
-                                                dense
-                                                size="sm"
-                                                label="Change"
-                                                :disable="busy"
-                                                @click="foodPickerOpen = true"
-                                            />
-                                            <BaseButton
-                                                variant="danger-icon"
-                                                size="sm"
-                                                :icon="ICONS.close"
-                                                :disable="busy"
-                                                aria-label="Unlink food"
-                                                @click="onUnlinkFood"
-                                            >
-                                                <q-tooltip>Unlink</q-tooltip>
-                                            </BaseButton>
+                                            <div class="dora-text-muted nutrition-suggestion__meta">
+                                                <template v-if="detail.nutrition_suggestion.kcal_per_100g !== null">
+                                                    {{ Math.round(detail.nutrition_suggestion.kcal_per_100g) }} kcal / 100g ·
+                                                </template>
+                                                {{ detail.nutrition_suggestion.source_label }} ·
+                                                matched on the name, not saved yet
+                                            </div>
+                                            <div class="row items-center q-gutter-xs q-mt-xs">
+                                                <BaseButton
+                                                    variant="primary"
+                                                    dense
+                                                    size="sm"
+                                                    label="Use this"
+                                                    :disable="busy"
+                                                    @click="onAcceptSuggestion"
+                                                />
+                                                <BaseButton
+                                                    variant="ghost"
+                                                    dense
+                                                    size="sm"
+                                                    :icon="ICONS.search"
+                                                    :disable="busy"
+                                                    aria-label="Search for a food"
+                                                    @click="foodPickerOpen = true"
+                                                >
+                                                    <q-tooltip>Search for a food yourself</q-tooltip>
+                                                </BaseButton>
+                                                <q-space />
+                                                <BaseButton
+                                                    variant="ghost"
+                                                    dense
+                                                    size="sm"
+                                                    label="Not a food"
+                                                    :disable="busy"
+                                                    @click="onIgnoreNutrition"
+                                                >
+                                                    <q-tooltip>
+                                                        Stop suggesting a food for this item
+                                                    </q-tooltip>
+                                                </BaseButton>
+                                            </div>
                                         </div>
+                                        <!-- Feedback 2026-08-16: the search affordance is
+                                             always present and is just the icon; "Not a
+                                             food" is gone from this state because it's an
+                                             answer to a question Dora hasn't asked here —
+                                             it belongs on the suggestion above, and in
+                                             bulk under Kitchen setup → Nutrition matching.
+                                             Searching from the ignored state and linking
+                                             something un-ignores the item server-side, so
+                                             there's no order to get wrong. -->
                                         <div v-else class="row items-center q-gutter-xs">
-                                            <span class="dora-text-muted">Not linked</span>
+                                            <span class="dora-text-muted">
+                                                <template v-if="detail.nutrition_ignored">
+                                                    Ignored
+                                                </template>
+                                                <template v-else>Not linked</template>
+                                            </span>
                                             <q-space />
+                                            <BaseButton
+                                                v-if="detail.nutrition_ignored"
+                                                variant="ghost"
+                                                dense
+                                                size="sm"
+                                                label="Track again"
+                                                :disable="busy"
+                                                @click="onUnignoreNutrition"
+                                            />
                                             <BaseButton
                                                 variant="ghost"
                                                 dense
                                                 size="sm"
-                                                label="Find a food"
+                                                :icon="ICONS.search"
                                                 :disable="busy"
+                                                aria-label="Search for a food"
                                                 @click="foodPickerOpen = true"
-                                            />
+                                            >
+                                                <q-tooltip>Search for a food to link</q-tooltip>
+                                            </BaseButton>
                                         </div>
                                     </q-item-section>
                                 </q-item>
@@ -338,7 +472,27 @@
                                 <q-item>
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Expiry</q-item-section>
                                     <q-item-section>
+                                        <!-- Feedback 2026-08-16: Set leads the row, ahead of
+                                             the date, and carries the same expiry glyph the
+                                             overview row uses (shared via
+                                             `helpers/expiryIndicator`) so the state reads the
+                                             same in both places. It stays a plain button —
+                                             the overview's is a dropdown, which this row
+                                             doesn't need since the push shortcuts are already
+                                             spelled out beside it. -->
                                         <div class="row items-center q-gutter-xs">
+                                            <BaseButton
+                                                variant="ghost"
+                                                dense
+                                                size="sm"
+                                                :icon="expiryIndicator.icon"
+                                                :color="expiryIndicator.colour ?? undefined"
+                                                :class="expiryIndicator.cssClass ?? undefined"
+                                                label="Set"
+                                                @click="expiryDialogOpen = true"
+                                            >
+                                                <q-tooltip>{{ expiryIndicator.tooltip }}</q-tooltip>
+                                            </BaseButton>
                                             <span class="dora-text-primary">
                                                 {{ detail.expiry_date || '—' }}
                                             </span>
@@ -346,8 +500,8 @@
                                             <!-- Feedback 2026-08-08: Clear sits at the left
                                                  edge of the right-aligned cluster so showing/
                                                  hiding it (it only exists when there's a date)
-                                                 doesn't nudge the +Nd / Set buttons — those
-                                                 stay anchored to the right. -->
+                                                 doesn't nudge the +Nd buttons — those stay
+                                                 anchored to the right. -->
                                             <BaseButton
                                                 v-if="detail.expiry_date"
                                                 variant="danger-icon"
@@ -361,12 +515,6 @@
                                             <BaseButton variant="ghost" dense size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
                                             <BaseButton variant="ghost" dense size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
                                             <BaseButton variant="ghost" dense size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
-                                            <!-- Feedback 2026-06-18: the calendar-only icon
-                                                 button picks up the "Set" label that used to
-                                                 live in the top toolbar. -->
-                                            <BaseButton variant="ghost" dense size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
-                                                <q-tooltip>Pick a date</q-tooltip>
-                                            </BaseButton>
                                         </div>
                                     </q-item-section>
                                 </q-item>
@@ -422,6 +570,41 @@
                                     </q-item-section>
                                 </q-item>
 
+                                <!-- Feedback 2026-08-16: stock-take mode's
+                                     Mute action tells the user they can
+                                     un-mute "from the item's detail page",
+                                     but the detail page never carried the
+                                     control. This row is that control — and
+                                     the only place the flag can be turned
+                                     back on. -->
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Stock-take</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-sm">
+                                            <q-toggle
+                                                :model-value="detail.stocktake_alerts_are_enabled"
+                                                :disable="busy"
+                                                @update:model-value="onToggleStocktakeAlerts"
+                                            />
+                                            <span class="dora-text-secondary text-caption">
+                                                {{ detail.stocktake_alerts_are_enabled
+                                                    ? 'Dora can ask you to check this'
+                                                    : 'Muted — Dora never asks' }}
+                                            </span>
+                                            <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                                                <q-tooltip max-width="320px">
+                                                    Controls whether this item
+                                                    ever joins the stock-take
+                                                    queue. Muting it during a
+                                                    stock take switches this
+                                                    off; this is where you
+                                                    switch it back on.
+                                                </q-tooltip>
+                                            </q-icon>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
                                 <!-- FU-511 — per-item "Auto-add when low"
                                      toggle removed. Auto-add is now a
                                      single install-wide setting managed at
@@ -456,15 +639,25 @@
                             </q-list>
 
                             <!-- Preferred buys (FU-211) — free-text "what I
-                                 actually buy" reminders. Always shown; not a
-                                 product/SKU, just a personal memory aid (and a
-                                 future shopping-list hint). -->
+                                 actually buy" reminders: not a product/SKU,
+                                 just a personal memory aid (and a future
+                                 shopping-list hint).
+
+                                 Feedback 2026-08-16: hidden entirely when the
+                                 Products overlay is on. The two answer the
+                                 same question ("which one do I actually buy?")
+                                 and Products answers it with real SKUs, prices
+                                 and deals — showing both invites the user to
+                                 maintain the same fact twice. Rows already
+                                 stored are kept, not deleted; turning Products
+                                 back off brings them straight back. -->
+                            <template v-if="!productsEnabled">
                             <!-- Feedback 2026-06-18 (round 4): the explainer
                                  ("What you actually buy for this — e.g.
                                  Vitasoy Oat Milky 1L") moves to an info-hover
                                  next to the heading. Same pattern as the
                                  toggle rows in the basics list. -->
-                            <div class="q-mt-md dora-text-secondary text-caption q-mb-sm row items-center q-gutter-xs">
+                            <div class="q-mt-md dora-text-secondary text-weight-bold q-mb-sm row items-center q-gutter-xs">
                                 <span>Preferred buys</span>
                                 <q-icon :name="ICONS.info_outline" size="14px" class="dora-text-muted">
                                     <q-tooltip max-width="320px">
@@ -544,6 +737,7 @@
                                     @click="addBuy"
                                 />
                             </div>
+                            </template>
 
                             <!-- "Your prices" widget (C5
                                  revised) replaces the inline price entry
@@ -1098,7 +1292,7 @@
     import BaseDropdown from 'src/components/BaseDropdown.vue';
     import BuyVerdictCard from 'src/components/stock/BuyVerdictCard.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
-    import PantryBeliefChip from 'src/components/stock/PantryBeliefChip.vue';
+    import PantryBeliefCard from 'src/components/stock/PantryBeliefCard.vue';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { formatMoney } from 'src/composables/useMoney';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
@@ -1108,6 +1302,7 @@
     import { QPage, useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import NutritionFoodPicker from 'src/components/stock/NutritionFoodPicker.vue';
+    import NutritionFactsList from 'src/components/stock/NutritionFactsList.vue';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
     import RecipeCard from 'src/components/RecipeCard.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
@@ -1121,9 +1316,11 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { openProductSearch } from 'src/composables/useProductSearchUrl';
+    import { fetchQrImageUrlAsync, openQrSheetAsync } from 'src/composables/useQrLabels';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
+    import { expiryIndicatorFor } from 'src/helpers/expiryIndicator';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LocationNode } from 'src/models/location';
     import type { StockGroup } from 'src/models/stockGroup';
@@ -1132,7 +1329,7 @@
     import type { LinkedProduct, PreferredBuy, PriceObservation, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
-    import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
+    import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -1165,6 +1362,9 @@
     const route = useRoute();
     const router = useRouter();
     const $q = useQuasar();
+    // Phones drop the header buttons to icon-only so the name, QR and Delete
+    // fit on one line (feedback 2026-08-16).
+    const compactHeader = computed(() => $q.screen.lt.sm);
 
     const stockItemApi = new StockItemApiService();
     const barcodeApi = new BarcodeApiService();
@@ -1217,19 +1417,36 @@
     // is typed on the recipe, so the row is hidden entirely below that (R-029).
     const { isComplex: nutritionIsComplex } = useNutritionMode();
     const foodPickerOpen = ref(false);
+    // The full per-100g table is behind a disclosure so it can't bury the
+    // sections under it (feedback 2026-08-16).
+    const nutritionExpanded = ref(false);
     const showQrOpen = ref(false);
-    const qrSrc = computed(() => {
-        const baseUrl = resolveBaseURL();
-        // size 512 looks crisp on retina; the dialog box clamps to 256.
-        return `${baseUrl}/stock-items/${stockItemId.value}/qr?size=512`;
-    });
+    // The QR PNG and the print sheet are fetched through the authenticated
+    // http client and handed to the browser as blobs (see useQrLabels). The
+    // previous `<img :src="apiUrl">` / `window.open(apiUrl)` pair relied on
+    // the browser volunteering the session cookie on an unauthenticated
+    // request, which is why the dialog rendered empty and "Print one" died.
+    const qrSrc = ref<string | null>(null);
+    const qrLoading = ref(false);
+    const qrError = ref<string | null>(null);
+
+    async function openQrDialog() {
+        showQrOpen.value = true;
+        if (qrSrc.value) return;
+        qrLoading.value = true;
+        qrError.value = null;
+        try {
+            // size 512 looks crisp on retina; the dialog box clamps to 256.
+            qrSrc.value = await fetchQrImageUrlAsync(stockItemId.value, 512);
+        } catch {
+            qrError.value = "Couldn't load this item's QR code.";
+        } finally {
+            qrLoading.value = false;
+        }
+    }
 
     function openSingleQrSheet() {
-        const baseUrl = resolveBaseURL();
-        window.open(
-            `${baseUrl}/stock-items/qr/sheet?ids=${stockItemId.value}`,
-            '_blank', 'noopener',
-        );
+        void openQrSheetAsync({ ids: [stockItemId.value] });
     }
 
     const tab = ref<string>(
@@ -1355,6 +1572,7 @@
         stock_location_id?: string | null;
         stock_group_id?: string | null;
         is_essential?: boolean;
+        stocktake_alerts_are_enabled?: boolean;
         expiry_date?: string | null;
         usual_store_id?: string | null;
         clear_usual_store?: boolean;
@@ -1365,6 +1583,9 @@
         // Nutrition complex-mode link, same clear-vs-unset shape as the store.
         nutrition_food_id?: string;
         clear_nutrition_food?: boolean;
+        // "Never suggest a food for this one." A plain bool, not a clear flag —
+        // unlike the FK there's no difference between false and absent.
+        nutrition_ignored?: boolean;
     };
     async function saveField(patch: FieldPatch) {
         if (!detail.value) return;
@@ -1432,6 +1653,9 @@
     async function onToggleFlagged(value: boolean) {
         await saveField({ is_essential: value });
     }
+    async function onToggleStocktakeAlerts(value: boolean) {
+        await saveField({ stocktake_alerts_are_enabled: value });
+    }
 
     // Nutrition complex-mode link. The picker has already persisted the food
     // (resolving a live suggestion server-side if needed) and hands back its
@@ -1441,6 +1665,21 @@
     }
     async function onUnlinkFood() {
         await saveField({ clear_nutrition_food: true });
+    }
+
+    // Accepting a suggestion is the same write as picking one by hand — the
+    // suggestion was only ever a candidate on screen, and this button press is
+    // the human confirmation that turns it into a link (P12 No-invent).
+    async function onAcceptSuggestion() {
+        const suggested = detail.value?.nutrition_suggestion;
+        if (!suggested) return;
+        await saveField({ nutrition_food_id: suggested.nutrition_food_id });
+    }
+    async function onIgnoreNutrition() {
+        await saveField({ nutrition_ignored: true });
+    }
+    async function onUnignoreNutrition() {
+        await saveField({ nutrition_ignored: false });
     }
     function shiftExpiry(days: number) {
         // From the current expiry if set, otherwise from today. Date math in
@@ -1608,6 +1847,10 @@
     }
 
     // ── Expiry ───────────────────────────────────────────────────────────
+    // Same indicator the overview row draws (R-002 — one helper, two callers).
+    const expiryIndicator = computed(() =>
+        expiryIndicatorFor(detail.value?.expiry_date ?? null),
+    );
     const expiryDialogOpen = ref(false);
     const expiryDraft = ref<string | null>(null);
     watch(expiryDialogOpen, (open) => {
@@ -2230,6 +2473,10 @@
     }
 
     watch(stockItemId, () => {
+        // The peek panel swaps ids in place — drop the cached QR so the
+        // dialog can't show the previous item's label.
+        qrSrc.value = null;
+        qrError.value = null;
         if (stockItemId.value) void loadDetail();
     });
 
@@ -2301,6 +2548,18 @@
         background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
     }
 
+    /* Mobile overflow — every field in this list is capped to its column so a
+       long value can't push the row sideways. The `use-input` case (Location)
+       is the loud one and is handled globally in `css/app.scss`
+       (`.q-select--with-input`); this covers the rest of the list, e.g. Stock
+       group, which overflowed by a smaller 23px for the same reason: `.q-field`
+       has `max-width: none` and sizes to content inside `q-item-section`'s
+       column flex layout. Measured at 375px — see app.scss for the full note. */
+    .dora-inline-edit :deep(.q-field) {
+        width: 100%;
+        max-width: 100%;
+    }
+
     /* Round-13: the level picker's `outline` prop drew the border in
        `currentColor` (full-strength text) which read as a glaring
        bright-white box against the other softer outlined inputs on the
@@ -2325,5 +2584,28 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 16px;
+    }
+
+    /* An unaccepted nutrition match. Deliberately set apart from the linked
+       state above it — a dashed edge and a tag, so the row reads as "Dora is
+       asking" rather than "this is set". Accent rather than a semantic colour:
+       a suggestion is neither a warning nor a success. */
+    .nutrition-suggestion {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-md);
+        padding: var(--space-2);
+        background: var(--surface-sunken);
+    }
+    .nutrition-suggestion__tag {
+        background: var(--surface-raised);
+        color: var(--text-secondary);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        padding: 1px 6px;
+    }
+    .nutrition-suggestion__meta {
+        font-size: 0.75rem;
+        line-height: 1.35;
+        margin-top: 2px;
     }
 </style>

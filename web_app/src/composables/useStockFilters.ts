@@ -331,6 +331,11 @@ export function useStockFilters(sources: {
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
         if (expiringSoonOnly.value) n++;
+        // `needsCheckOnly` narrows the list exactly like its siblings, so it
+        // has to count here and clear below — omitting it left the toolbar
+        // badge at 0 and suppressed the "Clear filters" button while the
+        // list was visibly filtered.
+        if (needsCheckOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
         if (recipeFilter.value !== null) n++;
         return n;
@@ -420,6 +425,7 @@ export function useStockFilters(sources: {
         openOnly.value = false;
         hasAlertOnly.value = false;
         expiringSoonOnly.value = false;
+        needsCheckOnly.value = false;
         cartFilter.value = 'all';
         recipeFilter.value = null;
     }

@@ -163,6 +163,7 @@
       "total"
     ],
     "item_keys": [
+      "day_nutrition",
       "entries",
       "meal_plan_id",
       "name",
@@ -255,12 +256,15 @@
       "is_favourite",
       "is_planned",
       "kcal",
+      "kcal_is_reliable",
+      "kcal_per_serving",
       "last_made_on",
       "missing_count",
       "missing_stock_item_names",
       "name",
       "not_made_recently",
       "notes",
+      "nutrition",
       "plan_count",
       "prep_time_minutes",
       "recipe_collection_id",

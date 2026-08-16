@@ -62,23 +62,48 @@
                 :class="[
                     'stock-row__level-btn',
                     levelButtonClass,
-                    { 'stock-row__level-btn--needs-check': needsCheck },
+                    {
+                        'stock-row__level-btn--needs-check': needsCheck,
+                        'stock-row__level-btn--belief': hasBelief,
+                    },
                 ]"
                 :style="levelButtonStyle"
-                :aria-label="`Stock level: ${levelName || 'unset'}`"
+                :aria-label="levelButtonAriaLabel"
                 @click.stop
             >
                 <q-tooltip>
                     {{ levelName ? `Level: ${levelName}` : 'Set stock level' }}
+                    <template v-if="belief && hasBelief">
+                        <br />
+                        Dora thinks {{ beliefBandWord }} — {{ belief.reason }}
+                    </template>
                 </q-tooltip>
                 <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                     <q-list dense style="min-width: 200px">
-                        <q-item-label header>Set level</q-item-label>
+                        <!-- 2026-08-15 feedback: the belief hint used to be a
+                             separate "Dora thinks…" pill sitting in the row,
+                             which is a second element saying something about
+                             the level the picker already owns. It now rides
+                             the picker itself: an offset ring on the button,
+                             and this header — which was a redundant "Set
+                             level" caption — carrying what she thinks and
+                             why. Falls back to "Set level" when she has
+                             nothing to add. -->
+                        <q-item-label v-if="hasBelief" header class="stock-row__belief-header">
+                            <div class="row items-center no-wrap">
+                                <q-icon :name="ICONS.inferred_hunch" size="16px" class="q-mr-xs" />
+                                Dora thinks {{ beliefBandWord }}
+                            </div>
+                            <div class="stock-row__belief-reason">{{ belief?.reason }}</div>
+                        </q-item-label>
+                        <q-item-label v-else header>Set level</q-item-label>
                         <q-item
                             v-for="level in stockLevels"
                             :key="level.stock_level_id"
                             clickable
                             v-close-popup
+                            :active="level.stock_level_id === item.stock_level_id"
+                            active-class="stock-row__level-option--active"
                             @click.stop="onSetLevel(level.stock_level_id)"
                         >
                             <q-item-section avatar>
@@ -88,10 +113,12 @@
                                     size="14px"
                                 />
                             </q-item-section>
+                            <!-- 2026-08-15 feedback: the current level is
+                                 shown by highlighting the whole row (the
+                                 `active` + `active-class` pattern used by
+                                 the settings nav and the shopping-list rail),
+                                 not a trailing tick. -->
                             <q-item-section>{{ level.name }}</q-item-section>
-                            <q-item-section v-if="level.stock_level_id === item.stock_level_id" side>
-                                <q-icon :name="ICONS.check" size="16px" />
-                            </q-item-section>
                         </q-item>
                     </q-list>
                 </q-menu>
@@ -102,15 +129,20 @@
                  Zone is lightly clickable — bubble up filter-to-location;
                  full breadcrumb stays in the tooltip + detail page.
             ────────────────────────────────────────────────────────── -->
-            <div class="stock-row__name-zone column items-start">
+            <div class="stock-row__name-zone column items-start justify-center">
                 <div class="stock-row__name">{{ item.name }}</div>
-                <!-- flex `gap` (not q-gutter) so the wrapper can't collide
-                     with any parent gutter scheme — R-027/ADR-023. Reserves a
-                     stable min-height (DR-8 #52) so the async belief chip fades
-                     into existing space instead of growing the row after paint. -->
-                <div class="row items-center no-wrap stock-row__meta">
+                <!-- 2026-08-15 feedback: the meta line no longer reserves a
+                     min-height. It used to hold the async "Dora thinks" chip
+                     (which needed the reserve so a late arrival didn't reflow
+                     the row) — that has moved onto the level picker, leaving
+                     only the location. An item with no location was still
+                     paying for the empty line, which shoved its name up off
+                     centre; now the line simply isn't rendered.
+                     Location is also hidden on phones (`showLocation`): it
+                     costs width the row doesn't have, and it's a tap target
+                     that silently applies a filter when fat-fingered. -->
+                <div v-if="showLocation" class="row items-center no-wrap stock-row__meta">
                     <button
-                        v-if="locationName"
                         type="button"
                         class="stock-row__zone"
                         @click.stop="emit('filter-location', item.stock_location_id!)"
@@ -122,35 +154,31 @@
                         </q-tooltip>
                         <q-tooltip v-else>Filter to this location</q-tooltip>
                     </button>
-                    <!-- Zero-Input Pantry inferred level (additive;
-                         beside the recorded level, never replacing it). -->
-                    <PantryBeliefChip :belief="belief" />
                 </div>
             </div>
 
             <q-space />
 
-            <!-- "should I buy this?" verdict. Renders inline
-                 left of the cart cluster because that's where the user
-                 is deciding whether to add to the list. Silent on
-                 low-confidence verdicts (Charter P3: don't dashboard
-                 every row) and when the feature flag is off. Emits the
-                 action up so the page can reuse the existing cart /
-                 stock-level mutation seams — the oracle emits intent,
-                 not new mutation paths. -->
-            <BuyVerdictBadge
-                v-if="verdictShouldShow"
-                :verdict="verdict"
-                @action="(kind) => emit('verdict-action', item.stock_item_id, kind)"
-            />
+            <!-- 2026-08-15 feedback: the "should I buy this?" verdict is no
+                 longer its own chip competing for row width. It's an
+                 extension of the cart decision, so it rides the cart button
+                 — a verdict-toned ring around it, and the same headline +
+                 reasons on the button's tooltip. See `AddToListButton`'s
+                 `verdict` prop. The one-tap action the chip's popover used
+                 to offer is gone because the button IS that action.
+                 Silent on low-confidence verdicts (Charter P3: don't
+                 dashboard every row) and when the feature flag is off. -->
 
             <!-- "Log a price" (G2: money-gated, left of
                  expiry). Opens the shared PriceEntry dialog. No emit
                  wiring beyond the optimistic close — the row's visible
                  surface doesn't depend on observations today; chunks 4/6
-                 surface them in widgets/charts. -->
+                 surface them in widgets/charts.
+                 Hidden on phones (2026-08-15 feedback) — the row cluster was
+                 taking half the width there; the page toolbar's "Log price"
+                 button covers the case. -->
             <StockItemRowPriceButton
-                v-if="moneyEnabled"
+                v-if="moneyEnabled && !compact"
                 :stock-item-id="item.stock_item_id"
                 :item-name="item.name"
             />
@@ -275,6 +303,7 @@
             <AddToListButton
                 variant="row"
                 :stock-item-id="item.stock_item_id"
+                :verdict="verdictShouldShow ? verdict : null"
             />
         </q-card-section>
 
@@ -297,9 +326,7 @@
     import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
-    import BuyVerdictBadge from 'src/components/stock/BuyVerdictBadge.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
-    import PantryBeliefChip from 'src/components/stock/PantryBeliefChip.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
@@ -308,6 +335,7 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
+    import { expiryIndicatorFor } from 'src/helpers/expiryIndicator';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import { isLowStockSequence, isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
@@ -345,11 +373,11 @@
         (e: 'long-press', stockItemId: string): void;
         // `go-to-list` retired with the "On N lists" chip.
         // The cart button owns the list interaction now.
-        // buy-verdict badge emits its one-tap action up so the
-        // page can reuse the existing cart / stock-level mutation seams.
-        (e: 'verdict-action', stockItemId: string,
-            kind: 'add_to_list' | 'skip' | 'mark_stocked'
-                | 'remove_from_list' | 'none'): void;
+        // `verdict-action` retired 2026-08-15 with the standalone verdict
+        // chip: the verdict is now chrome on the cart button, and the cart
+        // button's own click already performs the add/remove the one-tap
+        // action used to offer. The detail page + shopping list still drive
+        // `useBuyVerdictActions` for their richer surfaces.
     }>();
 
     const $q = useQuasar();
@@ -369,6 +397,41 @@
         && verdict.value !== null
         && verdict.value.confidence !== 'low',
     );
+
+    // Phones drop the location line and the per-row price button — see the
+    // template comments. `lt.sm` (xs) matches the 599px CSS breakpoints
+    // below, so the JS-gated and CSS-gated halves flip together.
+    const compact = computed(() => $q.screen.lt.sm);
+    const showLocation = computed(() => !!locationName.value && !compact.value);
+
+    // ── "Dora thinks" (P8-07) ───────────────────────────────────────────
+    // Same rule PantryBeliefChip applied when this lived in the row as its
+    // own pill: speak up ONLY when a genuine inference DISAGREES with the
+    // recorded level. Agreement carries no new information. The hint is now
+    // rendered *by the level picker* (ring + menu header) rather than beside
+    // it, because it is a statement about the level, and the picker is the
+    // thing that owns the level.
+    const hasBelief = computed(
+        () => !!belief.value
+            && belief.value.is_inferred
+            && belief.value.differs_from_recorded,
+    );
+    const BELIEF_BAND_WORD: Record<string, string> = {
+        out: 'out',
+        low: 'low',
+        stocked: 'stocked',
+    };
+    const beliefBandWord = computed(() => {
+        const band = belief.value?.believed_band;
+        if (!band) return '';
+        return BELIEF_BAND_WORD[band] ?? band;
+    });
+    const levelButtonAriaLabel = computed(() => {
+        const base = `Stock level: ${levelName.value || 'unset'}`;
+        return hasBelief.value
+            ? `${base}. Dora thinks ${beliefBandWord.value}`
+            : base;
+    });
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
@@ -432,43 +495,10 @@
     // ── Expiry derived state ────────────────────────────────────────────
     // Drives both the right-cluster button and the row-outline tone
     // (status → whole-row outline, decision 6).
-    type ExpiryTone = 'none' | 'ok' | 'soon' | 'expired';
-    const expiryTone = computed<ExpiryTone>(() => {
-        const date = props.item.expiry_date;
-        if (!date) return 'none';
-        const ms = new Date(date).getTime();
-        if (ms < Date.now()) return 'expired';
-        if ((ms - Date.now()) / 86_400_000 <= 7) return 'soon';
-        return 'ok';
-    });
-    // R-002: neutral "no expiry" routes through `dora-text-muted` (no
-    // colour prop); saturated branches stay on Quasar semantics.
-    // `colour: null` signals "no Quasar colour — use cssClass for the
-    // muted look".
-    const expiry = computed<{
-        icon: string;
-        colour: string | null;
-        cssClass: string | null;
-        tooltip: string;
-    }>(() => {
-        const date = props.item.expiry_date;
-        switch (expiryTone.value) {
-            case 'none':
-                return {
-                    icon: ICONS.event_available,
-                    colour: null,
-                    cssClass: 'dora-text-muted',
-                    tooltip: 'No expiry set — click to push or set one',
-                };
-            case 'expired':
-                return { icon: ICONS.error, colour: 'negative', cssClass: null, tooltip: `Expired ${date}` };
-            case 'soon':
-                return { icon: ICONS.event_busy, colour: 'warning', cssClass: null, tooltip: `Expires ${date}` };
-            case 'ok':
-            default:
-                return { icon: ICONS.event_available, colour: 'positive', cssClass: null, tooltip: `Expires ${date}` };
-        }
-    });
+    // R-002: tone + icon + colour live in `helpers/expiryIndicator` so the
+    // stock-item detail page renders the identical indicator.
+    const expiry = computed(() => expiryIndicatorFor(props.item.expiry_date));
+    const expiryTone = computed(() => expiry.value.tone);
 
     // ── Whole-row outline + dim rules (Model C, round 8) ────────────────
     // Unified rule with `hasAlert` in useStockFilters so the row outline
@@ -713,10 +743,17 @@
     }
 
     .stock-row {
-        /* Feedback 2026-06-18 (round 3): rows felt too tall after the
-           round-1 spacing bump. Bring the min-height down a notch while
-           keeping the gap+padding that gave it breathing room. */
-        min-height: 56px;
+        /* 2026-08-15 feedback ("scrolling feels like it's snapping"): the
+           row is now a FIXED height, not a min-height, and that height comes
+           from `--stock-row-height` — the same number the page hands
+           `q-virtual-scroll` as its item size (see `helpers/stockRowMetrics`).
+           Uniform rows are what let the virtual scroller's arithmetic be
+           exact; when it guessed 72px at a 64px row it re-measured mid-scroll
+           and re-padded the spacer, which is the snap the user was seeing.
+           The fallback keeps a sane height for the non-overview consumers
+           that don't set the property. Bottom margin is the row gap and is
+           included in the metric, so it's subtracted here. */
+        height: calc(var(--stock-row-height, 64px) - 8px);
         /* Intrinsic row gap. The parent used to rely on `q-gutter-y-sm`,
            but that class is a no-op inside `q-virtual-scroll` (the virtual
            scroller sets its own item spacing and swallows container
@@ -746,19 +783,49 @@
     .stock-row__body {
         padding: 6px 12px;
         gap: 14px; /* breathing room between image / level / name / cluster */
+        height: 100%;
+    }
+    /* Phones: the trailing action cluster was eating roughly half the row's
+       width (2026-08-15 feedback). Tighten both the gap between the row's
+       sections and the buttons themselves — the price button is already gone
+       there (page toolbar owns it), so this is the remaining squeeze.
+       Left padding is the exception and stays at the desktop 12px: the 5px
+       essential stripe is absolutely positioned on the row's left edge, so
+       the tightened 8px left only 3px between stripe and level button and
+       the two read as one squished blob (2026-08-16 feedback). Desktop's
+       7px was never reported — this restores that gap rather than opening
+       a new one. */
+    @media (max-width: 599px) {
+        .stock-row__body {
+            padding: 4px 8px 4px 12px;
+            gap: 8px;
+        }
+        .stock-row__body :deep(.dora-btn--icon) {
+            min-width: 30px;
+            min-height: 30px;
+            width: 30px;
+            height: 30px;
+            margin-left: -2px;
+        }
+        .stock-row__body :deep(.dora-btn--icon .q-icon) {
+            font-size: 19px;
+        }
     }
     /* FU-365 round 2: essentials get a secondary-toned left-edge stripe
        — the sole row-level indicator now that the flag button has been
        retired from the right cluster (essential is set-and-forget). A
        little thicker than before so it scans without an accompanying
-       icon. Colour matches the "Essential" footer count + filter chip. */
+       icon. Colour matches the "Essential" footer count + filter chip.
+       2026-08-16 feedback: paints in the indicator-grade secondary, not
+       `--q-secondary` — the latter is the toolbar background in every
+       dark theme, which left the stripe all but invisible there. */
     .stock-row__essential-stripe {
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
         width: 5px;
-        background: var(--q-secondary);
+        background: var(--brand-secondary-strong);
         pointer-events: none;
     }
 
@@ -808,23 +875,73 @@
        toolbar's Stocktake attention glow uses (see BaseButton
        `dora-btn--attention`), scoped to the tiny 32px level button.
        Users notice a due item on the Overview without having to open
-       the runner. */
+       the runner.
+
+       2026-08-15 feedback: the original pulse was a ring expanding from 0 to
+       6px while fading to nothing — at a 32px button that is a faint halo
+       most people never notice. Strengthened rather than replaced (the user
+       asked for more of the same effect, not a different one): the ring now
+       *rests* at a visible 2px hold and expands to 7px, the accent mix runs
+       85% → 20% instead of 55% → 0%, and the button itself breathes a hair
+       (scale 1.06) so the movement registers in peripheral vision. It's a
+       slow 2.2s ease so it reads as a heartbeat, not a blink — the thing
+       that makes a pulse annoying is frequency, not amplitude. */
     .stock-row__level-btn--needs-check {
-        animation: stock-row__level-needs-check-pulse 2s ease-in-out infinite;
+        animation: stock-row__level-needs-check-pulse 2.2s ease-in-out infinite;
     }
     @keyframes stock-row__level-needs-check-pulse {
         0%, 100% {
-            box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-accent) 55%, transparent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-accent) 85%, transparent);
+            transform: scale(1);
         }
         50% {
-            box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-accent) 0%, transparent);
+            box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand-accent) 20%, transparent);
+            transform: scale(1.06);
         }
     }
     @media (prefers-reduced-motion: reduce) {
         .stock-row__level-btn--needs-check {
             animation: none;
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-accent) 45%, transparent);
+            transform: none;
+            box-shadow: 0 0 0 2px var(--brand-accent);
         }
+    }
+
+    /* ── "Dora thinks" on the picker (2026-08-15 feedback) ───────────────
+       The user's own sketch: border the picker with a GAP between the line
+       and the box edge. Two stacked rings do that with one box-shadow — the
+       inner ring paints the page surface as the gap, the outer is the amber
+       line. Amber matches the pill this replaced, and the same
+       `--semantic-warning` the belief hint used, so the meaning carries over.
+       Loses to the stocktake pulse when both apply: that one is an
+       instruction ("check this"), this one is an observation. */
+    .stock-row__level-btn--belief:not(.stock-row__level-btn--needs-check) {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 4px var(--semantic-warning);
+    }
+
+    /* Belief header inside the level menu — replaces the redundant "Set
+       level" caption when Dora has something to say. */
+    .stock-row__belief-header {
+        color: var(--text-primary);
+        font-weight: 600;
+        line-height: 1.3;
+        padding-bottom: var(--space-2);
+    }
+    .stock-row__belief-reason {
+        font-weight: 400;
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
+        white-space: normal;
+    }
+    /* Current level = highlighted row, matching the `active-class` pattern
+       used by the settings nav + shopping-list rail. `:deep` because q-menu
+       teleports its list to body. */
+    :deep(.stock-row__level-option--active) {
+        background: var(--surface-sunken);
+        font-weight: 600;
+        color: var(--text-primary);
     }
 
     /* Name + zone — emphasised name (L79), light zone with hover
@@ -833,14 +950,15 @@
         flex: 1 1 auto;
         min-width: 0; /* allow ellipsis inside flex */
     }
-    /* Second line under the name (location zone + async belief chip). The
-       reserved min-height keeps the row a constant height whether or not a
-       belief chip has arrived yet, so a late chip fades in without reflowing
-       neighbours (DR-8 / FU-578 #52). `gap` lives here (not inline) so the
-       chip and zone never touch. */
+    /* Second line under the name (the location zone). The DR-8 min-height
+       reserve that used to sit here is gone: it existed to stop the async
+       belief chip reflowing the row on arrival, and that chip has moved onto
+       the level picker. What's left is synchronous, so the line is simply
+       absent when there's no location instead of holding an empty 20px that
+       pushed the name off centre (2026-08-15 feedback). Row height is fixed
+       regardless, so nothing reflows either way. */
     .stock-row__meta {
         gap: 6px;
-        min-height: 20px;
     }
     .stock-row__name {
         font-weight: 600;

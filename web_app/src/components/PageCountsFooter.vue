@@ -91,7 +91,10 @@
             case 'warning': return 'text-warning';
             case 'info': return 'text-info';
             case 'primary': return 'text-primary';
-            case 'secondary': return 'text-secondary';
+            // Not Quasar's `text-secondary` (that maps to --q-secondary,
+            // the surface-grade brand secondary — the toolbar background in
+            // every dark theme, so the count read as near-black there).
+            case 'secondary': return 'page-counts-footer__tone-secondary';
             case 'muted': return 'dora-text-muted';
             default: return '';
         }
@@ -99,6 +102,9 @@
 </script>
 
 <style scoped lang="scss">
+    .page-counts-footer__tone-secondary {
+        color: var(--brand-secondary-strong);
+    }
     .page-counts-footer {
         position: sticky;
         bottom: 0;

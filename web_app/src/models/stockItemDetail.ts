@@ -1,3 +1,10 @@
+// The suggestion shape is owned by the nutrition API service — the matching
+// page and this page render the same object, and a second declaration here
+// would drift from it (R-002).
+import type { NutritionFoodSuggestion } from 'src/services/api/nutritionApiService';
+
+export type { NutritionFoodSuggestion };
+
 export type LinkedProduct = {
     product_id: string;
     name: string;
@@ -242,6 +249,14 @@ export type StockItemDetail = {
      *  because a human confirmed one in the picker. Carries its source so the
      *  page can say where the numbers came from. */
     nutrition_food?: LinkedNutritionFood | null;
+    /** The matcher's best guess for an unlinked item, computed on the read and
+     *  never stored. Present only in complex mode, only while the item is both
+     *  unlinked and not ignored — so its absence means "nothing to offer", not
+     *  "not loaded yet". */
+    nutrition_suggestion?: NutritionFoodSuggestion | null;
+    /** The user said "never suggest a food for this one" (dish soap). Distinct
+     *  from simply being unlinked, and what stops the matcher re-asking. */
+    nutrition_ignored?: boolean;
 };
 
 export type LinkedNutritionFood = {
@@ -250,10 +265,17 @@ export type LinkedNutritionFood = {
     brand: string | null;
     source: string;
     source_label: string;
+    /** All per 100g except sodium, which is per-100g milligrams (how packs
+     *  state it). `null` means the source didn't carry the value — render it
+     *  as absent, never as zero. */
     kcal_per_100g: number | null;
     protein_g_per_100g: number | null;
     carbs_g_per_100g: number | null;
+    sugars_g_per_100g: number | null;
     fat_g_per_100g: number | null;
+    saturated_fat_g_per_100g: number | null;
+    fibre_g_per_100g: number | null;
+    sodium_mg_per_100g: number | null;
 };
 
 export type PricePoint = {

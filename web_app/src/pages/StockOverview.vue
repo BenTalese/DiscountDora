@@ -1,9 +1,23 @@
 <template>
     <q-page class="q-pa-md stock-overview" :style-fn="pageStyleFn">
         <!-- Header bar — FU-121: New item · Scan · Stocktake · Bulk select
-             · Export. Search stays separate on the right. -->
-        <div class="row items-center q-mb-md q-gutter-sm">
-            <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
+             · Log price · Export.
+             2026-08-15 feedback: on phones this row was eating a quarter of
+             the screen, so every action drops its label there and rides its
+             icon alone (`:label="compactToolbar ? undefined : '…'"`, tooltip
+             carries the name). The filter toggle + search then move to their
+             own second row where the search can actually fill the width,
+             instead of being crushed onto the end of the action row. -->
+        <div class="row items-center q-gutter-sm stock-toolbar">
+            <BaseButton
+                variant="primary"
+                :icon="ICONS.add"
+                :label="compactToolbar ? undefined : 'New item'"
+                aria-label="New item"
+                @click="onCreateClick"
+            >
+                <q-tooltip v-if="compactToolbar">New item</q-tooltip>
+            </BaseButton>
             <!-- FU-378 — action-first scan. Opens the camera in the default
                  "open item" action; the current action is shown and switched
                  from inside the overlay (see the #controls slot below), so
@@ -13,35 +27,75 @@
                 v-if="scanningEnabled"
                 variant="secondary"
                 :icon="ICONS.qr_code_scanner"
-                label="Scan"
+                :label="compactToolbar ? undefined : 'Scan'"
+                aria-label="Scan"
                 @click="openScan"
-            />
+            >
+                <q-tooltip v-if="compactToolbar">Scan</q-tooltip>
+            </BaseButton>
             <BaseButton
                 variant="secondary"
                 :icon="ICONS.fact_check"
-                :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
+                :label="stocktakeLabel"
+                :aria-label="stocktakeAriaLabel"
                 :attention="stocktakeOverdue > 0"
                 to="/stocktake"
-            />
+            >
+                <!-- Compact mode drops the label but NOT the overdue count —
+                     that number is the whole reason the button glows. -->
+                <q-badge v-if="compactToolbar && stocktakeOverdue > 0" color="primary" floating>
+                    {{ stocktakeOverdue }}
+                </q-badge>
+                <q-tooltip v-if="compactToolbar">{{ stocktakeAriaLabel }}</q-tooltip>
+            </BaseButton>
             <BaseButton
                 v-if="!bulkMode"
                 variant="secondary"
                 :icon="ICONS.checklist"
-                label="Bulk select"
+                :label="compactToolbar ? undefined : 'Bulk select'"
+                aria-label="Bulk select"
                 @click="bulkMode = true"
-            />
+            >
+                <q-tooltip v-if="compactToolbar">Bulk select</q-tooltip>
+            </BaseButton>
             <BaseButton
                 v-else
                 variant="secondary"
                 :icon="ICONS.close"
-                label="Cancel"
+                :label="compactToolbar ? undefined : 'Cancel'"
+                aria-label="Cancel bulk select"
                 @click="cancelBulk"
-            />
+            >
+                <q-tooltip v-if="compactToolbar">Cancel bulk select</q-tooltip>
+            </BaseButton>
+            <!-- 2026-08-15 feedback: "Log a price" moves off the dashboard
+                 and onto the surface where the user is actually looking at
+                 the item they want to price. Same `useLogPrice()` sheet the
+                 dashboard opened, so there's one flow, not two (R-003) —
+                 it just picks the stock item first. Money-gated to match the
+                 row-level button. On phones this toolbar entry is the ONLY
+                 way in: the per-row price buttons hide there to give the row
+                 its horizontal space back. -->
+            <BaseButton
+                v-if="moneyEnabled"
+                variant="secondary"
+                :icon="ICONS.cash_plus"
+                :label="compactToolbar ? undefined : 'Log price'"
+                aria-label="Log a price"
+                @click="openLogPrice()"
+            >
+                <q-tooltip v-if="compactToolbar">Log a price</q-tooltip>
+            </BaseButton>
             <!-- Feedback 2026-06-18 (round 3): Export rides BaseButton
                  (secondary) so it sits flush with the other toolbar
                  buttons. The dropdown menu hangs off the BaseButton via
                  q-menu — same UX, consistent chrome. -->
-            <BaseButton variant="secondary" :icon="ICONS.export_data" label="Export">
+            <BaseButton
+                variant="secondary"
+                :icon="ICONS.export_data"
+                :label="compactToolbar ? undefined : 'Export'"
+                aria-label="Export"
+            >
                 <q-menu auto-close>
                     <q-list dense style="min-width: 200px">
                         <!-- both exports respect the
@@ -63,31 +117,39 @@
                     </q-list>
                 </q-menu>
             </BaseButton>
-            <q-space />
-            <!-- Feedback 2026-06-18: Filter toggle moved into the main
-                 toolbar so the FilterBar doesn't get its own row of chrome
-                 just for the toggle button. Same v-model + count drives
-                 the panel below. -->
-            <FilterToggleButton
-                v-model="filtersExpanded"
-                :active-count="filters.activeFilterCount.value"
-                @clear="clearAllFilters"
-            />
-            <q-input
-                ref="searchInputRef"
-                v-model="filters.searchText.value"
-                outlined
-                dense
-                debounce="150"
-                placeholder="Search"
-                clearable
-                autofocus
-                style="min-width: 280px"
-            >
-                <template #prepend>
-                    <q-icon :name="ICONS.search" />
-                </template>
-            </q-input>
+
+            <!-- Desktop keeps the filter toggle + search on this same row,
+                 pushed right. On phones `stock-toolbar__find` wraps to its
+                 own line (see the scoped media query) so the search input
+                 gets the full width instead of a 280px sliver. -->
+            <q-space class="gt-xs" />
+            <div class="row items-center q-gutter-sm no-wrap stock-toolbar__find">
+                <!-- Feedback 2026-06-18: Filter toggle moved into the main
+                     toolbar so the FilterBar doesn't get its own row of chrome
+                     just for the toggle button. Same v-model + count drives
+                     the panel below. -->
+                <FilterToggleButton
+                    v-model="filtersExpanded"
+                    :active-count="filters.activeFilterCount.value"
+                    :compact="compactToolbar"
+                    @clear="clearAllFilters"
+                />
+                <q-input
+                    ref="searchInputRef"
+                    v-model="filters.searchText.value"
+                    class="col"
+                    outlined
+                    dense
+                    debounce="150"
+                    placeholder="Search"
+                    clearable
+                    :autofocus="!compactToolbar"
+                >
+                    <template #prepend>
+                        <q-icon :name="ICONS.search" />
+                    </template>
+                </q-input>
+            </div>
         </div>
 
         <!-- Summary counts moved to the sticky PageCountsFooter (A7). -->
@@ -102,7 +164,82 @@
             @clear="clearAllFilters"
         >
             <template #filters>
-            <div class="row q-gutter-sm items-center">
+            <!-- ── Row 1: quick filters ────────────────────────────────────
+                 2026-08-15 feedback: the toggle chips and the deep-link
+                 chips now live on their own row ABOVE the input filters
+                 rather than interleaved with the dropdowns. On phones the
+                 row scrolls horizontally (`stock-quick-filters`) instead of
+                 wrapping to four lines — an open filter panel used to eat
+                 half the screen.
+                 The (?) info icons that trailed Expiring soon / Essential /
+                 Open / Needs check are gone: each chip says what it does,
+                 and the tooltips were repeating the label back at the user.
+                 The one genuinely non-obvious rule — what the row colours
+                 mean — moved to Help → Guides ("What the colours and
+                 outlines mean"), which is where a reference belongs. -->
+            <div class="row items-center no-wrap stock-quick-filters">
+                <!-- FU-108: chip cluster ordered by usage frequency —
+                     highest-signal alert chip leads. -->
+                <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
+                    Needs attention
+                </FilterChip>
+
+                <FilterChip v-model="filters.expiringSoonOnly.value" :icon="ICONS.expiry" active-color="warning">
+                    Expiring soon
+                </FilterChip>
+
+                <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="secondary">
+                    Essential
+                </FilterChip>
+
+                <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">
+                    Open / in-use
+                </FilterChip>
+
+                <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
+                    Needs check
+                </FilterChip>
+
+                <!-- "Used in a recipe" filter removed
+                     (low signal; the recipe pages own that view). -->
+
+                <q-chip
+                    v-if="filters.cartFilter.value !== 'all'"
+                    clickable
+                    color="primary"
+                    text-color="white"
+                    removable
+                    @remove="filters.cartFilter.value = 'all'"
+                >
+                    <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
+                    {{ filters.cartFilter.value === 'on_list' ? 'On a list' : 'Not on any list' }}
+                </q-chip>
+
+                <!-- Recipe-ingredients filter — set via deep-link from a
+                     recipe card on the stock-item detail page. The chip is
+                     the only UI surface for the filter (no dropdown);
+                     removing it clears the deep-link state. -->
+                <q-chip
+                    v-if="filters.recipeFilter.value !== null
+                        && (filters.recipeFilterContext.value !== null || !recipesHydrated)"
+                    clickable
+                    color="primary"
+                    text-color="white"
+                    removable
+                    @remove="clearRecipeFilter"
+                >
+                    <q-icon :name="ICONS.menu_book" size="14px" class="q-mr-xs" />
+                    {{ recipeFilterChipLabel }}
+                </q-chip>
+            </div>
+
+            <!-- ── Row 2: input filters (level / sort / location / group) ── -->
+            <!-- 2026-08-16 feedback: same sideways-scroll treatment as the
+                 quick-filter row above. Four 180px dropdowns wrapped to
+                 two or three lines on a phone, which is the same "open
+                 filter panel eats the viewport" problem the chip row was
+                 fixed for — the two rows now behave identically. -->
+            <div class="row items-center no-wrap stock-input-filters">
             <!-- single dropdown defaults to "Any level".
                  Per-level chips with count badges retired; counts live in
                  the sticky footer now (PageCountsFooter).
@@ -140,97 +277,6 @@
                     </q-item>
                 </template>
             </q-select>
-
-            <q-separator vertical class="q-mx-sm" />
-
-            <!-- FU-108: chip cluster ordered by usage frequency —
-                 highest-signal alert chip leads. -->
-            <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
-                Needs attention
-            </FilterChip>
-
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.expiringSoonOnly.value" :icon="ICONS.expiry" active-color="warning">
-                    Expiring soon
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Items expiring within the next 7 days, or already expired.
-                        The dashboard's freshness score links straight here.
-                    </q-tooltip>
-                </q-icon>
-            </span>
-
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="secondary">
-                    Essential
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Items you've flagged as household staples. Surfaced first
-                        in filters and prioritised in shopping-list suggestions.
-                    </q-tooltip>
-                </q-icon>
-            </span>
-
-
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">
-                    Open / in-use
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Items you've marked as opened — currently being used,
-                        worth watching for expiry.
-                    </q-tooltip>
-                </q-icon>
-            </span>
-
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
-                    Needs check
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Items whose recorded stock level is old enough that Dora's
-                        stocktake mode wants you to verify it's still correct.
-                    </q-tooltip>
-                </q-icon>
-            </span>
-
-            <!-- "Used in a recipe" filter removed
-                 (low signal; the recipe pages own that view). -->
-
-            <q-chip
-                v-if="filters.cartFilter.value !== 'all'"
-                clickable
-                color="primary"
-                text-color="white"
-                removable
-                @remove="filters.cartFilter.value = 'all'"
-            >
-                <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
-                {{ filters.cartFilter.value === 'on_list' ? 'On a list' : 'Not on any list' }}
-            </q-chip>
-
-            <!-- Recipe-ingredients filter — set via deep-link from a
-                 recipe card on the stock-item detail page. The chip is
-                 the only UI surface for the filter (no dropdown);
-                 removing it clears the deep-link state. -->
-            <q-chip
-                v-if="filters.recipeFilter.value !== null
-                    && (filters.recipeFilterContext.value !== null || !recipesHydrated)"
-                clickable
-                color="primary"
-                text-color="white"
-                removable
-                @remove="clearRecipeFilter"
-            >
-                <q-icon :name="ICONS.menu_book" size="14px" class="q-mr-xs" />
-                {{ recipeFilterChipLabel }}
-            </q-chip>
-
-            <q-separator vertical class="q-mx-sm" />
 
             <!-- FU-108: sort ahead of location/group refinements —
                  users pick a sort axis far more often than they narrow
@@ -277,12 +323,6 @@
                 style="min-width: 180px"
             />
             </div>
-
-            <!-- DR-2 / D-013 — decode the row colour language (level
-                 squares, essential stripe, attention outlines, dimmed
-                 "out" row, stocktake pulse) right where the user is already
-                 looking at filters. -->
-            <StockRowLegend :levels="stockLevels" />
             </template>
         </FilterBar>
 
@@ -398,6 +438,7 @@
                         v-if="filters.filteredStockItems.value.length > 0 && filters.filteredStockItems.value.length <= VIRTUAL_SCROLL_THRESHOLD"
                         tag="div"
                         class="q-list stock-list"
+                        :style="listStyle"
                     >
                         <StockItemRow
                             v-for="(item, idx) in filters.filteredStockItems.value"
@@ -412,15 +453,15 @@
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
                             @long-press="onRowLongPress"
-                            @verdict-action="onVerdictAction"
                         />
                     </ListTransition>
                     <q-virtual-scroll
                         v-else-if="filters.filteredStockItems.value.length > VIRTUAL_SCROLL_THRESHOLD"
                         :items="filters.filteredStockItems.value"
-                        :virtual-scroll-item-size="VIRTUAL_SCROLL_ITEM_SIZE"
+                        :virtual-scroll-item-size="rowHeight"
                         :virtual-scroll-slice-size="30"
                         class="q-list stock-list"
+                        :style="listStyle"
                         v-slot="{ item, index }"
                     >
                         <StockItemRow
@@ -435,7 +476,6 @@
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
                             @long-press="onRowLongPress"
-                            @verdict-action="onVerdictAction"
                         />
                     </q-virtual-scroll>
 
@@ -591,9 +631,10 @@
     import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
-    import StockRowLegend from 'src/components/stock/StockRowLegend.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
+    import { useLogPrice } from 'src/composables/useLogPrice';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
@@ -602,6 +643,10 @@
     import type { StockGroup } from 'src/models/stockGroup';
     import type { StockLevel } from 'src/models/stockLevel';
     import { useStockOverviewExport } from 'src/composables/useStockOverviewExport';
+    import {
+        STOCK_ROW_HEIGHT_DESKTOP,
+        STOCK_ROW_HEIGHT_MOBILE,
+    } from 'src/helpers/stockRowMetrics';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
@@ -612,8 +657,6 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
-    import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
@@ -624,6 +667,16 @@
 
     const $q = useQuasar();
     const { scanningEnabled } = useScanningEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
+    // FU-300's sheet, reused verbatim — the dashboard's "Log a price"
+    // quick-action moved here (2026-08-15 feedback) rather than being
+    // rebuilt, so both entry points remain one flow.
+    const { openLogPrice } = useLogPrice();
+    // Phones drop every toolbar label down to its icon; the row was taking
+    // a quarter of the screen. Also gates the search autofocus — landing on
+    // this page with the keyboard already up is right on desktop and
+    // actively annoying on a phone.
+    const compactToolbar = computed(() => $q.screen.lt.sm);
     const stockGroupApi = new StockGroupApiService();
     const stockItemApi = new StockItemApiService();
     const barcodeApi = new BarcodeApiService();
@@ -651,6 +704,17 @@
             needsCheckIds.value = new Set();
         }
     }
+
+    // Compact mode shows the count as a floating badge instead, so the
+    // label goes bare and the full sentence lives on the tooltip/aria.
+    const stocktakeAriaLabel = computed(() =>
+        stocktakeOverdue.value > 0
+            ? `Stocktake (${stocktakeOverdue.value} due)`
+            : 'Stocktake',
+    );
+    const stocktakeLabel = computed(() =>
+        compactToolbar.value ? undefined : stocktakeAriaLabel.value,
+    );
 
     const router = useRouter();
     const route = useRoute();
@@ -681,7 +745,17 @@
     // so a 500-item pantry renders smoothly. Item-size is a rough
     // average — Quasar self-corrects after the first measure.
     const VIRTUAL_SCROLL_THRESHOLD = 50;
-    const VIRTUAL_SCROLL_ITEM_SIZE = 72;
+    // Row geometry comes from one place (`stockRowMetrics`) and is used
+    // twice from here: as `virtual-scroll-item-size`, and as the
+    // `--stock-row-height` custom property the row's CSS sizes itself from.
+    // They must agree exactly or Quasar re-measures mid-scroll and the list
+    // visibly snaps — the 2026-08-15 "jumpy scrolling" report.
+    const rowHeight = computed(() =>
+        $q.screen.lt.sm ? STOCK_ROW_HEIGHT_MOBILE : STOCK_ROW_HEIGHT_DESKTOP,
+    );
+    const listStyle = computed(() => ({
+        '--stock-row-height': `${rowHeight.value}px`,
+    }));
 
     // App-shell height (2026-08-04). QPage hands us the layout's real
     // chrome `offset` (header, plus a QFooter if the layout ever grows
@@ -813,38 +887,11 @@
     }
 
     // ── Buy-verdict actions ─────────────────────────────────────────────
-    // The card's one-tap intents round-trip through the shared
-    // `useBuyVerdictActions` composable, which reuses the row's existing
-    // mutation seams (R-003: no duplicated paths).
-    const verdictActions = useBuyVerdictActions();
-    async function onVerdictAction(
-        stockItemId: string,
-        kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
-    ) {
-        if (kind === 'add_to_list') {
-            const targetId = shoppingListStore.quickAddTargetListId;
-            if (!targetId) {
-                $q.notify({
-                    type: 'warning',
-                    position: 'bottom-right',
-                    message: 'No draft list yet — use the cart button to choose one.',
-                });
-                return;
-            }
-            await slActions.addItems(targetId, [{ stock_item_id: stockItemId }]);
-            invalidateBuyVerdict(stockItemId);
-            return;
-        }
-        if (kind === 'mark_stocked') {
-            await verdictActions.markStocked(stockItemId);
-            return;
-        }
-        if (kind === 'remove_from_list') {
-            await verdictActions.removeFromAllOpenLists(stockItemId);
-            return;
-        }
-        // `skip` / `none` — no server change; the user's dismissing the nudge.
-    }
+    // Retired 2026-08-15 with the row's standalone verdict chip. The verdict
+    // is now a ring + tooltip on the cart button, and that button's own click
+    // already performs the add/remove the chip's one-tap action offered — so
+    // there is nothing left for the page to broker. The richer surfaces
+    // (stock-item detail, shopping list) still use `useBuyVerdictActions`.
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
     const searchInputRef = ref<QInput | null>(null);
@@ -889,9 +936,17 @@
     const bulkBusy = ref(false);
 
     function toggleBulk(id: string) {
-        if (bulkSelection.value.has(id)) bulkSelection.value.delete(id);
+        const wasSelected = bulkSelection.value.has(id);
+        if (wasSelected) bulkSelection.value.delete(id);
         else bulkSelection.value.add(id);
         bulkSelection.value = new Set(bulkSelection.value);
+        // 2026-08-15 feedback: unticking the last item leaves bulk mode
+        // running with an empty selection and every action disabled —
+        // a dead-end bar the user then has to dismiss by hand. Treat
+        // "deselected the last one" as backing out of the mode. Only the
+        // untick path does this: `deselectAll` is an explicit "clear but
+        // stay in bulk mode" action and keeps its own behaviour.
+        if (wasSelected && bulkSelection.value.size === 0) bulkMode.value = false;
     }
     function selectVisible() {
         for (const item of filters.filteredStockItems.value) {
@@ -1471,6 +1526,57 @@
         background: var(--surface-sunken);
         border-radius: 6px;
     }
+
+    /* ── Toolbar (2026-08-15 feedback) ────────────────────────────────
+       Desktop: one row, actions left, filter-toggle + search right.
+       Phones: the action buttons go icon-only (handled in the template)
+       and `__find` wraps to a full-width second line so the search box
+       actually has room. `flex-basis: 100%` is what forces the wrap;
+       `q-space.gt-xs` is hidden there so nothing pushes against it. */
+    .stock-toolbar {
+        margin-bottom: var(--space-4);
+    }
+    .stock-toolbar__find {
+        flex: 1 1 auto;
+        min-width: 280px;
+    }
+    @media (max-width: 599px) {
+        .stock-toolbar__find {
+            flex-basis: 100%;
+            min-width: 0;
+        }
+    }
+
+    /* ── Quick-filter row ─────────────────────────────────────────────
+       Toggle chips sit on their own row above the input filters. On
+       phones they scroll sideways rather than wrapping onto four lines
+       — an open filter panel was taking half the viewport. The
+       scrollbar is hidden because the chips overflowing IS the
+       affordance; a 2px bar under them just adds noise. */
+    .stock-quick-filters,
+    .stock-input-filters {
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .stock-quick-filters::-webkit-scrollbar,
+    .stock-input-filters::-webkit-scrollbar {
+        display: none;
+    }
+    .stock-input-filters {
+        margin-top: var(--space-3);
+    }
+    /* Sized rather than content-sized. Two reasons: a flex item shrinks
+       past its own `min-width` once the row scrolls, and the Location
+       picker (a `use-input` QSelect) is capped at `width: 100%` globally,
+       which in a scrolling row resolves to the whole visible strip — it
+       came out 311px next to its 180px siblings. Pinning the track width
+       here makes all four read as one row of equal controls. */
+    .stock-input-filters > * {
+        flex: 0 0 180px;
+    }
     .dora-subbar__inner {
         padding: 12px 16px;
     }
@@ -1577,6 +1683,16 @@
         /* Reserve the gutter so the row width doesn't jump when the list
            crosses from non-scrolling to scrolling (filtering, deleting). */
         scrollbar-gutter: stable;
+    }
+    /* Phones paint an overlay scrollbar that takes no layout width, so
+       reserving a stable gutter AND a 16px pad just stole ~28px from every
+       row for a bar that isn't there (2026-08-15 feedback). Drop both to a
+       hairline; the desktop rules above are untouched. */
+    @media (max-width: 599px) {
+        .stock-list {
+            padding-right: var(--space-1);
+            scrollbar-gutter: auto;
+        }
     }
     /* FU-378 — caption under the in-overlay current-action switcher. Light
        text on the dark camera surface. */

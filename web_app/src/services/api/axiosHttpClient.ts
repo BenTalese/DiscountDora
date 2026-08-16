@@ -81,6 +81,10 @@ export type HttpClientResponse<TResponse> = TResponse;
 
 export interface HttpClient {
     get<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>>;
+    /** Binary GET (QR PNGs, future exports). Same interceptors — and so the
+     *  same session cookie, CSRF seeding and 401 routing — as every other
+     *  call, which a bare <img src> or window.open() does NOT get. */
+    getBlob(path: string): Promise<Blob>;
     post<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<HttpClientResponse<TResponse>>;
     put<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<HttpClientResponse<TResponse>>;
     patch<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<HttpClientResponse<TResponse>>;
@@ -240,6 +244,14 @@ export default class AxiosHttpClient implements HttpClient {
     async get<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>> {
         try {
             return (await this.axios.get<TResponse>(path)).data;
+        } catch (error) {
+            return this.handleError(error as AxiosError, 'GET', path);
+        }
+    }
+
+    async getBlob(path: string): Promise<Blob> {
+        try {
+            return (await this.axios.get<Blob>(path, { responseType: 'blob' })).data;
         } catch (error) {
             return this.handleError(error as AxiosError, 'GET', path);
         }

@@ -166,7 +166,57 @@ export type Recipe = {
      *  `GET /recipes/<recipe_id>/step-images/<image_id>`. Populated only
      *  on the detail endpoint. */
     step_images: RecipeStepImage[];
+    /** FU-635 — complex-mode nutrition summed from the ingredients' linked
+     *  foods. Server-owned (the gram-conversion ladder and coverage rule are
+     *  domain math, R-003). Populated only on the detail endpoint and only
+     *  while the install is in complex mode; null in off/simple, where the
+     *  typed `kcal` above is the whole feature. */
+    nutrition: RecipeNutrition | null;
+    /** FU-637 — the *effective* per-serving kcal for the install's current
+     *  nutrition mode: the typed `kcal` above in simple, the rollup in
+     *  complex, null when off (or when a complex recipe has no servings, where
+     *  a per-serving figure would have to be invented). Server-owned so the
+     *  card, the filter and the meal planner can't disagree (R-003) — read
+     *  this, never re-derive it from `kcal` + `nutrition`. */
+    kcal_per_serving: number | null;
+    /** Whether `kcal_per_serving` may be used to *judge* the recipe (filter it
+     *  out, rank it) rather than merely display it. */
+    kcal_is_reliable: boolean;
 };
+
+/** FU-635 — the recipe rollup. Nutrient fields are null when no counted
+ *  ingredient carried that nutrient; a 0 would claim the recipe has none.
+ *  `counted_count` / `total_count` / `uncounted` always travel with the
+ *  figure so a partial total can't be rendered as a complete one. */
+export type RecipeNutrition = {
+    /** 'serving' when the recipe has servings typed in; 'recipe' means the
+     *  figure is the whole-recipe total (we don't guess a serving count). */
+    basis: 'serving' | 'recipe';
+    servings: number | null;
+    kcal: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
+    counted_count: number;
+    total_count: number;
+    /** FU-637 — coverage is high enough to rank or filter the recipe on.
+     *  Display never gates on this (a thin figure still shows, with its
+     *  coverage); judging a recipe on a thin one would mislead. Threshold is
+     *  the server's (R-003) — read the flag, don't re-derive it. */
+    is_reliable: boolean;
+    /** Reason id → how many ingredients it accounts for. Only non-zero
+     *  reasons are present. Copy for each id lives in the component. */
+    uncounted: Partial<Record<RecipeNutritionGap, number>>;
+};
+
+/** FU-635 — closed set of reasons an ingredient contributed nothing (R-010).
+ *  Mirrors `features/nutrition/recipe_rollup.py`. */
+export type RecipeNutritionGap =
+    | 'not_linked'
+    | 'no_food'
+    | 'no_quantity'
+    | 'no_conversion'
+    | 'no_data';
 
 /** PROPOSAL_RECIPE_IMAGE_STEPS — closed set of recipe step payload modes.
  *  Kept as a const union (R-010) so a bad write fails at type-check. */

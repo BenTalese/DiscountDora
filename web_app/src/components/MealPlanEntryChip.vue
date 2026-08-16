@@ -67,6 +67,19 @@
                     <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
                     <q-item-section>Cook now</q-item-section>
                 </q-item>
+                <!-- FU-637 — asked for, never volunteered: Dora holds no
+                     calorie target, so she has no threshold at which she'd
+                     start suggesting you eat less. Hidden unless this meal has
+                     a figure solid enough to compare against (R-041). -->
+                <q-item
+                    v-if="canGoLighter"
+                    clickable
+                    v-close-popup
+                    @click="emit('lighter')"
+                >
+                    <q-item-section avatar><q-icon :name="ICONS.monitor_heart" /></q-item-section>
+                    <q-item-section>Find a lighter option…</q-item-section>
+                </q-item>
                 <template v-if="batchEnabled">
                     <q-separator />
                     <q-item clickable v-close-popup @click="emit('link')">
@@ -114,7 +127,14 @@
         (e: 'adjust', delta: number): void;
         (e: 'link'): void;
         (e: 'unlink'): void;
+        (e: 'lighter'): void;
     }>();
+
+    // Only offer the comparison when this meal's own figure can be compared —
+    // "lighter than an estimate we don't trust" isn't an answer.
+    const canGoLighter = computed(
+        () => props.entry.kcal_per_serving !== null && props.entry.kcal_is_reliable,
+    );
 
     // PROPOSAL_MEAL_PLANS_PART_2 — a linked cook batch (one cook, several days).
     // Only surfaced for Batch-cooking households.

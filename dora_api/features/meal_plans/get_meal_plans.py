@@ -51,6 +51,13 @@ class MealPlanEntryDto:
     is_cook_day: bool = False
     cook_batch_total_servings: int | None = None
     cook_batch_size: int | None = None
+    # FU-637 — what one serving of this meal costs, calorie-wise, for the
+    # install's current nutrition mode. Server-owned via
+    # `effective_kcal_per_serving` so the planner, the cookbook card and the
+    # kcal filter can't disagree about the same recipe (R-003). NULL when
+    # nutrition is off, or when the recipe has no figure.
+    kcal_per_serving: float | None = None
+    kcal_is_reliable: bool = False
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -70,11 +77,36 @@ class MealPlanEntryDto:
 
 
 @dataclass(frozen=True, slots=True)
+class MealPlanDayNutritionDto:
+    """FU-637 — one day's planned calories, per serving.
+
+    The figure answers "if I eat one serving of each meal planned for this
+    day, what's that?" — which is the question a calorie-conscious cook is
+    actually asking while building a week, and the only one Dora can answer
+    honestly: a meal plan schedules *pots of food*, not plates for named
+    people (`MealPlanEntry` has no eater), so per-person intake is not a
+    number this app has, and won't invent.
+
+    Coverage travels with it (R-041): `counted_meals` of `total_meals`.
+    A meal whose figure isn't reliable is left out of the sum and shows up in
+    the shortfall rather than quietly dragging the total down.
+    """
+    scheduled_for: date
+    kcal_per_serving: float | None
+    counted_meals: int
+    total_meals: int
+
+
+@dataclass(frozen=True, slots=True)
 class MealPlanDto:
     meal_plan_id: UUID
     name: str | None
     start_date: date
     entries: List[MealPlanEntryDto]
+    # FU-637 — per-day rollup over `entries`, server-side because summing a
+    # fetched collection is exactly the cross-entity aggregate the
+    # state-ownership rule keeps out of the client.
+    day_nutrition: List['MealPlanDayNutritionDto'] = dataclasses.field(default_factory=list)
 
     @classmethod
     def from_entity(cls, plan: MealPlan) -> 'MealPlanDto':
@@ -186,11 +218,100 @@ class GetMealPlansHandler:
             for plan in plans
         ]
 
+    def _hydrate_nutrition(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
+        """FU-637 — per-entry and per-day calories across every plan in the page.
+
+        Costs a constant number of queries: one to load the distinct recipes
+        with their ingredients (the plan query deliberately doesn't carry
+        ingredients — nothing else on this endpoint needs them), then the
+        rollup's own three. Skipped entirely when nutrition is off, so the
+        endpoint pays nothing for a feature the install isn't using.
+        """
+        from collections import defaultdict
+
+        from dora_api.domain.entities.app_setting import (
+            NUTRITION_MODE_COMPLEX, NUTRITION_MODE_OFF,
+        )
+        from dora_api.domain.entities.recipe import Recipe
+        from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+        from dora_api.features.app_settings.access import get_or_create_app_setting
+        from dora_api.features.nutrition.recipe_rollup import (
+            effective_kcal_per_serving, input_from_entity, rollup_recipes_nutrition,
+        )
+        from dora_api.features.nutrition.sources import nutrition_mode
+
+        mode = nutrition_mode(get_or_create_app_setting(self.repository))
+        if mode == NUTRITION_MODE_OFF or not plans:
+            return plans
+
+        recipe_ids = list({
+            entry.recipe_id for plan in plans for entry in plan.entries
+        })
+        if not recipe_ids:
+            return plans
+
+        recipes = (
+            self.repository.get(Recipe)
+            .include(Recipe.Fields.INGREDIENTS)
+                .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+            .all(EntityField(Recipe, "id").in_(recipe_ids))
+        )
+        rollups = (
+            rollup_recipes_nutrition(
+                self.repository, [input_from_entity(r) for r in recipes]
+            )
+            if mode == NUTRITION_MODE_COMPLEX else {}
+        )
+        figure_by_recipe = {
+            recipe.id: effective_kcal_per_serving(
+                mode, recipe.kcal, rollups.get(recipe.id),
+            )
+            for recipe in recipes
+        }
+
+        def _day_rows(entries: list[MealPlanEntryDto]) -> list[MealPlanDayNutritionDto]:
+            by_day: dict = defaultdict(list)
+            for entry in entries:
+                by_day[entry.scheduled_for].append(entry)
+            rows = []
+            for day, day_entries in sorted(by_day.items()):
+                counted = [e for e in day_entries if e.kcal_is_reliable and e.kcal_per_serving]
+                rows.append(MealPlanDayNutritionDto(
+                    scheduled_for = day,
+                    # None rather than 0.0 when nothing counted — zero would
+                    # read as "a day of no calories" (R-041).
+                    kcal_per_serving = (
+                        round(sum(e.kcal_per_serving for e in counted)) if counted else None
+                    ),
+                    counted_meals = len(counted),
+                    total_meals = len(day_entries),
+                ))
+            return rows
+
+        hydrated = []
+        for plan in plans:
+            entries = [
+                dataclasses.replace(
+                    entry,
+                    **dict(zip(
+                        ("kcal_per_serving", "kcal_is_reliable"),
+                        figure_by_recipe.get(entry.recipe_id, (None, False)),
+                    )),
+                )
+                for entry in plan.entries
+            ]
+            hydrated.append(dataclasses.replace(
+                plan, entries=entries, day_nutrition=_day_rows(entries),
+            ))
+        return hydrated
+
     def handle(self, options) -> Page[MealPlanDto]:
         page = self._base_query().paginate(
             options, MealPlanDto.from_entity, field_map=_FIELD_MAP
         )
-        hydrated = self._hydrate_entry_has_image(list(page.items))
+        hydrated = self._hydrate_nutrition(
+            self._hydrate_entry_has_image(list(page.items))
+        )
         return Page(items=hydrated, total=page.total, page=page.page, limit=page.limit)
 
     def handle_by_id(self, meal_plan_id: UUID) -> MealPlanDto | None:
@@ -198,7 +319,7 @@ class GetMealPlansHandler:
         if not entity:
             return None
         dto = MealPlanDto.from_entity(entity)
-        return self._hydrate_entry_has_image([dto])[0]
+        return self._hydrate_nutrition(self._hydrate_entry_has_image([dto]))[0]
 
 
 @MEAL_PLAN_ROUTER.route("")

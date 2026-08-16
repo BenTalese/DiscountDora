@@ -36,6 +36,34 @@
                     />
                 </SettingsRow>
 
+                <!-- 2026-08-15: tell the operator here, not at the viewfinder.
+                     Browsers withhold the camera API on a non-secure origin, so
+                     on a plain-http self-host the Scan button switches on and
+                     then can't open a camera. Shown only when it's actually
+                     true of the browser reading this page (so an admin on
+                     localhost, or in the app, sees nothing), and only once
+                     scanning is on — it's not a reason to avoid enabling it,
+                     since QR labels and manual entry are unaffected. -->
+                <q-banner
+                    v-if="scanningDraft && cameraInsecure"
+                    dense
+                    rounded
+                    class="dora-bg-warning-soft q-mt-sm"
+                >
+                    <template #avatar>
+                        <q-icon :name="ICONS.info_outline" />
+                    </template>
+                    <div class="text-body2">
+                        <strong>Camera scanning won't work in this browser.</strong>
+                        You're reading this over a plain <code>http://</code>
+                        address, and browsers only hand out camera access over a
+                        secure connection. QR label printing and typing a barcode
+                        by hand are unaffected. To scan with a camera, use the
+                        <strong>Dashy Dora Android app</strong> (it scans against
+                        any instance) or serve Dora over HTTPS.
+                    </div>
+                </q-banner>
+
                 <!-- buy-verdict oracle. Personal-data-only: no
                      external calls, no crowd data. On by default. -->
                 <SettingsRow
@@ -83,6 +111,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { cameraBlockedByInsecureContext } from 'src/helpers/cameraAvailability';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -108,6 +137,10 @@
     // handlers must refresh *those* caches too or the gated UI (Stock Overview
     // scan button, QR labels, buy-verdict badges) stays stale until a reload.
     const { refreshScanning } = useScanningEnabled();
+    // Same authority the scan overlay consults, so the warning here and the
+    // explainer there can't drift apart (R-003). Evaluated once — the page's
+    // origin can't change under it.
+    const cameraInsecure = cameraBlockedByInsecureContext();
     const { refreshBuyVerdict } = useBuyVerdictEnabled();
     // Session-wide Product Search URL cache — refreshed after a save so the
     // main-nav "Product Search" entry appears/updates without a page reload.

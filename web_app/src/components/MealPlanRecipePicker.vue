@@ -55,6 +55,13 @@
                             @click="!isMultiSelect && emit('recipePick', recipe.recipe_id)"
                         >
                             <q-item-label lines="2">{{ recipe.name }}</q-item-label>
+                            <!-- FU-637 — kcal at the moment of choosing, which
+                                 is the point of surfacing it at all. -->
+                            <q-item-label v-if="recipe.kcal_per_serving !== null" caption>
+                                {{ Math.round(recipe.kcal_per_serving) }} kcal per serving<span
+                                    v-if="!recipe.kcal_is_reliable"
+                                > (part)</span>
+                            </q-item-label>
                             <q-item-label v-if="batchEnabled && !isMultiSelect" caption>
                                 {{ recipe.unallocated_meals }} free
                             </q-item-label>

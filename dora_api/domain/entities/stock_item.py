@@ -40,6 +40,12 @@ class StockItem(BaseEntity):
     # stock items with it — the link just goes quiet and the item shows as
     # unlinked again.
     nutrition_food_id: UUID | None = None
+    # "Don't track nutrition for this item" — the explicit opt-out behind the
+    # auto-suggestion. Toilet paper has no calories and never will, so an item
+    # the user has waved off drops out of the unmatched queue permanently
+    # instead of being re-suggested on every visit. Distinct from
+    # `nutrition_food_id is None`, which means "unlinked, still worth asking".
+    nutrition_ignored: bool = False
     # FU-511 — per-item `auto_add_when_low` was collapsed into
     # `AppSetting.auto_add_mode` (off / essential_only / all). Auto-add
     # now derives from that install-wide setting + this item's
@@ -90,3 +96,4 @@ class StockItem(BaseEntity):
         SNOOZED_UNTIL = "snoozed_until"
         USUAL_STORE_ID = "usual_store_id"
         NUTRITION_FOOD_ID = "nutrition_food_id"
+        NUTRITION_IGNORED = "nutrition_ignored"

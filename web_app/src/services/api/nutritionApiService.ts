@@ -55,7 +55,47 @@ export interface NutritionLookupResponse {
     /** Sources that were asked but didn't answer. Surfaced rather than
      *  swallowed — "no results" and "one source is down" are different
      *  situations and the user deserves to know which they're in. */
-    sources_failed: { source: string; error: string }[];
+    sources_failed: { source: string; source_label?: string; error: string }[];
+}
+
+/** A food the matcher thinks might describe a stock item. Never a saved link —
+ *  it exists only until the user accepts it, ignores the item, or searches for
+ *  something better. `confidence` and `is_strong` both travel so the UI can
+ *  visibly hedge a weak guess without re-deriving the threshold (R-003). */
+export interface NutritionFoodSuggestion {
+    nutrition_food_id: string;
+    name: string;
+    brand: string | null;
+    source: string;
+    source_label: string;
+    kcal_per_100g: number | null;
+    confidence: number;
+    /** Near-certain. The only band the bulk accept-all verb touches. */
+    is_strong: boolean;
+}
+
+export interface UnmatchedStockItem {
+    stock_item_id: string;
+    name: string;
+    /** Null when nothing in the local catalogue scored well enough. That's a
+     *  real answer, not a loading state — most pantries hold things a food
+     *  catalogue should never match. */
+    suggestion: NutritionFoodSuggestion | null;
+}
+
+export interface UnmatchedItemsResponse {
+    items: UnmatchedStockItem[];
+    suggested_count: number;
+    strong_count: number;
+    ignored_count: number;
+    /** Populated only when asked for — the page loads them on demand behind
+     *  the "show ignored" toggle. */
+    ignored_items: UnmatchedStockItem[];
+    /** How many foods are installed locally. The matcher only ever reads the
+     *  local catalogue, so 0 means it cannot suggest anything at all — a
+     *  different state from "everything is already matched", and the one that
+     *  gets mistaken for a broken feature. */
+    catalogue_size: number;
 }
 
 export default class NutritionApiService {
@@ -79,6 +119,25 @@ export default class NutritionApiService {
         await this.httpClient.post<{ id: string; name: string; source_label: string }>(
             '/nutrition/foods/resolve',
             { source, source_ref: sourceRef },
+        );
+
+    /** Every stock item with no nutrition food, each with its best local
+     *  match. Suggestions are local-catalogue only — this runs across the whole
+     *  pantry, and a live source would mean hundreds of round-trips. */
+    getUnmatchedItemsAsync = async (
+        includeIgnored = false,
+    ): Promise<UnmatchedItemsResponse> =>
+        await this.httpClient.get<UnmatchedItemsResponse>(
+            `/nutrition/unmatched-items${includeIgnored ? '?include_ignored=1' : ''}`,
+        );
+
+    /** Link every item whose suggestion is a near-certainty. The server
+     *  recomputes the matches rather than trusting a list from here, so this
+     *  can only ever confirm what the matcher would have suggested anyway. */
+    acceptAllSuggestionsAsync = async (): Promise<{ linked_count: number }> =>
+        await this.httpClient.post<{ linked_count: number }>(
+            '/nutrition/suggestions/accept-all',
+            {},
         );
 
     /** Kick off a bulk dataset import. `url` overrides the built-in USDA

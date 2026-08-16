@@ -35,6 +35,23 @@
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
                     {{ recipe.difficulty }}
                 </q-chip>
+                <!-- FU-637 — kcal per serving while you're choosing, which is
+                     where it's actually useful. A thin complex-mode estimate
+                     still shows (hiding it would be its own kind of lie) but
+                     says so, rather than passing for a solid figure. -->
+                <q-chip
+                    v-if="kcal.value !== null"
+                    dense
+                    :icon="ICONS.monitor_heart"
+                    :outline="!kcal.judgeable"
+                >
+                    {{ Math.round(kcal.value) }} kcal
+                    <span v-if="!kcal.judgeable" class="q-ml-xs">(part)</span>
+                    <q-tooltip v-if="!kcal.judgeable">
+                        Worked out from only part of this recipe — open it to
+                        see what's missing.
+                    </q-tooltip>
+                </q-chip>
                 <q-chip
                     v-if="(recipe.section_count ?? 0) > 1"
                     dense
@@ -194,6 +211,13 @@
     // so this is presentation of data in hand, not a client-owned domain
     // rule — no server field warranted (R-003 "fine client display math").
     const ingredientCount = computed(() => props.recipe.ingredients.length);
+
+    // FU-637 — the server decides which figure this mode carries and whether
+    // it's solid enough to judge on; the card just renders the answer.
+    const kcal = computed(() => ({
+        value: props.recipe.kcal_per_serving ?? null,
+        judgeable: props.recipe.kcal_is_reliable === true,
+    }));
 
     // Tri-state cook-button colour (IMPL_PLAN_RECIPE_IMPORTER §Chunk 4):
     //   true  → primary (green-ish, "ready to cook")

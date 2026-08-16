@@ -153,6 +153,33 @@ class RecipeSectionDto:
 
 
 @dataclass(frozen=True, slots=True)
+class RecipeNutritionDto:
+    """FU-635 chunk 6 — complex-mode nutrition rolled up from the ingredients'
+    linked foods. Detail endpoint only, and only while the install is in
+    complex mode; `null` otherwise.
+
+    Always carries its coverage (`counted_count` / `total_count` + the
+    per-reason `uncounted` map) so the client can't render a partial total as
+    a complete one — the owner's call was "partials shown and marked", never
+    hidden.
+    """
+    basis: str                  # 'serving' | 'recipe' (no servings typed in)
+    servings: int | None
+    kcal: float | None
+    protein_g: float | None
+    carbs_g: float | None
+    fat_g: float | None
+    counted_count: int
+    total_count: int
+    uncounted: dict
+    # FU-637 — whether coverage is high enough to *judge* the recipe on (rank
+    # it, or exclude it from a "≤ N kcal" search). Display never gates on this;
+    # a thin estimate is still shown, with its coverage. The threshold is a
+    # domain constant and stays server-side (R-003).
+    is_reliable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RecipeDto:
     recipe_id: UUID
     name: str
@@ -285,6 +312,19 @@ class RecipeDto:
     # inlined either way (the SPA loads each via the dedicated bytes
     # endpoint at `/recipes/<id>/step-images/<image_id>`).
     step_images: List['RecipeStepImageDto'] = field(default_factory=list)
+    # FU-635 — complex-mode nutrition rollup: the full breakdown + coverage,
+    # for the recipe detail card. NULL outside complex mode.
+    nutrition: 'RecipeNutritionDto | None' = None
+    # FU-637 — the *effective* per-serving kcal for the install's current mode
+    # (typed number in simple, rollup in complex), so no client re-derives
+    # "which field, and may I trust it" (R-003). Distinct from `kcal` above,
+    # which is the stored value the editor writes. NULL when there's no figure
+    # — including a complex rollup with no servings typed in, where a
+    # per-serving number would have to be invented.
+    kcal_per_serving: float | None = None
+    # Whether `kcal_per_serving` may be used to *judge* the recipe (filter it
+    # out of a "≤ N kcal" search, rank it) as opposed to just display it.
+    kcal_is_reliable: bool = False
 
     @classmethod
     def from_entity(cls, recipe: Recipe, dietary_tag_ids: list[UUID] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
@@ -696,6 +736,122 @@ class GetRecipesHandler:
             estimated_cost_total_count=est.total_count,
         )
 
+    def _nutrition_mode(self) -> str:
+        """The install's nutrition mode. The rollup runs only in complex (off /
+        simple have no linked-food data, so the field stays NULL rather than
+        reporting a hollow "0 of 8" — R-029); `kcal_per_serving` is filled in
+        simple too, from the typed number.""" 
+        from dora_api.features.app_settings.access import get_or_create_app_setting
+        from dora_api.features.nutrition.sources import nutrition_mode
+
+        return nutrition_mode(get_or_create_app_setting(self.repository))
+
+    @staticmethod
+    def _nutrition_dto(rollup) -> 'RecipeNutritionDto':  # noqa: ANN001
+        return RecipeNutritionDto(
+            basis=rollup.basis,
+            servings=rollup.servings,
+            kcal=rollup.kcal,
+            protein_g=rollup.protein_g,
+            carbs_g=rollup.carbs_g,
+            fat_g=rollup.fat_g,
+            counted_count=rollup.counted_count,
+            total_count=rollup.total_count,
+            uncounted=rollup.uncounted,
+            is_reliable=rollup.is_reliable,
+        )
+
+    def _compute_nutrition(self, dto: RecipeDto, entity: Recipe) -> RecipeDto:
+        """FU-635 chunk 6 — complex-mode per-serving nutrition (detail path).
+
+        Server-side for the same reason the cost estimate is (R-003): the
+        gram-conversion ladder and the coverage rule are domain math, and a
+        second copy in the SPA is how the two drift apart.
+        """
+        import dataclasses
+        from dora_api.domain.entities.app_setting import NUTRITION_MODE_COMPLEX
+        from dora_api.features.nutrition.recipe_rollup import (
+            effective_kcal_per_serving, rollup_recipe_nutrition,
+        )
+
+        mode = self._nutrition_mode()
+        rollup = (
+            rollup_recipe_nutrition(self.repository, entity)
+            if mode == NUTRITION_MODE_COMPLEX else None
+        )
+        kcal, reliable = effective_kcal_per_serving(mode, dto.kcal, rollup)
+        return dataclasses.replace(
+            dto,
+            nutrition=self._nutrition_dto(rollup) if rollup is not None else None,
+            kcal_per_serving=kcal,
+            kcal_is_reliable=reliable,
+        )
+
+    def _hydrate_nutrition(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """FU-637 — the same rollup for a whole page, in three queries total.
+
+        Unlike `estimated_cost` (detail-only), nutrition is needed *on the
+        list*: the cookbook card shows kcal/serving and the "≤ N kcal" filter
+        judges on it, and a per-recipe fetch to render a card badge would be
+        the N+1 that `test_recipes_query_count` exists to catch.
+        """
+        import dataclasses
+        from dora_api.domain.entities.app_setting import NUTRITION_MODE_COMPLEX
+        from dora_api.features.nutrition.recipe_rollup import (
+            IngredientInput, RecipeNutritionInput, effective_kcal_per_serving,
+            rollup_recipes_nutrition,
+        )
+
+        if not dtos:
+            return dtos
+        mode = self._nutrition_mode()
+        if mode != NUTRITION_MODE_COMPLEX:
+            # Simple mode still gets an effective figure — the typed number —
+            # so the cookbook card and filter read one field in every mode.
+            return [
+                dataclasses.replace(
+                    dto,
+                    **dict(zip(
+                        ("kcal_per_serving", "kcal_is_reliable"),
+                        effective_kcal_per_serving(mode, dto.kcal, None),
+                    )),
+                )
+                for dto in dtos
+            ]
+
+        inputs = [
+            RecipeNutritionInput(
+                recipe_id=dto.recipe_id,
+                servings=dto.servings,
+                ingredients=[
+                    IngredientInput(
+                        stock_item_id=ing.stock_item_id,
+                        stock_item_name=ing.stock_item_name,
+                        quantity=ing.quantity,
+                        unit=ing.unit,
+                        is_optional=ing.is_optional,
+                    )
+                    for ing in dto.ingredients
+                ],
+            )
+            for dto in dtos
+        ]
+        rollups = rollup_recipes_nutrition(self.repository, inputs)
+
+        def _with_nutrition(dto: RecipeDto) -> RecipeDto:
+            rollup = rollups.get(dto.recipe_id)
+            if rollup is None:
+                return dto
+            kcal, reliable = effective_kcal_per_serving(mode, dto.kcal, rollup)
+            return dataclasses.replace(
+                dto,
+                nutrition=self._nutrition_dto(rollup),
+                kcal_per_serving=kcal,
+                kcal_is_reliable=reliable,
+            )
+
+        return [_with_nutrition(dto) for dto in dtos]
+
     def _hydrate_has_image(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """FU-090 — bulk-derive `has_image` from a single SQL pass that
         never touches the deferred image blob column. SQL `image IS NOT
@@ -895,7 +1051,7 @@ class GetRecipesHandler:
             options, RecipeDto.from_entity, field_map=_FIELD_MAP
         )
         import dataclasses
-        _Hydrated = self._hydrate_unallocated(
+        _Hydrated = self._hydrate_nutrition(self._hydrate_unallocated(
             self._hydrate_has_image(
                 self._hydrate_section_count(
                     self._hydrate_structured_steps_flag(
@@ -907,7 +1063,7 @@ class GetRecipesHandler:
                     )
                 )
             )
-        )
+        ))
         return dataclasses.replace(page, items=_Hydrated)
 
     def handle_by_id(self, recipe_id: UUID) -> RecipeDto | None:
@@ -995,7 +1151,7 @@ class GetRecipesHandler:
         _Hydrated = self._hydrate_unallocated(
             self._hydrate_has_image([_WithAssoc])
         )[0]
-        return self._compute_estimated_cost(_Hydrated)
+        return self._compute_nutrition(self._compute_estimated_cost(_Hydrated), entity)
 
 
 def _parse_bool(raw: str | None) -> bool | None:

@@ -20,6 +20,22 @@ export type MealPlanEntry = {
     is_cook_day: boolean;
     cook_batch_total_servings: number | null;
     cook_batch_size: number | null;
+    // FU-637 — what one serving of this meal costs, calorie-wise, in the
+    // install's current nutrition mode. Server-owned (same figure the cookbook
+    // card shows). Null when nutrition is off or the recipe has no figure.
+    kcal_per_serving: number | null;
+    kcal_is_reliable: boolean;
+};
+
+/** FU-637 — one day's planned calories: "a serving of each meal planned that
+ *  day". Not an intake figure — a meal plan schedules pots of food, not plates
+ *  for named people. Coverage travels with it: meals whose figure isn't
+ *  reliable are left out of the sum and counted in the shortfall. */
+export type MealPlanDayNutrition = {
+    scheduled_for: string;
+    kcal_per_serving: number | null;
+    counted_meals: number;
+    total_meals: number;
 };
 
 export type MealPlan = {
@@ -28,6 +44,9 @@ export type MealPlan = {
     name: string | null;
     start_date: string;
     entries: MealPlanEntry[];
+    /** FU-637 — per-day rollup over `entries`, summed server-side. Empty when
+     *  nutrition is off. */
+    day_nutrition: MealPlanDayNutrition[];
 };
 
 export type MealPlanIngredient = {

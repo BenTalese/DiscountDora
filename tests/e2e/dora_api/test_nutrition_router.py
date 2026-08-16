@@ -92,11 +92,64 @@ def test__nutrition__Anonymous__401OnLookupAndSources(api):
     assert_problem(anon.get(SOURCES), 401)
 
 
-def test__dataset_import__NonAdminBody__RejectsUnknownDataset(api):
-    # The admin gate itself is pinned by test_route_auth_enforcement; this
-    # covers the request-shape guard behind it.
+def test__dataset_import__UnknownDataset__IsRejectedAndNamesWhatWasSent(api):
+    """The admin gate itself is pinned by test_route_auth_enforcement; this
+    covers the request-shape guard behind it.
+
+    **Asserting the echoed name is the whole point.** The original version of
+    this test asserted only "400", and passed for two years' worth of the wrong
+    reason: the endpoint never registered a request-body schema, so the body was
+    always `None`, every dataset name became `''`, and the *download button was
+    dead in production* while the test stayed green. A 400 assertion that
+    doesn't check *why* can't tell a working guard from a broken pipe.
+    """
     resp = requests.post(IMPORT, json={"source": "not-a-dataset"})
     assert_problem(resp, 400)
+    assert "not-a-dataset" in resp.json()["title"], resp.text
+
+
+def test__dataset_import__ValidBody__ReachesTheHandler(api):
+    """A real dataset name must get past the request-shape guard. Sending a
+    deliberately unreachable URL keeps the test hermetic: the import starts, the
+    worker fails on its own, and what's proven here is that the *body arrived*
+    (the failure text names the URL, not an empty dataset)."""
+    resp = requests.post(IMPORT, json={
+        "source": "usda_sr_legacy",
+        "url": "http://127.0.0.1:9/never-served.zip",
+    })
+    assert resp.status_code == 200, resp.text
+    sr_legacy = next(
+        s for s in resp.json()["sources"] if s["id"] == "usda_sr_legacy"
+    )
+    assert sr_legacy["phase"] in {"downloading", "parsing", "error"}
+
+
+def test__resolve_food__AlreadyLocal__ReturnsTheStoredRow(api):
+    """Proves the request body actually reaches this endpoint.
+
+    Same defect class as the import button: `resolve` read its body via
+    `get_request_body()` without registering a schema, so every request became
+    "source and source_ref are required" and **no live suggestion could ever be
+    linked to a stock item**. Resolving an already-local row keeps it hermetic —
+    the branch returns before any network call.
+    """
+    _seed_foods()
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        food = next(
+            f for f in repo.get(NutritionFood).all() if f.name == "Bananas, raw"
+        )
+        source, source_ref, food_id = food.source, food.source_ref, str(food.id)
+
+    resp = requests.post(f"{BASE}/nutrition/foods/resolve", json={
+        "source": source, "source_ref": source_ref,
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == food_id
+
+
+def test__resolve_food__MissingFields__RejectedByTheSchema(api):
+    assert_problem(requests.post(f"{BASE}/nutrition/foods/resolve", json={}), 400)
 
 
 #endregion
@@ -259,6 +312,59 @@ def test__stock_item__UnrelatedPatch__LeavesTheLinkAlone(api):
 
     detail = requests.get(f"{BASE}/stock-items/{item_id}/detail").json()
     assert detail["nutrition_food"]["nutrition_food_id"] == ids["banana"]
+
+
+#endregion
+
+
+#region ---------------- dataset persistence (FU-639) ----------------
+
+
+def test__replace_dataset__PortionsSurviveTheRepositoryIdReassignment(api):
+    """The import wrote 14,449 portions pointing at ids that never existed.
+
+    `repository.add()` assigns a **fresh** id to every entity it stores, so the
+    `NutritionFood.id` values the parser generated were discarded on the way in
+    — while the portions it had already built still referenced them. Result: a
+    foreign-key violation on the first flush, and a download button that
+    downloaded, parsed, and then threw the whole dataset away. Nothing caught it
+    because the parser tests never touch a database and the seeded e2e fixtures
+    read `food.id` *after* adding.
+
+    This drives the real persistence path and asserts the link survives.
+    """
+    from dora_api.features.nutrition.dataset_import import (
+        ParsedPortion, _replace_dataset,
+    )
+
+    source = NUTRITION_SOURCE_USDA_SR_LEGACY
+    ref_a, ref_b = f"fk-{uuid4().hex[:8]}", f"fk-{uuid4().hex[:8]}"
+    foods = [
+        NutritionFood(id=uuid4(), source=source, source_ref=ref_a,
+                      name="FK Probe Flour", kcal_per_100g=364.0),
+        NutritionFood(id=uuid4(), source=source, source_ref=ref_b,
+                      name="FK Probe Banana", kcal_per_100g=89.0),
+    ]
+    portions = [
+        ParsedPortion(fdc_id=ref_a, amount=1, measure="cup", gram_weight=125.0),
+        ParsedPortion(fdc_id=ref_b, amount=1, measure="medium", gram_weight=118.0),
+    ]
+
+    with app.app_context():
+        _replace_dataset(SqlAlchemyRepository(), source, foods, portions)
+
+        repo = SqlAlchemyRepository()
+        stored = {f.source_ref: f for f in repo.get(NutritionFood).all()}
+        assert ref_a in stored and ref_b in stored
+        stored_ids = {f.id for f in stored.values()}
+        rows = repo.get(NutritionPortion).all()
+        # Every portion resolves to a food that is actually in the table.
+        assert rows, "no portions were stored at all"
+        assert all(p.nutrition_food_id in stored_ids for p in rows)
+        # And each one landed against its own food, not just *a* food.
+        by_food = {p.nutrition_food_id: p.measure for p in rows}
+        assert by_food[stored[ref_a].id] == "cup"
+        assert by_food[stored[ref_b].id] == "medium"
 
 
 #endregion

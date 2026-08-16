@@ -87,6 +87,17 @@
                     <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
                     <q-item-section>Cook now</q-item-section>
                 </q-item>
+                <!-- FU-637 — same action as the desktop chip's menu. Hidden
+                     unless this meal's figure is solid enough to compare. -->
+                <q-item
+                    v-if="canGoLighter"
+                    clickable
+                    v-close-popup
+                    @click="emit('lighter')"
+                >
+                    <q-item-section avatar><q-icon :name="ICONS.monitor_heart" /></q-item-section>
+                    <q-item-section>Find a lighter option…</q-item-section>
+                </q-item>
                 <template v-if="batchEnabled">
                     <q-separator />
                     <q-item clickable v-close-popup @click="emit('link')">
@@ -130,6 +141,7 @@
     const emit = defineEmits<{
         (e: 'view'): void;
         (e: 'cook'): void;
+        (e: 'lighter'): void;
         (e: 'remove'): void;
         (e: 'adjust', delta: number): void;
         (e: 'link'): void;
@@ -137,6 +149,12 @@
     }>();
 
     // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).
+    // Only offer the comparison when this meal's own figure can be compared —
+    // "lighter than an estimate we don't trust" isn't an answer.
+    const canGoLighter = computed(
+        () => props.entry.kcal_per_serving !== null && props.entry.kcal_is_reliable,
+    );
+
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
     const cookMarkerLabel = computed(() =>
         props.entry.is_cook_day

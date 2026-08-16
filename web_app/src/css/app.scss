@@ -70,3 +70,31 @@ body {
 .q-bar--dense {
     font-size: 0.875rem;
 }
+
+// 2026-08-16 — a `use-input` QSelect must not size itself to its own <input>.
+//
+// `use-input` is the one prop that makes QSelect render a real
+// `<input type="search">` instead of a plain div for its value (QSelect.js
+// `getInput`). An <input> carries an intrinsic width of roughly 20 characters
+// (~180px) that has nothing to do with its content — which is why a location
+// picker overflowed identically whether the location list was full or empty.
+//
+// Put that input inside a narrow container and the field wins: `.q-field` has
+// `max-width: none` and, as a flex item in `q-item-section`'s column layout,
+// sizes to content. Measured on the stock-item detail page at 375px: a 236px
+// field inside a 136px section, dropdown arrow landing 27px beyond the
+// viewport. Quasar's own `max-width: 100%` doesn't help — it sits on
+// `.q-field__control`, which resolves 100% against the oversized `.q-field`.
+//
+// Global rather than per-surface: 13 files use `use-input`, three of them
+// location pickers, and every one is a narrow-container overflow waiting to
+// happen. Scoped to `--with-input` so plain selects (which shrink correctly on
+// their own) are untouched.
+//
+// `min-width: 0` is deliberately NOT part of this — Quasar already sets it on
+// both `.q-item__section--main` and `.q-field__native`. It was the first fix
+// tried here and it was a no-op; don't re-add it thinking it helps.
+.q-select--with-input {
+    width: 100%;
+    max-width: 100%;
+}

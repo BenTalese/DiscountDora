@@ -92,6 +92,7 @@
     --brand-primary-soft: hsla(150, 48%, 40%, 0.22);
     --brand-secondary: hsl(170 28% 30%);          /* #35605A */
     --brand-secondary-soft: hsla(170, 28%, 30%, 0.3);
+    --brand-secondary-strong: hsl(170 32% 58%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(150 48% 40%);
     --brand-accent-soft: hsla(150, 48%, 40%, 0.22);
     --nav-slide-flash: hsl(95 85% 60%);
@@ -206,6 +207,7 @@
     --brand-primary-soft: hsla(46, 100%, 50%, 0.18);
     --brand-secondary: hsl(105 47% 36%);          /* #4D8B31 */
     --brand-secondary-soft: hsla(105, 47%, 36%, 0.25);
+    --brand-secondary-strong: hsl(105 42% 58%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(23 100% 57%);             /* #FF8427 */
     --brand-accent-soft: hsla(23, 100%, 57%, 0.18);
     --nav-slide-flash: hsl(320 95% 68%);
@@ -319,6 +321,7 @@
     --brand-primary-soft: hsla(193, 25%, 66%, 0.2);
     --brand-secondary: hsl(184 14% 47%);          /* #668586 */
     --brand-secondary-soft: hsla(184, 14%, 47%, 0.25);
+    --brand-secondary-strong: hsl(184 22% 64%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(232 41% 75%);             /* #A7ACD9 */
     --brand-accent-soft: hsla(232, 41%, 75%, 0.18);
     --nav-slide-flash: hsl(340 80% 72%);
@@ -432,6 +435,11 @@
     --brand-primary-soft: hsla(98, 60%, 70%, 0.18);
     --brand-secondary: hsl(2 16% 19%);            /* #442220 */
     --brand-secondary-soft: hsla(2, 16%, 19%, 0.3);
+    /* Lifted toward clay/tan rather than straight up the red ramp: this
+       theme's --semantic-negative is hsl(7 78% 65%), and a lifted #442220
+       lands close enough to it that an Essential stripe would read as an
+       alert. Hue pushed to 20 to keep the two separable. */
+    --brand-secondary-strong: hsl(20 30% 62%);
     --brand-accent: hsl(74 36% 44%);              /* #809848 */
     --brand-accent-soft: hsla(74, 36%, 44%, 0.18);
     --nav-slide-flash: hsl(95 75% 68%);
@@ -545,6 +553,7 @@
     --brand-primary-soft: hsla(33, 80%, 60%, 0.18);
     --brand-secondary: hsl(28 30% 40%);
     --brand-secondary-soft: hsla(28, 30%, 40%, 0.25);
+    --brand-secondary-strong: hsl(28 38% 62%);    /* indicator fill — see tokens.scss */
     --brand-accent: hsl(45 90% 65%);
     --brand-accent-soft: hsla(45, 90%, 65%, 0.18);
     --nav-slide-flash: hsl(195 90% 68%);

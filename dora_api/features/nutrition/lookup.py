@@ -23,6 +23,7 @@ persists one (P12 No-invent: a fuzzy name match is never a saved link).
 """
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -39,6 +40,9 @@ from dora_api.domain.entities.nutrition_food import (
 )
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.features.help.version_info import CURRENT_VERSION
+from dora_api.features.nutrition.nutrients import (
+    USDA_NUTRIENT_ATTRS, off_values,
+)
 from dora_api.persistence.bool_operation import Or
 from dora_api.persistence.field import EntityField as Field
 
@@ -59,6 +63,8 @@ _USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 # type-and-see-results interaction; a 10s stall to reach a web service is worse
 # than saying "that source didn't answer".
 _LIVE_TIMEOUT_SECONDS = 6
+# Short — the user is watching a type-ahead, not a batch job.
+_RETRY_DELAY_SECONDS = 0.6
 _MAX_RESULTS = 40
 _MAX_LOCAL_RESULTS = 25
 
@@ -83,10 +89,15 @@ class FoodResult:
     id: Optional[str] = None
     brand: Optional[str] = None
     barcode: Optional[str] = None
+    # One attribute per entry in `nutrients.NUTRIENTS`; keep the two in step.
     kcal_per_100g: Optional[float] = None
     protein_g_per_100g: Optional[float] = None
     carbs_g_per_100g: Optional[float] = None
+    sugars_g_per_100g: Optional[float] = None
     fat_g_per_100g: Optional[float] = None
+    saturated_fat_g_per_100g: Optional[float] = None
+    fibre_g_per_100g: Optional[float] = None
+    sodium_mg_per_100g: Optional[float] = None
     portions: List[dict] = field(default_factory=list)
     # Why this row is where it is in the list. Also lets the UI mark an exact
     # barcode hit differently from a name guess.
@@ -105,7 +116,11 @@ class FoodResult:
             "kcal_per_100g": self.kcal_per_100g,
             "protein_g_per_100g": self.protein_g_per_100g,
             "carbs_g_per_100g": self.carbs_g_per_100g,
+            "sugars_g_per_100g": self.sugars_g_per_100g,
             "fat_g_per_100g": self.fat_g_per_100g,
+            "saturated_fat_g_per_100g": self.saturated_fat_g_per_100g,
+            "fibre_g_per_100g": self.fibre_g_per_100g,
+            "sodium_mg_per_100g": self.sodium_mg_per_100g,
             "portions": self.portions,
             "match": self.match,
             "exact": self.exact,
@@ -148,14 +163,14 @@ def search_foods(repository, setting, query: str) -> dict:  # noqa: ANN001
                 if off:
                     results.append(off)
             except Exception as exc:  # noqa: BLE001
-                failed.append({"source": NUTRITION_SOURCE_OFF, "error": str(exc)})
+                failed.append(_failure(NUTRITION_SOURCE_OFF, exc))
 
     if not is_barcode and bool(getattr(setting, "nutrition_off_lookup_enabled", True)):
         queried.append(NUTRITION_SOURCE_OFF)
         try:
             results.extend(_off_by_text(text))
         except Exception as exc:  # noqa: BLE001
-            failed.append({"source": NUTRITION_SOURCE_OFF, "error": str(exc)})
+            failed.append(_failure(NUTRITION_SOURCE_OFF, exc))
 
     api_key = (getattr(setting, "nutrition_usda_api_key", "") or "").strip()
     if api_key and not is_barcode:
@@ -163,7 +178,7 @@ def search_foods(repository, setting, query: str) -> dict:  # noqa: ANN001
         try:
             results.extend(_usda_api_search(text, api_key))
         except Exception as exc:  # noqa: BLE001
-            failed.append({"source": NUTRITION_SOURCE_USDA_API, "error": str(exc)})
+            failed.append(_failure(NUTRITION_SOURCE_USDA_API, exc))
 
     return {
         "query": text,
@@ -171,6 +186,16 @@ def search_foods(repository, setting, query: str) -> dict:  # noqa: ANN001
         "results": [r.to_dict() for r in _rank(results, text)[:_MAX_RESULTS]],
         "sources_queried": queried,
         "sources_failed": failed,
+    }
+
+
+def _failure(source: str, exc: Exception) -> dict:
+    """A failed source carries its human label, like every result does — the
+    picker was rendering the raw id ("Couldn't reach off")."""
+    return {
+        "source": source,
+        "source_label": NUTRITION_SOURCE_LABELS.get(source, source),
+        "error": str(exc),
     }
 
 
@@ -220,7 +245,11 @@ def _search_local(repository, text: str, is_barcode: bool) -> List[FoodResult]: 
             kcal_per_100g = food.kcal_per_100g,
             protein_g_per_100g = food.protein_g_per_100g,
             carbs_g_per_100g = food.carbs_g_per_100g,
+            sugars_g_per_100g = food.sugars_g_per_100g,
             fat_g_per_100g = food.fat_g_per_100g,
+            saturated_fat_g_per_100g = food.saturated_fat_g_per_100g,
+            fibre_g_per_100g = food.fibre_g_per_100g,
+            sodium_mg_per_100g = food.sodium_mg_per_100g,
             portions = portions_by_food.get(food.id, []),
             match = "barcode" if matched_barcode else "name",
             exact = matched_barcode or food.name.strip().lower() == text.lower(),
@@ -247,6 +276,40 @@ def _portions_for(repository, food_ids) -> dict:  # noqa: ANN001
 
 
 def _fetch_json(url: str, purpose: str) -> dict:
+    """One retry on a *transient* failure, then give up and report.
+
+    Open Food Facts' search endpoint flaps: the same query answers 200, then
+    503, then 200 again within seconds (observed 2026-08-15 — it's what made
+    the food picker look broken). A single retry turns most of that flapping
+    into a normal result; anything that survives it is reported to the user as
+    a failed source rather than silently swallowed, which is the honest half of
+    this design and stays unchanged.
+
+    Only retried once, and only for transient statuses — a 404 or a bad payload
+    won't get better by asking again, and a picker that stalls for three
+    round-trips is its own kind of broken.
+    """
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            return _fetch_json_once(url, purpose)
+        except RuntimeError as exc:
+            last_error = exc
+            if not _is_transient(str(exc)) or attempt == 1:
+                raise
+            time.sleep(_RETRY_DELAY_SECONDS)
+    raise last_error  # unreachable; keeps the type checker honest
+
+
+def _is_transient(message: str) -> bool:
+    return any(
+        marker in message
+        for marker in ("HTTP Error 429", "HTTP Error 500", "HTTP Error 502",
+                       "HTTP Error 503", "HTTP Error 504", "timed out")
+    )
+
+
+def _fetch_json_once(url: str, purpose: str) -> dict:
     request = Request(url, headers={
         "User-Agent": _user_agent(purpose),
         "Accept": "application/json",
@@ -256,7 +319,12 @@ def _fetch_json(url: str, purpose: str) -> dict:
             raw = response.read().decode("utf-8", errors="replace")
     except (URLError, TimeoutError) as exc:
         raise RuntimeError(f"couldn't reach the service ({exc})") from exc
-    body = json.loads(raw)
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        # OFF answers overload with an HTML "temporarily unavailable" page,
+        # which used to surface as a raw JSONDecodeError traceback.
+        raise RuntimeError("the service returned a page instead of data") from exc
     if not isinstance(body, dict):
         raise RuntimeError("unexpected response shape")
     return body
@@ -277,17 +345,14 @@ def _off_result(product: dict) -> Optional[FoodResult]:
     if not name:
         return None
     nutriments = product.get("nutriments") or {}
-    kcal = _to_float(nutriments.get("energy-kcal_100g"))
     return FoodResult(
         source = NUTRITION_SOURCE_OFF,
         source_ref = (product.get("code") or "").strip(),
         name = name,
         brand = (product.get("brands") or "").strip() or None,
         barcode = (product.get("code") or "").strip() or None,
-        kcal_per_100g = kcal,
-        protein_g_per_100g = _to_float(nutriments.get("proteins_100g")),
-        carbs_g_per_100g = _to_float(nutriments.get("carbohydrates_100g")),
-        fat_g_per_100g = _to_float(nutriments.get("fat_100g")),
+        # OFF's key names + the sodium g→mg conversion live in `nutrients.py`.
+        **off_values(nutriments, _to_float),
     )
 
 
@@ -365,7 +430,11 @@ def resolve_food(repository, setting, source: str, source_ref: str) -> Optional[
         kcal_per_100g = result.kcal_per_100g,
         protein_g_per_100g = result.protein_g_per_100g,
         carbs_g_per_100g = result.carbs_g_per_100g,
+        sugars_g_per_100g = result.sugars_g_per_100g,
         fat_g_per_100g = result.fat_g_per_100g,
+        saturated_fat_g_per_100g = result.saturated_fat_g_per_100g,
+        fibre_g_per_100g = result.fibre_g_per_100g,
+        sodium_mg_per_100g = result.sodium_mg_per_100g,
         imported_at = datetime.now(timezone.utc),
     )
     repository.add(food)
@@ -402,14 +471,10 @@ def _parse_usda_foods(body: dict) -> List[FoodResult]:
             amount = _to_float(nutrient.get("value"))
             if amount is None:
                 continue
-            if name == "energy" and unit == "kcal":
-                values["kcal_per_100g"] = amount
-            elif name == "protein" and unit == "g":
-                values["protein_g_per_100g"] = amount
-            elif name == "total lipid (fat)" and unit == "g":
-                values["fat_g_per_100g"] = amount
-            elif name == "carbohydrate, by difference" and unit == "g":
-                values["carbs_g_per_100g"] = amount
+            # Same (name, unit) table the bulk CSV importer matches on.
+            attr = USDA_NUTRIENT_ATTRS.get((name, unit))
+            if attr:
+                values[attr] = amount
         if "kcal_per_100g" not in values:
             continue
         results.append(FoodResult(

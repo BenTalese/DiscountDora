@@ -92,6 +92,7 @@
     import SettingsNavGroup, { type SettingsNavEntry, type SettingsNavLeaf } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
+    import { useNutritionMode } from 'src/composables/useNutritionMode';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { suppressUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import { computed, nextTick, ref, watch } from 'vue';
@@ -130,6 +131,9 @@
     // the install-wide gate the page itself enforces). Hiding the nav
     // entry keeps the sidebar honest for installs that never opted in.
     const { scanningEnabled } = useScanningEnabled();
+    // Gates the nutrition-matching entry — there's nothing to match against
+    // until the install runs complex mode with food data installed.
+    const { isComplex: nutritionIsComplex } = useNutritionMode();
     // Money is an install-wide "kitchen setup" concern now (household budget +
     // dollar surfaces), gated on the install money flag — not a personal
     // account section. Hidden entirely when the install has money off.
@@ -163,6 +167,17 @@
             icon: ICONS.link,
             badge: unlinkedCount.value,
         });
+        // Complex-mode only: in off/simple there are no food links to make, so
+        // the entry is hidden rather than shown leading to an empty page
+        // (R-029). No badge — the count is the size of a backlog the user opted
+        // into, not an alert, and nagging is the opposite of the ask.
+        if (nutritionIsComplex.value) {
+            base.push({
+                path: '/settings/kitchen-setup/nutrition-matching',
+                label: 'Nutrition matching',
+                icon: ICONS.monitor_heart,
+            });
+        }
         // Recipe taxonomies — flat leaves (no sub-group), each with a
         // distinct icon: globe for world cuisines, shape for categories,
         // blender for equipment/tools, clock for time-of-day meal slots,

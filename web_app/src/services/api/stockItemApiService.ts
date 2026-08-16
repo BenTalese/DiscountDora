@@ -238,9 +238,16 @@ export type UpdateStockItemCommand = {
     clear_stock_group?: boolean;
     /** Nutrition complex-mode — the catalogue food whose per-100g values
      *  describe this item. UUID to bind; `clear_nutrition_food` to unlink.
-     *  Only ever sent from the picker's explicit confirm. */
+     *  Only ever sent from the picker's explicit confirm, or from accepting a
+     *  suggestion — which is the same confirm, just with the search already
+     *  done for you. */
     nutrition_food_id?: string;
     clear_nutrition_food?: boolean;
+    /** "Never suggest a food for this one" (dish soap). Drops the item out of
+     *  the matching queue for good. A plain bool rather than a clear flag —
+     *  unlike the FK above, false and absent mean different things only here,
+     *  so omitting it leaves the current value alone. */
+    nutrition_ignored?: boolean;
     /** P8-07 / FU-449 — consumption context. When a level DROP is the result
      *  of cooking (or another depletion), the server records a
      *  ConsumptionEvent so run-out prediction + the belief blend cooking with

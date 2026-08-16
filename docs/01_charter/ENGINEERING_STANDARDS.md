@@ -1521,6 +1521,153 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-041 — A derived aggregate ships with its coverage; a partial total never renders bare
+- **Rule:** any server-computed figure summed over a collection whose members
+  can each fail to contribute (unpriced ingredient, unlinked food, unconvertible
+  amount) must return **the count it was built from, the count it could have
+  been built from, and — where the reasons differ — a per-reason breakdown**,
+  in the same DTO as the number. The client renders the coverage **whenever it
+  renders the number**, not only when something is missing. A member that can't
+  be resolved is reported as a named gap; it is never approximated, defaulted to
+  zero, or silently dropped. When the divisor of a per-unit figure (servings,
+  headcount) is unknown, report the undivided total and say which basis it is —
+  never divide by a guess.
+- **Why:** a partial sum presented as a clean number is a confident lie, and the
+  reader has no way to tell "from 12 of 12" from "from 2 of 12" — the two are
+  different claims. Charter P3 (Honest) / P12 (No-invent) in code form. Both
+  existing aggregates arrived at this shape independently (`estimated_cost` +
+  `priced/total`; the nutrition rollup + `counted/total` + `uncounted`), which is
+  what makes it a rule rather than a coincidence.
+- **Apply:** shape the result dataclass as `value | None` + `counted` + `total`
+  (+ `reasons: dict[str, int]` when failures have distinct causes, keyed by a
+  closed set of ids per R-010 — copy for each id lives client-side). `None`, not
+  `0`, when nothing contributed: zero is a measurement. Pin the failure taxonomy
+  in tests — one case per reason. **If any surface then *acts* on the aggregate**
+  — filters, sorts, ranks, or alerts on it — the server also ships a boolean
+  saying whether coverage is good enough to act (`is_reliable`), derived from a
+  threshold that exists in exactly one place. Displaying a thin figure with its
+  coverage is honest; *hiding* a row on the strength of one is not, and a
+  coverage threshold duplicated in the SPA is R-003 drift waiting to happen.
+- **Violation signal:** an aggregate DTO carrying a bare number; a client
+  rendering a total with the coverage hidden behind a tooltip or an
+  `v-if="incomplete"`; a fallback constant standing in for a value the server
+  couldn't resolve; a per-serving figure computed with an assumed serving count.
+- **Source:** ADR-037; FU-635 chunk 6 recipe nutrition rollup (2026-08-14),
+  generalising the C-4/DEC-5 cost-estimate shape. The act-on-it clause was added
+  the same day by FU-637, when the cookbook's kcal filter needed to know which
+  estimates it was allowed to judge.
+
+---
+
+### R-042 — `repository.add()` assigns the id; never capture an entity's id before adding it
+- **Rule:** `SqlAlchemyRepository.add()` sets `entity.id = uuid4()` **unconditionally** —
+  the repository owns identity, and whatever id an entity was constructed with is
+  discarded. So any cross-reference between two new entities must be resolved
+  **after** the parent has been added: add the parents, `save_changes()`, then read
+  `parent.id` to build the children. When a pure/parsing layer must express the link
+  before any repository exists, carry the **natural key** (the source's own id) and
+  resolve it to a real `id` at persist time — never a pre-generated UUID.
+- **Why:** the alternative fails *silently at the type level and loudly at the
+  database*: the code reads perfectly, every id is a valid UUID, and the FK simply
+  points at a row that was never stored. The nutrition dataset importer built 14,449
+  `NutritionPortion` rows against parse-time food ids; every one dangled, and the
+  import died on a foreign-key violation after downloading and parsing the whole
+  dataset. Tests missed it for the subtlest possible reason — the fixtures read
+  `food.id` *after* `repo.add(food)`, which is the correct order by accident, and the
+  parser's own tests never touch a database.
+- **Apply:** two-phase write — parents added and saved, then children built from the
+  saved ids. Pin it with a test that drives the **real repository** and asserts each
+  child resolves to its own parent (not merely that some rows landed). A pure parser
+  should return a natural-key-linked DTO (e.g. `ParsedPortion(fdc_id=…)`), not a
+  half-built entity carrying a fictional FK.
+- **Violation signal:** an entity constructed with `id=uuid4()` whose id is then read
+  into another entity before `add()`; a `for … repository.add(child)` loop in the same
+  block as its parents; any FK value sourced from an object that hasn't been saved.
+- **Source:** ADR-038; the FU-639 nutrition-import investigation (2026-08-15). Applies
+  to every plain-UUID FK — which, per R-032, is most of them.
+
+---
+
+### R-043 — An inferred match is offered, never applied; its confidence is the server's and travels with it
+- **Rule:** When Dora guesses which entity another one refers to — a stock item's
+  nutrition food, an imported ingredient's stock item, a scanned barcode's product —
+  the guess is a **suggestion object** returned on a read, never a write. It carries
+  the score that produced it *and* the pre-computed band the UI renders
+  (`confidence` + `is_strong`), so the threshold exists once, on the server. Any bulk
+  "accept them all" verb takes only the top band, and **recomputes** the matches
+  itself rather than accepting a list of links from the client. Every surface that
+  shows a suggestion also offers the two other honest answers: search it yourself,
+  and never ask about this one again (a persisted opt-out, always reversible).
+- **Why:** matching is where a plausible-looking wrong answer is most expensive and
+  least visible — a mis-linked food quietly poisons every recipe rollup and per-day
+  calorie total downstream, and nothing on screen ever looks broken. The charter's
+  P12 No-invent is not "don't guess"; it's "don't *save* a guess". Keeping the
+  threshold server-side matters for the same reason as any other domain constant
+  (R-003): the band decides what a one-click bulk action is allowed to touch, so a
+  client that re-derived it could widen the blast radius by drifting.
+- **Apply:** compute in a dedicated module with a readable formula, not a fuzzy-match
+  library (R-019) — the reason a row scored 0.62 has to be explainable to whoever is
+  deciding whether to trust it. Set the floor to reject rather than offer a weak
+  match: most of a pantry is things a food catalogue *should* answer nothing for, and
+  a suggestion feed that cries wolf gets ignored wholesale. Pin the false positives
+  in tests as hard as the true positives.
+- **Violation signal:** a matcher that writes an FK; a threshold constant in a `.vue`
+  or `.ts` file; a bulk-accept endpoint whose request body names the links to make;
+  a suggestion surface with no "don't ask again"; a UI that renders a guess
+  indistinguishably from a confirmed value.
+- **Source:** ADR-039; the nutrition auto-matcher (2026-08-15). The existing
+  precedents it generalises are the recipe-importer bulk-linker and the OFF barcode
+  resolve path.
+
+---
+
+### R-044 — Read the app setting before you load the entity; a mid-handler commit expires `noload` relationships to None
+- **Rule:** In a read handler, resolve every `AppSetting` / config value **before**
+  loading the entities you are about to project into a DTO. `get_or_create_app_setting`
+  can commit, a commit expires every object in the SQLAlchemy session, and a
+  relationship mapped `lazy="noload"` (which is most of ours, per R-032/ADR-028)
+  re-reads as **None** instead of reloading.
+- **Why:** the failure is silent and total. Adding a mode check partway down
+  `get_stock_item_detail` — a change that reads as obviously safe — blanked
+  `stock_level` and `stock_location` on *every* stock-item detail response, including
+  ones that had nothing to do with the new feature. Nothing raised; the DTO just went
+  quietly hollow. It was caught only because `test_patch_semantics` compares a whole
+  before/after DTO rather than the field under test, which is the argument for that
+  test shape.
+- **Apply:** hoist the setting read to the top of `handle()` into a local, and use the
+  local downstream. If a lazily-evaluated gate is genuinely wanted, say so in a
+  comment naming this rule — the laziness is the trap, not the cost.
+- **Violation signal:** `get_or_create_app_setting(...)`, or any `save_changes()`,
+  appearing *after* an entity load inside a read/projection handler; a DTO field that
+  is None in production but populated in a unit test that never commits.
+- **Source:** ADR-040; the nutrition auto-matcher (2026-08-15). Sibling of ADR-028 —
+  same `noload` landmine, reached by a different route.
+
+---
+
+### R-045 — Never reach an authenticated endpoint from `<img src>` or `window.open`; fetch through the client and hand the browser a blob
+- **Rule:** Every request to `/api/*` goes through `AxiosHttpClient`. If the result
+  is a PNG/HTML/CSV rather than JSON, use `getBlob` (or `fetch` with
+  `credentials: 'include'`), then give the browser an object URL. A bare
+  `<img :src="apiUrl">`, `window.open(apiUrl)` or `<a :href="apiUrl" download>` is a
+  violation.
+- **Why:** those three are unauthenticated by construction — they carry the session
+  cookie only if the *browser* volunteers it, which depends on SameSite, on the SPA
+  and the API being same-site, and on the platform. All three assumptions hold on a
+  dev box and fail in real deployments: a split `app.` / `api.` host makes the
+  subresource cross-site (Lax declines), and the Capacitor shell serves the SPA from
+  an origin that is never the API's. The failure is silent and looks like a broken
+  feature, not an auth problem — the stock-item QR dialog rendered empty and "Print
+  one" died, with nothing in the console naming a session.
+- **Apply:** `http.getBlob(path)` → `URL.createObjectURL` → revoke on a timer. If the
+  fetched document itself references other API resources, the **server** must inline
+  them (data: URI), because relative URLs cannot resolve from a blob origin.
+- **Violation signal:** a template binding or `window.open` whose value is built from
+  `resolveBaseURL()` / `getBackendBaseUrl()`.
+- **Source:** ADR-041; the QR-label fix (2026-08-16).
+
+---
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -2543,6 +2690,133 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   dialog dismissal never mutates. The decision logic is unit-testable without
   mounting. Sets the template for any future multi-outcome confirm dialog.
 - **Promotes rule:** R-040.
+
+---
+
+### ADR-037 — Derived aggregates carry their coverage (promotes R-041)
+- **Date / task:** 2026-08-14 (FU-635 chunk 6 — recipe nutrition rollup)
+- **Status:** accepted
+- **Context:** the recipe nutrition rollup sums per-100g figures over ingredients
+  whose chain (ingredient → stock item → food → gram conversion) can break at
+  four separate links. Every option that hides a break — skipping the ingredient
+  silently, assuming a gram weight from a similar portion row, defaulting a
+  missing macro to 0, dividing by an assumed 4 servings — produces a number that
+  *looks* complete and is wrong in a way the reader cannot detect. The cost
+  estimate (DEC-5) had already reached the same conclusion for pricing, shipping
+  `priced_count`/`total_count` so the UI could say "based on N of M".
+- **Decision:** Promote **R-041**. The rollup returns `counted_count`,
+  `total_count`, and an `uncounted` map keyed by a closed set of reason ids
+  (`not_linked` / `no_food` / `no_quantity` / `no_conversion` / `no_data`);
+  nutrient fields are `None` rather than `0` when nothing supplied them; the
+  basis is explicit (`serving` when servings are typed in, `recipe` otherwise).
+  The card renders the coverage line **unconditionally**, gaps as a named list.
+  Gram conversion refuses rather than guesses: mass converts outright, volume
+  prefers the food's own measured USDA portion row over the modelled density
+  table, counts require a whole-item portion row.
+- **Consequences:** every future aggregate (waste totals, plan-level nutrition,
+  budget projections) owes the same shape, and the failure taxonomy has to be
+  enumerated up front — which is the useful pressure: it forces the author to
+  name what can go wrong instead of letting it vanish into the sum. Costs a
+  slightly wider DTO and a coverage line the reader must parse even at full
+  coverage; judged the right trade, since a number whose basis is invisible
+  reads as complete whether it is or not.
+- **Promotes rule:** R-041.
+
+---
+
+### ADR-038 — Identity is the repository's to assign; links between new entities resolve after the parent is saved (promotes R-042)
+- **Date / task:** 2026-08-15 (FU-639 — nutrition dataset import failed in production)
+- **Status:** accepted
+- **Context:** `SqlAlchemyRepository.add()` overwrites `entity.id` with a fresh UUID
+  by design. The USDA importer parsed foods and portions in one pure pass, linking
+  portions to `food.id` as generated during parsing; `add()` then replaced every
+  food's id, leaving all 14,449 portions pointing at ids that were never written. The
+  failure surfaced only against the real 7,793-row dataset, after a successful
+  download and parse, as `FOREIGN KEY constraint failed`. Three test layers missed it:
+  the parser's unit tests are database-free, the seeded e2e fixtures happen to read
+  `food.id` after adding, and the endpoint test asserted a status code without
+  checking why.
+- **Decision:** Promote **R-042**. The parse layer now returns `ParsedPortion`, keyed
+  by USDA's own `fdc_id` (a natural key that cannot go stale), and `_replace_dataset`
+  commits foods first, then builds portions from `{source_ref: saved_id}`. An e2e
+  drives the real repository and asserts each portion lands against *its own* food.
+- **Consequences:** any bulk import that writes a parent/child pair owes the same
+  two-phase shape and the same natural-key link — slightly more ceremony in exchange
+  for a class of silent dangling-FK bug being impossible to express. Does **not**
+  change `add()` itself: repository-owned identity is a long-standing convention and
+  rewriting it would ripple through every feature; the rule documents the contract
+  instead.
+- **Promotes rule:** R-042.
+
+---
+
+### ADR-039 — A guess is surfaced, not saved; the confidence band is server-owned (promotes R-043)
+- **Date / task:** 2026-08-15 (owner ask — auto-suggest a nutrition food for unlinked
+  stock items)
+- **Status:** accepted
+- **Context:** complex-mode nutrition required a human to open a picker and search,
+  once per stock item, before any calorie figure existed anywhere. The owner's read
+  was blunt: people won't do that, so the feature may as well not exist. The obvious
+  fix — auto-link the best name match — is precisely what the picker's own comment
+  had ruled out, because a mis-linked food silently corrupts every recipe rollup and
+  per-day total that reads through it, and nothing on screen looks wrong.
+- **Decision:** split "match" from "link". `features/nutrition/suggestions.py` scores
+  candidates and returns a `FoodSuggestion` on the read; `StockItem.nutrition_food_id`
+  is still written only by an explicit human action. The suggestion carries both its
+  raw score and `is_strong`, so the band lives once on the server, and the bulk
+  accept-all verb recomputes matches server-side and touches only the strong band.
+  A persisted, reversible `nutrition_ignored` gives "never ask about this again".
+- **Consequences:** every future inferred-match surface owes this shape rather than a
+  quiet write. Costs a per-entity opt-out column and a visibly-hedged UI state; buys
+  a feature that can be wrong without being harmful. Tuning is now a testable
+  artifact — the recall floor exists because "Toilet paper" matched "Toilet" at
+  exactly 0.50 in calibration, and that case is pinned.
+- **Promotes rule:** R-043.
+
+---
+
+### ADR-040 — Config reads belong at the top of a read handler (promotes R-044)
+- **Date / task:** 2026-08-15 (same unit — gating the suggestion on complex mode)
+- **Status:** accepted
+- **Context:** the suggestion is only worth computing in complex mode, so the handler
+  gained a mode check next to the code that used it — the placement that reads best.
+  `get_or_create_app_setting` commits, the commit expired the session, and the
+  already-loaded `StockItem`'s `lazy="noload"` relationships re-read as None. Every
+  stock-item detail response lost its level and location. No exception, no log line.
+- **Decision:** hoist the setting read above the entity load and pass a local down.
+  The docstring on `_nutrition_is_complex` states the ordering constraint in place, so
+  the next person to "tidy" it back down has been told why not.
+- **Consequences:** a small ordering convention in read handlers, and one more reason
+  to keep whole-DTO before/after assertions in the suite — a field-scoped test would
+  have stayed green through this.
+- **Promotes rule:** R-044.
+
+---
+
+### ADR-041 — Binary/document endpoints are fetched, not linked (promotes R-045)
+- **Date / task:** 2026-08-16 (stock-item detail feedback — "QR button currently
+  doesn't work: empty modal and a 404 when trying the print one button")
+- **Status:** accepted
+- **Context:** three call sites reached the QR endpoints by URL rather than through
+  the http client — the detail page's `<img :src>` and "Print one", the Kitchen-setup
+  QR-labels page, and the stock-overview bulk sheet. All of them depend on the browser
+  attaching `dora_session` to a request the app never made. That holds on a same-site
+  dev box and stops holding the moment the SPA and API are on different hosts, or the
+  app runs in the Capacitor shell. There is no honest way to make the linked form
+  reliable, because the caller cannot attach a credential to it.
+- **Decision:** one auth path. `AxiosHttpClient` grew `getBlob`; a single
+  `useQrLabels` module owns both QR URLs; the print sheet's per-label images are
+  inlined by the server as data: URIs so the page is self-contained and prints
+  correctly when saved. The alternative considered and rejected was making the QR
+  endpoints public — a QR payload is an item id, and unauthenticated enumeration of
+  a household's stock ids is not a trade worth making for a print button.
+- **Consequences:** binary/document endpoints cost a fetch + an object URL instead of
+  a URL string, and a server-rendered document that references other API resources has
+  to inline them. In exchange, "does this work?" stops depending on deployment shape.
+  Note the sibling call sites this did NOT convert: `print-view` and the CSV export
+  still build URLs (CSV via `fetch` with credentials, which is fine; `print-view` via
+  `window.open`, which is the same latent bug) — tracked as a follow-up.
+- **Promotes rule:** R-045.
 
 ---
 

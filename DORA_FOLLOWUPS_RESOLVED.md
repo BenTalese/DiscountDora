@@ -10,6 +10,79 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-637 — Cookbook's kcal filter/sort is simple-mode only; complex mode has no list-level nutrition
+- **Raised:** 2026-08-14 (FU-635 chunk 6 — recipe nutrition rollup).
+- **Type:** follow-up.
+- **What:** The Cookbook's "Kcal ≤" filter and "Kcal" sort axis read the typed
+  `Recipe.kcal`, which only exists in simple mode. They're now gated on
+  `isSimple` (they'd otherwise filter on a field complex mode hides), so in
+  complex mode the cookbook has no nutrition axis at all.
+- **Why deferred:** the rollup is detail-only by design, mirroring
+  `estimated_cost` — a list-level figure needs a batch path joining every
+  recipe's ingredients → stock items → foods → portions, which is a real query
+  (the rollup already has a batch-shaped core, so it's mostly plumbing + a
+  query-count test).
+- **Recommended resolution:** later — when someone actually wants to sort the
+  cookbook by calories in complex mode. Not worth the query cost speculatively.
+- **State note:** 2026-08-14 — **resolved, built.** The rollup was restructured
+  around a batch core (`rollup_recipes_nutrition`, three queries for a whole
+  page regardless of recipe count — pinned by a query-count e2e); the list
+  endpoint now hydrates `nutrition` exactly as the detail does (pinned by an
+  e2e asserting the two payloads are identical). Cookbook card shows kcal/serving
+  and the filter/sort work in both modes via the shared `recipeKcal` helper.
+  Added `is_reliable` so a thin estimate is *shown* but never used to exclude or
+  rank a recipe.
+
+
+## [RESOLVED] FU-635 — Nutrition complex-mode: 1 of 6 build chunks remains (recipe rollup + coverage)
+- **Raised:** 2026-08-14 (owner-directed complex-mode build; reverses the charter's nutrition cut — see `RECONCILED_FINISHING_PLAN.md` §7 decision 3).
+- **Type:** deferred job (in-progress feature, stopped at a clean boundary).
+- **What:** Landed this session — **(1)** nutrition collapsed to one install-wide
+  `AppSetting.nutrition_mode` (per-user mode + the second install bool both gone);
+  the dead `nutrition_db_source` seam retired. **(2)** `NutritionFood` +
+  `NutritionPortion` schema, `StockItem.nutrition_food_id`, migration
+  `b9e3f1a7c4d2`. **(3)** USDA FDC bulk importer (download → parse → replace),
+  parser pytest-pinned 9/9 incl. the kcal-vs-kJ trap.
+  **(4)** `Admin → System → Nutrition` page + `GET /api/nutrition/sources` +
+  `POST /api/nutrition/datasets/import`, verified live.
+  **(5)** unified lookup — `GET /api/nutrition/lookup` fans out across local
+  datasets + OFF + USDA API, barcode-aware, every result badged by source,
+  failed sources reported rather than swallowed; plus
+  `POST /api/nutrition/foods/resolve` which persists a picked live suggestion
+  by re-fetching it server-side (the client sends only source + ref, so it
+  can't write arbitrary numbers). 32 tests (21 unit + 11 e2e), verified live
+  against the real OFF API.
+  **(6)** stock-item link picker — `NutritionFoodPicker.vue` (search-and-confirm
+  dialog, results badged by source, barcode-aware, never auto-matches),
+  `StockItem.nutrition_food_id` bound through the existing update endpoint with
+  the same clear-vs-unset shape as `usual_store_id`, and the linked food echoed
+  on the detail DTO with its source label. 4 more e2e (link / unlink / null
+  default / unrelated-patch-leaves-it-alone).
+  **(7)** recipe per-serving rollup — `features/nutrition/recipe_rollup.py`
+  (mass converts outright; volumes prefer the food's own USDA portion row and
+  fall back to the density table; counts need a portion row or are reported
+  unconvertible), surfaced as `RecipeDto.nutrition` on the detail endpoint
+  behind the complex-mode gate, rendered by `RecipeNutritionCard.vue` with an
+  always-visible coverage line + named gaps. 16 unit + 4 e2e.
+- **Why deferred:** stopped at a coherent boundary rather than leaving a
+  half-written surface — everything shipped is green and usable (an admin can
+  set the mode and download a dataset), but no *user-facing* complex surface
+  exists yet, so `complex` currently behaves like `simple` for everyone except
+  the admin page.
+- **Recommended resolution:** now — the feature isn't user-visible until the
+  remaining three chunks land. Design decisions are all settled (owner picks,
+  2026-08-14): per-serving figure + always-visible coverage line; partial
+  totals shown, clearly marked; no reparenting of the amounts problem onto
+  per-100g (it needs the same gram conversion *plus* an unknowable cooking
+  yield — see the worklog entry for the reasoning).
+- **State note:** 2026-08-14 — **resolved.** Final chunk (recipe rollup +
+  coverage) shipped; all 6 chunks done, complex mode is now user-visible end
+  to end. Verified live against the running app: a real 3-ingredient recipe
+  returned 469 kcal/serving from 2 of 3 ingredients with the third correctly
+  reported as `no_conversion`. The *card's* visual render is still unseen —
+  the agent's browser pane won't mount `#/cookbook/<id>` — handed to
+  `DORA_VERIFY.md`. Cookbook list-level kcal in complex mode spun as FU-637.
+
 ## [RESOLVED] FU-584 — Detail-page e2e specs flake on a full-suite run: hash-goto doesn't reliably drive vue-router
 - **Raised:** 2026-07-19 (verify Batch 10) · **Resolved:** 2026-08-12 — **obviated by the Playwright feature-flow cull.**
 - **Type:** finding

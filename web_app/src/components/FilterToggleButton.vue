@@ -24,16 +24,21 @@
         v-if="(activeCount ?? 0) > 0"
         variant="ghost"
         :icon="ICONS.filter_alt_off"
-        label="Clear"
+        :label="compact ? undefined : 'Clear'"
+        aria-label="Clear filters"
         @click="$emit('clear')"
-    />
+    >
+        <q-tooltip v-if="compact">Clear filters</q-tooltip>
+    </BaseButton>
 
     <BaseButton
         :variant="expanded ? 'secondary' : 'ghost'"
         :icon="ICONS.tune"
-        :label="toggleLabel"
+        :label="compact ? undefined : toggleLabel"
+        :aria-label="toggleLabel"
         @click="expanded = !expanded"
     >
+        <q-tooltip v-if="compact">{{ toggleLabel }}</q-tooltip>
         <q-badge v-if="(activeCount ?? 0) > 0" color="primary" floating>
             {{ activeCount }}
         </q-badge>
@@ -48,8 +53,15 @@
         defineProps<{
             activeCount?: number;
             toggleLabel?: string;
+            /** Drop both labels and ride the icons alone, with the name in a
+             *  tooltip. Matches how the host toolbar's own actions collapse
+             *  on phones (2026-08-16 feedback: these two were the only
+             *  buttons on the Stock Overview toolbar still carrying text
+             *  there). The page owns the breakpoint, not this component —
+             *  it's the page that knows how crowded its toolbar is. */
+            compact?: boolean;
         }>(),
-        { activeCount: 0, toggleLabel: 'Filters' },
+        { activeCount: 0, toggleLabel: 'Filters', compact: false },
     );
 
     defineEmits<{ (e: 'clear'): void }>();

@@ -10,7 +10,11 @@
                     :on-click="toggleLeftDrawer"
                 />
 
-                <ApplicationLogo />
+                <!-- Desktop only. On mobile the mascot + wordmark ate the
+                     width the page title needs (long titles were being
+                     pushed out of the toolbar entirely); the Dashboard is
+                     reachable from the drawer instead — see `linksList`. -->
+                <ApplicationLogo v-if="$q.screen.gt.sm" />
 
                 <PageTitle
                     v-if="$q.screen.lt.md && route.meta.title"
@@ -22,17 +26,27 @@
                     :menu-links="linksList"
                 />
 
-                <!-- Mobile: shove the right-hand buttons (alerts, profile)
-                     to the far edge, leaving a big gap after the page title.
+                <!-- Mobile fallback filler: shove the right-hand buttons
+                     (alerts, profile) to the far edge on routes with no
+                     title. When a title *is* present it flexes and does
+                     the filling itself — a second growing element here
+                     would halve the width the title can use.
                      Desktop already fills the middle with MainMenuButtonStrip. -->
-                <q-space v-if="$q.screen.lt.md" />
+                <q-space v-if="$q.screen.lt.md && !route.meta.title" />
 
-                <AlertsBell v-if="currentUser" class="q-mr-sm" />
+                <!-- Right-hand cluster: on mobile the toolbar's own 2px gap
+                     is the only spacing — the desktop margins cost ~12px the
+                     page title needs. -->
+                <AlertsBell v-if="currentUser" :class="{ 'q-mr-sm': $q.screen.gt.sm }" />
 
                 <!-- Support Dora — donation CTA. Dora is free & open-source;
                      this is the gentle, always-available "chip in" affordance
                      (own --donate pink, own DonateMenu). -->
-                <DonateButton v-if="currentUser" variant="header" class="q-mr-xs" />
+                <DonateButton
+                    v-if="currentUser"
+                    variant="header"
+                    :class="{ 'q-mr-xs': $q.screen.gt.sm }"
+                />
 
                 <!-- Help & guides — peer of the profile button.
                      Direct nav to `/help`; carries the same active-ring
@@ -233,9 +247,14 @@
     });
 
     const linksList = computed<MenuButtonProps[]>(() => {
-        const base: MenuButtonProps[] = [
-            { label: 'Stock', icon: 'inventory_2', link: '/stock' }
-        ];
+        const base: MenuButtonProps[] = [];
+        // Mobile hides the brand mascot (the toolbar's only route to `/`),
+        // so the drawer carries the Dashboard entry instead. Desktop keeps
+        // the mascot as the home affordance and doesn't need the duplicate.
+        if ($q.screen.lt.md) {
+            base.push({ label: 'Dashboard', icon: ICONS.dashboard, link: '/' });
+        }
+        base.push({ label: 'Stock', icon: 'inventory_2', link: '/stock' });
         if (productSearchEntry.value) {
             base.push(productSearchEntry.value);
         }
@@ -307,6 +326,24 @@
         height: 64px;
         gap: 8px;
         padding: 0 12px;
+    }
+
+    /* Mobile (Quasar lt.md): tighter bar so a long page title has room.
+       Only the *visual* size comes down — glyph and avatar shrink, the
+       36px button hit box is left alone so this doesn't push the header
+       controls further under the D-004 touch-target floor. */
+    @media (max-width: 1023px) {
+        .dora-titlebar {
+            height: 52px;
+            gap: 2px;
+            padding: 0 4px;
+        }
+        .dora-titlebar :deep(.dora-btn--icon) .q-icon {
+            font-size: 22px;
+        }
+        .dora-titlebar :deep(.q-avatar) {
+            font-size: 26px;
+        }
     }
 
     /* Shared active-ring for header peer buttons (Help + Account).

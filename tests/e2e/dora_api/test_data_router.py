@@ -1018,8 +1018,13 @@ def test__qr_sheet__html_response(api):
     )
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("text/html")
-    # The sheet inlines an <img src="/api/stock-items/<id>/qr?...">.
-    assert f"/api/stock-items/{item_id}/qr" in response.text
+    # The sheet embeds each QR as a data: URI rather than pointing back at
+    # /api/stock-items/<id>/qr. The SPA fetches this page through the
+    # authenticated client and opens it as a blob, where a same-origin
+    # back-reference can't resolve — and an absolute one would be an
+    # unauthenticated subresource, which is what broke "Print one".
+    assert "src=\"data:image/png;base64," in response.text
+    assert f"/api/stock-items/{item_id}/qr" not in response.text
 
 
 # ── Stock-overview + meal-plan exports (post-N5 polish) ────────────────

@@ -31,6 +31,20 @@
                 Complex is on, but nothing can answer a lookup yet — download a
                 food dataset below, or allow Open Food Facts.
             </div>
+            <!-- Deliberately a *separate* condition from the one above. Open
+                 Food Facts alone satisfies "something can answer a lookup", so
+                 that banner goes quiet while auto-matching is still dead —
+                 matching reads the local catalogue only. Without this, the one
+                 state that looks like a bug is the one state we say nothing
+                 about. -->
+            <div
+                v-else-if="mode === 'complex' && !hasLocalDataset"
+                class="settings-page__note dora-text-muted"
+            >
+                Manual search works, but Dora can't <em>suggest</em> foods yet —
+                auto-matching only reads a downloaded dataset, never the web.
+                Install one below to switch suggestions on.
+            </div>
         </SettingsSection>
 
         <template v-if="mode === 'complex'">
@@ -43,6 +57,21 @@
                     domain, so it stays on your server with no strings attached.
                     Best for generic ingredients — "banana", "flour" — which is
                     what recipes actually name.
+                    <br /><br />
+                    <!-- Stated here because this is the only screen that can
+                         fix it: auto-matching reads the local catalogue and
+                         nothing else, so without a dataset it silently suggests
+                         nothing and reads as broken. -->
+                    <strong>Auto-matching and suggestions need this.</strong>
+                    Dora can only suggest a food for a stock item by matching its
+                    name against data held here — she never calls out to the
+                    internet for that, because it runs across the whole pantry at
+                    once. Until a dataset is installed,
+                    <router-link
+                        to="/settings/kitchen-setup/nutrition-matching"
+                        class="settings-page__link"
+                    >Nutrition matching</router-link>
+                    stays empty and no suggestions appear on stock items.
                 </template>
 
                 <div v-if="loading" class="settings-page__note dora-text-muted">
@@ -162,6 +191,12 @@
 
     const datasetSources = computed(() =>
         sources.value.filter((s) => s.kind === 'dataset'),
+    );
+    // A dataset reports `available` exactly when it holds rows, so this is
+    // "is there anything for the name-matcher to read?". Distinct from
+    // `anyAvailable`, which a live source alone satisfies.
+    const hasLocalDataset = computed(() =>
+        datasetSources.value.some((s) => s.available),
     );
 
     function isBusy(source: NutritionSourceStatus): boolean {

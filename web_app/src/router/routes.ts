@@ -342,6 +342,18 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/UnlinkedIngredientsSettings.vue'),
                         meta: { title: 'Unlinked Ingredients' }
                     },
+                    // Complex-mode nutrition matching — the same bulk-resolve
+                    // shape as unlinked ingredients above, for stock items with
+                    // no food link. Sits under kitchen-setup for the same
+                    // reason: user-curated pantry data, no admin guard on its
+                    // endpoints. The nav entry is hidden unless the install
+                    // runs complex nutrition; the page itself degrades to an
+                    // empty list, since the API answers empty in other modes.
+                    {
+                        path: 'kitchen-setup/nutrition-matching',
+                        component: () => import('pages/settings/NutritionMatchingSettings.vue'),
+                        meta: { title: 'Nutrition Matching' }
+                    },
                     // Backwards-compat redirects for moved/split routes.
                     // Bookmarks, email deep-links and HelpPage entries that
                     // shipped under the old paths keep working. Drop these

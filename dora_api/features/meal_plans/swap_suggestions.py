@@ -1,4 +1,18 @@
-"""FU-451 — budget-defense swaps (recipe swaps only).
+"""Meal-plan recipe swaps — two axes over one machine.
+
+**Budget defense (FU-451)** — when a week is *projected* to blow the grocery
+budget, Dora suggests cheaper recipes to bring it back under. Dora raises this
+one herself, because going over budget is a fact she can see.
+
+**Lighter alternatives (FU-637)** — "show me a lighter version of this meal",
+asked for **per entry, on demand**. Deliberately never volunteered: the owner's
+call is that Dora displays nutrition where it helps a decision and holds no
+calorie target, so there is no threshold at which she'd start suggesting you eat
+less. You ask, she answers.
+
+Both axes share the household-affinity rule (`_affinity_for` — never push a
+stranger recipe), the apply/undo path, and the `MealPlanSwapLedger`; only the
+ranking metric and the reason-chip vocabulary differ.
 
 When a meal-plan week is *projected* to blow the grocery budget, Dora suggests
 cheaper **recipe** swaps to bring it back under — a non-destructive alternative
@@ -59,14 +73,42 @@ WEEK_LENGTH_DAYS = 7
 # (proposal §4c). One suggestion per meal, best-saving first.
 MAX_CANDIDATES = 5
 
+# Why a candidate is a *plausible* swap at all, independent of which axis is
+# ranking it: it's cookable right now, it's the same style of meal, or the
+# household has cooked it before. A candidate with no affinity is a stranger and
+# is never suggested (proposal §4c).
+AFFINITY_COOKABLE = "cookable"
+AFFINITY_SIMILAR = "similar"
+AFFINITY_HOUSEHOLD_FAV = "household_fav"
+
+# Tier ranking for affinities (higher = preferred when the metric ties).
+_AFFINITY_TIER = {AFFINITY_COOKABLE: 3, AFFINITY_SIMILAR: 2, AFFINITY_HOUSEHOLD_FAV: 1}
+
 # Frozen reason-chip vocabulary (proposal §5). The chip is decided at rank
-# time and frozen on the DTO — the SPA never re-derives it.
+# time and frozen on the DTO — the SPA never re-derives it. One vocabulary per
+# axis: the affinity is the same fact, but "Cheaper — uses stock you have" and
+# "Lighter — uses stock you have" are different sentences.
 CHIP_COOKABLE = "cheaper_recipe_cookable"        # "Cheaper — uses stock you have"
 CHIP_SIMILAR = "cheaper_recipe_similar"          # "Cheaper — same style meal"
 CHIP_HOUSEHOLD_FAV = "cheaper_recipe_household_fav"  # "Cheaper — you've cooked it before"
+_BUDGET_CHIP = {
+    AFFINITY_COOKABLE: CHIP_COOKABLE,
+    AFFINITY_SIMILAR: CHIP_SIMILAR,
+    AFFINITY_HOUSEHOLD_FAV: CHIP_HOUSEHOLD_FAV,
+}
 
-# Tier ranking for the chips (higher = preferred when savings tie).
-_CHIP_TIER = {CHIP_COOKABLE: 3, CHIP_SIMILAR: 2, CHIP_HOUSEHOLD_FAV: 1}
+CHIP_LIGHTER_COOKABLE = "lighter_recipe_cookable"
+CHIP_LIGHTER_SIMILAR = "lighter_recipe_similar"
+CHIP_LIGHTER_HOUSEHOLD_FAV = "lighter_recipe_household_fav"
+_LIGHTER_CHIP = {
+    AFFINITY_COOKABLE: CHIP_LIGHTER_COOKABLE,
+    AFFINITY_SIMILAR: CHIP_LIGHTER_SIMILAR,
+    AFFINITY_HOUSEHOLD_FAV: CHIP_LIGHTER_HOUSEHOLD_FAV,
+}
+
+# Top-N lighter alternatives for one meal. Same reasoning as MAX_CANDIDATES:
+# a wall of options is overwhelm, not choice.
+MAX_LIGHTER_CANDIDATES = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,13 +154,13 @@ def _entry_cost(recipe, cost: Optional[CostEstimate], servings: int) -> Optional
     return base
 
 
-def _chip_for(from_recipe, candidate) -> Optional[str]:
-    """Which reason chip a candidate earns, or None if it's a "stranger"
-    (not cookable-now, not tag-similar, never cooked) — those are filtered
-    out so Dora never pushes an unfamiliar recipe as the cheaper answer
+def _affinity_for(from_recipe, candidate) -> Optional[str]:
+    """Which household affinity a candidate earns, or None if it's a "stranger"
+    (not cookable-now, not tag-similar, never cooked) — those are filtered out
+    so Dora never pushes an unfamiliar recipe as the answer, on either axis
     (proposal §4c household-affinity rule)."""
     if candidate.cookable is True:
-        return CHIP_COOKABLE
+        return AFFINITY_COOKABLE
     same_cuisine = (
         candidate.cuisine_id is not None
         and candidate.cuisine_id == from_recipe.cuisine_id
@@ -128,9 +170,9 @@ def _chip_for(from_recipe, candidate) -> Optional[str]:
         and candidate.category_id == from_recipe.category_id
     )
     if same_cuisine or same_category:
-        return CHIP_SIMILAR
+        return AFFINITY_SIMILAR
     if getattr(candidate, "last_made_on", None) is not None:
-        return CHIP_HOUSEHOLD_FAV
+        return AFFINITY_HOUSEHOLD_FAV
     return None
 
 
@@ -171,13 +213,14 @@ def rank_recipe_swaps(
             cand_cost = _entry_cost(candidate, cost_by_id.get(rid), entry.servings)
             if cand_cost is None or cand_cost >= from_cost:
                 continue
-            chip = _chip_for(from_recipe, candidate)
-            if chip is None:
+            affinity = _affinity_for(from_recipe, candidate)
+            if affinity is None:
                 continue
+            chip = _BUDGET_CHIP[affinity]
             saved = round(from_cost - cand_cost, 2)
             if saved <= 0:
                 continue
-            tier = _CHIP_TIER[chip]
+            tier = _AFFINITY_TIER[affinity]
             # Best per entry: most saved, then best chip tier.
             if best is None or (saved, tier) > (best.saved, best_tier):
                 best = RecipeSwapCandidate(
@@ -199,10 +242,70 @@ def rank_recipe_swaps(
             winners.append(best)
 
     # Rank across the week: biggest saving first, then chip tier.
+    _budget_tier = {chip: _AFFINITY_TIER[a] for a, chip in _BUDGET_CHIP.items()}
     winners.sort(
-        key=lambda c: (c.saved, _CHIP_TIER[c.reason_chip]), reverse=True,
+        key=lambda c: (c.saved, _budget_tier[c.reason_chip]), reverse=True,
     )
     return winners[:MAX_CANDIDATES]
+
+
+@dataclass(frozen=True, slots=True)
+class LighterSwapCandidate:
+    """FU-637 — a lighter alternative for one planned meal."""
+    to_recipe_id: UUID
+    to_recipe_name: str
+    kcal_per_serving: float
+    saved_kcal: float
+    reason_chip: str
+    missing_ingredient_names: List[str]
+
+
+def rank_lighter_swaps(
+    from_recipe,
+    recipes_by_id: dict,
+    planned_recipe_ids: set,
+) -> List[LighterSwapCandidate]:
+    """Pure ranker: recipes with fewer calories per serving than *from_recipe*,
+    best reduction first, ties broken by household affinity.
+
+    Both sides must carry a **reliable** figure (`kcal_is_reliable`). Ranking a
+    meal against a one-of-eight estimate would answer "which is lighter?" with
+    arithmetic on missing data — the R-041 rule, applied where it bites hardest,
+    since the whole point of the question is to trust the comparison.
+
+    Recipes already on the plan are skipped, same as the budget axis: swapping
+    Tuesday's dinner for Thursday's isn't variety.
+    """
+    baseline = getattr(from_recipe, "kcal_per_serving", None)
+    if baseline is None or not getattr(from_recipe, "kcal_is_reliable", False):
+        return []
+
+    out: List[LighterSwapCandidate] = []
+    for rid, candidate in recipes_by_id.items():
+        if rid == from_recipe.recipe_id or rid in planned_recipe_ids:
+            continue
+        kcal = getattr(candidate, "kcal_per_serving", None)
+        if kcal is None or not getattr(candidate, "kcal_is_reliable", False):
+            continue
+        if kcal >= baseline:
+            continue
+        affinity = _affinity_for(from_recipe, candidate)
+        if affinity is None:
+            continue
+        out.append(LighterSwapCandidate(
+            to_recipe_id = rid,
+            to_recipe_name = candidate.name,
+            kcal_per_serving = kcal,
+            saved_kcal = round(baseline - kcal),
+            reason_chip = _LIGHTER_CHIP[affinity],
+            missing_ingredient_names = list(
+                getattr(candidate, "missing_stock_item_names", []) or []
+            ),
+        ))
+
+    _lighter_tier = {chip: _AFFINITY_TIER[a] for a, chip in _LIGHTER_CHIP.items()}
+    out.sort(key=lambda c: (c.saved_kcal, _lighter_tier[c.reason_chip]), reverse=True)
+    return out[:MAX_LIGHTER_CANDIDATES]
 
 
 # ── Repo-touching orchestration ────────────────────────────────────────
@@ -349,11 +452,23 @@ def _suggestions_payload(r: SwapSuggestionsResponse) -> dict:
 # ── Apply / undo ───────────────────────────────────────────────────────
 
 
+# Why a swap was applied. Closed set (R-010); recorded on the ledger so the
+# audit trail says which question the user was answering.
+SWAP_REASON_BUDGET = "budget"
+SWAP_REASON_LIGHTER = "lighter"
+SWAP_REASONS = (SWAP_REASON_BUDGET, SWAP_REASON_LIGHTER)
+
+
 class ApplySwapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: str = "recipe"
     entry_id: UUID
     to_recipe_id: UUID
+    # FU-637 — which axis suggested this. Defaults to the original budget axis
+    # so existing callers are unchanged. It decides which feature gate applies:
+    # a lighter swap has nothing to do with money, and blocking it on
+    # `money_enabled` would have been a gate inherited by accident.
+    reason: str = SWAP_REASON_BUDGET
     # Optional stale-guard: the recipe the client believed the entry held. When
     # present and it no longer matches, the apply 409s so a stale card can't
     # silently swap the wrong meal (proposal §11 verify).
@@ -394,6 +509,81 @@ def get_swap_suggestions(meal_plan_id: UUID):
     return ok(_suggestions_payload(result))
 
 
+def compute_lighter_alternatives(
+    repository: SqlAlchemyRepository, meal_plan_id: UUID, entry_id: UUID,
+) -> Optional[dict]:
+    """FU-637 — lighter alternatives for one planned meal. None ⇒ plan or entry
+    not found. Returns an empty candidate list (not an error) when nutrition is
+    off or the meal has no reliable figure — "nothing to offer" is a normal
+    answer here, not a failure."""
+    from dora_api.domain.entities.app_setting import NUTRITION_MODE_OFF
+    from dora_api.features.app_settings.access import get_or_create_app_setting
+    from dora_api.features.nutrition.sources import nutrition_mode
+
+    plan_dto = GetMealPlansHandler(repository).handle_by_id(meal_plan_id)
+    if plan_dto is None:
+        return None
+    entry = next(
+        (e for e in plan_dto.entries if e.meal_plan_entry_id == entry_id), None
+    )
+    if entry is None:
+        return None
+
+    empty = {
+        "entry_id": str(entry_id),
+        "from_recipe_id": str(entry.recipe_id),
+        "from_recipe_name": entry.recipe_name,
+        "from_kcal_per_serving": entry.kcal_per_serving,
+        "candidates": [],
+    }
+    if nutrition_mode(get_or_create_app_setting(repository)) == NUTRITION_MODE_OFF:
+        return empty
+
+    recipes = _all_recipe_dtos(repository)
+    recipes_by_id = {r.recipe_id: r for r in recipes}
+    from_recipe = recipes_by_id.get(entry.recipe_id)
+    if from_recipe is None:
+        return empty
+
+    candidates = rank_lighter_swaps(
+        from_recipe, recipes_by_id, {e.recipe_id for e in plan_dto.entries},
+    )
+    return {
+        **empty,
+        "from_kcal_per_serving": from_recipe.kcal_per_serving,
+        "candidates": [
+            {
+                "to_recipe_id": str(c.to_recipe_id),
+                "to_recipe_name": c.to_recipe_name,
+                "kcal_per_serving": c.kcal_per_serving,
+                "saved_kcal": c.saved_kcal,
+                "reason_chip": c.reason_chip,
+                "missing_ingredient_names": c.missing_ingredient_names,
+            }
+            for c in candidates
+        ],
+    }
+
+
+@MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/lighter-alternatives", methods=["GET"])
+def get_lighter_alternatives(meal_plan_id: UUID):
+    """On-demand, per entry — never volunteered (see the module docstring)."""
+    # Aliased: this module binds the *parsed body* to `request` in the apply /
+    # undo handlers (house convention), so flask's own object needs a name of
+    # its own here rather than a module-level import that would read ambiguously.
+    from flask import request as flask_request
+
+    raw_entry_id = flask_request.args.get("entry_id")
+    try:
+        entry_id = UUID(str(raw_entry_id))
+    except (TypeError, ValueError):
+        return bad_request("entry_id must be a valid id.")
+    result = compute_lighter_alternatives(SqlAlchemyRepository(), meal_plan_id, entry_id)
+    if result is None:
+        return not_found(MealPlanEntry.__name__, entry_id)
+    return ok(result)
+
+
 @MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/apply-swap", methods=["POST"])
 @has_request_body(ApplySwapRequest)
 def apply_swap(meal_plan_id: UUID):
@@ -401,12 +591,14 @@ def apply_swap(meal_plan_id: UUID):
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    if not _money_features_on(repo):
-        return business_rule_violation("Money features are off; swaps are unavailable.")
-
     request: ApplySwapRequest = get_request_body()
     if request.kind != "recipe":
         return bad_request("Only recipe swaps are supported.")
+    if request.reason not in SWAP_REASONS:
+        return bad_request("Unknown swap reason.")
+
+    if request.reason == SWAP_REASON_BUDGET and not _money_features_on(repo):
+        return business_rule_violation("Money features are off; swaps are unavailable.")
 
     plan = _load_plan_with_entries(repo, meal_plan_id)
     if plan is None:
@@ -441,6 +633,7 @@ def apply_swap(meal_plan_id: UUID):
             "entry_id": str(entry.id),
             "from_recipe_id": str(from_recipe_id) if from_recipe_id else None,
             "from_servings": entry.servings,
+            "reason": request.reason,
         }),
     )
     repo.add(ledger)

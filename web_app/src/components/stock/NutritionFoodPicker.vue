@@ -4,8 +4,8 @@
             <q-card-section class="food-picker__head">
                 <div class="food-picker__title">Link {{ itemName }} to a food</div>
                 <div class="food-picker__sub dora-text-muted">
-                    Search by name, or type a barcode. Dora only uses the food you pick —
-                    nothing is matched automatically.
+                    Search by name, or type a barcode. Dora only saves the food you
+                    pick — nothing is linked without you.
                 </div>
             </q-card-section>
 
@@ -37,8 +37,9 @@
                 <div v-if="failedSources.length" class="food-picker__warning">
                     <q-icon :name="ICONS.warning" size="16px" />
                     <span>
-                        Couldn't reach {{ failedSources.join(', ') }}. These results may
-                        be incomplete.
+                        Couldn't reach {{ failedSources.join(', ') }} just now —
+                        it's often busy. Try again in a moment, or ask an admin to
+                        install the offline USDA food database, which always answers.
                     </span>
                 </div>
 
@@ -94,7 +95,10 @@
     // The interaction is deliberately "search, look, pick": results are
     // *suggestions* and nothing is written until the user taps one (P12
     // No-invent). Food matching is exactly where silent auto-matching produces
-    // confidently wrong calories, so there is no "best guess" auto-link path.
+    // confidently wrong calories, so there is no auto-*link* path — the
+    // name-based matcher added 2026-08-15 (`features/nutrition/suggestions.py`)
+    // only ever puts a labelled candidate on screen for a human to accept, and
+    // this dialog stays the "search it yourself" escape hatch from it.
     //
     // Every row is badged with the catalogue it came from, because three
     // sources can disagree about a banana and the user should be able to tell
@@ -142,8 +146,10 @@
     let searchToken = 0;
 
     async function onQueryChange(raw: string | number | null) {
+        // Trim for the search only — never write the trimmed value back into
+        // `query`. Doing so ate the trailing space of every word, so a
+        // two-word search ("greek yoghurt") collapsed to "greekyoghurt".
         const text = String(raw ?? '').trim();
-        query.value = text;
         if (text.length < 2) {
             results.value = [];
             failedSources.value = [];
@@ -158,7 +164,7 @@
             if (token !== searchToken) return;
             results.value = res.results;
             isBarcode.value = res.is_barcode;
-            failedSources.value = res.sources_failed.map((f) => f.source);
+            failedSources.value = res.sources_failed.map((f) => f.source_label ?? f.source);
             anySourceReady.value = res.sources_queried.length > 0;
         } catch (err) {
             if (token === searchToken) notifyError('Could not search for foods.', err);

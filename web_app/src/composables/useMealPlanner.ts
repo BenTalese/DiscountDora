@@ -7,7 +7,7 @@ import { useReducedMotion } from 'src/composables/useReducedMotion';
 import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
-import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
+import type { MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
 import type { Recipe } from 'src/models/recipe';
 import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -124,6 +124,15 @@ export function useMealPlanner() {
     }
     function otherSlotEntries(dayIso: string): MealPlanEntry[] {
         return dayEntries(dayIso).filter((e) => !slotNameSet.value.has(e.slot));
+    }
+
+    // FU-637 — one day's planned calories, summed server-side and looked up
+    // by date here. The lookup is presentation; the sum is not (a cross-entity
+    // aggregate belongs to the server).
+    function dayNutrition(dayIso: string): MealPlanDayNutrition | null {
+        return (focusedPlan.value?.day_nutrition ?? []).find(
+            (d) => toIso(d.scheduled_for) === dayIso,
+        ) ?? null;
     }
 
     const shortfallRecipeIds = computed(() => new Set(shortfall.value.map((s) => s.recipe_id)));
@@ -884,6 +893,7 @@ export function useMealPlanner() {
         focusedMonday,
         focusedPlan,
         weekDays,
+        dayNutrition,
         weekRangeLabel,
         slotNames,
         slotNameSet,

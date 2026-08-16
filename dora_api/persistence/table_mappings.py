@@ -280,6 +280,13 @@ def configure_mappings(db: SQLAlchemy):
             "nutrition_food_id", UUIDType,
             ForeignKey("NutritionFood.id", ondelete="SET NULL"), nullable=True,
         ),
+        # "Never suggest a food for this one" — the opt-out behind the
+        # auto-matcher. Indexed because the unmatched-items query filters on
+        # it on every load of the matching page.
+        Column(
+            "nutrition_ignored", Boolean,
+            nullable=False, server_default=false(), index=True,
+        ),
     )
 
     # Nutrition catalogue — a cache of foods from the configured sources.
@@ -297,7 +304,11 @@ def configure_mappings(db: SQLAlchemy):
         Column("kcal_per_100g", Float, nullable=True),
         Column("protein_g_per_100g", Float, nullable=True),
         Column("carbs_g_per_100g", Float, nullable=True),
+        Column("sugars_g_per_100g", Float, nullable=True),
         Column("fat_g_per_100g", Float, nullable=True),
+        Column("saturated_fat_g_per_100g", Float, nullable=True),
+        Column("fibre_g_per_100g", Float, nullable=True),
+        Column("sodium_mg_per_100g", Float, nullable=True),
         Column("imported_at", DateTime(timezone=True), nullable=True),
         UniqueConstraint("source", "source_ref", name="uq_nutrition_food_source_ref"),
     )

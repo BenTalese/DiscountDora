@@ -108,7 +108,7 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { ICONS } from 'src/style/icons';
     import { computed, onMounted, ref } from 'vue';
-    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import { openQrSheetAsync } from 'src/composables/useQrLabels';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useStockItemStore } from 'src/stores/stockItemStore';
 
@@ -146,13 +146,10 @@
     }
 
     function openSheet(args: { allItems: boolean }) {
-        const baseUrl = resolveBaseURL();
-        const ids = args.allItems ? '' : selectedItemIds.value.join(',');
-        const url =
-            `${baseUrl}/stock-items/qr/sheet` +
-            `?layout=${encodeURIComponent(sheetLayout.value)}` +
-            (ids ? `&ids=${encodeURIComponent(ids)}` : '');
-        window.open(url, '_blank', 'noopener');
+        void openQrSheetAsync({
+            layout: sheetLayout.value,
+            ...(args.allItems ? {} : { ids: selectedItemIds.value }),
+        });
     }
 
     onMounted(async () => {

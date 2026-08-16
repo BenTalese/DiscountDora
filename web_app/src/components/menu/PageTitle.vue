@@ -1,5 +1,8 @@
 <template>
-    <q-toolbar-title shrink class="dora-pageTitle text-accent">
+    <!-- No `shrink`: with flex: 0 0 auto a long title claimed its full
+         content width and got pushed out of the toolbar instead of
+         truncating. Flexing lets Quasar's built-in ellipsis do its job. -->
+    <q-toolbar-title class="dora-pageTitle text-accent">
         {{ label }}
     </q-toolbar-title>
 </template>
@@ -17,5 +20,15 @@
         font-size: calc(var(--font-size-2xl) * 1rem);
         margin-top: 4px;
         opacity: 0.9;
+        min-width: 0;
+    }
+
+    /* Mobile only surface for this component, but the step down is kept in
+       a query so a future desktop caller isn't silently shrunk too. One
+       token step (2xl → xl) — still well clear of the 12px D-003 floor. */
+    @media (max-width: 1023px) {
+        .dora-pageTitle {
+            font-size: calc(var(--font-size-xl) * 1rem);
+        }
     }
 </style>

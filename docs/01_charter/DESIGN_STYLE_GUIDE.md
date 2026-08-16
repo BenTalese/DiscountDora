@@ -552,6 +552,26 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   PATCHes are independent, and a double-toggle is last-write-wins, which is
   already the behaviour the user asked for.
 
+### D-020 — A brand colour used as an *indicator* reads from the indicator token
+- **Rule:** when `secondary` has to paint a **mark against the page** — a row
+  stripe, an active filter chip, a coloured count — read
+  `--brand-secondary-strong`, never `--q-secondary` / `--brand-secondary`. The
+  plain token is **surface-grade**: in every dark theme it is the toolbar
+  *background*, so an indicator painted in it sits at the page's own lightness.
+  Each dark theme overrides the `-strong` variant with a lifted tone; light
+  themes inherit, because there the surface-grade colour already reads as a mark.
+  Same discipline applies if a future brand colour picks up an indicator role —
+  add the `-strong` sibling rather than reaching for the surface value.
+- **Why:** measured 2026-08-16 across the five dark themes, the Essential row
+  stripe / Essential + Open filter chips / Essential footer count sat at
+  **1.45–4.74:1** against the sunken surface (cherry-cola-dark being effectively
+  invisible); the same three marks now measure **7.31–8.48:1**. Reported by the
+  owner as "too dark in dark mode" on two separate surfaces before the shared
+  cause was found — a per-surface patch would have missed the third.
+- **Violation signal:** `var(--q-secondary)` or `var(--brand-secondary)` in a
+  `background`/`border-color`/`color` on something that is not a surface, or a
+  Quasar `color="secondary"` / `text-secondary` class on a chip, badge or count.
+
 ---
 
 ## Exemplars (the bar — protect these)

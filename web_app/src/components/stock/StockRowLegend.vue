@@ -66,6 +66,40 @@
                 <span class="stock-row-legend__row-swatch stock-row-legend__row-swatch--check" aria-hidden="true" />
                 <span class="stock-row-legend__text">Pulsing level box — due for a stocktake check</span>
             </div>
+
+            <!-- 2026-08-15: the two "ring" indicators. Both were previously
+                 chips with their own words next to the row's buttons; now
+                 they're rings ON those buttons, which means they need
+                 decoding here exactly like the outlines above do (D-013).
+                 Swatches mirror the real box-shadow recipes so the mapping
+                 stays visual rather than verbal. -->
+            <div class="stock-row-legend__section-label">Rings on the buttons</div>
+            <div class="stock-row-legend__item row items-center no-wrap">
+                <span class="stock-row-legend__swatch stock-row-legend__swatch--square stock-row-legend__swatch--belief" aria-hidden="true" />
+                <span class="stock-row-legend__text">
+                    Amber ring on the level box — Dora thinks the level is
+                    something else. Open the picker for her reasoning.
+                </span>
+            </div>
+            <div class="stock-row-legend__item row items-center no-wrap">
+                <span class="stock-row-legend__swatch stock-row-legend__swatch--cart stock-row-legend__swatch--buy" aria-hidden="true" />
+                <span class="stock-row-legend__text">
+                    Green ring on the cart button — worth buying now
+                </span>
+            </div>
+            <div class="stock-row-legend__item row items-center no-wrap">
+                <span class="stock-row-legend__swatch stock-row-legend__swatch--cart stock-row-legend__swatch--wait" aria-hidden="true" />
+                <span class="stock-row-legend__text">
+                    Amber ring on the cart button — might be worth waiting
+                </span>
+            </div>
+            <div class="stock-row-legend__item row items-center no-wrap">
+                <span class="stock-row-legend__swatch stock-row-legend__swatch--cart stock-row-legend__swatch--skip" aria-hidden="true" />
+                <span class="stock-row-legend__text">
+                    Red ring on the cart button — probably skip. Hover any of
+                    the three for the reasons behind it.
+                </span>
+            </div>
         </div>
     </div>
 </template>
@@ -145,6 +179,42 @@
         border: 1px dashed color-mix(in srgb, var(--text-primary) 24%, transparent);
     }
 
+    /* Ring swatches. Same offset-ring recipe the real controls use (an inner
+       ring painted in the surface colour makes the gap, the outer one is the
+       line), scaled down and given margin so the ring isn't clipped by its
+       neighbours. `--belief` is the square level box; `--cart` is the round
+       cart button, so it carries the pill radius. */
+    .stock-row-legend__swatch--belief {
+        background: var(--surface-sunken);
+        margin: 4px;
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 3px var(--semantic-warning);
+    }
+    .stock-row-legend__swatch--cart {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin: 4px;
+        border-radius: var(--radius-full, 999px);
+        background: var(--surface-sunken);
+    }
+    .stock-row-legend__swatch--buy {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 3px var(--semantic-positive);
+    }
+    .stock-row-legend__swatch--wait {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 3px var(--semantic-warning);
+    }
+    .stock-row-legend__swatch--skip {
+        box-shadow:
+            0 0 0 2px var(--surface-component),
+            0 0 0 3px var(--semantic-negative);
+    }
+
     /* Row-highlight swatches — a mini row (28×18) carrying the same
        treatment the real row does, so the mapping is visual not verbal. */
     .stock-row-legend__row-swatch {
@@ -157,7 +227,7 @@
     }
     .stock-row-legend__row-swatch--essential {
         /* left-edge secondary stripe, matching StockItemRow. */
-        border-left: 5px solid var(--q-secondary);
+        border-left: 5px solid var(--brand-secondary-strong);
     }
     .stock-row-legend__row-swatch--warn {
         border-color: var(--q-warning);

@@ -22,6 +22,56 @@ top-to-bottom.
 
 ---
 
+## Stock overview: filter feedback (2026-08-16)
+_(All four items were agent-verified live on a scratch install and measured — icon-only Clear/Filters at 375px, the input-filter row on one 42px scrolling line with four equal 180px controls, the essential stripe's gap 7px→12px, and the secondary indicator tone 2.80:1→8.48:1 in pesto-dark (all five dark themes now 7.31–8.48:1, was 1.45–4.74:1). Evidence in `DORA_VERIFY_TRIAGE.md`. What's left is a look-and-feel call only you can make.)_
+- [ ] **The lifted "Essential/Open" tone in the other four dark themes** — pesto-dark was the one walked live. Cherry Cola Dark is the one to eyeball: its secondary is a near-black red, so the lifted version was pushed toward clay (hue 20) to stay clear of the alert red. Check the stripe/chip doesn't read as an alert.
+
+## Stock-item detail: feedback batch (2026-08-16)
+_(The Location-overflow fix was agent-verified live at 375px + 320px and its line deleted — evidence in `DORA_VERIFY_TRIAGE.md`. The rest below needs your eyes: it needs a re-imported dataset, a real device, or your own install. Tests green: 1772 backend, 434 vitest, vue-tsc + eslint clean.)_
+- [ ] ⚠️ **QR button + "Print one"** — the reported failure never reproduced statically (see FU-648). Confirm both work; if they now do, glance at the network tab and note what origin the API calls use, so FU-648 can be closed for the right reason.
+- [ ] **QR labels elsewhere** — Settings → Kitchen setup → QR labels ("Print all" and a selection), and the stock list's bulk QR action. Same rewrite, same risk.
+- [ ] **Nutrition search** — type "greek yoghurt" into the food picker and confirm the space survives.
+- [ ] **Stock-take toggle** — mute an item from stock-take mode, then un-mute it from the item's detail page and confirm it rejoins the queue.
+- [ ] **Nutrition Details table** — needs a **re-imported** dataset to show anything beyond the old four; check sodium reads as a sane mg figure (an OFF-sourced food is the one that goes through a unit conversion).
+- [ ] **"No food data installed" messaging** — on an install with no dataset downloaded, confirm Settings → Kitchen setup → **Nutrition matching** leads with the banner (+ "Set up food data" for an admin) rather than "nothing to match", and that Admin → System → Nutrition shows the "manual search works, suggestions don't" line when Open Food Facts is on but no dataset is installed. Then download a dataset and confirm suggestions appear on both that page and a stock item.
+- [ ] **The two collapsed cards** — "Dora thinks" (including on an item where she *agrees*, which never rendered before) and the buy verdict; check both expand, and that the verdict's icon reads as money/cart rather than a stock level.
+
+## Nutrition matching against a real USDA dataset (2026-08-15)
+_(The surface itself was agent-verified live end to end on a scratch install — suggestion panel, accept, accept-all touching only the confident band, "Not a food" + undo, the complex-mode nav gate, and the five non-food items correctly matching nothing. What's below needs the real catalogue, which the agent's scratch install didn't have.)_
+- [ ] With the **real USDA import** loaded (~7,800 foods, not the agent's 20-row stand-in), open **Settings → Kitchen setup → Nutrition matching** and judge the **match quality on your own pantry** — the scoring floors are calibrated against a hand-built set, so this is the first honest read on how often it's right, too eager, or too shy.
+- [ ] Same page, same dataset: confirm it **loads in reasonable time**. It reads the catalogue once per load and scores in memory; fine at 20 rows and expected to be fine at 7,800, but unmeasured.
+
+## Stock overview: mobile rework + row consolidation (2026-08-15)
+_(Most of this was agent-verified live at 375px and 1280px — toolbar collapse, second-row search, no mobile autofocus, quick-filter row + sideways scroll, no (?) icons, legend moved to Help, location/price hidden on mobile, cluster 43%→30% of row width, uniform 64/76px rows, "Needs check" now counting + clearing, bulk auto-exit, both belief and verdict rings with their tooltips, level-menu row highlight, both camera-error branches. What's left below is what the agent's pane genuinely can't reach.)_
+- [ ] **Scroll a pantry of 50+ items on a real device** and confirm the jumpiness is gone. The virtualised branch only kicks in above 50 items and it renders nothing in the agent's browser (that pane is `document.hidden`, so `requestAnimationFrame` never fires and Quasar's slice never settles — a harness artifact, reproduced on unmodified code too). This is the one fix that can't be confirmed without eyes.
+- [ ] Same list, **on a phone** — rows should be uniform and the two-line names should still fit their 76px row.
+- [ ] The **stocktake pulse**: strong enough to notice out of the corner of your eye, not so strong it's irritating to sit next to. Purely a taste call.
+- [ ] The **buy-verdict ring** on the cart button in a **light theme** (agent checked dark only) — the ring's inner "gap" paints `--surface-component`, so confirm it reads as a gap and not a white halo.
+- [ ] Same for the **amber "Dora thinks" ring** on the level picker in a light theme.
+- [ ] **On your phone, in the Android app:** turn scanning on and confirm the camera **does** open (the app's origin is secure, so it should scan against your plain-http instance). This is the claim the new messages make — worth proving once before they keep telling people it's true.
+- [ ] Same phone, in a **browser** at your LAN http address: the scanner should open to the "camera needs a secure connection" panel with a working type-a-barcode box, and Settings → Admin → System should carry the matching warning under the Scanning toggle. *(Both branches were agent-verified by stubbing, but never against a genuinely insecure origin.)*
+
+## Nutrition: download + link, re-test in YOUR container (2026-08-15) — origin FU-639
+_(Four bugs fixed after the owner's report. Verified on a local instance against the real USDA release — 7,793 foods + 14,449 portions imported, searched, and linked. **Not verified in the production container**, which is where you hit it: that instance wasn't reachable from the agent sandbox. Rebuild the image first — the fixes are server-side.)_
+- [ ] **Settings → Admin → System → Nutrition → complex → Download** on **USDA SR Legacy**: moves Downloading → Reading → Saving → "Installed and searchable" with a food count in the thousands (expect ~7,793).
+- [ ] Search a stock item's **Find a food** for "banana": local USDA results appear with a source badge, **no** "couldn't reach" warning.
+- [ ] Pick one → the stock item shows the food, and it survives a reload.
+- [ ] Foundation dataset downloads too (~3.8MB, fewer foods).
+- [ ] If a live source is briefly busy, the warning now names it properly ("Open Food Facts", not "off") and suggests the offline database.
+
+## Nutrition: recipe rollup card (2026-08-14) — origin FU-635
+_(Math + payload verified: 16 unit + 4 e2e, plus a live check on a real recipe (469 kcal/serving from 2 of 3 ingredients, third reported unconvertible). **The card's render is unseen** — `#/cookbook/<id>` won't mount in the agent's pane, same limitation as the picker. Needs a linked recipe: complex mode + a dataset + 2-3 ingredients linked to foods.)_
+- [ ] Recipe detail in **complex** mode shows a **Nutrition (per serving)** card: kcal, then protein/carbs/fat, then a **"From N of M ingredients"** line, then a bullet per gap ("2 stock items not linked to a food").
+- [ ] The typed **"kcal per serving"** field is gone from the edit form, and the header kcal chip shows the rolled-up number.
+- [ ] A recipe with **no servings** reads **"Nutrition (whole recipe)"** and suggests adding servings.
+- [ ] A recipe with nothing linked shows "Nothing to add up yet" with the coverage line, not an empty card or a zero.
+- [ ] Switch back to **simple**: the card is gone, the typed kcal field and its card are back.
+- [ ] **Cookbook cards** show a kcal/serving chip; a part-covered recipe's chip is outlined and reads "(part)" with a tooltip.
+- [ ] **"Kcal ≤" filter** narrows the list in complex mode, and a "(part)" recipe is *not* filtered out by it. "Kcal" sort ranks solid figures first, part-covered ones last.
+- [ ] **Meal planner:** each day header shows "N kcal"; a day where some meals have no figure reads "N kcal (1/2)". *(Agent-verified live in simple mode — day totals, the partial case, and silence when nutrition is off all render correctly; worth a second look in complex mode.)*
+- [ ] **Lighter swaps:** a planned meal's menu shows **Find a lighter option…** (and *doesn't* on a meal with no solid figure). The dialog lists lighter recipes with a "−N kcal" and a reason; picking one swaps it into the plan and the toast confirms. *(Agent-verified via the API — from a 900 kcal meal it returned 3 ranked candidates with correct chips, and correctly skipped recipes already on the week. **The menu item and dialog have never been rendered**: Quasar menus can't be driven in the agent's pane, so this is the eyes-on half.)*
+- [ ] **FU-638 check while you're here:** do recipe cards render on `#/cookbook` at all? They didn't in the agent's browser pane (empty state + footer counting 11), and it couldn't be attributed — see the follow-up.
+
 ## Nutrition: stock-item food picker (2026-08-14) — origin FU-635
 _(API layer verified: 15 e2e incl. link / unlink / null-default / unrelated-patch round-trips, plus live lookup against the real OFF API. **The picker's visual render could not be verified** — `#/stock/<id>` won't mount in the agent's browser pane at all (dashboard + Settings routes do); that's a pane limitation, not a code fault. These are eyes-on checks.)_
 - [ ] With nutrition on **complex**, a stock item's detail shows a **Nutrition** row reading "Not linked" with a **Find a food** button. On **simple** or **off**, the row is absent entirely (not greyed out).

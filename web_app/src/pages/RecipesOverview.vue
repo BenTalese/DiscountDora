@@ -251,7 +251,7 @@
             />
             <!-- kcal upper-bound filter (gated). -->
             <q-input
-                v-if="nutritionEnabled"
+                v-if="kcalAxisAvailable"
                 v-model.number="kcalMax"
                 dense
                 outlined
@@ -459,10 +459,17 @@
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
     const { showRecipeImages, setRecipeImages } = useImagePrefs();
-    // nutrition flag gates the kcal axis + filter.
-    const { nutritionEnabled } = useNutritionMode();
+    // FU-637 — the kcal axis works in both modes now. Which figure a recipe
+    // carries (typed in simple, rolled-up in complex) and whether it's solid
+    // enough to judge on are both the server's call — the list DTO ships the
+    // answer, so nothing is re-derived here (R-003).
+    const { nutritionEnabled: kcalAxisAvailable } = useNutritionMode();
+    const kcalOf = (recipe: Recipe) => ({
+        value: recipe.kcal_per_serving ?? null,
+        judgeable: recipe.kcal_is_reliable === true,
+    });
     const SORT_OPTIONS = computed<{ label: string; value: SortKey }[]>(() =>
-        nutritionEnabled.value
+        kcalAxisAvailable.value
             ? [...STATIC_SORT_OPTIONS, { label: 'Kcal', value: 'kcal' as SortKey }]
             : STATIC_SORT_OPTIONS,
     );
@@ -749,17 +756,18 @@
             ) {
                 return false;
             }
-            // "Kcal ≤" filter. Only active when nutrition
-            // is enabled. Recipes without a kcal value pass through (we
-            // don't penalise unannotated recipes).
+            // "Kcal ≤" filter. Recipes we can't put a trustworthy number on
+            // pass through rather than being hidden — that covers both an
+            // unannotated recipe and a complex-mode rollup too thin to judge
+            // (excluding a recipe on a 1-of-8 estimate would mislead exactly
+            // the person filtering by calories).
             if (
-                nutritionEnabled.value
+                kcalAxisAvailable.value
                 && kcalMax.value !== null
                 && Number.isFinite(kcalMax.value)
-                && r.kcal !== null
-                && r.kcal > kcalMax.value
             ) {
-                return false;
+                const { value, judgeable } = kcalOf(r);
+                if (judgeable && value !== null && value > kcalMax.value) return false;
             }
 
             // '__none__' is a real value meaning "uncategorised".
@@ -889,8 +897,13 @@
                     return (av - bv) * dirSign;
                 }
                 case 'kcal': {
-                    const av = a.kcal;
-                    const bv = b.kcal;
+                    // Thin estimates sort last alongside "no figure at all" —
+                    // ranking on one would put a half-known recipe above a
+                    // fully-known one on nothing but missing data.
+                    const ak = kcalOf(a);
+                    const bk = kcalOf(b);
+                    const av = ak.judgeable ? ak.value : null;
+                    const bv = bk.judgeable ? bk.value : null;
                     if (av === null && bv === null) return a.name.localeCompare(b.name);
                     if (av === null) return 1;
                     if (bv === null) return -1;
@@ -1056,10 +1069,10 @@
     });
 
     // if the user had Kcal as their sort axis and then the
-    // nutrition opt-in flips off (admin disable, or user picks Off in
-    // Settings), snap back to Name so the picker doesn't show an
-    // orphaned value.
-    watch(nutritionEnabled, (on) => {
+    // nutrition mode leaves simple (off, or complex where the figure is
+    // derived per-recipe instead), snap back to Name so the picker doesn't
+    // show an orphaned value.
+    watch(kcalAxisAvailable, (on) => {
         if (!on && sortBy.value === 'kcal') sortBy.value = 'name';
     });
 

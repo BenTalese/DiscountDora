@@ -30,6 +30,10 @@ def _item(level_sequence, name="item"):
         name=name,
         stock_level=_level(level_sequence) if level_sequence is not None else None,
         stock_location=None,
+        # Echoed onto the ingredient DTO. None here keeps these cookability
+        # cases about stock level only — the at-risk chips are their own
+        # tests (`test_recipe_expiring_ingredients.py`).
+        expiry_date=None,
     )
 
 

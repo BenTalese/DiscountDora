@@ -172,6 +172,11 @@ export type RecipeFilterArgs = {
      *  in-stock ingredient expiring within the horizon, and populate
      *  `expiring_ingredient_count` on the returned recipes. */
     expiring_within_days?: number;
+    /** Standard pagination. Omitted = the server's defaults (page 1,
+     *  limit 50) — which silently truncates any cookbook past 50
+     *  recipes, so list surfaces page with `getAllPagesAsync` instead. */
+    page?: number;
+    limit?: number;
 };
 
 export default class RecipeApiService {
@@ -206,6 +211,34 @@ export default class RecipeApiService {
     getAllAsync = async (filters?: RecipeFilterArgs): Promise<Page<Recipe>> => {
         const qs = encodeFilterQueryString(filters);
         return await this.httpClient.get<Page<Recipe>>(`/recipes${qs}`);
+    };
+
+    /** Load every recipe by paging until the server stops returning a full
+     *  page. Same shape and same reason as `StockItemApiService`'s (FU-035):
+     *  the cookbook filters and searches client-side over whatever the store
+     *  holds, so a single default page silently hid every recipe past the
+     *  50th — a recipe could sit on the meal planner yet be unfindable in
+     *  the cookbook with zero filters on. `limit` is capped server-side at
+     *  `query_options.MAX_LIMIT` (500); we ask for that to minimise
+     *  round-trips. */
+    getAllPagesAsync = async (
+        filters?: RecipeFilterArgs,
+        limit: number = 500,
+    ): Promise<Recipe[]> => {
+        const collected: Recipe[] = [];
+        let page = 1;
+        while (true) {
+            const result = await this.getAllAsync({ ...filters, page, limit });
+            collected.push(...result.items);
+            if (
+                result.items.length < limit
+                || collected.length >= (result.total ?? collected.length)
+            ) {
+                break;
+            }
+            page += 1;
+        }
+        return collected;
     };
 
     /** P2-08 — pulls the canonical tag catalogue + disclaimer. The
@@ -310,6 +343,12 @@ function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
     }
     if (filters.expiring_within_days !== undefined) {
         params.append('expiring_within_days', String(filters.expiring_within_days));
+    }
+    if (filters.page !== undefined) {
+        params.append('page', String(filters.page));
+    }
+    if (filters.limit !== undefined) {
+        params.append('limit', String(filters.limit));
     }
     const out = params.toString();
     return out ? `?${out}` : '';

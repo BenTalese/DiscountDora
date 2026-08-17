@@ -270,16 +270,16 @@
             ) {
                 loadingPickers.value = true;
                 try {
-                    const [templates, recipesResp, plansResp] = await Promise.all([
+                    const [templates, recipeList, plansResp] = await Promise.all([
                         templateApi.getAllAsync().catch(() => []),
-                        recipeApi.getAllAsync().catch(() => ({ items: [] })),
+                        recipeApi.getAllPagesAsync().catch(() => []),
                         mealPlanApi.getAllAsync().catch(() => ({ items: [] })),
                     ]);
                     templateOptions.value = templates.map((t) => ({
                         label: `${t.name} (${t.line_count} item${t.line_count === 1 ? '' : 's'})`,
                         value: t.template_id,
                     }));
-                    recipeOptions.value = (recipesResp.items ?? []).map((r) => {
+                    recipeOptions.value = recipeList.map((r) => {
                         const ingredientIds = (r.ingredients ?? [])
                             .map((i) => i.stock_item_id)
                             .filter((id): id is string => Boolean(id));

@@ -8,6 +8,12 @@
             "port": 5170
         },
         {
+            "name": "dora-backend-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": ["-m", "dora_api.startup"],
+            "port": 5170
+        },
+        {
             "name": "dora-verify-backend",
             "runtimeExecutable": ".venv\\Scripts\\python.exe",
             "runtimeArgs": ["-m", "dora_api.startup"],

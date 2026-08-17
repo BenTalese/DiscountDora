@@ -1,0 +1,144 @@
+"""Per-ingredient at-risk flags on the recipe DTO (owner feedback 2026-08-17).
+
+The cookbook can filter to "uses expiring ingredients", but opening a result
+didn't say *which* ingredient qualified — you were left comparing the list
+against the pantry by hand. `RecipeIngredientDto.is_expiring` / `is_expired`
+carry that answer.
+
+The contract worth pinning is the agreement: an ingredient is flagged under
+exactly the horizon the filter matched on (`EXPIRING_HORIZON_DAYS`), so a
+recipe the filter returned can never open with nothing marked. The 8-to-13-day
+band is the interesting one — it's inside the filter's 14 days but outside the
+client's 7-day expiry *display* band, which is precisely where a client-side
+re-derivation would silently disagree.
+"""
+from datetime import timedelta
+
+import requests
+
+from dora_api.features.recipes.get_recipes import EXPIRING_HORIZON_DAYS
+
+BASE = 'http://localhost:5170/api'
+RECIPES = f"{BASE}/recipes"
+STOCK_ITEMS = f"{BASE}/stock-items"
+
+
+def _household_today():
+    from datetime import date
+    return date.fromisoformat(requests.get(f"{BASE}/meal-plans/today").json()["today"])
+
+
+def _recipe_with_a_linked_ingredient() -> dict:
+    """A seeded recipe whose ingredients include at least one linked row."""
+    items = requests.get(f"{RECIPES}?limit=200").json()["items"]
+    recipe = next(
+        (r for r in items if any(i["stock_item_id"] for i in r["ingredients"])),
+        None,
+    )
+    assert recipe is not None, "seed expected to have a recipe with a linked ingredient"
+    return recipe
+
+
+def _detail(recipe_id: str) -> dict:
+    resp = requests.get(f"{RECIPES}/{recipe_id}")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def _ingredient(recipe: dict, stock_item_id: str) -> dict:
+    return next(i for i in recipe["ingredients"] if i["stock_item_id"] == stock_item_id)
+
+
+def _set_expiry(stock_item_id: str, expiry) -> None:
+    resp = requests.patch(
+        f"{STOCK_ITEMS}/{stock_item_id}",
+        json={"expiry_date": expiry.isoformat() if expiry else None},
+    )
+    assert resp.status_code in (200, 204), resp.text
+
+
+def test__recipe_detail__flags_the_ingredient_that_is_expiring(api):
+    """An ingredient inside the horizon is flagged, and its expiry is echoed
+    so the UI can say when. Ingredients that aren't at risk stay unflagged."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+    expiry = _household_today() + timedelta(days=10)
+
+    _set_expiry(target, expiry)
+
+    detail = _detail(recipe["recipe_id"])
+    flagged = _ingredient(detail, target)
+    assert flagged["is_expiring"] is True, flagged
+    assert flagged["is_expired"] is False, flagged
+    assert flagged["expiry_date"] == expiry.isoformat(), flagged
+
+    # Everything else on the recipe is untouched — the chip marks one row,
+    # it doesn't paint the whole list.
+    others = [
+        i for i in detail["ingredients"]
+        if i["stock_item_id"] and i["stock_item_id"] != target and not i["expiry_date"]
+    ]
+    assert all(i["is_expiring"] is False for i in others), others
+
+
+def test__recipe_detail__flag_agrees_with_the_cookbook_filter(api):
+    """The defect this exists to prevent: a recipe the "uses expiring
+    ingredients" filter returned, opening with nothing marked. Uses a date
+    inside the filter's horizon but outside the client's 7-day display band."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+    assert EXPIRING_HORIZON_DAYS > 7, "the interesting band only exists above the display band"
+
+    _set_expiry(target, _household_today() + timedelta(days=EXPIRING_HORIZON_DAYS - 1))
+
+    filtered = requests.get(
+        f"{RECIPES}?limit=200&expiring_within_days={EXPIRING_HORIZON_DAYS}"
+    ).json()["items"]
+    matched = next((r for r in filtered if r["recipe_id"] == recipe["recipe_id"]), None)
+    assert matched is not None, "recipe should match the filter it was set up for"
+
+    # Whatever the filter counted, the detail page can point at.
+    detail = _detail(recipe["recipe_id"])
+    assert any(i["is_expiring"] for i in detail["ingredients"]), detail["ingredients"]
+    assert _ingredient(detail, target)["is_expiring"] is True
+
+
+def test__recipe_detail__separates_expired_from_expiring(api):
+    """Past its date reads as expired (red), not merely soon (amber)."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+
+    _set_expiry(target, _household_today() - timedelta(days=1))
+
+    flagged = _ingredient(_detail(recipe["recipe_id"]), target)
+    assert flagged["is_expiring"] is True, flagged
+    assert flagged["is_expired"] is True, flagged
+
+
+def test__recipe_detail__ignores_expiry_beyond_the_horizon(api):
+    """Well outside the horizon is not flagged — the chip has to stay rare
+    enough to mean something."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+
+    _set_expiry(target, _household_today() + timedelta(days=EXPIRING_HORIZON_DAYS + 30))
+
+    flagged = _ingredient(_detail(recipe["recipe_id"]), target)
+    assert flagged["is_expiring"] is False, flagged
+    assert flagged["is_expired"] is False, flagged
+
+
+def test__recipe_list__carries_the_same_flags_as_the_detail(api):
+    """List and detail are one contract — the cookbook card, the picker and
+    cook mode all read the same DTO."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+
+    _set_expiry(target, _household_today() + timedelta(days=3))
+
+    listed = next(
+        r for r in requests.get(f"{RECIPES}?limit=200").json()["items"]
+        if r["recipe_id"] == recipe["recipe_id"]
+    )
+    assert _ingredient(listed, target)["is_expiring"] is True
+    assert _ingredient(_detail(recipe["recipe_id"]), target)["is_expiring"] is True

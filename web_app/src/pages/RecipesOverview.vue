@@ -1122,11 +1122,11 @@
         }
         expiringFetchInFlight.value = true;
         try {
-            const page = await recipeApi.getAllAsync({
+            const items = await recipeApi.getAllPagesAsync({
                 expiring_within_days: EXPIRING_FILTER_HORIZON_DAYS,
             });
             const next = new Map<string, number>();
-            for (const r of page.items) {
+            for (const r of items) {
                 next.set(r.recipe_id, r.expiring_ingredient_count ?? 0);
             }
             expiringCountByRecipeId.value = next;

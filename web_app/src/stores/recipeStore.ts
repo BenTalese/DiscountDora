@@ -26,9 +26,12 @@ export const useRecipeStore = defineStore('recipe', () => {
     let collectionsHydrated = false;
     let collectionsInflight: Promise<void> | null = null;
 
+    /** Pages until exhausted — the cookbook does its filtering, searching
+     *  and sorting over this collection, so a single 50-row page made
+     *  every recipe past the first page invisible on the overview. */
     const getRecipesAsync = () =>
-        recipeApiService.getAllAsync().then((page) => {
-            recipes.value = [...page.items].sort((a, b) => collator.compare(a.name, b.name));
+        recipeApiService.getAllPagesAsync().then((items) => {
+            recipes.value = [...items].sort((a, b) => collator.compare(a.name, b.name));
             recipesHydrated.value = true;
         });
 

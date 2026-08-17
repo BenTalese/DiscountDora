@@ -223,6 +223,31 @@
                                             >
                                                 Missing
                                             </q-chip>
+                                            <!-- Feedback 2026-08-17 — which ingredient
+                                                 is the expiring one. Sits beside Missing
+                                                 rather than replacing it: an item can be
+                                                 in stock and about to go off, which is
+                                                 exactly the case worth cooking. -->
+                                            <!-- D-002: `dark` ink, not white. Measured against
+                                                 every theme's semantic tokens, white on the
+                                                 amber chip lands at 1.7–3.0:1 (the floor is
+                                                 4.5); `dark` clears it at 5.5–9.5. The Missing
+                                                 chip above still uses white — that's the
+                                                 app-wide sweep in FU-671, not a difference
+                                                 that means anything. -->
+                                            <q-chip
+                                                v-if="ing.expiringChip"
+                                                dense
+                                                square
+                                                size="sm"
+                                                :color="ing.expiringChip.colour"
+                                                text-color="dark"
+                                                :icon="ing.expiringChip.icon"
+                                                class="q-ml-xs"
+                                            >
+                                                {{ ing.expiringChip.label }}
+                                                <q-tooltip>{{ ing.expiringChip.tooltip }}</q-tooltip>
+                                            </q-chip>
                                         </li>
                                     </ul>
                                 </template>
@@ -1648,6 +1673,50 @@
         const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
         return !item || Boolean(item.is_out_of_stock);
     }
+    // Feedback 2026-08-17 — filtering the cookbook to "uses expiring
+    // ingredients" told you a recipe qualified but not which ingredient made
+    // it qualify, so opening a result left you comparing the list against the
+    // pantry by hand. These read the server's per-ingredient verdict off the
+    // loaded recipe (never the stock store, and never recomputed from the
+    // date) so the chips and that filter share one horizon by construction.
+    //
+    // Keyed by stock item rather than by row: the read view renders the edit
+    // form's ingredients, which carry no `recipe_ingredient_id`. Two rows
+    // pointing at the same pantry item both chip, which is correct anyway.
+    const expiringItems = computed(() => {
+        const map = new Map<string, { expired: boolean; date: string | null }>();
+        for (const ing of recipe.value?.ingredients ?? []) {
+            if (!ing.stock_item_id || !ing.is_expiring) continue;
+            map.set(ing.stock_item_id, {
+                expired: ing.is_expired,
+                date: ing.expiry_date,
+            });
+        }
+        return map;
+    });
+    /** Chip copy + tone for an at-risk ingredient, or null for the rest.
+     *  D-001 escalation: amber for "use it soon", red once it's gone off. */
+    function expiringChipFor(stockItemId: string | null | undefined) {
+        if (!stockItemId) return null;
+        const hit = expiringItems.value.get(stockItemId);
+        if (!hit) return null;
+        // D-006 — the date reads through the household formatter, never a
+        // raw ISO echo.
+        const when = hit.date ? formatLocaleDate(hit.date) : null;
+        return hit.expired
+            ? {
+                label: 'Expired',
+                colour: 'negative',
+                icon: ICONS.error,
+                tooltip: when ? `Expired ${when}` : 'Past its expiry date',
+            }
+            : {
+                label: 'Use soon',
+                colour: 'warning',
+                icon: ICONS.event_busy,
+                tooltip: when ? `Expires ${when}` : 'Expiring soon',
+            };
+    }
     // Cookability is server-owned (Â§3.2): the loaded recipe carries `cookable`
     // and each ingredient carries `is_missing`. We read those off the saved
     // recipe rather than recomputing from stock data â€” the summary reflects the
@@ -1987,17 +2056,29 @@
         return (ing.raw_text ?? '').trim() || '(ingredient)';
     }
     // Ingredients grouped by named section (section order), unsectioned last.
+    //
+    // The rows are a *read model*, not the edit form's rows: each carries the
+    // at-risk chip already resolved, so the template renders one property
+    // instead of calling a lookup four times per ingredient. Everything the
+    // read view derives per-row belongs here for the same reason.
+    type ReadIngredientRow = typeof form.ingredients[number] & {
+        expiringChip: ReturnType<typeof expiringChipFor>;
+    };
     const readIngredientGroups = computed(() => {
+        const toRow = (i: typeof form.ingredients[number]): ReadIngredientRow =>
+            ({ ...i, expiringChip: expiringChipFor(i.stock_item_id) });
         const sections = [...form.sections].sort((a, b) => a.sequence - b.sequence);
-        const groups: Array<{ name: string | null; rows: typeof form.ingredients }> = [];
+        const groups: Array<{ name: string | null; rows: ReadIngredientRow[] }> = [];
         for (const sec of sections) {
-            const rows = form.ingredients.filter((i) => i.section_client_id === sec.client_id);
+            const rows = form.ingredients
+                .filter((i) => i.section_client_id === sec.client_id)
+                .map(toRow);
             if (rows.length > 0) groups.push({ name: sec.name || 'Section', rows });
         }
         const known = new Set(sections.map((s) => s.client_id));
-        const loose = form.ingredients.filter(
-            (i) => !i.section_client_id || !known.has(i.section_client_id),
-        );
+        const loose = form.ingredients
+            .filter((i) => !i.section_client_id || !known.has(i.section_client_id))
+            .map(toRow);
         if (loose.length > 0) groups.push({ name: null, rows: loose });
         return groups;
     });

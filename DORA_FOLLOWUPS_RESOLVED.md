@@ -10,6 +10,17 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-665 — Re-run vue-tsc + eslint over `web_app`
+- **Raised:** 2026-08-17 (cookbook collection-folder removal).
+- **Type:** leftover.
+- **What:** both were run clean over the `RecipesOverview.vue` / `useRecipeDisplay.ts` /
+  `recipe.ts` edits, but the final addition — `web_app/test/unit/recipeMetaLine.spec.ts` —
+  landed after that pass. It's green under vitest; the typecheck/lint sweep over it
+  didn't get to run.
+- **State note:** **Resolved 2026-08-17.** `npx vue-tsc --noEmit -p tsconfig.json` exits
+  0 with no diagnostics across the whole project, and `eslint` is clean over
+  `recipeMetaLine.spec.ts` plus this session's recipe-paging edits.
+
 ## [RESOLVED] FU-653 — Surface the Zero-Input inference engine beyond the stock pages (owner design ask)
 - **Raised:** 2026-08-17 (settings feedback batch). Owner deferred it one turn, then asked for it.
 - **Type:** deferred job (design + build).

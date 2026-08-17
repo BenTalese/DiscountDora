@@ -33,6 +33,19 @@ export type RecipeIngredient = {
      *  it when non-empty for the ingredient label ("1 pound ground
      *  turkey" is more informative than "ground turkey"). */
     raw_text: string | null;
+    /** The linked stock item's expiry date, echoed so a surface can say
+     *  *when* without fetching the stock item. Null when unlinked or unset. */
+    expiry_date: string | null;
+    /** Server-derived "this is one of the at-risk ones", on the same
+     *  contract as `is_missing`: the cookbook's at-risk horizon is a domain
+     *  constant the server owns, and it is deliberately longer than the
+     *  client's expiry *display* band in `helpers/expiryIndicator`. Never
+     *  re-derive this from `expiry_date` — that's how the chips would stop
+     *  agreeing with the "uses expiring ingredients" filter. */
+    is_expiring: boolean;
+    /** Already past its date. True implies `is_expiring`; it only splits
+     *  amber "use it soon" from red "it's gone off". */
+    is_expired: boolean;
 };
 
 /** C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).

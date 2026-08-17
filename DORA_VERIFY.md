@@ -120,6 +120,39 @@ the agent's pane, and the setup screen only exists on a zero-user install.)_
       — no validation error, and Settings → Account afterwards shows no address.
       Then check a bad value (`nope`) is still rejected.
 
+## Recipe page marks the expiring ingredients (2026-08-17)
+
+_(Server half is pinned by `tests/e2e/dora_api/test_recipe_expiring_ingredients.py`
+(5 tests, incl. filter↔chip agreement). The Vue render was never driven — the agent
+can't sign in. Your dev DB already has both cases: **Veggie Stir Fry → Broccoli**
+expires in 1 day, **Vanilla Ice Cream Bowl → Vanilla Ice Cream** expired 3 days ago.)_
+
+- [ ] Open Veggie Stir Fry: Broccoli carries an amber **Use soon** chip; hovering it
+      shows the expiry date in your locale format, not raw ISO.
+- [ ] Open Vanilla Ice Cream Bowl: Vanilla Ice Cream carries a red **Expired** chip.
+- [ ] Ingredients that aren't at risk carry no chip at all, and an item that's both
+      out of stock and expiring shows **Missing** *and* the at-risk chip.
+- [ ] Filter the cookbook to "uses expiring ingredients", open each result, and
+      confirm every one has at least one chip — that agreement is the whole point.
+- [ ] Both themes: the amber chip clears the contrast floor against white chip text
+      (D-002) — it's the one that worries me, `warning` + `text-color="white"`.
+
+## Cookbook shows every recipe, not the first 50 (2026-08-17)
+
+_(Owner-reported: recipes on the meal planner were unfindable in the cookbook
+with zero filters on. Cause was the store taking one 50-row page and filtering
+client-side; the dev DB has 68 recipes. Paging loop is pinned by
+`web_app/test/unit/recipeApiPaging.spec.ts`, but the fix itself was never
+driven in a browser.)_
+
+- [ ] Egg Fried Rice, Spaghetti Aglio e Olio and Tomato Pasta all appear in the
+      cookbook with no filters on, and all three are findable by search.
+- [ ] The **Planned** filter lists every recipe that's actually on the planner.
+- [ ] The counts in the sticky footer read 68 (or whatever `select count(*) from
+      Recipe` says), not 50.
+- [ ] Starting a shopping list **from recipes** offers the whole cookbook in the
+      picker, and the "uses expiring ingredients" filter isn't capped either.
+
 ## Cookbook: toolbar / filters / compact view (2026-08-17)
 
 _(Agent-verified live at 375px: toolbar wraps to two rows with the search box

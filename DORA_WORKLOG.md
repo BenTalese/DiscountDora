@@ -18,6 +18,148 @@ next.
 
 ---
 
+## 2026-08-17 (later 14) — Recipe page marks WHICH ingredient is expiring (owner feedback)
+**Status:** complete, pending a browser walk. Backend **1856 passed / 1 skipped /
+1 xfailed** (+5 new). Frontend 447/449 unchanged (known `stockLevelDot` pair, FU-666).
+vue-tsc 0, eslint clean.
+
+### The ask
+"Using the 'expiring ingredients' filter, there's no way of knowing which are expiring
+when I navigate to a recipe. Perhaps a chip next to the ingredient." Exactly right —
+the filter told you a recipe qualified and then made you diff the ingredient list
+against the pantry by hand.
+
+### Where the truth lives
+The important call was *which* horizon the chip uses. Three numbers were already in
+play: the waste rescue feed's **7** (`waste._DEFAULT_HORIZON_DAYS`), the cookbook
+filter's **14** (hardcoded client-side in `RecipesOverview.vue`), and the client's
+expiry *display* band of **7** (`helpers/expiryIndicator`, explicitly a display band).
+
+Deriving the chip in the client from `expiry_date` would have used the 7-day band and
+so **reproduced the reported bug in a subtler form** — filter to "expiring", open a
+result whose ingredient is 10 days out, see nothing marked. So the verdict is
+server-derived per ingredient, on the same contract as the neighbouring `is_missing`:
+
+- `EXPIRING_HORIZON_DAYS = 14` promoted to a named server constant in `get_recipes.py`,
+  documented against the waste feed's 7 (different job: "rescue now" vs "plan around it
+  this fortnight" — two horizons, but each with one home).
+- `RecipeIngredientDto` gains `expiry_date` (echoed in `from_entity`) plus `is_expiring`
+  / `is_expired`, stamped by a new `_hydrate_expiring_ingredients` — one
+  `load_expiring_stock_item_ids` call per request (the *same* predicate the filter uses,
+  R-003), not one per recipe. Wired into both the list and detail paths.
+- Client renders from that flag and never re-derives it; the model comment says so.
+
+**Deliberate asymmetry, documented in the docstring:** the chip marks optional
+ingredients, the card's count ignores them (it mirrors the rescue feed's ranking). The
+count answers "how much waste would cooking this head off?"; the chip answers "which one
+is it?". So a card badged 2 can open with 3 chips.
+
+### D-002 catch
+The obvious move was to copy the neighbouring Missing chip — `color` + `text-color=
+"white"`. Measured it instead: white on the amber chip is **1.7–3.0:1** across the
+theme tokens, against D-002's 4.5 floor. `text-color="dark"` clears it at 5.5–9.5, so
+the new chips ship correct. The existing white-ink chips are a **17-call-site** app-wide
+pattern (FU-671) — left alone, but that means the recipe row shows a white-ink Missing
+chip beside dark-ink at-risk chips until that sweep lands. Called out for the owner.
+
+### Tests
+`tests/e2e/dora_api/test_recipe_expiring_ingredients.py` (5). The load-bearing one is
+**filter↔chip agreement** at day 13 — inside the filter's horizon, outside the client's
+display band, i.e. exactly where a client-side re-derivation would silently disagree.
+Also: expired-vs-soon split, beyond-horizon stays unflagged, and list/detail parity.
+Fixed a stale `SimpleNamespace` stock-item stub in `test_recipe_cookability.py` rather
+than adding a defensive `getattr` — `expiry_date` is a real long-standing column and a
+getattr default would have hidden the next such gap.
+
+### Close-gate
+- **R-003:** the point of the change. One carve-out remains and is commented in place —
+  the filter's horizon still arrives as a client-supplied param, so the constant is
+  declared in both languages and agrees only by hand → **FU-669** (unifying it needs an
+  explicit param change; a blank-value-means-default shortcut was rejected as magic).
+- **R-021:** `is_expired` compares against `household_today`, matching the at-risk query.
+- **R-035 / D-rules:** D-002 measured and met (above); D-006 — the tooltip date goes
+  through `formatDate`, no raw ISO; D-001 — amber "Use soon" escalating to red
+  "Expired"; B2 — chip is labelled and tooltip'd, not a bare coloured dot.
+- **Componentisation:** the template was calling the chip resolver 4× per row; moved the
+  resolution into `readIngredientGroups` so the read view renders one property. That
+  computed is now an explicit read model rather than the edit form's rows.
+- **ADR check:** no new rule. The "server owns the verdict, client owns the glyph" split
+  is already R-003 + the `is_missing` precedent; this is a straight application.
+- **Ledgers:** FU-669 (horizon duplication), FU-670 (cook mode + edit rows don't show
+  the chip), FU-671 (D-002 chip-ink sweep) opened. Verify item added.
+
+**Next up:** owner's call on FU-670 (cook mode is arguably where this matters most) and
+FU-671. Then the browser walk for both this and later-13.
+
+---
+
+## 2026-08-17 (later 13) — Cookbook was showing only the first 50 recipes (owner bug report)
+**Status:** complete, pending a browser walk. Frontend **447 passed / 2 failed of 449**
+(the 2 are the known `stockLevelDot` pair, now logged as FU-666). vue-tsc exits 0
+project-wide; eslint clean over every touched file.
+
+### The report
+Egg Fried Rice, Spaghetti Aglio e Olio and Tomato Pasta all visible on the meal
+planner, but filtering the cookbook to "Planned" or searching found only Tomato
+Pasta — with **zero filters on**. Reported as fallout from the recent cookbook
+changes (collection folders → flat list, compact rows).
+
+### It wasn't the recent changes
+`RecipesOverview.vue`'s filter chain and the new flat-list render are both fine, and
+the backend's `_hydrate_inference` addition is purely additive. The cause is older
+and was merely *exposed* now:
+
+- `recipeStore.getRecipesAsync()` called `recipeApiService.getAllAsync()` with no
+  pagination args → server default `limit=50` (`query_options.DEFAULT_LIMIT`).
+- The dev DB holds **68** recipes (6 real + 62 "Load recipe NNN" load-test seeds).
+- `paginate()` orders by `id` when no sort is given — random UUIDs, so page 1 is an
+  arbitrary ~73% subset. In `data/dora.dev.db` the real recipes sit at id-order
+  positions 12, 27, 47, **58, 60, 68** — Vanilla Ice Cream Bowl, Spaghetti Aglio e
+  Olio and Cheesy Garlic Bread fall past the cut.
+- The cookbook filters, searches, sorts *and counts* entirely over what the store
+  holds, so the missing 18 are invisible to every control on the page.
+
+The meal planner was unaffected because it fetches its own entries, which is exactly
+why the two surfaces disagreed. **This is FU-035 a second time** — stock items had the
+identical bug and fixed it with a paging loop; recipes never got the same treatment.
+
+### Fix
+Mirrored the stock pattern rather than inventing a new one: `getAllPagesAsync()` on
+`RecipeApiService` (asks for `MAX_LIMIT`=500, stops on a short page or once `total` is
+reached), plus `page`/`limit` on `RecipeFilterArgs`. Three truncated callers moved onto
+it — `recipeStore.getRecipesAsync`, the expiring-ingredients map in `RecipesOverview`,
+and the recipe picker in `NewListDialog`.
+
+New `web_app/test/unit/recipeApiPaging.spec.ts` (4 tests) pins the loop: multi-page
+collection, short first page, exactly-full final page (the infinite-loop shape), and
+filters carried onto every request. This clears the verify-stance bar — a stable
+low-churn contract, cheap in Vitest, expensive to re-check by hand.
+
+### Not done, deliberately
+Left the client-side filtering posture alone (FU-667) — moving 20 filter axes to the
+server is a design job, not a bug fix. Logged FU-668 to sweep the other ~8 list stores
+for the same unpaged-first-page trap; only recipes and stock items are known-good.
+
+### Close-gate
+- **R-003 (state ownership):** unchanged — no domain rule moved into the client; this
+  only makes the client fetch the whole collection the server already offered.
+- **R-016 (lazy hydration):** the `ensureLoadedAsync` / inflight-dedupe contract is
+  untouched; only the fetch beneath it changed.
+- **Reuse over reinvention:** `getAllPagesAsync` is deliberately the same shape and
+  the same doc-comment framing as `StockItemApiService`'s, so the pattern reads as one
+  thing. A shared helper for the two is tempting but they're 12 lines each over
+  different DTOs — noted, not built.
+- **ADR check:** no new rule. "Page until exhausted when the client filters locally"
+  is arguably rule-shaped now it's happened twice — folded into FU-668 instead, so the
+  audit informs the rule rather than the rule preceding the audit.
+- **Ledgers:** FU-666/667/668 opened; **FU-665 resolved** (vue-tsc + eslint both run
+  clean this session, including `recipeMetaLine.spec.ts`).
+
+**Next up:** the DORA_VERIFY walk for this fix (agent couldn't log in to drive it), and
+FU-668's store sweep.
+
+---
+
 ## 2026-08-17 (later 12) — Cookbook collection folders out; first-setup demo-seed 500 fixed
 **Status:** complete. Backend **1851 passed / 1 skipped / 1 xfailed**. Frontend
 **443 / 2** (the known `stockLevelDot` pair). vue-tsc + eslint clean as of the

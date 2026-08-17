@@ -47,6 +47,17 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
 
+# How far ahead the cookbook counts an ingredient as "at risk". Owns the
+# number for both the "Uses expiring ingredients" filter and the per-
+# ingredient `is_expiring` flag below, so a recipe the filter matched can
+# never open with nothing marked (the mismatch the owner hit 2026-08-17).
+#
+# Deliberately NOT the waste feed's 7 (`waste._DEFAULT_HORIZON_DAYS`): that's
+# a one-glance "rescue this now" signal, this is "plan around it this
+# fortnight". Two horizons, two jobs — but each has exactly one home.
+EXPIRING_HORIZON_DAYS = 14
+
+
 @dataclass(frozen=True, slots=True)
 class RecipeIngredientDto:
     recipe_ingredient_id: UUID
@@ -85,6 +96,20 @@ class RecipeIngredientDto:
     # for the label when non-empty ("1 pound ground turkey" is more
     # informative than "ground turkey").
     raw_text: str | None = None
+    # The linked stock item's expiry, echoed so the UI can say *when*
+    # without a second fetch. Null when unlinked or no expiry is set.
+    expiry_date: str | None = None
+    # Server-derived, same shape and same reason as `is_missing` above: the
+    # client must not decide "is this at risk?" for itself, because the
+    # cookbook's horizon (`EXPIRING_HORIZON_DAYS`) is a domain constant while
+    # the client's expiry *display* band is a different, shorter number.
+    # Stamped by `_hydrate_expiring_ingredients` — needs today plus the shared
+    # at-risk query, neither of which `from_entity` has.
+    is_expiring: bool = False
+    # Already past its date. `is_expiring` is true for these too (the at-risk
+    # set includes expired items); this only splits amber "use it soon" from
+    # red "it's gone off", so the client does no date arithmetic of its own.
+    is_expired: bool = False
 
     @classmethod
     def from_entity(cls, ingredient: RecipeIngredient) -> 'RecipeIngredientDto':
@@ -106,6 +131,7 @@ class RecipeIngredientDto:
             section_id = getattr(ingredient, "section_id", None),
             is_optional = getattr(ingredient, "is_optional", False),
             raw_text = getattr(ingredient, "raw_text", None),
+            expiry_date = _Item.expiry_date.isoformat() if _Item and _Item.expiry_date else None,
         )
 
 
@@ -679,6 +705,12 @@ class GetRecipesHandler:
             # expiring within the horizon. Same predicate the rescue feed
             # uses (R-003); count cached on the handler so the hydration
             # step below doesn't recompute it.
+            # R-003 carve-out: the horizon arrives as a request param, and the
+            # cookbook client passes its own copy of `EXPIRING_HORIZON_DAYS`
+            # rather than being told it — so the constant does currently live
+            # in two languages. The per-ingredient chips read the server
+            # constant, so the two agree today; making that structural needs
+            # an explicit param change and is tracked as FU-669.
             _, expiring_counts = count_expiring_ingredients_per_recipe(
                 self.repository, filters.expiring_within_days,
             )
@@ -1010,6 +1042,60 @@ class GetRecipesHandler:
             for d in dtos
         ]
 
+    def _hydrate_expiring_ingredients(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """Mark which ingredients are the at-risk ones.
+
+        `expiring_ingredient_count` above tells the cookbook card *how many*;
+        this tells the recipe page *which*, so filtering to "uses expiring
+        ingredients" and opening a result no longer leaves you hunting for the
+        one that's about to go off (owner feedback 2026-08-17).
+
+        Deliberately the same `load_expiring_stock_item_ids` predicate and the
+        same horizon the filter uses (R-003) — one query for the whole page,
+        not one per recipe, and no way for the two answers to disagree.
+
+        Note this marks *optional* ingredients too, while the card's count
+        ignores them (it mirrors the rescue feed's ranking). That's intended:
+        the count answers "how much waste would cooking this head off?", where
+        an optional garnish shouldn't inflate the number; the chip answers
+        "which of these is the one?", where an expiring garnish is still worth
+        pointing at. So a card badged 2 can open with 3 chips.
+        """
+        if not dtos:
+            return dtos
+        import dataclasses
+
+        at_risk_ids = load_expiring_stock_item_ids(self.repository, EXPIRING_HORIZON_DAYS)
+        if not at_risk_ids:
+            return dtos
+        # R-021 — "expired" is measured against the household's today, not the
+        # server's, exactly as the at-risk query above is. Local import to
+        # match `load_expiring_stock_item_ids` and the other clock callers in
+        # this module.
+        from dora_api.features.app_settings.clock import household_today
+        today = household_today(self.repository)
+
+        out: list[RecipeDto] = []
+        for dto in dtos:
+            if not any(i.stock_item_id in at_risk_ids for i in dto.ingredients):
+                out.append(dto)
+                continue
+            out.append(dataclasses.replace(
+                dto,
+                ingredients=[
+                    i if i.stock_item_id not in at_risk_ids else dataclasses.replace(
+                        i,
+                        is_expiring=True,
+                        is_expired=(
+                            i.expiry_date is not None
+                            and date.fromisoformat(i.expiry_date) < today
+                        ),
+                    )
+                    for i in dto.ingredients
+                ],
+            ))
+        return out
+
     def _hydrate_tags(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """After paginate returns, bulk-load dietary tag + tool ids and rebuild
         the DTOs with them populated. The DTO is frozen, so we replace rather
@@ -1130,8 +1216,10 @@ class GetRecipesHandler:
                 self._hydrate_section_count(
                     self._hydrate_structured_steps_flag(
                         self._hydrate_has_step_images(
-                            self._hydrate_expiring_count(
-                                self._hydrate_tags(page.items)
+                            self._hydrate_expiring_ingredients(
+                                self._hydrate_expiring_count(
+                                    self._hydrate_tags(page.items)
+                                )
                             )
                         )
                     )
@@ -1222,8 +1310,8 @@ class GetRecipesHandler:
             step_images=step_image_dtos,
             has_step_images=bool(step_image_dtos),
         )
-        _Hydrated = self._hydrate_inference(self._hydrate_unallocated(
-            self._hydrate_has_image([_WithAssoc])
+        _Hydrated = self._hydrate_inference(self._hydrate_expiring_ingredients(
+            self._hydrate_unallocated(self._hydrate_has_image([_WithAssoc]))
         ))[0]
         return self._compute_nutrition(self._compute_estimated_cost(_Hydrated), entity)
 

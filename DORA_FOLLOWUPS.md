@@ -52,15 +52,98 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-665 — Re-run vue-tsc + eslint over `web_app`
-- **Raised:** 2026-08-17 (cookbook collection-folder removal).
-- **Type:** leftover.
-- **What:** both were run clean over the `RecipesOverview.vue` / `useRecipeDisplay.ts` /
-  `recipe.ts` edits, but the final addition — `web_app/test/unit/recipeMetaLine.spec.ts` —
-  landed after that pass. It's green under vitest; the typecheck/lint sweep over it
-  didn't get to run.
-- **Why deferred:** session ran out of time.
-- **Recommended resolution:** now (next session start — it's two commands).
+## [OPEN] FU-671 — `text-color="white"` on semantic chips fails the D-002 contrast floor
+- **Raised:** 2026-08-17 (expiring-ingredient chips).
+- **Type:** finding (D-002 / R-035).
+- **What:** measured against the actual theme tokens, white text on the **warning** chip
+  is **1.7–3.0:1** and on the **negative** chip **2.96–3.9:1**. D-002's floor for text
+  this size is **4.5:1**. `text-color="dark"` clears it everywhere (warning 5.5–9.5,
+  negative 4.3–5.6). **17 call sites** app-wide (`color="warning"` + white ×9,
+  `color="negative"` + white ×8) — including the "Uses N expiring" badge on the cookbook
+  card and compact row, and the **Missing** chip sitting directly beside the new at-risk
+  chips on the recipe page.
+- **Why deferred:** the owner asked for an ingredient chip; flipping 17 chips across
+  eight surfaces is a design sweep that wants one decision and one screenshot pass.
+  The new chips were built correct (`dark`), so until the sweep lands the recipe
+  ingredient row shows a white-ink Missing chip next to dark-ink at-risk chips.
+- **Recommended resolution:** now-ish — it's mechanical, and the mixed treatment on the
+  recipe page is visible. Worth deciding at the same time whether B2's prescribed
+  "`-soft` background + semantic ink" replaces solid semantic chips generally.
+
+## [OPEN] FU-670 — At-risk ingredient chips are read-view only (not cook mode / edit rows)
+- **Raised:** 2026-08-17 (expiring-ingredient chips).
+- **Type:** follow-up.
+- **What:** `RecipeIngredientDto.is_expiring` / `is_expired` now ship on both the list
+  and detail endpoints, but only the recipe **read view** renders a chip. The two other
+  places the same ingredients appear don't: **cook mode** (arguably where it matters
+  most — you're standing at the bench deciding what to use) and the **edit-mode
+  ingredient rows** (which already show Missing + stock-level chips, so the slot exists).
+  The data is already on the wire; each is a template addition reading `expiringChip`.
+- **Why deferred:** the owner asked for the recipe page specifically; adding two more
+  surfaces uninvited is the anti-creep principle's exact target.
+- **Recommended resolution:** now, if the owner wants it — it's small and the server
+  half is done. Otherwise opportunistic, next time either surface is open.
+
+## [OPEN] FU-669 — The cookbook's at-risk horizon still lives in two languages
+- **Raised:** 2026-08-17 (expiring-ingredient chips).
+- **Type:** finding (R-003).
+- **What:** `EXPIRING_HORIZON_DAYS = 14` is now the server's constant and the
+  per-ingredient chips read it. The **filter** still takes the horizon as a request
+  param, and `RecipesOverview.vue` passes its own `EXPIRING_FILTER_HORIZON_DAYS = 14`
+  — so the number is declared twice and they agree only by hand. Change one and the
+  filter silently stops matching the chips, which is the exact confusion this work was
+  reported to fix. Documented in place as an R-003 carve-out at both sites.
+- **Why deferred:** unifying it means an explicit API change (a `uses_expiring=true`
+  param the server resolves the horizon for, replacing the client-supplied number).
+  That's a deliberate contract decision, not a bug fix, and a blank-value-means-default
+  shortcut was rejected as magic.
+- **Recommended resolution:** when the recipes filter API is next touched — or now, if
+  you'd rather not carry the hand-sync risk. Needs a call on whether
+  `expiring_within_days` stays for other callers.
+
+## [OPEN] FU-668 — Audit every list store for the unpaged-first-page trap
+- **Raised:** 2026-08-17 (cookbook truncation bug).
+- **Type:** finding.
+- **What:** the cookbook bug (recipes past the 50th invisible because the store took
+  one default page and filtered client-side) is the *second* instance of this exact
+  defect — stock items had it as FU-035. The shape is: a store hydrates via a bare
+  `getAllAsync()`, and a page filters/searches over that collection in the browser.
+  Any such surface silently caps at `DEFAULT_LIMIT` (50) and misreports its own
+  counts. Recipes and stock items now page; **meal plans, shopping lists, shopping-list
+  templates, locations, stock groups and stores have not been checked.** Grep for
+  `getAllAsync()` with no args in `web_app/src/stores/`.
+- **Why deferred:** out of scope for the reported bug; fixing recipes was the ask.
+- **Recommended resolution:** now-ish — it's a read of ~8 stores, and each hit is a
+  user-visible "my data vanished" bug waiting for the install to grow past 50 rows.
+
+## [OPEN] FU-667 — Client-side filtering over a fully-hydrated collection is the real
+  design smell behind FU-668
+- **Raised:** 2026-08-17 (cookbook truncation bug).
+- **Type:** finding.
+- **What:** paging-until-exhausted fixes the correctness bug but keeps the underlying
+  posture: the cookbook downloads every recipe (with ingredients, stock levels and
+  locations eager-loaded) to filter and search 20-odd axes in the browser. That's a
+  growing payload and it sits awkwardly against R-003 — the server already owns
+  `cookable` / `max_missing` / `expiring_within_days` as query params, and the client
+  re-implements the rest. Not urgent at personal-cookbook scale (68 recipes today);
+  worth a decision before it's 500.
+- **Why deferred:** moving 20 filter axes server-side is a design job, not a bug fix,
+  and the charter's anti-creep principle says fix the reported defect first.
+- **Recommended resolution:** later — when a cookbook/pantry gets big enough to feel
+  it, or opportunistically alongside any other recipes-list work.
+
+## [OPEN] FU-666 — `stockLevelDot.spec.ts` has two failing tests on a clean tree
+- **Raised:** 2026-08-17 (cookbook truncation bug).
+- **Type:** finding.
+- **What:** "colours by canonical sequence" and "falls back to the sunken neutral"
+  both fail. Confirmed **pre-existing** — stashed all of this session's changes and
+  they still fail, so nothing in the recipe work caused them. They're the "known
+  `stockLevelDot` pair" the 2026-08-17 (later 12) worklog entry already counts as
+  expected-red, which means the frontend suite has been shipping 2/449 red for at
+  least a session without anyone deciding whether the component or the spec is wrong.
+- **Why deferred:** unrelated surface; would have been scope creep on a bug fix.
+- **Recommended resolution:** opportunistic, but decide *something* — either fix it or
+  mark it skipped with a reason. A permanently-red suite trains everyone to ignore it.
 
 ## [OPEN] FU-664 — Handler call sites can drift from entity signatures silently
 - **Raised:** 2026-08-17 (first-setup onboarding bug).

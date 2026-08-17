@@ -89,7 +89,7 @@
     import { useUnlinkedIngredientsStore } from 'src/stores/unlinkedIngredientsStore';
     import BaseButton from 'src/components/BaseButton.vue';
     import DonateButton from 'src/components/donate/DonateButton.vue';
-    import SettingsNavGroup, { type SettingsNavEntry, type SettingsNavLeaf } from 'src/components/settings/SettingsNavGroup.vue';
+    import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
     import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
@@ -192,46 +192,53 @@
         return base;
     });
 
-    const adminSystemItems = computed<SettingsNavLeaf[]>(() => {
-        const items: SettingsNavLeaf[] = [
-            { path: '/settings/admin/system/region', label: 'Region & locale', icon: ICONS.language },
-            { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
-            { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
-            { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
-            { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
-            { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
-            { path: '/settings/admin/system/nutrition', label: 'Nutrition', icon: ICONS.monitor_heart },
-            { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
-        ];
-        items.push(
-            // operational config that used to be env-only.
-            { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
-            { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
-            { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
-            { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
-        );
-        return items;
-    });
-
-    const adminSections = computed<SettingsNavEntry[]>(() => [
+    // Owner call 2026-08-17 — Admin used to be ONE group ("Admin · global")
+    // whose contents were mostly buried under a "System" sub-header, so the
+    // sidebar read as a single undifferentiated pile with an arbitrary nested
+    // level. It's now shaped exactly like the personal side: several
+    // top-level groups, each a flat list of destinations, no sub-headers
+    // anywhere. The URLs are untouched — this is purely how they're grouped
+    // in the nav, so every existing deep link and bookmark still resolves.
+    //
+    // The grouping answers "what am I here to change?": who can get in
+    // (Users) · what this install *is* (Install) · the household defaults the
+    // kitchen features read (Kitchen defaults) · how Dora reaches people
+    // (Messaging) · and the data itself, plus the keys and the paper trail
+    // over it (Data & access).
+    const adminUsers: SettingsNavEntry[] = [
         { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
-        {
-            subheader: 'System',
-            items: adminSystemItems.value,
-        },
-        // Data sub-group: relocated from the retired `/data`
-        // shell. Backup & restore + Import land here so their chrome
-        // matches every other Settings page.
-        {
-            subheader: 'Data',
-            items: [
-                { path: '/settings/admin/data/backup', label: 'Backup & restore', icon: ICONS.cloud_download },
-                { path: '/settings/admin/data/import', label: 'Import', icon: ICONS.file_upload },
-            ],
-        },
-        { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.fact_check },
+    ];
+
+    const adminInstall: SettingsNavEntry[] = [
+        { path: '/settings/admin/system/region', label: 'Region & locale', icon: ICONS.language },
+        { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
+        { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
+    ];
+
+    const adminKitchenDefaults: SettingsNavEntry[] = [
+        { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
+        { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
+        { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
+        { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
+        { path: '/settings/admin/system/nutrition', label: 'Nutrition', icon: ICONS.monitor_heart },
+        { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
+    ];
+
+    const adminMessaging: SettingsNavEntry[] = [
+        { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
+        { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
+        { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
+    ];
+
+    // Backup & restore + Import were relocated here from the retired `/data`
+    // shell; API access and the Audit log join them because all four are about
+    // data leaving, entering, or being accounted for.
+    const adminData: SettingsNavEntry[] = [
+        { path: '/settings/admin/data/backup', label: 'Backup & restore', icon: ICONS.cloud_download },
+        { path: '/settings/admin/data/import', label: 'Import', icon: ICONS.file_upload },
         { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
-    ]);
+        { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.history },
+    ];
 
     const $q = useQuasar();
     const authStore = useAuthStore();
@@ -296,7 +303,15 @@
 
     const navGroups = computed<SettingsNavGroupDef[]>(() => {
         if (isAdmin.value && mode.value === 'admin') {
-            return [{ label: 'Admin · global', items: adminSections.value, icon: ICONS.shield }];
+            return [
+                // `headerless` for the same reason Account is: it's a single
+                // destination, not a category.
+                { label: 'Users', items: adminUsers, headerless: true },
+                { label: 'Install', items: adminInstall, icon: ICONS.settings },
+                { label: 'Kitchen defaults', items: adminKitchenDefaults, icon: ICONS.restaurant },
+                { label: 'Messaging', items: adminMessaging, icon: ICONS.notifications_active },
+                { label: 'Data & access', items: adminData, icon: ICONS.storage },
+            ];
         }
         return [
             { label: 'Account', items: accountSections, headerless: true },

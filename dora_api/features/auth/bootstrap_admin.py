@@ -48,9 +48,15 @@ class BootstrapAdminRequest(BaseModel):
 
     username: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=255)
-    # Email is required for the admin account so password-reset works on a
-    # fresh install. Public /register still keeps email optional.
-    email: str = Field(min_length=1, max_length=255)
+    # Optional, same as public /register (owner call 2026-08-17). It was
+    # required so a locked-out first admin could self-serve a password
+    # reset — but this is self-hosted software, the person running setup
+    # owns the box, and the realistic recovery from "I forgot the very
+    # first password on a fresh install" is to wipe and start again, not
+    # to wait on an email. Still *required* when ADMIN_BOOTSTRAP_EMAIL is
+    # set, because there it is the credential the operator locked the
+    # endpoint to (see below).
+    email: str | None = Field(default=None, max_length=255)
 
 
 def _gone(detail: str):
@@ -114,7 +120,8 @@ def bootstrap_admin():
     request_body: BootstrapAdminRequest = get_request_body()
 
     issues: dict[str, list[str]] = {}
-    if not is_valid_email(request_body.email):
+    # Blank is fine; a value that isn't an address is not.
+    if request_body.email and not is_valid_email(request_body.email):
         issues["email"] = ["Please enter a valid email address."]
     pwd_error = validate_password(request_body.password)
     if pwd_error:

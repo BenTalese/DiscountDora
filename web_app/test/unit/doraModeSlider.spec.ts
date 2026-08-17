@@ -67,7 +67,7 @@ describe('DoraModeSlider', () => {
         expect(wrapper.emitted('update:modelValue')).toEqual([[true], [true]]);
     });
 
-    it('disabled: inert, out of the tab order, reason in the tooltip', async () => {
+    it('disabled: inert, reason in the tooltip', async () => {
         const wrapper = mountSlider({
             modelValue: false,
             disabled: true,
@@ -75,14 +75,52 @@ describe('DoraModeSlider', () => {
         });
 
         expect(wrapper.classes()).toContain('dora-mode-slider--disabled');
+        expect(wrapper.classes()).not.toContain('dora-mode-slider--actionable');
         expect(wrapper.attributes('aria-disabled')).toBe('true');
-        expect(wrapper.attributes('tabindex')).toBe('-1');
         expect(wrapper.find('.tooltip-stub').text())
             .toBe('Add an API key in Settings to enable AI.');
 
         await wrapper.trigger('click');
         await wrapper.trigger('keydown', { key: ' ' });
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+        expect(wrapper.emitted('disabled-activate')).toBeUndefined();
+    });
+
+    // The control stays reachable by keyboard even while disabled: it carries
+    // `aria-disabled` rather than native disabled semantics precisely so the
+    // actionable variant below can be activated. See the D-016 carve-out note
+    // in the component.
+    it('stays in the tab order while disabled', () => {
+        expect(mountSlider({ modelValue: false, disabled: true }).attributes('tabindex'))
+            .toBe('0');
+    });
+
+    it('actionable-disabled: activating emits disabled-activate, never a flip', async () => {
+        const wrapper = mountSlider({
+            modelValue: false,
+            disabled: true,
+            disabledIsActionable: true,
+            disabledReason: 'Connect a language model in Settings → Assistant first.',
+        });
+
+        expect(wrapper.classes()).toContain('dora-mode-slider--actionable');
+        // The reason alone is a dead end on touch, so the tooltip also says
+        // what tapping will do.
+        expect(wrapper.find('.tooltip-stub').text())
+            .toBe('Connect a language model in Settings → Assistant first. Tap to open Settings.');
+
+        await wrapper.trigger('click');
+        await wrapper.trigger('keydown', { key: 'Enter' });
+
+        expect(wrapper.emitted('disabled-activate')).toHaveLength(2);
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    it('actionable-disabled with no reason still explains the tap', () => {
+        expect(
+            mountSlider({ modelValue: false, disabled: true, disabledIsActionable: true })
+                .find('.tooltip-stub').text(),
+        ).toBe('Tap to set AI mode up in Settings.');
     });
 
     it('disabled without a reason renders no tooltip at all', () => {

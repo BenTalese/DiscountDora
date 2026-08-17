@@ -56,8 +56,11 @@ def _queue_ids(limit: int = 500) -> dict[str, dict]:
 
 
 def _unmute(stock_item_id: str) -> None:
-    """API-created items are born muted (`stocktake_alerts_are_enabled=False`
-    in create_stock_item.py) — flip the Mute off so the item can queue."""
+    """Pin the Mute off explicitly. API-created items are born *unmuted*
+    since 2026-08-17 (`stocktake_alerts_are_enabled=True` in
+    create_stock_item.py), so this is now a guarantee rather than a flip —
+    kept so these tests state the precondition they rely on instead of
+    inheriting it from a default that has already moved once."""
     resp = requests.patch(
         f"{BASE}/stock-items/{stock_item_id}",
         json={"stocktake_alerts_are_enabled": True},

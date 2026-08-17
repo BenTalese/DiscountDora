@@ -503,7 +503,9 @@ class CommitSpreadsheetHandler:
                     id=uuid4(),
                     name=row_name,
                     notes=None,
-                    stocktake_alerts_are_enabled=False,
+                    # Matches the hand-created default (2026-08-17) — an
+                    # imported item is still one the user chose to track.
+                    stocktake_alerts_are_enabled=True,
                     stock_level_id=stock_level_id,
                     stock_location_id=stock_location_id,
                     stock_group_id=stock_group_id,

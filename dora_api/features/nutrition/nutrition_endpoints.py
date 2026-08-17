@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.nutrition.lookup import resolve_food, search_foods
+from dora_api.features.nutrition.nutrients import NUTRIENT_ATTRS
 from dora_api.features.nutrition.dataset_import import (
     dataset_label, default_url, start_import, state_for,
 )
@@ -143,14 +144,10 @@ def resolve_food_endpoint():
         "name": _Food.name,
         "brand": _Food.brand,
         "barcode": _Food.barcode,
-        "kcal_per_100g": _Food.kcal_per_100g,
-        "protein_g_per_100g": _Food.protein_g_per_100g,
-        "carbs_g_per_100g": _Food.carbs_g_per_100g,
-        "sugars_g_per_100g": _Food.sugars_g_per_100g,
-        "fat_g_per_100g": _Food.fat_g_per_100g,
-        "saturated_fat_g_per_100g": _Food.saturated_fat_g_per_100g,
-        "fibre_g_per_100g": _Food.fibre_g_per_100g,
-        "sodium_mg_per_100g": _Food.sodium_mg_per_100g,
+        # Driven off the nutrient table rather than hand-listed — this payload
+        # is the third place the set was written out by hand, and the one most
+        # likely to be forgotten when a nutrient is added (R-002).
+        **{attr: getattr(_Food, attr, None) for attr in NUTRIENT_ATTRS},
     })
 
 

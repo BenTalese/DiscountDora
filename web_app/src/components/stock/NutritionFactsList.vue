@@ -7,55 +7,62 @@
         are both sparse, and a zero is a claim (P12 No-invent / P3 Honest).
         If nothing but energy is known, the caller's summary line has already
         said it and this list stays empty.
+
+        Rows arrive pre-formatted from the server (`nutrients.display_rows`),
+        which owns the label wording, the order, the units and the rounding.
+        This component only decides layout — sub-rows indent, and the optional
+        vitamins-and-minerals block hides behind a disclosure so a food with a
+        rich USDA profile can't push the panel off a phone screen.
     -->
-    <dl v-if="rows.length" class="nutrition-facts">
-        <template v-for="row in rows" :key="row.label">
-            <dt class="nutrition-facts__label dora-text-secondary">{{ row.label }}</dt>
-            <dd class="nutrition-facts__value">{{ row.value }}</dd>
+    <div v-if="panelRows.length || moreRows.length">
+        <dl v-if="panelRows.length" class="nutrition-facts">
+            <template v-for="row in panelRows" :key="row.label">
+                <dt
+                    class="nutrition-facts__label dora-text-secondary"
+                    :class="{ 'nutrition-facts__label--sub': row.indent }"
+                >{{ row.label }}</dt>
+                <dd class="nutrition-facts__value">{{ row.value }}</dd>
+            </template>
+        </dl>
+
+        <template v-if="moreRows.length">
+            <BaseButton
+                variant="ghost"
+                dense
+                size="sm"
+                class="q-mt-xs"
+                :icon="moreExpanded ? ICONS.collapse : ICONS.expand"
+                :label="`Vitamins & minerals (${moreRows.length})`"
+                @click="moreExpanded = !moreExpanded"
+            />
+            <dl v-if="moreExpanded" class="nutrition-facts q-mt-xs">
+                <template v-for="row in moreRows" :key="row.label">
+                    <dt class="nutrition-facts__label dora-text-secondary">{{ row.label }}</dt>
+                    <dd class="nutrition-facts__value">{{ row.value }}</dd>
+                </template>
+            </dl>
         </template>
-    </dl>
+    </div>
 </template>
 
 <script setup lang="ts">
-    import { computed } from 'vue';
+    import { computed, ref } from 'vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import type { LinkedNutritionFood } from 'src/models/stockItemDetail';
+    import { ICONS } from 'src/style/icons';
 
     const props = defineProps<{
         food: LinkedNutritionFood;
     }>();
 
-    type Row = { label: string; value: string };
+    // Collapsed by default, and it stays collapsed across food changes: the
+    // block is a "tell me more" answer, not something the page owes the reader
+    // on arrival.
+    const moreExpanded = ref(false);
 
-    // Whole numbers for energy and sodium (nobody reads 412.7 kcal); one
-    // decimal for the gram figures, where 0.4g vs 0g is a real difference.
-    function grams(value: number | null): string | null {
-        return value === null ? null : `${round(value, 1)} g`;
-    }
-    function whole(value: number | null, unit: string): string | null {
-        return value === null ? null : `${Math.round(value)} ${unit}`;
-    }
-    function round(value: number, places: number): string {
-        return String(Number(value.toFixed(places)));
-    }
-
-    // Order mirrors `dora_api/features/nutrition/nutrients.py` so the app reads
-    // the same top-to-bottom on both sides of the wire.
-    const rows = computed<Row[]>(() => {
-        const f = props.food;
-        const candidates: Array<[string, string | null]> = [
-            ['Energy', whole(f.kcal_per_100g, 'kcal')],
-            ['Protein', grams(f.protein_g_per_100g)],
-            ['Carbohydrate', grams(f.carbs_g_per_100g)],
-            ['— of which sugars', grams(f.sugars_g_per_100g)],
-            ['Fat', grams(f.fat_g_per_100g)],
-            ['— of which saturates', grams(f.saturated_fat_g_per_100g)],
-            ['Fibre', grams(f.fibre_g_per_100g)],
-            ['Sodium', whole(f.sodium_mg_per_100g, 'mg')],
-        ];
-        return candidates
-            .filter((entry): entry is [string, string] => entry[1] !== null)
-            .map(([label, value]) => ({ label, value }));
-    });
+    const rows = computed(() => props.food.nutrient_rows ?? []);
+    const panelRows = computed(() => rows.value.filter((r) => r.group === 'panel'));
+    const moreRows = computed(() => rows.value.filter((r) => r.group === 'more'));
 </script>
 
 <style scoped>
@@ -68,6 +75,12 @@
     }
     .nutrition-facts__label {
         margin: 0;
+    }
+    /* Sub-rows sit under their parent nutrient the way a printed panel sets
+       them — indentation rather than an em-dash prefix, so the label reads as
+       "Saturated" and not "— of which saturates". */
+    .nutrition-facts__label--sub {
+        padding-left: 12px;
     }
     .nutrition-facts__value {
         margin: 0;

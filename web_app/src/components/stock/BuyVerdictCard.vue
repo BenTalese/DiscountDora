@@ -88,12 +88,14 @@
             {{ verdict.data_used.price_samples }} price sample{{
                 verdict.data_used.price_samples === 1 ? '' : 's'
             }}
-            <!-- "shops" read as retailers; these are shopping *trips*. -->
-            <template v-if="verdict.data_used.purchases_last_12mo > 0">
-                across {{ verdict.data_used.purchases_last_12mo }} shopping trip{{
-                    verdict.data_used.purchases_last_12mo === 1 ? '' : 's'
-                }}
-            </template>
+            <!-- Feedback 2026-08-17: the "across N shopping trips" clause is
+                 gone. It read as the denominator of the price samples, which it
+                 isn't — prices arrive from imports, "your prices" entries and
+                 manual edits, none of which are trips — so it implied a
+                 relationship between the two numbers that doesn't exist.
+                 `purchases_last_12mo` is still on the DTO and still feeds the
+                 verdict's own reasoning server-side; it just isn't a footnote
+                 the reader can do anything with. -->
             <template v-if="verdict.data_used.waste_events_last_12mo > 0">
                 · {{ verdict.data_used.waste_events_last_12mo }} waste event{{
                     verdict.data_used.waste_events_last_12mo === 1 ? '' : 's'

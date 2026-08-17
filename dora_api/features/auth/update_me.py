@@ -59,6 +59,10 @@ class UpdateMeRequest(BaseModel):
     # edited via PATCH /app-settings, not here.
     # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
+    # FU-653 — per-surface belief overlays. Same shape as the toggle above.
+    inference_recipes_enabled: bool | None = None
+    inference_shopping_enabled: bool | None = None
+    inference_meal_plan_enabled: bool | None = None
     # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
     # edited via PATCH /app-settings, not here.
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
@@ -96,6 +100,7 @@ class UpdateMeRequest(BaseModel):
     # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Plain bool;
     # null is ignored (leave untouched). Independent of `llm_enabled`.
     show_assistant: bool | None = None
+    daily_brief_enabled: bool | None = None
 
 
 class UpdateMeHandler:
@@ -198,6 +203,17 @@ class UpdateMeHandler:
         ):
             _User.inferred_pantry_enabled = request.inferred_pantry_enabled
 
+        # FU-653 — the three per-surface overlays. Same null-is-ignored rule;
+        # looped because the handling is identical for all three.
+        for _Field in (
+            "inference_recipes_enabled",
+            "inference_shopping_enabled",
+            "inference_meal_plan_enabled",
+        ):
+            _Value = getattr(request, _Field)
+            if _Field in _SetFields and _Value is not None:
+                setattr(_User, _Field, _Value)
+
         # C-cross Chunk 5 — recipe-image opt-in. Plain bool; null is
         # ignored. Saved image bytes survive a toggle (only the render
         # is suppressed). FU-508 dropped the stock-image companion.
@@ -243,6 +259,9 @@ class UpdateMeHandler:
         # FU-360.6 — show/hide the Dora helper bubble. Plain bool; null ignored.
         if "show_assistant" in _SetFields and request.show_assistant is not None:
             _User.show_assistant = request.show_assistant
+
+        if "daily_brief_enabled" in _SetFields and request.daily_brief_enabled is not None:
+            _User.daily_brief_enabled = request.daily_brief_enabled
 
         if "llm_provider" in _SetFields:
             provider = request.llm_provider

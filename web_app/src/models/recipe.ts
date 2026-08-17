@@ -87,6 +87,10 @@ export type Recipe = {
     created_at: string;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;
+    /** Resolved server-side (same shape as `cuisine_name`) so the card /
+     *  row meta line can print the collection without joining against a
+     *  separately-fetched collection list. Null when uncollected. */
+    recipe_collection_name: string | null;
     servings: number | null;
     /** C-4 Chunk 7 — origin URL when the recipe was imported.
      *  Null for hand-entered recipes. */
@@ -122,6 +126,15 @@ export type Recipe = {
      *  detail-page "N ingredients need linking" prompt and the
      *  shopping-list "Add missing" flow's linking-first message. */
     unlinked_ingredient_count: number;
+    /** FU-653 — the Zero-Input belief's remark about this recipe, or null.
+     *  `'at_risk'`: reads cookable, but Dora believes a required ingredient
+     *  has run out. `'maybe_cookable'`: reads not-cookable, but she believes
+     *  every missing ingredient is back. **Additive only** — `cookable`,
+     *  `missing_count` and the cookbook's filters ignore it entirely. Null
+     *  unless the user opted the recipes surface in (Settings → Assistant). */
+    inference_hint: 'at_risk' | 'maybe_cookable' | null;
+    /** The items behind `inference_hint`, already de-duplicated. */
+    inference_stock_item_names: string[];
     /** C-4 Chunk 6 — structured steps. The list endpoint sets
      *  `has_structured_steps` (cheap existence check); the detail endpoint
      *  hydrates `steps[]`. Empty `steps[]` + `has_structured_steps === false`

@@ -113,6 +113,16 @@
         const id = currentUser.value?.user_id;
         return id ? `dora.helpHintDismissed.${id}` : 'dora.helpHintDismissed';
     };
+
+    function hintAlreadyDismissed(): boolean {
+        try {
+            return localStorage.getItem(hintDismissedKey()) !== null;
+        } catch {
+            // Storage disabled (private mode) — treat as "never dismissed" so
+            // the nudge still does its job.
+            return false;
+        }
+    }
     const helpApi = new HelpApiService();
     // suggestion count drives the badge on the launcher and
     // gives DoraChat the data when it opens. Refreshed on mount and
@@ -214,6 +224,7 @@
 
     function dismissHint() {
         showFirstTimeHint.value = false;
+        hintChecked = true;
         clearHintAutoHide();
         try {
             localStorage.setItem(hintDismissedKey(), '1');
@@ -223,6 +234,30 @@
             // helper that's trying to be discoverable.
         }
     }
+
+    // The hint is a once-per-user acknowledge held in localStorage, so the
+    // decision can't be made until the user id has hydrated — checking (and
+    // later writing) the pre-hydration fallback key would resurface the hint
+    // for someone who had already dismissed it. Runs at most once per mount.
+    let hintChecked = false;
+    let hintShowTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function considerFirstTimeHint() {
+        if (hintChecked || !currentUser.value?.user_id) return;
+        hintChecked = true;
+        if (hintAlreadyDismissed()) return;
+        // Tiny delay so the hint doesn't fight with the initial page-load
+        // animation.
+        hintShowTimer = setTimeout(() => {
+            hintShowTimer = null;
+            if (!open.value) {
+                showFirstTimeHint.value = true;
+                armHintAutoHide();
+            }
+        }, 1500);
+    }
+
+    watch(() => currentUser.value?.user_id, considerFirstTimeHint, { immediate: true });
 
     // Brief "wiggle" class added on click so the launcher gives tactile
     // feedback before the chat panel slides in.
@@ -308,22 +343,8 @@
             hasEntered.value = true;
         }, ENTRANCE_TOTAL_MS);
 
-        // Surface the first-time hint once per browser. Skip on the login
-        // page (the bubble itself only renders behind auth via MainLayout).
-        try {
-            if (!localStorage.getItem(hintDismissedKey())) {
-                // Tiny delay so the hint doesn't fight with the initial page
-                // load animation.
-                setTimeout(() => {
-                    if (!open.value) {
-                        showFirstTimeHint.value = true;
-                        armHintAutoHide();
-                    }
-                }, 1500);
-            }
-        } catch {
-            showFirstTimeHint.value = true;
-        }
+        // The first-time hint is handled by the `currentUser` watcher above —
+        // it needs the user id, which may land after mount.
 
         // Probe the version endpoint so the launcher can show a NEW badge
         // when there's an update. Failures are silent — the badge just
@@ -357,22 +378,41 @@
     onMounted(armSleepTimer);
     onBeforeUnmount(() => {
         if (sleepTimer !== null) clearTimeout(sleepTimer);
+        if (hintShowTimer !== null) clearTimeout(hintShowTimer);
         clearHintAutoHide();
     });
 </script>
 
 <style scoped>
+    /* Anchored to the *dynamic* viewport rather than to `bottom` on a fixed
+       box. Mobile browsers disagree about what `position: fixed; bottom: N`
+       means while the URL bar is collapsing — Firefox Android in particular
+       shifted the launcher up when the address bar was showing and back down
+       when it hid. A full-height `100dvh` shell pinned at the top, with the
+       contents pushed to its bottom edge, tracks the visible viewport the
+       same way in every engine. The shell is click-through so it doesn't
+       swallow taps on the page behind it. */
     .dora-bubble-root {
         position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100vh; /* fallback for engines without dvh */
+        height: 100dvh;
         /* DR-7 (FU-578 #6) — respect the mobile safe area so the launcher
            doesn't tuck under a home indicator / rounded corner. */
-        right: max(18px, env(safe-area-inset-right, 0px));
-        bottom: max(18px, env(safe-area-inset-bottom, 0px));
+        padding-right: max(18px, env(safe-area-inset-right, 0px));
+        padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
         z-index: 3000;
         display: flex;
         flex-direction: column;
+        justify-content: flex-end;
         align-items: flex-end;
         gap: 12px;
+        pointer-events: none;
+    }
+    .dora-bubble-root > * {
+        pointer-events: auto;
     }
     /* Launcher behaviour
        ──────────────────
@@ -399,8 +439,27 @@
     /* Hover: full opacity + full size. Active (chat open): pop a bit beyond
        full so it reads as the focused element while the panel is up. The
        first-time hint bubble pegs us at the hover state so the speech
-       balloon doesn't appear to float over an invisible launcher. */
-    .dora-bubble-launcher:hover,
+       balloon doesn't appear to float over an invisible launcher.
+
+       The :hover halves are gated behind a real pointer. On touch, a tap
+       leaves :hover latched on the launcher until you tap elsewhere, so
+       closing the panel *by tapping the mascot* left it stuck at full size
+       while closing via the panel's X correctly shrank it — the same action
+       with two different results. Touch devices get the idle/active states
+       only, which is the honest set for them. */
+    @media (hover: hover) and (pointer: fine) {
+        .dora-bubble-launcher:hover {
+            opacity: 1;
+            transform: scale(1);
+            outline: none;
+        }
+        .dora-bubble-launcher.is-sleeping:hover {
+            opacity: 1;
+        }
+        .dora-bubble-launcher:hover .dora-bubble-launcher-inner {
+            animation: dora-hover-bob 1.6s ease-in-out infinite;
+        }
+    }
     .dora-bubble-launcher:focus-visible,
     .dora-bubble-launcher.is-hint-visible {
         opacity: 1;
@@ -415,7 +474,6 @@
     .dora-bubble-launcher.is-sleeping {
         opacity: 0.35;
     }
-    .dora-bubble-launcher.is-sleeping:hover,
     .dora-bubble-launcher.is-sleeping:focus-visible {
         opacity: 1;
     }
@@ -501,9 +559,6 @@
         font-weight: 700;
         min-width: 22px;
         padding: 0 6px;
-    }
-    .dora-bubble-launcher:hover .dora-bubble-launcher-inner {
-        animation: dora-hover-bob 1.6s ease-in-out infinite;
     }
     .dora-bubble-launcher.is-wiggling .dora-bubble-launcher-inner {
         animation: dora-wiggle 380ms ease-in-out;

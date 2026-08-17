@@ -5,11 +5,12 @@
             'dora-mode-slider--ai': modelValue,
             'dora-mode-slider--basic': !modelValue,
             'dora-mode-slider--disabled': disabled,
+            'dora-mode-slider--actionable': disabled && disabledIsActionable,
         }"
         role="switch"
         :aria-checked="modelValue"
         :aria-disabled="disabled"
-        :tabindex="disabled ? -1 : 0"
+        :tabindex="0"
         @click="onToggle"
         @keydown.space.prevent="onToggle"
         @keydown.enter.prevent="onToggle"
@@ -28,6 +29,22 @@
 </template>
 
 <script lang="ts" setup>
+    // D-016 carve-out: the rule says a disabled control is "not focusable +
+    // visibly inert". This one carries `aria-disabled` rather than native
+    // disabled semantics precisely so it stays focusable and keeps a handler —
+    // the ARIA-sanctioned shape for a control that can't do its own job but
+    // can take you to where you fix that. It stays visibly dimmed either way.
+    // `disabledIsActionable` gates the behaviour; without it the control is
+    // inert as before.
+    //
+    // D-019 note: `togglingMode` (a transient flag) also feeds `disabled` from
+    // the caller, but the rule's focus-loss harm can't bite here — tabindex is
+    // unconditionally 0, so an in-flight PATCH never blurs the control the
+    // user is standing on.
+    //
+    // NB: this comment lives here rather than above the template's root
+    // element on purpose — a leading template comment makes the SFC
+    // multi-root, which breaks `wrapper.classes()` / `.trigger()` in the spec.
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
 
@@ -35,21 +52,38 @@
         modelValue: boolean;
         disabled?: boolean;
         disabledReason?: string;
+        // When true, activating the slider while `disabled` emits
+        // `disabled-activate` instead of doing nothing — the caller routes
+        // the user somewhere they can fix the reason it's disabled.
+        disabledIsActionable?: boolean;
     }>();
 
     const emit = defineEmits<{
         (e: 'update:modelValue', value: boolean): void;
+        (e: 'disabled-activate'): void;
     }>();
 
     const tooltip = computed(() => {
-        if (props.disabled) return props.disabledReason ?? '';
+        if (props.disabled) {
+            const reason = props.disabledReason ?? '';
+            // A hover-only explanation is invisible on touch, so when the
+            // disabled state is actionable the control itself is the
+            // affordance and the tooltip is just extra detail for pointers.
+            if (props.disabledIsActionable) {
+                return reason ? `${reason} Tap to open Settings.` : 'Tap to set AI mode up in Settings.';
+            }
+            return reason;
+        }
         return props.modelValue
             ? 'AI mode on — tap to switch to Basic.'
             : 'Basic mode on — tap to switch to AI.';
     });
 
     function onToggle() {
-        if (props.disabled) return;
+        if (props.disabled) {
+            if (props.disabledIsActionable) emit('disabled-activate');
+            return;
+        }
         emit('update:modelValue', !props.modelValue);
     }
 </script>
@@ -81,6 +115,13 @@
     .dora-mode-slider--disabled {
         cursor: not-allowed;
         opacity: 0.55;
+    }
+    // Actionable-disabled: still dimmed (AI isn't on) but it *does* something
+    // when tapped, so it must not advertise itself as inert.
+    .dora-mode-slider--disabled.dora-mode-slider--actionable {
+        cursor: pointer;
+        opacity: 0.7;
+        border-style: dashed;
     }
 
     .dora-mode-slider__label {

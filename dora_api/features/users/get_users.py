@@ -24,6 +24,9 @@ class UserDto:
     username: str
     user_id: UUID
     is_admin: bool
+    # Deactivate-instead-of-delete. The admin list is the only surface that
+    # renders it — everywhere else an inactive user simply can't sign in.
+    is_active: bool
     deals_email_enabled: bool
     # Settings rebuild Phase 4 — bulk-stamped from an IS-NOT-NULL select (see
     # `_stamp_has_image`) so the user list never triggers the deferred
@@ -38,6 +41,7 @@ class UserDto:
             username = user.username,
             user_id = user.id,
             is_admin = bool(user.is_admin),
+            is_active = bool(user.is_active),
             deals_email_enabled = bool(user.deals_email_enabled),
             has_image = False,
         )

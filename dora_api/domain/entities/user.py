@@ -150,6 +150,16 @@ class User(BaseEntity):
     send_deals_on_day: int
     username: str
     is_admin: bool = False
+    # Owner call 2026-08-17 — an account can be *switched off* instead of
+    # deleted. Deletion is destructive and irreversible (sessions, alert
+    # prefs and push subscriptions go with it); a housemate who moved out,
+    # or an account you want to park, only needs the door locked. Enforced
+    # in two places and nowhere else: `login` refuses to mint a session for
+    # an inactive user, and `get_me` clears an existing cookie on the next
+    # probe — so deactivating someone signs them out rather than waiting
+    # for their session to lapse. The admin API refuses to deactivate you
+    # (self) or the last active admin, mirroring the `is_admin` guard.
+    is_active: bool = True
     # Opt-IN flag for the weekly deals email; the preferred send day
     # (`send_deals_on_day`) is kept independently so toggling off and back on
     # doesn't lose it.
@@ -210,6 +220,19 @@ class User(BaseEntity):
     # some users want purely manual control, so this toggle switches the
     # belief chip + inference-driven quick-checks off.
     inferred_pantry_enabled: bool = True
+    # FU-653 — the same belief, surfaced where stock items *appear* rather
+    # than where they're managed: a remark on a recipe whose ingredient Dora
+    # thinks has run out, suggestions on a shopping list, a flag on a planned
+    # meal. One toggle each (owner, 2026-08-17) because they annotate three
+    # different jobs, and someone who wants the recipe hint may not want their
+    # shopping list editorialised. **Default False**, unlike the stock toggle
+    # above: these add commentary to pages the user opened for another reason,
+    # so they're opt-in. `inferred_pantry_enabled` remains the *stock* surface's
+    # switch. Single authority for reading them:
+    # `features/stock_items/inference_overlay.SURFACE_FLAGS`.
+    inference_recipes_enabled: bool = False
+    inference_shopping_enabled: bool = False
+    inference_meal_plan_enabled: bool = False
     # C-cross Chunk 5 — per-user image-display opt-in (proposal §2.8).
     # **Default True** — Charter P1 Effortless leans toward visual
     # richness; users who prefer a text-only UI flip it via the inline
@@ -261,6 +284,19 @@ class User(BaseEntity):
     # hides the whole assistant launcher for users who don't want it. When
     # False the SPA doesn't mount the bubble, so Basic *and* AI mode are gone.
     show_assistant: bool = True
+    # Daily brief push (owner, 2026-08-17). ONE push per day, at
+    # DAILY_BRIEF_HOUR household-local, summarising tomorrow's meals and any
+    # shopping day that's due. Deliberately *not* a per-slot reminder: five
+    # slots across seven days is up to 35 notifications a week, which trains
+    # the user to ignore the channel (Charter P10 Anti-creep). The owner also
+    # ruled out a just-in-time "dinner's in an hour" nudge — "they know when
+    # dinner is" — which is why `MealSlot` still has no start time.
+    #
+    # Opt-IN (default False), matching every other notification channel here.
+    # The send hour is fixed rather than configurable: one fewer thing to set
+    # up, and evening is the only hour where the brief is *actionable* (you
+    # can still defrost something or fill a gap in the plan).
+    daily_brief_enabled: bool = False
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -269,6 +305,7 @@ class User(BaseEntity):
         SEND_DEALS_ON_DAY = "send_deals_on_day"
         USERNAME = "username"
         IS_ADMIN = "is_admin"
+        IS_ACTIVE = "is_active"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
         DEALS_EMAIL_COMPACT = "deals_email_compact"
         THEME = "theme"
@@ -282,6 +319,9 @@ class User(BaseEntity):
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
+        INFERENCE_RECIPES_ENABLED = "inference_recipes_enabled"
+        INFERENCE_SHOPPING_ENABLED = "inference_shopping_enabled"
+        INFERENCE_MEAL_PLAN_ENABLED = "inference_meal_plan_enabled"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
@@ -291,3 +331,4 @@ class User(BaseEntity):
         LLM_ENABLED = "llm_enabled"
         LLM_PROVIDER = "llm_provider"
         SHOW_ASSISTANT = "show_assistant"
+        DAILY_BRIEF_ENABLED = "daily_brief_enabled"

@@ -148,6 +148,20 @@ export type ShoppingListDetail = {
     /** FU-334 — receipt-photo attachments, ordered by sequence. Empty array
      *  on draft lists or lists with no attachments yet. */
     attachments: ShoppingListAttachment[];
+    /** FU-653 — items Dora believes you've run out of that aren't on this list.
+     *  Suggestions only: nothing is added for you, and the list is the same
+     *  whether or not you look at them. Empty unless the user opted the
+     *  shopping surface in (Settings → Assistant), and always empty on a
+     *  finished list. Capped server-side. */
+    inferred_suggestions: InferredSuggestion[];
+};
+
+export type InferredSuggestion = {
+    stock_item_id: string;
+    name: string;
+    /** The belief's own plain-English "why", e.g. "Bought about every 9 days;
+     *  12 days since the last one." */
+    reason: string;
 };
 
 export type ActiveListInfo = {

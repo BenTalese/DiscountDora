@@ -6,8 +6,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Dietary tags"
-            :description="`Dietary / allergen / nutritional tags recipes can be tagged with. ${dietaryTags.length} tag${dietaryTags.length === 1 ? '' : 's'}.`"
-            :icon="ICONS.label"
+            description="Dietary / allergen / nutritional tags recipes can be tagged with. Useful for filtering."
         >
             <template #actions>
                 <BaseButton
@@ -21,12 +20,16 @@
 
         <q-list class="settings-list" separator>
             <q-item v-for="tag in dietaryTags" :key="tag.dietary_tag_id" class="q-py-sm">
-                <q-item-section avatar><q-icon :name="ICONS.label" /></q-item-section>
                 <q-item-section>
-                    <q-item-label>{{ tag.name }}</q-item-label>
-                    <q-item-label caption>
-                        {{ tag.category }} ·
-                        {{ tag.recipe_count ?? 0 }} recipe{{ (tag.recipe_count ?? 0) === 1 ? '' : 's' }}
+                    <!-- Same one-line treatment as VocabListEditor (owner call
+                         2026-08-17): name, then its grouping + tally inline at
+                         the same type size. -->
+                    <q-item-label class="vocab-row">
+                        <span>{{ tag.name }}</span>
+                        <span class="dora-text-muted">
+                            {{ tag.category }} ·
+                            {{ tag.recipe_count ?? 0 }} recipe{{ (tag.recipe_count ?? 0) === 1 ? '' : 's' }}
+                        </span>
                     </q-item-label>
                 </q-item-section>
                 <q-item-section side>
@@ -161,5 +164,11 @@
     .settings-list {
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .vocab-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--space-2, 8px);
     }
 </style>

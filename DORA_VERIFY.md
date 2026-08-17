@@ -22,14 +22,235 @@ top-to-bottom.
 
 ---
 
+## Evening brief actually lands (2026-08-17 later 10)
+
+_(Needs VAPID keys + a real push subscription, neither of which the dev
+instance has — the toggle is correctly disabled without them.)_
+
+- [ ] **It arrives, once, at 7pm.** With VAPID configured and push subscribed,
+      turn on Settings → Notifications → **Evening brief** on a day that has
+      meals planned for tomorrow. One notification at 7pm household time,
+      reading "Tomorrow — <slot>: <recipe>…". Not two, and not one per meal.
+- [ ] **Tapping it opens the planner.**
+- [ ] **Silence works.** On an evening with nothing planned for tomorrow *and*
+      no shopping day due, nothing should arrive at all.
+- [ ] **The gap nudge works.** Clear tomorrow but leave meals elsewhere in the
+      week: the brief should say "Nothing planned for tomorrow yet."
+- [ ] **Shop day rolls in.** Set a list's planned shop date to tomorrow — the
+      brief should carry it alongside the meals.
+- [ ] **Timezone.** Change the household timezone in Settings → Region and
+      confirm the next brief follows the *new* 7pm, without a restart.
+
+## Mobile resume: no more infinite splash (2026-08-17 later 9)
+
+_(The failure mode is a suspended mobile webview holding a dead socket — the dev
+pane and a desktop browser can't reproduce it. Needs the phone that saw it.)_
+
+- [ ] **Resume after a long background.** Leave the app backgrounded on the phone
+      for 10+ minutes (ideally moving between wifi and mobile data), then return.
+      It should come back within a few seconds — and if it can't reach the
+      server, the splash should show the **Retry** button rather than pulsing
+      indefinitely. Previously this could hang until force-close.
+- [ ] **Retry from that state actually recovers.** If you do get the Retry
+      button, pressing it should either load the app or say it still can't
+      reach the server — never go back to a silent pulse.
+- [ ] **Airplane-mode start.** Cold-start with the network off: the splash should
+      offer Retry within ~15 seconds, not sit there.
+
+## Assistant chat window — mobile + touch behaviour (2026-08-17 later 8)
+
+_(The two mobile ones can't be proved in the dev pane or on a desktop browser —
+sticky `:hover` and mobile URL-bar viewport behaviour need a real handset.)_
+
+- [ ] **Firefox on Android: the chat button doesn't move with the address bar.**
+      Scroll down until the address bar hides, then back up. The mascot should
+      stay a fixed distance off the bottom edge throughout. Compare against
+      Chrome on the same device — they should now match.
+- [ ] **Touch: closing the chat by tapping the mascot shrinks her.** On a phone,
+      open the chat by tapping the mascot, then close it the same way. She
+      should return to her small faded resting size immediately — not stay full
+      size until you tap elsewhere. Then repeat closing via the panel's X and
+      confirm the two look identical.
+- [ ] **Touch: the mascot doesn't sit permanently full-size.** After the above,
+      scroll the page — she should stay shrunk (no latched hover).
+
+## Offline sync + Retry, end to end (2026-08-17 later 7)
+
+_(The transport bugs are pinned by Vitest, but the whole point is that mocked
+transports never enforced CSRF — so the only real proof is a round trip against
+a running server. DevTools → Network → Offline is enough; no need for a real
+signal drop.)_
+
+- [ ] **The sync actually lands.** Go offline (DevTools throttling), change two
+      stock levels and tick a shopping-list line, go back online. The banner
+      clears, you get "Synced everything", and — the part that matters —
+      **reload and confirm the server kept all three**. This is the bug: it
+      used to report success and lose the lot.
+- [ ] **Sync on re-open.** Queue a change offline, **close the tab**, restore
+      the connection, open the app fresh. It should sync on sign-in without
+      you toggling the network again.
+- [ ] **Retry.** With the server stopped but the network up, press Retry —
+      expect a spinner and then "Still can't reach the server". Start the
+      server, press Retry again — the banner should clear immediately rather
+      than waiting out the backoff.
+- [ ] **Retry while the browser thinks it's offline** (DevTools Offline, server
+      running is fine): Retry must still fire a request. This is the case that
+      did nothing at all before.
+- [ ] **Docker env.** Rebuild the container and confirm the encryption banner
+      is gone with `DORA_SECRET_ENCRYPTION_KEY` set in `.env` — and spot-check
+      one var that is *not* named in `compose.yml`'s list (e.g.
+      `DORA_DEMO_MODE=true`) reaches the app, proving `env_file` is working.
+      Needs Compose v2.24+ for `required: false`; `docker compose config`
+      will tell you if your version chokes on it.
+
+## Feedback batch: setup screen / essential tab / stocktake skip (2026-08-17 later 6)
+
+_(All three are code-verified only — stock rows are virtualised and paint 0 in
+the agent's pane, and the setup screen only exists on a zero-user install.)_
+
+- [ ] **Essential marker**: on a stock row flagged Essential, the marker runs the
+      full 16px along the row's top and bottom edges, tapers back to 5px through
+      the middle, and its outer corners follow the row's 8px radius. Check it
+      doesn't crowd the stock-level button at the row's top/bottom on a phone.
+- [ ] **Stocktake skip**: with several items queued, tap Skip a few times — the
+      `n / total` counter's **total must not grow**, and the run must reach the
+      completion card. Reopen the queue: the skipped items are back.
+- [ ] **First-admin screen** (fresh install / empty DB): the fine print under the
+      form is gone, and the account is created with the **Email field left blank**
+      — no validation error, and Settings → Account afterwards shows no address.
+      Then check a bad value (`nope`) is still rejected.
+
+## Cookbook: toolbar / filters / compact view (2026-08-17)
+
+_(Agent-verified live at 375px: toolbar wraps to two rows with the search box
+full-width and no horizontal scroll; both filter rows stay one line each and
+scroll sideways; the compact toggle swaps 15 cards for 15 rows and writes the
+preference. What's left is the **desktop** shape — `$q.screen` reports width 0
+in the agent's pane, so every `lt.sm` branch renders in its mobile form there
+and the desktop one was never seen.)_
+
+- [ ] On a **desktop** window, the cookbook toolbar shows labelled buttons in
+      order — New recipe · Import · Hide/Show photos · Compact/Cards — with
+      Filters + search pushed right on the same row. Import should read as an
+      outlined button like Stock's, not a white one.
+- [ ] In **compact** view on desktop, each row shows the time / ingredient-count
+      / kcal chips (they're deliberately hidden on phones); names truncate with
+      an ellipsis rather than pushing the three action buttons off the row.
+- [ ] Compact view survives a **full reload** and a re-visit; switching back to
+      Cards sticks too.
+- [ ] The cookbook grid renders recipes on a **cold first load** (not just after
+      navigating away and back) — this is the outstanding half of **FU-638**.
+
+## Admin settings rework: nav / users / region (2026-08-17)
+
+_(Agent-verified live at 1280px and 375px, so most of this batch is already
+deleted. Confirmed: the admin sidebar renders as 5 flat groups with **zero**
+sub-headers and the mobile strip shows the same 5 tabs; the Users page has no
+Refresh and no Deals-email switch, both self-row toggles are disabled, a user
+created with a typed password gets a toast and **no** password readout while
+"Generate one instead" shows the 12-char readout once, deactivation confirms →
+badges → dims → toasts; at 375px the Users row stacks with no horizontal
+overflow; Region renders preview-first and "Match this device" saved timezone +
+locale live. The two below are what the pane genuinely could not exercise.)_
+
+- [ ] **Region — pick from the dropdowns.** The options popup never opens in the
+      agent's browser pane (it can't focus the combobox), so **choosing** a
+      currency or language from the list is unverified — only free-text and the
+      "Match this device" button were exercised. Open Settings → Admin →
+      Install → Region & locale, pick **USD — US dollar** from Currency: the
+      preview should flip to `$12.50` immediately and the choice should stick
+      across a refresh. Same for Language & format.
+- [ ] **Region — a code that isn't on the shortlist.** Type a currency the list
+      doesn't carry (e.g. `THB`) and press **Enter**; then repeat, typing it and
+      clicking away instead (blur). Both should save — the page commits on
+      either, deliberately, because Quasar's own Enter handling only runs with
+      the popup open. A half-typed `TH` abandoned on blur should be silently
+      dropped, not error.
+- [ ] **A deactivated user is actually locked out end-to-end.** Backend-pinned
+      in `test_user_router.py` (login refused, reason named, reactivate lets
+      them back in) — worth one hands-on pass anyway: sign in as a second user
+      in another browser, deactivate them from your admin session, and confirm
+      that browser gets bounced to the login screen rather than carrying on.
+
+## Inference on recipes / lists / meal planner (2026-08-17) — origin FU-653
+
+_(Server side agent-verified live, with the toggles off then on: recipe hints
+fire in both directions while `cookable`/`missing_count` stay put, the meal-plan
+entry carries the flag, the draft list returns one suggestion. What's left is
+the **client render** — the Browser pane can't paint the cookbook grid, recipe
+detail or shopping-list detail, so nobody has seen these three UIs.)_
+
+Turn all three on first: **Settings → Assistant → Zero-Input Pantry**. The dev
+seed now ships two purpose-built recipes:
+
+- [ ] **Cookbook card** — "Belief demo: Tuna Bake" shows an outline amber
+      **"May be short"** chip; "Belief demo: Juice Bowl" shows a green
+      **"May be cookable"**. Hover each for the reason + item name. Confirm the
+      cook button's colour and the cookable badge are **unchanged**.
+- [ ] **Recipe detail** — open the Tuna Bake: the belief card sits *under* the
+      cookability card, amber-edged, and the cookability card still says
+      "Cookable now".
+- [ ] **Shopping list** — open the draft "This week": the *"Dora thinks you may
+      be out of…"* strip sits above the items with a "Belief: Tuna Tins" chip.
+      Tap it → it becomes a normal line. Reopen the list; tap the **×** →
+      the strip goes for the session and comes back next visit.
+- [ ] **Meal planner** — drop "Belief demo: Tuna Bake" onto any day (it's
+      deliberately not pre-planned — a seventh seeded entry broke two e2e
+      tests' ingredient-demand assertions). Its entry chip should carry the
+      hunch glyph, and the week's "need to buy" figures should be unchanged.
+- [ ] **Off means silent** — switch the three off again and confirm all four
+      surfaces go quiet.
+
+## Settings — Assistant / About / nav feedback batch (2026-08-17)
+
+_(Agent-verified live at 375px and 1280px: provider cards minimise + open one
+at a time and sit at exactly 44px; group-heading taps navigate to the group's
+first page; Account/About no longer draw a redundant single chip; the three
+password fields sit at uniform 28px gaps; About renders 2×2 stat tiles with no
+horizontal scroll. What's left needs a real environment or your eye.)_
+
+- [ ] **The encryption fix, in your container.** Put `DORA_SECRET_ENCRYPTION_KEY`
+      in the server `.env`, `docker compose up -d`, then Settings → Assistant →
+      Providers: the "Secret encryption isn't set up" banner should be gone, and
+      saving a paid provider's API key should now succeed.
+- [ ] **Provider card states with real config** — connect Ollama (green), then
+      break its base URL (red) and confirm the minimised card reads correctly
+      without opening it.
+- [ ] **About on a real phone** — the mascot/hero, the stat tiles and the big
+      Install button. (In-pane the install button only ever shows the
+      "not available in this browser" line.)
+- [ ] **Install as an app** actually installs from the new button (Chrome
+      Android / Edge desktop), and the row switches to "Dora is installed".
+
+## Settings — store logo tile (2026-08-17)
+
+Everything else in the Kitchen-setup feedback batch was agent-verified live
+(list styling, descriptions, Add/Edit store round-trip incl. logo upload +
+removal, seeded unlinked ingredients). These two need hover/touch, which the
+headless pane can't drive:
+
+- [ ] Hover (and tab to) the store-logo tile in Add/Edit store — the pencil
+      overlay should fade in, same as the profile picture on Account.
+- [ ] On a phone, tapping the store-logo tile should offer camera + gallery.
+
 ## Stock overview: filter feedback (2026-08-16)
 _(All four items were agent-verified live on a scratch install and measured — icon-only Clear/Filters at 375px, the input-filter row on one 42px scrolling line with four equal 180px controls, the essential stripe's gap 7px→12px, and the secondary indicator tone 2.80:1→8.48:1 in pesto-dark (all five dark themes now 7.31–8.48:1, was 1.45–4.74:1). Evidence in `DORA_VERIFY_TRIAGE.md`. What's left is a look-and-feel call only you can make.)_
 - [ ] **The lifted "Essential/Open" tone in the other four dark themes** — pesto-dark was the one walked live. Cherry Cola Dark is the one to eyeball: its secondary is a near-black red, so the lifted version was pushed toward clay (hue 20) to stay clear of the alert red. Check the stripe/chip doesn't read as an alert.
 
+## Stock-item detail: feedback batch (2026-08-17)
+_(The QR server half is now pinned by 7 new e2e tests and was driven live cross-origin from the browser — both endpoints answered 200 and the real composable returned a blob. The "Print one" pop-up bug was root-caused and fixed (R-046). The copy/control removals are template-only. Tests green: 1749 backend + 4 new nutrient-table e2e, 434 vitest, vue-tsc + eslint clean. What's below needs your eyes or your install.)_
+- [ ] ⚠️ **QR dialog on YOUR install** — the "couldn't load…" failure has never reproduced here (three attempts now). It is now instrumented: if it still fails, the message names the **HTTP status and a `Ref:` prefix**. Quote it verbatim and FU-648 closes in one pass.
+- [ ] ⚠️ **"Print one" — on the phone, by tap.** This is where it was blocked; a desktop click never showed it. Expect a new tab that briefly says "Preparing labels…" then shows the sheet. If the browser blocks the tab you should now get "allow pop-ups for Dora", not a generic error.
+- [ ] **Nutrition — the new "Vitamins & minerals (N)" disclosure.** Link a food, open **Details**, and confirm the block appears with potassium/calcium/iron/vitamin C etc., collapsed by default. **Needs a re-imported dataset** — see FU-645; on a pre-today catalogue the block is simply absent (no empty section), which is itself the thing to confirm.
+- [ ] **Nutrition panel wording + order.** The table should now read Energy · Protein · **Fat, total** → indented *Saturated* · **Carbohydrate** → indented *Sugars* · Dietary fibre · Sodium — i.e. fat before carbs, indentation instead of "— of which". Check the indent is legible at 375px.
+- [ ] **Stock-take row** — the running "Dora can ask you to check this / Muted" caption is gone; confirm the toggle alone still reads unambiguously, and the (?) is now one sentence.
+- [ ] **Expiry row** — the "Set" word is gone from the button. Confirm the glyph-only button is still obviously tappable next to the date and the +1d/+7d/+14d cluster, and that its tooltip still describes the expiry state.
+- [ ] **Nutrition "Track again" is gone** — on an item marked "Not a food", confirm the search icon is the only control, and that linking a food from it clears the ignored state (should show the linked food, not "Ignored").
+- [ ] **Buy verdict footer** — "across N shopping trips" is gone. Confirm the remaining "Based on N price samples … (last 12 months)" still reads as a complete sentence, including when there are waste events.
+
 ## Stock-item detail: feedback batch (2026-08-16)
 _(The Location-overflow fix was agent-verified live at 375px + 320px and its line deleted — evidence in `DORA_VERIFY_TRIAGE.md`. The rest below needs your eyes: it needs a re-imported dataset, a real device, or your own install. Tests green: 1772 backend, 434 vitest, vue-tsc + eslint clean.)_
-- [ ] ⚠️ **QR button + "Print one"** — the reported failure never reproduced statically (see FU-648). Confirm both work; if they now do, glance at the network tab and note what origin the API calls use, so FU-648 can be closed for the right reason.
-- [ ] **QR labels elsewhere** — Settings → Kitchen setup → QR labels ("Print all" and a selection), and the stock list's bulk QR action. Same rewrite, same risk.
+- [ ] **QR labels elsewhere** — Settings → Kitchen setup → QR labels ("Print all" and a selection), and the stock list's bulk QR action. Both share the same composable, so they inherit the 2026-08-17 pop-up fix and now toast on failure instead of failing silently. (The detail page's own QR checks have moved to the 2026-08-17 section above.)
 - [ ] **Nutrition search** — type "greek yoghurt" into the food picker and confirm the space survives.
 - [ ] **Stock-take toggle** — mute an item from stock-take mode, then un-mute it from the item's detail page and confirm it rejoins the queue.
 - [ ] **Nutrition Details table** — needs a **re-imported** dataset to show anything beyond the old four; check sodium reads as a sane mg figure (an OFF-sourced food is the one that goes through a unit conversion).

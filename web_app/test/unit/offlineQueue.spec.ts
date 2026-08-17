@@ -105,8 +105,21 @@ function readQueue(): Array<{ id: string }> {
     return raw ? JSON.parse(raw) : [];
 }
 
+/** The replay needs a `dora_csrf` cookie to echo as `X-CSRF-Token` — the
+ *  server 403s a mutating call without it. Every test that drains needs
+ *  one present, exactly as a real session would have after the cold-load
+ *  GET seeded it. */
+function setCsrfCookie(value = 'tok-123'): void {
+    document.cookie = `dora_csrf=${value}; path=/`;
+}
+function clearCsrfCookie(): void {
+    document.cookie = 'dora_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+}
+
 beforeEach(() => {
     localStorage.clear();
+    clearCsrfCookie();
+    setCsrfCookie();
     vi.clearAllMocks();
 });
 
@@ -197,6 +210,44 @@ describe('drain — replay', () => {
         expect(config.headers['X-Offline-Replay']).toBe('1');
         expect(config.headers['X-Request-Id']).toBe('replay-a');
         expect(config.method).toBe('PATCH');
+    });
+
+    // ── FU-197 CSRF on replay ────────────────────────────────────────
+    // The replay uses bare `axios`, not AxiosHttpClient, so the interceptor
+    // that normally attaches the double-submit header never runs. It didn't
+    // attach it by hand either (found 2026-08-17), so every drain 403'd, was
+    // read as a non-network failure, and the mutation was burned into the
+    // conflict pile. The queue filled and never synced a thing. These two
+    // tests are the pin; the old suite passed throughout because axios is
+    // mocked here and never enforced CSRF.
+    it('replays echo the dora_csrf cookie as X-CSRF-Token', async () => {
+        setCsrfCookie('abc-987');
+        seedQueue([mutation('a')]);
+        h.request.mockResolvedValue({ data: {} });
+        const { mod } = await freshModule();
+
+        await mod.drain();
+
+        const config = h.request.mock.calls[0]![0] as {
+            headers: Record<string, string>;
+            withCredentials: boolean;
+        };
+        expect(config.headers['X-CSRF-Token']).toBe('abc-987');
+        expect(config.withCredentials).toBe(true);
+    });
+
+    it('defers (keeps queued) rather than conflicting when no CSRF cookie exists yet', async () => {
+        clearCsrfCookie();
+        seedQueue([mutation('a')]);
+        h.request.mockResolvedValue({ data: {} });
+        const { mod } = await freshModule();
+
+        await mod.drain();
+
+        // No request attempted, nothing burned — it waits for the cookie.
+        expect(h.request).not.toHaveBeenCalled();
+        expect(readQueue().map((m) => m.id)).toEqual(['a']);
+        expect(mod.useOfflineQueue().conflicts.value).toHaveLength(0);
     });
 
     it('stops on a network error: earlier item drops, the failed one + rest stay queued', async () => {

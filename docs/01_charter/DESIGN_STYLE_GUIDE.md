@@ -572,6 +572,27 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   `background`/`border-color`/`color` on something that is not a surface, or a
   Quasar `color="secondary"` / `text-secondary` class on a chip, badge or count.
 
+### D-021 — Navigation is one flat level: named groups of destinations, never sub-headers
+- **Rule:** a navigation surface (the Settings sidebar + its mobile tab strip,
+  and any future nav of the same shape) has exactly **two levels — a group, and
+  the destinations in it**. No third level: no indented sub-list under a
+  non-clickable sub-header, no collapsible tree. Every group heading names a
+  question the user is answering and **is itself a link** to that group's first
+  destination. When a group gets long, **split it into two groups**; that is the
+  only permitted response to length.
+- **Why:** Admin had grown a `System` sub-header holding twelve of its sixteen
+  pages under one "Admin · global" heading, so the whole surface read as an
+  undifferentiated pile with an arbitrary indent partway down, and depth was
+  communicated only by left-margin. Owner call 2026-08-17: *"logical groupings,
+  one flat level"* — the same instinct that produced the Stock-locations zone
+  cards (D-012) and the 2026-08-14 personal-settings regroup. The sub-group type
+  was deleted from `SettingsNavGroup` along with its last caller, so the shortcut
+  can't be taken again without deliberately re-adding it.
+- **Violation signal:** a `subheader` / `children` / `items`-of-`items` shape in a
+  nav definition; a nav row whose only distinguishing feature is `padding-left`;
+  a group heading that isn't a link; a group with more than ~8 destinations
+  (that's the split signal, not a nesting signal).
+
 ---
 
 ## Exemplars (the bar — protect these)

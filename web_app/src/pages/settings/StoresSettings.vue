@@ -2,18 +2,10 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Stores"
-            description="The retail stores you actually shop at. Curate this list yourself — Dora ships zero pre-seeded stores. Upload a logo so each store is recognisable on cards and lines."
+            description="The retail stores you actually shop at. Upload a logo so each store is recognisable on cards and lines."
             :icon="ICONS.store"
         >
             <template #actions>
-                <BaseButton
-                    variant="icon"
-                    :icon="ICONS.refresh"
-                    :loading="loading"
-                    @click="reload"
-                >
-                    <q-tooltip>Refresh</q-tooltip>
-                </BaseButton>
                 <BaseButton
                     :icon="ICONS.add"
                     label="Add store"
@@ -78,55 +70,68 @@
 
     <!-- Create / edit dialog. The picker is reused for both modes; `editing`
          carries the row when editing, null when creating. -->
-    <BaseDialog v-model="dialogOpen" :title="editing ? 'Edit store' : 'Add store'">
-        <template #content>
+    <BaseDialog
+        v-model="dialogOpen"
+        :title="editing ? 'Edit store' : 'Add store'"
+        closable
+    >
+        <!-- The body belongs in BaseDialog's DEFAULT slot. It was written as
+             `#content` (a slot BaseDialog does not define), so the whole form
+             — name field and logo picker — silently rendered nowhere. -->
+        <q-card-section class="column q-gutter-md">
             <q-input
                 v-model="draft.name"
                 outlined
                 dense
                 label="Store name"
                 autofocus
-                class="q-mb-md"
                 :rules="[(v) => !!v && v.trim().length > 0 || 'Name is required']"
+                @keydown.enter.prevent="onSave"
             />
 
-            <div class="row items-center q-gutter-md q-mb-sm">
-                <StoreLogo
-                    :name="draft.name || '?'"
-                    :store-id="editing?.store_id ?? null"
-                    :has-image="!!draft.image || (!!editing?.has_image && !clearImage)"
-                    :height="48"
-                    :width="80"
-                />
-                <div class="col">
-                    <div class="text-caption dora-text-muted q-mb-xs">
-                        Optional logo (PNG/JPG/WebP).
-                    </div>
-                    <div class="row items-center q-gutter-sm">
-                        <ImageSourcePicker
-                            variant="secondary"
-                            take-photo-label="Take a photo"
-                            :pick-label="pickerVerb"
-                            accept="image/png,image/jpeg,image/webp"
-                            @pick="onPickImage"
-                            @error="onPickError"
+            <div>
+                <div class="text-caption dora-text-muted q-mb-sm">
+                    Logo (optional)
+                </div>
+                <div class="row items-center q-gutter-md">
+                    <!-- Same click-the-picture affordance as the profile
+                         picture on Account (ImageEditTile), sized to the
+                         logo's rectangle rather than an avatar circle. -->
+                    <ImageEditTile
+                        :label="pickerVerb"
+                        shape="rounded"
+                        :width="80"
+                        :height="48"
+                        accept="image/png,image/jpeg,image/webp"
+                        @pick="onPickImage"
+                        @error="onPickError"
+                    >
+                        <StoreLogo
+                            :name="draft.name || '?'"
+                            :store-id="editing?.store_id ?? null"
+                            :has-image="!!editing?.has_image && !clearImage"
+                            :preview-src="draft.image"
+                            :height="48"
+                            :width="80"
                         />
-                        <BaseButton
-                            v-if="editing?.has_image && !clearImage && !draft.image"
-                            variant="danger-ghost"
-                            dense
-                            label="Remove existing logo"
-                            @click="clearImage = true"
-                        />
-                    </div>
-                    <div v-if="pickError" class="text-caption text-negative q-mt-xs">
-                        {{ pickError }}
-                    </div>
+                    </ImageEditTile>
+                    <BaseButton
+                        v-if="(editing?.has_image && !clearImage) || draft.image"
+                        variant="danger-ghost"
+                        dense
+                        :icon="ICONS.delete_outline"
+                        label="Remove logo"
+                        @click="onRemoveImage"
+                    />
+                </div>
+                <div v-if="pickError" class="text-caption text-negative q-mt-xs">
+                    {{ pickError }}
                 </div>
             </div>
-        </template>
-        <template #actions>
-            <BaseButton variant="ghost" label="Cancel" @click="dialogOpen = false" />
+        </q-card-section>
+
+        <template #actions="{ cancel }">
+            <BaseButton variant="ghost" label="Cancel" @click="cancel" />
             <BaseButton
                 :label="editing ? 'Save' : 'Add'"
                 :loading="saving"
@@ -140,7 +145,7 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
-    import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
+    import ImageEditTile from 'src/components/ImageEditTile.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useQuasar } from 'quasar';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -178,22 +183,10 @@
         return hasExisting || draft.image ? 'Change logo' : 'Add logo';
     });
 
-    function reload(): void {
-        loading.value = true;
-        loadError.value = null;
-        storesStore
-            .listAsync()
-            .catch((e) => {
-                loadError.value = toastCaption(e);
-            })
-            .finally(() => {
-                loading.value = false;
-            });
-    }
-
     onMounted(() => {
-        // Use R-016 ensureLoaded on first open; the explicit refresh
-        // button calls listAsync directly for a forced refetch.
+        // R-016 ensureLoaded. There is no manual refresh control — every
+        // mutation on this page already refreshes the store, so a refresh
+        // button was a no-op affordance.
         loading.value = true;
         storesStore
             .ensureLoadedAsync()
@@ -238,6 +231,15 @@
 
     function onPickError(message: string): void {
         pickError.value = message;
+    }
+
+    // Clears both a just-picked logo and (when editing) the saved one — the
+    // save below sends `clear_image` only when there is something on the
+    // server left to clear.
+    function onRemoveImage(): void {
+        draft.image = null;
+        pickError.value = null;
+        if (editing.value?.has_image) clearImage.value = true;
     }
 
     async function onSave(): Promise<void> {

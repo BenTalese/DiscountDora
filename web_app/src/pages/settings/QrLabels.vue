@@ -104,11 +104,12 @@
 </template>
 
 <script lang="ts" setup>
+    import { Notify } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { ICONS } from 'src/style/icons';
     import { computed, onMounted, ref } from 'vue';
-    import { openQrSheetAsync } from 'src/composables/useQrLabels';
+    import { describeQrFailure, openQrSheetAsync } from 'src/composables/useQrLabels';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useStockItemStore } from 'src/stores/stockItemStore';
 
@@ -145,10 +146,19 @@
         selectedItemIds.value = filteredStockItems.value.map((s) => s.stock_item_id);
     }
 
+    // Sync entry so the click's gesture still reaches `window.open` (R-046),
+    // and the rejection is reported rather than voided — a blocked pop-up used
+    // to look identical to the button not being wired up.
     function openSheet(args: { allItems: boolean }) {
-        void openQrSheetAsync({
+        openQrSheetAsync({
             layout: sheetLayout.value,
             ...(args.allItems ? {} : { ids: selectedItemIds.value }),
+        }).catch((err: unknown) => {
+            Notify.create({
+                type: 'negative',
+                position: 'bottom-right',
+                message: describeQrFailure(err),
+            });
         });
     }
 

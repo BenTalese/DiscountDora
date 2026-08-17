@@ -35,6 +35,20 @@
                 >
                     <q-tooltip>Needs cooking — pool is short</q-tooltip>
                 </q-icon>
+                <!-- FU-653 — Dora's belief about this meal. Its own glyph, not
+                     a change to the chip's state: the week's shortfall and
+                     "need to buy" figures are unchanged, and this sits beside
+                     them as a remark. Server sends it only when the user opted
+                     the meal-planner surface in, and never on a cooked meal. -->
+                <q-icon
+                    v-if="entry.inference_hint"
+                    :name="ICONS.inferred_hunch"
+                    size="14px"
+                    class="entry-chip__status"
+                    :class="entry.inference_hint === 'at_risk' ? 'text-warning' : 'text-positive'"
+                >
+                    <q-tooltip max-width="280px">{{ inferenceTooltip }}</q-tooltip>
+                </q-icon>
             </div>
         </div>
 
@@ -135,6 +149,15 @@
     const canGoLighter = computed(
         () => props.entry.kcal_per_serving !== null && props.entry.kcal_is_reliable,
     );
+
+    // FU-653 — the belief glyph's explanation. Names the items and says the
+    // plan is unchanged, so it reads as a heads-up rather than an error.
+    const inferenceTooltip = computed(() => {
+        const names = (props.entry.inference_stock_item_names ?? []).join(', ');
+        return props.entry.inference_hint === 'at_risk'
+            ? `Dora thinks you may have run out of ${names} since you planned this. Your plan and its shopping figures are unchanged.`
+            : `Recorded as missing ${names}, but Dora thinks you're back in stock — this may be cookable after all.`;
+    });
 
     // PROPOSAL_MEAL_PLANS_PART_2 — a linked cook batch (one cook, several days).
     // Only surfaced for Batch-cooking households.

@@ -58,6 +58,15 @@ class MealPlanEntryDto:
     # nutrition is off, or when the recipe has no figure.
     kcal_per_serving: float | None = None
     kcal_is_reliable: bool = False
+    # FU-653 — the Zero-Input belief's remark about this planned meal:
+    # 'at_risk' (the recipe reads cookable, but Dora believes a required
+    # ingredient has run out since you planned it) | 'maybe_cookable'.
+    # **Additive only** — the shortfall/"need to buy" figures this page
+    # already shows are unchanged, and nothing is re-planned off a belief.
+    # Null unless the user opted the meal-planner surface in, and never set on
+    # an entry that's already been cooked.
+    inference_hint: str | None = None
+    inference_stock_item_names: List[str] = dataclasses.field(default_factory=list)
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -305,13 +314,102 @@ class GetMealPlansHandler:
             ))
         return hydrated
 
+    def _hydrate_inference(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
+        """FU-653 — stamp the Zero-Input belief remark on each planned meal.
+
+        This endpoint deliberately doesn't load ingredients (nothing else here
+        needs them), so the recipes are re-loaded with their ingredient tree —
+        the same trade `_hydrate_nutrition` above makes, and skipped entirely
+        when the surface is off, so an install that never opted in pays one
+        cheap `User` read.
+
+        Entries already cooked are left alone: a warning about an ingredient
+        for a meal you've eaten is noise.
+        """
+        from dora_api.domain.entities.recipe import Recipe
+        from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+        from dora_api.domain.entities.stock_item import StockItem
+        from dora_api.domain.recipe_cookability import (missing_count_for,
+                                                        unlinked_count_for)
+        from dora_api.domain.stock_status import is_missing
+        from dora_api.features.stock_items.inference_overlay import (
+            SURFACE_MEAL_PLAN, IngredientRow, recipe_hint, resolve_divergence,
+        )
+
+        pending = [
+            entry for plan in plans for entry in plan.entries
+            if entry.consumed_at is None
+        ]
+        if not pending:
+            return plans
+        recipe_ids = list({entry.recipe_id for entry in pending})
+        recipes = (
+            self.repository.get(Recipe)
+            .include(Recipe.Fields.INGREDIENTS)
+                .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+                .then_include(StockItem.Fields.STOCK_LEVEL)
+            .all(EntityField(Recipe, "id").in_(recipe_ids))
+        )
+        items = {
+            ingredient.stock_item.id: ingredient.stock_item
+            for recipe in recipes
+            for ingredient in (recipe.ingredients or [])
+            if ingredient.stock_item is not None
+        }
+        divergence = resolve_divergence(
+            self.repository, SURFACE_MEAL_PLAN, list(items.values()),
+        )
+        if divergence.is_empty:
+            return plans
+
+        hint_by_recipe: dict = {}
+        for recipe in recipes:
+            hint = recipe_hint(
+                [
+                    IngredientRow(
+                        stock_item_id=i.stock_item.id if i.stock_item else None,
+                        name=i.stock_item.name if i.stock_item else (i.raw_text or ""),
+                        is_optional=bool(getattr(i, "is_optional", False)),
+                        is_missing=(
+                            is_missing(i.stock_item.stock_level) if i.stock_item else False
+                        ),
+                    )
+                    for i in (recipe.ingredients or [])
+                ],
+                divergence,
+                missing_count=missing_count_for(recipe.ingredients),
+                unlinked_count=unlinked_count_for(recipe.ingredients),
+            )
+            if hint is not None:
+                hint_by_recipe[recipe.id] = hint
+
+        if not hint_by_recipe:
+            return plans
+        return [
+            dataclasses.replace(plan, entries=[
+                (
+                    entry if (entry.consumed_at is not None
+                              or entry.recipe_id not in hint_by_recipe)
+                    else dataclasses.replace(
+                        entry,
+                        inference_hint=hint_by_recipe[entry.recipe_id].kind,
+                        inference_stock_item_names=(
+                            hint_by_recipe[entry.recipe_id].stock_item_names
+                        ),
+                    )
+                )
+                for entry in plan.entries
+            ])
+            for plan in plans
+        ]
+
     def handle(self, options) -> Page[MealPlanDto]:
         page = self._base_query().paginate(
             options, MealPlanDto.from_entity, field_map=_FIELD_MAP
         )
-        hydrated = self._hydrate_nutrition(
+        hydrated = self._hydrate_inference(self._hydrate_nutrition(
             self._hydrate_entry_has_image(list(page.items))
-        )
+        ))
         return Page(items=hydrated, total=page.total, page=page.page, limit=page.limit)
 
     def handle_by_id(self, meal_plan_id: UUID) -> MealPlanDto | None:
@@ -319,7 +417,9 @@ class GetMealPlansHandler:
         if not entity:
             return None
         dto = MealPlanDto.from_entity(entity)
-        return self._hydrate_nutrition(self._hydrate_entry_has_image([dto]))[0]
+        return self._hydrate_inference(
+            self._hydrate_nutrition(self._hydrate_entry_has_image([dto]))
+        )[0]
 
 
 @MEAL_PLAN_ROUTER.route("")

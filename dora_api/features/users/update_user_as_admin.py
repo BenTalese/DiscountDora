@@ -33,6 +33,8 @@ class AdminUpdateUserRequest(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=255)
     email: str | None = Field(default=None, max_length=255)
     is_admin: bool | None = None
+    # Deactivate-instead-of-delete (owner, 2026-08-17).
+    is_active: bool | None = None
     deals_email_enabled: bool | None = None
     # Settings rebuild Phase 4 (§2.9) — admins can clear a problematic user's
     # profile picture (and set one, for completeness). Same data-URL contract
@@ -46,16 +48,36 @@ class AdminUpdateUserResponse:
     user_not_found: bool = False
     username_taken: bool = False
     would_remove_last_admin: bool = False
+    would_deactivate_self: bool = False
+    would_deactivate_last_admin: bool = False
 
 
 class AdminUpdateUserHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
+    def _other_usable_admins(self, user_id: UUID) -> int:
+        """How many admins *other than this one* could still sign in.
+
+        The single authority for both lock-out guards below. With
+        `is_active` in play, "the last admin" has to mean the last admin who
+        can actually get in — otherwise you could deactivate one admin and
+        then demote the other, locking the install out through the side
+        door. Counted in Python over the (household-sized) admin set rather
+        than as a SQL `!=`, so the UUID-vs-str comparison trap FU-528 hit
+        can't reappear here.
+        """
+        admins = self.repository.get(User).all(
+            EntityField(User, User.Fields.IS_ADMIN).eq(True)
+            & EntityField(User, User.Fields.IS_ACTIVE).eq(True)
+        )
+        return sum(1 for a in admins if str(a.id) != str(user_id))
+
     def handle(
         self,
         request: AdminUpdateUserRequest,
         user_id: UUID,
+        caller_id: UUID | None = None,
     ) -> AdminUpdateUserResponse:
         _Target: User | None = self.repository.get(User).by_id(user_id)
         if _Target is None:
@@ -79,16 +101,24 @@ class AdminUpdateUserHandler:
             _Target.email = request.email
 
         if "is_admin" in _SetFields and request.is_admin is not None:
-            # Guard against an admin demoting themselves into a system with
-            # no admins. We don't block "demote someone else" because the
-            # caller is already an admin and the system isn't single-user
-            # by design.
+            # Guard against demoting the install's last usable admin — see
+            # `_other_usable_admins` for why "usable" (active) is the bar.
             if not request.is_admin and _Target.is_admin:
-                _IsAdminField = EntityField(User, User.Fields.IS_ADMIN)
-                _AdminCount = self.repository.get(User).count(_IsAdminField.eq(True))
-                if _AdminCount <= 1:
+                if self._other_usable_admins(user_id) == 0:
                     return AdminUpdateUserResponse(would_remove_last_admin=True)
             _Target.is_admin = request.is_admin
+
+        if "is_active" in _SetFields and request.is_active is not None:
+            if not request.is_active:
+                # Deactivating yourself would sign you out mid-action with no
+                # way back in (get_me kills the cookie on the next probe), so
+                # it's refused outright rather than confirmed — the same shape
+                # as the existing "you can't delete your own account" rule.
+                if caller_id is not None and str(caller_id) == str(user_id):
+                    return AdminUpdateUserResponse(would_deactivate_self=True)
+                if _Target.is_admin and self._other_usable_admins(user_id) == 0:
+                    return AdminUpdateUserResponse(would_deactivate_last_admin=True)
+            _Target.is_active = request.is_active
 
         if "deals_email_enabled" in _SetFields and request.deals_email_enabled is not None:
             _Target.deals_email_enabled = request.deals_email_enabled
@@ -108,12 +138,14 @@ class AdminUpdateUserHandler:
 @has_request_body(AdminUpdateUserRequest)
 def admin_update_user(user_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _, err = _require_admin()
+    _CallerId, err = _require_admin()
     if err is not None:
         return err
 
     _Request: AdminUpdateUserRequest = get_request_body()
-    _Response = AdminUpdateUserHandler(SqlAlchemyRepository()).handle(_Request, user_id)
+    _Response = AdminUpdateUserHandler(SqlAlchemyRepository()).handle(
+        _Request, user_id, _CallerId,
+    )
 
     if _Response.user_not_found:
         return not_found("User", user_id)
@@ -124,6 +156,14 @@ def admin_update_user(user_id: UUID):
     if _Response.would_remove_last_admin:
         return business_rule_violation(
             "Refusing to remove the last admin — promote someone else first."
+        )
+    if _Response.would_deactivate_self:
+        return business_rule_violation(
+            "You can't deactivate your own account."
+        )
+    if _Response.would_deactivate_last_admin:
+        return business_rule_violation(
+            "Refusing to deactivate the last admin — promote someone else first."
         )
 
     _Logger.info(f"Admin updated user {user_id}")

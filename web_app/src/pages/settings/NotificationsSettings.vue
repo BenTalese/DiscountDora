@@ -159,6 +159,36 @@
                 pushes here (other devices keep their own subscriptions).
             </div>
         </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <!-- Daily brief. Rides the push channel, so it's gated on the same
+             VAPID config + an actual subscription — offering it with nowhere
+             to deliver would be a toggle that silently does nothing. -->
+        <SettingsSection>
+            <template #title>Evening brief</template>
+            <template #actions>
+                <q-toggle
+                    v-if="currentUser"
+                    :model-value="currentUser.daily_brief_enabled"
+                    :disable="!pushVapidConfigured || !pushSupported"
+                    aria-label="Send me an evening brief"
+                    @update:model-value="onDailyBriefToggle"
+                />
+            </template>
+
+            <div class="settings-page__note dora-text-muted">
+                One notification at 7pm with tomorrow's meals and any shopping
+                day that's due. Nothing planned and nothing to buy means no
+                notification — it only arrives when there's something to say.
+            </div>
+            <div
+                v-if="currentUser?.daily_brief_enabled && !pushSubscribed && pushVapidConfigured && pushSupported"
+                class="settings-page__note dora-text-muted"
+            >
+                Turn on push notifications above to receive it on this device.
+            </div>
+        </SettingsSection>
     </div>
 </template>
 
@@ -278,6 +308,15 @@
             authStore.updateMeAsync({ alerts_email_day: value })
         );
         if (result === null) alertsEmailDayDraft.value = previous;
+    }
+
+    async function onDailyBriefToggle(value: boolean) {
+        await update(
+            value
+                ? "You'll get an evening brief when there's something to say."
+                : 'Evening brief turned off.',
+            () => authStore.updateMeAsync({ daily_brief_enabled: value }),
+        );
     }
 
     async function onPushToggle(value: boolean) {

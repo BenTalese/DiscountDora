@@ -6,6 +6,9 @@ export type AdminUser = {
     username: string;
     email: string | null;
     is_admin: boolean;
+    // Deactivate-instead-of-delete: an inactive account keeps all its data
+    // but can't sign in.
+    is_active: boolean;
     send_deals_on_day: number;
     deals_email_enabled: boolean;
     // Settings rebuild Phase 4 — whether the user has a profile picture
@@ -17,22 +20,26 @@ export type AdminUpdateUserCommand = {
     username?: string;
     email?: string | null;
     is_admin?: boolean;
+    is_active?: boolean;
     deals_email_enabled?: boolean;
 };
 
-// admin-create counterpart to
-// `/auth/register`. Server mints a one-time password + returns it once;
-// admin relays it out-of-band. No verification email; the admin
-// implicitly vouches.
+// admin-create counterpart to `/auth/register`. No verification email; the
+// admin implicitly vouches. `password` set ⇒ that's the password and the
+// response carries none back; omitted ⇒ the server mints a one-time password
+// and returns it once for the admin to relay out-of-band.
 export type AdminCreateUserCommand = {
     username: string;
     email?: string | null;
     is_admin?: boolean;
+    password?: string;
 };
 
-export type CreateUserResult = { user_id: string; new_password: string };
+// `new_password` is null whenever the admin chose the password themselves —
+// there's nothing to hand back that they don't already have.
+export type CreateUserResult = { user_id: string; new_password: string | null };
 
-export type ResetPasswordResult = { new_password: string };
+export type SetPasswordResult = { new_password: string | null };
 
 export default class UserAdminApiService {
     private httpClient = new AxiosHttpClient();
@@ -60,9 +67,13 @@ export default class UserAdminApiService {
     deleteAsync = async (userId: string): Promise<void> =>
         await this.httpClient.delete(`/users/${userId}`);
 
-    resetPasswordAsync = async (userId: string): Promise<ResetPasswordResult> =>
-        await this.httpClient.post<ResetPasswordResult, Record<string, never>>(
+    // `password` omitted ⇒ server generates one and returns it.
+    setPasswordAsync = async (
+        userId: string,
+        password?: string,
+    ): Promise<SetPasswordResult> =>
+        await this.httpClient.post<SetPasswordResult, { password?: string }>(
             `/users/${userId}/reset-password`,
-            {}
+            password ? { password } : {},
         );
 }

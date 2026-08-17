@@ -34,6 +34,9 @@ from dora_api.features.recipes.recipe_step_image_access import (
 from dora_api.features.recipes.recipe_section_access import (
     get_section_count_for_recipes, get_sections_for_recipe,
 )
+from dora_api.features.stock_items.inference_overlay import (
+    SURFACE_RECIPES, IngredientRow, recipe_hint, resolve_divergence,
+)
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import bad_request, not_found, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -215,7 +218,13 @@ class RecipeDto:
     is_favourite: bool
     last_made_on: date | None
     prep_time_minutes: int | None
+    # Same id-plus-name shape as cuisine/category above, and for the same
+    # reason: the cookbook prints the collection on every card's meta line
+    # now that the collection *folders* are gone, and resolving the name
+    # client-side would mean a join against a separately-fetched collection
+    # list on every render (R-003).
     recipe_collection_id: UUID | None
+    recipe_collection_name: str | None
     servings: int | None
     # origin URL when the recipe was imported.
     source: str | None
@@ -325,6 +334,16 @@ class RecipeDto:
     # Whether `kcal_per_serving` may be used to *judge* the recipe (filter it
     # out of a "≤ N kcal" search, rank it) as opposed to just display it.
     kcal_is_reliable: bool = False
+    # FU-653 — the Zero-Input belief's remark about this recipe, or None.
+    # 'at_risk' (reads cookable, but Dora believes a required ingredient has
+    # run out) | 'maybe_cookable' (reads not-cookable, but she believes every
+    # missing ingredient is back). **Purely additive**: `cookable`,
+    # `missing_count` and the `?cookable` filter above are untouched by it, by
+    # owner directive. Always None when the user hasn't opted the recipes
+    # surface in. Hydrated by `_hydrate_inference`, not `from_entity` — it
+    # needs the signed-in user plus a bulk belief gather.
+    inference_hint: str | None = None
+    inference_stock_item_names: List[str] = field(default_factory=list)
 
     @classmethod
     def from_entity(cls, recipe: Recipe, dietary_tag_ids: list[UUID] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
@@ -357,6 +376,7 @@ class RecipeDto:
             last_made_on = recipe.last_made_on,
             prep_time_minutes = recipe.prep_time_minutes,
             recipe_collection_id = recipe.recipe_collection.id if recipe.recipe_collection else None,
+            recipe_collection_name = recipe.recipe_collection.name if recipe.recipe_collection else None,
             servings = recipe.servings,
             source = recipe.source,
             time_of_day = recipe.time_of_day,
@@ -880,6 +900,60 @@ class GetRecipesHandler:
             for d in dtos
         ]
 
+    def _hydrate_inference(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """FU-653 — stamp the Zero-Input belief remark on each recipe.
+
+        One bulk belief gather for every stock item the page references (not
+        the whole pantry, and not one gather per recipe), then a pure decision
+        per recipe. Returns the dtos untouched when the user hasn't opted the
+        recipes surface in — `resolve_divergence` owns that gate.
+
+        Cookability is *not* recomputed here: the hint reads the DTO's existing
+        `missing_count` / `unlinked_ingredient_count`, which came from the
+        domain authority. The overlay adds a remark; it never edits a verdict.
+        """
+        if not dtos:
+            return dtos
+        import dataclasses
+
+        item_ids = {
+            ingredient.stock_item_id
+            for dto in dtos
+            for ingredient in dto.ingredients
+            if ingredient.stock_item_id is not None
+        }
+        if not item_ids:
+            return dtos
+        items = self.repository.get(StockItem).include(StockItem.Fields.STOCK_LEVEL).all(
+            EntityField(StockItem, "id").in_(list(item_ids))
+        )
+        divergence = resolve_divergence(self.repository, SURFACE_RECIPES, items)
+        if divergence.is_empty:
+            return dtos
+
+        out: list[RecipeDto] = []
+        for dto in dtos:
+            hint = recipe_hint(
+                [
+                    IngredientRow(
+                        stock_item_id=i.stock_item_id,
+                        name=i.stock_item_name or (i.raw_text or ""),
+                        is_optional=i.is_optional,
+                        is_missing=i.is_missing,
+                    )
+                    for i in dto.ingredients
+                ],
+                divergence,
+                missing_count=dto.missing_count,
+                unlinked_count=dto.unlinked_ingredient_count,
+            )
+            out.append(dto if hint is None else dataclasses.replace(
+                dto,
+                inference_hint=hint.kind,
+                inference_stock_item_names=hint.stock_item_names,
+            ))
+        return out
+
     def _hydrate_section_count(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """List endpoint only — one bulk query for the section-count
         badge on each recipe card. Detail endpoint loads the full
@@ -1051,7 +1125,7 @@ class GetRecipesHandler:
             options, RecipeDto.from_entity, field_map=_FIELD_MAP
         )
         import dataclasses
-        _Hydrated = self._hydrate_nutrition(self._hydrate_unallocated(
+        _Hydrated = self._hydrate_inference(self._hydrate_nutrition(self._hydrate_unallocated(
             self._hydrate_has_image(
                 self._hydrate_section_count(
                     self._hydrate_structured_steps_flag(
@@ -1063,7 +1137,7 @@ class GetRecipesHandler:
                     )
                 )
             )
-        ))
+        )))
         return dataclasses.replace(page, items=_Hydrated)
 
     def handle_by_id(self, recipe_id: UUID) -> RecipeDto | None:
@@ -1148,9 +1222,9 @@ class GetRecipesHandler:
             step_images=step_image_dtos,
             has_step_images=bool(step_image_dtos),
         )
-        _Hydrated = self._hydrate_unallocated(
+        _Hydrated = self._hydrate_inference(self._hydrate_unallocated(
             self._hydrate_has_image([_WithAssoc])
-        )[0]
+        ))[0]
         return self._compute_nutrition(self._compute_estimated_cost(_Hydrated), entity)
 
 

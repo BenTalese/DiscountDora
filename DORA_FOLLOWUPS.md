@@ -52,6 +52,152 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-665 — Re-run vue-tsc + eslint over `web_app`
+- **Raised:** 2026-08-17 (cookbook collection-folder removal).
+- **Type:** leftover.
+- **What:** both were run clean over the `RecipesOverview.vue` / `useRecipeDisplay.ts` /
+  `recipe.ts` edits, but the final addition — `web_app/test/unit/recipeMetaLine.spec.ts` —
+  landed after that pass. It's green under vitest; the typecheck/lint sweep over it
+  didn't get to run.
+- **Why deferred:** session ran out of time.
+- **Recommended resolution:** now (next session start — it's two commands).
+
+## [OPEN] FU-664 — Handler call sites can drift from entity signatures silently
+- **Raised:** 2026-08-17 (first-setup onboarding bug).
+- **Type:** finding.
+- **What:** `SeedDemoHandler` was still passing `image=None` to `StockItem` long after
+  the entity dropped the field. Nothing caught it because the only path that constructs
+  those rows is gated behind an idempotency check that's already satisfied on every
+  seeded/dev/e2e database — so a genuine first install was the *only* way to hit it.
+  Worth a sweep for other "only runs once, on a truly empty DB" branches (the rest of
+  the onboarding seeders, `seed_showcase`, the demo-reset path) that no test reaches.
+- **Why deferred:** out of scope for a bug fix; the reported defect itself is fixed and
+  now covered by `tests/e2e/dora_api/test_onboarding_seed_demo.py`.
+- **Recommended resolution:** opportunistic — or now, if a fresh-install smoke test is
+  wanted before the next release.
+
+## [OPEN] FU-663 — The chat header's Basic/AI slider is a 24px tap target (D-004)
+- **Raised:** 2026-08-17 (assistant chat-window feedback pass).
+- **Type:** finding.
+- **What:** `DoraModeSlider.vue` is `height: 24px; min-width: 96px`. D-004 floors touch
+  targets at 44×44px. This was tolerable while the slider was mouse-territory chrome,
+  but this session made it **deliberately tappable on touch** — when AI isn't configured
+  it now routes to Settings → Assistant rather than sitting inert behind a hover-only
+  tooltip. So it is now a primary touch affordance at roughly half the required height.
+- **Why deferred:** growing it changes the chat header's whole vertical rhythm (the
+  header row also holds three icon buttons and the D.O.R.A. wordmark), which is a design
+  call, not a CSS tweak. Same family as **FU-641** (header icon buttons at 36px) — the
+  two should be resolved together as one header-density pass rather than piecemeal.
+- **Recommended resolution:** later, folded into FU-641. Cheapest compliant shape is
+  probably an invisible `::after` hit-area expanding the slider to 44px vertically
+  without moving the pill itself.
+
+## [OPEN] FU-660 — Failed offline syncs have nowhere to go — no conflict UI
+- **Raised:** 2026-08-17 (offline-sync audit).
+- **Type:** finding / deferred job.
+- **What:** `useOfflineQueue` maintains a `conflicts` pile for queued mutations the
+  server rejects on replay for a non-network reason (422, 409, a since-deleted item).
+  It's exposed — `conflicts`, `conflictCount`, `discardConflict`, `retryConflict` — and
+  **nothing in the app consumes any of it**. The user gets one 5-second toast and the
+  change is then unreachable: no list, no retry, no way to see what was dropped. This
+  session made the pile survive a reload (it was memory-only, so a refresh erased the
+  record entirely), which turns silent loss into recoverable loss — but only for
+  someone reading localStorage.
+- **Why deferred:** the transport bugs were the blocker (nothing could sync at all —
+  see the same-day CSRF fix), and surfacing conflicts needs a real design call: where
+  does it live (a banner? Settings? a dedicated "unsynced changes" page?), and what are
+  the resolve verbs beyond retry/discard.
+- **Recommended resolution:** later, once the fixed sync path has been exercised in
+  anger — the shape of the UI should follow what conflicts actually turn out to be.
+  Pairs with FU-661.
+
+## [OPEN] FU-661 — Offline coverage is six mutation kinds; is that the right set?
+- **Raised:** 2026-08-17 (offline-sync audit).
+- **Type:** design question.
+- **What:** exactly six things queue offline — `stock_level_update`, `mark_open`,
+  `mark_restocked`, `push_expiry`, `clear_expiry`, `shopping_list_line_tick` — from three
+  call sites (`stockItemStore` ×2, `ShoppingListDetail`). Everything else fails loudly by
+  design (`useOfflineQueue`'s header: creates, deletes and anything identity-changing are
+  excluded because a phantom item appearing an hour later is worse than an error now).
+  That's a defensible line, but it was drawn at F3 and never revisited against how the
+  app is actually used mid-shop. Candidates worth a look: adding an item to a shopping
+  list (a create, but an idempotent-ish one), the stocktake runner's check/snooze (a
+  walk-the-pantry flow, i.e. exactly the "in a cupboard with no signal" case), and
+  cook-mode's finish step.
+- **Why deferred:** each addition needs its own replay-safety argument, and two of the
+  three are creates — the category the current design deliberately excludes.
+- **Recommended resolution:** opportunistic, or when the real-device field test (FU-389)
+  says which of these actually bites.
+
+## [OPEN] FU-662 — `attempts` is counted on queued mutations but never acted on
+- **Raised:** 2026-08-17 (offline-sync audit).
+- **Type:** finding.
+- **What:** `QueuedMutation.attempts` is incremented on every failed replay and read
+  nowhere. There's no cap, so a mutation that keeps failing retries forever, and no
+  staleness check, so a level set three days ago can replay over a newer value with
+  last-write-wins and no warning — `createdAt` is recorded but unused. Neither has bitten
+  yet (the queue could never drain at all until today's fix), which is precisely why it's
+  worth deciding now rather than after it does.
+- **Why deferred:** picking a cap and a staleness window is a product call, not a
+  mechanical fix — "drop it", "conflict it", and "replay it anyway" are all defensible.
+- **Recommended resolution:** with FU-660 — the answer to "too old / too many tries"
+  is "it goes in the conflict pile", so the two want designing together.
+
+## [OPEN] FU-656 — The password-strength rule is asserted in two languages
+- **Raised:** 2026-08-17 (admin-settings rework).
+- **Type:** finding.
+- **Why it matters (R-003):** `auth_helpers.validate_password` is the authority — length
+  **plus** a common-password blocklist — and it's the only thing that can reject a save.
+  But three forms need to say "at least 8 characters" *before* the round-trip, so the
+  number is now also a frontend constant (`web_app/src/models/password.ts`
+  `MIN_PASSWORD_LENGTH`). That's one copy on each side of the wire; raising the server
+  rule would silently leave the forms hinting the old number, and the blocklist half is
+  invisible to the client entirely (you only learn "that's a common password" after
+  submitting).
+- **What:** publish the policy from the server — `min_length` (and ideally a
+  `rules` blurb, `PASSWORD_RULES_DOC` already exists) on `GET /auth/capabilities`,
+  which is already unauthenticated and already read on the login screen — then delete
+  the literal and have `password.ts` read the published value with the current number
+  as a boot fallback.
+- **Why deferred:** the duplication is a hint string, not a security boundary — the
+  server still rejects anything weak — and doing it properly means a small policy store
+  + fallback on the client, which is more than the admin-settings unit should carry.
+- **Recommended resolution:** opportunistic — natural pairing with any future auth or
+  capabilities work.
+
+## [OPEN] FU-655 — Deactivation only bites on `/auth/me` and the admin gate, not on every authenticated route
+- **Raised:** 2026-08-17 (admin-settings rework).
+- **Type:** finding.
+- **What:** switching a user off is enforced in exactly three places — `login` refuses to
+  mint a session, `get_me` clears an existing cookie on the next probe, and
+  `auth/admin_gate.require_admin` re-checks before any admin action. A deactivated user
+  holding a live cookie who never hits `/auth/me` could still call ordinary
+  (non-admin) API routes until the SPA's next `/me`. In practice the SPA probes `/me`
+  on boot and on refocus, so the window is short and the surfaces reachable in it are
+  household-shared data the person already had — but "short" isn't "closed".
+- **Why deferred:** there is no shared authenticated-route resolver to hang the check
+  on — that's exactly the ~13-way hand-rolled `session['user_id']` → `User` dance in
+  **FU-654**. Adding a 14th copy of the check to each feature is the wrong fix; the
+  right one is a single `current_user()` that refuses inactive users, which lands with
+  FU-654's sweep.
+- **Recommended resolution:** with FU-654 — the check is two lines once the resolver
+  exists.
+
+## [OPEN] FU-654 — `session['user_id']` → `User` is hand-rolled in ~13 features (R-001)
+- **Raised:** 2026-08-17 (FU-653 build).
+- **Type:** finding.
+- **What:** the same 8-line dance — read `session["user_id"]`, `UUID()` it inside a
+  try/except, `repo.get(User).by_id(...)` — is copy-pasted across `features/alerts/*`
+  (5 files), `features/assistant/*` (2), `features/budget/budget.py`,
+  `features/dashboard/get_dora_score.py`, `features/stock_items/get_pantry_beliefs.py`
+  and now `features/stock_items/inference_overlay.current_user` (which at least gives the
+  three new surfaces one copy between them, with a comment pointing here).
+- **Why deferred:** mechanical and wide; folding it into one
+  `infrastructure/auth_helpers.current_user(repo)` touches a dozen files and belongs in a
+  tidy-up pass, not in the middle of a feature.
+- **Recommended resolution:** opportunistic — next time something is being changed across
+  those features anyway (a natural pairing with the FU-512 unit-of-work sweep).
+
 ## [OPEN] FU-651 — Stray editor temp file committed-adjacent in `web_app/src/pages/`
 - **Raised:** 2026-08-16 (stock-overview filter feedback).
 - **Type:** leftover.
@@ -107,24 +253,37 @@ long session summary. Distinct from the other logs:
   rest unasked is exactly the drive-by the standards warn against.
 - **Recommended resolution:** opportunistic — next time one of those files is open.
 
-## [OPEN] FU-648 — QR fix shipped without reproducing the reported failure
-- **Raised:** 2026-08-16 (stock-item detail feedback batch).
+## [OPEN] FU-648 — QR: "Print one" root-caused and fixed; the dialog failure still unexplained
+- **Raised:** 2026-08-16 (stock-item detail feedback batch). **Re-reported 2026-08-17**
+  by the owner after the first fix: "when I tap on it I get 'couldn't load…' and then
+  print one gives me an error."
 - **Type:** finding.
-- **What:** the owner reported "QR button doesn't work — empty modal and a 404 on Print
-  one". A static read did **not** reproduce it: both endpoints exist, both route, and
-  both answer 401-not-404 to an unauthenticated curl against the running dev backend.
-  The fix shipped (R-045 / ADR-041 — fetch through `AxiosHttpClient`, open a blob,
-  inline the sheet's images as data: URIs) removes the whole class of failure, since
-  the previous form could only work if the browser volunteered the session cookie. But
-  **the specific 404 was never explained** — a 404 rather than a 401 suggests the
-  request didn't reach those routes at all, which would point at the backend base URL
-  the owner's install resolves (`envDefault()` hardcodes `:5170`, which is wrong for a
-  single-port container deployment) rather than at auth.
-- **Why it matters:** if the base URL is the real cause, it's broken for more than QR
-  and the fix here would mask one symptom. Worth 2 minutes with devtools open.
-- **Recommended resolution:** confirm in browser — open the QR dialog on the owner's
-  actual install; if it now works, check what `localStorage['dora.backendBaseUrl']` /
-  the network tab show for the API origin and close this out. See DORA_VERIFY → Stock.
+- **What (updated 2026-08-17 — this round stopped guessing and measured):**
+  - **Server half: proven green.** New e2e pin `tests/e2e/dora_api/test_qr_labels.py`
+    (7 tests) exercises both endpoints through the real stack: PNG renders with the
+    right magic bytes, `size=512` (what the dialog asks for) is accepted, absurd sizes
+    400, an unknown item 404s, the sheet renders in caller order, skips unknown ids,
+    prints-all with no ids, and — the load-bearing one — contains
+    `data:image/png;base64,` and **no** `/api/stock-items` back-reference.
+  - **Transport half: proven green.** Driven live from the Browser pane at `:5174`
+    against the API at `:5170` — i.e. genuinely cross-origin with `credentials:
+    'include'` — both endpoints answered 200, and `fetchQrImageUrlAsync` from the real
+    composable returned a blob URL. So neither CORS, the cookie, nor the base URL is
+    broken on this shape of deployment.
+  - **"Print one": root-caused and fixed.** ADR-041's fix moved `window.open` to
+    *after* the `await`, which every browser treats as an unsolicited pop-up and blocks
+    — unconditionally on mobile, which is where the owner tapped. Now opened inside the
+    click and navigated when the fetch lands (**R-046 / ADR-042**), with a blocked
+    pop-up reported as its own message.
+  - **"Couldn't load…": still not reproduced**, on the third attempt. It is now
+    *instrumented* rather than guessed at: the dialog reports the HTTP status and the
+    correlation-id prefix instead of a flat sentence, and network errors are worded
+    differently from server errors.
+- **Why it matters:** the remaining unknown is specific to the owner's install, and the
+  previous two rounds failed precisely because the error message carried no evidence.
+- **Recommended resolution:** confirm in browser on the owner's actual install. If the
+  dialog still fails, **the message now names the cause** — quote it verbatim (status +
+  `Ref:` prefix) and this closes in one pass. If it works, close. See DORA_VERIFY → Stock.
 
 ## [OPEN] FU-647 — `print-view` and the CSV export still build API URLs by hand (R-045)
 - **Raised:** 2026-08-16 (QR fix — noticed in the same composable).
@@ -156,6 +315,29 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** when the recipe nutrition card is next touched. Note the
   data caveat: existing catalogue rows have NULL for all four until the dataset is
   re-imported, so the rollup would report them as uncounted for a while.
+- **Widened 2026-08-17:** the gap is now four nutrients plus fifteen — the
+  vitamins-and-minerals block (migration `b6e04c9a2f18`) is likewise stock-item-detail
+  only. This does **not** mean the rollup should grow all nineteen: a per-recipe
+  potassium total is a different (and much more caveated) claim than a per-100g
+  catalogue figure. Decide the scope deliberately when the card is next opened.
+
+## [OPEN] FU-657 — The new micronutrients' Open Food Facts scale factors are unverified against a real response
+- **Raised:** 2026-08-17 (nutrition micronutrients build).
+- **Type:** finding.
+- **What:** the fifteen new nutrients carry OFF `off_scale` values derived from OFF's
+  documented convention that every non-energy `*_100g` nutriment is normalised to
+  **grams** — so minerals are ×1000 (g→mg) and the µg-declared vitamins are ×1,000,000.
+  That's the same reasoning the existing (and correct) sodium ×1000 rests on, and the
+  USDA side of all fifteen is exercised by the importer's own `(name, unit)` matching.
+  But **no test and no live OFF response** covers the new keys, so a mis-scaled vitamin
+  would read as a 1000× error on a number people watch — the exact hazard the sodium
+  comment in `nutrients.py` warns about.
+- **Why deferred:** verifying it properly means hitting the live OFF API (the suite
+  deliberately keeps network sources off, and the local catalogue is USDA), so it's a
+  live-lookup check rather than a unit test.
+- **Recommended resolution:** opportunistic — next time OFF lookup is switched on, scan
+  a packaged good with a rich panel and sanity-check calcium/vitamin C against the pack.
+  A wrong order of magnitude is obvious at a glance.
 
 ## [OPEN] FU-645 — Existing nutrition catalogue rows have no sugars/saturates/fibre/sodium until re-import
 - **Raised:** 2026-08-16 (nutrition macros+ build).
@@ -170,6 +352,11 @@ long session summary. Distinct from the other logs:
   enough; a banner would be over-nagging for a display-only gap.
 - **Recommended resolution:** now-ish, alongside any next visit to the admin Nutrition
   page. Cheap either way.
+- **Widened 2026-08-17:** migration `b6e04c9a2f18` adds fifteen more on the same terms
+  (the vitamins-and-minerals block), so a pre-today install now shows an *empty*
+  optional section rather than a partial one — which reads as "this food has no
+  vitamins" instead of "we haven't downloaded them". That makes the one-line hint on
+  the admin Nutrition page more worth doing, not less.
 
 ## [OPEN] FU-644 — Preferred buys are hidden when Products is on, with no migration path for existing rows
 - **Raised:** 2026-08-16 (stock-item detail feedback batch — owner decision).
@@ -228,6 +415,11 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** `dora-btn--icon` is app-wide — raising it to 44px re-flows every
   toolbar, table row and card action in the app, which is its own unit with its own
   browser pass. Way outside a header tweak.
+- **Also in scope (2026-08-17):** the Users page's new per-row `⋮` actions menu is the
+  same `icon` variant, so on a phone it's a 36px target carrying that row's Edit /
+  Change-password / Delete. Not a new fault — it inherits the app-wide floor and will be
+  fixed by the same one-line change to `dora-btn--icon`. Called out so the sweep knows to
+  re-check row-level (not just toolbar) icon buttons.
 - **Recommended resolution:** later — fold into the next design-remediation pass, or
   whenever the FU-578 UX/UI review is triaged into fix units.
 
@@ -314,6 +506,18 @@ long session summary. Distinct from the other logs:
   render. If they do, this is an agent-pane artifact and can be closed with a
   note; if they don't, it's a live cookbook regression and the transition
   wrapper is the first suspect.
+- **2026-08-17 evidence (cookbook toolbar/compact-view work) — now strongly
+  looks like the pane artifact.** Reproduced exactly on the **first** navigation
+  to `#/cookbook` (empty state rendered, footer read "15 Shown / 9 Cookable"),
+  then **navigating away and back rendered 2 groups / 15 cards with no empty
+  state** — i.e. it only misses when the data arrives *during* the transition.
+  That is the rAF-wedge signature: `requestAnimationFrame` never fires in the
+  agent pane, so a Vue `<Transition>` (here `FadeTransition mode="out-in"`
+  around the grid) can wedge mid-leave, leaving the pre-data branch on screen
+  while the footer — outside the transition — updates normally. Same failure
+  mode as the DR-8 boot-splash wedge. Still needs the real-browser check to
+  close, but the transition wrapper is now the confirmed first suspect and the
+  bug is unlikely to exist outside the pane.
 
 ## [OPEN] FU-636 — USDA Foundation dataset URL carries a release date and will eventually 404
 - **Raised:** 2026-08-14 (nutrition complex-mode build).

@@ -259,23 +259,35 @@ export type StockItemDetail = {
     nutrition_ignored?: boolean;
 };
 
+/** One printed line of the per-100g table, formatted by the server.
+ *
+ *  `group` splits the standard panel (`panel` — rendered inline) from the
+ *  optional vitamins-and-minerals block (`more` — behind a disclosure);
+ *  `indent` marks a sub-row, the way a pack prints saturated fat under total
+ *  fat. Which nutrients exist, their order, their units and their rounding are
+ *  all decided in `dora_api/features/nutrition/nutrients.py` — the client
+ *  deliberately holds no copy of any of it (R-003). */
+export type NutrientRow = {
+    label: string;
+    /** Already formatted, unit included: "2.6 g", "412 kcal". */
+    value: string;
+    group: 'panel' | 'more';
+    indent: boolean;
+};
+
 export type LinkedNutritionFood = {
     nutrition_food_id: string;
     name: string;
     brand: string | null;
     source: string;
     source_label: string;
-    /** All per 100g except sodium, which is per-100g milligrams (how packs
-     *  state it). `null` means the source didn't carry the value — render it
-     *  as absent, never as zero. */
+    /** Per 100g. `null` means the source didn't carry it — render as absent,
+     *  never as zero. Energy is the one nutrient the app treats as
+     *  load-bearing, so it stays a number here as well as a formatted row. */
     kcal_per_100g: number | null;
-    protein_g_per_100g: number | null;
-    carbs_g_per_100g: number | null;
-    sugars_g_per_100g: number | null;
-    fat_g_per_100g: number | null;
-    saturated_fat_g_per_100g: number | null;
-    fibre_g_per_100g: number | null;
-    sodium_mg_per_100g: number | null;
+    /** Everything the source knows, in panel order. A nutrient it didn't state
+     *  is simply not in the list. */
+    nutrient_rows: NutrientRow[];
 };
 
 export type PricePoint = {

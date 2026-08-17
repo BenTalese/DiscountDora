@@ -10,16 +10,13 @@
             <template #title>Profile picture</template>
             <SettingsRow stacked>
                 <div class="avatar-edit-wrap">
-                    <div
-                        class="avatar-edit"
-                        role="button"
-                        tabindex="0"
-                        :aria-label="currentUser.has_image
+                    <ImageEditTile
+                        :label="currentUser.has_image
                             ? 'Change your profile picture'
                             : 'Upload a profile picture'"
-                        @click="triggerPick"
-                        @keydown.enter.prevent="triggerPick"
-                        @keydown.space.prevent="triggerPick"
+                        :busy="savingImage"
+                        @pick="onPickImage"
+                        @error="(m) => (imageError = m)"
                     >
                         <UserAvatar
                             :user-id="currentUser.user_id"
@@ -30,11 +27,7 @@
                             color="accent"
                             text-color="dark"
                         />
-                        <div class="avatar-edit__overlay">
-                            <q-icon :name="ICONS.edit" size="26px" />
-                        </div>
-                        <q-inner-loading :showing="savingImage" />
-                    </div>
+                    </ImageEditTile>
 
                     <BaseButton
                         v-if="currentUser.has_image"
@@ -46,15 +39,6 @@
                         @click="onClearImage"
                     />
 
-                    <!-- Native picker: on mobile this offers camera + gallery,
-                         on desktop the file dialog. -->
-                    <input
-                        ref="fileInput"
-                        type="file"
-                        accept="image/*"
-                        class="avatar-edit__input"
-                        @change="onFileChange"
-                    />
                     <div v-if="imageError" class="text-caption text-negative">
                         {{ imageError }}
                     </div>
@@ -107,11 +91,20 @@
             </template>
             <SettingsRow stacked>
                 <div class="row q-col-gutter-sm">
+                    <!-- `bottom-slots` reserves the message row this field
+                         doesn't otherwise have. Its two siblings carry an
+                         :error binding, so Quasar reserves 20px under *them*
+                         only — which on mobile (fields stacked) left Confirm
+                         sitting 28px below New while Current sat 8px above it,
+                         reading as a stray gap (owner, 2026-08-17). Reserving
+                         on all three makes the spacing uniform and stops the
+                         group shifting when a validation message appears. -->
                     <q-input
                         v-model="currentPassword"
                         label="Current password"
                         outlined
                         dense
+                        bottom-slots
                         type="password"
                         class="col-12 col-sm-4"
                         autocomplete="current-password"
@@ -175,7 +168,8 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
-    import { processImageFile } from 'src/services/files/imageService';
+    import ImageEditTile from 'src/components/ImageEditTile.vue';
+    import type { ProcessedImage } from 'src/services/files/imageService';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
     const $q = useQuasar();
@@ -185,26 +179,15 @@
     // ── Profile picture — click the circle to pick, immediate save ─────
     // The image is a distinct action, not part of the deferred field save:
     // picking or clearing commits straight away (no draft window), matching
-    // how modern apps handle an avatar.
-    const fileInput = ref<HTMLInputElement | null>(null);
+    // how modern apps handle an avatar. ImageEditTile owns the picker + the
+    // resize/encode step; this only saves the result.
     const savingImage = ref(false);
     const imageError = ref<string | null>(null);
 
-    function triggerPick() {
-        if (savingImage.value) return;
-        imageError.value = null;
-        fileInput.value?.click();
-    }
-
-    async function onFileChange(ev: Event) {
-        const input = ev.target as HTMLInputElement;
-        const file = input.files?.[0];
-        input.value = ''; // let re-picking the same file re-fire
-        if (!file) return;
+    async function onPickImage(processed: ProcessedImage) {
         savingImage.value = true;
         imageError.value = null;
         try {
-            const processed = await processImageFile(file);
             await authStore.updateMeAsync({ image: processed.dataUrl });
             notifySuccess('Profile picture updated.');
         } catch (err) {
@@ -354,44 +337,14 @@
         margin: 2px 0;
     }
 
-    // Circular avatar with a hover/focus pencil overlay — click anywhere on
-    // the circle to open the picker.
+    // The tile itself (circle + hover pencil) lives in ImageEditTile; this
+    // only stacks it above the Remove button.
     .avatar-edit-wrap {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
     }
-    .avatar-edit {
-        position: relative;
-        width: 96px;
-        height: 96px;
-        border-radius: 50%;
-        cursor: pointer;
-        outline: none;
-    }
-    .avatar-edit__overlay {
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        background: rgba(0, 0, 0, 0.45);
-        opacity: 0;
-        transition: opacity 0.15s ease;
-        pointer-events: none;
-    }
-    .avatar-edit:hover .avatar-edit__overlay,
-    .avatar-edit:focus-visible .avatar-edit__overlay {
-        opacity: 1;
-    }
-    .avatar-edit:focus-visible {
-        box-shadow: 0 0 0 3px var(--focus-ring, var(--brand-primary));
-        border-radius: 50%;
-    }
-    .avatar-edit__input { display: none; }
 
     .account-field {
         width: 100%;

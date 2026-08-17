@@ -818,15 +818,31 @@
        icon. Colour matches the "Essential" footer count + filter chip.
        2026-08-16 feedback: paints in the indicator-grade secondary, not
        `--q-secondary` — the latter is the toolbar background in every
-       dark theme, which left the stripe all but invisible there. */
+       dark theme, which left the stripe all but invisible there.
+       2026-08-17 feedback: no longer a straight up-and-down bar. The
+       element is now 16px wide and clipped to a bracket — it runs the
+       full 16px along the row's top and bottom edges, then tapers back
+       to the original 5px over the first/last 14px, so it reads as a
+       tab hooked around the corner rather than a stuck-on strip. The
+       row's `overflow: hidden` + 8px radius rounds the two outer
+       corners for free. Width is clip only: nothing else in the row
+       shifts, since the stripe is absolutely positioned. */
     .stock-row__essential-stripe {
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
-        width: 5px;
+        width: 16px;
         background: var(--brand-secondary-strong);
         pointer-events: none;
+        clip-path: polygon(
+            0 0,
+            100% 0,
+            5px 14px,
+            5px calc(100% - 14px),
+            100% 100%,
+            0 100%
+        );
     }
 
     /* Status outline-by-status (decision 6). Colours via theme tokens. */

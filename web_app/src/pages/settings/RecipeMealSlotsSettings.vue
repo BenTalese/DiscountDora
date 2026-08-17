@@ -26,7 +26,7 @@
     // up/down controls rely on that order. `usage_count` carries the tally the
     // generic editor renders.
     const load = async (): Promise<VocabItem[]> =>
-        (await api.getAllAsync()).map((s) => ({ id: s.meal_slot_id, name: s.name, recipe_count: s.usage_count }));
+        (await api.getAllAsync()).map((s) => ({ id: s.meal_slot_id, name: s.name, usage_count: s.usage_count }));
     const create = (name: string) => api.createAsync({ name });
     const rename = (id: string, name: string) => api.updateAsync(id, { name });
     const remove = (id: string) => api.deleteAsync(id).then(() => undefined);

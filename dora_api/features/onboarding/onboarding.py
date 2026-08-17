@@ -533,7 +533,9 @@ class SeedItemsHandler:
                 stock_level_last_updated=now,
                 stock_level=stocked,
                 stock_location=location,
-                stocktake_alerts_are_enabled=False,
+                # Same default as a hand-created item (2026-08-17): the
+                # user typed these, so they join the stocktake rotation.
+                stocktake_alerts_are_enabled=True,
             ))
             existing.add(name.lower())
             created += 1
@@ -629,13 +631,15 @@ class SeedDemoHandler:
                 ingredient_items.append(existing)
                 continue
             item = StockItem(
-                image=None,
                 name=str(name),
                 notes=None,
                 stock_group=None,
                 stock_level_last_updated=now,
                 stock_level=stocked,
                 stock_location=None,
+                # Deliberately stays muted while the hand-created default is
+                # on: these are scaffolding for the demo recipe, not items the
+                # user chose to track, so they shouldn't fill the queue.
                 stocktake_alerts_are_enabled=False,
             )
             self.repository.add(item)

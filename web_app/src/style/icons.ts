@@ -244,6 +244,11 @@ export const ICONS = {
     label: 'mdi-label',
     label_important: 'mdi-label-variant',
     visibility_outline: 'mdi-eye-outline',
+    // List-shape toggle (cookbook 2026-08-17): each glyph shows the shape
+    // the button will switch TO, so the icon is the destination not the
+    // current state.
+    view_module: 'mdi-view-grid',
+    view_list: 'mdi-view-list',
 
     // ── Semantic aliases — prefer these in new code ─────────────────
     // Common UI actions

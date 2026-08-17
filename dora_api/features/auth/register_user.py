@@ -82,6 +82,12 @@ class AuthenticatedUserDto:
     # clients read the cook-style via /api/health.cooking_policy.
     # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
+    # FU-653 — per-surface belief overlays (recipes / shopping lists / meal
+    # planner), each default off. The SPA reads them on boot to decide whether
+    # to render the hint on those pages at all; the server gates the data too.
+    inference_recipes_enabled: bool
+    inference_shopping_enabled: bool
+    inference_meal_plan_enabled: bool
     # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
     # clients read it from /api/health `features.nutrition_mode`.
     # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
@@ -119,6 +125,9 @@ class AuthenticatedUserDto:
     # True; distinct from `llm_enabled` (AI mode). When False the SPA hides
     # the launcher entirely.
     show_assistant: bool
+    # Daily brief push opt-in (one evening notification: tomorrow's meals +
+    # any shopping day that's due). Off by default like every other channel.
+    daily_brief_enabled: bool
 
     @classmethod
     def from_entity(
@@ -145,6 +154,9 @@ class AuthenticatedUserDto:
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
+            inference_recipes_enabled=bool(user.inference_recipes_enabled),
+            inference_shopping_enabled=bool(user.inference_shopping_enabled),
+            inference_meal_plan_enabled=bool(user.inference_meal_plan_enabled),
             show_recipe_images=bool(user.show_recipe_images),
             alerts_email_enabled=bool(user.alerts_email_enabled),
             alerts_email_cadence=user.alerts_email_cadence,
@@ -155,6 +167,7 @@ class AuthenticatedUserDto:
             llm_provider=user.llm_provider,
             assistant_ready=bool(active_provider is not None and active_provider.verified),
             show_assistant=bool(user.show_assistant),
+            daily_brief_enabled=bool(user.daily_brief_enabled),
         )
 
 

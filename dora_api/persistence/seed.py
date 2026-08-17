@@ -450,6 +450,48 @@ def seed_dev_data(
         instructions="1. Scoop the Vanilla Ice Cream into a bowl.\n2. Enjoy.",
     )
 
+    # ---------------- IMPORTED RECIPES WITH UNLINKED ROWS ---------------- #
+    # Two recipes in the state the paste importer leaves behind: some rows
+    # matched a StockItem, some only carry `raw_text`. This is what gives
+    # Settings → Unlinked ingredients real groups to bulk-link, and what puts
+    # both recipes into the unknown-cookability tri-state until they're
+    # resolved. "Coconut milk" is deliberately shared by both (and spelled
+    # with different casing/whitespace) so one group covers 2 recipes and
+    # exercises the normaliser; the rest are single-recipe groups.
+    unlinked = builders.unlinked_ingredient
+    green_curry = make_recipe(
+        name="Thai Green Curry", collection=to_try, cuisine="Asian", category="Rice",
+        cook=25, prep=15, servings=4, source="https://example.com/thai-green-curry",
+        ingredients=[
+            ingredient(chicken, 500, "g"),
+            ingredient(rice, 300, "g"),
+            unlinked("Coconut milk", 400, "ml"),
+            unlinked("Green curry paste", 3, "tbsp"),
+            unlinked("Fish sauce", 1, "tbsp"),
+            unlinked("Thai basil", None, None, notes="a handful, to finish"),
+        ],
+        instructions=(
+            "1. Fry the green curry paste until fragrant.\n"
+            "2. Add the Chicken Breast and brown, then pour in the coconut milk.\n"
+            "3. Simmer 15 minutes, season with fish sauce and serve over Jasmine Rice."
+        ),
+    )
+    laksa = make_recipe(
+        name="Weeknight Laksa", collection=to_try, cuisine="Asian", category="Side",
+        cook=20, prep=10, servings=2, source="https://example.com/weeknight-laksa",
+        ingredients=[
+            ingredient(chicken, 300, "g"),
+            unlinked("  coconut  milk ", 250, "ml"),
+            unlinked("Laksa paste", 2, "tbsp"),
+            unlinked("Rice noodles", 200, "g"),
+        ],
+        instructions=(
+            "1. Loosen the laksa paste in a splash of oil.\n"
+            "2. Add the coconut milk and Chicken Breast, simmer until cooked through.\n"
+            "3. Serve over softened rice noodles."
+        ),
+    )
+
     # ---------------- MEAL POOL ---------------- #
     # Seed `available_meals` directly on the recipes that the plan will
     # draw from, so the dashboard "meals on hand" card and the planner
@@ -701,6 +743,8 @@ def seed_dev_data(
         (fried_rice, "Vegetarian"),
         (fried_rice, "Dairy-free"),
         (garlic_bread, "Vegetarian"),
+        (green_curry, "Dairy-free"),
+        (laksa, "Dairy-free"),
     ]
     db.session.execute(
         recipe_tag_assoc.insert(),
@@ -716,6 +760,7 @@ def seed_dev_data(
         (aglio, "Large pot"), (aglio, "Frypan"),
         (stir_fry, "Wok"), (fried_rice, "Wok"),
         (garlic_bread, "Baking tray"), (simple_pasta, "Large pot"),
+        (green_curry, "Large pot"), (laksa, "Large pot"),
     ]
     db.session.execute(
         recipe_tool_assoc.insert(),
@@ -811,6 +856,44 @@ def seed_dev_data(
     belief_shops(b_oj, [(40, 4.00), (5, 4.20)])
     belief_shops(b_crackers, [(42, 3.00), (28, 3.00), (14, 3.20)])
     repo.save_changes()
+
+    # FU-653 — two recipes built ON the belief items above, so the recipe /
+    # meal-planner overlays have something to show. Without these the belief
+    # fixtures were pantry-only and no recipe could ever be flagged (found the
+    # hard way: the surfaces were correct and the dataset simply never
+    # exercised them).
+    #   • Tuna Bake  — every ingredient recorded Stocked, but Dora believes the
+    #     tuna has run out → "at risk" (the recipe still reads cookable).
+    #   • Juice Bowl — the OJ is recorded Out (so the recipe reads not-cookable)
+    #     but Dora believes it was restocked → "may be cookable after all".
+    belief_bake = make_recipe(
+        name="Belief demo: Tuna Bake", collection=weeknight, cuisine="Italian",
+        category="Pasta", cook=25, prep=10, servings=2,
+        ingredients=[
+            ingredient(b_tuna, 2, "tins"),
+            ingredient(pasta, 250, "g"),
+        ],
+        instructions="Cook the pasta. Stir the tuna through. Bake.",
+    )
+    make_recipe(
+        name="Belief demo: Juice Bowl", collection=weeknight, category="Breakfast",
+        cook=0, prep=5, servings=1, time_of_day="Breakfast",
+        ingredients=[
+            ingredient(b_oj, 200, "ml"),
+            ingredient(b_yoghurt, 150, "g"),
+        ],
+        instructions="Pour. Stir. Done.",
+    )
+    repo.save_changes()
+
+    # NOT planned into "This Week" on purpose. Adding a seventh entry there
+    # changed the week's aggregate ingredient demand, which two e2e tests
+    # (`test_meal_plan_preview`, `test_cook_batches`) legitimately assert on —
+    # they were right to fail. To see the meal-planner overlay, drop
+    # "Belief demo: Tuna Bake" onto any day from the planner (one tap), which
+    # is also the more honest walk: it's a meal you planned, then Dora noticed
+    # the tuna had likely run out.
+    _ = belief_bake
 
     # ---------------- QA FIXTURES (browser-E2E deterministic states) --------- #
     # Mirrors the hand-engineered "QA Verdict Cheese" fixture the 2026-07-17

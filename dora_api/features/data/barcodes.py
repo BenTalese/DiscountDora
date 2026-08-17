@@ -297,7 +297,11 @@ def stock_item_qr_sheet():
         css=PRINT_CSS,
         toolbar=PRINT_TOOLBAR,
     )
-    return Response(html, mimetype="text/html; charset=utf-8")
+    # `mimetype` (not `content_type`): Flask appends `; charset=utf-8` itself,
+    # so spelling it out here produced a doubled `charset=utf-8; charset=utf-8`
+    # header. Harmless to parsers, but it's the sort of thing that muddies the
+    # next person's read of a network tab.
+    return Response(html, mimetype="text/html")
 
 
 def _conflict(message: str) -> Response:

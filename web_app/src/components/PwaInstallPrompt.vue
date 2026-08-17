@@ -9,6 +9,7 @@
         v-else-if="available"
         :icon="ICONS.install_desktop"
         label="Install Dora as an app"
+        :size="size"
         @click="onInstall"
     />
     <q-banner
@@ -38,6 +39,11 @@
     import {
         installPromptAvailable, isInstalled, isIosSafari, showInstallPrompt,
     } from 'src/composables/usePwaLifecycle';
+
+    // Quasar button size (e.g. 'md', 'lg'). About gives the install action a
+    // section of its own with a large button (owner, 2026-08-17); every other
+    // caller keeps the default.
+    defineProps<{ size?: string | undefined }>();
 
     const $q = useQuasar();
     const available = installPromptAvailable();

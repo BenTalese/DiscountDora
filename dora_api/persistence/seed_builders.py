@@ -168,6 +168,21 @@ class SeedBuilders:
         self.repo.add(ri)
         return ri
 
+    def unlinked_ingredient(self, raw_text, qty=None, unit=None, notes=None):
+        """An ingredient the importer couldn't match to a StockItem.
+
+        Anchors on ``raw_text`` with a NULL stock-item FK — the exact shape
+        the paste importer lands when RapidFuzz finds no match, and the only
+        shape the Settings → Unlinked ingredients bulk-linker lists. Seeding
+        a few gives that page (and the recipes' unknown-cookability state)
+        something real to work against.
+        """
+        ri = RecipeIngredient(
+            notes=notes, quantity=qty, stock_item=None, unit=unit, raw_text=raw_text,
+        )
+        self.repo.add(ri)
+        return ri
+
     def make_recipe(self, *, name, collection, ingredients, instructions, **kw):
         recipe = Recipe(
             available_meals=kw.get("available_meals", 0),

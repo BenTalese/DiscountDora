@@ -255,8 +255,9 @@
                     <dd>Pick a new level. Also resets the check clock.</dd>
                     <dt>Skip</dt>
                     <dd>
-                        Later today — the item drops to the end and
-                        comes back if you reopen this queue.
+                        Not this time — the item drops out of this run
+                        and isn't asked about again until the next one.
+                        Nothing is recorded.
                     </dd>
                     <dt>Push 3 days</dt>
                     <dd>
@@ -438,10 +439,12 @@
 
     function onSkip() {
         if (!current.value) return;
-        // Session-only: move the item to the end of the queue and
-        // advance. It reappears if the user reaches the end. No API.
-        const skipped = current.value;
-        session.value = [...session.value, skipped];
+        // Session-only: drop the item for THIS run and advance. No API,
+        // so no clock change — it comes back next time the queue is built.
+        // 2026-08-17 feedback: it used to be re-appended to the end of the
+        // queue, which grew `session.length` on every skip — the progress
+        // denominator crept up and the run could never be finished by
+        // skipping. Skipping now resolves the item for the session.
         summary.skipped += 1;
         advance();
     }

@@ -25,6 +25,13 @@ export type MealPlanEntry = {
     // card shows). Null when nutrition is off or the recipe has no figure.
     kcal_per_serving: number | null;
     kcal_is_reliable: boolean;
+    /** FU-653 — Dora's belief about this planned meal: `'at_risk'` (an
+     *  ingredient she thinks has run out since you planned it) or
+     *  `'maybe_cookable'`. Additive only — the week's shortfall and "need to
+     *  buy" figures ignore it. Null on cooked entries, and unless the user
+     *  opted the meal-planner surface in. */
+    inference_hint: 'at_risk' | 'maybe_cookable' | null;
+    inference_stock_item_names: string[];
 };
 
 /** FU-637 — one day's planned calories: "a serving of each meal planned that

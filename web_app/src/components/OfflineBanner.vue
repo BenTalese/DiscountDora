@@ -41,12 +41,18 @@
         useNetworkStatus();
     const { queuedCount } = useOfflineQueue();
 
+    // Copy is deliberately narrow. It used to promise "Some actions are
+    // queued" / "Most actions still work", which overstated it — only six
+    // mutation kinds queue (stock levels, opened/restocked, expiry
+    // push/clear, ticking a list line: the mid-shop set). Everything else
+    // fails loudly on purpose, and telling someone their new recipe will
+    // "sync later" when it won't is worse than saying nothing.
     const message = computed(() => {
         if (!online.value) {
-            return "You're offline. Some actions are queued and will sync when you're back.";
+            return "You're offline. Stock changes and ticking items off a list still work — they'll sync when you're back.";
         }
         if (!apiReachable.value) {
-            return "We can't reach the server. Most actions still work and will sync when we reconnect.";
+            return "We can't reach the server. Stock changes and ticking items off a list still work — they'll sync when we reconnect.";
         }
         return '';
     });

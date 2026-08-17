@@ -14,6 +14,7 @@
         :usage-label="usageLabel ?? 'recipe'"
         :preserves-label="preservesLabel ?? false"
         :reorderable="reorderable ?? false"
+        :create-hint="createHint ?? ''"
         v-bind="emptyActionBinding"
         :items="items"
         :loading="loading"
@@ -31,7 +32,7 @@
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { computed, onMounted, ref } from 'vue';
 
-    export type VocabItem = { id: string; name: string; recipe_count?: number };
+    export type VocabItem = { id: string; name: string; usage_count?: number };
 
     const props = withDefaults(
         defineProps<{
@@ -46,6 +47,8 @@
             // VocabListEditor falls back to the recipe-shaped default when
             // unset.
             emptyAction?: string;
+            // Example names shown in the create prompt, e.g. `"Dairy", "Snacks"`.
+            createHint?: string;
             // Data access is injected by the caller so this wrapper stays
             // service-agnostic (R-003: each type already owns its CRUD
             // endpoints; we don't duplicate that knowledge here).

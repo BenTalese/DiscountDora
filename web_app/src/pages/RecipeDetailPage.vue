@@ -934,6 +934,36 @@
                         </q-tooltip>
                     </q-card>
 
+                    <!-- FU-653 — Dora's belief about this recipe, as a remark
+                         *under* the verdict card rather than inside it: the
+                         card states what your recorded levels say, and this
+                         says what she suspects. Deliberately separate so the
+                         two can't be mistaken for one answer. Rendered only
+                         when the user opted the recipes surface in (the server
+                         sends nothing otherwise). -->
+                    <q-card
+                        v-if="recipe?.inference_hint"
+                        flat
+                        bordered
+                        class="q-mb-md recipe-inference"
+                        :class="recipe.inference_hint === 'at_risk'
+                            ? 'recipe-inference--risk' : 'recipe-inference--good'"
+                    >
+                        <q-card-section class="row items-start no-wrap q-gutter-sm">
+                            <q-icon :name="ICONS.inferred_hunch" size="22px" />
+                            <div>
+                                <div class="text-subtitle2">
+                                    {{ recipe.inference_hint === 'at_risk'
+                                        ? 'Dora thinks you may be short'
+                                        : 'Dora thinks you may be able to cook this' }}
+                                </div>
+                                <div class="text-caption dora-text-secondary">
+                                    {{ inferenceCaption }}
+                                </div>
+                            </div>
+                        </q-card-section>
+                    </q-card>
+
                     <!-- read-only "last cooked". The cook + log-cook
                          actions in the top toolbar update this value;
                          displaying it here closes the loop ("when did I make
@@ -1685,6 +1715,16 @@
             return 'Cookability check needs every ingredient linked to a stock item.';
         }
         return `${inStockCount.value} of ${trackedCount.value} in stock`;
+    });
+
+    // FU-653 — the belief remark's copy. Names the items and says plainly that
+    // nothing above it has changed, so the two cards can't be read as one
+    // contradictory verdict.
+    const inferenceCaption = computed(() => {
+        const names = (recipe.value?.inference_stock_item_names ?? []).join(', ');
+        return recipe.value?.inference_hint === 'at_risk'
+            ? `From your shopping and cooking rhythm, she suspects ${names} has run out since you last recorded it. Cookability above still follows what you recorded.`
+            : `You've got ${names} recorded as missing, but her reading of your rhythm says otherwise. Record a level to settle it.`;
     });
 
     // â”€â”€ Picker (autocomplete + inline create) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2559,6 +2599,15 @@
 </script>
 
 <style scoped>
+    /* FU-653 — the belief remark. A tinted edge only: it sits under the
+       cookability verdict and must read as a note about it, not a second
+       verdict competing with it. */
+    .recipe-inference--risk {
+        border-color: color-mix(in srgb, var(--semantic-warning) 55%, transparent);
+    }
+    .recipe-inference--good {
+        border-color: color-mix(in srgb, var(--semantic-positive) 55%, transparent);
+    }
     .recipe-name-input :deep(input) {
         font-size: 1.15rem;
         font-weight: 600;

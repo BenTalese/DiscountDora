@@ -8,8 +8,8 @@
          The pill matches the size used by the previous MerchantLogo so
          existing layouts don't reflow. -->
     <img
-        v-if="hasImage"
-        :src="imageUrl"
+        v-if="previewSrc || hasImage"
+        :src="previewSrc || imageUrl"
         :alt="name"
         class="dora-logo-image"
         :style="{ height: `${height}px`, width: `auto`, minWidth: `${width}px` }"
@@ -38,10 +38,14 @@
             storeId?: string | null | undefined;
             /** Server's `has_image` flag (StoreDto / LinkedStore). */
             hasImage?: boolean;
+            /** Local (data-URL) image to show instead of the server's, for
+             *  previewing a just-picked logo before it has been saved — at
+             *  that point there is no `storeId` to build a URL from. */
+            previewSrc?: string | null | undefined;
             height?: number;
             width?: number;
         }>(),
-        { height: 32, width: 48, hasImage: false, storeId: null },
+        { height: 32, width: 48, hasImage: false, storeId: null, previewSrc: null },
     );
 
     /** Stable, deterministic colour from the store name. We pick from a

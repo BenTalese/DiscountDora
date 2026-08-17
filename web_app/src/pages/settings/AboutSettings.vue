@@ -1,30 +1,164 @@
 <template>
     <div class="settings-page">
-        <header class="about-header">
-            <q-avatar size="56px" square>
+        <!-- Owner rebuild 2026-08-17: the page used to open on a build label
+             and "Quasar 2 / Vue 3, talks to the Flask API over CORS" — true,
+             but written for whoever wrote it. It now opens on what Dora is
+             and what this household has going, with the operator-facing bits
+             last. -->
+        <header class="about-hero">
+            <q-avatar size="72px" square>
                 <img src="../../assets/logo-mascot.png" alt="Dashy Dora" />
             </q-avatar>
-            <div>
-                <h1 class="about-header__title">
+            <div class="about-hero__text">
+                <h1 class="about-hero__title">
                     <DoraBrand inline />
                 </h1>
-                <p class="about-header__tagline dora-text-muted">
+                <p class="about-hero__tagline dora-text-muted">
                     Your pantry at your fingertips.
                 </p>
             </div>
         </header>
 
+        <ul class="about-does">
+            <li v-for="line in whatDoraDoes" :key="line.text" class="about-does__item">
+                <q-icon :name="line.icon" size="20px" class="about-does__icon" />
+                <span>{{ line.text }}</span>
+            </li>
+        </ul>
+
+        <hr class="settings-divider" />
+
+        <!-- Counts come straight from the dashboard summary — the server
+             already owns these aggregates (R-003), so this is a read of an
+             existing fact, not a second tally that could disagree with the
+             dashboard. Hidden entirely if the fetch fails: a stats block is a
+             nicety, and half of one is worse than none. -->
+        <SettingsSection v-if="stats.length">
+            <template #title>Your kitchen at a glance</template>
+
+            <div class="about-stats">
+                <div v-for="stat in stats" :key="stat.label" class="about-stat">
+                    <div class="about-stat__value">{{ stat.value }}</div>
+                    <div class="about-stat__label">{{ stat.label }}</div>
+                </div>
+            </div>
+        </SettingsSection>
+
+        <hr v-if="stats.length" class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Install as an app</template>
+            <template #description>
+                Adds a Dora icon to your home screen or launcher and runs her
+                in her own window — no browser chrome, and she opens straight
+                to your kitchen.
+            </template>
+
+            <div class="about-install">
+                <PwaInstallPrompt size="lg" />
+            </div>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <!-- Open-source project & support links. The "Report" row is gated on
+             a configured support channel (useSupportChannel /
+             support_channel.py). -->
+        <SettingsSection>
+            <template #title>Project &amp; support</template>
+            <template #description>
+                Dora is free and open-source (MIT). Contributions, bug reports,
+                and a little support all help.
+            </template>
+
+            <q-list class="about-list">
+                <q-item
+                    clickable
+                    tag="a"
+                    :href="REPO_URL"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.code" size="20px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label>Source code</q-item-label>
+                        <q-item-label caption>GitHub · BenTalese/dashy-dora</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+
+                <q-item
+                    v-if="hasChannel"
+                    clickable
+                    tag="a"
+                    :href="reportHref"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.bug_report" size="20px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label>Report a bug or request a feature</q-item-label>
+                        <q-item-label caption>Opens a new issue on GitHub.</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+
+                <q-item clickable :to="'/help'">
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.help_outline" size="20px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label>Help &amp; guides</q-item-label>
+                        <q-item-label caption>How each part of Dora works.</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.chevron_right" size="18px" />
+                    </q-item-section>
+                </q-item>
+
+                <q-item
+                    clickable
+                    tag="a"
+                    :href="PRIMARY_DONATION.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.favorite" size="20px" :style="{ color: 'var(--donate)' }" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label>Support Dora</q-item-label>
+                        <q-item-label caption>Donations keep the project going 💗</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </SettingsSection>
+
         <hr class="settings-divider" />
 
         <SettingsSection>
-            <template #title>About this install</template>
+            <template #title>Technical details</template>
+            <template #description>
+                Only useful when reporting a problem.
+            </template>
 
             <q-list class="about-list">
                 <q-item>
                     <q-item-section>
                         <q-item-label>Build</q-item-label>
                         <q-item-label caption>
-                            Local development. Versioning isn't tagged in this fork yet.
+                            Versioning isn't tagged in this fork yet.
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side>
@@ -32,30 +166,11 @@
                     </q-item-section>
                 </q-item>
 
-                <q-item>
-                    <q-item-section>
-                        <q-item-label>Install as an app</q-item-label>
-                        <q-item-label caption>
-                            Adds a Dora icon to your home screen / launcher
-                            and runs in its own window. iOS Safari uses
-                            "Add to Home Screen" instead.
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <PwaInstallPrompt />
-                    </q-item-section>
-                </q-item>
-
-                <q-item>
-                    <q-item-section>
-                        <q-item-label>Web client</q-item-label>
-                        <q-item-label caption>
-                            Quasar 2 / Vue 3, talks to the Flask API over CORS.
-                        </q-item-label>
-                    </q-item-section>
-                </q-item>
-
-                <q-item>
+                <!-- Native builds only. In a browser the app is served by the
+                     same host it talks to, so the URL is neither editable nor
+                     interesting (owner, 2026-08-17); in the Android/iOS shell
+                     it's the only way to point at your server. -->
+                <q-item v-if="isNative">
                     <q-item-section>
                         <q-item-label>Dora API endpoint</q-item-label>
                         <q-item-label caption class="text-mono">{{ doraApiUrl }}</q-item-label>
@@ -75,70 +190,6 @@
 
         <hr class="settings-divider" />
 
-        <!-- Open-source project & support links. Restored when the repo went
-             public again (FU-608); the "Report" row is gated on a configured
-             support channel (useSupportChannel / support_channel.py). -->
-        <SettingsSection>
-            <template #title>Project &amp; source</template>
-            <template #description>
-                Dora is free and open-source (MIT). Contributions, bug reports,
-                and a little support all help.
-            </template>
-
-            <q-list class="about-list">
-                <q-item
-                    clickable
-                    tag="a"
-                    :href="REPO_URL"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <q-item-section>
-                        <q-item-label>Source code</q-item-label>
-                        <q-item-label caption>GitHub · BenTalese/dashy-dora</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <q-icon :name="ICONS.open_in_new" size="18px" />
-                    </q-item-section>
-                </q-item>
-
-                <q-item
-                    v-if="hasChannel"
-                    clickable
-                    tag="a"
-                    :href="reportHref"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <q-item-section>
-                        <q-item-label>Report a bug or request a feature</q-item-label>
-                        <q-item-label caption>Opens a new issue on GitHub.</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <q-icon :name="ICONS.open_in_new" size="18px" />
-                    </q-item-section>
-                </q-item>
-
-                <q-item
-                    clickable
-                    tag="a"
-                    :href="PRIMARY_DONATION.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <q-item-section>
-                        <q-item-label>Support Dora</q-item-label>
-                        <q-item-label caption>Donations keep the project going 💗</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <q-icon :name="ICONS.favorite" size="18px" :style="{ color: 'var(--donate)' }" />
-                    </q-item-section>
-                </q-item>
-            </q-list>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
-
         <p class="about-footer dora-text-muted">
             Dora is a hobby project. The mascot is doing its best.
         </p>
@@ -151,11 +202,14 @@
     import { useQuasar } from 'quasar';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
     import DoraBrand from 'src/components/DoraBrand.vue';
-    import { computed, ref } from 'vue';
+    import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import { useSupportChannel, supportHref } from 'src/composables/useSupportChannel';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import DashboardApiService from 'src/services/api/dashboardApiService';
+    import type { DashboardSummary } from 'src/models/dashboard';
     import { PRIMARY_DONATION } from 'src/config/donationLinks';
     import {
         getBackendBaseUrl,
@@ -172,6 +226,73 @@
 
     const { channel, hasChannel } = useSupportChannel();
     const reportHref = computed(() => supportHref(channel.value));
+
+    // The money + meal-planning lines only claim what this install actually
+    // does — an install with money off shouldn't be told Dora tracks prices.
+    const { money: moneyEnabled, mealPlanning } = useFeatureFlags();
+
+    const whatDoraDoes = computed(() => {
+        const lines: { icon: string; text: string }[] = [
+            {
+                icon: ICONS.inventory_2,
+                text: 'Keeps track of what\'s in your kitchen, and what\'s running out.',
+            },
+            {
+                icon: ICONS.restaurant,
+                text: 'Tells you what you can cook tonight from what you already have.',
+            },
+        ];
+        if (mealPlanning.value) {
+            lines.push({
+                icon: ICONS.event_note,
+                text: 'Plans your week of meals and turns it into a shopping list.',
+            });
+        } else {
+            lines.push({
+                icon: ICONS.shopping_cart,
+                text: 'Builds your shopping list from what the kitchen is short on.',
+            });
+        }
+        if (moneyEnabled.value) {
+            lines.push({
+                icon: ICONS.savings,
+                text: 'Remembers what you paid, so you know a good price when you see one.',
+            });
+        }
+        return lines;
+    });
+
+    // ── "At a glance" ──────────────────────────────────────────────────
+    const summary = ref<DashboardSummary | null>(null);
+    const dashboardApi = new DashboardApiService();
+
+    onMounted(async () => {
+        try {
+            summary.value = await dashboardApi.getSummaryAsync();
+        } catch {
+            // Silent: this block is decoration, and the dashboard itself
+            // already surfaces a real fetch failure loudly.
+            summary.value = null;
+        }
+    });
+
+    const stats = computed<{ value: number; label: string }[]>(() => {
+        const s = summary.value;
+        if (!s) return [];
+        const out = [
+            { value: s.stock_items.total, label: s.stock_items.total === 1 ? 'item tracked' : 'items tracked' },
+            { value: s.recipes.total, label: s.recipes.total === 1 ? 'recipe' : 'recipes' },
+            { value: s.shopping_lists.total, label: s.shopping_lists.total === 1 ? 'shopping list' : 'shopping lists' },
+        ];
+        if (mealPlanning.value) {
+            const upcoming = s.meal_plan.upcoming_entries.length;
+            out.push({ value: upcoming, label: upcoming === 1 ? 'meal coming up' : 'meals coming up' });
+        }
+        return out;
+    });
+
+    // ── Technical details ──────────────────────────────────────────────
+    const isNative = isNativePlatform();
 
     // surface the live backend URL (which now includes the
     // Capacitor/localStorage runtime override), not just the build-time
@@ -213,12 +334,8 @@
             // against the new backend — a soft nav would keep the old
             // Pinia stores alive and cause hard-to-debug staleness.
             setTimeout(() => {
-                if (isNativePlatform()) {
-                    void router.replace('/');
-                    window.location.reload();
-                } else {
-                    window.location.reload();
-                }
+                void router.replace('/');
+                window.location.reload();
             }, 400);
         } catch (err) {
             $q.notify({
@@ -235,23 +352,76 @@
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
-    .about-header {
+
+    .about-hero {
         display: flex;
         align-items: center;
         gap: 16px;
         padding-bottom: 12px;
     }
-    .about-header__title {
+    .about-hero__text { min-width: 0; }
+    .about-hero__title {
         margin: 0;
         font-size: 1.5rem;
         font-weight: 700;
         color: var(--text-primary);
         line-height: 1.1;
     }
-    .about-header__tagline {
+    .about-hero__tagline {
         margin: 4px 0 0;
         font-size: 0.9375rem;
     }
+
+    .about-does {
+        list-style: none;
+        margin: 0 0 4px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .about-does__item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 0.9375rem;
+        line-height: 1.4;
+        color: var(--text-primary);
+    }
+    .about-does__icon {
+        flex: 0 0 auto;
+        margin-top: 1px;
+        color: var(--brand-primary);
+    }
+
+    /* auto-fit rather than a fixed column count: four tiles on a wide pane,
+       two on a phone, without a breakpoint per layout. */
+    .about-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 10px;
+    }
+    .about-stat {
+        background: var(--surface-sunken);
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+    }
+    .about-stat__value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--text-primary);
+    }
+    .about-stat__label {
+        margin-top: 2px;
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        line-height: 1.3;
+    }
+
+    .about-install { display: flex; }
+
     .about-list {
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
     }
@@ -259,6 +429,22 @@
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 6%, transparent);
         padding: 12px 4px;
     }
+    /* Mobile: the side column (chip / button) was being squeezed to a sliver
+       beside a long two-line label, which is what made this page look broken
+       on a phone. Below 600px each row stacks its side content underneath,
+       left-aligned with the label. */
+    @media (max-width: 599px) {
+        .about-list :deep(.q-item) {
+            flex-wrap: wrap;
+        }
+        .about-list :deep(.q-item__section--side) {
+            padding-left: 0;
+            align-items: flex-start;
+        }
+        .about-hero { gap: 12px; }
+        .about-hero__title { font-size: 1.25rem; }
+    }
+
     .about-footer {
         margin: 4px 0 0;
         font-size: 0.8125rem;

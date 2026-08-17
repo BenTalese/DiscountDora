@@ -34,10 +34,14 @@
                      Desktop already fills the middle with MainMenuButtonStrip. -->
                 <q-space v-if="$q.screen.lt.md && !route.meta.title" />
 
-                <!-- Right-hand cluster: on mobile the toolbar's own 2px gap
-                     is the only spacing — the desktop margins cost ~12px the
-                     page title needs. -->
-                <AlertsBell v-if="currentUser" :class="{ 'q-mr-sm': $q.screen.gt.sm }" />
+                <!-- Right-hand cluster: mobile gets a trimmed-down gap
+                     (`q-mr-xs`, 4px) rather than the desktop margins — the
+                     buttons read as separate targets without costing the page
+                     title the ~12px desktop spacing eats. -->
+                <AlertsBell
+                    v-if="currentUser"
+                    :class="$q.screen.gt.sm ? 'q-mr-sm' : 'q-mr-xs'"
+                />
 
                 <!-- Support Dora — donation CTA. Dora is free & open-source;
                      this is the gentle, always-available "chip in" affordance
@@ -45,7 +49,7 @@
                 <DonateButton
                     v-if="currentUser"
                     variant="header"
-                    :class="{ 'q-mr-xs': $q.screen.gt.sm }"
+                    class="q-mr-xs"
                 />
 
                 <!-- Help & guides — peer of the profile button.

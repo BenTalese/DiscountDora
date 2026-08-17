@@ -1,208 +1,38 @@
 <template>
-    <div class="settings-page">
-        <SettingsPageHeader
-            title="Stock groups"
-            :description="`Tag your stock items so they're easier to filter on the overview. ${groups.length} group${groups.length === 1 ? '' : 's'}.`"
-            :icon="ICONS.label"
-        >
-            <template #actions>
-                <BaseButton
-                    :icon="ICONS.add"
-                    label="New group"
-                    :loading="creating"
-                    @click="onCreate"
-                />
-            </template>
-        </SettingsPageHeader>
-
-        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
-            {{ loadError }}
-        </q-banner>
-
-        <q-list class="settings-list" separator>
-            <q-item v-for="group in groups" :key="group.stock_group_id" class="q-py-sm">
-                <q-item-section avatar>
-                    <q-icon :name="ICONS.label" />
-                </q-item-section>
-                <q-item-section>
-                    <q-item-label v-if="editingId !== group.stock_group_id">
-                        {{ group.name }}
-                    </q-item-label>
-                    <q-input
-                        v-else
-                        v-model="renameDraft"
-                        dense
-                        outlined
-                        autofocus
-                        @blur="saveRename(group)"
-                        @keydown.enter.prevent="saveRename(group)"
-                        @keydown.esc.prevent="editingId = null"
-                    />
-                    <q-item-label caption>
-                        {{ group.item_count ?? 0 }} item{{
-                            (group.item_count ?? 0) === 1 ? '' : 's'
-                        }}
-                    </q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                    <div class="row q-gutter-xs">
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.edit"
-                            @click="startRename(group)"
-                        >
-                            <q-tooltip>Rename</q-tooltip>
-                        </BaseButton>
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.delete_outline"
-                            @click="onDelete(group)"
-                        >
-                            <q-tooltip>Delete</q-tooltip>
-                        </BaseButton>
-                    </div>
-                </q-item-section>
-            </q-item>
-            <q-item v-if="!loading && groups.length === 0">
-                <q-item-section class="dora-text-muted text-center">
-                    No groups yet. Create one to start tagging stock items.
-                </q-item-section>
-            </q-item>
-        </q-list>
-
-        <q-inner-loading :showing="loading && groups.length === 0">
-            <AppSpinner size="48px" />
-        </q-inner-loading>
-    </div>
+    <!-- R-001 — stock groups are a name-only vocabulary with a usage tally,
+         exactly the shape TaxonomyManagerPage/VocabListEditor already own.
+         The page kept a hand-rolled copy of that list until 2026-08-17, which
+         is how its row styling drifted from the five Recipe* pages; it is now
+         a thin caller like the rest. Only `usageLabel` differs (items, not
+         recipes). -->
+    <TaxonomyManagerPage
+        title="Stock groups"
+        description="Tag your stock items so they're easier to filter on the overview."
+        noun="stock group"
+        noun-plural="stock groups"
+        usage-label="item"
+        create-hint="&quot;Dairy&quot;, &quot;Snacks&quot;"
+        empty-action="Create one to start tagging stock items."
+        :load="load"
+        :create="create"
+        :rename="rename"
+        :remove="remove"
+    />
 </template>
 
 <script lang="ts" setup>
-    import AppSpinner from 'src/components/AppSpinner.vue';
-    import BaseButton from 'src/components/BaseButton.vue';
-    import { ICONS } from 'src/style/icons';
-    import { useQuasar } from 'quasar';
-    import type { StockGroup } from 'src/models/stockGroup';
+    import TaxonomyManagerPage, { type VocabItem } from 'src/components/settings/TaxonomyManagerPage.vue';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
-    import { onMounted, ref } from 'vue';
-    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
-    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
-    const $q = useQuasar();
     const api = new StockGroupApiService();
 
-    const groups = ref<StockGroup[]>([]);
-    const loading = ref(false);
-    const loadError = ref<string | null>(null);
-    const creating = ref(false);
-
-    const editingId = ref<string | null>(null);
-    const renameDraft = ref('');
-
-    async function load() {
-        loading.value = true;
-        loadError.value = null;
-        try {
-            groups.value = await api.getAllAsync();
-        } catch (err) {
-            loadError.value = `Could not load: ${describeApiError(err)}`;
-        } finally {
-            loading.value = false;
-        }
-    }
-
-    async function onCreate() {
-        const name = await new Promise<string | null>((resolve) => {
-            $q.dialog({
-                title: 'New stock group',
-                message: 'What is this group called? (e.g. "Dairy", "Snacks")',
-                prompt: { model: '', type: 'text' },
-                cancel: { noCaps: true },
-            })
-                .onOk((v: string) => resolve(v.trim()))
-                .onCancel(() => resolve(null))
-                .onDismiss(() => resolve(null));
-        });
-        if (!name) return;
-        creating.value = true;
-        try {
-            await api.createAsync({ name });
-            await load();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not create.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            creating.value = false;
-        }
-    }
-
-    function startRename(group: StockGroup) {
-        editingId.value = group.stock_group_id;
-        renameDraft.value = group.name;
-    }
-
-    async function saveRename(group: StockGroup) {
-        const next = renameDraft.value.trim();
-        if (!next || next === group.name) {
-            editingId.value = null;
-            return;
-        }
-        try {
-            await api.updateAsync(group.stock_group_id, { name: next });
-            await load();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not rename.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            editingId.value = null;
-        }
-    }
-
-    async function onDelete(group: StockGroup) {
-        const count = group.item_count ?? 0;
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: `Delete "${group.name}"?`,
-                message:
-                    count > 0
-                        ? `${count} item${
-                              count === 1 ? '' : 's'
-                          } currently in this group will lose their group tag. The items themselves stay.`
-                        : 'Nothing currently uses this group.',
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!ok) return;
-        try {
-            await api.deleteAsync(group.stock_group_id);
-            await load();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not delete.',
-                caption: toastCaption(err),
-            });
-        }
-    }
-
-    onMounted(load);
+    const load = async (): Promise<VocabItem[]> =>
+        (await api.getAllAsync()).map((g) => ({
+            id: g.stock_group_id,
+            name: g.name,
+            usage_count: g.item_count ?? 0,
+        }));
+    const create = (name: string) => api.createAsync({ name });
+    const rename = (id: string, name: string) => api.updateAsync(id, { name });
+    const remove = (id: string) => api.deleteAsync(id).then(() => undefined);
 </script>
-
-<style scoped lang="scss">
-    .settings-page { display: flex; flex-direction: column; position: relative; }
-    .settings-list {
-        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
-        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
-    }
-</style>

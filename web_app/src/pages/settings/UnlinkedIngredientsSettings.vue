@@ -9,7 +9,7 @@
     <div class="settings-page q-gutter-md">
         <SettingsPageHeader
             title="Unlinked ingredients"
-            description="Recipe ingredients that couldn't be matched to a tracked stock item when you imported them. Link each one to a stock item — Dora updates every recipe that uses that text in one go. Recipes flip back to a real cookable / not-cookable state as soon as their last unlinked row is resolved."
+            description="Recipe ingredients that couldn't be matched to a stock item when you imported them via the recipe importer. Linking these ingredients allows Dora to determine the cookable state of a recipe."
             :icon="ICONS.link"
         />
 

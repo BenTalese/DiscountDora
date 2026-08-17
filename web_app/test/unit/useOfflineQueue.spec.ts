@@ -98,6 +98,10 @@ function readStore(userId = 'anonymous'): unknown[] {
 
 beforeEach(async () => {
     localStorage.clear();
+    // The replay echoes the `dora_csrf` cookie as `X-CSRF-Token`; without
+    // one it defers rather than replaying (see offlineQueue.spec.ts, which
+    // owns that contract). A real session always has it by drain time.
+    document.cookie = 'dora_csrf=tok-123; path=/';
     vi.clearAllMocks();
     vi.resetModules();
 
@@ -295,10 +299,19 @@ describe('per-user isolation + persistence', () => {
         expect(mod.useOfflineQueue().queuedCount.value).toBe(0);
         expect(readStore('user-A')).toHaveLength(1);
 
-        // Back to A — the write is still there.
+        // Back to A — the write is still there, and signing in now drains
+        // it. That drain-on-arrival is the 2026-08-17 fix: `apiReachable`
+        // starts true and never transitions on a fresh load, so a queue
+        // persisted from a previous session had nothing to trigger it and
+        // sat in localStorage until the connection happened to drop and
+        // recover. So: A's mutation replays, and A's store ends empty.
         auth.currentUser = { user_id: 'user-A' };
         await tick();
-        expect(mod.useOfflineQueue().queuedCount.value).toBe(1);
+        expect(h.request).toHaveBeenCalledTimes(1);
+        expect((h.request.mock.calls[0]![0] as { data: unknown }).data)
+            .toEqual({ done: true });
+        expect(mod.useOfflineQueue().queuedCount.value).toBe(0);
+        expect(readStore('user-A')).toHaveLength(0);
     });
 
     it('survives a reload by loading the persisted queue on boot', async () => {

@@ -205,18 +205,32 @@
         }
     }
 
-    // Poll every 60s so the bell stays roughly fresh without hammering.
+    // Poll every 60s so the bell stays roughly fresh without hammering, but
+    // only while someone can actually see the bell. A backgrounded phone
+    // waking its radio to refresh a badge nobody is looking at is pure cost —
+    // and the state it fetched is stale by the time the user returns anyway.
+    // Coming back to the foreground refreshes immediately instead, which is
+    // both cheaper and fresher. (Same reasoning as the health probe in
+    // `useNetworkStatus`.)
     let pollHandle: ReturnType<typeof setInterval> | null = null;
+
+    function onVisibilityChange() {
+        if (document.visibilityState === 'hidden') return;
+        void alertStore.refreshAsync();
+    }
 
     onMounted(async () => {
         await alertStore.refreshAsync();
         pollHandle = setInterval(() => {
+            if (document.visibilityState === 'hidden') return;
             void alertStore.refreshAsync();
         }, 60_000);
+        document.addEventListener('visibilitychange', onVisibilityChange);
     });
 
     onUnmounted(() => {
         if (pollHandle) clearInterval(pollHandle);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
     });
 </script>
 

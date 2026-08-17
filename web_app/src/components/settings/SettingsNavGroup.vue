@@ -5,50 +5,51 @@
              just don't draw the eyebrow. Used for the standalone Account and
              About entries, which are single destinations rather than
              categories (owner call 2026-08-14). -->
-        <div v-if="!headerless" class="settings-nav-group__eyebrow">
+        <!-- The eyebrow is a link to the group's first destination, matching
+             the mobile tab strip (owner, 2026-08-17). Same look as before —
+             it only gains a hover/focus affordance, since it now goes
+             somewhere. -->
+        <component
+            :is="firstPath ? 'router-link' : 'div'"
+            v-if="!headerless"
+            :to="firstPath"
+            class="settings-nav-group__eyebrow"
+            :class="{ 'settings-nav-group__eyebrow--link': !!firstPath }"
+        >
             <q-icon v-if="icon" :name="icon" size="12px" class="q-mr-xs" />
             {{ label }}
-        </div>
+        </component>
         <ul class="settings-nav-group__list">
-            <template v-for="entry in items" :key="entryKey(entry)">
-                <template v-if="'subheader' in entry">
-                    <li class="settings-nav-group__subheader">{{ entry.subheader }}</li>
-                    <li v-for="item in entry.items" :key="item.path" class="settings-nav-group__item--sub">
-                        <router-link
-                            :to="item.path"
-                            class="settings-nav-group__link"
-                            active-class="settings-nav-group__link--active"
-                            exact-active-class="settings-nav-group__link--active"
-                        >
-                            <q-icon :name="item.icon" size="18px" class="settings-nav-group__icon" />
-                            <span class="settings-nav-group__label">{{ item.label }}</span>
-                            <span v-if="item.badge" class="settings-nav-group__badge">{{ item.badge }}</span>
-                        </router-link>
-                    </li>
-                </template>
-                <li v-else>
-                    <router-link
-                        :to="entry.path"
-                        class="settings-nav-group__link"
-                        active-class="settings-nav-group__link--active"
-                        exact-active-class="settings-nav-group__link--active"
-                    >
-                        <q-icon :name="entry.icon" size="18px" class="settings-nav-group__icon" />
-                        <span class="settings-nav-group__label">{{ entry.label }}</span>
-                        <span v-if="entry.badge" class="settings-nav-group__badge">{{ entry.badge }}</span>
-                    </router-link>
-                </li>
-            </template>
+            <li v-for="entry in items" :key="entry.path">
+                <router-link
+                    :to="entry.path"
+                    class="settings-nav-group__link"
+                    active-class="settings-nav-group__link--active"
+                    exact-active-class="settings-nav-group__link--active"
+                >
+                    <q-icon :name="entry.icon" size="18px" class="settings-nav-group__icon" />
+                    <span class="settings-nav-group__label">{{ entry.label }}</span>
+                    <span v-if="entry.badge" class="settings-nav-group__badge">{{ entry.badge }}</span>
+                </router-link>
+            </li>
         </ul>
     </nav>
 </template>
 
 <script setup lang="ts">
+    import { computed } from 'vue';
+
     // IMPL_PLAN_SETTINGS_REBUILD §2.7 — side-nav group. Drops the card
     // wrapper + captions; eyebrow group header (11px / uppercase /
     // weight 600 / muted); active state = soft brand tint + 3px accent
-    // left-edge bar. §6.5 (user pick): nested groupings use indented
-    // sub-list under a non-clickable sub-header.
+    // left-edge bar.
+    //
+    // Owner call 2026-08-17 — **the IA is one flat level everywhere**: a group
+    // is a list of destinations, full stop. The old `SettingsNavSubGroup`
+    // (an indented list under a non-clickable sub-header, §6.5) is gone along
+    // with its last caller — Admin's "System" pile, which is what prompted the
+    // rule. Groups are the only nesting; if a group is getting long, it wants
+    // splitting into two groups, not a sub-header.
     export interface SettingsNavLeaf {
         path: string;
         label: string;
@@ -58,13 +59,11 @@
         // 0 ⇒ no badge.
         badge?: number;
     }
-    export interface SettingsNavSubGroup {
-        subheader: string;
-        items: SettingsNavLeaf[];
-    }
-    export type SettingsNavEntry = SettingsNavLeaf | SettingsNavSubGroup;
+    // Retained as an alias so the many `SettingsNavEntry` annotations across
+    // the shell keep reading naturally; it is now simply a leaf.
+    export type SettingsNavEntry = SettingsNavLeaf;
 
-    defineProps<{
+    const props = defineProps<{
         label: string;
         items: SettingsNavEntry[];
         // `| undefined` so a computed nav-group list can pass an absent icon
@@ -75,9 +74,8 @@
         headerless?: boolean | undefined;
     }>();
 
-    function entryKey(e: SettingsNavEntry): string {
-        return 'subheader' in e ? `sub:${e.subheader}` : e.path;
-    }
+    // Where the eyebrow link goes. Empty string ⇒ render it as a plain div.
+    const firstPath = computed<string>(() => props.items[0]?.path ?? '');
 </script>
 
 <style scoped lang="scss">
@@ -98,6 +96,19 @@
         text-transform: uppercase;
         color: var(--text-muted);
         padding: 4px 12px;
+        text-decoration: none;
+    }
+    .settings-nav-group__eyebrow--link {
+        border-radius: 6px;
+        transition: color 0.18s ease, background-color 0.18s ease;
+    }
+    .settings-nav-group__eyebrow--link:hover {
+        color: var(--text-secondary);
+        background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+    }
+    .settings-nav-group__eyebrow--link:focus-visible {
+        outline: 2px solid var(--ring-focus);
+        outline-offset: -2px;
     }
     .settings-nav-group__list {
         list-style: none;
@@ -106,14 +117,6 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
-    }
-    .settings-nav-group__subheader {
-        font-size: 0.6875rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        padding: 8px 12px 2px 28px;
     }
     .settings-nav-group__link {
         position: relative;
@@ -128,9 +131,6 @@
         font-size: 0.875rem;
         line-height: 1.2;
         transition: background-color 0.18s ease, color 0.18s ease;
-    }
-    .settings-nav-group__item--sub .settings-nav-group__link {
-        padding-left: 28px;
     }
     .settings-nav-group__link:hover {
         background: color-mix(in srgb, var(--text-primary) 4%, transparent);

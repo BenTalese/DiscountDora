@@ -24,6 +24,22 @@ services:
       dockerfile: Dockerfile
     restart: always
 
+    # ── Pass the operator's whole .env through ────────────────────────
+    # The `environment:` block below is an explicit allow-list: anything
+    # an operator sets in `.env` that ISN'T named there is silently
+    # dropped on the floor. That is exactly how DORA_SECRET_ENCRYPTION_KEY
+    # went missing (2026-08-17) — set correctly in `.env`, never reached
+    # the container, and the app reported "Secret encryption isn't set up".
+    # `env_file` closes the whole class of bug: every var in `.env` is
+    # forwarded whether or not this file knows about it. The block below
+    # then stays for what it's actually good at — documenting the vars and
+    # supplying container defaults (values there win over `env_file`).
+    # `required: false` needs Compose v2.24+; on older versions drop the
+    # two lines and the file becomes mandatory.
+    env_file:
+      - path: .env
+        required: false
+
     environment:
       - PUID=1000
       - PGID=1000
@@ -38,6 +54,13 @@ services:
 
       # ── Secrets / auth ─────────────────────────────────────────────
       - DORA_SECRET_KEY=${DORA_SECRET_KEY:-}
+      # The KEK that wraps every secret stored at rest (SMTP password,
+      # VAPID private key, per-user LLM API keys). It was missing from
+      # this block until 2026-08-17 — an operator who set it in `.env`
+      # still got "Secret encryption isn't set up on this install" in the
+      # container, because compose never forwarded it. Generate with:
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - DORA_SECRET_ENCRYPTION_KEY=${DORA_SECRET_ENCRYPTION_KEY:-}
       - DORA_CORS_ORIGINS=${DORA_CORS_ORIGINS:-}
       - DORA_SECURE_COOKIES=${DORA_SECURE_COOKIES:-false}
       - DORA_ALLOW_DESTRUCTIVE=${DORA_ALLOW_DESTRUCTIVE:-false}
@@ -58,6 +81,15 @@ services:
       # production compose is the lightweight SQLite path on purpose.
       - DORA_DB_PATH=${DORA_DB_PATH:-/app/data/dora.data.db}
       - DORA_DB_URL=${DORA_DB_URL:-}
+      # Per-component Postgres vars — the third resolution step in
+      # `configuration_manager.get_db_connection_string()`, for when the
+      # credentials come from the environment but the shape is fixed.
+      # Only consulted when both DORA_DB_URL and DORA_DB_PATH are unset.
+      - DORA_DB_HOST=${DORA_DB_HOST:-}
+      - DORA_DB_PORT=${DORA_DB_PORT:-}
+      - DORA_DB_NAME=${DORA_DB_NAME:-}
+      - DORA_DB_USER=${DORA_DB_USER:-}
+      - DORA_DB_PASSWORD=${DORA_DB_PASSWORD:-}
 
       # ── API tuning (optional; defaults baked into appsettings) ─────
       - DORA_API_PORT=${DORA_API_PORT:-5170}
@@ -74,16 +106,52 @@ services:
       - DORA_WEB_THREADS=${DORA_WEB_THREADS:-4}
       - DORA_WEB_TIMEOUT=${DORA_WEB_TIMEOUT:-120}
 
-      # ── Transactional email (auth flows). Sender runs in dry-run
-      #    mode when DORA_SMTP_USERNAME is unset.
-      - DORA_SMTP_HOST=${DORA_SMTP_HOST:-}
-      - DORA_SMTP_PORT=${DORA_SMTP_PORT:-587}
-      - DORA_SMTP_USER=${DORA_SMTP_USER:-}
-      - DORA_SMTP_PASSWORD=${DORA_SMTP_PASSWORD:-}
-      - DORA_SMTP_FROM=${DORA_SMTP_FROM:-}
+      # ── Email / push / voice / hosting: NOT here, by design ────────
+      # SMTP, VAPID, the Piper paths, `email_enabled`,
+      # `audit_retention_days` and `public_url` were promoted to
+      # AppSetting rows by IMPL_PLAN_ENV_TO_APPSETTING and are edited
+      # under Settings → Admin. Their env vars survive **only** inside
+      # migration b7d2f9c1e4a3, which read them once at upgrade time —
+      # there is no runtime fallback. Forwarding them here would advertise
+      # settings that do nothing. (This block used to carry
+      # `DORA_SMTP_USER` + `DORA_SMTP_PASSWORD`: the first is a misspelling
+      # of `DORA_SMTP_USERNAME` that nothing has ever read, and the second
+      # is a wrapped secret with no env path at all. Both removed
+      # 2026-08-17.)
+
+      # ── Support channel (author-controlled, read at runtime) ───────
+      # Where "Report an issue" points. Deliberately env-only, never an
+      # admin AppSetting — see PROPOSAL_SUPPORT_CHANNEL.
+      - DORA_SUPPORT_URL=${DORA_SUPPORT_URL:-}
+      - DORA_SUPPORT_EMAIL=${DORA_SUPPORT_EMAIL:-}
+
+      # ── Demo mode (FU-392, read at runtime) ────────────────────────
+      # Serves the curated showcase dataset + a persistent banner, and
+      # periodically resets itself. Env-only by design so a prospect
+      # poking around the demo admin can't switch it off. Off unless set.
+      - DORA_DEMO_MODE=${DORA_DEMO_MODE:-}
+      - DORA_DEMO_RESET_MINUTES=${DORA_DEMO_RESET_MINUTES:-}
+
+      # ── TTS voices (read at runtime) ───────────────────────────────
+      # Where Piper voice models are stored. Defaults to <DATA_DIR>/voices,
+      # which rides the dora_data volume — only set this to stage models
+      # on a different mount.
+      - DORA_PIPER_VOICE_DIR=${DORA_PIPER_VOICE_DIR:-}
 
       # ── Bootstrap admin ────────────────────────────────────────────
       - ADMIN_BOOTSTRAP_EMAIL=${ADMIN_BOOTSTRAP_EMAIL:-}
+
+      # ── Deliberately NOT forwarded ─────────────────────────────────
+      # DORA_CSRF_DISABLED, DORA_DISABLE_SECURITY_HEADERS,
+      # DORA_SKIP_PROD_VALIDATION — dev-only escape hatches that weaken
+      # the install; naming them here invites someone to set one "just to
+      # get past" a boot failure. DORA_SEED_* are dev-seed knobs
+      # (DORA_ALLOW_DESTRUCTIVE is forwarded above but inert here —
+      # `is_seed_allowed()` returns false in production regardless).
+      # DORA_API_HOST / _BIND / _SPA_DIR / _WEB_APP_* / _GUNICORN_LOG_LEVEL
+      # are container-internal and set by the Dockerfile.
+      # These are all still reachable via `env_file` if an operator really
+      # means it — this list documents intent, it isn't a lock.
 
     ports:
       - "5170:5170"   # dora_api

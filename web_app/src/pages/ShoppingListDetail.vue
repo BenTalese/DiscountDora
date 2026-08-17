@@ -478,6 +478,55 @@
                         </q-card-section>
                     </q-card>
 
+                    <!-- FU-653 — Dora's suggestions, above the list and
+                         visibly not part of it: chips you may tap to add,
+                         never lines that appeared on their own. The whole
+                         strip is dismissible for the session, because a
+                         suggestion you've considered and rejected shouldn't
+                         keep taking up the top of the page. Empty (and so
+                         absent) unless the user opted the shopping surface in.
+                    -->
+                    <q-card
+                        v-if="visibleSuggestions.length > 0"
+                        flat
+                        bordered
+                        class="q-mb-md inferred-suggestions"
+                    >
+                        <q-card-section class="q-pb-xs row items-center no-wrap q-gutter-xs">
+                            <q-icon :name="ICONS.inferred_hunch" size="18px" />
+                            <span class="text-subtitle2">Dora thinks you may be out of…</span>
+                            <q-space />
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.close"
+                                aria-label="Hide suggestions"
+                                @click="suggestionsDismissed = true"
+                            >
+                                <q-tooltip>Hide these for now</q-tooltip>
+                            </BaseButton>
+                        </q-card-section>
+                        <q-card-section class="q-pt-none">
+                            <div class="row q-gutter-xs">
+                                <q-chip
+                                    v-for="s in visibleSuggestions"
+                                    :key="s.stock_item_id"
+                                    clickable
+                                    outline
+                                    color="primary"
+                                    :icon="ICONS.add"
+                                    :disable="addingSuggestionId === s.stock_item_id"
+                                    @click="onAddSuggestion(s)"
+                                >
+                                    {{ s.name }}
+                                    <q-tooltip v-if="s.reason" max-width="280px">
+                                        {{ s.reason }} Nothing has been added — tap to put it
+                                        on this list.
+                                    </q-tooltip>
+                                </q-chip>
+                            </div>
+                        </q-card-section>
+                    </q-card>
+
                     <!-- Lines -->
                     <q-card v-if="detail.lines.length === 0" flat bordered>
                         <q-card-section class="text-center dora-text-muted">
@@ -1263,6 +1312,7 @@
     import {
         chosenOfferFor,
         priceOfLine,
+        type InferredSuggestion,
         type LineProductOffer,
         type ShoppingListDetail,
         type ShoppingListLine,
@@ -2297,6 +2347,42 @@
                 message: 'Could not swap.',
                 caption: toastCaption(err),
             });
+        }
+    }
+
+    // ── FU-653: Dora's inferred suggestions ───────────────────────────
+    // Dismissal is deliberately in-memory only: the suggestion set changes as
+    // the belief does, so persisting "hidden" would need a per-item ledger and
+    // an expiry policy to answer "hidden until when?" — for a strip you can
+    // also just ignore, that's machinery for nothing. It comes back next visit.
+    const suggestionsDismissed = ref(false);
+    const addingSuggestionId = ref<string | null>(null);
+
+    const visibleSuggestions = computed<InferredSuggestion[]>(() =>
+        suggestionsDismissed.value ? [] : (detail.value?.inferred_suggestions ?? []),
+    );
+
+    async function onAddSuggestion(suggestion: InferredSuggestion) {
+        addingSuggestionId.value = suggestion.stock_item_id;
+        try {
+            await api.addLineAsync(listId.value, {
+                stock_item_id: suggestion.stock_item_id,
+            });
+            await refreshAll();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Added ${suggestion.name}.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: `Could not add ${suggestion.name}.`,
+                caption: toastCaption(err),
+            });
+        } finally {
+            addingSuggestionId.value = null;
         }
     }
 

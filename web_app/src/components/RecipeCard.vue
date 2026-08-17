@@ -65,6 +65,22 @@
                      "Uses expiring ingredients" filter is active (the
                      parent passes `showExpiringBadge`). Off-filter, the
                      count is meaningless noise; we hide it. -->
+                <!-- FU-653 — Dora's belief, as a remark. Outline, not filled:
+                     the filled chips on this row state facts about the recipe,
+                     and this is an opinion that hasn't changed any of them
+                     (the cook button's colour and the cookable badge are
+                     deliberately untouched). Server sends it only when the
+                     user opted the recipes surface in. -->
+                <q-chip
+                    v-if="recipe.inference_hint"
+                    dense
+                    outline
+                    :color="recipe.inference_hint === 'at_risk' ? 'warning' : 'positive'"
+                    :icon="ICONS.inferred_hunch"
+                >
+                    {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
+                    <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
+                </q-chip>
                 <q-chip
                     v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
                     dense
@@ -142,11 +158,9 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
-    import { recipeImageUrl } from 'src/services/api/recipeApiService';
-    import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
-    import { storeToRefs } from 'pinia';
-    import { computed, ref } from 'vue';
+    import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
+    import { ref } from 'vue';
 
     const props = withDefaults(
         defineProps<{
@@ -179,98 +193,16 @@
     }>();
 
     const imgFailed = ref(false);
-    const imageUrl = computed(() => recipeImageUrl(props.recipe.recipe_id));
     const { showRecipeImages } = useImagePrefs();
-    const initial = computed(() => (props.recipe.name.trim()[0] ?? '?').toUpperCase());
-    const mediaStyle = computed(() => {
-        let hash = 0;
-        for (const ch of props.recipe.name) hash = (hash * 31 + ch.charCodeAt(0)) % 360;
-        return { background: `hsl(${hash}, 45%, 42%)` };
-    });
 
-    const { dietaryTags } = storeToRefs(useRecipeVocabStore());
-    const tagNames = computed(() => {
-        const byId = new Map(dietaryTags.value.map((t) => [t.dietary_tag_id, t.name]));
-        return (props.recipe.dietary_tag_ids ?? [])
-            .map((id) => byId.get(id))
-            .filter((n): n is string => Boolean(n));
-    });
-
-    const missingIds = computed(() => [
-        ...new Set(
-            props.recipe.ingredients
-                .filter((i) => i.is_missing && i.stock_item_id !== null)
-                .map((i) => i.stock_item_id as string),
-        ),
-    ]);
-
-    const cookable = computed(() => props.recipe.cookable);
-    const unlinkedCount = computed(() => props.recipe.unlinked_ingredient_count ?? 0);
-    // Display-only count of the recipe's ingredient lines. The list
-    // endpoint already hydrates `ingredients` (the footer actions read it),
-    // so this is presentation of data in hand, not a client-owned domain
-    // rule — no server field warranted (R-003 "fine client display math").
-    const ingredientCount = computed(() => props.recipe.ingredients.length);
-
-    // FU-637 — the server decides which figure this mode carries and whether
-    // it's solid enough to judge on; the card just renders the answer.
-    const kcal = computed(() => ({
-        value: props.recipe.kcal_per_serving ?? null,
-        judgeable: props.recipe.kcal_is_reliable === true,
-    }));
-
-    // Tri-state cook-button colour (IMPL_PLAN_RECIPE_IMPORTER §Chunk 4):
-    //   true  → primary (green-ish, "ready to cook")
-    //   false → warning (amber, "missing some ingredients but you can try")
-    //   null  → grey ("we don't know — link ingredients to check")
-    const cookButtonColor = computed(() => {
-        if (cookable.value === null) return 'grey';
-        return cookable.value ? 'primary' : 'warning';
-    });
-    const cookButtonTooltip = computed(() => {
-        if (cookable.value === null) {
-            return `Link ${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to check cookability — this is a stock-item feature`;
-        }
-        return cookable.value
-            ? 'Cook'
-            : `Cook anyway — missing ${missingIds.value.length} ingredient(s)`;
-    });
-    const addListTooltip = computed(() => {
-        if (cookable.value === null) {
-            return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} need linking first`;
-        }
-        return cookable.value
-            ? 'Add ingredients to a list'
-            : `Add ${missingIds.value.length} missing to a list`;
-    });
-
-    const totalTime = computed(() => {
-        if (
-            props.recipe.prep_time_minutes === null
-            && props.recipe.cook_time_minutes === null
-        ) {
-            return null;
-        }
-        return (props.recipe.prep_time_minutes ?? 0) + (props.recipe.cook_time_minutes ?? 0);
-    });
-
-    const metaLine = computed(() => {
-        // DR-4 (FU-578 #14): dedupe case-insensitively so a recipe whose cuisine
-        // and category are the same word doesn't render "Dessert · Dessert".
-        const seen = new Set<string>();
-        const parts = [
-            props.recipe.cuisine_name,
-            props.recipe.category_name,
-            props.recipe.time_of_day,
-        ].filter((p): p is string => Boolean(p))
-            .filter((p) => {
-                const key = p.toLowerCase();
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
-        return parts.join(' · ');
-    });
+    // Everything derived from the recipe for display lives in one place,
+    // shared with the compact `RecipeRow` (R-003) — the card decides only
+    // how to lay it out.
+    const {
+        totalTime, ingredientCount, kcal, metaLine, tagNames, missingIds,
+        cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
+        inferenceTooltip, initial, mediaStyle, imageUrl,
+    } = useRecipeDisplay(() => props.recipe);
 
     function onAddToList() {
         if (cookable.value) {

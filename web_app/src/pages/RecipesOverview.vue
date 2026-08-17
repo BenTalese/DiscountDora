@@ -5,29 +5,45 @@
          NOT a fixed-height app-shell like StockOverview — <q-page>'s default
          min-height is exactly what's wanted. See ENGINEERING_STANDARDS R-036. -->
     <q-page class="q-pa-md">
-        <!-- ── Header ─────────────────────────────────────────────── -->
-        <div class="row items-center q-mb-md">
-            <!-- Counts moved to the sticky PageCountsFooter (A7). -->
-            <q-space />
-            <q-input
-                dense
-                debounce="200"
-                placeholder="Search"
-                v-model="searchText"
-                clearable
-                outlined
-                class="q-mr-sm"
+        <!-- ── Toolbar ─────────────────────────────────────────────
+             2026-08-17 feedback: standardised on the Stock Overview
+             toolbar (`StockOverview.vue`) so the two list surfaces read
+             as one control. Actions left in a fixed order (add · import ·
+             photos · view), filter-toggle + search pushed right. On
+             phones every action drops its label and rides its icon alone
+             (tooltip carries the name), and `__find` wraps to a full-width
+             second row so the search box has room — same two-row shape,
+             same `compactToolbar` gate. Import was `ghost` (which reads
+             white/transparent next to the filled actions); it's a
+             secondary now, like Stock's own non-primary buttons. -->
+        <div class="row items-center q-gutter-sm recipes-toolbar">
+            <!-- Counts live in the sticky PageCountsFooter (A7). -->
+            <BaseButton
+                variant="primary"
+                :icon="ICONS.add"
+                :label="compactToolbar ? undefined : 'New recipe'"
+                aria-label="New recipe"
+                @click="onCreateClick"
             >
-                <template #append><q-icon :name="ICONS.search" /></template>
-            </q-input>
+                <q-tooltip v-if="compactToolbar">New recipe</q-tooltip>
+            </BaseButton>
+            <BaseButton
+                variant="secondary"
+                :icon="ICONS.content_paste"
+                :label="compactToolbar ? undefined : 'Import'"
+                aria-label="Import a recipe"
+                @click="onImportClick"
+            >
+                <q-tooltip v-if="compactToolbar">Import a recipe</q-tooltip>
+            </BaseButton>
             <!-- C-cross Chunk 5 — inline image-display toggle. Persists
                  across sessions via /api/users/me; reused on cook mode /
                  detail surfaces as a read-only gate. -->
             <BaseButton
-                variant="ghost"
+                variant="secondary"
                 :icon="showRecipeImages ? ICONS.image : ICONS.image_not_supported"
+                :label="compactToolbar ? undefined : (showRecipeImages ? 'Hide photos' : 'Show photos')"
                 :aria-label="showRecipeImages ? 'Hide recipe photos' : 'Show recipe photos'"
-                :class="['q-mr-sm', { 'recipes-overview__images-off': !showRecipeImages }]"
                 @click="onToggleRecipeImages"
             >
                 <q-tooltip>
@@ -36,26 +52,46 @@
                         : 'Show recipe photos · saved across sessions' }}
                 </q-tooltip>
             </BaseButton>
+            <!-- 2026-08-17 feedback: card grid ⇄ one row per recipe (the
+                 Stock Overview shape). The icon shows the shape the button
+                 switches TO. Remembered per device via localStorage —
+                 `useListViewMode`. -->
             <BaseButton
-                variant="ghost"
-                :icon="ICONS.content_paste"
-                label="Import"
-                class="q-mr-sm"
-                @click="onImportClick"
-            />
-            <BaseButton
-                variant="primary"
-                :icon="ICONS.add"
-                label="New recipe"
-                @click="onCreateClick"
-            />
-            <!-- Feedback 2026-06-18: filter toggle in the main toolbar so
-                 the FilterBar doesn't carry its own row of chrome. -->
-            <FilterToggleButton
-                v-model="filtersExpanded"
-                :active-count="activeFilterCount"
-                @clear="clearFilters"
-            />
+                variant="secondary"
+                :icon="viewMode === 'grid' ? ICONS.view_list : ICONS.view_module"
+                :label="compactToolbar ? undefined : (viewMode === 'grid' ? 'Compact' : 'Cards')"
+                :aria-label="viewMode === 'grid' ? 'Switch to compact rows' : 'Switch to cards'"
+                @click="toggleViewMode"
+            >
+                <q-tooltip>
+                    {{ viewMode === 'grid'
+                        ? 'Compact rows · remembered next visit'
+                        : 'Card grid · remembered next visit' }}
+                </q-tooltip>
+            </BaseButton>
+
+            <q-space class="gt-xs" />
+            <div class="row items-center q-gutter-sm no-wrap recipes-toolbar__find">
+                <!-- Feedback 2026-06-18: filter toggle in the main toolbar so
+                     the FilterBar doesn't carry its own row of chrome. -->
+                <FilterToggleButton
+                    v-model="filtersExpanded"
+                    :active-count="activeFilterCount"
+                    :compact="compactToolbar"
+                    @clear="clearFilters"
+                />
+                <q-input
+                    v-model="searchText"
+                    class="col"
+                    dense
+                    outlined
+                    debounce="200"
+                    placeholder="Search"
+                    clearable
+                >
+                    <template #prepend><q-icon :name="ICONS.search" /></template>
+                </q-input>
+            </div>
         </div>
 
         <!-- Import-from-URL on the overview's New-Recipe
@@ -84,9 +120,14 @@
             <!-- FU-108: filter controls ordered by usage frequency
                  (quick chips → sort → common single-selects →
                  ingredients → numeric bounds → occasional
-                 dietary/tools → set-and-forget collection). Pure
-                 template reorder; no state or logic changed. -->
-            <div class="row q-gutter-sm items-center">
+                 dietary/tools → set-and-forget collection).
+                 2026-08-17 feedback: split into the Stock Overview's two
+                 rows — toggle chips on top, input filters below — each
+                 scrolling sideways on phones rather than wrapping to four
+                 or five lines (an open panel was eating the viewport).
+                 Same rows, same overflow treatment, same class shape as
+                 `stock-quick-filters` / `stock-input-filters`. -->
+            <div class="row items-center no-wrap recipes-quick-filters">
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
                 Favourites
             </FilterChip>
@@ -124,9 +165,10 @@
             <FilterChip v-model="expiringOnly" :icon="ICONS.wasteExpired" active-color="warning">
                 Uses expiring ingredients
             </FilterChip>
+            </div>
 
-            <q-separator vertical class="q-mx-sm" />
-
+            <!-- ── Row 2: input filters ──────────────────────────────── -->
+            <div class="row items-center no-wrap recipes-input-filters">
             <q-select
                 v-model="sortBy"
                 :options="SORT_OPTIONS"
@@ -148,8 +190,6 @@
             >
                 <q-tooltip>{{ sortDirTooltip }}</q-tooltip>
             </BaseButton>
-
-            <q-separator vertical class="q-mx-sm" />
 
             <!-- L235 — cuisine + category are distinct single-select filters,
                  no longer lumped together as one "tags" multi-select. -->
@@ -328,46 +368,45 @@
                 />
             </div>
 
-            <!-- Collection groups as rounded, collapsible surface boxes. -->
-            <div
-                v-for="group in groups"
-                :key="group.key"
-                class="recipe-group dora-bg-sunken q-mb-lg"
-            >
+            <!-- One flat list, in the order the sort axis put them.
+                 Recipes used to be boxed into collapsible collection
+                 folders; in a large cookbook that buried search results
+                 under a folder you had to notice and open, which is the
+                 opposite of what a search is for. The collection is now a
+                 fact on each card's meta line, and the toolbar's Collection
+                 filter is how you narrow to one.
+                 Two shapes, one data path: the compact branch is the same
+                 recipes, the same handlers and the same derived figures
+                 (`useRecipeDisplay`) — only the component differs. -->
+            <div v-if="viewMode === 'grid'" class="row q-col-gutter-md">
                 <div
-                    class="recipe-group__header row items-center cursor-pointer"
-                    @click="toggleGroup(group.key)"
+                    v-for="recipe in sortedRecipes"
+                    :key="recipe.recipe_id"
+                    class="col-12 col-sm-6 col-md-4 col-lg-3"
                 >
-                    <q-icon
-                        :name="isCollapsed(group.key) ? ICONS.chevron_right : ICONS.expand_more"
-                        size="22px"
-                        class="q-mr-xs"
+                    <RecipeCard
+                        :recipe="recipeWithExpiringCount(recipe)"
+                        :show-expiring-badge="expiringOnly"
+                        @open="onOpenRecipe"
+                        @cook="onCookClick"
+                        @toggle-favourite="onToggleFavourite"
+                        @add-missing="onAddMissing"
+                        @add-all-to-list="onAddAllToList"
                     />
-                    <q-icon :name="ICONS.folder" size="18px" class="q-mr-xs" />
-                    <div class="text-subtitle1 text-weight-medium">{{ group.label }}</div>
-                    <q-chip dense outline size="sm" class="q-ml-sm">
-                        {{ group.recipes.length }}
-                    </q-chip>
                 </div>
-                <q-slide-transition>
-                    <div v-show="!isCollapsed(group.key)" class="row q-col-gutter-md q-pa-md q-pt-none">
-                        <div
-                            v-for="recipe in group.recipes"
-                            :key="recipe.recipe_id"
-                            class="col-12 col-sm-6 col-md-4 col-lg-3"
-                        >
-                            <RecipeCard
-                                :recipe="recipeWithExpiringCount(recipe)"
-                                :show-expiring-badge="expiringOnly"
-                                @open="onOpenRecipe"
-                                @cook="onCookClick"
-                                @toggle-favourite="onToggleFavourite"
-                                @add-missing="onAddMissing"
-                                @add-all-to-list="onAddAllToList"
-                            />
-                        </div>
-                    </div>
-                </q-slide-transition>
+            </div>
+            <div v-else>
+                <RecipeRow
+                    v-for="recipe in sortedRecipes"
+                    :key="recipe.recipe_id"
+                    :recipe="recipeWithExpiringCount(recipe)"
+                    :show-expiring-badge="expiringOnly"
+                    @open="onOpenRecipe"
+                    @cook="onCookClick"
+                    @toggle-favourite="onToggleFavourite"
+                    @add-missing="onAddMissing"
+                    @add-all-to-list="onAddAllToList"
+                />
             </div>
         </div>
         </FadeTransition>
@@ -407,6 +446,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import RecipeCard from 'src/components/RecipeCard.vue';
+    import RecipeRow from 'src/components/recipes/RecipeRow.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
     import DietaryTagFilter from 'src/components/recipes/DietaryTagFilter.vue';
@@ -417,6 +457,7 @@
     } from 'src/components/filters/triStateFilterTypes';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useListState } from 'src/composables/useListState';
+    import { useListViewMode } from 'src/composables/useListViewMode';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
@@ -459,6 +500,14 @@
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
     const { showRecipeImages, setRecipeImages } = useImagePrefs();
+    // Phones drop every toolbar label down to its icon — same gate and same
+    // reason as Stock Overview (the row was eating a quarter of the screen).
+    const compactToolbar = computed(() => $q.screen.lt.sm);
+    // Card grid ⇄ compact rows, remembered across visits (localStorage).
+    const viewMode = useListViewMode('cookbook-overview');
+    function toggleViewMode() {
+        viewMode.value = viewMode.value === 'grid' ? 'compact' : 'grid';
+    }
     // FU-637 — the kcal axis works in both modes now. Which figure a recipe
     // carries (typed in simple, rolled-up in complex) and whether it's solid
     // enough to judge on are both the server's call — the list DTO ships the
@@ -939,36 +988,10 @@
         return arr.sort(cmp);
     });
 
-    type Group = { key: string; label: string; recipes: Recipe[] };
-    const groups = computed<Group[]>(() => {
-        const buckets = new Map<string, Group>();
-        for (const r of sortedRecipes.value) {
-            const collection = recipeCollections.value.find(
-                (c) => c.recipe_collection_id === r.recipe_collection_id,
-            );
-            const key = collection?.recipe_collection_id ?? '__none__';
-            const label = collection?.name ?? 'Uncategorised';
-            if (!buckets.has(key)) buckets.set(key, { key, label, recipes: [] });
-            buckets.get(key)!.recipes.push(r);
-        }
-        return [...buckets.values()].sort((a, b) => {
-            // Push "Uncategorised" to the bottom; otherwise alphabetical.
-            if (a.key === '__none__') return 1;
-            if (b.key === '__none__') return -1;
-            return a.label.localeCompare(b.label);
-        });
-    });
-
-    // Collapsible collection groups — track the collapsed set (default all
-    // expanded). Keyed by collection id / '__none__'.
-    const collapsedGroups = ref<Set<string>>(new Set());
-    const isCollapsed = (key: string) => collapsedGroups.value.has(key);
-    function toggleGroup(key: string) {
-        const next = new Set(collapsedGroups.value);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        collapsedGroups.value = next;
-    }
+    // NOTE: the collection-bucketing + collapsed-folder state that used to
+    // live here is gone. Recipes render as one flat sorted list; the
+    // collection travels on each card's meta line (`useRecipeDisplay`) and
+    // the Collection dropdown below is how you narrow to one.
 
     const hasAnyFilter = computed(
         () =>
@@ -1440,10 +1463,52 @@
     .full-height {
         height: 100%;
     }
-    .recipe-group {
-        border-radius: 12px;
+    /* ── Toolbar (2026-08-17 feedback) ────────────────────────────────
+       Lifted wholesale from `StockOverview.vue` so both list surfaces
+       behave identically: desktop = one row (actions left, filter-toggle
+       + search right); phones = icon-only actions with `__find` wrapping
+       to a full-width second line. `flex-basis: 100%` forces that wrap;
+       `q-space.gt-xs` is hidden there so nothing pushes against it. */
+    .recipes-toolbar {
+        margin-bottom: var(--space-4);
     }
-    .recipe-group__header {
-        padding: 12px 16px;
+    .recipes-toolbar__find {
+        flex: 1 1 auto;
+        min-width: 280px;
+    }
+    @media (max-width: 599px) {
+        .recipes-toolbar__find {
+            flex-basis: 100%;
+            min-width: 0;
+        }
+    }
+
+    /* ── Filter rows ──────────────────────────────────────────────────
+       Quick chips on top, input filters below; both scroll sideways
+       instead of wrapping. The scrollbar is hidden because the controls
+       overflowing IS the affordance. Matches the stock page's
+       `.stock-quick-filters` / `.stock-input-filters` exactly.
+       Unlike stock's uniform 180px track, the widths here are genuinely
+       heterogeneous (a 130px numeric bound next to a 200px collection
+       picker next to an icon-only sort-direction button), so items keep
+       their natural width — `flex: 0 0 auto` is what stops a flex item
+       shrinking past its own `min-width` once the row scrolls. */
+    .recipes-quick-filters,
+    .recipes-input-filters {
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .recipes-quick-filters::-webkit-scrollbar,
+    .recipes-input-filters::-webkit-scrollbar {
+        display: none;
+    }
+    .recipes-input-filters {
+        margin-top: var(--space-3);
+    }
+    .recipes-input-filters > * {
+        flex: 0 0 auto;
     }
 </style>

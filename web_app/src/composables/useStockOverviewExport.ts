@@ -5,7 +5,7 @@
  */
 import { Notify } from 'quasar';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
-import { openQrSheetAsync } from 'src/composables/useQrLabels';
+import { describeQrFailure, openQrSheetAsync } from 'src/composables/useQrLabels';
 import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useStockOverviewExport() {
@@ -51,9 +51,19 @@ export function useStockOverviewExport() {
         window.open(`${baseUrl}/stock-items/print-view${idsParam}`, '_blank', 'noopener');
     }
 
+    // Stays sync-entry so the click's gesture reaches `window.open` (R-046);
+    // the failure is caught rather than dropped, because the most likely one is
+    // a blocked pop-up, and a print button that does nothing at all is the
+    // worst version of that.
     function openQrSheet(ids: string[]): void {
         if (ids.length === 0) return;
-        void openQrSheetAsync({ layout: 'a4-21up', ids });
+        openQrSheetAsync({ layout: 'a4-21up', ids }).catch((err: unknown) => {
+            Notify.create({
+                type: 'negative',
+                position: 'bottom-right',
+                message: describeQrFailure(err),
+            });
+        });
     }
 
     return { downloadCsv, openPrintView, openQrSheet };

@@ -1,6 +1,6 @@
 <template>
     <div class="settings-page">
-        <SettingsPageHeader :title="title" :description="rolledDescription">
+        <SettingsPageHeader :title="title" :description="description">
             <template #actions>
                 <BaseButton
                     :icon="ICONS.add"
@@ -13,11 +13,14 @@
 
         <q-list class="vocab-list" separator>
             <q-item v-for="(item, index) in items" :key="item.id" class="vocab-list__item">
-                <q-item-section avatar>
-                    <q-icon :name="ICONS.label" />
-                </q-item-section>
                 <q-item-section>
-                    <q-item-label v-if="editingId !== item.id">{{ item.name }}</q-item-label>
+                    <!-- Name and usage tally sit on one line at the same type
+                         size (owner call 2026-08-17) — the tally is context on
+                         the name, not a second-tier caption. -->
+                    <q-item-label v-if="editingId !== item.id" class="vocab-row">
+                        <span>{{ item.name }}</span>
+                        <span class="dora-text-muted">{{ usageText(item) }}</span>
+                    </q-item-label>
                     <q-input
                         v-else
                         v-model="renameDraft"
@@ -28,10 +31,6 @@
                         @keydown.enter.prevent="saveRename(item)"
                         @keydown.esc.prevent="editingId = null"
                     />
-                    <q-item-label caption>
-                        {{ item.recipe_count ?? 0 }}
-                        {{ usageLabel }}{{ (item.recipe_count ?? 0) === 1 ? '' : 's' }}
-                    </q-item-label>
                 </q-item-section>
                 <q-item-section side>
                     <div class="row q-gutter-xs items-center">
@@ -80,10 +79,10 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
-    import { computed, ref } from 'vue';
+    import { ref } from 'vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
-    type VocabItem = { id: string; name: string; recipe_count?: number };
+    type VocabItem = { id: string; name: string; usage_count?: number };
 
     const props = withDefaults(
         defineProps<{
@@ -98,12 +97,15 @@
             usageLabel?: string;
             preservesLabel?: boolean;
             emptyAction?: string;
+            /** Optional example shown in the create prompt, e.g. `"Dairy", "Snacks"`. */
+            createHint?: string;
         }>(),
         {
             reorderable: false,
             usageLabel: 'recipe',
             preservesLabel: false,
             emptyAction: 'Create one to start tagging recipes.',
+            createHint: '',
         },
     );
 
@@ -114,11 +116,18 @@
         (e: 'reorder', id: string, direction: 'up' | 'down'): void;
     }>();
 
-    const rolledDescription = computed(() => {
-        const count = props.items.length;
-        const word = count === 1 ? props.noun : props.nounPlural;
-        return `${props.description} ${count} ${word}.`;
-    });
+    // "entry" → "entries", not "entrys". Only the -y rule is worth encoding:
+    // the usage labels are a closed set (recipe / item / entry) and a general
+    // pluraliser would be a library-sized answer to a three-word problem.
+    function plural(word: string, count: number): string {
+        if (count === 1) return word;
+        return /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
+    }
+
+    function usageText(item: VocabItem): string {
+        const count = item.usage_count ?? 0;
+        return `${count} ${plural(props.usageLabel, count)}`;
+    }
 
     const $q = useQuasar();
     const editingId = ref<string | null>(null);
@@ -128,7 +137,9 @@
         const name = await new Promise<string | null>((resolve) => {
             $q.dialog({
                 title: `New ${props.noun}`,
-                message: `What is this ${props.noun} called?`,
+                message: `What is this ${props.noun} called?${
+                    props.createHint ? ` (e.g. ${props.createHint})` : ''
+                }`,
                 prompt: { model: '', type: 'text' },
                 cancel: { noCaps: true },
             })
@@ -151,11 +162,11 @@
     }
 
     async function onDelete(item: VocabItem) {
-        const count = item.recipe_count ?? 0;
-        const plural = count === 1 ? '' : 's';
+        const count = item.usage_count ?? 0;
+        const used = `${count} ${plural(props.usageLabel, count)}`;
         const usageMessage = props.preservesLabel
-            ? `${count} ${props.usageLabel}${plural} use this ${props.noun}; they'll keep the label.`
-            : `${count} ${props.usageLabel}${plural} using this ${props.noun} will lose it. The ${props.usageLabel}s themselves stay.`;
+            ? `${used} use this ${props.noun}; they'll keep the label.`
+            : `${used} using this ${props.noun} will lose it. The ${plural(props.usageLabel, 2)} themselves stay.`;
         const ok = await new Promise<boolean>((resolve) => {
             $q.dialog({
                 title: `Delete "${item.name}"?`,
@@ -185,5 +196,13 @@
     }
     .vocab-list__item {
         padding: 10px 4px;
+    }
+    // Name + tally on one line, same size; the tally wraps under the name
+    // rather than squeezing it when the row runs out of width.
+    .vocab-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--space-2, 8px);
     }
 </style>

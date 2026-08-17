@@ -18,6 +18,1157 @@ next.
 
 ---
 
+## 2026-08-17 (later 12) — Cookbook collection folders out; first-setup demo-seed 500 fixed
+**Status:** complete. Backend **1851 passed / 1 skipped / 1 xfailed**. Frontend
+**443 / 2** (the known `stockLevelDot` pair). vue-tsc + eslint clean as of the
+`RecipesOverview` edits; the final `recipeMetaLine.spec.ts` addition was verified
+by vitest but the typecheck/lint pass over it was cut short — re-run both at the
+top of the next session.
+
+### 1. Admin first setup: "ticked everything on" couldn't finish (owner bug report)
+
+`POST /onboarding/seed-demo` 500'd with
+`StockItem.__init__() got an unexpected keyword argument 'image'` —
+`SeedDemoHandler` still passed `image=None`, a field `StockItem` dropped.
+`applyDraft()` awaits that call, so the throw took out `complete()` and the
+wizard sat on "Couldn't finish setting up" with no way through.
+
+**Why it never showed up in tests:** the handler's idempotency check
+short-circuits when the "Spaghetti Aglio e Olio" recipe already exists, and both
+the dev seed and the e2e baseline have it. Only a genuine first-run install —
+no demo recipe, at least one of the three ingredients missing — reaches the
+row-creating half. Reproduced by clearing recipes in the e2e DB, which turned
+the previously-green sequence into the exact 500 the owner saw.
+
+Fix is the one-line kwarg removal. New e2e coverage in
+`tests/e2e/dora_api/test_onboarding_seed_demo.py` forces the fresh-install
+branch (drop recipes + rename the demo's ingredients out of the way, matching
+the handler's own case-insensitive lookup) and pins both the create path and
+the second-call no-op.
+
+### 2. Cookbook: collection folders removed, collection moved onto the card
+
+Owner: collapsible collection folders hide search hits below the fold in a large
+book. Confirmed with him: collection goes **first on the meta line** ("Weeknight
+Dinners · Italian · Main · Dinner", same muted caption), folders drop from
+**both** cards and compact rows, toolbar **Collection filter stays**.
+
+- `RecipeDto` gains `recipe_collection_name`, resolved server-side alongside
+  `cuisine_name` / `category_name` (R-003 — the client would otherwise join
+  against a separately-fetched collection list on every render). Free: the list
+  query already `.include(Recipe.Fields.RECIPE_COLLECTION)`. DTO snapshot
+  refreshed.
+- `useRecipeDisplay.metaLine` prepends it, so RecipeCard **and** RecipeRow get
+  it from one place. New `recipeMetaLine.spec.ts` pins the order + the DR-4
+  case-insensitive dedupe.
+- `RecipesOverview.vue`: `groups` / `collapsedGroups` / `toggleGroup` /
+  `.recipe-group*` styles all deleted; one flat `sortedRecipes` list per view.
+
+**Verified live** (`dora-verify-backend` + `dora-spa`, logged in as `dora`,
+`#/cookbook`): 15 cards, **zero** `.recipe-group` elements, metas reading
+"Weeknight Dinners · Italian · Main · Dinner"; same after toggling to compact
+rows (15 rows, same metas, no folders). Note for future pane work: the cookbook's
+`FadeTransition` wedges mid-leave on first mount (the documented rAF starvation)
+and shows a stale "No recipes match the current filters" over an empty grid —
+navigate away and back so the store is already populated and no swap occurs.
+
+**Standards close-gate:** R-003 honoured in both directions (name resolved
+server-side; display composition shared by the two layouts rather than
+duplicated). No D-rule surface changed beyond removing a container. No new ADR.
+
+**Next up:** re-run vue-tsc + eslint over `web_app` to confirm the new spec file
+is clean.
+
+---
+
+## 2026-08-17 (later 11) — Mobile header: gap back between the right-hand buttons
+**Status:** complete. One-file UI tweak, verified live in the Browser pane.
+
+Owner report: on mobile the alerts / donate / settings buttons in the header were
+crammed together. A prior pass had stripped their margins on mobile to buy the
+page title ~12px (`MainLayout.vue` right-hand cluster) — too aggressive; the three
+targets read as one blob.
+
+Fix: mobile now gets a trimmed gap rather than none — `AlertsBell` uses
+`q-mr-sm` on desktop / `q-mr-xs` (4px) on mobile, and `DonateButton` carries
+`q-mr-xs` unconditionally (it was desktop-only). Net cost to the title on mobile
+is 8px, not the ~12px the desktop margins ate.
+
+**Verified live** (`dora-verify-backend` + `dora-spa`, logged in as `dora`,
+DOM probe on `.dora-titlebar`): the pane renders the mobile branch (no
+`MainMenuButtonStrip`, no Help button, page title present) and the three
+buttons now sit **12px apart** (4px margin + the toolbar's 8px), previously 8px.
+
+Also fielded a docker-build question: the `[build] WARN: default voice fetch
+failed…` text the owner saw in `docker compose up` output is BuildKit **echoing
+the RUN command** (`|| echo …`), not the fallback firing — the same step logs
+`[fetch-voice] ready: /app/packaging/voices/en_US-amy-medium.onnx` and exits
+`DONE`. No code change; awaiting owner confirmation there wasn't a different
+symptom behind the paste.
+
+**Standards close-gate:** no R-rule drift (theme tokens untouched; Quasar spacing
+utilities already the house idiom for this cluster). D-rules: tap targets grew
+apart, none shrank. No new ADR warranted.
+
+**Next up:** nothing queued from this unit.
+
+---
+
+## 2026-08-17 (later 10) — Meal-planner reminders shipped as a daily brief
+**Status:** complete. Backend **1849 passed / 1 skipped / 1 xfailed**. Frontend
+**439 / 2** (the known `stockLevelDot` pair). vue-tsc + eslint clean.
+
+Item 3 of the later-9 owner list, after a design round. The ask was per-slot
+cooking reminders driven by a new `MealSlot.starts_at`; the owner reframed it
+mid-discussion ("perhaps per slot is too fiddly and also too many
+notifications, perhaps a day brief") and then settled the rest: fires **evening
+~7pm, not configurable**; **silent when there's nothing to say**; **push only**;
+**no just-in-time nudge** ("they know when dinner is"); and shop-day rolled in.
+
+### The finding that shrank the build
+
+Most of this already existed. `alert_kinds.py` has had **`shopping_day`** (per
+non-done list whose `planned_shop_date` is within 3 days, or overdue) and
+**`no_planned_meals`** since C-9.4 — both `TIER_FYI`, and `send_alerts_push.py`
+pushes `TIER_ACTIONABLE` only, so they've been bell-only all along. So the gap
+was never "build a notification system"; it was (a) nothing reads *tomorrow's
+meals*, and (b) there's no **digest-shaped** push — everything fires per-alert,
+hourly, as it changes.
+
+Two consequences, both recorded in the module docstrings so nobody re-litigates
+them:
+- **No `MealSlot.starts_at`, no migration, no time inputs.** A brief covering a
+  whole day never asks "is dinner soon?", so slots order by the `sequence` they
+  already have. This was the single biggest chunk of the original plan and it's
+  simply gone.
+- **The hourly alerts tick is sufficient.** No finer scheduler.
+
+### What was built
+
+- `features/meal_plans/daily_brief.py` — assembly. Wording rules are
+  module-level **pure functions** (`format_meal_line`, `format_shopping_line`,
+  `slot_order_map`) with a thin repo walk around them, matching
+  `pantry_belief.compute_belief`. The shopping half reads
+  `GetAlertsHandler` rather than re-querying (R-003), so a user who disabled the
+  `shopping_day` kind or snoozed a list gets no shopping half — for free.
+- `features/alerts/send_daily_brief.py` — delivery. `DAILY_BRIEF_HOUR = 19`.
+- `User.daily_brief_enabled` (default False) + migration `f2a9c4e18b73`, DTO,
+  PATCH field, `AuthenticatedUser` model, and an **Evening brief** section on
+  Settings → Notifications gated on VAPID + push support.
+- Registered **hourly at :45**, self-gating on the household clock.
+
+**Decisions made:**
+- **Scheduled hourly and self-gated, not pinned to `CronTrigger(hour=19)`.** The
+  scheduler is built once at startup in the *server's* timezone; the brief must
+  land at 19:00 **household** time, and that's a runtime AppSetting (R-021).
+  Self-gating means changing the timezone in Settings takes effect that evening.
+- **Dedup reuses `AlertInteraction`** under `meal:daily_brief:<date>` — the same
+  date-discriminator trick `no_planned_meals` uses with its ISO-week label. One
+  row per (user, day), so a restart inside the brief hour can't double-send.
+- **An empty brief does NOT stamp the ledger.** If the user adds tomorrow's
+  dinner at 19:20 the brief has genuinely changed and the next tick should send.
+- **A total send failure doesn't stamp either** — only a landed push does, so a
+  transient outage retries instead of silently burning the day.
+- **Only `shopping_day` rolled in**, per the owner's answer. `expiring_soon` is
+  a one-line addition to `_shopping_alerts`' sibling if he wants it later; not
+  added unasked.
+- Kept the `is_active` guard on recipients — a deactivated account shouldn't
+  keep buzzing someone's phone.
+
+### The bug worth remembering
+
+The first cut queried `MealPlanEntry` without `.include(MealPlanEntry.Fields.
+RECIPE)`. That relationship is mapped **`lazy="noload"` (R-019 / ADR-014)**, so
+every `entry.recipe` came back **None** — *no exception, no warning*. The brief
+assembled cleanly and would have fired every evening naming zero meals. Caught
+only by driving the handler against the real seeded DB; the pure-function tests
+can't see it, because the bug is in the repo walk. Now fixed, commented in
+place, and pinned by `tests/test_daily_brief_repo.py`. The planning-window probe
+passes `with_recipe=False` — it counts rows, so joining Recipe would be waste.
+
+**Files touched:** new `dora_api/features/meal_plans/daily_brief.py`,
+`dora_api/features/alerts/send_daily_brief.py`,
+`dora_api/persistence/migrations/versions/f2a9c4e18b73_20260817_user_daily_brief.py`,
+`tests/test_daily_brief.py` (16 pure), `tests/test_daily_brief_repo.py` (3 DB-backed);
+edited `domain/entities/user.py`, `features/auth/register_user.py`,
+`features/auth/update_me.py`, `persistence/table_mappings.py`, `startup.py`,
+`web_app/src/models/auth.ts`, `web_app/src/services/api/authApiService.ts`,
+`web_app/src/pages/settings/NotificationsSettings.vue`,
+`tests/e2e/dora_api/dto_snapshots.json`, `CHANGELOG.md`.
+
+**Engineering-standards close-gate:**
+- **R-019 / ADR-014** (no lazy loads; callers `.include()`) — violated, caught,
+  fixed, commented, and now test-pinned. See above.
+- **R-003** (one source for a domain fact) — honoured deliberately: the brief
+  does not grow its own idea of "shopping day", it reads the canonical evaluator.
+- **R-021** (calendar logic in the household timezone) — the job converts `now`
+  into the household zone and derives `today` from that; the assembler takes
+  `today` as a parameter and never reads a clock.
+- **R-010** (closed-set sentinels) — n/a, no new string enum.
+- **ADR evaluation:** no new rule. The "digest-shaped push vs per-alert push"
+  split is a genuine second pattern in this codebase, but two instances with
+  different jobs isn't a rule yet — revisit if a third channel wants digesting.
+
+**Verification:** 19 new tests green. Toggle verified live in the Browser pane —
+the section renders, the field round-trips through the real API (`PATCH /auth/me`
+then a server re-read), and the toggle correctly renders **disabled** on this
+dev instance because VAPID isn't configured, which is the intended gate. The
+assembler was driven against the real seeded DB and produced
+`"Tomorrow — Dinner: Egg Fried Rice."` for the 2026-08-17 evening.
+*Not verified:* an actual push landing on a device (needs VAPID keys + a real
+subscription) and the 19:00 fire. Both queued in `DORA_VERIFY.md`.
+
+**Next up:** unchanged — the browser-verify sweep of the four unverified
+champion/native surfaces, or Phase 4 open-source release readiness.
+
+**Open questions for user:** whether `expiring_soon` ("use these up") should
+join the brief. One line if so; deliberately left out as unasked scope.
+
+---
+
+## 2026-08-17 (later 9) — Food facts deepened + the mobile-resume hang root-caused
+**Status:** complete for items 1–2 of a three-item owner list; **item 3 (meal-planner
+slot reminders) is not started — it's parked on two owner decisions**, see below.
+`vue-tsc` + eslint clean, Vitest **439 / 2** (the known `stockLevelDot` pair), backend
+`test_help_router.py` 4 passed.
+
+### 1 — Where do food facts come from, and can we add more?
+
+`dora_api/features/help/get_food_fact.py` — a curated local tuple, `random.choice` per
+request, served at `GET /api/help/food-fact`. Feeds both the Help page card and the
+chat's `food_fact` intent (one source, R-003 already honoured). The module docstring
+records *why* it isn't the external RSS feed the original spec named: feed shape drift,
+client CORS, rate limits.
+
+Grew **25 → 128** facts. Verified programmatically: no duplicates, none over the
+docstring's ~140-char ceiling. `test_help_router.py` imports `FOOD_FACTS` and asserts
+membership, so it covers the new entries without edits.
+
+### 2 — Is the health pulse too chatty, and why is mobile resume so slow?
+
+Two separate things, and the second is the real bug.
+
+**Chatty:** the cadence was 30s while reachable, and a 5s → 60s exponential ladder while
+unreachable. The "every 5s" the owner saw is the **unreachable** ladder, not the steady
+state — that's working as designed and a fast first retry there is the point, so the
+ladder stands. What was genuinely wasteful: both the health probe *and* the alerts-bell
+60s poll ran **regardless of visibility**. Both now stand down while
+`document.visibilityState === 'hidden'` and refresh on return. Steady health poll
+relaxed 30s → 60s, which the new resume-probe more than compensates for.
+
+**The resume hang — root cause: `axios.create()` set no `timeout`, so every request had
+NO ceiling.** On mobile the socket is typically dead by the time the OS resumes the app;
+such a request never resolves and never rejects. So: no error, therefore no retry,
+therefore `bootstrapError` never set, therefore the splash pulses **forever** with no
+Retry button — exactly the reported symptom, and the "stuck on the page waiting to
+reconnect" variant too. Fixes:
+- `DEFAULT_TIMEOUT_MS = 30_000` on the instance (generous — the admin dataset-import /
+  backup-restore calls are legitimately slow and must not be cut off).
+- `/auth/me` + `/auth/bootstrap-required` get `BOOT_PROBE_TIMEOUT_MS = 8_000` and a
+  retry ceiling of **1** instead of 3. They gate the splash, and the splash already owns
+  the recovery affordance; 3 × 30s of silent pulsing is strictly worse than handing the
+  user the Retry button at ~16s. Follows the file's existing `SUPPRESS_401_PATHS`
+  path-list idiom.
+- New `visibilitychange` handler in `useNetworkStatus` → immediate forced probe with the
+  backoff reset, so a resumed app doesn't wait out a ladder from an outage that ended
+  while it was backgrounded.
+
+A timeout surfaces as `ECONNABORTED` with no `error.response`, so it already normalises
+to `isNetworkError` → the splash shows "Can't reach the server", which is the honest
+message.
+
+**Decisions made:**
+- Kept the unreachable 5s→60s ladder as-is. The complaint was about *background* chatter;
+  the ladder only runs when something is actually broken, and slowing it would trade a
+  real recovery-latency win for a saving that only applies during an outage.
+- Did **not** add a per-request options bag to the `HttpClient` interface for the boot
+  timeout. A path list is a smaller change, matches the two lists already in that file,
+  and the interface change would touch every one of the ~40 api services for one caller.
+- Left the existing food facts alone rather than fact-checking them in passing. Two are
+  shaky (the corn-kernel "exactly 800, in 16 rows" is a generalisation, and the mushroom
+  genetics one is loose) — out of scope for "add more", noted here rather than silently
+  rewritten.
+
+**Files touched:** `dora_api/features/help/get_food_fact.py`,
+`web_app/src/services/api/axiosHttpClient.ts`,
+`web_app/src/composables/useNetworkStatus.ts`,
+`web_app/src/components/AlertsBell.vue`, `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Engineering-standards close-gate:** no R-rule violations introduced. The visibility
+gating is duplicated in two places (`useNetworkStatus` + `AlertsBell`) — borderline
+R-003, but a shared `useDocumentVisibility` composable for two 3-line call sites is
+worse than the duplication; flagged here rather than abstracted. No new ADR: the
+"background timers stand down while hidden" pattern is a candidate rule if a third
+poller appears, but two isn't a pattern.
+
+**Verification:** food-fact list validated by script (count / dupes / length) and by the
+existing backend test. The axios + visibility changes are **not** browser-verified — the
+failure mode is a suspended mobile webview with a dead socket, which the dev pane cannot
+reproduce. Queued in `DORA_VERIFY.md`.
+
+**Next up:** **item 3 — meal-planner slot reminders — is blocked on the owner.** The
+request resolved one fork itself (slots get a **time input**; slot end inferred from the
+next slot's start). What's still open: (a) build now vs. proposal-first, given this
+spans a `MealSlot.starts_at` migration, slot-time validation, a settings time input, a
+new scheduler job, per-user opt-in prefs and household-timezone handling; and (b) the
+reminder lead time, which also decides whether the **hourly** alerts tick is sufficient
+or needs a finer cadence. Groundwork already confirmed: push infra + per-user alert
+prefs + an hourly job exist (`send_alerts_push.py`, `manage_alert_prefs.py`), fresh vs
+batch is `batch_features_enabled` on the AppSetting singleton via `useCookingPolicy`,
+and `MealSlot` is currently `{name, sequence}` with the slot held as free-text on
+`MealPlanEntry.slot`.
+
+**Open questions for user:** the two in "Next up" — asked directly at the end of the
+session.
+
+---
+
+## 2026-08-17 (later 8) — Assistant chat window: five owner-feedback items
+**Status:** complete. `vue-tsc --noEmit` clean, `eslint` clean, Vitest **439 passing /
+2 failing** — the 2 are the pre-existing `stockLevelDot` pair (FU-634/642/650),
+untouched here. Live-verified in the Browser pane for the three checks that pane can
+prove; the two touch/mobile ones are in `DORA_VERIFY.md`.
+
+**What ran:** a flat list of five observations the owner made about the Dora chat
+bubble + chat window. All five landed; nothing deferred.
+
+1. **First-time hint should only show if never dismissed.** It already persisted
+   (`localStorage`, keyed per user — FU-360.5), but the *check* ran in `onMounted`
+   against `hintDismissedKey()`, which falls back to a shared browser-wide key while
+   `currentUser` is un-hydrated. So on a slow `/me` the check read the wrong entry and
+   the hint resurfaced for someone who'd dismissed it. Replaced the `onMounted` block
+   with a `watch(() => currentUser.value?.user_id, …, {immediate:true})` + a
+   `hintChecked` latch, so the decision is made exactly once and only with a real id.
+2. **Firefox Android: launcher moves with the address bar.** Root cause is engine
+   disagreement about what `position: fixed; bottom: N` means while the URL bar
+   collapses. `.dora-bubble-root` is now a `100dvh` (with `100vh` fallback) full-height
+   shell pinned at `top: 0`, contents pushed to its bottom edge via
+   `justify-content: flex-end`, safe-area insets moved from `right`/`bottom` to
+   `padding-right`/`padding-bottom`. The shell is `pointer-events: none` with
+   `> * { pointer-events: auto }` so it doesn't swallow page taps — **verified**:
+   `elementFromPoint(400,300)` returns page content, and the launcher still hit-tests.
+   `.dora-chat-card`'s `70vh` also went to `70dvh` (vh fallback first) so the card
+   can't outgrow the shell that now constrains it.
+3. **Tapping the mascot to close left her full-size; the X shrank her.** Sticky
+   `:hover` on touch. Split the combined `:hover, :focus-visible, .is-hint-visible`
+   rules and moved every `:hover` half — including `dora-hover-bob` — inside
+   `@media (hover: hover) and (pointer: fine)`.
+4. **D.O.R.A. acronym tooltip fired from anywhere in the header.** A `q-tooltip`
+   anchors to its **parent element**; it was a *sibling* of the name `<span>`, so its
+   parent was the whole header row. Moved it inside the span. **Verified** — the
+   tooltip's comment placeholder now renders inside `.dora-bot-name`.
+5. **Disabled AI toggle explained itself only via hover (invisible on touch).** New
+   `disabledIsActionable` prop on `DoraModeSlider`: when set, activating it while
+   disabled emits `disabled-activate` instead of no-oping. `DoraChat` passes
+   `!canConfigureAi` and routes to `/settings/assistant` + closes the panel. `tabindex`
+   is now unconditionally `0`; the actionable-disabled look is dimmed-but-dashed with
+   `cursor: pointer`. **Verified** — clicking it landed on `#/settings/assistant`.
+
+**Decisions made:**
+- Item 5 keeps `aria-disabled` rather than becoming a normal enabled switch. It genuinely
+  *cannot* be flipped here, and `aria-disabled` (unlike native `disabled`) keeps the node
+  focusable and handler-bearing — the sanctioned shape for "can't do its job, can take you
+  to where you fix it".
+- Item 2 fixed CSS-only rather than with a `visualViewport` JS offset. `dvh` is the
+  standard answer, is supported everywhere Dora targets, and adding a resize listener to
+  a global overlay for a single-engine cosmetic drift isn't worth the surface area.
+- The `togglingMode`-drives-`disabled` D-019 smell was left alone (explained in place, not
+  logged) — with `tabindex` now unconditional, the rule's actual harm (blurring the control
+  mid-interaction) can no longer occur.
+
+**Trap worth remembering:** the D-016 carve-out comment was first written as a leading
+`<!-- … -->` above the template's root element. That makes the SFC **multi-root**, and
+`doraModeSlider.spec.ts` went from 12 green to 5 red instantly — `wrapper.classes()`,
+`wrapper.attributes()` and `wrapper.trigger()` all resolve against a fragment. The
+component still rendered fine in the browser, so only the spec caught it. Rule of
+thumb: explanatory comments for a single-root SFC go in `<script setup>`, not above the
+root element. Noted in place in the component.
+
+**Files touched:** `web_app/src/components/dora/DoraBubble.vue`,
+`web_app/src/components/dora/DoraChat.vue`,
+`web_app/src/components/dora/DoraModeSlider.vue`,
+`web_app/test/unit/doraModeSlider.spec.ts` (the disabled-is-out-of-the-tab-order
+assertion is now wrong by design — split into a "stays in the tab order while
+disabled" case, plus two new cases covering the actionable-disabled emit and its
+tooltip copy; 8 → 12 tests), `CHANGELOG.md`, `DORA_VERIFY.md`, `DORA_FOLLOWUPS.md`,
+`PROJECT_STATE.md`.
+
+**Engineering-standards close-gate:**
+- **D-016** (disabled = not focusable + inert) — deliberate carve-out for the actionable
+  slider, commented in place at the top of `DoraModeSlider.vue`'s template with the
+  reasoning.
+- **D-019** (no transient flag on `:disable` of a focusable control) — pre-existing
+  `togglingMode`; explained in the same comment block, harm now unreachable.
+- **D-004** (44px touch floor) — the slider is 24px tall and this change made it a
+  first-class touch target. Logged as **FU-663**, recommended to be resolved together
+  with FU-641 (header icon buttons at 36px) as one header-density pass.
+- **R-003 / theme tokens** — no new raw colour values; the new `--actionable` state
+  reuses the existing border/opacity treatment.
+- **ADR evaluation:** no new rule. The `@media (hover: hover)` gate is a candidate if a
+  second sticky-hover bug turns up — one instance isn't a pattern yet.
+
+**Verification:** booted `dora-verify-backend` + `dora-spa`, logged in as `dora/dora`.
+Confirmed: hint appears on a fresh user, and a set per-user key suppresses it across a
+full reload (the exact race the fix targets); shell is full-height + click-through with
+the launcher pinned at 18px from both edges; slider renders
+`--disabled --actionable` with `tabindex=0`, `cursor: pointer`, `aria-disabled=true`,
+and navigates to `#/settings/assistant` on click; tooltip anchor is now the name span.
+The chat card staying in the DOM after `emit('close')` is the known rAF-starved-pane
+`<Transition>` wedge (see the browser-login memory), not a regression — `open` flips
+false and the launcher drops `.is-active`.
+*Not verified:* the two touch/mobile behaviours (items 2 and 3) — no handset. In
+`DORA_VERIFY.md` under "Assistant chat window — mobile + touch behaviour".
+
+**Next up:** unchanged from later-7 — either the browser-verify sweep of the four
+unverified champion/native surfaces, or Phase 4 open-source release readiness. The
+FU-578 UX/UI review triage remains the largest live design backlog.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-08-17 (later 7) — Compose env audit + the offline queue was never syncing
+**Status:** complete. Backend **1777 passed / 1 skipped / 1 xfailed** (+58 in
+`test_sqlalchemy_repository.py` re-run with `--basetemp`; its 53 errors on the first
+run are this sandbox's unwritable temp dir, not code). Frontend **436 passing / 2
+failing** — the same pre-existing FU-634 `stockLevelDot` pair. vue-tsc + eslint clean.
+
+**What ran:** the owner's three questions. Two were "I'm not sure this works" — both
+were right.
+
+### 1 — Compose env-var audit
+
+The `DORA_SECRET_ENCRYPTION_KEY` miss wasn't a one-off, it was **structural**:
+`compose.yml`'s `environment:` block is an explicit allow-list, so anything an operator
+sets in `.env` that isn't named there is dropped silently. Fixed the class, not the
+instance — added `env_file: [{path: .env, required: false}]` so the whole file is
+forwarded regardless. The `environment:` block stays for what it's genuinely good at
+(documentation + container defaults, which still win).
+
+Then audited it properly. Scanned every env read in `dora_api/` + `gunicorn.conf.py` +
+`startup.sh` + `Dockerfile`. Findings:
+
+- **`DORA_SMTP_USER` vs `DORA_SMTP_USERNAME`** — compose forwarded a name nothing has
+  ever read. **`DORA_SMTP_PASSWORD`** likewise has no env path at all (wrapped secret,
+  admin UI only). Both removed.
+- **Eight runtime-read vars were never forwarded**: `DORA_DB_HOST/_PORT/_NAME/_USER/
+  _PASSWORD` (the third resolution step in `get_db_connection_string`),
+  `DORA_SUPPORT_URL/_EMAIL`, `DORA_DEMO_MODE/_RESET_MINUTES`, `DORA_PIPER_VOICE_DIR`.
+  Added, and documented in `.env.example` (which was well behind compose).
+- **The SMTP/VAPID/Piper/`public_url`/`audit_retention` block is migration-only** —
+  promoted to AppSetting by IMPL_PLAN_ENV_TO_APPSETTING; the env vars survive only
+  inside migration `b7d2f9c1e4a3` and have **no runtime fallback**. Deliberately *not*
+  re-added to compose (that would advertise settings that do nothing) — `.env.example`
+  already said so and compose contradicted it.
+- **Deliberately omitted, now written down:** `DORA_CSRF_DISABLED`,
+  `DORA_DISABLE_SECURITY_HEADERS`, `DORA_SKIP_PROD_VALIDATION` (escape hatches that
+  weaken the install — naming them invites use), `DORA_SEED_*`, and the
+  container-internal host/port/bind vars the Dockerfile owns.
+
+**New: `tests/test_compose_env_coverage.py`** (16 tests). Every env name the code reads
+must be in compose or on `INTENTIONALLY_OMITTED` with a reason; the mirror test catches
+orphans in compose (it's what proves the `_USER`/`_PASSWORD` removal was right); a third
+stops the omit-list rotting. One design note worth keeping: the scanner matches **bare
+string literals**, not `os.environ.get(...)` call sites, because `secret_encryption.py`
+reads its var through a module constant (`_ENV_VAR = "DORA_SECRET_ENCRYPTION_KEY"`) — a
+call-site scanner misses precisely the variable that started this.
+
+### 2 & 3 — The offline queue: queued fine, never synced
+
+The two questions turned out to be one investigation. **The offline queue has been
+broken end to end since it shipped.**
+
+**Root cause.** `replayOnce` uses **bare `axios`**, not `AxiosHttpClient` — deliberately,
+so a replay isn't re-enqueued by its own `tryWithQueue` wrapper. But that also skips the
+interceptor that attaches the FU-197 double-submit `X-CSRF-Token` header, and
+`require_csrf_if_protected` 403s every mutating `/api/*` call without it (in all
+profiles; `DORA_CSRF_DISABLED` is dev-only). So **every drain 403'd**. Worse, the
+failure is self-concealing: 403 is a non-network error, so the drain loop classified it
+as a *conflict*, dropped the mutation out of the queue, showed one 5s toast, and the
+`conflicts` array was **memory-only** — a reload erased the evidence. Net effect: every
+stock level set and line ticked while offline was lost, and the UI said "Synced
+everything". The FU-571 sweep that fixed the raw-`fetch` callers missed this one.
+**The existing 24 queue tests all passed throughout — axios is mocked, so CSRF is never
+enforced in them.**
+
+Fixed: replay attaches `csrfHeader()`; if the cookie isn't readable yet it throws a
+*network-flavoured* error so the item stays queued rather than being burned as a
+conflict; conflicts now persist to localStorage. Two new tests pin the header and the
+defer, which is the regression the old suite structurally couldn't catch.
+
+**Second bug — the drain trigger.** The only trigger was `watch(apiReachable)` on a
+false→true **transition**. `apiReachable` initialises `true` and the first probe leaves
+it true, so a queue rehydrated from a previous session had nothing to fire it: close the
+tab in the carpark, open it at home, and it syncs only if you later lose and regain the
+connection. Now also drains when the user id transitions to a resolved value. Firing on
+the *transition* rather than the `immediate` run is deliberate — that's also when
+`/auth/me` has returned, which is what seeds the CSRF cookie the replay needs.
+
+**Third bug — Retry did nothing.** `retryNow` called `runProbe`, which starts with
+`if (!online.value) { scheduleNext(); return false; }`. So with `navigator.onLine`
+false, Retry issued no request, no spinner and no message — a genuinely dead button, in
+exactly the situation it exists for (`navigator.onLine` reports whether an interface
+exists, not whether anything is reachable, so it's wrong on captive portals and
+half-dropped mobile data). `runProbe(force)` now bypasses that, a success **corrects**
+`online` instead of waiting for the browser's event, a failed forced probe toasts
+"Still can't reach the server", and an `inFlight` guard stops a click racing the poll.
+
+**Copy.** The banner promised "Most actions still work and will sync". Six kinds queue
+(stock level, opened/restocked, expiry push/clear, list tick) — the mid-shop set. Reworded
+to name them; telling someone their new recipe will sync later when it won't is worse
+than silence.
+
+**Not fixed, logged instead:** FU-660 (the `conflicts` pile has **no UI at all** —
+exposed, never consumed; now at least survives a reload), FU-661 (is six mutation kinds
+the right coverage?), FU-662 (`attempts` counted, never acted on; no cap, no staleness
+check against `createdAt`).
+
+**Standards close-gate.** New **R-047 + ADR-043** — an HTTP call that bypasses
+`AxiosHttpClient` must re-attach what the interceptor would have (CSRF + credentials),
+and defer rather than send when the cookie isn't ready. Second time this has bitten
+after FU-571, so it earned a rule. The ADR records the two rejected alternatives:
+routing the replay through `AxiosHttpClient` (re-enqueues itself — the reason for bare
+axios) and exempting `X-Offline-Replay` server-side (a header an attacker can set is not
+a defence). Also updated the `csrfHeader()` comment block so its inventory of bypassing
+callers is real again.
+
+**Not verified live.** Nothing was walked in a browser — and here that gap matters more
+than usual, because the whole failure mode is one mocked transports can't reproduce. Five
+checks queued in `DORA_VERIFY.md` → "Offline sync + Retry, end to end"; the load-bearing
+one is *queue offline, go online, reload, confirm the server kept it*. `docker` isn't on
+PATH in this shell, so `docker compose config` was not run — worth doing once, since
+`env_file`'s `required: false` needs Compose v2.24+.
+
+**Next up:** unchanged — champion-surface verify sweep, or Phase-4 release readiness.
+
+---
+
+## 2026-08-17 (later 6) — Feedback batch: first-admin screen, essential tab, stocktake skip
+**Status:** complete. vue-tsc clean; eslint clean over the touched files; backend auth +
+DTO-contract + audit tests green (63 passed). One backend contract change (bootstrap
+email optional), no migration. Not walked in the browser — see "Not verified" below.
+
+**What ran:** the owner's four bullets.
+
+**1 — First admin screen.** Removed the `#card-foot` fine print ("This screen only
+appears once…") from `SetupAdminPage.vue`, along with the now-orphan
+`.setup-fineprint` rule. The `AuthShell` `card-foot` slot is untouched and still used
+by the other pre-auth pages.
+
+**2 — Email on first-admin is now OPTIONAL (owner call, same session).** The original
+reason was in a code comment only (`bootstrap_admin.py:51`): the bootstrap admin
+auto-verifies and skips SMTP, so a forgotten first password had no second admin and no
+verified address to reset through. Owner's ruling: that's not a real risk on
+self-hosted software — the person running setup owns the box, and the actual recovery
+from "I forgot the password I set 30 seconds ago on an empty install" is to wipe and
+restart, not to wait on an email. So `BootstrapAdminRequest.email` is now
+`str | None = None`, matching public `/register`, and the format check only fires on a
+non-empty value. Client mirrors it: `BootstrapAdminCommand.email` is `string | null`,
+the required-rule is gone, the label reads "Email (optional)", and the page sends
+`form.email.trim() || null` so a blank field stores NULL rather than `''`.
+
+**`ADMIN_BOOTSTRAP_EMAIL` still makes it mandatory** — no change needed, and worth
+knowing it's deliberate: the existing match check compares `(email_norm or "").lower()`
+against the configured address, so a blank submission on a locked install falls to the
+same generic refusal as a wrong one. There, the address isn't a recovery convenience,
+it's the credential gating the endpoint.
+
+Tests: `test_auth_flows.py` 28 passed, `test_dto_contracts.py` + `test_audit_completeness.py`
+35 passed. No snapshot to update — `dto_snapshots.json` covers response DTOs, and this is
+a request model.
+
+**3 — Essential marker.** `.stock-row__essential-stripe` was a flat 5px full-height
+bar. Now 16px wide and `clip-path`-ed to a bracket: full 16px along the row's top and
+bottom edges, tapering to 5px over the first/last 14px, straight 5px through the
+middle (~28px of a 56px row). Chosen over a wider `border-radius`-only shape because
+the ask was specifically "wraps the top and bottom … and tapers like a tab", which is
+a bracket, not a rounded bar. Width change is **clip only** — the element is absolutely
+positioned, so the 2026-08-16 left-padding fix (phones keep desktop's 12px so the
+stripe doesn't blob into the level button) still holds; the flare only exceeds 12px in
+the outermost ~4px of the row, above and below the level button's box.
+
+**4 — Stocktake skip.** `onSkip()` re-appended the item to `session` and advanced, so
+`session.length` — the progress denominator and the "n / total" readout — grew on every
+skip and a run could not be finished by skipping. It now just counts and advances. No
+API either way, so the item's clock is untouched and it heads the next queue. Help-dialog
+copy for Skip rewritten, and `PROPOSAL_STOCKTAKE_MODE.md` §5 (the Skip row + the
+"Why Skip ≠ Push" note) revised in place with a dated note, since the old behaviour was
+a recorded design decision rather than a bug.
+
+**5 — "Stocktake" vs "Stock-take".** Not renamed, deliberately. **"Stocktake" is the
+standard one-word spelling** in Australian and British English (Macquarie, Oxford);
+"stock-take" is a rarer variant and "stock take" is wrong. The codebase already agrees
+369:1 (369 `stocktake` vs 3 `stock-take`), so the consistent fix runs the *other* way:
+normalised the three strays in `StockItemDetailPage.vue` — including the user-facing
+**"Stock-take"** row label — to `Stocktake`. Owner told; happy to run the full rename if
+he'd rather have the hyphen.
+
+**Not verified (and why).** None of it was walked live. Stock rows are virtualised and
+paint 0 rows in the agent's pane (rAF is starved — see
+`reference-dev-verify-browser-login`), `screenshot` fails there, and the first-admin
+screen only exists on a zero-user install. Three checks queued in `DORA_VERIFY.md` →
+"Feedback batch: setup screen / essential tab / stocktake skip".
+
+**Standards close-gate.** Checked against `ENGINEERING_STANDARDS.md` + `DESIGN_STYLE_GUIDE.md`:
+no new violations. The stripe keeps `--brand-secondary-strong` (D-020 indicator grade,
+the 2026-08-16 dark-theme fix) and gains no literal colour; the hint is plain copy, no
+new token; skip is pure client view-state (R-003 — the queue is server-built, and
+skipping deliberately writes nothing). No recurring decision worth an ADR.
+
+**Next up:** unchanged — the champion-surface browser-verify sweep, or Phase-4 release
+readiness (FU-406/608/557). Nothing here spun a new follow-up.
+
+---
+
+## 2026-08-17 (later 5) — Cookbook feedback batch: toolbar standardised on Stock, two-row filters, compact row view
+**Status:** complete, green. vue-tsc clean; eslint clean over the six touched files;
+vitest **434 passing / 2 failing** (the same pre-existing FU-634/642/650
+`stockLevelDot` pair — unchanged). Agent-verified live at 375px. No backend change,
+no migration.
+
+**What ran:** the owner's three cookbook bullets.
+
+**1 — Toolbar.** `RecipesOverview.vue`'s header was its own invention: search on the
+left, actions reversed, Import rendered `ghost` (which paints white/transparent and
+read as disabled beside the filled New-recipe button — the owner's exact complaint).
+It's now the `StockOverview.vue` toolbar, not a lookalike: same `row items-center
+q-gutter-sm` shell, same `compactToolbar = $q.screen.lt.sm` gate dropping every label
+to its icon with the name on a tooltip, same `q-space.gt-xs` + `__find` wrapper, and
+the same `flex-basis: 100%` media query that wraps filter-toggle + search to a
+full-width second row on phones. `FilterToggleButton` gets `:compact` for the first
+time on this page. Order is the requested one: add · import · photos · view · ⟨gap⟩ ·
+filters · search. Import → `secondary`.
+
+**2 — Filters.** One `q-gutter-sm` wrap-row of ~19 controls became the stock page's
+**two rows** — `recipes-quick-filters` (5 toggle chips) above `recipes-input-filters`
+(13 selects/inputs/tri-states) — each `no-wrap` + `overflow-x: auto` with the
+scrollbar hidden, mirroring `.stock-quick-filters` / `.stock-input-filters`. The two
+`q-separator vertical` dividers went: they were wrapping-row punctuation and are
+meaningless once the rows scroll. One deliberate divergence from stock, commented in
+place: stock pins `flex: 0 0 180px` because its four dropdowns are interchangeable,
+whereas these thirteen are genuinely heterogeneous (a 130px "Kcal ≤" beside a 200px
+Collection picker beside an icon-only sort-direction button), so they keep their
+natural width via `flex: 0 0 auto` — which is still what stops a flex item shrinking
+past its own `min-width` in a scrolling row.
+
+**3 — Compact view, and the refactor it forced.** New `components/recipes/RecipeRow.vue`
+— thumbnail · name · meta line · figures · favourite/cook/cart — with `StockItemRow`'s
+chrome (8px radius, accent-tinted hover, no lift, the same phone squeeze on the icon
+cluster). Toggled from the toolbar, persisted per-device by a new
+`useListViewMode(pageKey)` (localStorage sibling of `useFilterPanelExpanded`;
+deliberately *not* a `/me` field — unlike `show_recipe_images`, which view shape suits
+you is a device question, and `useListState` is session-only so it wouldn't have been
+"remembered" at all).
+
+The design call worth recording: a second view of the same recipe meant a second copy
+of the card's dozen display computeds — the cook-button colour, the three tooltips,
+the kcal judgeability read, the DR-4 meta-line dedupe, the FU-653 belief sentence. That
+is precisely the duplication R-003 exists to stop, and the first wording change would
+have drifted them. So `composables/useRecipeDisplay.ts` now owns all of it and both
+`RecipeCard` and `RecipeRow` decide **layout only**. RecipeCard's script shrank by
+~90 lines and lost three imports; its template is untouched.
+
+**Verified live (375px, seeded dev data).** Toolbar: 4 icon-only actions on row 1, the
+find cluster wrapped to row 2 at the full 343px, 100px tall, `docOverflow` 0. Filters:
+both rows one line each (39px / 42px), scrollWidth 820 and 2016 against a 311px client
+— i.e. scrolling, not wrapping. Compact toggle: 15 cards → 15 rows, `dora.listView.
+cookbook-overview` = `compact`, aria flips to "Switch to cards", row 58px, names
+ellipsis, no h-scroll.
+
+**What could NOT be verified, and why.** `$q.screen.width` is **0** in the agent's
+browser pane (confirmed by reading the live Quasar instance) — Quasar never measures,
+`resize` events and viewport changes don't move it, and `lt.sm` is stuck true. So every
+`$q.screen`-gated branch in the app renders in its **mobile** form there, including
+Stock Overview's own toolbar, whose buttons are equally label-less. The desktop shape
+(labels, row chips) is unseen and is queued in `DORA_VERIFY.md`. Worth remembering: this
+is a general pane limitation, not a cookbook one.
+
+**FU-638 — evidence, still open.** Reproduced on the *first* navigation to `#/cookbook`
+(empty state + footer reading "15 Shown"), then navigating away and back rendered 2
+groups / 15 cards cleanly. That's the rAF-wedge signature (rAF never fires in this pane,
+so the `FadeTransition mode="out-in"` around the grid wedges mid-leave while the footer,
+outside it, updates) — the same failure as the DR-8 boot splash. Noted on the FU; it
+stays `[OPEN]` pending the real-browser check, per the reported-defect rule.
+
+**Standards close-gate.** R-001 (new component, not inline markup), R-003 (the
+`useRecipeDisplay` extraction above; `useListViewMode` generic rather than a cookbook
+one-off), R-035/D-rules (theme tokens throughout; one **D-017 carve-out commented in
+place** — `.recipe-row__initial` is near-white on a per-recipe generated `hsl()` tile,
+identical to the card's existing treatment, where no token can name the colour). No new
+ADR: this unit applied existing rules rather than establishing one.
+
+**Next up:** owner's call. The desktop half of the cookbook walk is 60 seconds in a real
+browser and would also close FU-638. Otherwise unchanged: the FU-578 DR tail
+(DR-12/13/15/16), or Phase-4 release readiness.
+
+---
+
+## 2026-08-17 (later 4) — Stock-item detail feedback batch: QR root-cause, nutrition micronutrients, copy/control removals
+**Status:** complete, green. vue-tsc clean; eslint clean over all of `src/`; vitest **434
+passing / 2 failing** (the pre-existing FU-634/642/650 `stockLevelDot` pair); backend
+**1749 passed** (1738 + 11 new), the 53 errors being the known
+`test_sqlalchemy_repository.py` tmp-path set. Migration `b6e04c9a2f18` applied cleanly
+to the real dev DB (all 15 columns verified present). New: **R-046 / ADR-042**, FU-657.
+
+**What ran:** the owner's seven stock-item-detail bullets.
+
+**1 — QR, and the end of guessing.** FU-648 had been "fixed" twice without the failure
+ever being reproduced, both times from a static read. This round measured instead:
+
+- **Server half pinned** — `tests/e2e/dora_api/test_qr_labels.py`, 7 tests through the
+  real stack. PNG magic bytes, `size=512` accepted / 63 / 2048 / `"big"` rejected,
+  unknown item 404, sheet in caller order, unknown ids skipped, no-ids prints-all, and
+  the load-bearing one: the sheet contains `data:image/png;base64,` and **no**
+  `/api/stock-items` back-reference. All green first run.
+- **Transport half proven** — driven live from the Browser pane at `:5174` against the
+  API at `:5170`, genuinely cross-origin with `credentials: 'include'`. Both endpoints
+  200; `fetchQrImageUrlAsync` imported from the actual composable returned a blob URL.
+  So CORS, the cookie and the base URL are all fine on this deployment shape, which
+  kills the FU-648 `envDefault()`-hardcodes-`:5170` hypothesis for this case.
+- **That left the gesture — and there it was.** ADR-041's own fix introduced it:
+  moving to fetch-then-`window.open(blobUrl)` put the open *after* an `await`, which
+  every browser treats as an unsolicited pop-up. Desktop Chrome is lenient enough to
+  hide it; mobile blocks unconditionally — and the owner said "when I **tap** on it".
+  Now opened inside the click and navigated on arrival, placeholder written into the
+  fresh tab, `location.replace` so Back doesn't return to it, tab closed if the fetch
+  throws. `noopener` had to go (it forces a `null` return, so there's no handle);
+  `opener` is severed by hand. Promoted to **R-046 / ADR-042**.
+- **The dialog's "couldn't load…" still doesn't reproduce** — third attempt. So it got
+  *instrumented* rather than guessed at: `describeQrFailure` reports the HTTP status
+  and the correlation-id prefix, words network errors differently from server errors,
+  and names a blocked pop-up as its own outcome. The reason FU-648 survived two fixes
+  is that the only person who could see it had nothing to report but our own sentence.
+  FU-648 stays **[OPEN]** with that stated; the next report closes it in one pass.
+- Both sibling callers (`useStockOverviewExport.openQrSheet`, `QrLabels.openSheet`)
+  share the composable so they inherit the fix; their `void …` calls — which dropped
+  every failure on the floor — now toast. Also fixed the sheet's doubled
+  `charset=utf-8; charset=utf-8` header, spotted in the live probe.
+
+**2 — Nutrition micronutrients (the one real feature).** The owner asked what else can
+be pulled and whether an optional block could carry potassium/vitamin D/calcium/iron.
+Fifteen added — trans/mono/polyunsaturated fat, cholesterol, potassium, calcium, iron,
+magnesium, zinc, vitamins A/C/D/E/B12, folate — as columns (migration `b6e04c9a2f18`).
+This **reverses the 2026-08-16 scope note**, and the reversal is defensible rather than
+a flip-flop: "needs a per-nutrient child table" is true of the *full* USDA table, not of
+a curated fifteen; the sparseness concern is real and is answered in the **UI** (behind
+a disclosure, whole block absent when empty) rather than by not storing them.
+
+**The design call worth recording.** Adding fifteen nutrients would have multiplied the
+existing duplication — the client held its own copy of the labels, order, units and
+rounding, with a comment asking the next person to keep it in step by hand (R-003
+violation, and exactly the thing that breaks when the set grows). So `nutrients.py`
+became the rendering authority too: `display_rows()` returns formatted rows tagged
+`panel`/`more` + `indent`, the detail DTO carries `nutrient_rows`, and
+`NutritionFactsList.vue` now only decides *layout*. Seven per-attribute fields left the
+DTO in the process. The three hand-listed attribute copies in `lookup.py` /
+`nutrition_endpoints.py` are now `NUTRIENT_ATTRS` loops — adding a nutrient really is
+one edit again. Pinned by `tests/e2e/dora_api/test_nutrition_facts_table.py` (4 tests:
+panel order + indent, formatting/rounding, the `more` group, and that an unknown
+nutrient has no row while a *stated* zero is kept).
+
+Panel wording also went to the printed-panel form the owner asked for: **Fat, total →
+*Saturated*; Carbohydrate → *Sugars*** (AU/NZ style, owner is AU), indented rather than
+"— of which", and **fat now precedes carbohydrate**, which no printed panel had agreed
+with before.
+
+**3 — The removals.** Stock-take row lost its running caption + the (?) trimmed to one
+sentence; expiry button lost "Set" (label → `aria-label`, so the icon-only control keeps
+an accessible name); "Track again" deleted — `update_stock_item.py:271` already clears
+`nutrition_ignored` when a food is linked, so the search icon *is* the un-ignore, and
+it's the one that leaves the item in a useful state; buy-verdict footer lost "across N
+shopping trips" (it read as the denominator of the price samples, which it isn't —
+prices come from imports and manual entry, not trips). `purchases_last_12mo` stays on
+the DTO and still feeds the verdict's own reasoning.
+
+**Left open / new:** **FU-657** — the fifteen new OFF scale factors (×1000, ×1e6) are
+derived from OFF's documented grams normalisation but no test or live response covers
+them; a mis-scaled vitamin is a 1000× error, so it wants one eyeball against a real
+pack. **FU-645 / FU-646 widened** — pre-today catalogues now show an *absent* block
+rather than a partial one (which reads as "this food has no vitamins"), and the recipe
+rollup gap is now four-plus-fifteen (deliberately **not** a mandate to roll all nineteen
+up — a per-recipe potassium total is a much more caveated claim).
+
+**Not verified visually.** The pane still won't mount `#/stock/<id>` (standing note in
+the dev-verify reference), so the nutrition table and the three removals were verified
+through the API + e2e + typecheck, not by eye. Queued as a fresh `DORA_VERIFY.md`
+section — including the two QR checks that must be done **on a phone**, since that's the
+only place the pop-up bug was ever observable.
+
+**Next up:** owner's call. The queued verify batch is the natural next step (it now has
+two ⚠️ QR items that would close FU-648). Otherwise unchanged: the FU-578 DR tail
+(DR-12/13/15/16), or Phase-4 release readiness.
+
+---
+
+## 2026-08-17 (later 3) — Admin settings feedback batch: nav regroup, Users rework, Region & locale redesign
+**Status:** complete, green, agent-verified live at 1280px and 375px.
+vue-tsc clean; eslint clean; vitest **434 passing / 2 failing** (pre-existing FU-634/642/650
+`stockLevelDot`); backend **1738 passed** (+6 new user-router pins), the 53 errors being the
+known `test_sqlalchemy_repository.py` tmp-path set. Migration schema-match green. DTO
+snapshots refreshed (`UserDto` +`is_active`). New: FU-655, FU-656, D-021.
+
+**What ran:** the owner's admin-settings feedback, all six bullets, in one pass.
+
+**1 — The nav (the bullet the rest hangs off).** Admin was a *single* group,
+"Admin · global", with twelve of its sixteen pages buried under a `System` sub-header.
+The regroup is five flat groups — **Users** (headerless, like Account) · **Install**
+(region/features/hosting) · **Kitchen defaults** (stock/stocktake/cooking/reconcile/
+nutrition/alerts) · **Messaging** (email/push/voice) · **Data & access** (backup/import/
+API keys/audit). The grouping answers "what am I here to change?"; API access + Audit log
+joined the data group because all four are data leaving, entering, or being accounted for.
+**No route moved** — deliberately, so every bookmark and deep link still resolves; this is
+purely how they're bucketed.
+
+The load-bearing follow-through: with Admin's `System` gone, `SettingsNavSubGroup` had
+**no callers left**, so it was deleted rather than left as machinery inviting its own
+return. `SettingsNavEntry` is now an alias for the leaf, `SettingsMobileNav.leavesOf`
+stopped flattening, and the indent CSS went. Promoted to **D-021** (nav is two levels;
+a long group gets *split*, not indented) so the next person doesn't re-derive it.
+
+**2 — Users.** Refresh deleted (every mutation already reloaded the list; it only ever
+re-fetched what was on screen). Deals-email toggle deleted — it's a personal notification
+preference that already lives in Settings → Notifications, where its owner controls it.
+Mobile: the row was `q-item` side-slots cramming avatar+name+email+2 toggles+4 labelled
+buttons into one non-wrapping line; it's now hand-rolled flex where identity and controls
+are wrapping siblings, and Edit/Change-password/Delete collapsed into a `⋮` menu.
+**Measured 375px: zero horizontal overflow, controls stack under the identity block.**
+
+**3 — Passwords.** `password` is now optional on create and on the (renamed in the UI)
+**Change password** action. Typed ⇒ used, and **not echoed back** — the admin already has
+it, so returning it is pure exposure; omitted ⇒ the old 12-char generate-and-show-once.
+`validate_password` is the single authority for both paths (R-003) so an admin can't seed
+accounts weaker than a user's own change-password would allow. The shared
+`PasswordSetter.vue` carries the field + reveal + generate-instead escape hatch for both
+dialogs (R-001 — two identical needs that would have drifted).
+
+Two things fell out. `reset_user_password` never bumped `password_changed_at`, so an
+admin-driven change — the case *most* likely to be "their credential is compromised" —
+didn't invalidate their sessions; it does now, with the caller's own device re-stamped
+(mirroring `change_password`) so an admin changing their own password here isn't logged
+out mid-action.
+
+**4 — `is_active` (deactivate instead of delete).** New column, default TRUE, migration
+`a7f3c9d15e82`. Enforced in exactly three places and nowhere else: `login` refuses to mint
+a session, `get_me` clears the cookie on the next probe, `require_admin` re-checks. The
+**one real design call**: the refusal *names the reason*, unlike a bad password — at that
+point the caller has already proved they own the account, so it leaks nothing and saves
+them guessing at a password that works.
+
+The guard that mattered more than it looks: "last admin" had to be redefined as **last
+admin who can still sign in**, or you could deactivate one admin and then demote the
+other through the side door. One helper (`_other_usable_admins`) now backs both the
+demote and the deactivate check, counting in Python over the household-sized admin set
+rather than a SQL `!=` — the UUID-vs-str comparison trap FU-528 hit lives on that path.
+Self-deactivation is refused outright rather than confirmed: it would sign you out with
+no way back.
+
+**5 — Region & locale.** Was three stacked paragraphs explaining ISO 4217 and BCP-47
+around four bare inputs, plus *two* "Use this device" buttons doing overlapping jobs.
+Rebuilt preview-first: money, dates and "today" render from the **draft** values via plain
+`Intl` (deliberately **not** `useMoney`/`useDateFormat` — those read the *saved* install
+policy, which is the wrong thing for a preview of an uncommitted choice), so the only
+observable effect of these settings leads the page. Currency and locale became searchable
+lists of real options (`models/regionChoices.ts` — a shortlist, **not** a whitelist; free
+text still commits and the server still validates). The two device buttons became one
+"Match this device" that says plainly it leaves currency alone.
+
+**The verification miss worth recording.** The Browser pane cannot open a QSelect popup or
+reliably focus its input — `document.activeElement` stayed `BODY` after a click that the
+tool reported as landing. I initially read "typed USD + Enter didn't save" as a bug and
+added a blur-commit; the blur *also* appeared not to fire. Neither conclusion was sound —
+the harness was broken, not the code. Landed on committing free text on **both** Enter and
+blur (guarded by `pending*` against the double-submit, and by a label check so
+`fill-input`'s post-pick rewrite is never mistaken for input — both event orderings are
+safe), and handed the actual interaction to DORA_VERIFY rather than asserting it. Lesson:
+when the probe can't focus the element, "the feature doesn't work" is not an available
+conclusion.
+
+**Verified live (agent, 1280px + 375px):** sidebar renders 5 groups / **0** sub-headers
+and the mobile strip the same 5 tabs; Users has no Refresh and no Deals toggle, both
+self-row toggles disabled, `⋮` shows the 3 actions; create-with-typed-password ⇒ toast and
+**no** readout, generate ⇒ 12-char readout once; deactivate confirms → badges → dims →
+toasts; 375px row stacks with no h-scroll; Region preview + "Match this device" saved
+timezone **and** locale live and survived a reload.
+
+**Left open:** **FU-655** — deactivation bites on `/auth/me` + the admin gate, but there's
+no shared authenticated-route resolver to hang it on, so a live cookie could reach ordinary
+routes until the SPA's next `/me`. That resolver is exactly **FU-654**; adding a 14th
+hand-rolled copy would be the wrong fix, so the two land together. **FU-656** — the
+"at least 8 characters" hint now exists on both sides of the wire; the server should
+publish it via `/auth/capabilities`.
+
+**Next up:** owner's call. The queued DORA_VERIFY batch is small (Region dropdown picks +
+an unlisted currency code — the two things the pane couldn't drive). Otherwise the
+standing options are unchanged: the FU-578 DR remediation tail (DR-12/13/15/16), or
+Phase 4 open-source release readiness (FU-406/608/557).
+
+**Open questions for user:** none blocking. One judgement call worth a second opinion:
+Audit log + API access were filed under **Data & access** rather than a separate
+"Security" group — four items in one group beat two groups of two, but if you think of
+them as security rather than data, say so and they split.
+
+---
+
+## 2026-08-17 (later 2) — FU-653: the Zero-Input belief, surfaced on recipes / shopping lists / meal planner
+**Status:** code-complete, green, **server side agent-verified live with a clean A/B**.
+vue-tsc clean; eslint clean; vitest 434 passing / 2 failing (pre-existing FU-650);
+backend **1732 passed** (incl. 10 new overlay unit tests + 1 regression test), green across
+3 consecutive random-order runs; the 53 errors are the pre-existing `test_sqlalchemy_
+repository.py` tmp-path set. DTO snapshots refreshed (5 added keys, none removed).
+Client renders owed a browser walk. FU-653 → RESOLVED; FU-654 opened.
+
+**What ran:** the item the owner deferred last turn. Design doc written *and* built in the
+same pass: `docs/04_proposals/PROPOSAL_INFERENCE_SURFACES.md` (with the §8 coverage table
+against his eight bullets).
+
+**The load-bearing constraint, and what it bought architecturally.** "It shouldn't change
+the cookable state and shouldn't be filtered on it" is the whole design. So the overlay is
+its own module — `features/stock_items/inference_overlay.py`, beside the belief engine, NOT
+inside `domain/recipe_cookability.py`. Putting it there would have invited exactly the merge
+the rule forbids. `recipe_hint()` is a pure function that **takes `missing_count` and
+`unlinked_count` as arguments** rather than recomputing them: the domain module stays the one
+authority on "missing", and the overlay can only ever *add a remark to* that verdict.
+Verified rather than asserted — with a hint present, the same recipe still returns
+`cookable: true, missing_count: 0`.
+
+**Three honesty gates** before Dora says anything: the belief must be genuinely inferred
+(not an echo of a level you confirmed this week), must *differ* from what's recorded
+(agreement is not news), and must be medium-or-better confidence. Two directions fall out —
+believed-out and believed-available. Only the **`out`** band can put a recipe at risk,
+because `stock_status.is_missing` counts out-of-stock and not low; a remark using a
+different threshold from the verdict it sits beside would be incoherent.
+
+**The one real design call:** `maybe_cookable` requires **all** recorded-missing ingredients
+to be believed back, not any. Rescuing one of three still leaves you unable to cook it, and
+"you might be able to cook this" would then be a lie of omission. Pinned in a unit test.
+
+**Defaults.** The three new toggles are **off**; `inferred_pantry_enabled` keeps its meaning
+as the stock surface's switch and stays on. The stock overlay is the headline experience of a
+page about stock levels; these annotate pages you opened to do something else (P10).
+`SURFACE_FLAGS` is the single surface→column map and `resolve_divergence` returns the empty
+overlay when a surface is off, so no caller branches on a flag and "off" is the same code
+path as "nothing to say".
+
+**The verification miss that mattered.** First live run: all three surfaces returned
+nothing. Not a bug — the seed's seven `Belief: …` fixtures are pantry-only, so no recipe
+could ever reference one, and no shopping list, and no meal. The dataset had never been able
+to exercise the feature. Added two dev recipes built ON those items (`Belief demo: Tuna Bake`
+→ at_risk; `Belief demo: Juice Bowl` → maybe_cookable) plus a Sunday plan entry, which also
+gives the owner a 30-second walk. Worth remembering: a feature that keys off fixture data
+needs the fixture extended in the same pass, or "it returns nothing" reads as broken.
+
+**Verified live (API layer, toggles off → on):** off ⇒ `inference_hint: null` on both demo
+recipes with the correct recorded states (`cookable true/0`, `false/1`); on ⇒ `at_risk` /
+`maybe_cookable` with the right item names, the meal-plan entry flagged, and the draft list
+returning one suggestion ("Belief: Tuna Tins", with the belief's own reason string). Toggles
+round-trip through `/auth/me`. The **client** renders are unverified: this pane can't paint
+the cookbook grid, recipe detail, or shopping-list detail (pre-existing — zero `q-card`s
+render on those routes, same class as the stock-item-detail limitation). Queued in
+DORA_VERIFY with the demo recipes named.
+
+**A real bug fell out of the seed change, and it wasn't mine.** Adding two recipes shifted
+which recipe `_recipe_with_ingredients()` picks in two meal-plan e2e tests, and they started
+failing **intermittently** with a 500. The cause: `aggregate_meal_plan_ingredients` reads
+`ingredient.stock_item.id` with no None check, so **one unlinked ingredient anywhere in the
+selection 500s the whole endpoint** — both `/meal-plans/preview-ingredients` and a saved
+plan's `/ingredients`. Live since the paste importer; it only became reachable in tests when
+*yesterday's* session seeded two imported-look recipes, and my two extra recipes changed the
+odds enough to surface it. Fixed (skip unlinked rows — a shopping list is a list of stock
+items) + pinned with a regression test that targets an unlinked recipe deliberately instead
+of whatever sorts first. Full suite now green across **3 consecutive random-order runs**
+(1732 passed); the previous "1731 passed" baseline was luck.
+
+Two smaller seed lessons from the same stretch: appending straight to
+`plan.entries` inserts a row with an **all-zeros id** (`BaseEntity.id` defaults to
+`EMPTY_UUID`; `repo.add` is what mints one) — caught by
+`test_reconcile_verbs::test__unknown_entry_id_returns_404` suddenly finding a real entry at
+`00000000-…`. And the belief-demo meal-plan entry was dropped entirely: a seventh entry in
+"This Week" changes the week's aggregate ingredient demand, which two e2e tests correctly
+assert on. The owner adds the recipe to a day himself during the verify walk, which is the
+truer scenario anyway.
+
+**Standards close-gate.** R-003 (one authority for the rule; cookability untouched; the
+overlay is server-computed, never assembled client-side from the beliefs map), R-010 (closed
+string set for the hint kinds), R-034 (schema-match + migration chain green), D-002 (semantic
+tokens for the tints). One R-001 finding logged rather than fixed: the
+`session['user_id']` → `User` dance is hand-rolled in ~13 features and I added a 13th (one
+copy shared by all three new surfaces, commented, pointing at **FU-654**). No new ADR — this
+is R-003 working as intended, not a new decision.
+
+**Next up:** the DORA_VERIFY walk of the three client renders (fast, with the seeded demo
+recipes). Otherwise unchanged: the champion/native verify sweep, or Phase 4 release
+readiness (FU-406/608/557).
+
+---
+
+## 2026-08-17 (later) — Settings feedback batch: stocktake default, mobile nav, Assistant rework, About rebuild
+**Status:** code-complete, green, **agent-verified live with measurements**. vue-tsc clean;
+eslint clean; vitest 434 passing / 2 failing (both pre-existing FU-650 `stockLevelDot`);
+backend **1721 passed / 0 failed**, 53 errors — all in `test_sqlalchemy_repository.py`, the
+same pre-existing set the previous entry recorded (untouched here). One new FU (653), one
+new DORA_VERIFY section.
+
+**What ran:** an owner feedback list — stocktake default, four Settings-nav/Account items,
+five Assistant items, two About items. One item (surfacing the inference engine on recipes /
+shopping lists / meal planner) the owner explicitly deferred: *"lets pick this back up on the
+next turn"* → **FU-653**, with the design steer already captured there.
+
+**The one that mattered — "Seeing 'Secret encryption isn't set up' but I'm fairly certain it
+IS set up on this install".** The owner's own guess ("is the docker compose not passing
+everything through?") was right. `compose.yml`'s `environment:` block forwards
+`DORA_SECRET_KEY` and ~25 others but **never listed `DORA_SECRET_ENCRYPTION_KEY`** — so a key
+set in the host `.env` simply never reached the container, and `encryption_available()` was
+correctly reporting false. Nothing in the app was broken. Added it to the block with a
+comment naming the failure mode. I diffed every `DORA_*` the backend reads against what
+compose forwards: the remainder are either optional tuning, dev-only, or were promoted to
+`AppSetting` by the env→AppSetting migration (`DORA_PUBLIC_URL`, SMTP, VAPID), so nothing else
+is silently missing.
+
+**Stocktake default flipped to enabled.** `create_stock_item.py` had
+`stocktake_alerts_are_enabled = False` — every item you added was born muted, so the queue
+only ever contained items you'd hand-opted-in. Now `True`, and the same for the two other
+*user-data* creation paths (onboarding paste-in `seed-items`, spreadsheet import). The
+onboarding **demo-recipe** ingredient scaffolding deliberately stays muted, commented in
+place — those are items the user never chose. `test_stocktake_router._unmute` kept but its
+docstring rewritten: it's now a stated precondition, not a flip.
+
+**Settings nav.** The "weird sub account/about button" is what a single-destination group
+looks like in a two-level tab strip: the group tab, then one chip below repeating its name.
+Rather than inventing a "General" bucket (the owner's other option), the tab *became* the
+destination — `onGroupTap` navigates to the group's first leaf, and the chip row is
+suppressed when a group has ≤1 leaf. Desktop sidebar eyebrows got the same treatment
+(`<router-link>` to the first leaf) since it was ~6 lines, which the owner said was optional.
+
+**Two `all: unset` traps, both caught by measuring the running app** — worth remembering
+because the pattern is used in several components here:
+- `all: unset` makes every **inherited** property inherit, and Quasar's typography sets
+  `h3 { line-height: 3.125rem }`. The provider card header measured **71px tall** for one
+  line of text until both the button and the `<h3>` got an explicit line-height.
+- `all: unset` also resets **box-sizing to content-box**, so `min-height: 44px` on the mobile
+  nav tab rendered a **62px** tab (44 + 16 padding + 2 border). Both now pinned; tabs and
+  provider headers measure exactly 44px.
+
+**The Account password gap, diagnosed rather than guessed.** Measured: the three fields sat
+at 48 / 68 / 68px. Quasar reserves a 20px message row only on fields with an `:error`
+binding, which "Current password" lacks — so on mobile the gap above Confirm was 28px and the
+gap above New was 8px. `bottom-slots` on the first field makes all three reserve it: uniform
+28px gaps, and the group no longer jumps when a validation message appears.
+
+**Assistant page.** Reordered to Assistant chat → Providers → Zero-Input Pantry; the
+Basic-vs-model paragraph became a `(?)` tooltip beside Mode (the app's existing
+`help_outline` + `q-tooltip` pattern); the encryption banner moved inside Providers; each
+provider became a one-open-at-a-time disclosure card (`aria-expanded`/`aria-controls`, real
+`<button>` header) with a border tint per state. The owner asked for neutral/green/red —
+I kept **amber for "saved but never tested"** rather than folding it into green (would claim
+an unverified connection) or red (would accuse a provider that may be fine).
+
+**About rebuilt** to the owner's picks: hero + four plain "what Dora does" lines (gated on the
+money/meal-planning flags so an install isn't told about features it has off), a
+**"Your kitchen at a glance"** row read straight off `/dashboard/summary` (R-003 — the server
+already owns those aggregates; a second tally could disagree with the dashboard), **Install
+as an app** as its own section with a large button (`PwaInstallPrompt` gained a `size` prop),
+Project & support (+ a Help & guides row), then **Technical details** last. Per the owner the
+API-endpoint + Change-instance row is **gone on web** and kept **native-only**, where it's the
+only way to point the shell at a server.
+
+**Verification.** Drove the real app (`dora-verify-backend` + `dora-spa`). Measured, not
+judged: provider headers 44px and collapsed (`display:none`) with only the tapped one at
+281px; mobile tabs 44px, no horizontal scroll at 375px on either page; About tiles 2×2;
+password gaps 28/28. Created a stock item through the real Add dialog and read
+`/detail` back: `stocktake_alerts_are_enabled: true`. (A test item
+"Zzz Verify Stocktake Default" is left in the dev SQLite fixture — untracked, reseeded on
+boot.)
+
+**Standards close-gate.** R-003 (About stats read the server's aggregate rather than counting
+client-side; nav IA still one definition feeding both navs), R-001 (the disclosure card is
+page-local, not a new shared component — one caller), D-002 (state tints use
+`--semantic-*`, no raw hex), D-004 (44px verified on both new tap targets). No new ADR: the
+`all: unset` traps are a note, not a rule — if a third component hits them, that's the
+trigger for one.
+
+**Next up:** **FU-653** — the inference-surfacing design the owner deferred to next turn.
+Otherwise unchanged: the browser-verify sweep of the four champion/native surfaces, or
+Phase 4 release readiness (FU-406/608/557).
+
+---
+
+## 2026-08-17 — Kitchen-setup settings: seven-page feedback batch (list styling, Stores dialog, copy)
+**Status:** code-complete, green, **agent-verified live with measurements**. vue-tsc clean;
+eslint clean; vitest 434 passing / 2 failing (both pre-existing FU-650 `stockLevelDot`);
+backend 1719 passing / 2 failing + 53 errors, **all pre-existing** (confirmed by re-running
+`test_alerts.py` with this session's seed changes stashed — same two fail; the 53 errors are
+in `test_sqlalchemy_repository.py`, untouched here). Two verify lines added; no new FUs.
+
+**What ran:** an owner feedback list across Stock groups / Stores / Unlinked ingredients /
+Cuisines / Categories / Tools / Meal slots / Dietary tags. Every bullet is done.
+
+**The one that mattered — "the Stores add modal is broken (no input and no submit
+button)".** It reproduced immediately and the cause is a silent one worth remembering:
+`StoresSettings` wrote its dialog body as `<template #content>`, and **`BaseDialog` has no
+`content` slot** — the body goes in the *default* slot. Vue neither warns nor errors on an
+unmatched named slot, so the entire form (name field, logo picker, preview) rendered
+**nowhere**, and the card came up as a title bar with two buttons. That also explains the
+next bullet — "no facility to upload logos" — the picker was there all along, just never
+mounted. This is the second slot-contract bug of its kind; worth a lint rule if a third
+turns up.
+
+**Two R-001 extractions, both because the feedback was really "these drifted".**
+- **Stock groups was a hand-rolled copy** of the shared vocab list (its own `q-list`,
+  rename inline-edit, delete dialog, ~200 lines) — which is exactly *why* its row styling
+  differed from the five Recipe\* pages the owner compared it to. Fixing only the styling
+  would have left the fork in place to drift again, so it's now a thin
+  `TaxonomyManagerPage` caller like the rest. `VocabItem.recipe_count` was renamed
+  **`usage_count`** across the wrapper + all six callers — the field already carried
+  *items* for stock groups and *entries* for meal slots, so the old name was actively
+  misleading.
+- **The store-logo picker.** The owner asked for "the style of profile pic editing", which
+  lived as bespoke markup + CSS inside `AccountSettings`. Extracted to
+  **`ImageEditTile.vue`** (slot for the visual, so callers keep owning what a picture of
+  *their* entity looks like; the component owns only picker → `processImageFile` →
+  `pick`), and both surfaces now use it. `shape="rounded"` covers the logo's rectangle vs
+  the avatar's circle. The single `accept="image/*"` input is deliberate rather than
+  `ImageSourcePicker`'s two buttons — on mobile the OS sheet already offers camera *and*
+  gallery, so two buttons on an 80×48 tile would add nothing.
+
+**Two things the static read would have got wrong**, both caught in the running app:
+- **`StoreLogo` could not preview a just-picked logo.** It resolves its `src` from
+  `storeId` + `has_image`, and while *creating* a store there is no id yet — the old code
+  passed `:has-image="!!draft.image || …"`, which would have pointed an `<img>` at a URL
+  built from `null`. Added a `previewSrc` prop (local data URL wins over the server route),
+  verified live: the picked PNG previews at 1851 chars of data URL before save.
+- **Meal slots said "0 entrys".** Pre-existing (the old caption had the same `${label}s`),
+  but promoted from small grey caption to full-size inline text by this change, so it had
+  to be fixed rather than carried. `usageLabel` is a closed three-word set
+  (recipe/item/entry), so the pluraliser encodes only the `-y → -ies` rule; a general one
+  would be a library-sized answer to a three-word problem. Now reads "0 entries / 1 entry
+  / 17 entries".
+
+**Dev data.** `SeedBuilders.unlinked_ingredient()` lands the shape the paste importer
+actually produces (NULL stock-item FK, `raw_text` anchor). Two imported-looking recipes
+(Thai Green Curry, Weeknight Laksa) now seed six unlinked groups. "Coconut milk" is
+deliberately spelled `"Coconut milk"` in one and `"  coconut  milk "` in the other — live
+it renders as **one** group "Used in 2 recipes", which incidentally proves
+`normalise_raw_text`'s case+whitespace collapse end to end.
+
+**Verification.** Drove the real app (`dora-verify-backend` + `dora-spa`, both torn down).
+Measured, not judged: name/tally same line, both `14.4375px`, 8px gap, `0` avatar icons in
+any list row. Full Add-store round-trip: typed name → fed a canvas-generated PNG to the
+file input → preview → **Add** → row shows a logo served from
+`/api/stores/<id>/image`; then **Edit → Remove logo → Save** → row falls back to the
+hash swatch; test store deleted afterwards, working tree clean of DB churn. Account's
+avatar tile re-probed post-extraction: unchanged at 96px/50%/tabindex 0.
+
+**Standards close-gate.** R-001 (both extractions), R-003 (`processImageFile` chokepoint
+kept). One R-002 carve-out, commented in place: the tile's `rgba(0,0,0,.45)` + `#fff`
+scrim sits over an arbitrary *user-uploaded image*, not a themed surface, so a fixed pair
+is correct — same reasoning as the original it came from. No new ADR: the slot-contract
+bug is a candidate if it recurs, and the R-001 extractions are the existing rule working.
+
+**Next up:** unchanged — either the browser-verify sweep of the four unverified
+champion/native surfaces, or Phase 4 open-source release readiness (FU-406/608/557).
+
+---
+
 ## 2026-08-16 (later) — Stock Overview: filter feedback (mobile toolbar, scroll row, dark-mode secondary)
 **Status:** code-complete, green, **agent-verified live with measurements**. vue-tsc clean;
 vitest 434 passing / 2 failing, both pre-existing (see FU-650 — confirmed failing with this

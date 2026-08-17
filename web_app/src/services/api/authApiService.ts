@@ -22,12 +22,13 @@ export type RegisterCommand = {
     password: string;
     email: string | null;
 };
-/** FU-200 — first-admin bootstrap. Email is required (not optional like
- *  /register) so password reset works on a fresh install. */
+/** FU-200 — first-admin bootstrap. Email is optional, as on /register
+ *  (owner call 2026-08-17). It becomes mandatory only on an install that
+ *  sets ADMIN_BOOTSTRAP_EMAIL, where the server matches it. */
 export type BootstrapAdminCommand = {
     username: string;
     password: string;
-    email: string;
+    email: string | null;
 };
 export type UpdateMeCommand = {
     send_deals_on_day?: number;
@@ -51,6 +52,11 @@ export type UpdateMeCommand = {
     /** P8-07 — Zero-Input Pantry opt-out. `false` hides the inferred-level
      *  belief overlay; default `true`. */
     inferred_pantry_enabled?: boolean;
+    /** FU-653 — per-surface belief overlays (recipes / shopping lists / meal
+     *  planner). Each defaults false. */
+    inference_recipes_enabled?: boolean;
+    inference_shopping_enabled?: boolean;
+    inference_meal_plan_enabled?: boolean;
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';
@@ -80,6 +86,8 @@ export type UpdateMeCommand = {
     llm_provider?: 'ollama' | 'openai' | 'anthropic' | 'gemini' | null;
     /** FU-360.6 — show/hide the Dora helper bubble for this account. */
     show_assistant?: boolean;
+    /** Daily brief push opt-in. See AuthenticatedUser. */
+    daily_brief_enabled?: boolean;
 };
 export type ChangePasswordCommand = {
     current_password: string;

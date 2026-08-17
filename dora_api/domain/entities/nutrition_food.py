@@ -88,6 +88,27 @@ class NutritionFood(BaseEntity):
     saturated_fat_g_per_100g: float | None = None
     fibre_g_per_100g: float | None = None
     sodium_mg_per_100g: float | None = None
+    # The optional vitamins-and-minerals block (owner request 2026-08-17).
+    # Sparser than the macros above — a source knowing a food's energy says
+    # nothing about whether it knows its folate — which is why the UI keeps
+    # these behind a disclosure and drops the whole block when it's empty.
+    # Milligrams for the minerals, micrograms for the vitamins declared that
+    # way; the unit is in the name, as with sodium.
+    trans_fat_g_per_100g: float | None = None
+    monounsaturated_fat_g_per_100g: float | None = None
+    polyunsaturated_fat_g_per_100g: float | None = None
+    cholesterol_mg_per_100g: float | None = None
+    potassium_mg_per_100g: float | None = None
+    calcium_mg_per_100g: float | None = None
+    iron_mg_per_100g: float | None = None
+    magnesium_mg_per_100g: float | None = None
+    zinc_mg_per_100g: float | None = None
+    vitamin_a_ug_per_100g: float | None = None
+    vitamin_c_mg_per_100g: float | None = None
+    vitamin_d_ug_per_100g: float | None = None
+    vitamin_e_mg_per_100g: float | None = None
+    vitamin_b12_ug_per_100g: float | None = None
+    folate_ug_per_100g: float | None = None
     imported_at: datetime | None = None
 
     class Fields(BaseEntity.Fields):
@@ -104,4 +125,19 @@ class NutritionFood(BaseEntity):
         SATURATED_FAT_G_PER_100G = "saturated_fat_g_per_100g"
         FIBRE_G_PER_100G = "fibre_g_per_100g"
         SODIUM_MG_PER_100G = "sodium_mg_per_100g"
+        TRANS_FAT_G_PER_100G = "trans_fat_g_per_100g"
+        MONOUNSATURATED_FAT_G_PER_100G = "monounsaturated_fat_g_per_100g"
+        POLYUNSATURATED_FAT_G_PER_100G = "polyunsaturated_fat_g_per_100g"
+        CHOLESTEROL_MG_PER_100G = "cholesterol_mg_per_100g"
+        POTASSIUM_MG_PER_100G = "potassium_mg_per_100g"
+        CALCIUM_MG_PER_100G = "calcium_mg_per_100g"
+        IRON_MG_PER_100G = "iron_mg_per_100g"
+        MAGNESIUM_MG_PER_100G = "magnesium_mg_per_100g"
+        ZINC_MG_PER_100G = "zinc_mg_per_100g"
+        VITAMIN_A_UG_PER_100G = "vitamin_a_ug_per_100g"
+        VITAMIN_C_MG_PER_100G = "vitamin_c_mg_per_100g"
+        VITAMIN_D_UG_PER_100G = "vitamin_d_ug_per_100g"
+        VITAMIN_E_MG_PER_100G = "vitamin_e_mg_per_100g"
+        VITAMIN_B12_UG_PER_100G = "vitamin_b12_ug_per_100g"
+        FOLATE_UG_PER_100G = "folate_ug_per_100g"
         IMPORTED_AT = "imported_at"

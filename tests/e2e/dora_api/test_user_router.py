@@ -28,6 +28,8 @@ def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
     assert _User['send_deals_on_day'] == 6
     assert _User['username'] == 'dora'
     assert _User['is_admin'] is True
+    # Deactivate-instead-of-delete: seeded rows are usable accounts.
+    assert _User['is_active'] is True
     assert is_valid_uuid(_User['user_id'])
     assert _User.keys() == {
         'email',
@@ -35,6 +37,7 @@ def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
         'username',
         'user_id',
         'is_admin',
+        'is_active',
         'deals_email_enabled',
         # Settings rebuild Phase 4 — bulk-stamped via _stamp_has_image.
         'has_image',
@@ -166,3 +169,109 @@ def test__get_users__FilteringSortingAndPagingUsers__GetsMatchingUsers(api):
 
 
 #endregion get_users tests
+
+#region ---------------- admin-set passwords + deactivation ----------------
+
+# These pin the two things the 2026-08-17 admin-users rework actually promises,
+# both of which are invisible from the page itself: a password the admin typed
+# is the password (and is never echoed back), and a deactivated account cannot
+# get in. Chosen over UI-level checks per the lean verification stance — they're
+# cheap, fast, and pin contracts that shouldn't churn.
+
+_STRONG_PW = "Abcdefghij1"
+
+
+def _reset_login_bucket() -> None:
+    # `auth.login` is rate-limited 5/min per IP and the bucket is
+    # process-lifetime, shared with every other suite. Clear it so a 429 can't
+    # masquerade as the 401 these tests are actually asserting.
+    from dora_api.infrastructure import auth_helpers
+    with auth_helpers._buckets_lock:
+        auth_helpers._buckets.clear()
+
+
+def _create_user(**overrides) -> tuple[str, dict]:
+    payload = {"username": f"probe-{uuid.uuid4().hex[:8]}", **overrides}
+    response = requests.post(base_route, json=payload)
+    assert response.status_code == 200, response.text
+    return payload["username"], response.json()
+
+
+def _login(username: str, password: str):
+    _reset_login_bucket()
+    return requests.Session().post(
+        "http://localhost:5170/api/auth/login",
+        json={"username": username, "password": password},
+    )
+
+
+def test__create_user__with_a_chosen_password__does_not_echo_it_back(api):
+    username, body = _create_user(password=_STRONG_PW)
+
+    # The admin already knows it — handing it back would be pure exposure.
+    assert body["new_password"] is None
+    assert _login(username, _STRONG_PW).status_code == 200
+
+
+def test__create_user__without_a_password__generates_and_returns_one(api):
+    username, body = _create_user()
+
+    assert isinstance(body["new_password"], str) and len(body["new_password"]) == 12
+    assert _login(username, body["new_password"]).status_code == 200
+
+
+def test__create_user__with_a_weak_chosen_password__is_422(api):
+    response = requests.post(base_route, json={
+        "username": f"probe-{uuid.uuid4().hex[:8]}", "password": "short",
+    })
+
+    assert response.status_code == 422, response.text
+    assert "password" in response.json()["errors"]
+
+
+def test__set_password__with_a_chosen_password__replaces_the_old_one(api):
+    username, body = _create_user()
+    user_id = body["user_id"]
+
+    response = requests.post(f'{base_route}/{user_id}/reset-password', json={
+        "password": _STRONG_PW,
+    })
+
+    assert response.status_code == 200, response.text
+    assert response.json()["new_password"] is None
+    assert _login(username, _STRONG_PW).status_code == 200
+    assert _login(username, body["new_password"]).status_code == 401
+
+
+def test__deactivating_a_user__stops_them_signing_in(api):
+    username, body = _create_user(password=_STRONG_PW)
+    assert _login(username, _STRONG_PW).status_code == 200
+
+    patch = requests.patch(f'{base_route}/{body["user_id"]}', json={"is_active": False})
+    assert patch.status_code == 204, patch.text
+
+    refused = _login(username, _STRONG_PW)
+    assert refused.status_code == 401
+    # Credentials were right, so naming the reason leaks nothing and saves
+    # them guessing at a password that works.
+    assert "deactivated" in refused.json()["detail"].lower()
+
+    # …and reactivating lets them straight back in — nothing was destroyed.
+    assert requests.patch(
+        f'{base_route}/{body["user_id"]}', json={"is_active": True},
+    ).status_code == 204
+    assert _login(username, _STRONG_PW).status_code == 200
+
+
+def test__deactivating_yourself__is_refused(api):
+    me = requests.get(f'{base_route}?filter=username:eq:dora').json()['items'][0]
+
+    response = requests.patch(f'{base_route}/{me["user_id"]}', json={"is_active": False})
+
+    # `business_rule_violation` is a 422 carrying the message under errors[""].
+    assert response.status_code == 422, response.text
+    assert "own account" in response.text.lower()
+    # And the guard actually held — the caller is still usable.
+    assert requests.get(base_route).status_code == 200
+
+#endregion admin-set passwords + deactivation

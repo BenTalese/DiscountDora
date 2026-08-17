@@ -20,6 +20,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.stock_items.inference_overlay import (
+    SURFACE_SHOPPING, resolve_divergence,
+)
 from dora_api.features.shopping_lists.shopping_list_attachment_access import (
     get_attachment_metadata_for_list)
 from dora_api.infrastructure.api_response import not_found, ok
@@ -195,6 +198,15 @@ class ShoppingListAttachmentDto:
 
 
 @dataclass(frozen=True, slots=True)
+class InferredSuggestionDto:
+    """One "Dora thinks you're out of this" suggestion. `reason` is the belief's
+    own plain-English why, so the chip can explain itself on tap."""
+    stock_item_id: UUID
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class ShoppingListDetailDto:
     shopping_list_id: UUID
     # Custom name (None = self-labelled) + the resolved label to render —
@@ -209,6 +221,13 @@ class ShoppingListDetailDto:
     lines: List[ShoppingListLineDto] = field(default_factory=list)
     # empty list when the list is a draft or has no attachments yet.
     attachments: List[ShoppingListAttachmentDto] = field(default_factory=list)
+    # FU-653 — things Dora believes you've run out of that aren't on this list
+    # yet. **Suggestions only**: nothing is added, no line is created, and the
+    # list is identical whether or not you look at them (owner directive —
+    # inference must not get in the way of the normal flow). Always empty when
+    # the user hasn't opted the shopping surface in, and on a finished list
+    # (suggesting additions to a completed shop is noise).
+    inferred_suggestions: List['InferredSuggestionDto'] = field(default_factory=list)
 
 
 class GetShoppingListDetailHandler:
@@ -467,6 +486,7 @@ class GetShoppingListDetailHandler:
             ]
 
         return ShoppingListDetailDto(
+            inferred_suggestions = self._inferred_suggestions(_List, _Lines),
             shopping_list_id = _List.id,
             name = _List.name,
             display_name = _List.display_name,
@@ -478,6 +498,47 @@ class GetShoppingListDetailHandler:
             lines = _LineDtos,
             attachments = _Attachments,
         )
+
+
+    # FU-653 — the shopping surface of the Zero-Input belief overlay.
+    _MAX_SUGGESTIONS = 6
+
+    def _inferred_suggestions(
+        self, shopping_list: ShoppingList, lines: List[ShoppingListLine],
+    ) -> List[InferredSuggestionDto]:
+        """Items Dora believes are out, that this list doesn't already carry.
+
+        Scoped to items *recorded* as available — an item you've already
+        recorded as out is the existing low-stock machinery's job (auto-add,
+        the Needs-restock filter), and repeating it here as a "suggestion"
+        would be Dora taking credit for what you told her.
+
+        Capped: this is a nudge beside the list, not a second list. Sorted by
+        name so the order is stable between refreshes rather than shuffling
+        with belief confidence.
+        """
+        if shopping_list.is_done:
+            return []
+        already_on_list = {l.stock_item_id for l in lines if l.stock_item_id}
+        candidates = (
+            self.repository.get(StockItem).include("stock_level").all()
+        )
+        candidates = [c for c in candidates if c.id not in already_on_list]
+        divergence = resolve_divergence(self.repository, SURFACE_SHOPPING, candidates)
+        if not divergence.believed_out:
+            return []
+        by_id = {c.id: c for c in candidates}
+        out = [
+            InferredSuggestionDto(
+                stock_item_id = item_id,
+                name = by_id[item_id].name,
+                reason = divergence.reasons.get(item_id, ""),
+            )
+            for item_id in divergence.believed_out
+            if item_id in by_id
+        ]
+        out.sort(key=lambda s: s.name.lower())
+        return out[:self._MAX_SUGGESTIONS]
 
 
 @SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>", methods=["GET"])

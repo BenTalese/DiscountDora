@@ -1,7 +1,7 @@
 <template>
     <TaxonomyManagerPage
         title="Categories"
-        description="The category options shown on recipes (single-select)."
+        description="The category options shown on recipes. Useful for filtering."
         noun="category"
         noun-plural="categories"
         :load="load"
@@ -18,7 +18,7 @@
     const api = new CategoryApiService();
 
     const load = async (): Promise<VocabItem[]> =>
-        (await api.getAllAsync()).map((c) => ({ id: c.category_id, name: c.name, recipe_count: c.recipe_count ?? 0 }));
+        (await api.getAllAsync()).map((c) => ({ id: c.category_id, name: c.name, usage_count: c.recipe_count ?? 0 }));
     const create = (name: string) => api.createAsync({ name });
     const rename = (id: string, name: string) => api.updateAsync(id, { name });
     const remove = (id: string) => api.deleteAsync(id).then(() => undefined);

@@ -2,24 +2,20 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Users"
-            description="Manage every account in this install."
+            description="Everyone who can sign in to this install. Deactivate an account to lock someone out without losing their history."
             :icon="ICONS.group"
         >
             <template #actions>
+                <!-- The refresh button went (owner, 2026-08-17): the list is
+                     reloaded after every mutation on this page and there is no
+                     other writer, so it only ever re-fetched what was already
+                     on screen. -->
                 <BaseButton
                     variant="primary"
                     :icon="ICONS.person_add"
                     label="Add user"
                     @click="onAddClick"
                 />
-                <BaseButton
-                    variant="icon"
-                    :icon="ICONS.refresh"
-                    :loading="loading"
-                    @click="loadUsers"
-                >
-                    <q-tooltip>Refresh user list</q-tooltip>
-                </BaseButton>
             </template>
         </SettingsPageHeader>
 
@@ -27,9 +23,15 @@
             {{ loadError }}
         </q-banner>
 
-        <q-list class="settings-list" separator>
-            <q-item v-for="user in users" :key="user.user_id" class="q-py-md">
-                <q-item-section avatar>
+        <!-- Rows are hand-rolled flex rather than q-item/q-item-section side
+             slots. The old side-slot layout crammed two toggles and four
+             labelled buttons into one non-wrapping row, which on a phone
+             squeezed the name column to a few characters (owner, 2026-08-17).
+             Here the identity block and the controls are siblings that wrap:
+             one line each on desktop, stacked on mobile. -->
+        <ul class="user-list">
+            <li v-for="user in users" :key="user.user_id" class="user-row" :class="{ 'user-row--inactive': !user.is_active }">
+                <div class="user-row__identity">
                     <UserAvatar
                         :user-id="user.user_id"
                         :has-image="user.has_image"
@@ -40,101 +42,99 @@
                         :class="user.is_admin ? '' : 'dora-bg-sunken dora-text-secondary'"
                         :text-color="user.is_admin ? 'dark' : undefined"
                     />
-                </q-item-section>
-                <q-item-section>
-                    <q-item-label class="text-weight-medium">
-                        {{ user.username }}
-                        <q-badge
-                            v-if="user.is_admin"
-                            color="warning"
-                            text-color="white"
-                            class="q-ml-sm"
-                        >
-                            admin
-                        </q-badge>
-                        <q-badge
-                            v-if="user.user_id === currentUserId"
-                            color="grey"
-                            text-color="white"
-                            class="q-ml-xs"
-                        >
-                            you
-                        </q-badge>
-                    </q-item-label>
-                    <q-item-label caption>
-                        {{ user.email ?? 'No email on file' }}
-                    </q-item-label>
-                </q-item-section>
-
-                <q-item-section side>
-                    <div class="row q-gutter-sm items-center">
-                        <q-toggle
-                            :model-value="user.is_admin"
-                            label="Admin"
-                            dense
-                            :disable="
-                                togglingId === user.user_id ||
-                                user.user_id === currentUserId
-                            "
-                            @update:model-value="onToggleAdmin(user, $event)"
-                        >
-                            <q-tooltip v-if="user.user_id === currentUserId">
-                                Use Account settings to manage your own account.
-                            </q-tooltip>
-                        </q-toggle>
-                        <!-- Deals email is a products-only feature (product
-                             data is its source). With no product data ingested,
-                             hide the per-user column entirely (owner feedback). -->
-                        <q-toggle
-                            v-if="productsEnabled"
-                            :model-value="user.deals_email_enabled"
-                            label="Deals email"
-                            dense
-                            :disable="togglingId === user.user_id"
-                            @update:model-value="onToggleDeals(user, $event)"
-                        />
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            :icon="ICONS.edit"
-                            label="Edit"
-                            @click="onEdit(user)"
-                        />
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            :icon="ICONS.lock_reset"
-                            label="Reset pwd"
-                            :loading="resettingId === user.user_id"
-                            @click="onResetPassword(user)"
-                        />
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            :icon="ICONS.delete"
-                            label="Delete"
-                            class="text-negative"
-                            :disable="
-                                user.user_id === currentUserId ||
-                                deletingId === user.user_id
-                            "
-                            :loading="deletingId === user.user_id"
-                            @click="onDelete(user)"
-                        >
-                            <q-tooltip v-if="user.user_id === currentUserId">
-                                You can't delete your own account.
-                            </q-tooltip>
-                        </BaseButton>
+                    <div class="user-row__names">
+                        <div class="user-row__name">
+                            <span class="text-weight-medium">{{ user.username }}</span>
+                            <q-badge v-if="user.is_admin" color="warning" text-color="dark">admin</q-badge>
+                            <q-badge v-if="user.user_id === currentUserId" outline color="primary">you</q-badge>
+                            <q-badge v-if="!user.is_active" color="negative" text-color="white">deactivated</q-badge>
+                        </div>
+                        <div class="user-row__email dora-text-muted">
+                            {{ user.email ?? 'No email on file' }}
+                        </div>
                     </div>
-                </q-item-section>
-            </q-item>
+                </div>
 
-            <q-item v-if="!loading && users.length === 0">
-                <q-item-section>
-                    <q-item-label class="dora-text-muted">No users found.</q-item-label>
-                </q-item-section>
-            </q-item>
-        </q-list>
+                <div class="user-row__controls">
+                    <!-- The per-user deals-email toggle moved out (owner,
+                         2026-08-17). It's a personal notification preference —
+                         it already lives in Settings → Notifications, where the
+                         user owns it — not a thing an admin administers. -->
+                    <!-- D-019: the only thing allowed to disable these is the
+                         *semantic* reason (it's your own row). The in-flight
+                         `busyId` deliberately does NOT gate them — inerting a
+                         focusable control mid-interaction drops focus, and a
+                         double-toggle is last-write-wins, which `patch()`
+                         converges by reloading the list after every write. -->
+                    <q-toggle
+                        :model-value="user.is_admin"
+                        label="Admin"
+                        dense
+                        :disable="user.user_id === currentUserId"
+                        @update:model-value="onToggleAdmin(user, $event)"
+                    >
+                        <q-tooltip v-if="user.user_id === currentUserId">
+                            Use Account settings to manage your own account.
+                        </q-tooltip>
+                    </q-toggle>
+                    <q-toggle
+                        :model-value="user.is_active"
+                        label="Active"
+                        dense
+                        :disable="user.user_id === currentUserId"
+                        @update:model-value="onToggleActive(user, $event)"
+                    >
+                        <q-tooltip v-if="user.user_id === currentUserId">
+                            You can't deactivate your own account.
+                        </q-tooltip>
+                    </q-toggle>
+
+                    <!-- Edit / password / delete collapse into one menu. Four
+                         labelled buttons per row was the other half of the
+                         mobile squeeze, and these are all deliberate,
+                         low-frequency actions. -->
+                    <BaseButton
+                        variant="icon"
+                        :icon="ICONS.more_vert"
+                        :loading="busyId === user.user_id"
+                        :aria-label="`Actions for ${user.username}`"
+                    >
+                        <q-menu auto-close anchor="bottom right" self="top right">
+                            <q-list style="min-width: 200px">
+                                <q-item clickable @click="onEdit(user)">
+                                    <q-item-section avatar>
+                                        <q-icon :name="ICONS.edit" size="20px" />
+                                    </q-item-section>
+                                    <q-item-section>Edit details</q-item-section>
+                                </q-item>
+                                <q-item clickable @click="onChangePassword(user)">
+                                    <q-item-section avatar>
+                                        <q-icon :name="ICONS.lock_reset" size="20px" />
+                                    </q-item-section>
+                                    <q-item-section>Change password</q-item-section>
+                                </q-item>
+                                <q-separator />
+                                <q-item
+                                    clickable
+                                    :disable="user.user_id === currentUserId"
+                                    class="text-negative"
+                                    @click="onDelete(user)"
+                                >
+                                    <q-item-section avatar>
+                                        <q-icon :name="ICONS.delete" size="20px" />
+                                    </q-item-section>
+                                    <q-item-section>Delete user</q-item-section>
+                                </q-item>
+                            </q-list>
+                        </q-menu>
+                    </BaseButton>
+                </div>
+            </li>
+
+            <li v-if="!loading && users.length === 0" class="user-row">
+                <span class="dora-text-muted">No users found.</span>
+            </li>
+        </ul>
 
         <q-inner-loading :showing="loading && users.length === 0">
             <AppSpinner size="48px" />
@@ -142,31 +142,30 @@
 
         <!-- Edit dialog ─────────────────────────────────────────── -->
         <BaseDialog v-model="editOpen" :title="`Edit ${editingUser?.username ?? ''}`" closable card-style="min-width: 320px; max-width: 480px">
-                <q-card-section>
-                    <q-input
-                        v-model="editingUsername"
-                        label="Username"
-                        outlined
-                        dense
-                        class="q-mb-md"
-                    />
-                    <q-input
-                        v-model="editingEmail"
-                        label="Email"
-                        outlined
-                        dense
-                        placeholder="No email on file"
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        label="Save"
-                        :loading="savingEdit"
-                        :disable="!editingUsername.trim()"
-                        @click="onSaveEdit"
-                    />
-                </template>
+            <q-card-section class="q-gutter-md">
+                <q-input
+                    v-model="editingUsername"
+                    label="Username"
+                    outlined
+                    dense
+                />
+                <q-input
+                    v-model="editingEmail"
+                    label="Email"
+                    outlined
+                    dense
+                    placeholder="No email on file"
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    label="Save"
+                    :loading="savingEdit"
+                    :disable="!editingUsername.trim()"
+                    @click="onSaveEdit"
+                />
+            </template>
         </BaseDialog>
 
         <!-- Add-user dialog ─────────────────────────────────────── -->
@@ -194,67 +193,95 @@
                     :error-message="createFieldErrors.email"
                     @update:model-value="() => clearCreateField('email')"
                 />
-                <q-toggle
-                    v-model="createDraft.is_admin"
-                    label="Admin"
+                <!-- Owner call 2026-08-17 — set the password here rather than
+                     relaying a generated one. Generating stays available for
+                     the "they're not with me" case, so the old flow is a
+                     checkbox away, not gone. -->
+                <PasswordSetter
+                    v-model="createDraft.password"
+                    v-model:generate="createDraft.generate"
+                    :error="createFieldErrors.password"
+                    @input="() => clearCreateField('password')"
                 />
-                <div class="text-caption dora-text-muted">
-                    Dora will generate a one-time password. You'll see it once — copy it
-                    and share it with the user out-of-band.
-                </div>
+                <q-toggle v-model="createDraft.is_admin" label="Admin" />
             </q-card-section>
             <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <BaseButton
                     label="Create"
                     :loading="creating"
-                    :disable="!createDraft.username.trim()"
+                    :disable="!canSubmitCreate"
                     @click="onSubmitCreate"
                 />
             </template>
         </BaseDialog>
 
-        <!-- One-time-password result dialog (shared by create + reset) ── -->
+        <!-- Change-password dialog ──────────────────────────────── -->
         <BaseDialog
-            v-model="resetResultOpen"
-            :title="resetResultKind === 'create' ? 'User created' : 'Password reset'"
+            v-model="passwordOpen"
+            :title="`Change password for ${passwordTarget?.username ?? ''}`"
+            closable
+            card-style="min-width: 320px; max-width: 480px"
+        >
+            <q-card-section class="q-gutter-md">
+                <div class="text-caption dora-text-muted">
+                    This signs {{ passwordTarget?.username }} out of every device
+                    they're currently signed in on.
+                </div>
+                <PasswordSetter
+                    v-model="passwordDraft"
+                    v-model:generate="passwordGenerate"
+                    :error="passwordError"
+                    autofocus
+                    @input="passwordError = ''"
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    label="Change password"
+                    :loading="savingPassword"
+                    :disable="!passwordGenerate && !passwordLongEnough(passwordDraft)"
+                    @click="onSubmitPassword"
+                />
+            </template>
+        </BaseDialog>
+
+        <!-- Generated-password readout (shared by create + change) ── -->
+        <BaseDialog
+            v-model="generatedOpen"
+            :title="generatedKind === 'create' ? 'User created' : 'Password changed'"
             closable
             card-style="min-width: 320px"
         >
-                <q-card-section>
-                    <div class="text-caption dora-text-muted">
-                        <span v-if="resetResultKind === 'create'">
-                            Copy this one-time password and pass it to
-                            {{ resetTargetName }} out-of-band. They'll be
-                            able to log in with it and change it themselves.
-                            It's shown once.
-                        </span>
-                        <span v-else>
-                            Copy this and pass it to {{ resetTargetName }}
-                            out-of-band. It's shown once.
-                        </span>
-                    </div>
-                </q-card-section>
-                <q-card-section>
-                    <q-input
-                        :model-value="resetResult"
-                        readonly
-                        outlined
-                        dense
-                        class="reset-password-readout"
-                    >
-                        <template #append>
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.content_copy"
-                                @click="copyReset"
-                            />
-                        </template>
-                    </q-input>
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Done" v-close-popup />
-                </template>
+            <q-card-section>
+                <div class="text-caption dora-text-muted">
+                    Copy this one-time password and pass it to
+                    {{ generatedTargetName }} out-of-band — it's shown once.
+                    They can change it themselves after signing in.
+                </div>
+            </q-card-section>
+            <q-card-section>
+                <q-input
+                    :model-value="generatedPassword"
+                    readonly
+                    outlined
+                    dense
+                    class="generated-password-readout"
+                >
+                    <template #append>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.content_copy"
+                            aria-label="Copy password"
+                            @click="copyGenerated"
+                        />
+                    </template>
+                </q-input>
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Done" v-close-popup />
+            </template>
         </BaseDialog>
     </div>
 </template>
@@ -263,6 +290,7 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import PasswordSetter from 'src/components/settings/PasswordSetter.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { copyToClipboard, useQuasar } from 'quasar';
@@ -273,7 +301,7 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import { useAuthStore } from 'src/stores/authStore';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { passwordLongEnough } from 'src/models/password';
     import { computed, onMounted, reactive, ref } from 'vue';
     import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -281,14 +309,14 @@
     const api = new UserAdminApiService();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
-    // Deals email is products-gated (see the toggle's template comment).
-    const { products: productsEnabled } = useFeatureFlags();
 
     const users = ref<AdminUser[]>([]);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-    const togglingId = ref<string | null>(null);
-    const resettingId = ref<string | null>(null);
+    // One busy marker per row — the toggles and the overflow button all
+    // belong to the same user, and letting a second write start while the
+    // first is in flight is how you get a row that disagrees with the server.
+    const busyId = ref<string | null>(null);
 
     const editOpen = ref(false);
     const editingUser = ref<AdminUser | null>(null);
@@ -296,31 +324,47 @@
     const editingEmail = ref('');
     const savingEdit = ref(false);
 
-    const deletingId = ref<string | null>(null);
-
-    // Create-user dialog state. Fresh reactive draft each open (see openCreate).
+    // Create-user dialog state. Fresh draft each open (see onAddClick).
     const createOpen = ref(false);
     const creating = ref(false);
-    const createDraft = reactive<AdminCreateUserCommand & { username: string; email: string; is_admin: boolean }>({
+    const createDraft = reactive({
         username: '',
         email: '',
         is_admin: false,
+        password: '',
+        // Default OFF — the owner's ask was "I should be able to set their
+        // password for them", so typing one is the primary path and
+        // generate-instead is the opt-out.
+        generate: false,
     });
     const createFieldErrors = ref<Record<string, string>>({});
-    function clearCreateField(field: 'username' | 'email') {
+    function clearCreateField(field: 'username' | 'email' | 'password') {
         if (createFieldErrors.value[field]) {
             const next = { ...createFieldErrors.value };
             delete next[field];
             createFieldErrors.value = next;
         }
     }
+    const canSubmitCreate = computed(
+        () => createDraft.username.trim().length > 0
+            && (createDraft.generate || passwordLongEnough(createDraft.password)),
+    );
 
-    // One-time-password result dialog is shared by create + reset — the copy
-    // text depends on which flow produced the password.
-    const resetResultOpen = ref(false);
-    const resetResult = ref('');
-    const resetTargetName = ref('');
-    const resetResultKind = ref<'create' | 'reset'>('reset');
+    // Change-password dialog state.
+    const passwordOpen = ref(false);
+    const passwordTarget = ref<AdminUser | null>(null);
+    const passwordDraft = ref('');
+    const passwordGenerate = ref(false);
+    const passwordError = ref('');
+    const savingPassword = ref(false);
+
+    // Generated-password readout, shared by create + change — only shown when
+    // the *server* invented the password. A password the admin typed is never
+    // echoed back.
+    const generatedOpen = ref(false);
+    const generatedPassword = ref('');
+    const generatedTargetName = ref('');
+    const generatedKind = ref<'create' | 'change'>('change');
 
     const currentUserId = computed(() => currentUser.value?.user_id ?? null);
 
@@ -338,18 +382,15 @@
     }
 
     async function patch(user: AdminUser, command: Parameters<typeof api.updateAsync>[1]) {
-        togglingId.value = user.user_id;
+        busyId.value = user.user_id;
         try {
             await api.updateAsync(user.user_id, command);
             await loadUsers();
-            // when the admin is editing themselves (self-demote,
-            // rename, email change), the admin-user list refresh above
-            // doesn't touch `authStore.currentUser`. Without this refresh
-            // the router guard, MainLayout, SettingsShell, and every
-            // admin page keep reading a stale `is_admin`/`username`, so
-            // the demoted admin still sees admin surfaces until the next
-            // hard reload. Backend prevents removing the last admin so
-            // this can't lock the caller out.
+            // when the admin is editing themselves (rename, email change), the
+            // admin-user list refresh above doesn't touch
+            // `authStore.currentUser`. Without this refresh the router guard,
+            // MainLayout, SettingsShell, and every admin page keep reading a
+            // stale `is_admin`/`username`.
             if (user.user_id === currentUser.value?.user_id) {
                 await authStore.refreshAsync();
             }
@@ -361,9 +402,12 @@
                 message: 'Update failed.',
                 caption: toastCaption(err)
             });
+            // Re-read so a rejected write (e.g. the last-admin guard) doesn't
+            // leave the toggle showing the value the server refused.
+            await loadUsers();
             return false;
         } finally {
-            togglingId.value = null;
+            busyId.value = null;
         }
     }
 
@@ -371,8 +415,28 @@
         await patch(user, { is_admin: value });
     }
 
-    async function onToggleDeals(user: AdminUser, value: boolean) {
-        await patch(user, { deals_email_enabled: value });
+    async function onToggleActive(user: AdminUser, value: boolean) {
+        if (!value) {
+            const confirmed = await confirmDialog({
+                title: `Deactivate "${user.username}"?`,
+                message:
+                    `They'll be signed out and won't be able to sign in again `
+                    + `until you switch this back on. Nothing they created is `
+                    + `removed.`,
+                okLabel: 'Deactivate',
+            });
+            if (!confirmed) return;
+        }
+        const ok = await patch(user, { is_active: value });
+        if (ok) {
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: value
+                    ? `"${user.username}" can sign in again.`
+                    : `"${user.username}" is deactivated.`,
+            });
+        }
     }
 
     function onEdit(user: AdminUser) {
@@ -394,49 +458,58 @@
         if (ok) editOpen.value = false;
     }
 
-    async function onResetPassword(user: AdminUser) {
-        const confirm = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: 'Reset password',
-                message: `Generate a new one-time password for "${user.username}"?`,
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!confirm) return;
+    // ── Password ─────────────────────────────────────────────────────
+    function onChangePassword(user: AdminUser) {
+        passwordTarget.value = user;
+        passwordDraft.value = '';
+        passwordGenerate.value = false;
+        passwordError.value = '';
+        passwordOpen.value = true;
+    }
 
-        resettingId.value = user.user_id;
+    async function onSubmitPassword() {
+        const user = passwordTarget.value;
+        if (!user) return;
+        savingPassword.value = true;
         try {
-            const { new_password } = await api.resetPasswordAsync(user.user_id);
-            resetResult.value = new_password;
-            resetTargetName.value = user.username;
-            resetResultKind.value = 'reset';
-            resetResultOpen.value = true;
+            const { new_password } = await api.setPasswordAsync(
+                user.user_id,
+                passwordGenerate.value ? undefined : passwordDraft.value,
+            );
+            passwordOpen.value = false;
+            if (new_password) {
+                generatedPassword.value = new_password;
+                generatedTargetName.value = user.username;
+                generatedKind.value = 'change';
+                generatedOpen.value = true;
+            } else {
+                $q.notify({
+                    type: 'positive',
+                    position: 'bottom-right',
+                    message: `Password changed for "${user.username}".`,
+                });
+            }
         } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Reset failed.',
-                caption: toastCaption(err)
-            });
+            passwordError.value = fieldError(err, 'password')
+                ?? 'Could not change the password.';
         } finally {
-            resettingId.value = null;
+            savingPassword.value = false;
         }
     }
 
-    // Add / Delete on the users page.
+    // ── Create / delete ──────────────────────────────────────────────
     function onAddClick() {
         createDraft.username = '';
         createDraft.email = '';
         createDraft.is_admin = false;
+        createDraft.password = '';
+        createDraft.generate = false;
         createFieldErrors.value = {};
         createOpen.value = true;
     }
 
     async function onSubmitCreate() {
-        if (!createDraft.username.trim()) return;
+        if (!canSubmitCreate.value) return;
         creating.value = true;
         createFieldErrors.value = {};
         try {
@@ -446,19 +519,28 @@
             };
             const email = createDraft.email.trim();
             if (email.length > 0) payload.email = email;
+            if (!createDraft.generate) payload.password = createDraft.password;
 
             const { new_password } = await api.createAsync(payload);
             createOpen.value = false;
-            resetResult.value = new_password;
-            resetTargetName.value = payload.username;
-            resetResultKind.value = 'create';
-            resetResultOpen.value = true;
+            if (new_password) {
+                generatedPassword.value = new_password;
+                generatedTargetName.value = payload.username;
+                generatedKind.value = 'create';
+                generatedOpen.value = true;
+            } else {
+                $q.notify({
+                    type: 'positive',
+                    position: 'bottom-right',
+                    message: `Created "${payload.username}".`,
+                });
+            }
             await loadUsers();
         } catch (err) {
             // Server maps username-taken / email-taken to 400 with a friendly
-            // detail; validation problems (bad email) come back as 422 with a
-            // per-field errors map. Surface both inline.
-            const problem = (err as { response?: { data?: { errors?: Record<string, string[]>; detail?: string } } })?.response?.data;
+            // detail; validation problems (bad email, weak password) come back
+            // as 422 with a per-field errors map. Surface both inline.
+            const problem = problemOf(err);
             if (problem?.errors) {
                 const next: Record<string, string> = {};
                 for (const [field, messages] of Object.entries(problem.errors)) {
@@ -485,24 +567,18 @@
     }
 
     async function onDelete(user: AdminUser) {
-        const confirm = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: `Delete "${user.username}"?`,
-                message:
-                    `Their sessions, alert preferences and push subscriptions ` +
-                    `will be removed. Household-shared things they touched ` +
-                    `(recipes, shopping lists) stay in the household.`,
-                cancel: { noCaps: true },
-                persistent: true,
-                ok: { color: 'negative', label: 'Delete' },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
+        const confirmed = await confirmDialog({
+            title: `Delete "${user.username}"?`,
+            message:
+                `Their sessions, alert preferences and push subscriptions `
+                + `will be removed. Household-shared things they touched `
+                + `(recipes, shopping lists) stay in the household. `
+                + `Deactivate instead if you only want to lock them out.`,
+            okLabel: 'Delete',
         });
-        if (!confirm) return;
+        if (!confirmed) return;
 
-        deletingId.value = user.user_id;
+        busyId.value = user.user_id;
         try {
             await api.deleteAsync(user.user_id);
             $q.notify({
@@ -519,13 +595,13 @@
                 caption: toastCaption(err),
             });
         } finally {
-            deletingId.value = null;
+            busyId.value = null;
         }
     }
 
-    async function copyReset() {
+    async function copyGenerated() {
         try {
-            await copyToClipboard(resetResult.value);
+            await copyToClipboard(generatedPassword.value);
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
@@ -541,16 +617,106 @@
         }
     }
 
+    // ── Small local helpers ──────────────────────────────────────────
+    type Problem = { errors?: Record<string, string[]>; detail?: string };
+
+    function problemOf(err: unknown): Problem | undefined {
+        return (err as { response?: { data?: Problem } })?.response?.data;
+    }
+
+    /** First message the server attached to one field, if any. */
+    function fieldError(err: unknown, field: string): string | null {
+        const problem = problemOf(err);
+        const messages = problem?.errors?.[field];
+        if (Array.isArray(messages) && messages.length > 0) return messages[0]!;
+        return problem?.detail ?? null;
+    }
+
+    // R-039: dialogs are sentence-case with `noCaps` on the cancel action.
+    function confirmDialog(opts: { title: string; message: string; okLabel: string }) {
+        return new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: opts.title,
+                message: opts.message,
+                cancel: { noCaps: true },
+                persistent: true,
+                ok: { color: 'negative', label: opts.okLabel, noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+    }
+
     onMounted(loadUsers);
 </script>
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; position: relative; }
-    .settings-list {
+
+    .user-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .user-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px 16px;
+        padding: 14px 0;
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
     }
-    .reset-password-readout :deep(input) {
+    /* A deactivated account stays fully legible — it's dimmed, not hidden,
+       because the admin is looking at this list precisely to find it. */
+    .user-row--inactive .user-row__identity { opacity: 0.6; }
+
+    .user-row__identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        /* min-width:0 lets the long-email ellipsis actually engage instead of
+           the flex item refusing to shrink below its content. */
+        min-width: 0;
+        flex: 1 1 220px;
+    }
+    .user-row__names { min-width: 0; }
+    .user-row__name {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        line-height: 1.3;
+    }
+    .user-row__email {
+        font-size: 0.8125rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .user-row__controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex: 0 0 auto;
+    }
+
+    /* Mobile: the controls drop onto their own full-width line under the
+       identity block and spread out, instead of competing with the name for
+       horizontal space. */
+    @media (max-width: 599px) {
+        .user-row__identity { flex: 1 1 100%; }
+        .user-row__controls {
+            flex: 1 1 100%;
+            justify-content: space-between;
+            padding-left: 54px; /* line up under the name, past the avatar */
+        }
+    }
+
+    .generated-password-readout :deep(input) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         letter-spacing: 0.05em;
     }

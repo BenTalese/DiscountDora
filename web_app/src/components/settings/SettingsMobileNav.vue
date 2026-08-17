@@ -17,14 +17,19 @@
                 class="settings-mnav__group"
                 :class="{ 'settings-mnav__group--active': group.label === activeLabel }"
                 :aria-selected="group.label === activeLabel"
-                @click="activeLabel = group.label"
+                @click="onGroupTap(group)"
             >
                 <q-icon v-if="group.icon" :name="group.icon" size="14px" class="q-mr-xs" />
                 {{ group.label }}
             </button>
         </div>
 
-        <div class="settings-mnav__chips">
+        <!-- A single-destination group (Account, About) is its own tab — the
+             one chip underneath just repeated the tab's label as a second
+             button to press, which read as a stray sub-item (owner,
+             2026-08-17). Tapping the tab navigates there instead, so the
+             strip is suppressed rather than shown with one entry. -->
+        <div v-if="activeLeaves.length > 1" class="settings-mnav__chips">
             <router-link
                 v-for="leaf in activeLeaves"
                 :key="leaf.path"
@@ -47,7 +52,7 @@
         SettingsNavLeaf,
     } from 'src/components/settings/SettingsNavGroup.vue';
     import { computed, ref, watch } from 'vue';
-    import { useRoute } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
 
     export interface SettingsNavGroupDef {
         label: string;
@@ -63,12 +68,12 @@
 
     const route = useRoute();
 
-    // Subgroups (Recipe taxonomies / System) flatten to their leaves — the
-    // chip strip is one flat scrollable row, no second-level nesting on mobile.
+    // Every group is a flat list of destinations now (the sub-header level was
+    // retired 2026-08-17 — see SettingsNavGroup), so this is a plain read.
+    // Kept as a named function because the tab logic below leans on it three
+    // times and "the leaves of a group" is the concept, not the field.
     function leavesOf(group: SettingsNavGroupDef): SettingsNavLeaf[] {
-        return group.items.flatMap((entry) =>
-            'subheader' in entry ? entry.items : [entry],
-        );
+        return group.items;
     }
 
     // Default the open tab to whichever group owns the current route, so a
@@ -88,6 +93,18 @@
         () => route.path,
         () => { activeLabel.value = groupOwningRoute(); },
     );
+
+    // Tapping a group heading navigates to that group's first destination
+    // (owner, 2026-08-17) — leaving the user parked on the previous page
+    // while the strip changed underneath them was the confusing half. The
+    // route watch above then syncs `activeLabel`, so this only has to set it
+    // for the (impossible-in-practice) empty-group case.
+    const router = useRouter();
+    function onGroupTap(group: SettingsNavGroupDef) {
+        activeLabel.value = group.label;
+        const first = leavesOf(group)[0];
+        if (first && first.path !== route.path) void router.push(first.path);
+    }
 
     const activeLeaves = computed<SettingsNavLeaf[]>(() => {
         const group = props.groups.find((g) => g.label === activeLabel.value);
@@ -116,6 +133,14 @@
         white-space: nowrap;
         cursor: pointer;
         padding: 8px 12px;
+        /* D-004 — the tab is now a navigation control in its own right (it
+           carries you to the group's first page, and for Account/About it is
+           the only way there), so it earns the 44px touch floor. Was 38px. */
+        min-height: 44px;
+        /* `all: unset` also resets box-sizing to content-box, which turned
+           the 44px floor into a 62px tab (measured). */
+        box-sizing: border-box;
+        line-height: 1.3;
         font-size: 0.8125rem;
         font-weight: 600;
         color: var(--text-secondary);

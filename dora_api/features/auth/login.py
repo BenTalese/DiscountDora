@@ -32,6 +32,11 @@ class LoginRequest(BaseModel):
 @dataclass(slots=True)
 class LoginResponse:
     user: User | None = None
+    # Distinct from `user=None`: the credentials were *right*, the account is
+    # switched off. Kept separate so the route can say so — at this point the
+    # caller has already proved they own the account, so naming the reason
+    # leaks nothing and saves them guessing at a password that works.
+    deactivated: bool = False
 
 
 class LoginHandler:
@@ -45,6 +50,8 @@ class LoginHandler:
             return LoginResponse(user = None)
         if not check_password_hash(_User.password_hash, request.password):
             return LoginResponse(user = None)
+        if not _User.is_active:
+            return LoginResponse(user = None, deactivated = True)
         return LoginResponse(user = _User)
 
 
@@ -69,6 +76,19 @@ def login():
     _Handler = LoginHandler(SqlAlchemyRepository())
     _Request: LoginRequest = get_request_body()
     _Response = _Handler.handle(_Request)
+
+    if _Response.deactivated:
+        _Logger.warning(
+            f"Login refused for deactivated account '{_Request.username}'"
+        )
+        audit_emit(
+            "auth.login.deactivated",
+            severity=SEVERITY_WARN,
+            payload={"username": _Request.username},
+        )
+        return unauthorized(
+            "This account has been deactivated. Ask an admin to switch it back on."
+        )
 
     if _Response.user is None:
         _Logger.warning(f"Failed login attempt for username '{_Request.username}'")

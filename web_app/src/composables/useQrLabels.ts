@@ -13,7 +13,7 @@
 // Fetching through `AxiosHttpClient` and handing the browser a blob URL keeps
 // exactly one auth path in the app. The sheet's QR images are inlined by the
 // server as data: URIs (see `barcodes.py`) so the blob page is self-contained.
-import AxiosHttpClient from 'src/services/api/axiosHttpClient';
+import AxiosHttpClient, { NormalisedApiError } from 'src/services/api/axiosHttpClient';
 
 const http = new AxiosHttpClient();
 
@@ -26,6 +26,38 @@ function objectUrlFor(blob: Blob): string {
     const url = URL.createObjectURL(blob);
     setTimeout(() => URL.revokeObjectURL(url), BLOB_TTL_MS);
     return url;
+}
+
+/** Raised when the browser refused to open the print tab. Distinct from an
+ *  API failure because the user's fix is different — allow pop-ups, don't
+ *  report a bug — so the caller can say so. */
+export class PopupBlockedError extends Error {
+    constructor() {
+        super('The browser blocked the print tab.');
+        this.name = 'PopupBlockedError';
+    }
+}
+
+/** A short, quotable description of why a QR call failed.
+ *
+ *  The detail page used to swallow the error whole and render a flat
+ *  "Couldn't load this item's QR code." That is exactly why FU-648 could be
+ *  investigated twice without being explained: the one person who could see
+ *  the failure had nothing to report but the sentence we wrote. The status and
+ *  the correlation id are already on `NormalisedApiError` — surfacing them
+ *  turns the next report into a one-line diagnosis. */
+export function describeQrFailure(error: unknown): string {
+    if (error instanceof PopupBlockedError) {
+        return 'Your browser blocked the print tab — allow pop-ups for Dora and try again.';
+    }
+    if (error instanceof NormalisedApiError) {
+        if (error.isNetworkError) {
+            return "Couldn't reach the server for this QR code. Check the connection and try again.";
+        }
+        const ref = error.correlationId ? ` · Ref: ${error.correlationId.slice(0, 8)}` : '';
+        return `Couldn't load this item's QR code (error ${error.status})${ref}.`;
+    }
+    return "Couldn't load this item's QR code.";
 }
 
 /** PNG of one item's `dora://` label QR, as an object URL for `<img :src>`. */
@@ -45,13 +77,55 @@ export async function openQrSheetAsync(options: {
     ids?: string[];
     layout?: string;
 } = {}): Promise<void> {
-    const params = new URLSearchParams();
-    if (options.layout) params.set('layout', options.layout);
-    if (options.ids && options.ids.length > 0) params.set('ids', options.ids.join(','));
-    const query = params.toString();
-    const html = await http.get<string>(
-        `/stock-items/qr/sheet${query ? `?${query}` : ''}`,
-    );
-    const url = objectUrlFor(new Blob([html], { type: 'text/html' }));
-    window.open(url, '_blank', 'noopener');
+    // The tab is opened HERE — synchronously, still inside the click's own
+    // call stack — and only navigated to the blob once the fetch returns.
+    //
+    // Opening it after the `await` is what broke "Print one": every browser
+    // treats a `window.open` that isn't attributable to a user gesture as an
+    // unsolicited pop-up and blocks it, and mobile Safari/Chrome (where this
+    // was reported, by tap) block it unconditionally. The old code did
+    // `await http.get(...)` first, so by the time it opened the tab the
+    // gesture had long expired.
+    //
+    // `noopener` is deliberately NOT passed: with it, `window.open` returns
+    // null by spec and there'd be no handle to navigate. The opener reference
+    // is severed by hand below instead, which gets the same protection — and
+    // the destination is a blob: URL this app just built, not a third party.
+    const target = window.open('', '_blank');
+    if (!target) throw new PopupBlockedError();
+    try {
+        target.opener = null;
+    } catch {
+        // Cross-origin-ish edge; the blob we're about to load is ours anyway.
+    }
+    // Something to look at if the sheet is slow — a blank tab reads as broken.
+    try {
+        target.document.write('<!doctype html><title>QR sheet</title><p>Preparing labels…');
+        target.document.close();
+    } catch {
+        // Some shells disallow document.write into a fresh window; harmless.
+    }
+
+    try {
+        const params = new URLSearchParams();
+        if (options.layout) params.set('layout', options.layout);
+        if (options.ids && options.ids.length > 0) params.set('ids', options.ids.join(','));
+        const query = params.toString();
+        const html = await http.get<string>(
+            `/stock-items/qr/sheet${query ? `?${query}` : ''}`,
+        );
+        const url = objectUrlFor(new Blob([html], { type: 'text/html' }));
+        // `replace`, not `href`: the placeholder shouldn't sit in the tab's
+        // history where Back would return the user to "Preparing labels…".
+        target.location.replace(url);
+    } catch (error) {
+        // Don't strand the reader on the placeholder — close it and let the
+        // caller report the failure where they're actually looking.
+        try {
+            target.close();
+        } catch {
+            // Already gone.
+        }
+        throw error;
+    }
 }

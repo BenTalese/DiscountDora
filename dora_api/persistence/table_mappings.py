@@ -309,6 +309,25 @@ def configure_mappings(db: SQLAlchemy):
         Column("saturated_fat_g_per_100g", Float, nullable=True),
         Column("fibre_g_per_100g", Float, nullable=True),
         Column("sodium_mg_per_100g", Float, nullable=True),
+        # The optional vitamins-and-minerals block (2026-08-17). Same shape as
+        # the macros above — nullable, per 100g, unit in the name — and the
+        # same authority: `features/nutrition/nutrients.py` decides which of
+        # these exist and how each source names them.
+        Column("trans_fat_g_per_100g", Float, nullable=True),
+        Column("monounsaturated_fat_g_per_100g", Float, nullable=True),
+        Column("polyunsaturated_fat_g_per_100g", Float, nullable=True),
+        Column("cholesterol_mg_per_100g", Float, nullable=True),
+        Column("potassium_mg_per_100g", Float, nullable=True),
+        Column("calcium_mg_per_100g", Float, nullable=True),
+        Column("iron_mg_per_100g", Float, nullable=True),
+        Column("magnesium_mg_per_100g", Float, nullable=True),
+        Column("zinc_mg_per_100g", Float, nullable=True),
+        Column("vitamin_a_ug_per_100g", Float, nullable=True),
+        Column("vitamin_c_mg_per_100g", Float, nullable=True),
+        Column("vitamin_d_ug_per_100g", Float, nullable=True),
+        Column("vitamin_e_mg_per_100g", Float, nullable=True),
+        Column("vitamin_b12_ug_per_100g", Float, nullable=True),
+        Column("folate_ug_per_100g", Float, nullable=True),
         Column("imported_at", DateTime(timezone=True), nullable=True),
         UniqueConstraint("source", "source_ref", name="uq_nutrition_food_source_ref"),
     )
@@ -1054,6 +1073,11 @@ def configure_mappings(db: SQLAlchemy):
         # `_KNOWN_NULLABILITY_DRIFT` / `_KNOWN_UNIQUE_DRIFT` so it can't grow.
         Column("username", String(255), nullable=False, unique=True),
         Column("is_admin", Boolean, nullable=False, default=False, server_default=false()),
+        # Deactivate-instead-of-delete (owner, 2026-08-17). Default TRUE so
+        # every existing row — and every future insert that doesn't mention
+        # it — is a normal, usable account; only an explicit admin action
+        # switches it off. See the entity comment for where it's enforced.
+        Column("is_active", Boolean, nullable=False, default=True, server_default=true()),
         # Opt-in, matching `alerts_email_enabled` — a fresh install has no SMTP,
         # so nobody should land pre-subscribed to mail the server can't send.
         # (Was `true()` to carry pre-existing subscribers over the column's
@@ -1087,6 +1111,12 @@ def configure_mappings(db: SQLAlchemy):
         # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
+        # FU-653 — per-surface belief overlays (recipes / shopping lists / meal
+        # planner). Default FALSE: they annotate pages the user opened for
+        # another reason, so they're opt-in, unlike the stock overlay above.
+        Column("inference_recipes_enabled", Boolean, nullable=False, server_default=false()),
+        Column("inference_shopping_enabled", Boolean, nullable=False, server_default=false()),
+        Column("inference_meal_plan_enabled", Boolean, nullable=False, server_default=false()),
         # `nutrition_mode` moved to AppSetting (2026-08-14) — install-wide,
         # see the nutrition block in the AppSetting table above.
         # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
@@ -1118,6 +1148,7 @@ def configure_mappings(db: SQLAlchemy):
         # FU-360.6 — per-user "show the Dora helper bubble" opt-out. Default
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
+        Column("daily_brief_enabled", Boolean, nullable=False, server_default=false()),
     )
 
     # admin-minted bearer credential for `POST /api/ingest`. The

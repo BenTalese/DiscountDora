@@ -12,60 +12,36 @@
             </template>
         </SettingsPageHeader>
 
-        <!-- Warns (and offers to generate a key) when the install hasn't set
-             DORA_SECRET_ENCRYPTION_KEY — a paid-provider API key can't be
-             stored encrypted without it, so saving one would be refused. -->
-        <EncryptionKeyBanner secret-label="a paid provider's API key" />
-
+        <!-- Owner regroup 2026-08-17: the page now reads chat → providers →
+             pantry inference. "Assistant chat" owns the two settings about
+             the chat itself (show it; which brain answers); the long
+             explanation of Basic-vs-model moved into a (?) chip so the
+             section stays scannable. -->
         <SettingsSection>
+            <template #title>Assistant chat</template>
+
             <SettingsRow label="Show digital assistant chat bubble">
                 <q-toggle
                     :model-value="currentUser.show_assistant !== false"
                     @update:model-value="onShowAssistantChange"
                 />
             </SettingsRow>
-        </SettingsSection>
 
-        <hr class="settings-divider" />
-
-        <SettingsSection>
-            <template #title>Zero-Input Pantry</template>
-            <template #description>
-                Dora can infer each item's stock level from your shopping,
-                cooking, and buying rhythm — showing what it thinks beside the
-                level you last recorded, and asking a quick check only when it's
-                unsure. Your recorded level always stays the source of truth for
-                shopping and cooking.
-                <router-link
-                    :to="{ path: '/help', query: { q: 'Dora thinks' } }"
-                    class="settings-page__link"
-                >Learn more</router-link>.
-            </template>
-
-            <SettingsRow
-                label="Infer stock levels"
-                help="When on, Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels."
-            >
-                <q-toggle
-                    :model-value="currentUser.inferred_pantry_enabled"
-                    @update:model-value="onInferredPantryChange"
-                />
-            </SettingsRow>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
-
-        <SettingsSection>
-            <template #title>Mode</template>
-            <template #description>
-                <strong>Basic</strong> (the default, no setup) answers questions
-                about your pantry, meals, and lists and can add items when you
-                type things like "add milk". Selecting a language model routes
-                <em>tool-able requests</em> through it for richer, multi-step
-                help. Only providers you've connected below can be picked.
-            </template>
-
-            <SettingsRow label="Mode">
+            <SettingsRow>
+                <template #label>
+                    Mode
+                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
+                        <q-tooltip max-width="320px">
+                            <strong>Basic</strong> (the default, no setup)
+                            answers questions about your pantry, meals, and
+                            lists and can add items when you type things like
+                            "add milk". Selecting a language model routes
+                            tool-able requests through it for richer,
+                            multi-step help. Only providers you've connected
+                            below can be picked.
+                        </q-tooltip>
+                    </q-icon>
+                </template>
                 <q-select
                     :model-value="modeValue"
                     :options="modeOptions"
@@ -91,12 +67,35 @@
                 the moment you enter them.
             </template>
 
+            <!-- Warns (and offers to generate a key) when the install hasn't
+                 set DORA_SECRET_ENCRYPTION_KEY — a paid-provider API key can't
+                 be stored encrypted without it, so saving one would be
+                 refused. Sits inside Providers (owner, 2026-08-17): at the top
+                 of the page it read as a whole-page failure, when the only
+                 thing it gates is pasting a paid provider's key. -->
+            <EncryptionKeyBanner secret-label="a paid provider's API key" />
+
+            <!-- Each provider is a minimised card — name + connection state —
+                 that opens on click (owner, 2026-08-17). Four always-expanded
+                 forms buried the one you'd actually configured. -->
             <div
                 v-for="provider in PROVIDERS"
                 :key="provider"
                 class="provider-card"
+                :class="`provider-card--${statusTone(provider)}`"
             >
-                <div class="provider-card__head">
+                <button
+                    type="button"
+                    class="provider-card__head"
+                    :aria-expanded="expanded === provider"
+                    :aria-controls="`provider-body-${provider}`"
+                    @click="toggleProvider(provider)"
+                >
+                    <q-icon
+                        :name="expanded === provider ? ICONS.collapse : ICONS.expand"
+                        size="18px"
+                        class="provider-card__chevron"
+                    />
                     <h3 class="provider-card__name">{{ providerDisplayName(provider) }}</h3>
                     <div class="provider-card__status">
                         <q-spinner
@@ -113,18 +112,15 @@
                         <span :class="`text-${statusColor(provider)}`">
                             {{ statusLabel(provider) }}
                         </span>
-                        <BaseButton
-                            v-if="canTest(provider)"
-                            variant="ghost"
-                            :icon="ICONS.wifi_tethering"
-                            label="Test"
-                            :disable="state[provider].status === 'checking'"
-                            @click="onTest(provider)"
-                        />
                     </div>
-                </div>
+                </button>
 
-                <div class="provider-card__body">
+                <q-slide-transition>
+                <div
+                    v-show="expanded === provider"
+                    :id="`provider-body-${provider}`"
+                    class="provider-card__body"
+                >
                     <!-- Ollama: base URL + model (model becomes a picker of
                          installed models once a probe succeeds). No API key. -->
                     <template v-if="provider === 'ollama'">
@@ -210,8 +206,83 @@
                             />
                         </SettingsRow>
                     </template>
+
+                    <!-- Re-check lives with the fields it re-checks, now that
+                         the header is the disclosure control. -->
+                    <div v-if="canTest(provider)" class="provider-card__actions">
+                        <BaseButton
+                            variant="ghost"
+                            :icon="ICONS.wifi_tethering"
+                            label="Test connection"
+                            :disable="state[provider].status === 'checking'"
+                            @click="onTest(provider)"
+                        />
+                    </div>
                 </div>
+                </q-slide-transition>
             </div>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Zero-Input Pantry</template>
+            <template #description>
+                Dora can infer each item's stock level from your shopping,
+                cooking, and buying rhythm — showing what it thinks beside the
+                level you last recorded, and asking a quick check only when it's
+                unsure. Your recorded level always stays the source of truth for
+                shopping and cooking. Pick where she's allowed to mention it;
+                what she thinks never changes what the app does.
+                <router-link
+                    :to="{ path: '/help', query: { q: 'Dora thinks' } }"
+                    class="settings-page__link"
+                >Learn more</router-link>.
+            </template>
+
+            <SettingsRow
+                label="On the stock list and stock items"
+                help="Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels."
+            >
+                <q-toggle
+                    :model-value="currentUser.inferred_pantry_enabled"
+                    @update:model-value="onInferredPantryChange"
+                />
+            </SettingsRow>
+
+            <!-- FU-653 — the same belief, on the pages where stock items turn
+                 up rather than where they're managed. Separate toggles because
+                 they annotate three different jobs; all default off, since
+                 they add remarks to pages you opened to do something else. -->
+            <SettingsRow
+                label="On recipes"
+                help="Flags a recipe as at risk when Dora believes an ingredient has run out — and points out one you may be able to cook after all. Never changes whether a recipe counts as cookable, and never filters your cookbook."
+            >
+                <q-toggle
+                    :model-value="currentUser.inference_recipes_enabled"
+                    @update:model-value="(v: boolean) => onSurfaceChange('recipes', v)"
+                />
+            </SettingsRow>
+
+            <SettingsRow
+                label="On shopping lists"
+                help="Suggests items Dora believes you've run out of, beside the list. Nothing is added for you."
+            >
+                <q-toggle
+                    :model-value="currentUser.inference_shopping_enabled"
+                    @update:model-value="(v: boolean) => onSurfaceChange('shopping', v)"
+                />
+            </SettingsRow>
+
+            <SettingsRow
+                label="On the meal planner"
+                help="Flags a planned meal whose ingredient Dora believes has run out since you planned it. Your plan and its shopping figures are unchanged."
+            >
+                <q-toggle
+                    :model-value="currentUser.inference_meal_plan_enabled"
+                    @update:model-value="(v: boolean) => onSurfaceChange('meal_plan', v)"
+                />
+            </SettingsRow>
         </SettingsSection>
     </div>
 </template>
@@ -225,7 +296,7 @@
         type ProviderConfig,
     } from 'src/services/api/assistantApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { computed, onMounted, reactive } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -356,6 +427,26 @@
             case 'unverified': return ICONS.help_outline;
             default: return ICONS.help_outline;
         }
+    }
+
+    // Card tint: neutral when nothing is configured, green when it's working,
+    // red when the last probe failed. "Configured but never tested" keeps its
+    // own amber — calling it green would claim a connection nobody has
+    // verified, and calling it red would accuse a provider that may be fine.
+    function statusTone(p: LlmProviderName): string {
+        switch (state[p].status) {
+            case 'connected': return 'ok';
+            case 'error': return 'bad';
+            case 'unverified': return 'warn';
+            default: return 'neutral';
+        }
+    }
+
+    // One card open at a time — a disclosure list, not four accordions; null
+    // means all minimised, which is how the page loads.
+    const expanded = ref<LlmProviderName | null>(null);
+    function toggleProvider(p: LlmProviderName) {
+        expanded.value = expanded.value === p ? null : p;
     }
 
     function canTest(p: LlmProviderName): boolean {
@@ -502,6 +593,29 @@
             () => authStore.updateMeAsync({ inferred_pantry_enabled: value }),
         );
     }
+
+    // FU-653 — the three per-surface overlays. One handler: the three differ
+    // only in which field they write and what the toast calls the place.
+    const SURFACE_FIELDS = {
+        recipes: 'inference_recipes_enabled',
+        shopping: 'inference_shopping_enabled',
+        meal_plan: 'inference_meal_plan_enabled',
+    } as const;
+    const SURFACE_LABELS: Record<keyof typeof SURFACE_FIELDS, string> = {
+        recipes: 'recipes',
+        shopping: 'shopping lists',
+        meal_plan: 'the meal planner',
+    };
+
+    async function onSurfaceChange(surface: keyof typeof SURFACE_FIELDS, value: boolean) {
+        const where = SURFACE_LABELS[surface];
+        await update(
+            value
+                ? `Dora will share what she thinks on ${where}.`
+                : `Dora will stay quiet on ${where}.`,
+            () => authStore.updateMeAsync({ [SURFACE_FIELDS[surface]]: value }),
+        );
+    }
 </script>
 
 <style scoped lang="scss">
@@ -516,22 +630,64 @@
     .provider-card {
         border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
         border-radius: 12px;
-        padding: 14px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+        overflow: hidden;
+    }
+    /* State tint on the card edge — deliberately a border + soft wash, not a
+       filled card: the card is a control, and a saturated fill would compete
+       with the page's own surfaces (D-002). */
+    .provider-card--ok {
+        border-color: color-mix(in srgb, var(--semantic-positive) 55%, transparent);
+    }
+    .provider-card--bad {
+        border-color: color-mix(in srgb, var(--semantic-negative) 55%, transparent);
+    }
+    .provider-card--warn {
+        border-color: color-mix(in srgb, var(--semantic-warning) 50%, transparent);
     }
     .provider-card__head {
+        /* The whole header is the disclosure control, so it's a real <button>
+           (keyboard + screen-reader for free) reset back to a row. */
+        all: unset;
+        box-sizing: border-box;
+        width: 100%;
+        cursor: pointer;
+        /* `all: unset` makes every *inherited* property inherit — including a
+           line-height that resolves to ~51px here (measured), which stretched
+           the row to 71px tall. Pin it. */
+        line-height: 1.3;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 10px;
         flex-wrap: wrap;
+        /* D-004 — 44px minimum touch target for the tap-to-open row. */
+        min-height: 44px;
+        padding: 10px 14px;
+    }
+    .provider-card__head:hover {
+        background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+    }
+    .provider-card__head:focus-visible {
+        outline: 2px solid var(--ring-focus);
+        outline-offset: -2px;
+    }
+    .provider-card__chevron {
+        flex: 0 0 auto;
+        color: var(--text-secondary);
+    }
+    .provider-card__actions {
+        display: flex;
+        justify-content: flex-start;
+        padding-top: 2px;
     }
     .provider-card__name {
         margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
         font-size: 0.9375rem;
         font-weight: 700;
+        /* Quasar's typography gives a bare <h3> `line-height: 3.125rem`, which
+           made this row 71px tall (measured) for one line of text. */
+        line-height: 1.3;
         color: var(--text-primary);
     }
     .provider-card__status {
@@ -539,10 +695,16 @@
         align-items: center;
         gap: 6px;
         font-size: 0.8125rem;
+        /* An error reason can be a sentence; keep it from shoving the name
+           off the row on a narrow screen. */
+        max-width: 100%;
+        text-align: right;
     }
     .provider-card__body {
         display: flex;
         flex-direction: column;
         gap: 10px;
+        padding: 4px 14px 14px;
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
     }
 </style>

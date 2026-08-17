@@ -51,6 +51,17 @@ def aggregate_meal_plan_ingredients(
         recipe_servings = recipe.servings or 1
         scale = servings / recipe_servings if recipe_servings else 1
         for ingredient in recipe.ingredients or []:
+            # An *unlinked* ingredient (paste-imported, never matched to a
+            # pantry item — IMPL_PLAN_RECIPE_IMPORTER §Chunk 4) has no stock
+            # item to aggregate against. This used to read `.id` off None and
+            # 500 the whole endpoint, so both this preview and a saved plan's
+            # ingredients died outright if any recipe in the selection had one
+            # unlinked row. Skipping is the right answer, not a placeholder: a
+            # shopping list is a list of *stock items*, and "1 cup of
+            # something" isn't one — the linking prompt on the recipe is where
+            # that gets resolved.
+            if ingredient.stock_item is None:
+                continue
             existing = aggregated.setdefault(ingredient.stock_item.id, {
                 "stock_item_name": ingredient.stock_item.name,
                 "total_quantity": 0.0 if ingredient.quantity is not None else None,

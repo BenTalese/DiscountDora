@@ -147,6 +147,21 @@ def bootstrap(is_test_env: bool = False):
             id="alerts_push",
             replace_existing=True,
         )
+        # Daily brief push. Registered **hourly** rather than pinned to the
+        # send hour: this cron fires in the *server's* timezone, while the
+        # brief must land at 19:00 **household** time (R-021), and the
+        # household timezone is a runtime AppSetting. The job gates on the
+        # household clock internally, so changing the timezone in Settings
+        # takes effect that same evening instead of at the next restart.
+        # Minute 45 staggers it off the :30 alerts push. Self-gates when
+        # VAPID isn't configured, same as its sibling.
+        from dora_api.features.alerts.send_daily_brief import send_daily_brief
+        scheduler.add_job(
+            send_daily_brief,
+            CronTrigger(minute=45),
+            id="daily_brief",
+            replace_existing=True,
+        )
         # Demo / sellable-showcase auto-reset (FU-392). When the install is
         # booted in demo mode, wipe + re-seed the curated showcase dataset on
         # a fixed interval so anyone poking at the demo starts from a clean,

@@ -99,8 +99,11 @@ class CreateStockItemHandler:
         # PROPOSAL_STOCKTAKE_MODE — per-item cadence is no longer a stored
         # field; the queue resolves it from the household default band +
         # Auto self-tuning (R-003, single authority in
-        # `features/stocktake/cadence.py`). New items just start silent
-        # until the engagement gate picks them up.
+        # `features/stocktake/cadence.py`). The per-item flag below is the
+        # *mute*: a new item joins the rotation by default (owner call
+        # 2026-08-17 — an item you bothered to add is one you want checked;
+        # opting each one in by hand was the wrong default), and the
+        # engagement gate still decides when it actually surfaces.
         _NewStockItem = StockItem(
             name = request.name,
             notes = None,
@@ -110,7 +113,7 @@ class CreateStockItemHandler:
             # is preserved on serialisation via DoraJSONProvider.
             stock_level_last_updated = datetime.now(timezone.utc),
             stock_location = _StockLocation,
-            stocktake_alerts_are_enabled = False,
+            stocktake_alerts_are_enabled = True,
             expiry_date = request.expiry_date,
             is_essential = request.is_essential,
             is_open = request.is_open,

@@ -28,13 +28,13 @@
             <q-input
                 outlined
                 v-model="form.email"
-                label="Email"
+                label="Email (optional)"
                 type="email"
                 autocomplete="email"
+                hint="Only used to email you a password reset. Leave it blank if you'd rather not."
                 :error="!!fieldErrors.email"
                 :error-message="fieldErrors.email"
                 @update:model-value="clearField('email')"
-                :rules="[(v: string) => !!v || 'Email is required']"
             />
 
             <q-input
@@ -69,14 +69,6 @@
                 label="Create admin account"
             />
         </q-form>
-
-        <template #card-foot>
-            <div class="setup-fineprint">
-                This screen only appears once. After setup completes,
-                sign-in becomes the entry point and new accounts can
-                register normally.
-            </div>
-        </template>
     </AuthShell>
 </template>
 
@@ -119,7 +111,9 @@
             await authStore.setupAdminAsync({
                 username: form.username,
                 password: form.password,
-                email: form.email,
+                // Blank means "no address" — send null, not "", so the
+                // server stores NULL rather than an empty string.
+                email: form.email.trim() || null,
             });
             $q.notify({
                 type: 'positive', position: 'top',
@@ -170,11 +164,5 @@
         color: var(--auth-shell-text-muted);
         font-size: 0.95rem;
         margin-top: 6px;
-    }
-    .setup-fineprint {
-        color: var(--auth-shell-text-muted);
-        font-size: 0.78rem;
-        line-height: 1.4;
-        text-align: center;
     }
 </style>

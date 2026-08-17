@@ -2,16 +2,24 @@
     <q-card flat bordered class="dora-chat-card column" style="width: 360px">
         <q-card-section class="dora-chat-header q-py-sm">
             <div class="row items-center no-wrap">
-                <span class="dora-bot-name">D.O.R.A.</span>
-                <q-tooltip anchor="bottom middle" self="top middle">
-                    Delicious Organised Restock Assistant
-                </q-tooltip>
+                <!-- The acronym expansion hangs off the name text itself, not
+                     the header row — a q-tooltip attaches to its *parent*
+                     element, so as a sibling of the span it used to fire from
+                     anywhere in the row (the mode slider, the close button…). -->
+                <span class="dora-bot-name">
+                    D.O.R.A.
+                    <q-tooltip anchor="bottom middle" self="top middle">
+                        Delicious Organised Restock Assistant
+                    </q-tooltip>
+                </span>
                 <DoraModeSlider
                     class="q-ml-sm"
                     :model-value="modeSliderValue"
                     :disabled="!canToggleMode || togglingMode"
                     :disabled-reason="modeSliderDisabledReason"
+                    :disabled-is-actionable="!canConfigureAi"
                     @update:model-value="onModeSliderToggle"
+                    @disabled-activate="openAssistantSettings"
                 />
                 <q-space />
                 <!-- speak Dora's replies. Hidden when the browser
@@ -825,6 +833,14 @@
 
     function openDoraHelp() {
         void router.push('/help/dora');
+        emit('close');
+    }
+
+    // The mode slider can't turn AI on until a provider is connected. Rather
+    // than sitting inert behind a hover-only explanation (invisible on touch),
+    // tapping it takes the user to the page where they can fix that.
+    function openAssistantSettings() {
+        void router.push('/settings/assistant');
         emit('close');
     }
 
@@ -1642,8 +1658,14 @@
            header and input footer, then scrolls internally. Without this,
            a long thread pushes the footer off-screen because the
            combined fixed sizes exceed the viewport. */
+        /* dvh, not vh — the launcher shell this card sits in is sized off the
+           dynamic viewport, so measuring the card against the *large*
+           viewport would let it outgrow its container while a mobile URL bar
+           is showing. vh first as the fallback for engines without dvh. */
         max-height: 70vh;
         height: 70vh;
+        max-height: 70dvh;
+        height: 70dvh;
         background: var(--surface-component);
     }
     .dora-chat-header {

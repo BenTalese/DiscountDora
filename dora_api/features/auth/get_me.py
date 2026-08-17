@@ -37,6 +37,16 @@ def get_me():
         session.clear()
         return unauthorized()
 
+    # Deactivated while signed in. Same treatment as a deleted row: the
+    # cookie stops working on the next probe, so switching an account off
+    # actually signs that person out instead of waiting for the session to
+    # lapse. (`login` is the other half of the gate.)
+    if not user.is_active:
+        session.clear()
+        return unauthorized(
+            "This account has been deactivated. Ask an admin to switch it back on."
+        )
+
     # A1: session-staleness check. If this user's password was changed
     # after the session was minted, the cookie is invalid — covers reset
     # (which invalidates everyone) and self-serve change-password

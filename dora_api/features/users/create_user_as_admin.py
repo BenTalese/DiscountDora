@@ -27,7 +27,8 @@ from dora_api.infrastructure.api_response import (business_rule_violation, ok,
 from dora_api.infrastructure.audit import emit as audit_emit
 from dora_api.infrastructure.auth_helpers import (hash_password,
                                                   is_valid_email,
-                                                  normalise_email)
+                                                  normalise_email,
+                                                  validate_password)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
@@ -47,6 +48,13 @@ class AdminCreateUserRequest(BaseModel):
     username: str = Field(min_length=1, max_length=255)
     email: str | None = Field(default=None, max_length=255)
     is_admin: bool = False
+    # Owner call 2026-08-17 — the admin can set the password themselves
+    # instead of relaying a generated one. Omitted (or empty) keeps the
+    # original behaviour: Dora mints a one-time password and hands it back
+    # once. Set ⇒ the response carries no password at all, because the
+    # admin already knows it and echoing a chosen secret back over the wire
+    # buys nothing.
+    password: str | None = Field(default=None, max_length=255)
 
 
 @dataclass(slots=True)
@@ -73,7 +81,8 @@ class AdminCreateUserHandler:
             if existing_by_email is not None:
                 return AdminCreateUserResponse(email_taken=True)
 
-        one_time_password = "".join(
+        chosen = (request.password or "").strip()
+        one_time_password = chosen or "".join(
             secrets.choice(_ONE_TIME_ALPHABET) for _ in range(12)
         )
         now = datetime.now(timezone.utc)
@@ -91,7 +100,9 @@ class AdminCreateUserHandler:
 
         return AdminCreateUserResponse(
             new_user_id=new_user.id,
-            new_password=one_time_password,
+            # Only echoed when *Dora* invented it — a password the admin
+            # typed doesn't need handing back.
+            new_password=None if chosen else one_time_password,
         )
 
 
@@ -104,6 +115,19 @@ def admin_create_user():
         return err
 
     _Request: AdminCreateUserRequest = get_request_body()
+
+    # A chosen password meets exactly the same bar as a self-serve one —
+    # `validate_password` is the single authority (R-003), so an admin can't
+    # quietly seed accounts weaker than the rules the user is held to.
+    if _Request.password:
+        pwd_error = validate_password(_Request.password)
+        if pwd_error:
+            return unprocessable_entity(ProblemDetails(
+                detail="See errors property for more details.",
+                errors={"password": [pwd_error]},
+                status=422, title="Validation failed.",
+                type="https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
+            ))
 
     if _Request.email is not None and not is_valid_email(_Request.email):
         return unprocessable_entity(ProblemDetails(

@@ -41,7 +41,7 @@ from dora_api.domain.entities.nutrition_food import (
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.features.help.version_info import CURRENT_VERSION
 from dora_api.features.nutrition.nutrients import (
-    USDA_NUTRIENT_ATTRS, off_values,
+    NUTRIENT_ATTRS, USDA_NUTRIENT_ATTRS, off_values,
 )
 from dora_api.persistence.bool_operation import Or
 from dora_api.persistence.field import EntityField as Field
@@ -90,6 +90,9 @@ class FoodResult:
     brand: Optional[str] = None
     barcode: Optional[str] = None
     # One attribute per entry in `nutrients.NUTRIENTS`; keep the two in step.
+    # (Declared rather than generated so callers and tests can reach a nutrient
+    # by name; the *copies* between this and NutritionFood are loop-driven off
+    # NUTRIENT_ATTRS, which is where the drift used to be.)
     kcal_per_100g: Optional[float] = None
     protein_g_per_100g: Optional[float] = None
     carbs_g_per_100g: Optional[float] = None
@@ -98,6 +101,21 @@ class FoodResult:
     saturated_fat_g_per_100g: Optional[float] = None
     fibre_g_per_100g: Optional[float] = None
     sodium_mg_per_100g: Optional[float] = None
+    trans_fat_g_per_100g: Optional[float] = None
+    monounsaturated_fat_g_per_100g: Optional[float] = None
+    polyunsaturated_fat_g_per_100g: Optional[float] = None
+    cholesterol_mg_per_100g: Optional[float] = None
+    potassium_mg_per_100g: Optional[float] = None
+    calcium_mg_per_100g: Optional[float] = None
+    iron_mg_per_100g: Optional[float] = None
+    magnesium_mg_per_100g: Optional[float] = None
+    zinc_mg_per_100g: Optional[float] = None
+    vitamin_a_ug_per_100g: Optional[float] = None
+    vitamin_c_mg_per_100g: Optional[float] = None
+    vitamin_d_ug_per_100g: Optional[float] = None
+    vitamin_e_mg_per_100g: Optional[float] = None
+    vitamin_b12_ug_per_100g: Optional[float] = None
+    folate_ug_per_100g: Optional[float] = None
     portions: List[dict] = field(default_factory=list)
     # Why this row is where it is in the list. Also lets the UI mark an exact
     # barcode hit differently from a name guess.
@@ -113,14 +131,7 @@ class FoodResult:
             "name": self.name,
             "brand": self.brand,
             "barcode": self.barcode,
-            "kcal_per_100g": self.kcal_per_100g,
-            "protein_g_per_100g": self.protein_g_per_100g,
-            "carbs_g_per_100g": self.carbs_g_per_100g,
-            "sugars_g_per_100g": self.sugars_g_per_100g,
-            "fat_g_per_100g": self.fat_g_per_100g,
-            "saturated_fat_g_per_100g": self.saturated_fat_g_per_100g,
-            "fibre_g_per_100g": self.fibre_g_per_100g,
-            "sodium_mg_per_100g": self.sodium_mg_per_100g,
+            **{attr: getattr(self, attr) for attr in NUTRIENT_ATTRS},
             "portions": self.portions,
             "match": self.match,
             "exact": self.exact,
@@ -242,14 +253,7 @@ def _search_local(repository, text: str, is_barcode: bool) -> List[FoodResult]: 
             name = food.name,
             brand = food.brand,
             barcode = food.barcode,
-            kcal_per_100g = food.kcal_per_100g,
-            protein_g_per_100g = food.protein_g_per_100g,
-            carbs_g_per_100g = food.carbs_g_per_100g,
-            sugars_g_per_100g = food.sugars_g_per_100g,
-            fat_g_per_100g = food.fat_g_per_100g,
-            saturated_fat_g_per_100g = food.saturated_fat_g_per_100g,
-            fibre_g_per_100g = food.fibre_g_per_100g,
-            sodium_mg_per_100g = food.sodium_mg_per_100g,
+            **{attr: getattr(food, attr, None) for attr in NUTRIENT_ATTRS},
             portions = portions_by_food.get(food.id, []),
             match = "barcode" if matched_barcode else "name",
             exact = matched_barcode or food.name.strip().lower() == text.lower(),
@@ -427,14 +431,7 @@ def resolve_food(repository, setting, source: str, source_ref: str) -> Optional[
         name = result.name,
         brand = result.brand,
         barcode = result.barcode,
-        kcal_per_100g = result.kcal_per_100g,
-        protein_g_per_100g = result.protein_g_per_100g,
-        carbs_g_per_100g = result.carbs_g_per_100g,
-        sugars_g_per_100g = result.sugars_g_per_100g,
-        fat_g_per_100g = result.fat_g_per_100g,
-        saturated_fat_g_per_100g = result.saturated_fat_g_per_100g,
-        fibre_g_per_100g = result.fibre_g_per_100g,
-        sodium_mg_per_100g = result.sodium_mg_per_100g,
+        **{attr: getattr(result, attr, None) for attr in NUTRIENT_ATTRS},
         imported_at = datetime.now(timezone.utc),
     )
     repository.add(food)

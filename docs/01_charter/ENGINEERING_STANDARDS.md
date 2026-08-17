@@ -1666,6 +1666,54 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `resolveBaseURL()` / `getBackendBaseUrl()`.
 - **Source:** ADR-041; the QR-label fix (2026-08-16).
 
+### R-046 — Open the window inside the click; navigate it after the await
+- **Rule:** `window.open` runs **synchronously in the event handler's own call
+  stack**, before any `await`. Hold the returned handle, fetch, then
+  `handle.location.replace(objectUrl)`. Never `await` first and open second.
+- **Why:** every browser blocks a `window.open` it can't attribute to a user
+  gesture, and the gesture does not survive a network round-trip. Mobile Safari
+  and Chrome-on-Android block it unconditionally — which is why the reported
+  symptom was "I *tap* Print one and get an error" while the same button
+  behaved on a desktop dev box. This is the exact trap R-045 walks you into: the
+  fix for "don't `window.open` an API URL" is to fetch first, and fetching first
+  is what breaks the open.
+- **Apply:** open with `_blank` and **not** `noopener` — with `noopener` the call
+  returns `null` by spec and there is no handle to navigate; sever `win.opener`
+  by hand instead. Write a one-line placeholder into the fresh tab so a slow
+  fetch doesn't read as a dead window, `location.replace` (not `href`) so Back
+  doesn't return to the placeholder, and `close()` the tab if the fetch throws.
+  A null return means the browser blocked it: say so in the UI — "allow pop-ups"
+  is a different instruction from "something went wrong".
+- **Violation signal:** `window.open` appearing after an `await` in the same
+  function, or a `void someAsyncOpen()` call with no `catch`.
+- **Source:** ADR-042; the QR "Print one" fix (2026-08-17), FU-648.
+
+### R-047 — An HTTP call that bypasses `AxiosHttpClient` must re-attach what the interceptor would have
+- **Rule:** any mutating request to `/api/*` issued with raw `fetch`, bare
+  `axios`, `navigator.sendBeacon` or anything else that isn't an
+  `AxiosHttpClient` instance **must** spread
+  [`csrfHeader()`](../../web_app/src/services/api/axiosHttpClient.ts) and set
+  `withCredentials` / `credentials: 'include'`. If the CSRF cookie isn't
+  readable yet, **defer the call** — do not send it and treat the 403 as a
+  permanent failure.
+- **Why:** the FU-197 double-submit defence 403s every mutating call whose
+  `X-CSRF-Token` header doesn't match the `dora_csrf` cookie, and the header is
+  attached by an *interceptor on the client instance*. Bypass the instance and
+  you silently lose it. This has now bitten twice: FU-571 swept the raw-`fetch`
+  callers (uploads, import/backup, client logs, TTS), and the offline queue's
+  replay — bare `axios`, added before that sweep — was missed and 403'd **every**
+  drain from the day it shipped. Worse, the failure is invisible in tests
+  (axios is mocked, so CSRF is never enforced) and self-concealing at runtime
+  (403 is a non-network error, so the queue classified it as a conflict and
+  discarded it).
+- **Apply:** prefer the client. When you genuinely can't use it, put the call
+  next to the others in the FU-571 comment block so the list stays a real
+  inventory, and pin it with a test that asserts the header is present — a
+  mocked transport will never catch its absence on its own.
+- **Violation signal:** `axios.request(` / `fetch(` with a `method` of POST,
+  PATCH, PUT or DELETE and no `csrfHeader()` in the same object literal.
+- **Source:** ADR-043; the offline-replay fix (2026-08-17), following FU-571.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -2817,6 +2865,60 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   still build URLs (CSV via `fetch` with credentials, which is fine; `print-view` via
   `window.open`, which is the same latent bug) — tracked as a follow-up.
 - **Promotes rule:** R-045.
+
+### ADR-042 — The pop-up is opened by the gesture, not by the response (promotes R-046)
+- **Date / task:** 2026-08-17 (stock-item detail feedback — "QR codes still seem to
+  be having issues… print one gives me an error")
+- **Status:** accepted
+- **Context:** ADR-041 removed the URL-linked form of the print sheet and replaced it
+  with fetch-then-`window.open(blobUrl)`. That fixed the auth problem and introduced a
+  new one in the same line: the open now happens after an `await`, so the browser no
+  longer attributes it to the click. Desktop Chrome is lenient enough that a dev box
+  shows nothing wrong; the owner reported it from a tap, where it is blocked outright.
+  Two rounds of investigation had by then failed to explain the failure, because both
+  were static reads — this round proved the server half green with an e2e pin (7 tests,
+  including that the sheet contains no `/api` back-reference) and a live cross-origin
+  browser probe, which is what left the client gesture as the only place to look.
+- **Decision:** open the tab first, synchronously, and navigate it when the fetch
+  lands. `noopener` is dropped (it forces a `null` return) and `opener` is severed by
+  hand. Rejected: rendering the sheet in a same-tab route (loses the print affordance
+  and the browser's own print chrome), and triggering a download instead (the sheet is
+  meant to be printed, and a download is worse on mobile, not better).
+- **Consequences:** every "fetch a document then show it" flow now has a required
+  shape, and the two sites FU-647 tracks (`print-view`, CSV export) inherit it when
+  they're converted. A blocked pop-up is now a distinct, named outcome the UI reports
+  as such rather than a generic failure.
+- **Also decided (not a rule):** the detail page's QR errors now carry the HTTP status
+  and the correlation-id prefix instead of a flat sentence. The reason FU-648 survived
+  two fixes is that the only person who could observe it had nothing to report back
+  but our own copy. When a defect is reported from an install you can't reach,
+  instrumenting the error path is part of the fix, not a follow-up.
+- **Promotes rule:** R-046.
+
+### ADR-043 — Cross-cutting request concerns are the client's, so leaving the client forfeits them (promotes R-047)
+- **Context:** `AxiosHttpClient` attaches four things via interceptors —
+  correlation id, CSRF double-submit header, retry/backoff, and the 401
+  handler. A handful of callers can't use it (streaming responses, chunked
+  uploads, and the offline queue, which must replay *without* being
+  re-enqueued by its own wrapper) and reach for raw `fetch` / bare `axios`.
+  Each such caller silently opts out of all four.
+- **Decision:** treat "not using the client" as a checklist, not a shortcut.
+  The mandatory item is CSRF + credentials; the rest are judgement. Record
+  each bypassing caller in one place (the `csrfHeader()` comment block) and
+  pin it with a test.
+- **Alternatives considered:** *(a)* make the offline replay go through
+  `AxiosHttpClient` — rejected: `tryWithQueue` wraps the client, so a replay
+  through it re-enqueues itself on failure, which is the reason it used bare
+  axios in the first place. *(b)* Exempt replays from CSRF server-side via an
+  `X-Offline-Replay` header — rejected outright: a header an attacker can set
+  is not a defence, and it would hand any cross-site form a CSRF bypass.
+  *(c)* Move the header attachment into a shared `buildRequest()` helper both
+  paths call — the right long-term shape, deferred as unnecessary for three
+  callers; R-047 plus the test is enough for now.
+- **Consequence:** the bypass list stays small and visible. The cost is that
+  every new bypassing caller needs its own header test, because mocked
+  transports can't catch a missing one.
+- **Promotes rule:** R-047.
 
 ---
 

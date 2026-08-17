@@ -74,15 +74,20 @@
                             width="256px"
                             height="256px"
                         />
-                        <div v-else-if="qrError" class="dora-text-muted text-caption">
-                            {{ qrError }}
-                        </div>
                         <img
                             v-else-if="qrSrc"
                             :src="qrSrc"
                             alt="QR code"
                             style="width: 256px; height: 256px; max-width: 100%;"
                         />
+                        <!-- The error sits BELOW the image rather than in place
+                             of it: "Print one" can fail (blocked pop-up) after
+                             the code itself loaded fine, and swapping the
+                             loaded QR out for that message would read as the
+                             code having broken too. -->
+                        <div v-if="qrError" class="text-negative text-caption q-mt-sm">
+                            {{ qrError }}
+                        </div>
                     </q-card-section>
                     <template #actions>
                         <BaseButton variant="ghost" label="Close" v-close-popup />
@@ -445,15 +450,14 @@
                                                 <template v-else>Not linked</template>
                                             </span>
                                             <q-space />
-                                            <BaseButton
-                                                v-if="detail.nutrition_ignored"
-                                                variant="ghost"
-                                                dense
-                                                size="sm"
-                                                label="Track again"
-                                                :disable="busy"
-                                                @click="onUnignoreNutrition"
-                                            />
+                                            <!-- Feedback 2026-08-17: no explicit "Track
+                                                 again" button. Linking a food from the
+                                                 search dialog un-ignores the item
+                                                 server-side, so the search affordance
+                                                 beside it already *is* the un-ignore —
+                                                 and it's the one that leaves the item in
+                                                 a useful state rather than back at
+                                                 "Not linked". -->
                                             <BaseButton
                                                 variant="ghost"
                                                 dense
@@ -472,14 +476,21 @@
                                 <q-item>
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Expiry</q-item-section>
                                     <q-item-section>
-                                        <!-- Feedback 2026-08-16: Set leads the row, ahead of
-                                             the date, and carries the same expiry glyph the
-                                             overview row uses (shared via
+                                        <!-- Feedback 2026-08-16: the set-expiry control leads
+                                             the row, ahead of the date, and carries the same
+                                             expiry glyph the overview row uses (shared via
                                              `helpers/expiryIndicator`) so the state reads the
                                              same in both places. It stays a plain button —
                                              the overview's is a dropdown, which this row
                                              doesn't need since the push shortcuts are already
-                                             spelled out beside it. -->
+                                             spelled out beside it.
+                                             Feedback 2026-08-17: the "Set" label is dropped —
+                                             the glyph plus the date sitting next to it carry
+                                             the meaning, and the word competed with the
+                                             +1d/+7d/+14d verbs for the same row. The label
+                                             moves to `aria-label` so the button keeps an
+                                             accessible name (D-rule: icon-only controls are
+                                             still named). -->
                                         <div class="row items-center q-gutter-xs">
                                             <BaseButton
                                                 variant="ghost"
@@ -488,7 +499,7 @@
                                                 :icon="expiryIndicator.icon"
                                                 :color="expiryIndicator.colour ?? undefined"
                                                 :class="expiryIndicator.cssClass ?? undefined"
-                                                label="Set"
+                                                aria-label="Set expiry date"
                                                 @click="expiryDialogOpen = true"
                                             >
                                                 <q-tooltip>{{ expiryIndicator.tooltip }}</q-tooltip>
@@ -570,7 +581,7 @@
                                     </q-item-section>
                                 </q-item>
 
-                                <!-- Feedback 2026-08-16: stock-take mode's
+                                <!-- Feedback 2026-08-16: stocktake mode's
                                      Mute action tells the user they can
                                      un-mute "from the item's detail page",
                                      but the detail page never carried the
@@ -578,7 +589,7 @@
                                      the only place the flag can be turned
                                      back on. -->
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Stock-take</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Stocktake</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
@@ -586,19 +597,18 @@
                                                 :disable="busy"
                                                 @update:model-value="onToggleStocktakeAlerts"
                                             />
-                                            <span class="dora-text-secondary text-caption">
-                                                {{ detail.stocktake_alerts_are_enabled
-                                                    ? 'Dora can ask you to check this'
-                                                    : 'Muted — Dora never asks' }}
-                                            </span>
+                                            <!-- Feedback 2026-08-17: the running
+                                                 commentary beside the toggle is
+                                                 gone — the toggle's own position
+                                                 already says which way it's set —
+                                                 and the (?) is trimmed to the one
+                                                 sentence that says what the toggle
+                                                 does. -->
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
                                                 <q-tooltip max-width="320px">
                                                     Controls whether this item
-                                                    ever joins the stock-take
-                                                    queue. Muting it during a
-                                                    stock take switches this
-                                                    off; this is where you
-                                                    switch it back on.
+                                                    ever joins the stocktake
+                                                    queue.
                                                 </q-tooltip>
                                             </q-icon>
                                         </div>
@@ -1316,7 +1326,7 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { openProductSearch } from 'src/composables/useProductSearchUrl';
-    import { fetchQrImageUrlAsync, openQrSheetAsync } from 'src/composables/useQrLabels';
+    import { describeQrFailure, fetchQrImageUrlAsync, openQrSheetAsync } from 'src/composables/useQrLabels';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
@@ -1438,15 +1448,28 @@
         try {
             // size 512 looks crisp on retina; the dialog box clamps to 256.
             qrSrc.value = await fetchQrImageUrlAsync(stockItemId.value, 512);
-        } catch {
-            qrError.value = "Couldn't load this item's QR code.";
+        } catch (error) {
+            // The reason, not just the fact. This used to be a bare sentence
+            // with the error discarded, which is why the reported failure
+            // (FU-648) survived two investigations unexplained — there was
+            // nothing for the one person who could see it to report back.
+            qrError.value = describeQrFailure(error);
         } finally {
             qrLoading.value = false;
         }
     }
 
-    function openSingleQrSheet() {
-        void openQrSheetAsync({ ids: [stockItemId.value] });
+    // "Print one" opens a tab, so it must stay synchronous into
+    // `openQrSheetAsync` — see the pop-up note there. Failures used to be
+    // dropped on the floor by a bare `void`; they now land in the dialog's own
+    // error slot, next to the button that caused them.
+    async function openSingleQrSheet() {
+        qrError.value = null;
+        try {
+            await openQrSheetAsync({ ids: [stockItemId.value] });
+        } catch (error) {
+            qrError.value = describeQrFailure(error);
+        }
     }
 
     const tab = ref<string>(
@@ -1678,9 +1701,12 @@
     async function onIgnoreNutrition() {
         await saveField({ nutrition_ignored: true });
     }
-    async function onUnignoreNutrition() {
-        await saveField({ nutrition_ignored: false });
-    }
+    // Feedback 2026-08-17: the "Track again" button that called an
+    // `onUnignoreNutrition` here is gone. Un-ignoring now happens implicitly —
+    // `update_stock_item` clears `nutrition_ignored` whenever a food is linked,
+    // so picking one from the search dialog is the un-ignore. The bulk
+    // Settings → Kitchen setup → Nutrition matching screen keeps an explicit
+    // control for the "I mis-tagged a batch" case.
     function shiftExpiry(days: number) {
         // From the current expiry if set, otherwise from today. Date math in
         // UTC so DST boundaries don't shift the displayed day.

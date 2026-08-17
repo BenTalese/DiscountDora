@@ -43,6 +43,15 @@ def require_admin() -> tuple[UUID | None, object]:
     if me is None:
         session.clear()
         return None, unauthorized()
+    # A deactivated account keeps its cookie until `get_me` next runs, so the
+    # admin gate re-checks rather than trusting the session. This closes the
+    # admin half only; the general "any authenticated route" half needs the
+    # shared session→User resolver tracked as FU-654 (see FU-655).
+    if not me.is_active:
+        session.clear()
+        return None, unauthorized(
+            "This account has been deactivated. Ask an admin to switch it back on."
+        )
     if not me.is_admin:
         return None, forbidden("Admin role required.")
     return _UserId, None

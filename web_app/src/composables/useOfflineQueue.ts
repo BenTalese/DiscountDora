@@ -17,7 +17,9 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { Notify } from 'quasar';
 import {
+    csrfHeader,
     NormalisedApiError,
+    readCsrfCookie,
 } from 'src/services/api/axiosHttpClient';
 import { useAuthStore } from 'src/stores/authStore';
 import { computed, readonly, ref, watch } from 'vue';
@@ -53,9 +55,17 @@ function storageKey(userId: string): string {
     return `dora.offlineQueue.${userId || 'anonymous'}`;
 }
 
-function loadQueue(userId: string): QueuedMutation[] {
+/** Conflicts persist too. They used to live in memory only, so a mutation
+ *  the server rejected on replay showed one 5-second toast and then vanished
+ *  on the next reload — a silent data-loss path with no record of what was
+ *  dropped. Same per-user keying as the queue. */
+function conflictKey(userId: string): string {
+    return `dora.offlineConflicts.${userId || 'anonymous'}`;
+}
+
+function loadStored(key: string): QueuedMutation[] {
     try {
-        const raw = localStorage.getItem(storageKey(userId));
+        const raw = localStorage.getItem(key);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return [];
@@ -65,12 +75,24 @@ function loadQueue(userId: string): QueuedMutation[] {
     }
 }
 
-function saveQueue(userId: string, queue: QueuedMutation[]): void {
+function saveStored(key: string, items: QueuedMutation[]): void {
     try {
-        localStorage.setItem(storageKey(userId), JSON.stringify(queue));
+        localStorage.setItem(key, JSON.stringify(items));
     } catch {
         // localStorage may be unavailable (private mode) — best effort.
     }
+}
+
+function loadQueue(userId: string): QueuedMutation[] {
+    return loadStored(storageKey(userId));
+}
+
+function saveQueue(userId: string, queue: QueuedMutation[]): void {
+    saveStored(storageKey(userId), queue);
+}
+
+function saveConflicts(userId: string, items: QueuedMutation[]): void {
+    saveStored(conflictKey(userId), items);
 }
 
 function newId(): string {
@@ -95,6 +117,7 @@ let currentUserId = '';
 function rehydrate(userId: string) {
     currentUserId = userId;
     queue.value = loadQueue(userId);
+    conflicts.value = loadStored(conflictKey(userId));
 }
 
 // Network-status watcher: trigger drain when apiReachable flips true.
@@ -102,10 +125,31 @@ function boot() {
     if (booted) return;
     booted = true;
     const auth = useAuthStore();
-    rehydrate(auth.currentUser?.user_id ?? '');
+    // `immediate` covers the initial rehydrate — the user may already be
+    // resolved when the first consumer mounts, or arrive moments later.
     watch(
         () => auth.currentUser?.user_id ?? '',
-        (userId) => rehydrate(userId),
+        (userId, previous) => {
+            rehydrate(userId);
+            // Drain when a user *arrives*, not only on a network flip. This
+            // is the ordinary case the `apiReachable` watcher below misses
+            // entirely: you queue changes in the shop, close the tab, and
+            // open the app again at home. `apiReachable` starts true and
+            // the first probe leaves it true, so it never *transitions* —
+            // the queue used to sit in localStorage indefinitely, syncing
+            // only if you happened to lose and regain the connection again.
+            //
+            // `previous === undefined` is the immediate run, which only
+            // rehydrates. Waiting for the real transition is deliberate:
+            // the id resolving means /auth/me has come back, and that
+            // response is what seeds the `dora_csrf` cookie the replay
+            // needs. boot() runs from the app-shell banner, which mounts
+            // before auth resolves, so the transition always happens.
+            if (previous !== undefined && userId && queue.value.length > 0) {
+                void drain();
+            }
+        },
+        { immediate: true },
     );
     const { apiReachable } = useNetworkStatus();
     watch(apiReachable, (now, was) => {
@@ -205,6 +249,7 @@ export async function drain(): Promise<void> {
                 // the user can decide what to do. Don't keep retrying
                 // forever in a loop.
                 conflicts.value = [...conflicts.value, mutation];
+                saveConflicts(currentUserId, conflicts.value);
                 queue.value = queue.value.filter((q) => q.id !== mutation.id);
                 saveQueue(currentUserId, queue.value);
                 Notify.create({
@@ -237,6 +282,29 @@ export async function drain(): Promise<void> {
 // we route errors back through NormalisedApiError-compatible shape so
 // the drain loop can branch correctly.
 async function replayOnce(mutation: QueuedMutation): Promise<void> {
+    // FU-197 double-submit CSRF: every mutating /api/* call must echo the
+    // `dora_csrf` cookie as a header or the server 403s it. This uses bare
+    // `axios`, not our AxiosHttpClient, so the interceptor that normally
+    // attaches it never runs — the FU-571 sweep that fixed the raw-fetch
+    // callers missed this one, and the result was that **every** drain 403'd,
+    // was classified as a non-network failure, and the mutation went straight
+    // to the conflict pile. The queue filled up and never synced anything.
+    if (!readCsrfCookie()) {
+        // No cookie yet (cold boot before the first GET response seeded it,
+        // or a browser restart cleared the session cookie). Report it as a
+        // network error so the drain loop leaves the item queued and tries
+        // again later, instead of burning it as an unresolvable conflict.
+        throw new NormalisedApiError({
+            status: 0,
+            code: 'csrf_not_ready',
+            message: 'CSRF token not available yet — will retry.',
+            details: null,
+            correlationId: `replay-${mutation.id}`,
+            isNetworkError: true,
+            method: mutation.method,
+            url: mutation.url,
+        });
+    }
     const config: AxiosRequestConfig = {
         url: mutation.url,
         method: mutation.method,
@@ -246,6 +314,7 @@ async function replayOnce(mutation: QueuedMutation): Promise<void> {
             'Content-Type': 'application/json',
             'X-Request-Id': `replay-${mutation.id}`,
             'X-Offline-Replay': '1',
+            ...csrfHeader(),
         },
         timeout: 10_000,
     };
@@ -273,6 +342,7 @@ async function replayOnce(mutation: QueuedMutation): Promise<void> {
 /** Discard a conflicted mutation (user decided it's no longer relevant). */
 export function discardConflict(mutationId: string): void {
     conflicts.value = conflicts.value.filter((m) => m.id !== mutationId);
+    saveConflicts(currentUserId, conflicts.value);
 }
 
 /** Retry a conflicted mutation (e.g. after the user fixed the underlying state). */
@@ -280,6 +350,7 @@ export async function retryConflict(mutationId: string): Promise<void> {
     const target = conflicts.value.find((m) => m.id === mutationId);
     if (!target) return;
     conflicts.value = conflicts.value.filter((m) => m.id !== mutationId);
+    saveConflicts(currentUserId, conflicts.value);
     queue.value = [...queue.value, target];
     saveQueue(currentUserId, queue.value);
     await drain();

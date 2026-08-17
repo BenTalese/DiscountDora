@@ -10,6 +10,24 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-653 — Surface the Zero-Input inference engine beyond the stock pages (owner design ask)
+- **Raised:** 2026-08-17 (settings feedback batch). Owner deferred it one turn, then asked for it.
+- **Type:** deferred job (design + build).
+- **What:** the pantry-belief engine only showed up on the stock overview + stock-item
+  detail. The owner wanted it surfaced wherever stock items *appear* — recipes ("you may be
+  short on X", and the inverse), shopping lists (suggestions beside the flow), the meal
+  planner — without ever changing the real answer, each behind its own toggle.
+- **State note:** **Resolved 2026-08-17.** Built end to end. New shared authority
+  `features/stock_items/inference_overlay.py` (divergence + the pure `recipe_hint` rule +
+  the per-surface gate); three new `User` columns (migration `e5c1a9d7b234`, all default
+  off); hydration on `/recipes` (list + detail), `/meal-plans` and
+  `/shopping-lists/<id>`; SPA renders on the recipe card, recipe detail, meal-plan entry
+  chip and a dismissible shopping-list suggestion strip; four toggles under Settings →
+  Assistant. `cookable` / `missing_count` / filters / list contents provably unchanged —
+  verified live with the toggles off then on. Design + coverage table:
+  `docs/04_proposals/PROPOSAL_INFERENCE_SURFACES.md`. Client renders owed a browser walk
+  (`DORA_VERIFY.md`); the pane can't paint those pages.
+
 ## [RESOLVED] FU-637 — Cookbook's kcal filter/sort is simple-mode only; complex mode has no list-level nutrition
 - **Raised:** 2026-08-14 (FU-635 chunk 6 — recipe nutrition rollup).
 - **Type:** follow-up.

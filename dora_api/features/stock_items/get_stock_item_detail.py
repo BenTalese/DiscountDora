@@ -34,6 +34,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.stock_status import get_stock_item_unit_cost_at
+from dora_api.features.nutrition.nutrients import display_rows
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.your_prices import build_your_prices_for_item
 from dora_api.infrastructure.api_response import not_found, ok
@@ -247,6 +248,23 @@ class YourPricesDto:
 
 
 @dataclass(frozen=True, slots=True)
+class NutrientRowDto:
+    """One printed line of the per-100g table.
+
+    Formatted server-side. The client used to hold its own copy of the label
+    text, the row order, the units and the rounding policy, kept in step with
+    `nutrients.py` by a comment asking the next person to remember — which is
+    the duplication R-003 forbids, and it broke the moment the nutrient set
+    grew. `group` is `panel` (the statement every pack carries, rendered
+    inline) or `more` (the vitamins-and-minerals block, behind a disclosure);
+    `indent` marks a sub-row like saturated fat under total fat."""
+    label: str
+    value: str
+    group: str
+    indent: bool
+
+
+@dataclass(frozen=True, slots=True)
 class LinkedNutritionFoodDto:
     """The nutrition-catalogue food a stock item is linked to. Carries its
     source so the detail page can say where the numbers came from — the same
@@ -256,17 +274,14 @@ class LinkedNutritionFoodDto:
     brand: str | None
     source: str
     source_label: str
-    # Per 100g, sodium in mg. The set is defined in
-    # `features/nutrition/nutrients.py`; NULL means "this source didn't say",
-    # and the UI renders that as an absent row rather than a zero.
+    # Energy stays a first-class field: it's the one number the app treats as
+    # load-bearing, and the summary line above the table renders it on its own.
+    # NULL means "this source didn't say", never zero.
     kcal_per_100g: float | None
-    protein_g_per_100g: float | None
-    carbs_g_per_100g: float | None
-    sugars_g_per_100g: float | None
-    fat_g_per_100g: float | None
-    saturated_fat_g_per_100g: float | None
-    fibre_g_per_100g: float | None
-    sodium_mg_per_100g: float | None
+    # Everything the source knows, already formatted and in panel order. A
+    # nutrient the source didn't state is simply absent — no row, no "0", no
+    # em-dash (P12 No-invent).
+    nutrient_rows: list[NutrientRowDto]
 
 
 @dataclass(frozen=True, slots=True)
@@ -900,13 +915,13 @@ class GetStockItemDetailHandler:
                     source = _Food.source,
                     source_label = NUTRITION_SOURCE_LABELS.get(_Food.source, _Food.source),
                     kcal_per_100g = _Food.kcal_per_100g,
-                    protein_g_per_100g = _Food.protein_g_per_100g,
-                    carbs_g_per_100g = _Food.carbs_g_per_100g,
-                    sugars_g_per_100g = _Food.sugars_g_per_100g,
-                    fat_g_per_100g = _Food.fat_g_per_100g,
-                    saturated_fat_g_per_100g = _Food.saturated_fat_g_per_100g,
-                    fibre_g_per_100g = _Food.fibre_g_per_100g,
-                    sodium_mg_per_100g = _Food.sodium_mg_per_100g,
+                    nutrient_rows = [
+                        NutrientRowDto(
+                            label = row.label, value = row.value,
+                            group = row.group, indent = row.indent,
+                        )
+                        for row in display_rows(_Food)
+                    ],
                 )
 
         # Auto-match suggestion — only worth computing when there's nothing to

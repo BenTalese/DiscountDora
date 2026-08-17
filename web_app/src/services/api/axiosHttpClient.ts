@@ -63,6 +63,28 @@ const SUPPRESS_401_PATHS = ['/auth/me', '/auth/login', '/auth/register'];
 // cold-load would race with the splash and look broken.
 const SUPPRESS_NOTIFY_PATHS = ['/auth/me'];
 
+// ─── Timeouts ────────────────────────────────────────────────────────
+// axios defaults to NO timeout, which is fine on a desktop and wrong on a
+// phone: when the OS suspends the app the TCP connection is often already
+// dead by the time it resumes, so the request neither succeeds nor errors —
+// it hangs forever. Nothing rejects, so no retry fires, no error state is
+// set, and the user sits on a pulsing splash (boot probe) or a page that
+// never reconnects. Every request now has a ceiling.
+//
+// The boot probes get a much shorter one. They gate the splash, and the
+// splash already owns the recovery affordance (a Retry button) — so failing
+// fast and handing the user that button beats a long silent wait. Everything
+// else keeps the generous ceiling; some admin calls (dataset import kick-off,
+// backup/restore) are legitimately slow and must not be cut off.
+const DEFAULT_TIMEOUT_MS = 30_000;
+const BOOT_PROBE_TIMEOUT_MS = 8_000;
+const BOOT_PROBE_PATHS = ['/auth/me', '/auth/bootstrap-required'];
+
+function isBootProbe(url: string | undefined): boolean {
+    if (!url) return false;
+    return BOOT_PROBE_PATHS.some((p) => url.endsWith(p));
+}
+
 function shouldSuppress401(url: string | undefined): boolean {
     if (!url) return false;
     return SUPPRESS_401_PATHS.some((p) => url.endsWith(p));
@@ -120,12 +142,21 @@ function newCorrelationId(): string {
 // the offline queue's job — see useOfflineQueue).
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const MAX_RETRIES = 3;
+// The boot probes retry once, not three times. Three attempts at the full
+// timeout is ~25s of pulsing splash before the user is offered anything to
+// press; the splash's Retry button is a better answer than a longer wait,
+// and it re-enters the same loop.
+const MAX_BOOT_PROBE_RETRIES = 1;
 
 function isRetryable(method: string | undefined, error: AxiosError): boolean {
     const m = (method ?? 'get').toLowerCase();
     if (m !== 'get') return false;
     if (!error.response) return true; // network error / no response
     return RETRYABLE_STATUSES.has(error.response.status);
+}
+
+function retryCeilingFor(url: string | undefined): number {
+    return isBootProbe(url) ? MAX_BOOT_PROBE_RETRIES : MAX_RETRIES;
 }
 
 function backoffDelay(attempt: number): number {
@@ -153,10 +184,14 @@ export function readCsrfCookie(): string | null {
 }
 
 // FU-571 — spreadable CSRF header for the handful of callers that bypass
-// axios with raw `fetch` (chunked uploads, import/backup inspect+commit,
-// client logs, TTS streaming). The axios interceptor below attaches this
-// automatically; raw fetches MUST spread this in or the FU-197 double-submit
-// defence 403s every mutating call.
+// this client (chunked uploads, import/backup inspect+commit, client logs,
+// TTS streaming — all raw `fetch` — plus `useOfflineQueue.replayOnce`, which
+// uses bare `axios` so a replay isn't re-enqueued by its own wrapper). The
+// interceptor below attaches this automatically; anything not going through
+// an AxiosHttpClient instance MUST spread it in or the FU-197 double-submit
+// defence 403s every mutating call. See R-047 — keep this list current, and
+// pin each bypassing caller with a test (a mocked transport never enforces
+// CSRF, so a missing header is invisible otherwise).
 export function csrfHeader(): Record<string, string> {
     const token = readCsrfCookie();
     return token ? { 'X-CSRF-Token': token } : {};
@@ -175,6 +210,9 @@ export default class AxiosHttpClient implements HttpClient {
     constructor() {
         this.axios = axios.create({
             headers: { 'Content-Type': 'application/json' },
+            // See the timeout block above — without this a request can hang
+            // forever after a mobile suspend/resume.
+            timeout: DEFAULT_TIMEOUT_MS,
             // withCredentials lets the browser send/receive the dora_session
             // cookie on cross-origin requests (dev: 5174 → 5170).
             withCredentials: true
@@ -189,6 +227,7 @@ export default class AxiosHttpClient implements HttpClient {
             // valid answer on native before the setup gate completes; the
             // router prevents API calls in that window.
             cfg.baseURL = getBackendBaseUrl();
+            if (isBootProbe(cfg.url)) cfg.timeout = BOOT_PROBE_TIMEOUT_MS;
             if (!cfg.__correlationId) cfg.__correlationId = newCorrelationId();
             cfg.headers.set?.('X-Request-Id', cfg.__correlationId);
 
@@ -221,7 +260,7 @@ export default class AxiosHttpClient implements HttpClient {
                 // Retry GETs on network errors and 5xx-class transient codes.
                 if (isRetryable(cfg.method, error)) {
                     const attempt = (cfg.__retryCount ?? 0) + 1;
-                    if (attempt <= MAX_RETRIES) {
+                    if (attempt <= retryCeilingFor(cfg.url)) {
                         cfg.__retryCount = attempt;
                         await sleep(backoffDelay(attempt));
                         return this.axios.request(cfg);

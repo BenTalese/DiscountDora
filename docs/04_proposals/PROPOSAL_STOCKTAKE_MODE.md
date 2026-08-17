@@ -164,14 +164,15 @@ The runner card shows the item, its current level, and how overdue it is, then:
 
 | Button | Meaning | Effect |
 |---|---|---|
-| **Skip** | "Later *today* — keep reminding me." | Session-only: drops to the end of this session; **no clock change**; reappears if the queue is reopened. |
+| **Skip** | "Not this time." | Session-only: the item is **resolved for this run** and advances; **no clock change**, nothing recorded, so it returns in the next queue. *(Revised 2026-08-17 — it originally re-queued the item at the end of the session, which grew the run's own denominator on every skip and made the run unfinishable by skipping.)* |
 | **Push** | "Not now — stop asking for a few days." | Sets `snoozed_until = now + 3 days`; **no `last_checked_at` stamp** (makes no claim the stock is right); advance. |
 | **Mute** | "Stop nagging about this item." | **Confirmation dialog first**, then `stocktake_alerts_are_enabled = false`; advance. Reversible from the item's detail page. |
 
 **Why Push ≠ Still correct:** "Still correct" asserts you verified it and resets
 the full cadence clock. Push is the honest defer — it doesn't lie by stamping a
-verification that never happened. **Why Skip ≠ Push:** Skip is session-only ("get
-to it this afternoon"); Push persists for 3 days across sessions.
+verification that never happened. **Why Skip ≠ Push:** Skip is session-only and
+silent — it just steps past the item, which is still due and will head the next
+queue; Push persists for 3 days across sessions.
 
 **Dropped:** the standalone **Out of stock** button (Out is just a level in the
 Change-level picker) and the **per-item "Add to list"** button (moves to the

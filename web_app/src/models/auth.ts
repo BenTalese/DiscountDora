@@ -86,6 +86,15 @@ export type AuthenticatedUser = {
     // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;
+    /** FU-653 — the same belief surfaced on the pages where stock items
+     *  *appear*: a remark on a recipe, suggestions beside a shopping list, a
+     *  flag on a planned meal. One opt-in each, all **default false**. None of
+     *  them changes cookability, filtering, or what's on a list — they only
+     *  add a remark, which is why they're separate from the stock toggle
+     *  above. */
+    inference_recipes_enabled: boolean;
+    inference_shopping_enabled: boolean;
+    inference_meal_plan_enabled: boolean;
     // `nutrition_mode` removed (2026-08-14) — nutrition is install-wide.
     // Read it with `useNutritionMode()`, which sources it from
     // /api/health `features.nutrition_mode`.
@@ -128,5 +137,9 @@ export type AuthenticatedUser = {
     // FU-360.6 — whether the Dora helper bubble is mounted at all. Default
     // true; distinct from `llm_enabled` (that switches AI mode only).
     show_assistant: boolean;
+    /** Owner call 2026-08-17 — one opt-in evening push (19:00 household time)
+     *  summarising tomorrow's meals and any shopping day that's due. Off by
+     *  default, and silent on days with nothing to say. */
+    daily_brief_enabled: boolean;
 };
 export type LlmProvider = NonNullable<AuthenticatedUser['llm_provider']>;

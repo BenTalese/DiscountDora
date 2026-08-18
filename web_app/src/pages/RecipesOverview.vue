@@ -36,37 +36,30 @@
             >
                 <q-tooltip v-if="compactToolbar">Import a recipe</q-tooltip>
             </BaseButton>
-            <!-- C-cross Chunk 5 — inline image-display toggle. Persists
-                 across sessions via /api/users/me; reused on cook mode /
-                 detail surfaces as a read-only gate. -->
-            <BaseButton
-                variant="secondary"
-                :icon="showRecipeImages ? ICONS.image : ICONS.image_not_supported"
-                :label="compactToolbar ? undefined : (showRecipeImages ? 'Hide photos' : 'Show photos')"
-                :aria-label="showRecipeImages ? 'Hide recipe photos' : 'Show recipe photos'"
-                @click="onToggleRecipeImages"
-            >
-                <q-tooltip>
-                    {{ showRecipeImages
-                        ? 'Hide recipe photos · saved across sessions'
-                        : 'Show recipe photos · saved across sessions' }}
-                </q-tooltip>
-            </BaseButton>
             <!-- 2026-08-17 feedback: card grid ⇄ one row per recipe (the
                  Stock Overview shape). The icon shows the shape the button
                  switches TO. Remembered per device via localStorage —
-                 `useListViewMode`. -->
+                 `useListViewMode`.
+                 2026-08-18: this ALSO owns photos now. The toolbar used to
+                 carry a separate "Hide photos" toggle beside it, which made
+                 four states out of two real ones — "compact with photos" and
+                 "cards without" were both just a smaller/emptier version of
+                 the other mode. Cards show photos, compact doesn't. The
+                 per-user `show_recipe_images` preference still exists and
+                 still gates the recipe *detail* page; it moved to
+                 Settings → Appearance, so choosing a cookbook layout can't
+                 silently change what you see while cooking. -->
             <BaseButton
                 variant="secondary"
                 :icon="viewMode === 'grid' ? ICONS.view_list : ICONS.view_module"
                 :label="compactToolbar ? undefined : (viewMode === 'grid' ? 'Compact' : 'Cards')"
-                :aria-label="viewMode === 'grid' ? 'Switch to compact rows' : 'Switch to cards'"
+                :aria-label="viewMode === 'grid' ? 'Switch to compact rows, without photos' : 'Switch to cards, with photos'"
                 @click="toggleViewMode"
             >
                 <q-tooltip>
                     {{ viewMode === 'grid'
-                        ? 'Compact rows · remembered next visit'
-                        : 'Card grid · remembered next visit' }}
+                        ? 'Compact rows, no photos · remembered next visit'
+                        : 'Card grid with photos · remembered next visit' }}
                 </q-tooltip>
             </BaseButton>
 
@@ -131,20 +124,29 @@
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
                 Favourites
             </FilterChip>
-            <span class="row items-center no-wrap">
-                <FilterChip v-model="cookableNowOnly" :icon="ICONS.check_circle" active-color="positive">
-                    Cookable now
-                </FilterChip>
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                    <q-tooltip>
-                        Recipes where every ingredient is currently in stock.
-                        Distinct from "Have meals in pool" — that one shows
-                        recipes with cooked-ahead portions ready to serve.
-                    </q-tooltip>
+            <!-- Icon matches the recipe row's Cook button (`chef_hat`) — the
+                 filter and the action it predicts should read as the same
+                 thing. The help affordance sits INSIDE the chip rather than
+                 floating beside it, so the chip is one target and the row
+                 doesn't gain a stray un-aligned glyph. -->
+            <FilterChip v-model="cookableNowOnly" :icon="ICONS.chef_hat" active-color="positive">
+                Cookable now
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs recipes-filter__hint">
+                    <q-tooltip>Recipes where every ingredient is currently in stock.</q-tooltip>
                 </q-icon>
-            </span>
-            <FilterChip v-model="inStockOnly" :icon="ICONS.inventory_2" active-color="primary">
-                Have meals in pool
+            </FilterChip>
+            <!-- "Meals prepared" (was "Have meals in pool"): portions you've
+                 already cooked ahead and can eat now. Only meaningful when the
+                 install runs batch cook-style — with `batchEnabled` off there
+                 is no cook-ahead surface at all, so the filter is hidden rather
+                 than shown always matching nothing (R-029). -->
+            <FilterChip
+                v-if="batchEnabled"
+                v-model="inStockOnly"
+                :icon="ICONS.mealsPrepared"
+                active-color="primary"
+            >
+                Meals prepared
             </FilterChip>
             <!-- tri-state: click 1 = Planned only, click 2 = Not
                  planned only, click 3 = off. Single chip cycles through; the
@@ -169,85 +171,86 @@
 
             <!-- ── Row 2: input filters ──────────────────────────────── -->
             <div class="row items-center no-wrap recipes-input-filters">
-            <q-select
-                v-model="sortBy"
+            <!-- Axis + direction are one control (SortControl) — the direction
+                 toggle rides in the select's append slot rather than sitting
+                 beside it as a separately-sized button. -->
+            <SortControl
+                v-model:sort-by="sortBy"
+                v-model:sort-dir="sortDir"
                 :options="SORT_OPTIONS"
-                emit-value
-                map-options
-                outlined
-                dense
-                label="Sort by"
-                style="min-width: 180px"
+                class="recipes-filter__sort"
             />
-            <!-- direction toggle. Icon flips between
-                 arrow-up (asc) and arrow-down (desc). Tooltip explains
-                 the current axis's meaning in the chosen direction. -->
-            <BaseButton
-                variant="ghost"
-                :icon="sortDir === 'asc' ? ICONS.arrow_upward : ICONS.arrow_downward"
-                :aria-label="`Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}`"
-                @click="toggleSortDir"
-            >
-                <q-tooltip>{{ sortDirTooltip }}</q-tooltip>
-            </BaseButton>
 
             <!-- L235 — cuisine + category are distinct single-select filters,
-                 no longer lumped together as one "tags" multi-select. -->
+                 no longer lumped together as one "tags" multi-select.
+                 Icons match the matching Settings → Kitchen setup pages
+                 (cuisines = globe, categories = shape, meal slots = clock,
+                 tools = blender, dietary tags = leaf) so the same concept
+                 carries the same glyph wherever it appears. -->
             <q-select
                 dense
                 outlined
-                style="min-width: 170px"
+                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
                 v-model="cuisineFilter"
                 :options="cuisineOptions"
                 label="Cuisine"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.public" size="18px" /></template>
+            </q-select>
             <q-select
                 dense
                 outlined
-                style="min-width: 170px"
+                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
                 v-model="categoryFilter"
                 :options="categoryOptions"
                 label="Category"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.category" size="18px" /></template>
+            </q-select>
             <!-- time-of-day single-select. §1.12: vocabulary
                  sourced from DEFAULT_MEAL_SLOTS (shared with meal-plans
                  PROPOSAL_MEAL_PLANS.md §4). -->
             <q-select
                 dense
                 outlined
-                style="min-width: 170px"
+                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
                 v-model="timeOfDayFilter"
                 :options="TIME_OF_DAY_OPTIONS"
                 label="Time of day"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.schedule" size="18px" /></template>
+            </q-select>
             <!-- §1.7 — difficulty single-select. Closed vocabulary
                  (Easy / Medium / Hard). -->
             <q-select
                 dense
                 outlined
-                style="min-width: 160px"
+                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
                 v-model="difficultyFilter"
                 :options="DIFFICULTY_OPTIONS"
                 label="Difficulty"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.difficulty" size="18px" /></template>
+            </q-select>
             <!-- Uses / Doesn't use ingredients consolidated
                  into the shared TriStateFilter, with `searchable` for the
                  large stock-item set and a per-row stock-level colour dot.
                  Single button (+/-) replaces the two paired q-selects. -->
             <TriStateFilter
                 label="Ingredients"
+                :icon="ICONS.ingredients"
                 searchable
                 search-placeholder="Search ingredients…"
                 :options="ingredientFilterOptions"
@@ -258,37 +261,46 @@
             />
             <!-- :hint removed; the under-input copy was just
                  padding out the filter row's height and offsetting
-                 alignment without adding info. -->
+                 alignment without adding info. Every numeric bound carries the
+                 same icon as its sort axis / the surface it counts, so the row
+                 scans as a set rather than a mix of iconned and bare fields. -->
             <q-input
+                v-if="batchEnabled"
                 v-model.number="mealCountMin"
                 dense
                 outlined
                 type="number"
                 min="0"
-                style="max-width: 140px"
-                label="Meals ≥"
+                class="recipes-filter__num"
+                label="Meals prepared ≥"
                 hide-bottom-space
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.mealsPrepared" size="18px" /></template>
+            </q-input>
             <q-input
                 v-model.number="missingMax"
                 dense
                 outlined
                 type="number"
                 min="0"
-                style="max-width: 130px"
+                class="recipes-filter__num"
                 label="Missing ingredients ≤"
                 hide-bottom-space
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.cartRemove" size="18px" /></template>
+            </q-input>
             <q-input
                 v-model.number="ingredientsMax"
                 dense
                 outlined
                 type="number"
                 min="0"
-                style="max-width: 140px"
-                label="# ingredients ≤"
+                class="recipes-filter__num"
+                label="Ingredient count ≤"
                 hide-bottom-space
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.ingredientCount" size="18px" /></template>
+            </q-input>
             <!-- kcal upper-bound filter (gated). -->
             <q-input
                 v-if="kcalAxisAvailable"
@@ -297,20 +309,29 @@
                 outlined
                 type="number"
                 min="0"
-                style="max-width: 130px"
+                class="recipes-filter__num"
                 label="Kcal ≤"
                 hide-bottom-space
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.local_fire_department" size="18px" /></template>
+            </q-input>
             <!-- L237 — one tri-state dietary filter (must-have / must-not /
-                 neutral) replacing the old two include/exclude selects. -->
-            <DietaryTagFilter
+                 neutral) replacing the old two include/exclude selects.
+                 These were `DietaryTagFilter`, a wrapper whose only remaining
+                 job was defaulting the label; its own docblock said new uses
+                 should consume TriStateFilter directly, so with icons to plumb
+                 through as well it was collapsed rather than widened (R-001). -->
+            <TriStateFilter
+                label="Dietary tags"
+                :icon="ICONS.eco"
                 :options="dietaryTagOptions"
                 v-model:include="dietaryTagsInclude"
                 v-model:exclude="dietaryTagsExclude"
             />
             <!-- L310 — tools inclusion/exclusion filter (same tri-state control). -->
-            <DietaryTagFilter
+            <TriStateFilter
                 label="Tools"
+                :icon="ICONS.blender"
                 :options="toolFilterOptions"
                 v-model:include="toolsInclude"
                 v-model:exclude="toolsExclude"
@@ -325,14 +346,16 @@
             <q-select
                 dense
                 outlined
-                style="min-width: 200px"
+                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
                 v-model="collectionFilter"
                 :options="collectionOptionsWithNone"
                 label="Collection"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
+            </q-select>
             </div>
             </template>
         </FilterBar>
@@ -386,6 +409,7 @@
                 >
                     <RecipeCard
                         :recipe="recipeWithExpiringCount(recipe)"
+                        :show-image="true"
                         :show-expiring-badge="expiringOnly"
                         @open="onOpenRecipe"
                         @cook="onCookClick"
@@ -449,12 +473,13 @@
     import RecipeRow from 'src/components/recipes/RecipeRow.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
-    import DietaryTagFilter from 'src/components/recipes/DietaryTagFilter.vue';
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
+    import SortControl, { type SortAxisFor } from 'src/components/filters/SortControl.vue';
     import type {
         TriStateOption,
         TriStateSort,
     } from 'src/components/filters/triStateFilterTypes';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useListState } from 'src/composables/useListState';
     import { useListViewMode } from 'src/composables/useListViewMode';
@@ -477,7 +502,6 @@
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
 
     const $q = useQuasar();
@@ -499,7 +523,6 @@
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
-    const { showRecipeImages, setRecipeImages } = useImagePrefs();
     // Phones drop every toolbar label down to its icon — same gate and same
     // reason as Stock Overview (the row was eating a quarter of the screen).
     const compactToolbar = computed(() => $q.screen.lt.sm);
@@ -513,35 +536,32 @@
     // enough to judge on are both the server's call — the list DTO ships the
     // answer, so nothing is re-derived here (R-003).
     const { nutritionEnabled: kcalAxisAvailable } = useNutritionMode();
+    // Install-wide cook-style. "fresh" installs have no cooked-ahead portions,
+    // so every meals-prepared affordance (chip, minimum-count input, sort axis)
+    // is hidden rather than left to always match nothing.
+    const { batchEnabled } = useBatchEnabled();
     const kcalOf = (recipe: Recipe) => ({
         value: recipe.kcal_per_serving ?? null,
         judgeable: recipe.kcal_is_reliable === true,
     });
-    const SORT_OPTIONS = computed<{ label: string; value: SortKey }[]>(() =>
-        kcalAxisAvailable.value
-            ? [...STATIC_SORT_OPTIONS, { label: 'Kcal', value: 'kcal' as SortKey }]
-            : STATIC_SORT_OPTIONS,
-    );
-
-    async function onToggleRecipeImages() {
-        const previous = showRecipeImages.value;
-        try {
-            await setRecipeImages(!previous);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                timeout: 2000,
-                message: previous ? 'Recipe photos hidden.' : 'Recipe photos shown.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not save preference.',
-                caption: toastCaption(err),
+    // Two conditional axes, each gated on the feature that gives it meaning:
+    // Kcal on the nutrition opt-in, "Meals prepared" on batch cook-style.
+    const SORT_OPTIONS = computed<SortAxisFor<SortKey>[]>(() => {
+        const options = [...STATIC_SORT_OPTIONS];
+        if (batchEnabled.value) {
+            options.push({
+                label: 'Meals prepared', value: 'meal_count',
+                ascLabel: 'Fewest first', descLabel: 'Most first',
             });
         }
-    }
+        if (kcalAxisAvailable.value) {
+            options.push({
+                label: 'Kcal', value: 'kcal',
+                ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'asc',
+            });
+        }
+        return options;
+    });
 
     const loading = ref(false);
 
@@ -593,7 +613,11 @@
         difficultyFilter, ingredientsMax, usesStockItemIds, excludesStockItemIds,
     } = cookbookState;
     const EXPIRING_FILTER_HORIZON_DAYS = 14;
-    const expiringCountByRecipeId = ref<Map<string, number>>(new Map());
+    /** Per-recipe at-risk facts from the filter fetch: how many ingredients
+     *  are at risk, and when the soonest of them goes off. Both are server-
+     *  derived; the client only orders and colours by them. */
+    type ExpiringFacts = { count: number; soonest: string | null };
+    const expiringByRecipeId = ref<Map<string, ExpiringFacts>>(new Map());
     const expiringFetchInFlight = ref(false);
 
     type SortKey =
@@ -619,20 +643,42 @@
     // on the server.
     const DIFFICULTY_OPTIONS = [...DIFFICULTY_VALUES];
 
-    const STATIC_SORT_OPTIONS: { label: string; value: SortKey }[] = [
-        { label: 'Name', value: 'name' },
-        { label: 'Recently made', value: 'last_made' },
+    // Labels name the axis only — the direction lives on the attached toggle
+    // (see SortControl), so no option here says "first" or carries an arrow.
+    // Each axis states how its two directions read and which one it snaps to
+    // when picked; that used to live in a separate `sortDirTooltip` switch and
+    // a separate `watch(sortBy)`, three places to keep in step for one fact.
+    const STATIC_SORT_OPTIONS: SortAxisFor<SortKey>[] = [
+        {
+            label: 'Name', value: 'name',
+            ascLabel: 'A → Z', descLabel: 'Z → A', defaultDir: 'asc',
+        },
+        {
+            label: 'Recently made', value: 'last_made',
+            ascLabel: 'Oldest first', descLabel: 'Most recent first',
+        },
         // Recently added is the fifth IMPL_PLAN_COOKBOOK Chunk 1
         // axis; landed once Recipe.created_at became available on the DTO.
-        { label: 'Recently added', value: 'created_at' },
-        { label: 'Meals in pool', value: 'meal_count' },
-        { label: 'Prep + cook time', value: 'total_time' },
-        // sort by ingredient count (fewer ingredients first
-        // is the common "make this quick" intent; the asc/desc toggle
-        // covers the other direction).
-        { label: '# ingredients', value: 'ingredient_count' },
+        {
+            label: 'Recently added', value: 'created_at',
+            ascLabel: 'Oldest first', descLabel: 'Most recent first',
+        },
+        // "Prep + cook time" described the arithmetic rather than the thing
+        // being sorted; owner feedback 2026-08-18.
+        {
+            label: 'Total time', value: 'total_time',
+            ascLabel: 'Fastest first', descLabel: 'Slowest first', defaultDir: 'asc',
+        },
+        // Fewer ingredients first is the common "make this quick" intent.
+        {
+            label: 'Ingredient count', value: 'ingredient_count',
+            ascLabel: 'Fewest first', descLabel: 'Most first', defaultDir: 'asc',
+        },
         // §1.7 — difficulty ordinal (Easy < Medium < Hard; nulls sink).
-        { label: 'Difficulty', value: 'difficulty' },
+        {
+            label: 'Difficulty', value: 'difficulty',
+            ascLabel: 'Easiest first', descLabel: 'Hardest first', defaultDir: 'asc',
+        },
     ];
     const cookbookSortState = useListState('cookbook-overview:sort', () => ({
         sortBy: ref<SortKey>('name'),
@@ -641,6 +687,20 @@
         sortDir: ref<SortDir>('asc'),
     }));
     const { sortBy, sortDir } = cookbookSortState;
+
+    // Cookbook filter + sort state is persisted, so an install that *had* batch
+    // cook-style on can come back with a meals-prepared sort or filter still
+    // stored after an admin switches to "fresh". Left alone that shows an empty
+    // Sort-by select and an active-but-invisible filter silently hiding recipes,
+    // so neutralise the state rather than only hiding the controls. Immediate:
+    // `batchEnabled` resolves from /api/health after mount, so a stale stored
+    // value would otherwise survive until the flag next changed.
+    watch(batchEnabled, (enabled) => {
+        if (enabled) return;
+        if (sortBy.value === 'meal_count') sortBy.value = 'name';
+        inStockOnly.value = false;
+        mealCountMin.value = null;
+    }, { immediate: true });
 
     // Dietary + tools filter state — tri-state include/exclude id arrays
     // (combine with AND). Persisted with the rest of the cookbook filters.
@@ -785,8 +845,8 @@
             // the unrestricted list rather than an empty flash).
             if (
                 expiringOnly.value
-                && expiringCountByRecipeId.value.size > 0
-                && !expiringCountByRecipeId.value.has(r.recipe_id)
+                && expiringByRecipeId.value.size > 0
+                && !expiringByRecipeId.value.has(r.recipe_id)
             ) {
                 return false;
             }
@@ -906,11 +966,27 @@
         // sort axis + direction are preserved in state for when they
         // toggle the filter off.
         if (expiringOnly.value) {
-            const counts = expiringCountByRecipeId.value;
+            const facts = expiringByRecipeId.value;
             return arr.sort((a, b) => {
-                const av = counts.get(a.recipe_id) ?? 0;
-                const bv = counts.get(b.recipe_id) ?? 0;
-                if (av !== bv) return bv - av;
+                const af = facts.get(a.recipe_id);
+                const bf = facts.get(b.recipe_id);
+                // URGENCY first (owner feedback 2026-08-18): the soonest
+                // expiry wins, so 2 ingredients going off today outrank 4
+                // going off next week — the filter exists to save the food
+                // that's closest to being binned, not the biggest pile.
+                // ISO dates compare correctly as strings; a recipe with no
+                // date sinks below every recipe that has one.
+                const ad = af?.soonest ?? null;
+                const bd = bf?.soonest ?? null;
+                if (ad !== bd) {
+                    if (ad === null) return 1;
+                    if (bd === null) return -1;
+                    return ad.localeCompare(bd);
+                }
+                // Same urgency → the bigger rescue first.
+                const ac = af?.count ?? 0;
+                const bc = bf?.count ?? 0;
+                if (ac !== bc) return bc - ac;
                 return a.name.localeCompare(b.name);
             });
         }
@@ -1046,51 +1122,6 @@
         return n;
     });
 
-    function toggleSortDir() {
-        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-    }
-
-    // Phrasing per axis so the tooltip explains the *meaning* of the
-    // current direction, not just "ascending" vs "descending".
-    const sortDirTooltip = computed(() => {
-        const asc = sortDir.value === 'asc';
-        switch (sortBy.value) {
-            case 'last_made':
-                return asc ? 'Oldest first' : 'Most recent first';
-            case 'created_at':
-                return asc ? 'Oldest first' : 'Most recent first';
-            case 'meal_count':
-                return asc ? 'Fewest meals first' : 'Most meals first';
-            case 'total_time':
-                return asc ? 'Fastest first' : 'Slowest first';
-            case 'kcal':
-                return asc ? 'Lowest kcal first' : 'Highest kcal first';
-            case 'ingredient_count':
-                return asc ? 'Fewest ingredients first' : 'Most ingredients first';
-            case 'difficulty':
-                return asc ? 'Easiest first' : 'Hardest first';
-            case 'name':
-            default:
-                return asc ? 'A → Z' : 'Z → A';
-        }
-    });
-
-    // when the user picks a new sort axis, snap to its
-    // conventional direction so the first thing they see makes sense
-    // (recently-made → newest first; name → A→Z; etc). They can still
-    // flip with the direction button.
-    watch(sortBy, (next) => {
-        // Name + ingredient_count default to ascending — "A→Z" / "fewest
-        // first" are the natural reads. Everything else (recently made,
-        // most meals, fastest, lowest kcal) defaults to descending.
-        sortDir.value =
-            next === 'name'
-            || next === 'ingredient_count'
-            || next === 'difficulty'
-                ? 'asc'
-                : 'desc';
-    });
-
     // if the user had Kcal as their sort axis and then the
     // nutrition mode leaves simple (off, or complex where the figure is
     // derived per-recipe instead), snap back to Name so the picker doesn't
@@ -1106,9 +1137,18 @@
     // off case so Vue's reactivity skips unnecessary card re-renders.
     function recipeWithExpiringCount(recipe: Recipe): Recipe {
         if (!expiringOnly.value) return recipe;
-        const count = expiringCountByRecipeId.value.get(recipe.recipe_id) ?? 0;
-        if (count === (recipe.expiring_ingredient_count ?? 0)) return recipe;
-        return { ...recipe, expiring_ingredient_count: count };
+        const facts = expiringByRecipeId.value.get(recipe.recipe_id);
+        const count = facts?.count ?? 0;
+        const soonest = facts?.soonest ?? null;
+        if (
+            count === (recipe.expiring_ingredient_count ?? 0)
+            && soonest === (recipe.expiring_soonest_date ?? null)
+        ) return recipe;
+        return {
+            ...recipe,
+            expiring_ingredient_count: count,
+            expiring_soonest_date: soonest,
+        };
     }
 
     // Fetch the expiring set whenever the filter is flipped on; clear
@@ -1117,7 +1157,7 @@
     // which recipes use them) lives entirely on the server.
     watch(expiringOnly, async (on) => {
         if (!on) {
-            expiringCountByRecipeId.value = new Map();
+            expiringByRecipeId.value = new Map();
             return;
         }
         expiringFetchInFlight.value = true;
@@ -1125,11 +1165,14 @@
             const items = await recipeApi.getAllPagesAsync({
                 expiring_within_days: EXPIRING_FILTER_HORIZON_DAYS,
             });
-            const next = new Map<string, number>();
+            const next = new Map<string, ExpiringFacts>();
             for (const r of items) {
-                next.set(r.recipe_id, r.expiring_ingredient_count ?? 0);
+                next.set(r.recipe_id, {
+                    count: r.expiring_ingredient_count ?? 0,
+                    soonest: r.expiring_soonest_date ?? null,
+                });
             }
-            expiringCountByRecipeId.value = next;
+            expiringByRecipeId.value = next;
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -1510,5 +1553,52 @@
     }
     .recipes-input-filters > * {
         flex: 0 0 auto;
+    }
+
+    /* ── One control scale for the input-filter row ───────────────────
+       Owner feedback 2026-08-18: "dislike the sizing difference between
+       types of filters (vertically and horizontally), particularly the
+       inclusion/exclusion ones like the ingredients filter".
+
+       Measured before the fix, the row ran three heights and six widths:
+       q-field selects/inputs at 40px, the tri-state dropdown buttons
+       (q-btn-dropdown) at 33px, the sort-direction button at 36px; widths
+       78 / 145 / 152 / 180 / 228px. The tri-states looked like a different
+       species of control because they ARE one — a button pretending to be
+       a field.
+
+       So: one height token for everything in the row, and two width
+       tracks — the text-ish controls (selects + tri-state dropdowns) share
+       one, the numeric bounds share a slightly wider one because their
+       labels ("Missing ingredients ≤") are longer than their content. The
+       tri-state buttons additionally borrow the field's border colour,
+       radius and label colour so they sit in the row as peers. */
+    .recipes-input-filters {
+        --filter-control-h: 40px;
+        --filter-control-w: 180px;
+        --filter-control-w-num: 200px;
+        align-items: center;
+    }
+    .recipes-filter__select,
+    .recipes-filter__sort {
+        min-width: var(--filter-control-w);
+        max-width: var(--filter-control-w);
+    }
+    .recipes-filter__num {
+        min-width: var(--filter-control-w-num);
+        max-width: var(--filter-control-w-num);
+    }
+    /* q-field's own inner control is what actually sets the height. */
+    .recipes-input-filters :deep(.q-field--dense .q-field__control) {
+        height: var(--filter-control-h);
+    }
+    /* Tri-state dropdowns: match the fields rather than the buttons. */
+    .recipes-input-filters :deep(.dora-dropdown-btn) {
+        min-height: var(--filter-control-h);
+        min-width: var(--filter-control-w);
+        border-radius: var(--radius-sm);
+    }
+    .recipes-input-filters :deep(.dora-dropdown-btn .q-btn__content) {
+        justify-content: flex-start;
     }
 </style>

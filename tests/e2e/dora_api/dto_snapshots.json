@@ -252,6 +252,7 @@
       "estimated_cost_priced_count",
       "estimated_cost_total_count",
       "expiring_ingredient_count",
+      "expiring_soonest_date",
       "has_image",
       "has_step_images",
       "has_structured_steps",

@@ -18,6 +18,158 @@ next.
 
 ---
 
+## 2026-08-19 — Cookbook feedback batch (15 items): crash fix, filter rework, sort control, expiry urgency
+**Status:** ⚠️ **HANDOFF WITH ONE OPEN BLOCKER — FU-676.** All 15 feedback items
+are built. Frontend **455/457** (the two known FU-666 `stockLevelDot` failures),
+vue-tsc 0, eslint clean on `src/`. Backend **1857 passed / 1 failed** — the
+failure is **test pollution I introduced**, see FU-676. Suite is NOT green.
+
+### START HERE
+**FU-676.** My two new tests in `test_recipe_expiring_ingredients.py` PATCH
+`expiry_date` onto seeded stock items and never restore them, which breaks
+`test_update_stock_item_auto_add.py::test__auto_add__already_on_target_draft__does_not_fire`
+in full-suite order. That test **passes in isolation (12 passed)** — it is not a
+product bug. Fix = restore the original expiry in a fixture/`finally`, or seed
+dedicated fixtures. The pre-existing tests in that file have the same
+no-cleanup shape; mine tipped it over by mutating two items instead of one.
+
+### The two real bugs
+- **Crash (reported):** `TriStateFilter`'s search box was `clearable` with a
+  `ref('')` model, and Quasar's X emits **null** — so `searchText.value.trim()`
+  threw inside a computed and unmounted the page. The owner guessed it was a
+  class of bug and was right: a sweep found the identical shape in
+  `PriceHistoryPage`, `StockItemDetailPage` (substitute picker) and
+  `QrLabels`. Rather than four `?? ''` patches, all four now use a new
+  `components/SearchInput.vue` that owns `clear-value=""` + a `string`-typed
+  emit, so the null can't be produced. `NutritionFoodPicker` already handled it
+  (`String(raw ?? '')`) and was left alone. Pinned by `test/unit/searchInput.spec.ts`
+  (4 tests, incl. driving Quasar's real clear button).
+- **Unreadable sort toggle (reported):** measured live at **1:1** —
+  `rgb(53,151,102)` text on `rgb(53,151,102)` background in pesto-dark. Cause was
+  NOT TriStateFilter: `toggle-color="primary"` makes Quasar emit its
+  `.text-primary` utility, which carries `!important` and beat the scoped rule
+  trying to set readable ink. Fixed once in **`BaseSegmented`** (the shared
+  wrapper) using `--text-on-primary`; TriStateFilter's local override shrank to
+  just the fill. Verified across 5 themes and on a non-flat consumer.
+  **This exposed FU-674:** three themes (pesto 3.88, blueberry 4.21, midnight
+  2.86) define `--text-on-primary` as white over a mid-brightness primary and
+  fail D-002's 4.5 floor app-wide. Owner decision needed on which lever to pull.
+
+### Decisions taken (owner, via AskUserQuestion)
+Photos+view → **merge, cook mode separate**; pool wording → **"Meals prepared"**;
+expiry → **urgency-coloured chip + tooltip**; dropdowns → **assess, don't flip**.
+
+### Notable structure
+- **`SortControl.vue`** — axis + direction as one control (toggle rides the
+  select's `#append`). Each axis declares its own `ascLabel`/`descLabel`/
+  `defaultDir`, which absorbed a `sortDirTooltip` switch AND a `watch(sortBy)`
+  from RecipesOverview — three places for one fact, now one.
+- **StockOverview** collapsed 6 combined keys → 4 axes + direction, with
+  `migrateStockSort` so saved sorts survive. Its 5 existing sort tests were
+  rewritten to axis+direction **keeping the exact expected orderings**, so they
+  act as a regression check on the comparator rewrite, not a restatement of it.
+- **`DietaryTagFilter.vue` deleted** — a wrapper whose only job was defaulting a
+  label; its own docblock said new uses should go direct (R-001).
+- **Expiry urgency:** server now returns `expiring_soonest_date` (a **date**, not
+  a day count, so the client reuses the shared `expiryToneFor` helper rather than
+  growing a second threshold — R-003). New `ExpiringChip.vue` shared by card and
+  compact row. DTO snapshot refreshed — exactly one key added, nothing else drifted.
+
+### Dropdown assessment (owner asked for a recommendation, not a flip)
+**72 `q-select`s, none set `behavior`** → all inherit Quasar's default (menu on
+desktop, **full-screen dialog on mobile**); the 3 `BaseDropdown` consumers are
+always menus. The split is accidental, not chosen. **Recommendation: neither
+blanket option.** The owner's real complaint ("hard to tap out of") is a
+*dismissal* defect — a long list fills the viewport, leaving no backdrop to tap
+and no visible Done. Recommend a `BaseSelect` wrapper: `behavior="menu"` for
+short closed vocabularies, a **constrained** dialog (max-height ~70vh, max-width,
+explicit close) for long/`use-input` lists (13 use typeahead). Not built —
+72 call sites, wants a real-device verify. **FU-675.**
+
+### Verification note
+Browser verification was done by **DOM measurement, not screenshots** — the
+preview renderer doesn't paint here (screenshots time out; Vue `<Transition>`
+stalls mid-leave, which also made the cookbook look empty until transitions were
+zeroed). I confirmed that empty-cookbook symptom **reproduces on a clean tree via
+`git stash`**, so it is an environment artefact, not a regression. Measured
+after: filter row = one height (40px), two widths, icons on every control;
+card radius 4px → 10px.
+
+### Close-gate
+- **R-001:** three shared components extracted (`SearchInput`, `SortControl`,
+  `ExpiringChip`); one redundant wrapper deleted.
+- **R-003:** expiry tone/threshold not duplicated; sort direction defaults live
+  on the axis definition. Pre-existing FU-669 carve-out untouched.
+- **R-035/D-002:** contrast measured, not eyeballed; new chip uses dark ink and
+  deliberately does not become an 18th `text-color="white"` site (FU-671).
+- **New FUs:** 673 (pre-existing lint debt in 3 test files), 674, 675, **676**.
+- **ADR:** none proposed — no new recurring decision, though if a `BaseSelect`
+  lands (FU-675) the "wrapper owns the framework default" pattern now has four
+  instances and would be worth promoting to a rule.
+
+**Next up:** fix FU-676 to get the suite green, then walk `DORA_VERIFY.md`'s new
+cookbook section.
+
+---
+
+## 2026-08-18 — Settings heading icons: complete the set, match the tab, repaint Appearance
+**Status:** complete, verified live. vue-tsc 0, eslint clean, frontend 447/449
+(the known `stockLevelDot` pair, FU-666 — unchanged baseline).
+
+### The ask
+Owner feedback: "missing icons on some settings pages next to the headings — e.g.
+Locations has one, Groups doesn't. Should match the tab icon." Plus: "Appearance
+could have a better icon (like a paint brush)."
+
+### What was actually wrong
+`SettingsPageHeader` has taken an optional `icon` since the settings rebuild, and
+most pages passed one — but the prop being *optional* meant nine pages silently
+shipped without it, and nothing tied the value to the sidebar. Two classes of gap:
+
+- **Never passed one:** Account, Appearance, Notifications, Voice, Money, Dietary
+  tags — and the six taxonomy pages (5 × Recipe\* + Stock groups), which render
+  through `TaxonomyManagerPage → VocabListEditor` and had no way to pass one at
+  all. The prop was plumbed through both (required, not optional, so the next
+  taxonomy page can't repeat the omission) and each caller passes the icon its
+  nav entry uses.
+- **Passed the wrong one:** Nutrition (`restaurant` vs nav's `monitor_heart`) and
+  Audit log (`fact_check` vs nav's `history`). Neither was in the report; both
+  came out of auditing the full set rather than just the named page.
+
+**Appearance** moved `tune` → `palette` in *both* the nav and the page. `tune` was
+also the admin Features page's icon, so the sidebar had one glyph for two
+unrelated destinations; the page is theme/colour/text-size, so the palette is both
+better and unambiguous.
+
+About is deliberately left alone — it opens on a mascot hero, not the standard
+page header.
+
+### Verification
+Driven live (SPA on 5174 against the running backend), not just typechecked. A DOM
+sweep walked all 31 settings routes in both Settings and Admin mode and compared
+`.settings-page-header__icon`'s mdi class against the matching sidebar link's:
+**every page matches**, no console errors. Money reports nav `MISSING` only because
+this install has money features off, which hides that nav entry by design.
+
+Per the lean verification stance this needed no new automated test — it's a static
+prop wiring pinned by a one-time live walk, not a stable contract worth a spec.
+
+### Close-gate
+- **R-001:** the taxonomy pages stayed thin callers; the icon went through the
+  shared wrapper rather than each page growing its own header.
+- **R-003:** the icon is now declared in two places per page (nav definition +
+  page). They agree, verified — but by hand. Logged as **FU-672**; the structural
+  fix is a shared route→icon map, which touches all 31 pages and was out of scope.
+- **R-035 / D-rules:** no new colour or type; the header icon renders in
+  `--q-accent` as it already did for the pages that had one.
+- **ADR:** nothing new — this is an existing rule (R-003) being flagged, not a new
+  recurring decision.
+
+**Next up:** unchanged — the browser-verify sweep of the four unverified
+champion/native surfaces, or Phase 4 release readiness.
+
+---
+
 ## 2026-08-17 (later 14) — Recipe page marks WHICH ingredient is expiring (owner feedback)
 **Status:** complete, pending a browser walk. Backend **1856 passed / 1 skipped /
 1 xfailed** (+5 new). Frontend 447/449 unchanged (known `stockLevelDot` pair, FU-666).

@@ -5,7 +5,7 @@
         class="recipe-card cursor-pointer column no-wrap"
         @click="onCardClick"
     >
-        <div v-if="showRecipeImages" class="recipe-card__media" :style="mediaStyle">
+        <div v-if="showImage" class="recipe-card__media" :style="mediaStyle">
             <img
                 v-if="recipe.has_image && !imgFailed"
                 class="recipe-card__img"
@@ -81,15 +81,11 @@
                     {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
                     <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
                 </q-chip>
-                <q-chip
+                <ExpiringChip
                     v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
-                    dense
-                    color="warning"
-                    text-color="white"
-                    :icon="ICONS.wasteExpired"
-                >
-                    Uses {{ recipe.expiring_ingredient_count }} expiring
-                </q-chip>
+                    :count="recipe.expiring_ingredient_count ?? 0"
+                    :soonest-date="recipe.expiring_soonest_date"
+                />
             </div>
         </q-card-section>
 
@@ -156,9 +152,9 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
     import { ref } from 'vue';
 
@@ -176,6 +172,14 @@
              *  "Recipes using this" tab so the user can jump from a
              *  recipe back to the rest of its pantry footprint. */
             showFilterByIngredients?: boolean;
+            /** Render the photo strip. Owner call 2026-08-18 merged the
+             *  cookbook's "show/hide photos" toggle into its cards/compact
+             *  view switch, so the cookbook now passes `true` unconditionally
+             *  (a card IS the with-photos shape) while other surfaces pass the
+             *  user's `show_recipe_images` preference. Explicit prop rather
+             *  than reading the preference in here, so a call site can't be
+             *  surprised by which of the two rules it gets. */
+            showImage: boolean;
         }>(),
         {
             showExpiringBadge: false,
@@ -193,7 +197,6 @@
     }>();
 
     const imgFailed = ref(false);
-    const { showRecipeImages } = useImagePrefs();
 
     // Everything derived from the recipe for display lives in one place,
     // shared with the compact `RecipeRow` (R-003) — the card decides only
@@ -225,6 +228,10 @@
         outline: 2px solid transparent;
         outline-offset: -2px;
         height: 100%;
+        /* Owner feedback 2026-08-18 — "round the corners a tad more". The card
+           was on Quasar's 4px generic radius (measured); --radius-lg is the
+           token the media strip was already reaching for by hand. */
+        border-radius: var(--radius-lg);
     }
     .recipe-card:hover {
         box-shadow: var(--elevation-card-hover);
@@ -233,7 +240,16 @@
     .recipe-card__media {
         position: relative;
         height: 110px;
-        border-radius: 10px 10px 0 0;
+        /* `inherit`, not a repeated literal: Quasar's own
+           `.q-card > *:first-child` rule already forces the top corners to
+           follow the card, which is why the hardcoded `10px 10px 0 0` that
+           used to sit here measured as 4px in the browser — it never applied.
+           Inheriting states the real relationship and can't drift from the
+           card's radius (and drops a hardcoded value, R-002). */
+        border-top-left-radius: var(--radius-lg);
+        border-top-right-radius: var(--radius-lg);
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
         display: flex;
         align-items: center;
         justify-content: center;

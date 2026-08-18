@@ -2,6 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Money &amp; budgets"
+            :icon="ICONS.savings"
             description="Set a shared grocery budget for the household. Dora tracks spend across every finished shopping list and surfaces dollar figures on recipes, lists, and the dashboard."
         />
 
@@ -59,6 +60,7 @@
     import BudgetApiService from 'src/services/api/budgetApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import { ICONS } from 'src/style/icons';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 

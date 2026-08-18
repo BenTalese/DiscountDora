@@ -334,6 +334,13 @@ class RecipeDto:
     # filter (`?expiring_within_days=N`); zero otherwise. The cookbook
     # surfaces a "Uses N expiring" badge from this number.
     expiring_ingredient_count: int = 0
+    # Soonest expiry date (ISO) among the counted at-risk ingredients, or None.
+    # Drives the cookbook's urgency ranking + chip colour so "2 expiring today"
+    # outranks "4 expiring next week" (owner feedback 2026-08-18). A date
+    # rather than a day count, so the client colours it with the same shared
+    # expiry-tone helper every other surface uses instead of a second
+    # threshold (R-003).
+    expiring_soonest_date: str | None = None
     # PROPOSAL_RECIPE_IMAGE_STEPS — which step payload to render. Server-
     # owned; replaces the implicit "has structured rows?" detection so
     # 'image' is a first-class peer. Default 'freeform' for new recipes.
@@ -546,18 +553,26 @@ def load_expiring_stock_item_ids(
 
 def count_expiring_ingredients_per_recipe(
     repository, horizon_days: int,
-) -> tuple[set[UUID], dict[UUID, int]]:
-    """`(at_risk_item_ids, expiring_count_by_recipe_id)` over the horizon.
+) -> tuple[set[UUID], dict[UUID, int], dict[UUID, str]]:
+    """`(at_risk_item_ids, count_by_recipe_id, soonest_date_by_recipe_id)`.
 
     The count ignores optional ingredients so the result matches the
     rescue feed's recipe ranking (cookbook revision §1.9 / R-003).
-    Recipes whose count is zero are omitted from the dict, so callers
+    Recipes whose count is zero are omitted from the dicts, so callers
     can `.get(rid, 0)` for hydration and `set(d.keys())` for the
     restriction filter.
+
+    The third map is the **soonest** at-risk expiry date (ISO) among a
+    recipe's counted ingredients. Owner feedback 2026-08-18: ranking on the
+    raw count alone put "4 ingredients expiring next week" above "2 expiring
+    today", which is backwards — the point of the filter is to cook the thing
+    that's about to be thrown away. The date (not a day count) is what
+    crosses the wire so the client can reuse its existing shared expiry-tone
+    helper instead of re-deriving a second day-threshold (R-003).
     """
     at_risk_ids = load_expiring_stock_item_ids(repository, horizon_days)
     if not at_risk_ids:
-        return at_risk_ids, {}
+        return at_risk_ids, {}, {}
     recipes = (
         repository
         .get(Recipe)
@@ -566,8 +581,10 @@ def count_expiring_ingredients_per_recipe(
         .all()
     )
     counts: dict[UUID, int] = {}
+    soonest: dict[UUID, str] = {}
     for recipe in recipes:
         n = 0
+        earliest: date | None = None
         for ing in (recipe.ingredients or []):
             item = ing.stock_item
             if item is None:
@@ -576,9 +593,21 @@ def count_expiring_ingredients_per_recipe(
                 continue
             if item.id in at_risk_ids:
                 n += 1
+                # An at-risk item can still have no date (the predicate also
+                # catches items flagged at-risk by other means), so guard.
+                item_expiry = getattr(item, "expiry_date", None)
+                if item_expiry is not None:
+                    as_date = (
+                        item_expiry if isinstance(item_expiry, date)
+                        else date.fromisoformat(str(item_expiry))
+                    )
+                    if earliest is None or as_date < earliest:
+                        earliest = as_date
         if n > 0:
             counts[recipe.id] = n
-    return at_risk_ids, counts
+            if earliest is not None:
+                soonest[recipe.id] = earliest.isoformat()
+    return at_risk_ids, counts, soonest
 
 
 def load_recipe_cookability(
@@ -622,6 +651,9 @@ class GetRecipesHandler:
         # is active; consumed by `_hydrate_expiring_count` so the count
         # query runs once per request.
         self._expiring_counts: dict[UUID, int] = {}
+        # Soonest at-risk expiry date per recipe (ISO), same lifecycle as the
+        # counts above — populated only when the expiring filter is active.
+        self._expiring_soonest: dict[UUID, str] = {}
 
     def _base_query(self):
         return (
@@ -711,10 +743,11 @@ class GetRecipesHandler:
             # in two languages. The per-ingredient chips read the server
             # constant, so the two agree today; making that structural needs
             # an explicit param change and is tracked as FU-669.
-            _, expiring_counts = count_expiring_ingredients_per_recipe(
+            _, expiring_counts, expiring_soonest = count_expiring_ingredients_per_recipe(
                 self.repository, filters.expiring_within_days,
             )
             self._expiring_counts = expiring_counts
+            self._expiring_soonest = expiring_soonest
 
         # Start with "every recipe id" as the candidate set, then narrow.
         # Loading every id is cheap enough to be honest at our scale.
@@ -1038,6 +1071,7 @@ class GetRecipesHandler:
             dataclasses.replace(
                 d,
                 expiring_ingredient_count=self._expiring_counts.get(d.recipe_id, 0),
+                expiring_soonest_date=self._expiring_soonest.get(d.recipe_id),
             )
             for d in dtos
         ]

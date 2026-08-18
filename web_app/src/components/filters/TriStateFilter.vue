@@ -22,27 +22,19 @@
     -->
     <BaseDropdown
         :label="buttonLabel"
-        :icon="ICONS.tune"
+        :icon="icon ?? ICONS.tune"
         outline
         dense
         :color="activeCount > 0 ? 'primary' : undefined"
     >
         <div :style="{ minWidth: '260px', maxWidth: '320px' }">
-            <q-input
+            <SearchInput
                 v-if="searchable"
                 v-model="searchText"
-                dense
-                outlined
-                clearable
-                debounce="100"
                 :placeholder="searchPlaceholder ?? 'Search…'"
                 class="q-ma-sm"
                 autofocus
-            >
-                <template #prepend>
-                    <q-icon :name="ICONS.search" size="18px" />
-                </template>
-            </q-input>
+            />
             <!-- Optional sort axis selector. Renders only when the caller
                  hands in `sortOptions`. `q-btn-toggle` with `outline` so
                  the buttons read as distinct segments — the previous
@@ -119,6 +111,7 @@
     import { ICONS } from 'src/style/icons';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import SearchInput from 'src/components/SearchInput.vue';
 
     import type {
         TriStateOption,
@@ -131,6 +124,10 @@
             include: string[];
             exclude: string[];
             label?: string;
+            /** Trigger-button glyph. Defaults to the generic `tune` slider;
+             *  callers pass the icon their concept carries elsewhere in the
+             *  app (ingredients, dietary tags, tools …). */
+            icon?: string;
             searchable?: boolean;
             searchPlaceholder?: string;
             sortOptions?: TriStateSort[];
@@ -252,13 +249,11 @@
         border-radius: var(--radius-md);
         margin: 0 8px 4px;
     }
-    // Segmented-button look. Quasar's q-btn-toggle in `flat` mode keeps
-    // the *background* transparent on the active button (toggle-color
-    // only retints the text), which made the active state invisible.
-    // Drive the active visual directly from `aria-pressed="true"` —
-    // which Quasar always sets on the selected toggle — so we control
-    // both background and text-colour ourselves and stay theme-token-
-    // aware (R-002).
+    // Segmented-button look. Quasar's q-btn-toggle in `flat` mode keeps the
+    // *background* transparent on the active button, so we paint the fill from
+    // `aria-pressed="true"` (which Quasar always sets on the selected toggle)
+    // and stay theme-token-aware (R-002). The matching *ink* is owned by
+    // BaseSegmented — see the D-002 note there for why it can't be set here.
     .tri-state-filter__sort-toggle {
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
@@ -275,7 +270,6 @@
     }
     .tri-state-filter__sort-toggle :deep(.q-btn[aria-pressed='true']) {
         background: var(--brand-primary);
-        color: var(--text-on-primary, white);
         font-weight: 600;
     }
 </style>

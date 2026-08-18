@@ -9,6 +9,7 @@
     <VocabListEditor
         :title="title"
         :description="description"
+        :icon="icon"
         :noun="noun"
         :noun-plural="nounPlural"
         :usage-label="usageLabel ?? 'recipe'"
@@ -38,6 +39,8 @@
         defineProps<{
             title: string;
             description: string;
+            /** Heading icon — must match this page's sidebar entry in SettingsShell. */
+            icon: string;
             noun: string;
             nounPlural: string;
             usageLabel?: string;

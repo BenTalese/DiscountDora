@@ -276,6 +276,17 @@ export const ICONS = {
     ingredients: 'mdi-food-variant',
     meal: 'mdi-silverware-fork-knife',
     chef_hat: 'mdi-chef-hat',
+    // Portions already cooked and waiting to be eaten (the surface formerly
+    // called the "meal pool"). A fridge reads as "cooked, stored, ready" —
+    // `meal` is the recipe/dish itself and `chef_hat` is the act of cooking,
+    // so neither carries the "already done, waiting for you" sense.
+    mealsPrepared: 'mdi-fridge',
+    // Filter/sort axis glyphs — see the cookbook filter row, where every
+    // control carries one so the strip scans as a set (D-005).
+    sort: 'mdi-sort',
+    difficulty: 'mdi-speedometer',
+    ingredientCount: 'mdi-format-list-numbered',
+    collection: 'mdi-bookmark-multiple',
     location: 'mdi-map-marker',
     user: 'mdi-account-circle',
     scan: 'mdi-qrcode-scan',

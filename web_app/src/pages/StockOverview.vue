@@ -281,16 +281,10 @@
             <!-- FU-108: sort ahead of location/group refinements —
                  users pick a sort axis far more often than they narrow
                  by location or group. -->
-            <q-select
-                v-model="filters.sortBy.value"
+            <SortControl
+                v-model:sort-by="filters.sortBy.value"
+                v-model:sort-dir="filters.sortDir.value"
                 :options="STOCK_SORT_OPTIONS"
-                option-value="value"
-                option-label="label"
-                emit-value
-                map-options
-                outlined
-                dense
-                label="Sort by"
                 style="min-width: 180px"
             />
 
@@ -614,6 +608,7 @@
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
+    import SortControl from 'src/components/filters/SortControl.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';

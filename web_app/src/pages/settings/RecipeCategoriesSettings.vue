@@ -2,6 +2,7 @@
     <TaxonomyManagerPage
         title="Categories"
         description="The category options shown on recipes. Useful for filtering."
+        :icon="ICONS.category"
         noun="category"
         noun-plural="categories"
         :load="load"
@@ -12,6 +13,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import TaxonomyManagerPage, { type VocabItem } from 'src/components/settings/TaxonomyManagerPage.vue';
     import CategoryApiService from 'src/services/api/categoryApiService';
 

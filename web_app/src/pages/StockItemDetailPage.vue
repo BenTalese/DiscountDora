@@ -956,6 +956,7 @@
                                  on this surface. -->
                             <RecipeCard
                                 :recipe="r"
+                                :show-image="showRecipeImages"
                                 :show-filter-by-ingredients="true"
                                 @open="goToRecipe"
                                 @cook="goToCook"
@@ -1266,9 +1267,7 @@
         <!-- ── Add-substitute picker dialog ───────────────────────────── -->
         <BaseDialog v-model="subPickerOpen" title="Add a substitute" closable card-style="width: 560px; max-width: 95vw">
                 <q-card-section>
-                    <q-input v-model="subSearch" outlined dense autofocus debounce="150" placeholder="Search stock items" clearable>
-                        <template #prepend><q-icon :name="ICONS.search" /></template>
-                    </q-input>
+                    <SearchInput v-model="subSearch" autofocus :debounce="150" placeholder="Search stock items" />
                 </q-card-section>
                 <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
                     <q-list separator>
@@ -1296,6 +1295,8 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
+    import SearchInput from 'src/components/SearchInput.vue';
+    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -1372,6 +1373,10 @@
     const route = useRoute();
     const router = useRouter();
     const $q = useQuasar();
+    // Recipe photos on the "Recipes using this" cards follow the user's own
+    // preference — this isn't the cookbook, so the cookbook's cards/compact
+    // switch has no say here.
+    const { showRecipeImages } = useImagePrefs();
     // Phones drop the header buttons to icon-only so the name, QR and Delete
     // fit on one line (feedback 2026-08-16).
     const compactHeader = computed(() => $q.screen.lt.sm);

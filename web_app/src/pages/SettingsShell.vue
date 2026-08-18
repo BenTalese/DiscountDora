@@ -117,7 +117,9 @@
     ];
 
     const preferenceSections: SettingsNavEntry[] = [
-        { path: '/settings/preferences', label: 'Appearance', icon: ICONS.tune },
+        // Palette, not the generic `tune` slider it used to carry — this page is
+        // theme/colour/text-size, and `tune` is the admin Features page's icon.
+        { path: '/settings/preferences', label: 'Appearance', icon: ICONS.palette },
         { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
         { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
         { path: '/settings/assistant', label: 'Assistant', icon: ICONS.smart_toy },

@@ -3,7 +3,7 @@
         <SettingsPageHeader
             title="Nutrition"
             description="How much nutrition detail Dora tracks. This is install-wide — one setting for the whole household, not per person."
-            :icon="ICONS.restaurant"
+            :icon="ICONS.monitor_heart"
         />
 
         <SettingsSection>

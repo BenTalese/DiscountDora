@@ -4,7 +4,7 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader title="Notifications" />
+        <SettingsPageHeader title="Notifications" :icon="ICONS.notifications" />
 
         <!-- Weekly deals email. Gated on `products` (data-presence): with no
              product data ingested there's no deal source, so the whole feature
@@ -201,6 +201,7 @@
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import { ICONS } from 'src/style/icons';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import ChannelSetupNote from 'src/components/settings/ChannelSetupNote.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';

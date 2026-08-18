@@ -142,3 +142,53 @@ def test__recipe_list__carries_the_same_flags_as_the_detail(api):
     )
     assert _ingredient(listed, target)["is_expiring"] is True
     assert _ingredient(_detail(recipe["recipe_id"]), target)["is_expiring"] is True
+
+
+def test__cookbook_filter__reports_the_soonest_expiry_per_recipe(api):
+    """`expiring_soonest_date` is the EARLIEST at-risk date in the recipe.
+
+    This is what the cookbook ranks on (owner feedback 2026-08-18): ordering by
+    the raw count put "4 ingredients expiring next week" above "2 expiring
+    today", which is backwards for a filter whose whole job is rescuing food
+    that's about to be binned. Pinning "soonest, not last-seen, not the count"
+    is the part that would regress silently — a max/last-write bug still looks
+    plausible in the UI.
+    """
+    items = requests.get(f"{RECIPES}?limit=200").json()["items"]
+    recipe = next(
+        (r for r in items
+         if len([i for i in r["ingredients"] if i["stock_item_id"]]) >= 2),
+        None,
+    )
+    assert recipe is not None, "seed expected to have a recipe with 2+ linked ingredients"
+    linked = [i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"]][:2]
+
+    today = _household_today()
+    far = today + timedelta(days=EXPIRING_HORIZON_DAYS - 1)
+    near = today + timedelta(days=2)
+    # Set the FAR one first, so a naive "last one wins" implementation would
+    # report `far` and fail here.
+    _set_expiry(linked[0], far)
+    _set_expiry(linked[1], near)
+
+    filtered = requests.get(
+        f"{RECIPES}?limit=200&expiring_within_days={EXPIRING_HORIZON_DAYS}"
+    ).json()["items"]
+    matched = next((r for r in filtered if r["recipe_id"] == recipe["recipe_id"]), None)
+    assert matched is not None, "recipe should match the filter it was set up for"
+
+    assert matched["expiring_soonest_date"] == near.isoformat(), matched
+    assert matched["expiring_ingredient_count"] >= 2, matched
+
+
+def test__cookbook_filter__soonest_date_is_absent_without_the_filter(api):
+    """The urgency field rides the same opt-in as the count: the default
+    cookbook load doesn't pay for the expiry query, so it stays null."""
+    recipe = _recipe_with_a_linked_ingredient()
+    target = next(i["stock_item_id"] for i in recipe["ingredients"] if i["stock_item_id"])
+    _set_expiry(target, _household_today() + timedelta(days=2))
+
+    unfiltered = requests.get(f"{RECIPES}?limit=200").json()["items"]
+    row = next(r for r in unfiltered if r["recipe_id"] == recipe["recipe_id"])
+    assert row["expiring_soonest_date"] is None, row
+    assert row["expiring_ingredient_count"] == 0, row

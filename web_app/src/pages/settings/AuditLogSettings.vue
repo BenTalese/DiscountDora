@@ -3,7 +3,7 @@
         <SettingsPageHeader
             title="Audit log"
             description="Every mutating request, login attempt, client crash, and explicit service-layer event lands here. Filters narrow the view; click a row to see the full payload."
-            :icon="ICONS.fact_check"
+            :icon="ICONS.history"
         >
             <template #actions>
                 <BaseButton

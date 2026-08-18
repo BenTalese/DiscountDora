@@ -12,17 +12,11 @@
                     </div>
                 </q-card-section>
                 <q-card-section class="q-pt-none">
-                    <q-input
+                    <SearchInput
                         v-model="filter"
-                        outlined
-                        dense
-                        clearable
                         placeholder="Search saved products"
-                    >
-                        <template #prepend>
-                            <q-icon :name="ICONS.search" size="16px" />
-                        </template>
-                    </q-input>
+                        icon-size="16px"
+                    />
                 </q-card-section>
                 <q-card-section class="q-pt-none">
                     <div class="text-caption dora-text-muted-7 q-mb-xs">Selected</div>
@@ -256,6 +250,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import { useMoney, formatMoney } from 'src/composables/useMoney';

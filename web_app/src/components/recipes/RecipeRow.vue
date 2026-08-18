@@ -18,23 +18,11 @@
         @click="emit('open', recipe.recipe_id)"
     >
         <q-card-section class="row items-center no-wrap recipe-row__body">
-            <!-- Thumbnail rides the same per-user opt-in as the card grid
-                 (`show_recipe_images`), so hiding photos hides them in both
-                 views rather than only the one the toggle sits next to. -->
-            <div
-                v-if="showRecipeImages"
-                class="recipe-row__media"
-                :style="mediaStyle"
-            >
-                <img
-                    v-if="recipe.has_image && !imgFailed"
-                    class="recipe-row__img"
-                    :src="imageUrl"
-                    alt=""
-                    @error="imgFailed = true"
-                />
-                <span v-else class="recipe-row__initial">{{ initial }}</span>
-            </div>
+            <!-- No thumbnail, by definition. Owner call 2026-08-18 merged the
+                 separate "show/hide photos" toggle into the cards/compact
+                 switch: compact IS the without-photos shape, so the row no
+                 longer consults `show_recipe_images` (nor renders an initial
+                 tile in its place — that was the photo slot's stand-in). -->
 
             <div class="recipe-row__name-zone column items-start justify-center">
                 <div class="recipe-row__name">{{ recipe.name }}</div>
@@ -79,16 +67,12 @@
                     </span>
                     <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
                 </q-chip>
-                <q-chip
+                <ExpiringChip
                     v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
-                    dense
-                    color="warning"
-                    text-color="white"
-                    :icon="ICONS.wasteExpired"
-                >
-                    {{ recipe.expiring_ingredient_count }}
-                    <q-tooltip>Uses {{ recipe.expiring_ingredient_count }} expiring ingredient(s)</q-tooltip>
-                </q-chip>
+                    :count="recipe.expiring_ingredient_count ?? 0"
+                    :soonest-date="recipe.expiring_soonest_date"
+                    compact
+                />
             </div>
 
             <q-space />
@@ -126,12 +110,12 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
     import type { Recipe } from 'src/models/recipe';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
-    import { computed, ref } from 'vue';
+    import { computed } from 'vue';
 
     const props = withDefaults(
         defineProps<{
@@ -153,13 +137,10 @@
 
     const $q = useQuasar();
     const compact = computed(() => $q.screen.lt.sm);
-    const imgFailed = ref(false);
-    const { showRecipeImages } = useImagePrefs();
 
     const {
         totalTime, ingredientCount, kcal, metaLine, missingIds, cookable,
         cookButtonColor, cookButtonTooltip, addListTooltip, inferenceTooltip,
-        initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);
 
     function onAddToList() {
@@ -190,31 +171,6 @@
         padding: 6px 12px;
         gap: 12px;
         min-height: 56px;
-    }
-    .recipe-row__media {
-        flex: 0 0 auto;
-        width: 44px;
-        height: 44px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }
-    .recipe-row__img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    /* D-017 carve-out: the fallback glyph sits on a per-recipe generated
-       hsl() tile, so no theme token can name a colour that reads on it —
-       it's near-white by construction. Identical treatment to
-       `RecipeCard.__initial`, which is the same tile at card size. */
-    .recipe-row__initial {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: rgba(255, 255, 255, 0.92);
-        user-select: none;
     }
     /* The name zone is the only part allowed to shrink, so a long recipe
        name truncates instead of pushing the action cluster off the row. */

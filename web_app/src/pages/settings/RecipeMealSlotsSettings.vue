@@ -2,6 +2,7 @@
     <TaxonomyManagerPage
         title="Meal slots"
         description="The meal slot options shown in meal plans and on recipes."
+        :icon="ICONS.schedule"
         noun="meal slot"
         noun-plural="meal slots"
         usage-label="entry"
@@ -17,6 +18,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import TaxonomyManagerPage, { type VocabItem } from 'src/components/settings/TaxonomyManagerPage.vue';
     import MealSlotApiService from 'src/services/api/mealSlotApiService';
 

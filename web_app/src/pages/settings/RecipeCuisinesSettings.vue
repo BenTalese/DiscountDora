@@ -2,6 +2,7 @@
     <TaxonomyManagerPage
         title="Cuisines"
         description="The cuisine options shown on recipes. Useful for filtering."
+        :icon="ICONS.public"
         noun="cuisine"
         noun-plural="cuisines"
         :load="load"
@@ -12,6 +13,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import TaxonomyManagerPage, { type VocabItem } from 'src/components/settings/TaxonomyManagerPage.vue';
     import CuisineApiService from 'src/services/api/cuisineApiService';
 

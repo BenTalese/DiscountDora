@@ -24,11 +24,8 @@
         <q-card v-if="scanningEnabled" flat bordered>
             <q-card-section>
                 <div class="row q-col-gutter-md items-end">
-                    <q-input
+                    <SearchInput
                         v-model="sheetFilter"
-                        dense
-                        outlined
-                        clearable
                         label="Filter items"
                         class="col-12 col-sm-6"
                     />
@@ -105,6 +102,7 @@
 
 <script lang="ts" setup>
     import { Notify } from 'quasar';
+    import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { ICONS } from 'src/style/icons';

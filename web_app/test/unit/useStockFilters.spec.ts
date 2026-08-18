@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ref } from 'vue';
 
 import { clearAllListState } from 'src/composables/useListState';
-import { useStockFilters } from 'src/composables/useStockFilters';
+import { migrateStockSort, useStockFilters } from 'src/composables/useStockFilters';
 import type { LocationNode } from 'src/models/location';
 import type { Recipe } from 'src/models/recipe';
 import type { Membership } from 'src/models/shoppingList';
@@ -282,40 +282,80 @@ describe('useStockFilters — filtering', () => {
 // ── Sorting ─────────────────────────────────────────────────────────────
 
 describe('useStockFilters — sorting', () => {
-    it('name_desc reverses the alphabetical order', () => {
+    // Direction moved off the option list and onto the shared SortControl
+    // toggle (2026-08-18), so these assert axis + direction. The expected
+    // orderings are unchanged from the six-combined-key era on purpose —
+    // that's what makes them a regression check on the rewrite, not just a
+    // restatement of the new code.
+    it('name descending reverses the alphabetical order', () => {
         const f = makeFilters();
-        f.sortBy.value = 'name_desc';
+        f.sortBy.value = 'name';
+        f.sortDir.value = 'desc';
         expect(names(f)).toEqual(['Flour', 'Egg', 'Dill', 'Cheese', 'Bread', 'Apple']);
     });
 
-    it('level_lowest puts the most-depleted items first, ties broken by name', () => {
+    it('level ascending puts the most-depleted items first, ties broken by name', () => {
         const f = makeFilters();
-        f.sortBy.value = 'level_lowest';
+        f.sortBy.value = 'level';
+        f.sortDir.value = 'asc';
         expect(names(f)).toEqual(['Cheese', 'Bread', 'Flour', 'Apple', 'Dill', 'Egg']);
     });
 
-    it('level_highest puts the best-stocked items first', () => {
+    it('level descending puts the best-stocked items first', () => {
         const f = makeFilters();
-        f.sortBy.value = 'level_highest';
+        f.sortBy.value = 'level';
+        f.sortDir.value = 'desc';
         expect(names(f)).toEqual(['Apple', 'Dill', 'Egg', 'Bread', 'Flour', 'Cheese']);
     });
 
-    it('updated_recent orders by last stock-level touch, newest first', () => {
+    it('updated descending orders by last stock-level touch, newest first', () => {
         const f = makeFilters();
-        f.sortBy.value = 'updated_recent';
+        f.sortBy.value = 'updated';
+        f.sortDir.value = 'desc';
         // Bread (07-09) > Flour (07-05) > Apple (07-01) > the never-updated.
         expect(names(f).slice(0, 3)).toEqual(['Bread', 'Flour', 'Apple']);
     });
 
-    it('expiry_asc puts nearest expiry first and items without a date last', () => {
+    it('expiry ascending puts nearest expiry first and items without a date last', () => {
         const f = makeFilters();
-        f.sortBy.value = 'expiry_asc';
+        f.sortBy.value = 'expiry';
+        f.sortDir.value = 'asc';
         expect(names(f).slice(0, 2)).toEqual(['Egg', 'Dill']);
         // No-expiry items follow, ordered by least-recently-updated then name:
-        // Apple (07-01) < Flour (07-05) < Bread (07-09) — wait, Bread has a
-        // date; remaining are Apple, Bread, Cheese, Flour. Bread(07-09) >
-        // Flour(07-05) > Apple(07-01); Cheese has no update date → first.
+        // Cheese has no update date → first, then Apple (07-01) < Flour
+        // (07-05) < Bread (07-09).
         expect(names(f).slice(2)).toEqual(['Cheese', 'Apple', 'Flour', 'Bread']);
+    });
+
+    it('expiry descending flips the dated items but still sinks the undated', () => {
+        const f = makeFilters();
+        f.sortBy.value = 'expiry';
+        f.sortDir.value = 'desc';
+        // Nulls-last is a property of the data, not the direction — reversing
+        // must not float the no-expiry items to the top.
+        expect(names(f).slice(0, 2)).toEqual(['Dill', 'Egg']);
+        expect(names(f).slice(2)).toEqual(['Cheese', 'Apple', 'Flour', 'Bread']);
+    });
+});
+
+describe('migrateStockSort — persisted sorts survive the axis/direction split', () => {
+    it('translates every legacy combined key to the pair it meant', () => {
+        expect(migrateStockSort('name_asc')).toEqual({ sortBy: 'name', sortDir: 'asc' });
+        expect(migrateStockSort('name_desc')).toEqual({ sortBy: 'name', sortDir: 'desc' });
+        expect(migrateStockSort('level_lowest')).toEqual({ sortBy: 'level', sortDir: 'asc' });
+        expect(migrateStockSort('level_highest')).toEqual({ sortBy: 'level', sortDir: 'desc' });
+        expect(migrateStockSort('updated_recent')).toEqual({ sortBy: 'updated', sortDir: 'desc' });
+        expect(migrateStockSort('expiry_asc')).toEqual({ sortBy: 'expiry', sortDir: 'asc' });
+    });
+
+    it('leaves an already-migrated axis alone, on its conventional direction', () => {
+        expect(migrateStockSort('expiry')).toEqual({ sortBy: 'expiry', sortDir: 'asc' });
+        expect(migrateStockSort('updated')).toEqual({ sortBy: 'updated', sortDir: 'desc' });
+    });
+
+    it('falls back to name ascending for junk or missing values', () => {
+        expect(migrateStockSort(null)).toEqual({ sortBy: 'name', sortDir: 'asc' });
+        expect(migrateStockSort('nonsense')).toEqual({ sortBy: 'name', sortDir: 'asc' });
     });
 });
 

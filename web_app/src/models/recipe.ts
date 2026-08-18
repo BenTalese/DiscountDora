@@ -176,6 +176,12 @@ export type Recipe = {
      *  filter's horizon. Populated only when the request set
      *  `?expiring_within_days=N` — zero / absent otherwise. */
     expiring_ingredient_count?: number;
+    /** Soonest expiry date (ISO) among those at-risk ingredients, or null.
+     *  Server-derived (see `count_expiring_ingredients_per_recipe`); the
+     *  cookbook ranks and colours by this so "2 expiring today" beats
+     *  "4 expiring next week". Never re-derive the tone from the raw
+     *  ingredient list here — use `expiryToneFor` on this date. */
+    expiring_soonest_date?: string | null;
     /** PROPOSAL_RECIPE_IMAGE_STEPS — which step payload to render:
      *  'structured' uses `steps[]`, 'freeform' splits `instructions` on
      *  newline (today's fallback), 'image' renders `step_images[]` as a

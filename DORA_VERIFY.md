@@ -2215,3 +2215,12 @@ Every other platform: no visible effect; already worked.*
 - [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — new icon button reads in all
 
 ---
+
+## Cookbook — filter bar, sort control, expiry urgency (2026-08-19 batch)
+
+- [ ] Clear the Ingredients filter's search box with the X — it must not blank the page (was a hard crash). Same for the search boxes on Price history, QR labels, and the stock-item Add-substitute dialog.
+- [ ] Open the Ingredients filter on **pesto-dark** and confirm the selected Sort-by segment is readable (was green-on-green).
+- [ ] Turn on "Uses expiring ingredients" and confirm ordering is by urgency — a recipe with 2 ingredients going off today must sit above one with 4 going off next week. Check the chip colour matches (red = expired, amber = within 7 days, grey = later) and the tooltip names the soonest date.
+- [ ] Switch Cookbook to Compact and back: cards must show photos, compact must not. Confirm the old "Hide photos" toolbar button is gone and the equivalent now lives in Settings → Appearance → Recipe photos (which should only affect the recipe *page*).
+- [ ] On an install with batch cooking **off**, confirm the "Meals prepared" chip, the "Meals prepared ≥" input and the "Meals prepared" sort axis are all absent; turn batch on and confirm they appear.
+- [ ] Stock overview: the sort direction toggle now lives inside the Sort-by field. Confirm each axis flips (Name, Stock level, Last updated, Expiry) and that a sort saved before this change still restores sensibly.

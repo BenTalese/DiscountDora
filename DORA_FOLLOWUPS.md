@@ -52,6 +52,100 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-676 — ⚠️ HANDOFF BLOCKER: new expiry tests pollute shared seed state
+- **Raised:** 2026-08-19 (cookbook feedback batch) — **start here next session**
+- **Type:** finding (defect I introduced; not yet fixed)
+- **What:** the two tests I added to
+  `tests/e2e/dora_api/test_recipe_expiring_ingredients.py`
+  (`..._reports_the_soonest_expiry_per_recipe`,
+  `..._soonest_date_is_absent_without_the_filter`) PATCH `expiry_date` onto
+  **seeded** stock items and never restore them. Full-suite result is now
+  **1 failed, 1857 passed**, with
+  `tests/e2e/dora_api/test_update_stock_item_auto_add.py::test__auto_add__already_on_target_draft__does_not_fire`
+  failing — **it passes in isolation (12 passed)**, so this is order-dependent
+  cross-test pollution, not a product bug.
+- **Note:** the pre-existing tests in that same file have the same
+  no-cleanup shape, so the pattern predates me — my two just tipped it over by
+  mutating *two* items on a recipe instead of one.
+- **Fix shape:** capture each target's original `expiry_date` and restore it in
+  a fixture/`finally`, or seed a dedicated recipe + stock items for these tests
+  rather than borrowing whatever the seed produced.
+- **Recommended resolution:** **now** — the suite is not green until this is
+  done. Everything else in the batch is green (frontend 455/457 = the two known
+  FU-666 `stockLevelDot` failures only; vue-tsc 0; eslint clean on `src/`).
+
+## [OPEN] FU-675 — mobile dropdown behaviour: no shared select wrapper to apply a rule through
+- **Raised:** 2026-08-19 (cookbook feedback batch — owner asked for an assessment)
+- **Type:** finding / deferred job
+- **What:** the app has **72 `q-select`s and none set `behavior`**, so every one
+  inherits Quasar's default — an anchored menu on desktop, a **full-screen
+  dialog on mobile** — while the three `BaseDropdown` consumers (the tri-state
+  filters) are always menus. That's the inconsistency the owner reported, and
+  it is entirely accidental rather than chosen. The recommendation (below, and
+  in the worklog entry for 2026-08-19) is a rule keyed on option count, not a
+  blanket flip either way — but there is **no shared select wrapper** to apply
+  it through, so it currently means touching 72 call sites.
+- **Recommended shape:** add `BaseSelect.vue` (the `SearchInput` / `SortControl`
+  pattern from this same batch), give it `behavior="menu"` for short closed
+  vocabularies and a **constrained** dialog (max-height ~70vh + max-width, so
+  the backdrop stays tappable) with an explicit close affordance for long or
+  `use-input` lists — 13 selects use typeahead today. The owner's actual
+  complaint ("difficult to tap out of") is a *dismissal* defect: with a long
+  list the dialog fills the viewport and leaves no backdrop to tap, and there's
+  no visible Done. That is fixable without changing which surface style is used.
+- **Why deferred:** it's an app-wide control refactor, well outside a cookbook
+  polish batch, and it wants its own verify pass on a real phone (the desktop
+  preview can't show the failure mode).
+- **Recommended resolution:** later, as its own unit — pairs naturally with the
+  next mobile-UX pass.
+
+## [OPEN] FU-674 — `--text-on-primary` fails the D-002 contrast floor in three themes
+- **Raised:** 2026-08-19 (cookbook feedback batch — segmented-control fix)
+- **Type:** finding
+- **What:** fixing the unreadable sort toggle moved every segmented control's
+  active label onto `--text-on-primary`. **Measured live** against each theme's
+  `--brand-primary`: pesto-dark **5.18:1** ✅, lemon-tart **9.47:1** ✅, but
+  **pesto 3.88:1**, **blueberry 4.21:1**, **midnight 2.86:1** — all below
+  D-002's 4.5 floor. Those three define the token as pure white over a
+  mid-brightness primary. The reported bug (pesto-dark, measured at **1.0:1** —
+  literally invisible) is fixed; this is a pre-existing token-level problem the
+  measurement exposed, and it affects **anything** painting `--text-on-primary`
+  over `--brand-primary`, not just segmented controls.
+- **Why deferred:** the fix is either darkening those themes' ink (changes every
+  primary button's look in three themes) or darkening their `--brand-primary`
+  (changes the brand colour) — a design call the owner should make, not a
+  side-effect of a filter-toggle fix. Same family as [[FU-671]].
+- **Recommended resolution:** now-ish — it's a one-decision fix once the owner
+  picks which lever; worth doing before the next design-remediation chunk.
+
+## [OPEN] FU-673 — three test files carry pre-existing lint errors
+- **Raised:** 2026-08-19 (cookbook feedback batch)
+- **Type:** finding
+- **What:** `npx eslint src test` reports 11 errors, all in
+  `test/unit/offlineQueue.spec.ts`, `test/unit/useBuyVerdict.spec.ts`,
+  `test/unit/useOfflineQueue.spec.ts` — `@typescript-eslint/require-await` and
+  `consistent-type-imports`. None are in `src/`; none were touched by this
+  batch. They mean a plain `eslint src test` is not currently green, so a real
+  regression in a test file would be lost in the noise.
+- **Why deferred:** unrelated to the work in flight; mechanical but wants its
+  own commit so the diff is reviewable as "lint only".
+- **Recommended resolution:** opportunistic.
+
+## [OPEN] FU-672 — settings page-header icon is declared twice per page (nav + page)
+- **Raised:** 2026-08-18 (settings heading-icon sweep)
+- **Type:** finding
+- **What:** every settings page's heading icon is now set on the page itself
+  (`SettingsPageHeader :icon` / `TaxonomyManagerPage :icon`) while the *same*
+  icon is declared independently in `SettingsShell.vue`'s nav definitions. They
+  agree today (verified live across all 31 pages) but only by hand — an
+  R-003-shaped duplication, the same "one source for the IA" argument that made
+  both navs read one `navGroups`.
+- **Why deferred:** the structural fix is a shared route→icon map both the nav
+  and the pages read, which touches all 31 page components; out of scope for a
+  polish pass that was asked to add the missing icons.
+- **Recommended resolution:** opportunistic — fold into the next settings-IA
+  change that touches `SettingsShell.vue` nav definitions anyway.
+
 ## [OPEN] FU-671 — `text-color="white"` on semantic chips fails the D-002 contrast floor
 - **Raised:** 2026-08-17 (expiring-ingredient chips).
 - **Type:** finding (D-002 / R-035).

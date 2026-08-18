@@ -1,6 +1,6 @@
 <template>
     <div class="settings-page">
-        <SettingsPageHeader :title="title" :description="description">
+        <SettingsPageHeader :title="title" :description="description" :icon="icon">
             <template #actions>
                 <BaseButton
                     :icon="ICONS.add"
@@ -88,6 +88,8 @@
         defineProps<{
             title: string;
             description: string;
+            /** Heading icon — must match this page's sidebar entry in SettingsShell. */
+            icon: string;
             noun: string;
             nounPlural: string;
             items: VocabItem[];

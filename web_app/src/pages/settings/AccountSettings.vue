@@ -4,7 +4,7 @@
     </div>
 
     <div v-else class="settings-page">
-        <SettingsPageHeader title="Account" />
+        <SettingsPageHeader title="Account" :icon="ICONS.person" />
 
         <SettingsSection>
             <template #title>Profile picture</template>

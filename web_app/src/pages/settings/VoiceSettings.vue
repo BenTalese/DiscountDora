@@ -6,6 +6,7 @@
     <div v-else class="settings-page">
         <SettingsPageHeader
             title="Voice"
+            :icon="ICONS.record_voice_over"
             description="Talk to Dora and let her talk back. Speech recognition uses your browser's built-in support, so it only works where the browser supports it and will ask for microphone permission the first time. For Dora's replies you can choose her natural neural voice or your browser's built-in one."
         />
 
@@ -88,6 +89,7 @@
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import { ICONS } from 'src/style/icons';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import VoicePicker from 'src/components/settings/VoicePicker.vue';
 

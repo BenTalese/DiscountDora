@@ -469,7 +469,9 @@ def compute_auto_build(
     allowed_slots = _resolve_allowed_slots(request.slot_names, household_slots)
 
     recipes = _all_recipe_dtos(repository)
-    _, expiring_counts = count_expiring_ingredients_per_recipe(
+    # The soonest-expiry map is the cookbook's urgency ranking input; the
+    # week builder only needs "how much would this rescue", so it ignores it.
+    _, expiring_counts, _ = count_expiring_ingredients_per_recipe(
         repository, EXPIRING_HORIZON_DAYS,
     )
     cost_est = estimate_costs_for(repository, recipes)

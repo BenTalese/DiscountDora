@@ -12,25 +12,66 @@ import type { LocationNode } from 'src/models/location';
 import type { StockLevel } from 'src/models/stockLevel';
 import { computed, ref, watch, type DeepReadonly } from 'vue';
 import { useListState } from 'src/composables/useListState';
+import type { SortAxisFor } from 'src/components/filters/SortControl.vue';
 
-export type StockSortKey =
-    | 'name_asc'
-    | 'name_desc'
-    | 'level_lowest'
-    | 'level_highest'
-    | 'updated_recent'
-    | 'expiry_asc';
+/**
+ * Sort AXES, not axis+direction pairs. This list used to be six options where
+ * four were really two axes with the direction baked into the label ("Name
+ * (A-Z)" / "Name (Z-A)", "lowest first" / "highest first") — so the page had
+ * two different grammars for one concept, and the cookbook's separate
+ * direction toggle made three across the app. Owner feedback 2026-08-18:
+ * direction is always the attached toggle (`SortControl`), never an option.
+ */
+export type StockSortKey = 'name' | 'level' | 'updated' | 'expiry';
+
+export type StockSortDir = 'asc' | 'desc';
 
 export type StockCartFilter = 'all' | 'on_list' | 'off_list';
 
-export const STOCK_SORT_OPTIONS: { value: StockSortKey; label: string }[] = [
-    { value: 'name_asc', label: 'Name (A-Z)' },
-    { value: 'name_desc', label: 'Name (Z-A)' },
-    { value: 'level_lowest', label: 'Stock level (lowest first)' },
-    { value: 'level_highest', label: 'Stock level (highest first)' },
-    { value: 'updated_recent', label: 'Recently updated' },
-    { value: 'expiry_asc', label: 'Expires soonest' },
+export const STOCK_SORT_OPTIONS: SortAxisFor<StockSortKey>[] = [
+    {
+        value: 'name', label: 'Name',
+        ascLabel: 'A → Z', descLabel: 'Z → A', defaultDir: 'asc',
+    },
+    {
+        value: 'level', label: 'Stock level',
+        ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'asc',
+    },
+    {
+        value: 'updated', label: 'Last updated',
+        ascLabel: 'Least recent first', descLabel: 'Most recent first',
+    },
+    {
+        value: 'expiry', label: 'Expiry date',
+        ascLabel: 'Expires soonest', descLabel: 'Expires latest', defaultDir: 'asc',
+    },
 ];
+
+/**
+ * Stock sort is persisted per user, so installs carry the old combined keys
+ * ('name_desc', 'level_lowest', …). Map them onto the axis+direction pair they
+ * meant rather than silently resetting someone's saved sort to Name.
+ */
+const LEGACY_SORT_KEYS: Record<string, { sortBy: StockSortKey; sortDir: StockSortDir }> = {
+    name_asc: { sortBy: 'name', sortDir: 'asc' },
+    name_desc: { sortBy: 'name', sortDir: 'desc' },
+    level_lowest: { sortBy: 'level', sortDir: 'asc' },
+    level_highest: { sortBy: 'level', sortDir: 'desc' },
+    updated_recent: { sortBy: 'updated', sortDir: 'desc' },
+    expiry_asc: { sortBy: 'expiry', sortDir: 'asc' },
+};
+
+/** Reads a stored value that may be either shape. Exported for the test. */
+export function migrateStockSort(
+    stored: string | null | undefined,
+): { sortBy: StockSortKey; sortDir: StockSortDir } {
+    if (stored && stored in LEGACY_SORT_KEYS) return LEGACY_SORT_KEYS[stored]!;
+    if (stored && STOCK_SORT_OPTIONS.some((o) => o.value === stored)) {
+        const axis = STOCK_SORT_OPTIONS.find((o) => o.value === stored)!;
+        return { sortBy: stored as StockSortKey, sortDir: axis.defaultDir ?? 'desc' };
+    }
+    return { sortBy: 'name', sortDir: 'asc' };
+}
 
 /**
  * All filter / sort / summary state for the pantry. Reusable wherever a list
@@ -79,7 +120,8 @@ export function useStockFilters(sources: {
             cartFilter: ref<StockCartFilter>('all'),
             // Deep-link from stock-item detail page's "Recipes using this".
             recipeFilter: ref<string | null>(null),
-            sortBy: ref<StockSortKey>('name_asc'),
+            sortBy: ref<StockSortKey>('name'),
+            sortDir: ref<StockSortDir>('asc'),
         }))
         : {
             searchText: ref(''),
@@ -93,13 +135,24 @@ export function useStockFilters(sources: {
             expiringSoonOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
-            sortBy: ref<StockSortKey>('name_asc'),
+            sortBy: ref<StockSortKey>('name'),
+            sortDir: ref<StockSortDir>('asc'),
         };
     const {
         searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
         openOnly, hasAlertOnly, needsCheckOnly, expiringSoonOnly, cartFilter,
-        recipeFilter, sortBy,
+        recipeFilter, sortBy, sortDir,
     } = state;
+
+    // A session persisted before the axis/direction split holds a combined key
+    // ('level_lowest'); translate it in place so the saved intent survives.
+    {
+        const migrated = migrateStockSort(sortBy.value as string);
+        if (migrated.sortBy !== (sortBy.value as string)) {
+            sortBy.value = migrated.sortBy;
+            sortDir.value = migrated.sortDir;
+        }
+    }
 
     // ── Lookup maps ─────────────────────────────────────────────────────
     const levelSequenceById = computed(() => {
@@ -270,54 +323,52 @@ export function useStockFilters(sources: {
 
         const collator = new Intl.Collator('en', { sensitivity: 'base' });
         const sorted = [...matches];
-        switch (sortBy.value) {
-            case 'name_desc':
-                sorted.sort((a, b) => collator.compare(b.name, a.name));
-                break;
-            case 'level_lowest':
-                sorted.sort(
-                    (a, b) =>
-                        levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id) ||
-                        collator.compare(a.name, b.name),
-                );
-                break;
-            case 'level_highest':
-                sorted.sort(
-                    (a, b) =>
-                        levelSequence(a.stock_level_id) - levelSequence(b.stock_level_id) ||
-                        collator.compare(a.name, b.name),
-                );
-                break;
-            case 'updated_recent':
-                sorted.sort((a, b) =>
-                    (b.stock_level_last_updated ?? '').localeCompare(
-                        a.stock_level_last_updated ?? '',
-                    ),
-                );
-                break;
-            case 'expiry_asc':
-                // C-waste W2: nearest-expiry first; items without an
-                // expiry date fall to the bottom (nulls last). Ties
-                // break on stock_level_last_updated asc (least-recently
-                // touched falls back into "stalest" territory) then by
-                // name so the order is fully deterministic.
-                sorted.sort((a, b) => {
+        // One comparator per AXIS, written in its ascending sense; the
+        // direction toggle flips the result. Previously each direction was its
+        // own `case` with the comparison hand-reversed, which is how
+        // `level_lowest` ended up subtracting in the opposite order to
+        // `level_highest` and only the tie-break stayed identical.
+        //
+        // "Ascending" per axis means: name A→Z · stock level lowest-first ·
+        // last-updated least-recent-first · expiry soonest-first.
+        const dir = sortDir.value === 'asc' ? 1 : -1;
+        sorted.sort((a, b) => {
+            switch (sortBy.value) {
+                case 'level':
+                    // levelSequence runs high→low as stock increases, so the
+                    // ascending ("lowest first") sense subtracts b from a.
+                    return (
+                        dir * (levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id))
+                        || collator.compare(a.name, b.name)
+                    );
+                case 'updated':
+                    return (
+                        dir * (a.stock_level_last_updated ?? '').localeCompare(
+                            b.stock_level_last_updated ?? '',
+                        )
+                        || collator.compare(a.name, b.name)
+                    );
+                case 'expiry': {
+                    // C-waste W2: items without an expiry date always fall to
+                    // the bottom — nulls-last is a property of the data, not of
+                    // the direction, so it is deliberately NOT flipped by `dir`.
+                    // Ties break on last-updated (least-recently touched is the
+                    // "stalest") then name, so the order is fully deterministic.
                     const ae = a.expiry_date ?? '';
                     const be = b.expiry_date ?? '';
                     if (ae && !be) return -1;
                     if (!ae && be) return 1;
-                    if (ae !== be) return ae.localeCompare(be);
+                    if (ae !== be) return dir * ae.localeCompare(be);
                     const au = a.stock_level_last_updated ?? '';
                     const bu = b.stock_level_last_updated ?? '';
                     if (au !== bu) return au.localeCompare(bu);
                     return collator.compare(a.name, b.name);
-                });
-                break;
-            case 'name_asc':
-            default:
-                sorted.sort((a, b) => collator.compare(a.name, b.name));
-                break;
-        }
+                }
+                case 'name':
+                default:
+                    return dir * collator.compare(a.name, b.name);
+            }
+        });
         return sorted;
     });
 
@@ -445,6 +496,7 @@ export function useStockFilters(sources: {
         recipeFilter,
         recipeFilterContext,
         sortBy,
+        sortDir,
         // option lists
         locationOptions,
         allLocationOptions,

@@ -187,10 +187,8 @@
                  (cuisines = globe, categories = shape, meal slots = clock,
                  tools = blender, dietary tags = leaf) so the same concept
                  carries the same glyph wherever it appears. -->
-            <q-select
-                dense
-                outlined
-                emit-value
+            <BaseSelect
+                                emit-value
                 map-options
                 clearable
                 v-model="cuisineFilter"
@@ -198,11 +196,9 @@
                 label="Cuisine"
             >
                 <template #prepend><q-icon :name="ICONS.public" size="18px" /></template>
-            </q-select>
-            <q-select
-                dense
-                outlined
-                emit-value
+            </BaseSelect>
+            <BaseSelect
+                                emit-value
                 map-options
                 clearable
                 v-model="categoryFilter"
@@ -210,14 +206,12 @@
                 label="Category"
             >
                 <template #prepend><q-icon :name="ICONS.category" size="18px" /></template>
-            </q-select>
+            </BaseSelect>
             <!-- time-of-day single-select. §1.12: vocabulary
                  sourced from DEFAULT_MEAL_SLOTS (shared with meal-plans
                  PROPOSAL_MEAL_PLANS.md §4). -->
-            <q-select
-                dense
-                outlined
-                emit-value
+            <BaseSelect
+                                emit-value
                 map-options
                 clearable
                 v-model="timeOfDayFilter"
@@ -225,13 +219,11 @@
                 label="Time of day"
             >
                 <template #prepend><q-icon :name="ICONS.schedule" size="18px" /></template>
-            </q-select>
+            </BaseSelect>
             <!-- §1.7 — difficulty single-select. Closed vocabulary
                  (Easy / Medium / Hard). -->
-            <q-select
-                dense
-                outlined
-                emit-value
+            <BaseSelect
+                                emit-value
                 map-options
                 clearable
                 v-model="difficultyFilter"
@@ -239,7 +231,7 @@
                 label="Difficulty"
             >
                 <template #prepend><q-icon :name="ICONS.difficulty" size="18px" /></template>
-            </q-select>
+            </BaseSelect>
             <!-- Uses / Doesn't use ingredients consolidated
                  into the shared TriStateFilter, with `searchable` for the
                  large stock-item set and a per-row stock-level colour dot.
@@ -339,10 +331,8 @@
                  exclusion can be added back behind a more discoverable
                  control if real usage demands it; the text-match was a
                  source of false negatives. -->
-            <q-select
-                dense
-                outlined
-                emit-value
+            <BaseSelect
+                                emit-value
                 map-options
                 clearable
                 v-model="collectionFilter"
@@ -350,7 +340,7 @@
                 label="Collection"
             >
                 <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
-            </q-select>
+            </BaseSelect>
             </FilterRow>
             </template>
         </FilterBar>
@@ -482,6 +472,7 @@
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
     import FilterRow from 'src/components/filters/FilterRow.vue';
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import SortControl, { type SortAxisFor } from 'src/components/filters/SortControl.vue';
     import type {
         TriStateOption,

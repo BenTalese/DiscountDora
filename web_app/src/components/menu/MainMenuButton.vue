@@ -14,11 +14,18 @@
             <div class="dora-mainMenuButton-label">{{ label }}</div>
         </div>
     </q-item>
+    <!-- Quasar's router active classes are blanked here for the same reason as
+         SideMenuButton: `.q-item.q-router-link--active` sets
+         `color: var(--q-primary)` at a higher specificity than
+         `.dora-mainMenuButton-active`, so an active strip button rendered
+         primary instead of accent. `isActive` is the single source of truth. -->
     <q-item
         v-else
         :to="link"
         :class="{ 'is-expanded': isExpanded, 'dora-mainMenuButton-active': isActive }"
         class="dora-mainMenuButton"
+        active-class=""
+        exact-active-class=""
         no-caps
     >
         <div class="dora-mainMenuButton-inner column items-center justify-center">

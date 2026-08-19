@@ -165,6 +165,9 @@ export type Recipe = {
     estimated_cost: number | null;
     estimated_cost_priced_count: number;
     estimated_cost_total_count: number;
+    /** Feedback 2026-08-19 — the per-ingredient working behind the
+     *  estimate, shown when the cost card is expanded. Detail only. */
+    estimated_cost_lines: RecipeCostLine[];
     /** C-4 Chunk 10 — named sections (DEC-3 option A). The list endpoint
      *  populates only `section_count` for the card badge; the detail
      *  endpoint also hydrates `sections[]`. Empty sections +
@@ -271,6 +274,25 @@ export type RecipeVersionSibling = {
     name: string;
     last_made_on: string | null;
     available_meals: number;
+};
+
+/** Why an ingredient contributed nothing to the estimate. Mirrors the
+ *  `UNPRICED_*` constants in `dora_api/features/recipes/recipe_cost.py`;
+ *  the phrasing lives on the client so the server ships facts, not copy. */
+export type RecipeCostUnpricedReason = 'no_link' | 'no_price' | 'unit_mismatch';
+
+/** One ingredient's row in the expandable cost breakdown. `line_cost` is
+ *  set exactly when `reason` is null. */
+export type RecipeCostLine = {
+    name: string;
+    quantity: number | null;
+    unit: string | null;
+    /** Price per `priced_unit` — e.g. 0.004 when the price is $4/kg and
+     *  `priced_unit` is "g". Null when the ingredient was never priced. */
+    unit_price: number | null;
+    priced_unit: string | null;
+    line_cost: number | null;
+    reason: RecipeCostUnpricedReason | null;
 };
 
 export type RecipeStep = {

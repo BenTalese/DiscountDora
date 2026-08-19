@@ -246,17 +246,16 @@
                  Feedback (2026-06-30): the option list and trigger both
                  render the level colour-dot, matching the detail-page
                  picker so the three surfaces look identical. -->
-            <q-select
+            <BaseSelect
                 v-model="filters.levelFilter.value"
                 :options="stockLevels"
                 :option-label="(o: StockLevel) => o.name"
                 :option-value="(o: StockLevel) => o.stock_level_id"
                 emit-value
                 map-options
-                dense
-                outlined
                 clearable
                 label="Any level"
+                dialog-title="Stock level"
             >
                 <template #selected-item="scope">
                     <span class="row items-center no-wrap">
@@ -275,7 +274,7 @@
                         <q-item-section>{{ scope.opt.name }}</q-item-section>
                     </q-item>
                 </template>
-            </q-select>
+            </BaseSelect>
 
             <!-- FU-108: sort ahead of location/group refinements —
                  users pick a sort axis far more often than they narrow
@@ -286,11 +285,9 @@
                 :options="STOCK_SORT_OPTIONS"
             />
 
-            <q-select
+            <BaseSelect
                 v-model="filters.locationFilter.value"
                 :options="filters.locationOptions.value"
-                dense
-                outlined
                 emit-value
                 map-options
                 use-input
@@ -299,18 +296,18 @@
                 input-debounce="200"
                 clearable
                 label="Any location"
+                dialog-title="Location"
                 @filter="filters.filterLocations"
             />
 
-            <q-select
+            <BaseSelect
                 v-model="filters.groupFilter.value"
                 :options="filters.groupOptions.value"
-                dense
-                outlined
                 emit-value
                 map-options
                 clearable
                 label="Any group"
+                dialog-title="Stock group"
             />
             </FilterRow>
             </template>
@@ -605,6 +602,7 @@
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
     import FilterRow from 'src/components/filters/FilterRow.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import SortControl from 'src/components/filters/SortControl.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';

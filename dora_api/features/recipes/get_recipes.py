@@ -182,6 +182,23 @@ class RecipeSectionDto:
 
 
 @dataclass(frozen=True, slots=True)
+class RecipeCostLineDto:
+    """One ingredient's row in the cost breakdown (feedback 2026-08-19).
+
+    `line_cost` is set exactly when `reason` is null. `reason` is one of
+    `recipe_cost.UNPRICED_*` — the client maps it to a phrase; the server
+    doesn't ship prose it would then have to keep in sync with the UI.
+    """
+    name: str
+    quantity: float | None
+    unit: str | None
+    unit_price: float | None
+    priced_unit: str | None
+    line_cost: float | None
+    reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class RecipeNutritionDto:
     """FU-635 chunk 6 — complex-mode nutrition rolled up from the ingredients'
     linked foods. Detail endpoint only, and only while the install is in
@@ -322,6 +339,10 @@ class RecipeDto:
     # as an estimate, not a quote.
     estimated_cost_priced_count: int = 0
     estimated_cost_total_count: int = 0
+    # Feedback 2026-08-19 — the per-ingredient working behind the estimate,
+    # for the recipe page's expandable cost card. Detail endpoint only; the
+    # collapsed card still reads only the three fields above.
+    estimated_cost_lines: List['RecipeCostLineDto'] = field(default_factory=list)
     # named sections (DEC-3 option A). The list endpoint
     # populates only `section_count` (cheap), the detail endpoint also
     # hydrates `sections[]`. Empty sections + section_count == 0 ⇒ the
@@ -819,6 +840,18 @@ class GetRecipesHandler:
             estimated_cost=est.estimated_cost,
             estimated_cost_priced_count=est.priced_count,
             estimated_cost_total_count=est.total_count,
+            estimated_cost_lines=[
+                RecipeCostLineDto(
+                    name=line.name,
+                    quantity=line.quantity,
+                    unit=line.unit,
+                    unit_price=line.unit_price,
+                    priced_unit=line.priced_unit,
+                    line_cost=line.line_cost,
+                    reason=line.reason,
+                )
+                for line in est.lines
+            ],
         )
 
     def _nutrition_mode(self) -> str:

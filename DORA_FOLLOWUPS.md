@@ -29,6 +29,110 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-683 — stock-surface signal consolidation: 7 live bugs + 5 duplications, plan written, Step 0 gates the main chunk
+- **Raised:** 2026-08-19 (stock overview signal-crossover design session)
+- **Type:** deferred job + findings
+- **What:** the owner flagged that Stock Overview has too many competing signals
+  (stocktake, Dora thinks, expiry, needs attention, essential, needs check, buy
+  verdict, open/in-use). The investigation found nine visual channels on one row
+  sharing a two-colour palette with **inverted meanings** (red level box = "buy
+  this urgently", red cart ring eight pixels away = "don't buy this"), plus two
+  independent attention engines and three independent cadence implementations.
+  Full context, evidence register, and a 6-chunk plan:
+  **`docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`**.
+  **Live bugs found (all verifiable independently of the plan):**
+  - **B1** `useStockFilters.ts:137` hardcodes a 7-day expiring-soon window while
+    the server resolves a configurable one — admin changes it, row outlines and
+    the "Needs attention" count don't move.
+  - **B2** per-user `AlertPreference` is honoured by the bell and **ignored
+    entirely** by the overview; disabling a kind silences the bell but not the rows.
+  - **B3** `AlertsPage.vue:331` deep-links to `/stock?attention=true`, which
+    filters by a *different rule* than the count that was tapped.
+  - **B4** non-essential out-of-stock is a MEDIUM **actionable** alert server-side
+    but the row is **dimmed** — same item is "act on this" and de-emphasised.
+  - **B5** `StockItemRow.vue:390` fires **one HTTP request per rendered row** for
+    the buy verdict (the module cache dedupes by id, it doesn't stop fan-out);
+    200-item pantry = 200 requests to render a ring that's suppressed at low
+    confidence. `useBuyVerdict.ts`'s own comment claims otherwise — it's wrong.
+  - **B6** same per-line N+1 on the shopping list (`BuyVerdictBadgeInline`);
+    survives B5's fix and becomes the primary surface after it.
+  - **B7** `buy_verdict_enabled` is a household AppSetting despite being a pure
+    per-user display overlay — **owner confirmed this is a mistake**.
+  - **D1–D3 (R-003):** `14`-day and `90`-day windows each declared twice across
+    `stocktake.py` / `cadence.py` (one carries a comment admitting the mirror);
+    and **three** implementations of "mean gap between movements" —
+    `pantry_belief._mean_gap_days`, `get_buy_verdict._cadence_detail` (identical
+    inputs, identical math), `cadence.auto_band_from_history`.
+  - **D4 (R-003):** `hasAlert` computes a cross-entity domain rule client-side.
+- **Why deferred:** Chunk 3 (the one attention rule) is **gated on a Step-0
+  assessment of the alerts system with the owner** — it was largely AI-built from
+  loose ideas and has never been vetted (9 kinds, 2 tiers, per-user prefs, a page,
+  a bell, `act_on_alert`, a digest email). Consolidating onto an unvetted
+  foundation makes it harder to change later, not easier. Chunks 1 and 2 have no
+  such dependency.
+- **Fix shape:** the plan's §3. Chunks 1 (constant + cadence consolidation) and 2
+  (verdict off the row + settings scope) can land immediately; 3–6 follow Step 0.
+- **Recommended resolution:** Step 0 **now** (it's a conversation, not code);
+  Chunks 1–2 opportunistically whenever the stock surface is next open.
+
+## [OPEN] FU-682 — three more `window.open(apiUrl)` print views still violate R-045
+- **Raised:** 2026-08-19 (recipe view feedback batch)
+- **Type:** finding
+- **What:** the recipe Print button was reported as "404s" and turned out to be a
+  straight R-045 violation — `window.open` on a URL built from `resolveBaseURL()`,
+  which is authenticated only if the browser volunteers the session cookie. Fixed
+  by routing it through the new shared `services/files/printView.openHtmlDocumentAsync`
+  (fetch through `AxiosHttpClient`, tab claimed on the gesture per R-046).
+  **Three siblings were left untouched and have the identical defect:**
+  `useShoppingListExport.ts:22`, `useMealPlanExport.ts:13`,
+  `useStockOverviewExport.ts:51`. All three will fail the same way on a split
+  `app.`/`api.` host and in the Capacitor shell, and will look like a 404 to the user.
+- **Why deferred:** the reported surface was the recipe page; the other three are
+  different pages the owner hasn't reviewed this round, and each needs its own
+  error copy + a walk. The mechanic they need already exists, so each is a ~10-line
+  change.
+- **Fix shape:** replace each `window.open(...)` with `openHtmlDocumentAsync(path, title)`
+  (keep the call a sync entry point — no `await` before it), and give each a toast
+  with `toastCaption(err)` + the `PopupBlockedError` branch, as
+  `useRecipeExport.openPrintView` now does. `useQrLabels` is already migrated.
+- **Recommended resolution:** now-ish — it's a known-broken class with a proven fix
+  sitting next to it. Otherwise opportunistically, whenever each page is next open.
+
+## [OPEN] FU-681 — the recipe detail page never leaves its loading skeleton in the agent preview pane
+- **Raised:** 2026-08-19 (recipe view feedback batch)
+- **Type:** finding
+- **What:** `/#/cookbook/<id>` mounts, `GET /api/recipes/<id>` returns **200**, no
+  console errors — and the page stays on the `FadeTransition` loading branch with
+  the content `v-else-if` never mounting (the fade sits at `opacity: 0`). Same
+  family as [[FU-638]] (rAF starvation in the pane); injecting
+  `*{transition:none}` did **not** clear it this time, so the existing workaround
+  is insufficient for `mode="out-in"`.
+- **Why deferred:** it blocked visual verification of this session's toolbar rebuild,
+  but it is an **agent-pane artefact, not a user-facing bug** — the same route renders
+  for the owner. Chasing it is its own investigation.
+- **Recommended resolution:** opportunistic, but worth doing before the next
+  recipe-page unit — two sessions in a row have now shipped recipe-page changes that
+  couldn't be seen. Likely the same root cause as FU-638; fix them together.
+
+## [OPEN] FU-680 — the ingredient-unit reconciliation has no density bridge
+- **Raised:** 2026-08-19 (recipe view feedback batch)
+- **Type:** follow-up
+- **What:** recipe costing now converts an ingredient's quantity into the unit its
+  price is per, and leaves the ingredient **unpriced** when the two can't bridge.
+  `units.convert` *can* cross mass↔volume when given an ingredient name that's in
+  `INGREDIENT_DENSITY_G_PER_ML`, but `recipe_cost._line_cost` doesn't pass one — so
+  "200 ml of milk" against a price per kg reads as unpriceable even though the
+  density table knows the answer.
+- **Why deferred:** the reported bug was a wildly *wrong* number; an honest gap is
+  the correct floor and shipping it doesn't depend on this. Passing a name also needs
+  a decision about which name (the stock item's, which is user-typed, vs the linked
+  product's) and how loudly to flag a density-derived estimate.
+- **Fix shape:** pass `ingredient=<stock item name lowercased>` into `units.convert`
+  from `_line_cost`, and mark the resulting `CostLine` so the breakdown can show the
+  estimate is density-derived.
+- **Recommended resolution:** when the cost card next comes up, or if the owner
+  reports "it says it can't price something it obviously can".
+
 ## [OPEN] FU-678 — every `.dora-btn` is 36px tall, under D-004's 44px touch floor
 - **Raised:** 2026-08-19 (cookbook feedback batch 2)
 - **Type:** finding
@@ -91,37 +195,33 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-675 — mobile dropdown behaviour: no shared select wrapper to apply a rule through
-- **Raised:** 2026-08-19 (cookbook feedback batch — owner asked for an assessment)
-- **Type:** finding / deferred job
-- **What:** the app has **72 `q-select`s and none set `behavior`**, so every one
-  inherits Quasar's default — an anchored menu on desktop, a **full-screen
-  dialog on mobile** — while the three `BaseDropdown` consumers (the tri-state
-  filters) are always menus. That's the inconsistency the owner reported, and
-  it is entirely accidental rather than chosen. The recommendation (below, and
-  in the worklog entry for 2026-08-19) is a rule keyed on option count, not a
-  blanket flip either way — but there is **no shared select wrapper** to apply
-  it through, so it currently means touching 72 call sites.
-- **Recommended shape:** add `BaseSelect.vue` (the `SearchInput` / `SortControl`
-  pattern from this same batch), give it `behavior="menu"` for short closed
-  vocabularies and a **constrained** dialog (max-height ~70vh + max-width, so
-  the backdrop stays tappable) with an explicit close affordance for long or
-  `use-input` lists — 13 selects use typeahead today. The owner's actual
-  complaint ("difficult to tap out of") is a *dismissal* defect: with a long
-  list the dialog fills the viewport and leaves no backdrop to tap, and there's
-  no visible Done. That is fixable without changing which surface style is used.
-- **Why deferred:** it's an app-wide control refactor, well outside a cookbook
-  polish batch, and it wants its own verify pass on a real phone (the desktop
-  preview can't show the failure mode).
-- **Recommended resolution:** later, as its own unit — pairs naturally with the
-  next mobile-UX pass.
-- **Update 2026-08-19** (cookbook feedback batch 2): the *"no shared wrapper"*
-  half is now partly false — `components/filters/BaseFilterField.vue` exists and
-  the three tri-state filters route through it, so a rule could be applied there
-  in one place. But that wrapper hosts a **custom panel**, not an options list:
-  the **72 `q-select`s still have no wrapper**, and nothing about the mobile
-  `behavior` question (menu vs constrained dialog, and the dismissal defect) has
-  been decided or changed. This FU stays open for exactly that.
+## [OPEN] FU-675 — migrate the remaining ~64 `q-select`s onto `BaseSelect`
+- **Raised:** 2026-08-19; **substantially delivered 2026-08-19 (later 3)** —
+  reduced to a migration backlog.
+- **Type:** deferred job
+- **Decided and built:** `components/BaseSelect.vue` owns the menu-vs-dialog
+  rule (≤8 options and no typeahead → `menu`; longer or `use-input` →
+  `default`, i.e. dialog on mobile) plus a close affordance in the dialog case.
+  Pinned by `test/unit/baseSelect.spec.ts` (9 tests). **8 call sites migrated**:
+  the five cookbook filter selects, the three StockOverview ones, and
+  `SortControl` (which the cookbook and stock rows both use).
+- **What remains:** ~64 `q-select`s elsewhere — settings pages, dialogs
+  (`CreateStockItemDialog`, `PutAwayDialog`, `BulkMoveLocationDialog`,
+  `SubstituteMetadataDialog`), `ShoppingListDetail`, `MyProductsPage`,
+  `ReportsPage`, `RecipeDetailPage`, onboarding. Until they move, they keep
+  Quasar's unconfigured default, so the owner's original inconsistency persists
+  on those surfaces.
+- **Migration gotcha — read before doing the rest.** `BaseSelect` declares
+  `useInput` (the rule reads it), which means **Vue consumes it and drops it
+  from `$attrs`**; it is forwarded explicitly. Any *other* q-select prop that
+  BaseSelect ever declares must be forwarded the same way. This bit once
+  already: the stock location picker's typeahead silently stopped working while
+  the control still looked correct — caught live, now covered by a test.
+  `BaseSelect` also applies `dense`+`outlined` itself, so drop that pair at each
+  call site rather than passing it twice.
+- **Recommended resolution:** opportunistic, a surface at a time, each with a
+  glance at the page afterwards — a mechanical all-at-once sweep across 64 sites
+  is exactly where a dropped slot or prop would hide.
 
 ## [OPEN] FU-674 — `--text-on-primary` fails the D-002 contrast floor in three themes
 - **Raised:** 2026-08-19 (cookbook feedback batch — segmented-control fix)

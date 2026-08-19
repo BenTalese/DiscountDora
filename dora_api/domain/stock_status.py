@@ -26,6 +26,7 @@ contract owns thresholds, not only level→bucket mapping (impl plan §1 Chunk 1
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import Iterable, Optional
 
@@ -84,6 +85,26 @@ def get_stock_item_unit_cost_at(observations, when=None):  # noqa: ANN001 — du
 
     Pure: caller passes already-fetched observations.
     """
+    priced = get_stock_item_unit_cost_with_unit_at(observations, when)
+    return priced.amount if priced is not None else None
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedUnitCost:
+    """A per-unit cost together with the unit it is *per*."""
+    amount: float
+    unit: str
+
+
+def get_stock_item_unit_cost_with_unit_at(observations, when=None):  # noqa: ANN001 — duck-typed observations
+    """As :func:`get_stock_item_unit_cost_at`, but keeps the unit.
+
+    Added 2026-08-19: the recipe cost estimator has to know whether "$4.20"
+    means per litre or per bottle before it can multiply an ingredient
+    quantity by it — dropping the unit is what produced a $1590 two-ingredient
+    recipe. The bare-float version above delegates here so the "which
+    observation counts" rule has exactly one owner (R-003).
+    """
     candidates = [
         o for o in observations
         if getattr(o, "total_measure", 0) and (when is None or o.observed_at <= when)
@@ -91,7 +112,12 @@ def get_stock_item_unit_cost_at(observations, when=None):  # noqa: ANN001 — du
     if not candidates:
         return None
     latest = max(candidates, key=lambda o: o.observed_at)
-    return latest.total_price / latest.total_measure if latest.total_measure else None
+    if not latest.total_measure:
+        return None
+    return ObservedUnitCost(
+        amount=latest.total_price / latest.total_measure,
+        unit=latest.unit,
+    )
 
 
 def _sequence_of(level) -> Optional[int]:

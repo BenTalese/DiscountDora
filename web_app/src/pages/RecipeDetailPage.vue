@@ -27,26 +27,119 @@
         </q-banner>
 
         <div v-else-if="recipe" key="rd-content">
-            <!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <div class="row items-center q-mb-sm no-wrap">
-                <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="onBack" />
-                <div class="q-ml-sm col">
-                    <div class="text-caption dora-text-muted">
-                        <router-link to="/cookbook" class="dora-text-muted">
-                            Cookbook
-                        </router-link>
-                        <q-icon :name="ICONS.chevron_right" size="14px" />
-                        {{ form.name || 'Untitled recipe' }}
-                    </div>
-                </div>
-                <BaseButton
-                    variant="ghost"
-                    :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
-                    :label="recipe.is_favourite ? 'Favourited' : 'Favourite'"
-                    :class="{ 'text-negative': recipe.is_favourite }"
-                    @click="onToggleFavourite"
-                />
-            </div>
+            <!-- ── Header ──────────────────────────────────────────────
+                 Feedback 2026-08-19: one toolbar, not three rows. The
+                 breadcrumb is gone (the back arrow already says where you
+                 came from), the name sits inline beside that arrow (matching
+                 the stock-item detail header), and every action lives in the
+                 shared `PageToolbar` actions slot — including the three that
+                 used to hide behind an ellipsis menu, because an extra click
+                 to reach Delete / New version / Favourite is pure cost.
+                 Phones drop the labels to icons on the same `lt.sm` gate the
+                 cookbook and stock overview use; the label survives as the
+                 tooltip. -->
+            <PageToolbar :title="form.name || 'Untitled recipe'" back-to="/cookbook">
+                <template #actions>
+                    <BaseButton
+                        variant="primary"
+                        :icon="ICONS.restaurant_menu"
+                        :label="compactToolbar ? undefined : 'Cook mode'"
+                        aria-label="Cook mode"
+                        @click="onStartCookMode"
+                    >
+                        <q-tooltip v-if="compactToolbar">Cook mode</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        v-if="!editing"
+                        variant="secondary"
+                        :icon="ICONS.edit"
+                        :label="compactToolbar ? undefined : 'Edit'"
+                        aria-label="Edit"
+                        @click="editing = true"
+                    >
+                        <q-tooltip v-if="compactToolbar">Edit</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        v-if="editing"
+                        variant="secondary"
+                        :icon="ICONS.save"
+                        :label="compactToolbar ? undefined : 'Save'"
+                        aria-label="Save"
+                        :disable="!isDirty"
+                        :loading="saving"
+                        @click="onSave"
+                    >
+                        <q-tooltip v-if="compactToolbar">Save</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        v-if="editing"
+                        variant="ghost"
+                        :icon="ICONS.check"
+                        :label="compactToolbar ? undefined : 'Done'"
+                        aria-label="Done"
+                        @click="editing = false"
+                    >
+                        <q-tooltip v-if="compactToolbar">Done</q-tooltip>
+                    </BaseButton>
+                    <!-- Feedback 2026-08-19: import is a toolbar button here
+                         too, the way it is on the cookbook overview — it was
+                         a row buried in a sidebar card. -->
+                    <BaseButton
+                        variant="ghost"
+                        :icon="ICONS.content_paste"
+                        :label="compactToolbar ? undefined : 'Import'"
+                        aria-label="Import a recipe"
+                        @click="onImportFromUrl"
+                    >
+                        <q-tooltip>
+                            {{ compactToolbar ? 'Import a recipe — ' : '' }}paste a
+                            recipe over this one
+                        </q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        variant="ghost"
+                        :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
+                        :label="compactToolbar ? undefined : (recipe.is_favourite ? 'Favourited' : 'Favourite')"
+                        :aria-label="recipe.is_favourite ? 'Remove from favourites' : 'Add to favourites'"
+                        :class="{ 'text-negative': recipe.is_favourite }"
+                        @click="onToggleFavourite"
+                    >
+                        <q-tooltip v-if="compactToolbar">
+                            {{ recipe.is_favourite ? 'Favourited' : 'Favourite' }}
+                        </q-tooltip>
+                    </BaseButton>
+                    <!-- copies the recipe into a sibling version (same
+                         `version_group_id`) and routes into it. -->
+                    <BaseButton
+                        variant="ghost"
+                        :icon="ICONS.content_copy"
+                        :label="compactToolbar ? undefined : 'New version'"
+                        aria-label="New version"
+                        :loading="newVersionLoading"
+                        @click="onNewVersion"
+                    >
+                        <q-tooltip v-if="compactToolbar">New version</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        variant="ghost"
+                        :icon="ICONS.print"
+                        :label="compactToolbar ? undefined : 'Print'"
+                        aria-label="Print"
+                        @click="onPrint"
+                    >
+                        <q-tooltip v-if="compactToolbar">Print</q-tooltip>
+                    </BaseButton>
+                    <BaseButton
+                        variant="danger-ghost"
+                        :icon="ICONS.delete"
+                        :label="compactToolbar ? undefined : 'Delete'"
+                        aria-label="Delete recipe"
+                        @click="onDelete"
+                    >
+                        <q-tooltip v-if="compactToolbar">Delete recipe</q-tooltip>
+                    </BaseButton>
+                </template>
+            </PageToolbar>
 
             <!-- L289 — the name is its own clearly-editable field (matching
                  the stock-item screen), not a heading masquerading as one. -->
@@ -61,93 +154,6 @@
                 :error-message="nameError ?? undefined"
                 @update:model-value="onNameInput"
             />
-            <!-- DR-11 (D-015): in the read view the name is the page title, not
-                 a field masquerading as a heading. -->
-            <h1 v-else class="recipe-read__title q-mb-md">{{ form.name || 'Untitled recipe' }}</h1>
-
-            <!-- L308 — actions across the top (sticky), never stranded at the
-                 bottom on mobile. Mark cooked is the prominent action and sits
-                 far from Delete (L305). -->
-            <div class="recipe-toolbar row items-center q-gutter-sm q-mb-md">
-                <BaseButton
-                    variant="primary"
-                    :icon="ICONS.restaurant"
-                    label="Mark cooked"
-                    :loading="adjusting"
-                    @click="onMarkCooked"
-                />
-                <BaseButton
-                    variant="secondary"
-                    :icon="ICONS.restaurant_menu"
-                    label="Cook mode"
-                    @click="onStartCookMode"
-                />
-                <BaseButton
-                    variant="ghost"
-                    :icon="ICONS.history"
-                    label="Log cook…"
-                    @click="logCookOpen = true"
-                />
-                <BaseButton
-                    variant="ghost"
-                    :icon="ICONS.print"
-                    label="Print"
-                    @click="onPrint"
-                />
-                <q-space />
-                <!-- DR-11 (D-015): explicit read/edit toggle. Read mode shows
-                     Edit; edit mode shows Save + Done (Done just collapses the
-                     editor — Save is the persistence action). -->
-                <BaseButton
-                    v-if="!editing"
-                    variant="primary"
-                    :icon="ICONS.edit"
-                    label="Edit"
-                    @click="editing = true"
-                />
-                <BaseButton
-                    v-if="editing"
-                    variant="primary"
-                    :icon="ICONS.save"
-                    label="Save"
-                    :disable="!isDirty"
-                    :loading="saving"
-                    @click="onSave"
-                />
-                <BaseButton
-                    v-if="editing"
-                    variant="ghost"
-                    :icon="ICONS.check"
-                    label="Done"
-                    @click="editing = false"
-                />
-                <BaseButton variant="icon" :icon="ICONS.more_vert">
-                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
-                        <q-list dense style="min-width: 220px">
-                            <!-- copies the recipe into a sibling version
-                                 (same `version_group_id`) and routes into it. -->
-                            <q-item
-                                clickable
-                                v-close-popup
-                                :disable="newVersionLoading"
-                                @click="onNewVersion"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.content_copy" />
-                                </q-item-section>
-                                <q-item-section>New version</q-item-section>
-                            </q-item>
-                            <q-separator />
-                            <q-item clickable v-close-popup @click="onDelete">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.delete" color="negative" />
-                                </q-item-section>
-                                <q-item-section class="text-negative">Delete recipe</q-item-section>
-                            </q-item>
-                        </q-list>
-                    </q-menu>
-                </BaseButton>
-            </div>
 
             <div class="row q-col-gutter-lg">
                 <!-- â”€â”€ Main editor column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
@@ -315,6 +321,7 @@
                         <q-card-section>
                             <ImageUploadField
                                 :preview-url="imagePreviewUrl"
+                                :can-clear="hasRemovableImage"
                                 :name="form.name"
                                 alt="Recipe image"
                                 @pick="onPickImage"
@@ -466,7 +473,7 @@
                     </q-card>
 
                     <!-- â”€â”€ Meals on hand â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                    <q-card v-if="recipe" flat bordered class="q-mb-md">
+                    <q-card v-if="recipe && batchEnabled" flat bordered class="q-mb-md">
                         <q-card-section class="row items-center q-gutter-md no-wrap">
                             <div>
                                 <div class="text-subtitle1">Available meals</div>
@@ -1005,47 +1012,82 @@
                         </q-card-section>
                     </q-card>
 
-                    <!-- cost estimate. Server-derived
-                         from linked product offers; rendered only when the
-                         C-cross money opt-in is on AND at least one
-                         ingredient could be priced. "Estimate" is the loud
-                         word — the tooltip explains the math + the
-                         coverage. -->
+                    <!-- cost estimate. Server-derived from linked product
+                         offers and price observations; rendered only when the
+                         C-cross money opt-in is on.
+
+                         Feedback 2026-08-19: collapsed it shows what it always
+                         showed; expanded it shows the working — per ingredient,
+                         the quantity, the unit price it was matched against,
+                         and the line total, or why that ingredient couldn't be
+                         priced. Costing has enough "why is that number what it
+                         is?" in it (unit reconciliation, offers vs what you
+                         actually paid) that hiding the arithmetic makes the
+                         estimate untrustworthy. It also renders now when the
+                         estimate is *null* but ingredients are linked — the
+                         old card vanished silently, which reads as a bug. -->
                     <q-card
-                        v-if="moneyEnabled && recipe && recipe.estimated_cost !== null"
+                        v-if="moneyEnabled && recipe && showCostCard"
                         flat
                         bordered
                         class="q-mb-md"
                     >
-                        <q-card-section class="row items-center q-gutter-sm">
-                            <q-icon :name="ICONS.payments" size="22px" class="dora-text-muted" />
-                            <div>
-                                <div class="text-caption dora-text-muted">
-                                    Estimated cost
-                                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                        <q-tooltip>
-                                            Estimate — sums each ingredient's
-                                            quantity × current offer price
-                                            (per unit) from any linked
-                                            product. Based on
-                                            {{ recipe.estimated_cost_priced_count }}
-                                            of
+                        <q-expansion-item dense-toggle expand-separator>
+                            <template #header>
+                                <q-item-section avatar class="recipe-cost__avatar">
+                                    <q-icon :name="ICONS.payments" size="22px" class="dora-text-muted" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <div class="text-caption dora-text-muted">Estimated cost</div>
+                                    <div class="text-body2">
+                                        <strong v-if="recipe.estimated_cost !== null">
+                                            {{ formatMoney(recipe.estimated_cost) }}
+                                        </strong>
+                                        <strong v-else class="dora-text-muted">Not enough price info</strong>
+                                        <span class="text-caption dora-text-muted q-ml-xs">
+                                            ({{ recipe.estimated_cost_priced_count }} /
                                             {{ recipe.estimated_cost_total_count }}
-                                            ingredients with linked offers.
-                                            Unit reconciliation is rough.
-                                        </q-tooltip>
-                                    </q-icon>
+                                            ingredients priced)
+                                        </span>
+                                    </div>
+                                </q-item-section>
+                            </template>
+
+                            <q-card-section class="q-pt-none">
+                                <div class="text-caption dora-text-muted q-mb-sm">
+                                    Each ingredient is priced from its cheapest linked
+                                    product offer, or from what you last paid for it.
+                                    An ingredient measured in units the price can't be
+                                    converted into is left out rather than guessed at.
                                 </div>
-                                <div class="text-body2">
-                                    <strong>{{ formatMoney(recipe.estimated_cost) }}</strong>
-                                    <span class="text-caption dora-text-muted q-ml-xs">
-                                        ({{ recipe.estimated_cost_priced_count }} /
-                                        {{ recipe.estimated_cost_total_count }}
-                                        ingredients priced)
-                                    </span>
-                                </div>
-                            </div>
-                        </q-card-section>
+                                <q-markup-table flat dense class="recipe-cost__table">
+                                    <tbody>
+                                        <tr
+                                            v-for="(line, li) in recipe.estimated_cost_lines"
+                                            :key="`cost-${li}`"
+                                        >
+                                            <td>
+                                                {{ line.name }}
+                                                <span v-if="costLineQuantity(line)" class="dora-text-muted">
+                                                    · {{ costLineQuantity(line) }}
+                                                </span>
+                                            </td>
+                                            <td class="text-right">
+                                                <template v-if="line.line_cost !== null">
+                                                    {{ formatMoney(line.line_cost) }}
+                                                    <div class="text-caption dora-text-muted">
+                                                        {{ formatMoney(line.unit_price) }} / {{ line.priced_unit }}
+                                                    </div>
+                                                </template>
+                                                <span v-else class="text-caption dora-text-muted">
+                                                    {{ costLineReason(line) }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </q-markup-table>
+                            </q-card-section>
+                        </q-expansion-item>
                     </q-card>
 
                     <!-- FU-635 — complex mode replaces the typed number with
@@ -1122,21 +1164,10 @@
                         </q-list>
                     </q-card>
 
-                    <q-card flat bordered class="q-mb-md">
-                        <q-list dense separator>
-                            <q-item clickable @click="onImportFromUrl">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.content_paste" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>Paste a recipe…</q-item-label>
-                                    <q-item-label caption>
-                                        Ctrl+A / Ctrl+C on the recipe page, paste here.
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
-                    </q-card>
+                    <!-- Feedback 2026-08-19: the "Paste a recipe…" row that
+                         lived here is now the toolbar's Import button, so
+                         importing looks the same on this page as it does on
+                         the cookbook overview. -->
 
                     <!-- Versions card. Only renders when this
                          recipe has siblings sharing its version_group_id.
@@ -1246,33 +1277,6 @@
             @confirm="onPickerConfirm"
         />
 
-        <!-- Log cook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="logCookOpen" title="Log a cook" closable card-style="min-width: 320px">
-                <q-card-section class="q-pt-none">
-                    <q-input
-                        v-model.number="logCookCount"
-                        type="number"
-                        min="1"
-                        max="999"
-                        outlined
-                        dense
-                        autofocus
-                        label="Meals cooked"
-                        hint="Adds to this recipe's pool."
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Log"
-                        :loading="logging"
-                        :disable="!(logCookCount > 0)"
-                        @click="onLogCook"
-                    />
-                </template>
-        </BaseDialog>
-
         <!-- Cook-mode guard (L297/L299/L309). Extracted 2026-08-19 to
              `CookModeGuardDialog` so the cookbook shows the same confirm this
              page does — the rule used to live only here. -->
@@ -1298,6 +1302,7 @@
     import { needsCookGuard } from 'src/helpers/cookModeGuard';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import PageToolbar from 'src/components/PageToolbar.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
@@ -1315,15 +1320,17 @@
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
     import { formatMoney } from 'src/composables/useMoney';
+    import { formatQuantity } from 'src/helpers/formatQuantity';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
-    import type { Recipe, RecipeStepsMode } from 'src/models/recipe';
+    import type { Recipe, RecipeCostLine, RecipeStepsMode } from 'src/models/recipe';
     import type { Substitute } from 'src/models/stockItemDetail';
     import RecipeApiService, { recipeImageUrl, recipeStepImageUrl, type ImportedRecipe } from 'src/services/api/recipeApiService';
     import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useDragDropList } from 'src/composables/useDragDropList';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import type {
@@ -1367,6 +1374,13 @@
     // either flag is off.
     const { moneyEnabled } = useMoneyEnabled();
     const { nutritionEnabled, isSimple, isComplex } = useNutritionMode();
+    // Feedback 2026-08-19: the meal pool is a batch-cooking concept. With
+    // cook-style "fresh" there is no pool to show, so the card doesn't
+    // render — same gate the cookbook already applies to "Meals prepared".
+    const { batchEnabled } = useBatchEnabled();
+    // Phones drop every toolbar label down to its icon — same gate and the
+    // same name as the cookbook overview and stock overview toolbars.
+    const compactToolbar = computed(() => $q.screen.lt.sm);
     const stockItemApi = new StockItemApiService();
     const { addItems } = useShoppingListActions();
 
@@ -2085,6 +2099,45 @@
         }
         return null;
     });
+    // Feedback 2026-08-19: "no way to remove/clear image of a recipe". The
+    // claim above was only half true — ImageUploadField derives Remove from
+    // its `previewUrl` when `canClear` isn't passed, and that URL is gated on
+    // `showRecipeImages`. With photos turned off the recipe still HAD an
+    // image and there was no way to delete it. Whether an image exists is a
+    // fact about the recipe; whether it's displayed is a viewing preference.
+    // They're separate questions, so Remove now reads the fact.
+    // ── Cost card (feedback 2026-08-19) ────────────────────────────────
+    // Show the card whenever the recipe has something the estimator could
+    // have priced — i.e. at least one ingredient linked to a stock item.
+    // Without that, "no estimate" isn't information, it's an empty card.
+    const showCostCard = computed(
+        () => recipe.value !== null
+            && (recipe.value.estimated_cost !== null
+                || recipe.value.estimated_cost_lines.some((l) => l.reason !== 'no_link')),
+    );
+    function costLineQuantity(line: RecipeCostLine): string {
+        return formatQuantity(line.quantity, line.unit);
+    }
+    // Server ships the reason code; the sentence lives here (R-003 — one
+    // owner per fact, and copy is the client's fact).
+    function costLineReason(line: RecipeCostLine): string {
+        switch (line.reason) {
+            case 'no_link':
+                return 'Not linked to a stock item';
+            case 'no_price':
+                return 'No price recorded yet';
+            case 'unit_mismatch':
+                return line.priced_unit
+                    ? `Priced per ${line.priced_unit} — can't convert`
+                    : "Units don't match";
+            default:
+                return '';
+        }
+    }
+
+    const hasRemovableImage = computed(() =>
+        imageDirty.value ? !!form.image : !!recipe.value?.has_image,
+    );
     function onPickImage(dataUrl: string) {
         form.image = dataUrl;
         imageDirty.value = true;
@@ -2475,11 +2528,13 @@
         }
     }
 
-    // â”€â”€ Meals-on-hand controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Meals-on-hand controls ─────────────────────────────────────────
+    // Feedback 2026-08-19: "Mark cooked" and "Log cook…" are gone. Cooking
+    // is an *implicit* fact — nobody navigates to a recipe to remember to
+    // record that they made it — so the only writer of `last_made_on` and
+    // the pool bump is now finishing a cook session. The stepper below stays
+    // as the direct way to correct the pool count.
     const adjusting = ref(false);
-    const logCookOpen = ref(false);
-    const logCookCount = ref<number>(1);
-    const logging = ref(false);
 
     async function onAdjustMeals(delta: number) {
         if (!recipe.value) return;
@@ -2496,57 +2551,6 @@
             });
         } finally {
             adjusting.value = false;
-        }
-    }
-
-    // L304 — "Mark cooked" = the one-tap "I made it once": logs a single
-    // cook (bumps the pool + last-cooked date). "Log cook…" stays for N.
-    async function onMarkCooked() {
-        if (!recipe.value) return;
-        adjusting.value = true;
-        try {
-            await recipeStore.cookAsync(recipe.value.recipe_id, 1);
-            await loadRecipe();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Marked as cooked.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not mark cooked.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            adjusting.value = false;
-        }
-    }
-
-    async function onLogCook() {
-        if (!recipe.value) return;
-        const n = Math.max(1, Math.floor(logCookCount.value || 0));
-        logging.value = true;
-        try {
-            await recipeStore.cookAsync(recipe.value.recipe_id, n);
-            await loadRecipe();
-            logCookOpen.value = false;
-            logCookCount.value = 1;
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Logged ${n} cooked meal${n === 1 ? '' : 's'}.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not log cook.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            logging.value = false;
         }
     }
 
@@ -2629,12 +2633,10 @@
         }
     }
 
-    function onBack() {
-        // The unsaved-changes prompt is owned by `useUnsavedChangesGuard`
-        // (FU-156) — it fires on the resulting router-leave regardless of
-        // which nav surface triggered it, so no per-handler check here.
-        void router.push('/cookbook');
-    }
+    // `onBack` was retired 2026-08-19 — PageToolbar's `back-to` is a plain
+    // router link to /cookbook, which is all this did. The unsaved-changes
+    // prompt is owned by `useUnsavedChangesGuard` (FU-156) and fires on the
+    // resulting router-leave whatever triggered it, so nothing is lost.
 
     // â”€â”€ Mount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     onMounted(async () => {
@@ -2681,22 +2683,7 @@
        (.dora-dnd-row / .dora-dnd-handle); the composable applies the
        classes via `rowClass`, the template uses .dora-dnd-handle on
        the handle wrapper. */
-    /* L308 — keep the action toolbar reachable at the top on every width. */
-    .recipe-toolbar {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: var(--surface-page);
-        padding: 6px 0;
-    }
-
     /* ── DR-11 (D-015) read view ──────────────────────────────────────── */
-    .recipe-read__title {
-        font-size: 1.6rem;
-        font-weight: 700;
-        line-height: 1.2;
-        margin: 0;
-    }
     .recipe-read__hero {
         border-radius: var(--radius-lg, 12px);
         max-height: 320px;

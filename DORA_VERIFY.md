@@ -22,6 +22,36 @@ top-to-bottom.
 
 ---
 
+## Recipe page: toolbar, cost card, image, meals (2026-08-19)
+*Server half verified live against your seed: Juice Bowl now reports **no
+estimate** with both lines reading "unit_mismatch · $4.20 per ea", Tuna Bake
+prices at **$3.15** (2 tins × $1.20 + 250g × $0.003/g). The page itself never
+left its loading skeleton in the agent pane — see FU-681 — so everything below
+is unseen.*
+- [ ] One toolbar only: back arrow, recipe name inline beside it, no breadcrumb,
+      no second button row, no `⋮` menu. Long recipe name isn't chopped.
+- [ ] At 375px the toolbar actions are icon-only with working tooltips, and the
+      page has no horizontal scroll.
+- [ ] Cook mode / Edit / Import / Favourite / New version / Print / Delete all
+      still do what they say; Edit swaps to Save + Done.
+- [ ] Estimated cost expands to a per-ingredient breakdown; a priced line shows
+      "$x.xx" over "$y / unit", an unpriced one gives the reason.
+- [ ] Print opens the recipe card in a new tab (this is the reported 404 — it
+      needs the check from a phone / a non-localhost host, which is where the
+      old code failed).
+- [ ] Settings → Appearance → recipe photos **off**, then edit a recipe that has
+      a photo: **Remove** is present and clears it.
+- [ ] Batch cooking off ⇒ no "Available meals" card. On ⇒ card + stepper.
+- [ ] Cooking a recipe through cook mode still updates "Last cooked" (it is now
+      the only thing that does).
+
+## Nav: menu link active colour (2026-08-19)
+- [ ] Mobile drawer on a non-dashboard route (e.g. /stock): Dashboard row is
+      plain text, not primary-tinted; only the current surface carries the
+      accent background with on-accent text.
+- [ ] Desktop menu strip: the active button's icon + label are accent, not
+      primary.
+
 ## Cookbook: filter uniformity, cook guard, modals (2026-08-19)
 *Measured live where the pane allowed it: filter-row controls are all real
 `q-field`s at 180/200 × 44px with the same border colour and the same
@@ -2276,3 +2306,11 @@ Every other platform: no visible effect; already worked.*
 - [ ] Switch Cookbook to Compact and back: cards must show photos, compact must not. Confirm the old "Hide photos" toolbar button is gone and the equivalent now lives in Settings → Appearance → Recipe photos (which should only affect the recipe *page*).
 - [ ] On an install with batch cooking **off**, confirm the "Meals prepared" chip, the "Meals prepared ≥" input and the "Meals prepared" sort axis are all absent; turn batch on and confirm they appear.
 - [ ] Stock overview: the sort direction toggle now lives inside the Sort-by field. Confirm each axis flips (Name, Stock level, Last updated, Expiry) and that a sort saved before this change still restores sensibly.
+
+## Dropdowns — menu vs dialog (2026-08-19, FU-675) — **needs a real phone**
+
+The menu/dialog choice is user-agent based, so **resizing a desktop browser cannot show this**.
+
+- [ ] On a phone, open Cookbook filters → **Difficulty**, **Cuisine**, **Category**, **Time of day**, **Collection**: each should open an ordinary dropdown attached to the field, NOT a full-screen panel.
+- [ ] On a phone, Stock filters → **Any level** / **Any group** / **Sort by**: same, an attached dropdown.
+- [ ] On a phone, Stock filters → **Any location** (typeahead): this one SHOULD still be the full-screen panel — confirm it now shows a title and a close (X), that the X dismisses it, and that **typing still filters the list** (this broke once and was fixed).

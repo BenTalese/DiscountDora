@@ -14,29 +14,19 @@
 // exactly one auth path in the app. The sheet's QR images are inlined by the
 // server as data: URIs (see `barcodes.py`) so the blob page is self-contained.
 import AxiosHttpClient, { NormalisedApiError } from 'src/services/api/axiosHttpClient';
+// The new-tab mechanic (R-045 fetch-through-the-client + R-046 open-on-the-
+// gesture) moved to `services/files/printView` on 2026-08-19 when the recipe
+// Print button needed the same thing. Re-exported here so existing importers
+// of `PopupBlockedError` don't have to care where it lives.
+import {
+    objectUrlFor,
+    openHtmlDocumentAsync,
+    PopupBlockedError,
+} from 'src/services/files/printView';
+
+export { PopupBlockedError };
 
 const http = new AxiosHttpClient();
-
-/** Blob URLs are revoked on a timer rather than immediately: the consumer is
- *  a just-opened window / an <img> that hasn't decoded yet. A minute is long
- *  past both, and short enough that a print session doesn't leak the pages. */
-const BLOB_TTL_MS = 60_000;
-
-function objectUrlFor(blob: Blob): string {
-    const url = URL.createObjectURL(blob);
-    setTimeout(() => URL.revokeObjectURL(url), BLOB_TTL_MS);
-    return url;
-}
-
-/** Raised when the browser refused to open the print tab. Distinct from an
- *  API failure because the user's fix is different — allow pop-ups, don't
- *  report a bug — so the caller can say so. */
-export class PopupBlockedError extends Error {
-    constructor() {
-        super('The browser blocked the print tab.');
-        this.name = 'PopupBlockedError';
-    }
-}
 
 /** A short, quotable description of why a QR call failed.
  *
@@ -77,55 +67,15 @@ export async function openQrSheetAsync(options: {
     ids?: string[];
     layout?: string;
 } = {}): Promise<void> {
-    // The tab is opened HERE — synchronously, still inside the click's own
-    // call stack — and only navigated to the blob once the fetch returns.
-    //
-    // Opening it after the `await` is what broke "Print one": every browser
-    // treats a `window.open` that isn't attributable to a user gesture as an
-    // unsolicited pop-up and blocks it, and mobile Safari/Chrome (where this
-    // was reported, by tap) block it unconditionally. The old code did
-    // `await http.get(...)` first, so by the time it opened the tab the
-    // gesture had long expired.
-    //
-    // `noopener` is deliberately NOT passed: with it, `window.open` returns
-    // null by spec and there'd be no handle to navigate. The opener reference
-    // is severed by hand below instead, which gets the same protection — and
-    // the destination is a blob: URL this app just built, not a third party.
-    const target = window.open('', '_blank');
-    if (!target) throw new PopupBlockedError();
-    try {
-        target.opener = null;
-    } catch {
-        // Cross-origin-ish edge; the blob we're about to load is ours anyway.
-    }
-    // Something to look at if the sheet is slow — a blank tab reads as broken.
-    try {
-        target.document.write('<!doctype html><title>QR sheet</title><p>Preparing labels…');
-        target.document.close();
-    } catch {
-        // Some shells disallow document.write into a fresh window; harmless.
-    }
-
-    try {
-        const params = new URLSearchParams();
-        if (options.layout) params.set('layout', options.layout);
-        if (options.ids && options.ids.length > 0) params.set('ids', options.ids.join(','));
-        const query = params.toString();
-        const html = await http.get<string>(
-            `/stock-items/qr/sheet${query ? `?${query}` : ''}`,
-        );
-        const url = objectUrlFor(new Blob([html], { type: 'text/html' }));
-        // `replace`, not `href`: the placeholder shouldn't sit in the tab's
-        // history where Back would return the user to "Preparing labels…".
-        target.location.replace(url);
-    } catch (error) {
-        // Don't strand the reader on the placeholder — close it and let the
-        // caller report the failure where they're actually looking.
-        try {
-            target.close();
-        } catch {
-            // Already gone.
-        }
-        throw error;
-    }
+    // Must stay a sync entry point: `openHtmlDocumentAsync` claims the tab in
+    // the caller's own call stack (R-046), so awaiting anything before this
+    // line would re-break "Print one" exactly the way FU-648 described.
+    const params = new URLSearchParams();
+    if (options.layout) params.set('layout', options.layout);
+    if (options.ids && options.ids.length > 0) params.set('ids', options.ids.join(','));
+    const query = params.toString();
+    return openHtmlDocumentAsync(
+        `/stock-items/qr/sheet${query ? `?${query}` : ''}`,
+        'QR sheet',
+    );
 }

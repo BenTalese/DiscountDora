@@ -271,7 +271,9 @@ def test__create_recipe__ExtraAttributes__IsBadRequest(api):
 #region ---------------- estimated cost (Chunk 9 / DEC-5) ----------------
 
 
-def _link_priced_item(*, price_now: float, size_value: float, level: int = 0) -> dict:
+def _link_priced_item(
+    *, price_now: float, size_value: float, level: int = 0, size_unit: str = "L",
+) -> dict:
     """A Stocked item linked to an active product whose current offer gives a
     unit price of `price_now / size_value`. Exercises the real cost join
     (StockItemProduct → Product → ProductOffer)."""
@@ -286,8 +288,8 @@ def _link_priced_item(*, price_now: float, size_value: float, level: int = 0) ->
         "price_was": price_now + 5,
         "is_active": True,
         "is_available": True,
-        "size": f"{size_value}L",
-        "size_unit": "L",
+        "size": f"{size_value}{size_unit}",
+        "size_unit": size_unit,
         "size_value": size_value,
     })
     assert _ProductResp.status_code == 201, _ProductResp.text
@@ -306,16 +308,70 @@ def _detail(recipe_id: str) -> dict:
     return resp.json()
 
 
-def test__estimated_cost__sums_quantity_times_offer_unit_price(api):
-    # unit price = 6.00 / 2.0 = 3.00; two of them → 6.00 (DORA_VERIFY Chunk-9 L214).
+def test__estimated_cost__converts_the_ingredient_quantity_into_the_priced_unit(api):
+    # The product is 2 L for $6.00 → $3.00 per L. The recipe asks for 2 cups
+    # = 500 ml = 0.5 L → $1.50.
+    #
+    # This test asserted 6.00 until 2026-08-19, which was the bug, not the
+    # contract: it multiplied "2 cups" by "$3 per litre" as if a cup were a
+    # litre. Same defect, at seed scale, reported a $1590 two-ingredient
+    # recipe. The unit is now reconciled or the ingredient is left unpriced.
     _Priced = _link_priced_item(price_now=6.0, size_value=2.0)
     _Recipe = _make_recipe("Cost Full", ingredients=[
         {"stock_item_id": _Priced["stock_item_id"], "quantity": 2, "unit": "cup"},
     ])
     _Detail = _detail(_Recipe["recipe_id"])
-    assert _Detail["estimated_cost"] == 6.0
+    assert _Detail["estimated_cost"] == 1.5
     assert _Detail["estimated_cost_priced_count"] == 1
     assert _Detail["estimated_cost_total_count"] == 1
+
+
+def test__estimated_cost__counted_ingredient_is_priced_per_item(api):
+    # "2 tins" against a 2 L / $6.00 product: "tins" is not a unit we know,
+    # and doesn't need to be — a count means whole items, so 2 × $6.00.
+    _Priced = _link_priced_item(price_now=6.0, size_value=2.0)
+    _Recipe = _make_recipe("Cost Counted", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 2, "unit": "tins"},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] == 12.0
+    assert _Detail["estimated_cost_priced_count"] == 1
+
+
+def test__estimated_cost__unbridgeable_units_are_unpriced_not_guessed(api):
+    # A product with no size prices per item ("ea"). An ingredient measured in
+    # grams can't be converted into items — the pack's weight is unknown — so
+    # it contributes nothing and says so, instead of billing 250 whole packs.
+    _Priced = _link_priced_item(price_now=4.0, size_value=1, size_unit="ea")
+    _Recipe = _make_recipe("Cost Mismatch", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 250, "unit": "g"},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] is None
+    assert _Detail["estimated_cost_priced_count"] == 0
+    _Lines = _Detail["estimated_cost_lines"]
+    assert len(_Lines) == 1
+    assert _Lines[0]["reason"] == "unit_mismatch"
+    assert _Lines[0]["line_cost"] is None
+    assert _Lines[0]["priced_unit"] == "ea"
+
+
+def test__estimated_cost__breakdown_lines_show_the_working_per_ingredient(api):
+    _Priced = _link_priced_item(price_now=6.0, size_value=2.0)
+    _Unlinked = _make_item("Cost Unlinked Line", 0)
+    _Recipe = _make_recipe("Cost Lines", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 1, "unit": "L"},
+        {"stock_item_id": _Unlinked["stock_item_id"], "quantity": 3},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    _Lines = _Detail["estimated_cost_lines"]
+    assert len(_Lines) == 2
+    assert _Lines[0]["line_cost"] == 3.0        # 1 L × $3.00/L
+    assert _Lines[0]["unit_price"] == 3.0
+    assert _Lines[0]["priced_unit"] == "L"
+    assert _Lines[0]["reason"] is None
+    assert _Lines[1]["reason"] == "no_price"
+    assert _Lines[1]["line_cost"] is None
 
 
 def test__estimated_cost__partial_coverage_prices_only_linked_products(api):

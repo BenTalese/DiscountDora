@@ -267,14 +267,18 @@ _observed_ats = st.datetimes(
 )
 
 _observations = st.builds(
-    lambda price, measure, ts: SimpleNamespace(
-        total_price=price, total_measure=measure, observed_at=ts
+    # `unit` joined the shape 2026-08-19: the cost estimator has to know what
+    # a price is *per*, so the real observation's unit is now read as well as
+    # its ratio. Every stored observation has always carried one.
+    lambda price, measure, ts, unit: SimpleNamespace(
+        total_price=price, total_measure=measure, observed_at=ts, unit=unit
     ),
     st.floats(min_value=0.0, max_value=1000.0, allow_nan=False, allow_infinity=False),
     # Mix of usable measures and the zero-measure rows the function must skip.
     st.one_of(st.just(0.0), st.floats(min_value=0.001, max_value=100.0,
                                       allow_nan=False, allow_infinity=False)),
     _observed_ats,
+    st.sampled_from(["ea", "g", "kg", "ml", "L"]),
 )
 
 

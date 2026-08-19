@@ -1,6 +1,6 @@
 # Dashy Dora — Project State
 
-**Last reviewed: 2026-08-19.** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
+**Last reviewed: 2026-08-19 (stock-signal consolidation design session).** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
 This is the single front door: where every phase and workstream is up
 to, and what needs your attention. For *where things stand* this doc
@@ -61,7 +61,7 @@ UX/UI review** into fix units.
 | Merchant→Store rename | ✅ | `usual_store_id` + Stores page shipped | RUNBOOK Phase E |
 | Shopping Lists | ✅ | 8/8 bullets; DRAFT→SHOPPING→DONE loop | [PROPOSAL](docs/04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md) |
 | Cook Mode | ✅ | Chunks 1–6 shipped | `C_big_rock_design_briefs.md` |
-| Cookbook | ➗ | Chunks 1–10 shipped; recipe-detail residuals; complex-mode nutrition on the card + kcal filter/sort in both modes (FU-637 done). **2026-08-17 feedback batch:** the toolbar is now the Stock Overview toolbar (order, secondary Import, phone icon-only + two-row wrap), the filter panel split into stock's two sideways-scrolling rows, and a **compact one-row-per-recipe view** landed with the choice remembered per device (`useListViewMode`) — the card/row split forced the display-derivation duplication out into a shared `useRecipeDisplay` (R-003). Verified live at 375px; **desktop shape owed** (`$q.screen` reads 0 in the agent pane, so only mobile branches render there). **FU-638 still open** but now evidenced as an rAF-wedge pane artifact. **2026-08-17:** recipe pages now mark *which* ingredient is at risk (server-derived `is_expiring` / `is_expired` on the ingredient DTO, sharing the filter's horizon by construction) — read view only for now, see FU-670. **2026-08-17 fix:** the page was only ever loading the first 50 recipes and filtering client-side over them, so anything past the cut was invisible to the list, search, filters and counts (owner hit it at 68 recipes); the store now pages until exhausted, as stock has since FU-035. Browser walk owed; **FU-668** sweeps the remaining list stores for the same trap | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
+| Cookbook | ➗ | Chunks 1–10 shipped; recipe-detail residuals; complex-mode nutrition on the card + kcal filter/sort in both modes (FU-637 done). **2026-08-17 feedback batch:** the toolbar is now the Stock Overview toolbar (order, secondary Import, phone icon-only + two-row wrap), the filter panel split into stock's two sideways-scrolling rows, and a **compact one-row-per-recipe view** landed with the choice remembered per device (`useListViewMode`) — the card/row split forced the display-derivation duplication out into a shared `useRecipeDisplay` (R-003). Verified live at 375px; **desktop shape owed** (`$q.screen` reads 0 in the agent pane, so only mobile branches render there). **FU-638 still open** but now evidenced as an rAF-wedge pane artifact. **2026-08-17:** recipe pages now mark *which* ingredient is at risk (server-derived `is_expiring` / `is_expired` on the ingredient DTO, sharing the filter's horizon by construction) — read view only for now, see FU-670. **2026-08-17 fix:** the page was only ever loading the first 50 recipes and filtering client-side over them, so anything past the cut was invisible to the list, search, filters and counts (owner hit it at 68 recipes); the store now pages until exhausted, as stock has since FU-035. Browser walk owed; **FU-668** sweeps the remaining list stores for the same trap. **2026-08-19 recipe-view batch (14 items):** the recipe page collapsed its three header rows onto the shared `PageToolbar` (name inline with the back arrow, no breadcrumb, no `⋮` — New version / Delete / Favourite / Import promoted to buttons, phone icon-only); **Mark cooked + Log cook deleted** — cooking is now implicit via cook mode only (owner call); the estimated-cost card expands to a per-ingredient breakdown; image-Remove un-gated from the photos *display* preference; Available meals gated on `batchEnabled`. Two real bugs fixed with it: the **$1590 estimate** (quantity × price with no unit reconciliation — reproduced from the seed on paper, fixed live) and the **Print 404** (an un-swept R-045 `window.open(apiUrl)`; the mechanic is now shared in `printView.ts`, **FU-682** carries the three remaining violations). Layout half is **unseen** — the recipe page never leaves its loading skeleton in the agent pane (**FU-681**) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Stock Overview | ✅ | 3-band StockLevel, buy-verdict badge, Needs-check filter, overdue pulse. **2026-08-17:** the Essential row marker is now a tapered tab hooked around the row's top/bottom edges rather than a straight left-edge bar (browser-verify owed — virtualised rows don't paint in the agent pane) | `PROPOSAL_STOCK_OVERVIEW` |
 | Stock-item detail | ➗ | 2026-08-16 batch, then a **2026-08-17 batch**: QR "Print one" **root-caused and fixed** (the ADR-041 fix had moved `window.open` after the `await`, so browsers blocked it — mobile unconditionally; now R-046/ADR-042), server half pinned by 7 new e2e tests + proven live cross-origin; nutrition **micronutrient block** (15 nutrients, migration `b6e04c9a2f18`) with the panel table now server-rendered from one authority; stock-take caption, expiry "Set" label, "Track again" and the verdict's "across N trips" all removed. **FU-648 stays open but is now instrumented** — the dialog failure has never reproduced in 3 attempts, and the error message now names status + ref, so the next report closes it. Phone-verify owed (the pop-up bug is only observable there) | `DORA_VERIFY` → Stock-item detail (2026-08-17) |
 | Stocktake Mode redesign | ✅ | Built end-to-end (Chunks 1–3 + housekeeping); SK-1..11 resolved. **2026-08-17:** the locked Skip decision was revised on owner feedback — Skip resolves the item for the run instead of re-queuing it (the old behaviour grew the run's own denominator, so a run couldn't be finished by skipping); proposal §5 updated in place | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
@@ -90,6 +90,15 @@ UX/UI review** into fix units.
 
 ## ⚠️ Needs your attention now
 
+00. **Sit in on the Step-0 alerts assessment.** `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`
+   is written and its main chunk is *deliberately blocked* on 5 questions only you
+   can answer — which of the 9 alert kinds you actually want, whether per-user
+   `AlertPreference` earns its complexity, whether actionable/FYI survives next to
+   `severity`, whether the digest email lives. The alerts system was largely
+   AI-built from loose ideas and has never been vetted; consolidating onto it
+   unassessed would make it harder to change later. It's a conversation, not code.
+   Chunks 1–2 need nothing from you and can land meanwhile. See FU-683.
+
 0. **Walk the new inference surfaces in a browser.** FU-653 shipped (recipes /
    shopping lists / meal planner, each toggled separately, all three off by
    default). The server side is verified; the three client renders have never
@@ -107,6 +116,17 @@ UX/UI review** into fix units.
 **Total open backlog is 68 items in `DORA_FOLLOWUPS.md`** (counted 2026-08-19;
 the dashboard's previous "34" was a 2026-08-14 count and had drifted badly). These are the ones wanting a decision or a
 running-app check, most important first.
+
+0c. **Walk the recipe page.** The 2026-08-19 batch rebuilt its toolbar, removed
+   Mark cooked / Log cook, and made the cost card expandable — and **none of the
+   layout has been seen**, because the recipe page doesn't leave its loading
+   skeleton in the agent pane (FU-681). The two bug fixes in the same batch
+   *were* verified live against your seed (Juice Bowl: $1590 → no estimate with
+   both lines explaining why; Tuna Bake: $3.15). The Print fix specifically needs
+   a check **from a phone or a non-localhost host** — that's the only place the
+   old code failed. `DORA_VERIFY.md` → "Recipe page: toolbar, cost card, image,
+   meals". Related: **FU-682** — three more print buttons (shopping list, meal
+   plan, stock overview) still carry the defect Print had.
 
 1. **Walk the cookbook feedback-batch-2 changes in a browser.** 15 items shipped
    2026-08-19 — the filter row rebuilt on shared base components, the cook-mode
@@ -246,7 +266,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | C_big_rock_design_briefs.md | 🗄 historical | Big-rock briefs → proposals → IMPL_PLANs; C-6/C-8 companion-scope |
 | INV_investigations.md | 🗄 historical | INV-1..10 → reports; INV-9 (palette) superseded |
 
-## 04_proposals — designs, impl-plans, runbook (63)
+## 04_proposals — designs, impl-plans, runbook (64)
 
 **IMPL plans & runbook (A–M):**
 
@@ -277,6 +297,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | IMPL_PLAN_STATE_OWNERSHIP | Impl plan | ✅ done | Server-owned derived facts refactor | cookable/missing/allocation SSOT landed |
 | IMPL_PLAN_STOCK_ITEM_DETAIL | Impl plan | ✅ done | Stock-item detail polish (C-1b) | Detail page live |
 | IMPL_PLAN_STOCK_OVERVIEW | Impl plan | ✅ done | Stock overview redesign (C-1) | `StockOverview.vue`/`StockItemRow.vue` |
+| IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION | Impl plan | 🔵 designed-not-built | Collapse the stock row's 9 competing signals → 4; one attention rule, one cadence engine | Written 2026-08-19; 6 chunks, Chunk 3 gated on Step-0 alerts assessment; FU-683 |
 | IMPL_PLAN_WASTE_MINIMISATION | Impl plan | ✅ done | Waste-minimisation cluster (C-waste) | `wasteApiService.ts` + mark-as-wasted |
 | IMPL_PLAN_YOUR_PRICES | Impl plan | ✅ done | "Your prices" intelligence (Phase F) | "All 8 chunks landed (FU-227/425)" |
 | OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT | Option doc | 🔵 deferred | Parked multi-tenant SaaS / managed-host option | Deferred 2026-07-14; kept parked post-pivot |

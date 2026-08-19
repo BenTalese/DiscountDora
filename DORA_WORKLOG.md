@@ -18,6 +18,306 @@ next.
 
 ---
 
+## 2026-08-19 (later 6) — Stock-surface signal consolidation (design session, no code)
+**Status:** design-complete, nothing built. Output is
+`docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md` + **FU-683**.
+Chunk 3 is deliberately gated on a Step-0 assessment the owner has to sit in on.
+
+### What prompted it
+Owner: Stock Overview has too much competing for attention — stocktake, Dora
+thinks, expiry, needs attention, essential, needs check, buy verdict,
+open/in-use. Asked whether there's unnecessary crossover, UI *and* backend.
+
+### What the investigation actually found
+Not feature bloat. Three specific things:
+- **Colour collision.** Nine visual channels on one row sharing two hues with
+  **inverted meanings** — red level box = "buy this urgently", red cart ring
+  eight pixels away = "don't buy this". `StockRowLegend.vue` is 262 lines
+  documenting twelve states; a decoder ring is the symptom, not the fix.
+- **Two attention engines.** Server `alert_kinds.py` (9 kinds, tiers, per-user
+  prefs, configurable window) vs client `hasAlert` (4 conditions, hardcoded 7,
+  **ignores prefs entirely**). They disagree on non-essential out-of-stock, and
+  `AlertsPage.vue:331` deep-links between them — you tap a count and land on a
+  list computed by a different rule.
+- **Three cadence implementations.** `pantry_belief._mean_gap_days` and
+  `get_buy_verdict._cadence_detail` are the *same math on the same inputs* in
+  different prose; `cadence.auto_band_from_history` is a third on another source.
+
+7 live bugs + 5 duplications, all itemised in FU-683 and the plan's §1.
+
+### Decisions worth knowing about (full set in the plan's §2)
+- **Auto-check ("Dora does stocktake for you") — rejected.** Primary reason: it's
+  a *write* solution to a *sort* problem; reordering already delivers the felt
+  outcome. Secondary: it feeds itself — writing `last_checked_at` makes
+  `compute_belief` path 1 return `confidence=0.95, is_inferred=False,
+  reason="You confirmed this today."` about something the user never looked at.
+  Revival conditions are recorded in the plan so this doesn't come back untested.
+- **Bulk confirm — accepted, but as a scan-and-exception screen, not a "Confirm
+  all (12)" button.** The latter gets rubber-stamped by session three and becomes
+  auto-check with a fig leaf. `POST /api/stocktake/bulk-check` already exists.
+- **Belief becomes the queue's ranker; cadence becomes the floor + fallback.**
+  No toggle, no selector — owner: "less stuff to configure is better."
+- **Attention outline stays** (I proposed removing it; owner overruled, correctly
+  — it's *meant* to be eye-catching). Collapsed from two tiers to one instead.
+- **Buy verdict comes off the row entirely.** An earlier idea to show it in the
+  cart popover was killed by the owner: the list picker deliberately doesn't
+  always appear, so there's no reliable moment to hang it on.
+- **Settings scoping rule established** — *writes shared state → household;
+  changes only what you see → per-user*. Caught `buy_verdict_enabled` being
+  household-scoped for a pure display overlay (owner confirmed: a mistake).
+  ADR candidate if it survives one more application.
+
+### Deliberate contradiction, flagged
+D-14 removes the stocktake button's pulsing glow. Feedback **L103** says the glow
+is *"not obvious enough. I almost didn't see it."* Newer decision wins — the
+surface is moving off motion-as-signal and stocktake gets one entry point with a
+count — but it's recorded in the plan so it doesn't read as an oversight. If the
+count proves too quiet, the fix is prominence, not re-adding an animation.
+
+### Next up
+**Step 0** — the alerts assessment (5 questions in the plan's §3). It's a
+conversation, not code, and it gates Chunk 3. Chunks 1 and 2 have no dependency
+and can land any time the stock surface is open.
+
+### Standards close-gate
+No code changed, so no new violations introduced. The plan *pays down* D1–D4
+(existing R-003 debt) and moves a cross-entity rule off the client. Design-guide
+(R-035) checks — colour tokens for the three-band ramp, and the
+`prefers-reduced-motion` posture for the two motion removals — are called out as
+implementation-time obligations in the plan's §4.
+
+---
+
+## 2026-08-19 (later 5) — Recipe view feedback batch (14 items)
+**Status:** code-complete. Backend **1861 passed** (4 new e2e cost tests, 1 DTO
+snapshot updated, 1 property-test fixture extended), frontend **478/478**,
+vue-tsc 0, eslint clean on every touched file. The two server-side bugs were
+verified **live against the owner's own seed data**; the page's own layout was
+not — see the environment note.
+
+### Scope, as agreed up front
+Owner answered the two discussion points before any code moved:
+- **Mark cooked + Log cook: remove both.** Cooking becomes an implicit fact —
+  `last_made_on` and the pool bump are now written only by finishing a cook
+  session. The stepper stays as the manual correction. `cookAsync` keeps two
+  live callers (cook mode, meal planner), so nothing was orphaned.
+- **Read view vs cook mode overlap: leave as-is.** No change made; the DR-11
+  read view stands. The owner's own "ignore the Save/Done item" note follows
+  from this, so Save + Done were left alone too.
+- All 14 items in one unit.
+
+### The $1590 recipe — root-caused by arithmetic, not by a browser
+`recipe_cost._cost_one` multiplied the ingredient quantity by a unit price
+**without ever checking what the price was per**. The seed's Juice Bowl is
+200 ml OJ + 150 g yoghurt; the belief fixtures' observations are count
+observations (`unit="ea"`, harvested from product-less lines — see
+`_line_price.harvest_observation_fields`) at $4.20 and $5.00. 200×4.20 +
+150×5.00 = **$1590 exactly**. The number was reproducible on paper from the
+seed, so no browser was needed to confirm the cause.
+
+The fix carries the unit alongside every price (`UnitPrice`) and splits the two
+ways recipes measure things:
+- **By measure** — convert into the priced unit via `units.convert`; no bridge
+  ⇒ **unpriced**, surfaced per line as `unit_mismatch`. This is the honest
+  answer: a bottle's size is genuinely unknown.
+- **By the item** — "2 tins", "1 onion", or a bare "2" — multiply by
+  `pack_amount`, the price of one whole thing. Deliberately permissive about
+  unknown units, because the count is all the arithmetic needs.
+
+That second half was **found by a failing test, not by design**: the strict-only
+version made "1 unitless thing against a per-litre product" unpriceable, which
+regressed the most common pantry case. Worth noting for the next person — the
+first rule I wrote was correct and useless.
+
+Two old e2e tests asserted the bug as the contract (`2 cups × $3/L == $6.00`).
+Both rewritten with the reasoning inline so this can't be "fixed" back.
+`get_stock_item_unit_cost_at` now delegates to a new
+`get_stock_item_unit_cost_with_unit_at` so "which observation counts" keeps one
+owner (R-003) while the unit survives.
+
+### The Print 404 — an un-swept R-045 violation
+Could not be reproduced here: the route exists, its e2e test passes, and a real
+authenticated browser fetch against the owner's running instance returned
+**200 HTML**. That is exactly the tell. `openPrintView` was
+`window.open(`${baseUrl}/…/print-view`)` — **the literal R-045 violation
+signal** — which carries the session only when the browser volunteers it. It
+does on a same-site dev box (hence the 200) and declines cross-site, and cannot
+in the Capacitor shell. Same defect the QR sheet had; ADR-041/042 fixed that one
+and never swept its siblings.
+
+The R-045+R-046 mechanic is now one implementation
+(`services/files/printView.openHtmlDocumentAsync`); `useQrLabels` was migrated
+onto it rather than left as a second copy, and `PopupBlockedError` is re-exported
+from its old home so importers didn't have to change. **Three siblings remain
+broken and are logged as FU-682** (shopping list, meal plan, stock overview).
+
+### The rest
+Toolbar rebuilt on the shared `PageToolbar` (back + inline name + actions),
+breadcrumb and `⋮` menu deleted, Import promoted from a sidebar card row,
+phone `lt.sm` icon-only gate matching the cookbook; `onBack` retired in favour
+of `back-to`. Cost card is now a `q-expansion-item` with a per-ingredient
+breakdown (new `RecipeCostLineDto` / `estimated_cost_lines`, detail-only) and it
+**renders when the estimate is null but ingredients are linked** — vanishing
+silently reads as a bug. Image Remove was gated on `showRecipeImages`, a
+*display* preference, so photos-off meant an unremovable photo; it now reads
+whether an image exists. "Available meals" gated on `batchEnabled`.
+
+### Environment note — the page could not be seen
+`/#/cookbook/<id>` mounts, the API returns 200, no console errors, and the page
+**stays on the loading skeleton** with the `FadeTransition` at `opacity: 0`.
+The documented `*{transition:none}` workaround did not clear it (it doesn't
+cover `mode="out-in"`). Logged as **FU-681**; the whole layout half of this
+batch is owed a walk in `DORA_VERIFY.md`. Two consecutive sessions have now
+shipped recipe-page changes sight-unseen — worth fixing before a third.
+Verification of the server half was done by booting a **second API on :5171
+against a copy of the dev DB**, leaving the owner's instance untouched.
+
+### Close-gate
+- **R-003:** the whole cost fix. One owner for "what a price is per", one for
+  "which observation counts", one for the new-tab mechanic. Reason codes ship
+  from the server; the *prose* stays on the client, so copy has one home too.
+- **R-045 / R-046:** the point of the print fix; `openPrintView` documents why
+  it must stay a sync entry point.
+- **R-001:** `printView.ts` extracted at its second consumer, not its fourth.
+- **R-035 / D-rules:** no new colour or token; `PageToolbar` already carries the
+  44px min-height and the wrap behaviour DR-9 established.
+- **Scope discipline:** the three remaining R-045 violations, the density bridge,
+  and the pane wedge were all logged (FU-680/681/682), not swept in.
+- **No new ADR.** The print fix *applies* ADR-041/042 rather than deciding
+  anything; the `Base*`-wrapper ADR candidate flagged in the entry below now has
+  a fifth instance in `printView` and is still worth filing with FU-675.
+
+**Next up:** unchanged from the owner's queue — but **FU-682** is a known-broken
+class with the fix sitting next to it, and this batch owes a browser walk.
+
+---
+
+## 2026-08-19 (later 4) — Dashboard drawer link always primary-tinted
+**Status:** code-complete, eslint clean on both files. Browser-verify still owed
+(port 5174 held by another chat's dev server — the pane refuses to co-exist);
+logged under DORA_VERIFY "Nav: menu link active colour".
+
+**Report:** "Dashboard menu link has green text styling in mobile view which is
+different to the rest. Error due to it being special in desktop view?" — the
+mobile-only part of the guess was right, the *reason* wasn't. It's not that the
+entry is conditionally pushed for `screen.lt.md`; it's the route it points at.
+
+**Cause.** `SideMenuButton` renders a `q-item` with `:to`, so Quasar attaches its
+router-link active class. That matching is **route-record based**
+(`use-router-link.js` `linkActiveIndex`): the Dashboard entry targets `/`, which
+resolves to the *empty child* of the `/` MainLayout record, and the composable's
+parent-record fallback then reports it active on every route under that layout.
+Quasar ships `.q-item.q-router-link--active { color: var(--q-primary) }` — hence
+primary text on the Dashboard row everywhere. Desktop never showed it because
+`linksList` only pushes the Dashboard entry on `lt.md` (the mascot is the desktop
+home affordance).
+
+**Second bug found in passing.** That same rule is `(0,2,0)` and beats both
+`.dora-sideMenuButton-active` and `.dora-mainMenuButton-active` at `(0,1,0)`, so
+the *genuinely* active item was rendering primary rather than
+`--text-on-accent` / accent — on desktop too. One cause, two symptoms.
+
+**Fix.** Blank `active-class` / `exact-active-class` on the `:to` branch of both
+`SideMenuButton` and `MainMenuButton`, leaving `useMenuLinkActive` (path-prefix)
+as the only source of active styling. Rejected `exact`: it fixes the Dashboard
+row but leaves the specificity clash on every other item, so the app would still
+have two competing notions of "active".
+
+### Close-gate
+- **R-003 (single source of truth):** the whole point — active state had two
+  owners (Quasar's record matching + `useMenuLinkActive`) disagreeing. Now one.
+- **R-035/D-rules:** no new colour introduced; this restores the specified accent
+  roles the components already declared.
+- **No new ADR.** "Neutralise a framework default that competes with our own
+  state" is close to the `Base*`-wrapper pattern the entry below flags as an ADR
+  candidate; folding it in there when that one is filed is better than a rule of
+  its own on one instance.
+
+**Next up:** unchanged — FU-675's remaining migration, then FU-674.
+
+---
+
+## 2026-08-19 (later 3) — FU-675: the menu-vs-dialog rule, as `BaseSelect`
+**Status:** complete for the decision + 8 call sites; the rest is a migration
+backlog (FU-675, rewritten). Frontend **478/478 across 41 files**, vue-tsc 0,
+eslint clean on `src` (the 11 remaining are FU-673's three untouched test files).
+
+### I had the diagnosis wrong last time — corrected
+The previous handoff asserted the mobile select dialog "fills the viewport
+leaving no backdrop to tap". **That was wrong**, and reading Quasar's own source
+rather than reasoning from the symptom is what corrected it. `QSelect.sass`
+already constrains it: `width: 90vw !important`, `max-height: calc(100vh - 70px)`,
+tightened to `- 108px` on `body.mobile`. On a 375×812 phone that leaves ~19px
+strips each side and ~54px bands top and bottom. So backdrop **does** exist.
+
+The real problem is narrower and different: those bands are awkward targets (the
+bottom one is where the browser toolbar and home indicator live), there is **no
+X and no Done** anywhere in Quasar's select dialog, and with `use-input` the
+software keyboard eats most of what's left. That reframing is what the fix
+follows from — the dialog didn't need constraining, it needed an exit.
+
+### The other fact that matters
+`QSelect.js` `updatePreState`: `hasDialog = $q.platform.is.mobile !== true && …`.
+The choice is **user-agent based, not viewport based**. A desktop browser dragged
+to phone width still gets a menu; only a real phone gets the dialog. So this is
+**not observable by resizing** — I confirmed the pane reports
+`body.class = "desktop touch electron"` at a 375px viewport. That is why the rule
+is pinned in Vitest with a mocked platform rather than left to a browser walk,
+and why the owner's "this might just be a mobile thing" was exactly right.
+
+### The rule
+`components/BaseSelect.vue`: **≤8 options and no typeahead → `menu`**; longer or
+`use-input` → `default`. Not a blanket flip either way, because the two cases
+differ — a five-option menu anchored to a field beats a modal takeover (the
+style the owner prefers), but a long or typeahead list needs the room and has to
+survive the keyboard, which is the problem the dialog exists to solve. The 8
+comes from arithmetic, not taste: Quasar caps the mobile dialog at
+`100vh - 108px` ≈ 14 rows at ~48px; an anchored menu has less room, so the
+cutoff sits well below it. Dialog case gains a sticky title + close row via
+QSelect's `before-options` slot.
+
+### A regression I introduced and caught live
+Declaring `useInput` on BaseSelect (the rule has to read it) means **Vue consumes
+it and drops it from `$attrs`** — so `q-select` stopped receiving it and the
+stock location picker's typeahead silently died while still looking correct.
+vue-tsc and eslint were both clean through this; only reading the mounted
+QSelect's props in the browser showed `useInput: false`. Forwarded explicitly,
+now covered by a test, and written into FU-675 as the migration gotcha since any
+future declared prop has the same trap.
+
+### Migrated (8)
+Five cookbook filter selects, three StockOverview selects, and `SortControl`.
+Verified live on the four stock controls with real data: 3 → menu, 4 → menu,
+8 + use-input → default, 6 → menu; all still 180×44, so `BaseSelect` applying
+`dense`+`outlined` itself preserved the sizing the previous unit established.
+
+### Environment notes (cost time again)
+The dev server **died twice** mid-session; a blank page and a stale component
+tree were both that, not code — `preview_list` returning `[]` is the tell. The
+pane also still starves rAF, so inject `*{transition:none!important}` first, and
+synthetic `click`/pointer events do **not** open a Quasar menu (real input only,
+and screenshots time out here so coordinate clicks aren't available either).
+Route changes via `location.hash` can leave the previous page mounted — the
+cookbook row was not re-verified for that reason; it uses the same component and
+is covered by the tests.
+
+### Close-gate
+- **R-001:** one wrapper owns the decision; call sites dropped their duplicated
+  `dense`+`outlined`.
+- **R-003:** the menu/dialog rule has exactly one home, and the threshold is
+  documented against the framework number it derives from.
+- **No magic:** `BaseSelect` is explicit — no global patching of Quasar defaults,
+  which was the alternative and would have been invisible at every call site.
+- **ADR candidate (not filed):** "a Base* wrapper owns the framework default" now
+  has four instances (`SearchInput`, `SortControl`, `BaseSegmented`,
+  `BaseSelect`). Worth promoting to an R-rule once FU-675's migration lands and
+  the pattern has proven itself across the remaining ~64 sites.
+
+**Next up:** FU-675's remaining migration (a surface at a time), then **FU-674**
+(`--text-on-primary` lever — still the owner's call).
+
+---
+
 ## 2026-08-19 (later 2) — FU-679 closed: import-dialog paste prompt
 **Status:** complete. Trivial follow-on to the cookbook batch above; suites
 unaffected (vue-tsc 0, eslint clean, frontend 469/469 re-run).

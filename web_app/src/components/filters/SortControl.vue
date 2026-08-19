@@ -16,15 +16,14 @@
         as two separate axes the way StockOverview used to. One axis, one
         toggle, everywhere.
     -->
-    <q-select
+    <BaseSelect
         :model-value="sortBy"
         :options="options"
         :label="label"
         emit-value
         map-options
-        outlined
-        dense
         class="sort-control"
+        dialog-title="Sort by"
         @update:model-value="onAxisChange"
     >
         <template #prepend>
@@ -50,12 +49,13 @@
                 <q-tooltip>{{ directionLabel }}</q-tooltip>
             </q-btn>
         </template>
-    </q-select>
+    </BaseSelect>
 </template>
 
 <script setup lang="ts">
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import BaseSelect from 'src/components/BaseSelect.vue';
 
     /** Axis definition narrowed to a page's own sort-key union, so a typo in a
      *  `value` is a compile error rather than a silently dead option. */

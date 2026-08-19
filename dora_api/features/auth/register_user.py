@@ -82,6 +82,8 @@ class AuthenticatedUserDto:
     # clients read the cook-style via /api/health.cooking_policy.
     # Zero-Input Pantry opt-out (default True).
     inferred_pantry_enabled: bool
+    # D-12 — per-user since 2026-08-19; was an install-wide AppSetting.
+    buy_verdict_enabled: bool
     # FU-653 — per-surface belief overlays (recipes / shopping lists / meal
     # planner), each default off. The SPA reads them on boot to decide whether
     # to render the hint on those pages at all; the server gates the data too.
@@ -154,6 +156,7 @@ class AuthenticatedUserDto:
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
             inferred_pantry_enabled=bool(user.inferred_pantry_enabled),
+            buy_verdict_enabled=bool(user.buy_verdict_enabled),
             inference_recipes_enabled=bool(user.inference_recipes_enabled),
             inference_shopping_enabled=bool(user.inference_shopping_enabled),
             inference_meal_plan_enabled=bool(user.inference_meal_plan_enabled),

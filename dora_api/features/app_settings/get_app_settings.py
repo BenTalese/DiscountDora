@@ -18,7 +18,6 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class AppSettingsDto:
     scanning_enabled: bool
     # buy-verdict oracle toggle.
-    buy_verdict_enabled: bool
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
     money_enabled: bool
@@ -89,7 +88,6 @@ class AppSettingsDto:
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
     return AppSettingsDto(
         scanning_enabled=bool(setting.scanning_enabled),
-        buy_verdict_enabled=bool(getattr(setting, "buy_verdict_enabled", True)),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),

@@ -18,6 +18,191 @@ next.
 
 ---
 
+## 2026-08-19 (later 8) — Stock signal consolidation, **Chunk 2**
+**Status:** code-complete and **walked live**. Backend **1886 passed** (+4 e2e
+pinning the setting's scope), frontend **484 passed** (+6 pinning the bulk
+priming), vue-tsc 0, eslint clean on all 11 touched files. Two DTO snapshots
+refreshed — the diff *is* the contract change (`buy_verdict_enabled` leaves
+`app_settings`, arrives on `auth_me`). Chunk 2 of
+`docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`.
+
+### What shipped
+- **D-10 — the buy verdict is off the stock row entirely.** The ring on the cart
+  button is gone, and with it `AddToListButton`'s `verdict` prop, its tooltip
+  block, `VERDICT_HEADLINE`, the aria plumbing and both style blocks (which held
+  nothing else). `StockItemRow` was the prop's only caller — checked before
+  deleting, per the plan's "don't leave unreachable scaffolding".
+- **B5 — the overview asks for nothing.** The row's `useBuyVerdict(...)` call is
+  deleted, so it's zero requests rather than fewer.
+- **D-12 / B7 — `buy_verdict_enabled` moved AppSetting → User.** Migration
+  `d9f4b2c7e803`: clean drop-and-add, no backfill shim (pre-release policy). The
+  toggle moved Admin→Features → **Settings→Assistant**, beside
+  `inferred_pantry_enabled`. `features.buy_verdict` is gone from `/api/health`
+  (an install-wide channel can't carry a per-user answer), and
+  `useBuyVerdictEnabled` is now an eight-line read off `/auth/me` in the shape of
+  `useImagePrefs` — its module-level health probe and `refreshBuyVerdict` went
+  with the flag, since the auth store already owns the user's freshness.
+- **B6 — the shopping list asks once.** New `primeBuyVerdicts(ids, fetcher)` seeds
+  the module cache from one bulk response; `ShoppingListDetail` calls it
+  synchronously right after `detail` is assigned, so the entries are marked
+  in-flight *before* the lines paint. That ordering is the whole trick — priming
+  after the rows mount saves nothing, because they've already asked.
+
+### Verified live, not inferred
+The pane can't composite frames here (screenshots time out, and a routed page
+never mounts — the FU-681 artifact), so this was a **once-off Playwright drive**
+against a throwaway seeded backend on :5171, driving the *built* SPA through the
+locally-installed Chrome (`channel: 'chrome'` — Playwright's own browser binary
+isn't downloaded on this box, and a ~150MB fetch wasn't worth it). Script lived
+in the scratchpad, not the repo: the e2e layer is smoke-only and must not gain
+feature specs. 9/9 checks, including the two that matter and can't be seen:
+
+- stock overview → **0** `buy-verdict` requests;
+- shopping list → **1** bulk call, **0** per-line calls;
+- the Assistant row exists, toggling it writes the per-user field (`true → false`
+  on `/auth/me`), and Admin→Features no longer offers it.
+
+Two false failures on the way, both worth knowing: an absence assertion right
+after an in-app nav reads **both** pages (MainLayout's router-view is a
+simultaneous cross-fade, R-037) — reload instead; and Git Bash path-converts a
+bare `#/route` argument into `C:/Program Files/Git/...`, so pass
+`MSYS_NO_PATHCONV=1`.
+
+### Judgement calls
+- **Bulk endpoint stays list-scoped.** FU-649 wanted a pantry-wide
+  `/stock-items/buy-verdicts` to drive an overview filter. D-10 just removed the
+  verdict from the overview, and the plan's §5 parks "is pantry-wide verdict
+  browsing a real browse mode?" for Step 0 — so building it now would be building
+  for a surface that may not exist. FU-649 updated, not closed.
+- **No server-side gate on the verdict endpoints.** `buy_verdict_enabled` is a
+  display preference; the client gates the render. Gating the data too would be
+  the belt-and-braces `get_pantry_beliefs` does, but it isn't in the plan and the
+  overlay leaks nothing sensitive — noted rather than done.
+- **The D-12 scoping rule is still not an R-rule.** The plan says promote it after
+  it survives *one more* application; this was its first. Left as D-12.
+
+### Next up
+**Step 0 — the alerts assessment.** It is now the only thing blocking the rest of
+the plan: Chunk 3 is gated on it directly, and 4–6 queue behind 3. Five questions,
+in the plan's §3; it's a conversation, not code.
+
+### Standards close-gate
+- **R-003** — one home for "should the verdict show?" (the composable), one for
+  "what's on this list" (the endpoint resolves lines server-side rather than
+  taking an id array).
+- **R-005 / distribution posture** — one clean migration, no dialect-specific SQL,
+  no auth/config/deployment change.
+- **R-035 / D-rules** — the removals are the design work here (D-5/D-7/D-8's colour
+  argument, applied to the cart ring). The new settings row reuses `SettingsRow`,
+  so it inherits the section's tokens, spacing and tap targets; nothing bespoke
+  was styled. Confirmed live at 1280px; the row is plain text + a `q-toggle`, so
+  there's no layout of its own to break on a phone.
+- **R-032** — no new relationship reads.
+- **ADR evaluation** — no new rule (see the D-12 note above).
+
+---
+
+## 2026-08-19 (later 7) — Stock signal consolidation, **Chunk 1** (backend only)
+**Status:** code-complete. Backend **1882 passed** (+21: 9 new `cadence_math`
+unit tests, 8 new D-11 composer tests, 4 new e2e for the bulk endpoint), 1
+skipped, 1 xfailed — the same skip/xfail as before. Frontend untouched apart
+from one corrected comment (eslint clean). Chunk 1 of
+`docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`; no UI change, so
+nothing here is browser-visible except the bug below.
+
+### What shipped
+- **D1/D2 — duplicated windows collapsed.** `cadence.py` now owns both as public
+  `AUTO_HISTORY_WINDOW_DAYS` / `LOW_OUT_BUMP_WINDOW_DAYS`; `stocktake.py` imports
+  them instead of re-declaring (its 90-day copy carried a comment admitting it was
+  a mirror, which is how the plan found it).
+- **D3 — one mean-gap engine.** New `dora_api/domain/cadence_math.py::mean_gap_days`,
+  used by belief, the verdict, *and* the stocktake auto-tuner. It handles both input
+  domains honestly (whole-day for purchase dates, sub-day for change timestamps) and
+  returns `None` — not `0.0` — when every point lands together, so a double-entry
+  can't read as the fastest-moving item in the pantry.
+- **D-11 — the verdict's `need` axis consumes `compute_belief`.** Belief wins when it
+  has signal; the recorded level is the floor; a **low-confidence** belief defers
+  entirely (a guess Dora wouldn't show as a chip has no business overruling a level
+  the user set). When the band is an inference that *disagrees* with the recorded
+  level it hedges twice: the label reads "Probably out of stock" rather than
+  "You're out of stock", and the verdict's confidence steps down one — belief can
+  reach "high" off ~3 logged purchases and has no quantity awareness at all
+  (plan §1.3), so it must not produce the composer's strongest verdict alone.
+  Belief's own `reason` becomes the need detail, so the two surfaces now speak with
+  one voice instead of two phrasings of the same cadence fact.
+- **B6 — bulk verdicts.** `GET /api/shopping-lists/<id>/buy-verdicts`, backed by a
+  new `gather_verdict_inputs_for_items` (fixed query count, shaped on
+  `gather_beliefs_for_items`); the single-item path now delegates to it, so there is
+  one definition of what the composer reasons from. `_item_has_fake_markdown` became
+  a batched `_items_with_fake_markdown` with the per-product judgement memoised.
+  **Not yet wired to the SPA** — that's Chunk 2.
+- **B5's lie corrected.** `useBuyVerdict.ts`'s comment claimed the module cache stops
+  a 100-row page firing 100 requests. It doesn't (id-dedupe only helps on remount);
+  the comment now says so and points at the bulk endpoint.
+
+### The bug this uncovered — the buy verdict has never worked
+Landing D-11 meant belief and the verdict read the same field, and an e2e comparing
+the two endpoints failed: bulk said `buy` for an out-of-stock item, the per-item
+endpoint said `unsure/low`. Root cause is **R-032's identity-map corollary with the
+`.include()` present** — the endpoint included `STOCK_LEVEL`, the session already
+tracked that instance with the relationship unset, `contains_eager` didn't
+repopulate it, and `noload` reads as `None` silently. So `stock_level_band` was
+`"unknown"`, the `need` axis collapsed to thin-data, and **every** verdict from that
+endpoint was `unsure/low` — which the UI suppresses at low confidence, meaning the
+whole feature has been invisible rather than obviously broken. (That is also the real
+mechanism behind the plan's B5 remark that low confidence is "the common case".)
+
+Fixed by resolving the level off the FK instead — new
+`features/stock_items/_level_access.py::resolve_levels_by_item`, per R-032's own
+"only need its id? read `x._some_fk_id`" guidance. Belief's `recorded_sequence` read
+the same relationship and had the same exposure; it now goes through the same helper.
+Chasing this cost most of the unit's time: three wrong hypotheses (query shape
+`.eq` vs `.in_`, a warm-up query, session-per-request) before instrumenting
+`_execute` and watching the same item arrive hydrated in one request and `None` in
+the next. **~20 other readers of `item.stock_level` carry the same exposure and are
+NOT swept — FU-684**, with `alerts/get_alerts.py:215` flagged as the one that matters
+(a silent `None` there suppresses the very alerts Chunk 3 consolidates onto, and
+Chunk 3 opens that file anyway).
+
+### Decisions taken inside the chunk
+- **Bulk endpoint is list-scoped, not id-array-scoped.** The client already has a list
+  id, and resolving lines server-side keeps "what's on this list" in one place (R-003).
+  Follows the `POST /stocktake/bulk-check` precedent for shape, the `GET
+  /stock-items/beliefs` precedent for response.
+- **No server-side gate on it.** `buy_verdict_enabled` is a display opt-out that D-12
+  is about to move from a household AppSetting to a per-user field; gating now would be
+  rewritten immediately. Parity with the per-item endpoint, which doesn't gate either.
+- **FU-649's pantry-wide variant deliberately not built.** D-10 removes the verdict from
+  the stock row, so a pantry-wide endpoint only earns its keep if the "scan my pantry for
+  what's worth buying" browse mode survives Step 0 — the one question §5 parks there.
+  FU-649 updated rather than closed.
+- **`cadence.auto_band_from_history` behaviour change, deliberate:** identical timestamps
+  used to average to `0.0` → Weekly; they now read as no signal → baseline stands.
+
+### Next up
+**Chunk 2** — verdict off the row (D-10), stop fetching per row (B5), delete
+`AddToListButton`'s dead `verdict` prop after checking callers, move
+`buy_verdict_enabled` AppSetting → User (D-12/B7), wire the shopping list to the new
+bulk endpoint. It has no dependency on Step 0. **Step 0** (the alerts assessment) is
+still owner-owned and still gates Chunk 3.
+
+### Standards close-gate
+- **R-003** — the unit is mostly R-003 repayment: D1/D2/D3 collapsed, single-item
+  gather delegating to the bulk one. New shared modules are `domain/cadence_math.py`
+  (pure) and `features/stock_items/_level_access.py` (repo-touching).
+- **R-032** — the defect above is a seventh instance of the noload family, fixed via the
+  rule's own FK guidance; the un-swept readers are logged as FU-684 rather than left
+  silent. The rule's `Source` line gained this instance.
+- **R-005 / distribution posture** — no data-access, auth, config or deployment change;
+  new queries are repository/core SQLAlchemy, no dialect-specific SQL.
+- **R-035 / D-rules** — no UI change (one TS comment), so no design-guide surface.
+- **ADR evaluation** — no new rule. The two candidates were already covered: the
+  hydration fix is R-032, and the "one home for shared arithmetic" instinct is R-003.
+  If FU-684's sweep finds several live bugs, R-032 needs a stronger "an `.include()`
+  alone is not proof of hydration" clause — noted there, not promoted on one instance.
+
+---
+
 ## 2026-08-19 (later 6) — Stock-surface signal consolidation (design session, no code)
 **Status:** design-complete, nothing built. Output is
 `docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md` + **FU-683**.

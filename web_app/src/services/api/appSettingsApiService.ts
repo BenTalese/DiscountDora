@@ -11,7 +11,6 @@ export type AppSettings = {
     // authStore.currentUser.llm_*).
     scanning_enabled: boolean;
     // buy-verdict oracle. Default on (pure-personal feature).
-    buy_verdict_enabled: boolean;
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: boolean;
     money_enabled: boolean;

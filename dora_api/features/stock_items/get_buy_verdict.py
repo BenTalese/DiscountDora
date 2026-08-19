@@ -13,6 +13,11 @@ Design points that keep this honest:
   list lines via the existing `line_paid_unit_price` ladder (R-003
   chokepoint). Cadence is derived inline. Waste rate reads
   `StockItemWasteEvent`. No external calls, no crowd data.
+* **One cadence engine.** The `need` axis consumes `pantry_belief`
+  (D-11 / `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`). It used to carry
+  its own copy of belief's mean-gap math over belief's own inputs, so
+  the two surfaces could state the same fact in different — sometimes
+  contradictory — prose. Belief factors cook events; this never did.
 * **Pure composer.** The axes are three pure functions
   (`_price_axis`, `_need_axis`, `_waste_axis`) that never touch a
   session; the endpoint fetches raw data once and passes it in. Tests
@@ -28,11 +33,13 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Optional
 from uuid import UUID
 
+from dora_api.domain.cadence_math import mean_gap_days
 from dora_api.domain.entities.shopping_list import (
     SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine,
 )
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
+from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import (
     is_low_stock, is_out_of_stock,
 )
@@ -41,6 +48,10 @@ from dora_api.features.app_settings.clock import (
 )
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.stock_items._level_access import resolve_levels_by_item
+from dora_api.features.stock_items.pantry_belief import (
+    PantryBelief, gather_beliefs_for_items,
+)
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -176,6 +187,11 @@ class _AxisInputs:
     # zone UTC observation timestamps are bucketed into via `_local_date` so the
     # two clocks agree. Defaults to UTC (tests build samples at UTC-noon).
     tz: tzinfo = timezone.utc
+    # D-11 — Dora's inferred level for this item, or None when belief
+    # wasn't gathered (older call sites / composer unit tests). When belief
+    # has something to say the `need` axis prefers it over the recorded
+    # level; see `_need_band`. Server-owned reasoning either way (R-003).
+    belief: Optional[PantryBelief] = None
     # FU-450 — at least one product linked to this item is currently
     # running an inflated "special" (claims a saving, but the household has
     # paid less recently). Demotes a price-driven `buy` to `wait` and
@@ -242,48 +258,86 @@ def _price_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
     ), "usual_price"
 
 
+# Need-axis labels, keyed by band: (recorded, inferred). The inferred wording
+# hedges because that band is Dora's guess disagreeing with what the user last
+# recorded — asserting "You're out of stock" about an inference is exactly the
+# overclaim Charter P3 (Honest) forbids.
+_NEED_LABELS: dict[str, tuple[str, str]] = {
+    "out": ("You're out of stock", "Probably out of stock"),
+    "low": ("Running low", "Probably running low"),
+    "stocked": ("Stocked", "Probably still stocked"),
+}
+
+_NEED_SIGNALS: dict[str, str] = {
+    "out": "out_of_stock",
+    "low": "low_stock",
+    "stocked": "stocked",
+}
+
+
+def _need_band(inputs: _AxisInputs) -> tuple[str, bool]:
+    """Resolve the band the `need` axis reasons from, and whether belief
+    supplied it (D-11).
+
+    Belief wins when it has signal; the recorded level is the floor. A
+    low-confidence belief defers — it is the thin-data / no-history path, and
+    a guess Dora wouldn't show the user as a chip has no business overruling
+    a level that user set by hand.
+    """
+    belief = inputs.belief
+    if belief is None or belief.confidence_band == "low":
+        return inputs.stock_level_band, False
+    return belief.believed_band, True
+
+
+def _need_is_soft_inference(inputs: _AxisInputs) -> bool:
+    """True when the need band is an inference that *disagrees* with the
+    recorded level — the case where the composer should hedge (both in the
+    label and in the verdict's confidence). Belief merely echoing what the
+    user recorded is not soft; it is the recorded level."""
+    band, from_belief = _need_band(inputs)
+    if not from_belief:
+        return False
+    belief = inputs.belief
+    assert belief is not None      # implied by from_belief
+    return belief.is_inferred and band != inputs.stock_level_band
+
+
 def _need_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
-    band = inputs.stock_level_band
-    if band == "out":
-        return VerdictReasonDto(
-            axis="need",
-            signal="out_of_stock",
-            label="You're out of stock",
-        ), "out_of_stock"
-    if band == "low":
-        detail = _cadence_detail(inputs)
-        return VerdictReasonDto(
-            axis="need",
-            signal="low_stock",
-            label="Running low",
-            detail=detail,
-        ), "low_stock"
-    if band == "stocked":
-        detail = _cadence_detail(inputs)
-        return VerdictReasonDto(
-            axis="need",
-            signal="stocked",
-            label="Stocked",
-            detail=detail,
-        ), "stocked"
-    # Unknown stock band means we don't have a status at all — treat as
-    # thin-data on this axis; the composer will absorb the drop in
-    # confidence.
-    return None, "thin_data"
+    band, from_belief = _need_band(inputs)
+    if band not in _NEED_SIGNALS:
+        # Unknown stock band means we don't have a status at all, and belief
+        # had nothing to add — treat as thin-data on this axis; the composer
+        # will absorb the drop in confidence.
+        return None, "thin_data"
+
+    recorded_label, inferred_label = _NEED_LABELS[band]
+    soft = _need_is_soft_inference(inputs)
+    # When belief drove the band, its own `reason` is the explanation — one
+    # voice for the cadence story instead of two phrasings of it.
+    detail = (
+        inputs.belief.reason if from_belief and inputs.belief is not None
+        else _cadence_detail(inputs)
+    )
+    signal = _NEED_SIGNALS[band]
+    return VerdictReasonDto(
+        axis="need",
+        signal=signal,
+        label=inferred_label if soft else recorded_label,
+        detail=detail,
+    ), signal
 
 
 def _cadence_detail(inputs: _AxisInputs) -> Optional[str]:
+    """Fallback cadence prose for items with no belief (see `_need_band`).
+    The averaging itself is shared (`domain/cadence_math.py`, R-003) so this
+    can no longer drift from what belief says."""
     dates = inputs.unique_purchase_dates
     if len(dates) < _MIN_UNIQUE_PURCHASE_DATES:
         return None
-    gaps = [
-        (dates[i] - dates[i - 1]).days
-        for i in range(1, len(dates))
-        if (dates[i] - dates[i - 1]).days > 0
-    ]
-    if not gaps:
+    avg_days = mean_gap_days(dates)
+    if avg_days is None:
         return None
-    avg_days = sum(gaps) / len(gaps)
     days_since = (inputs.today - dates[-1]).days
     if days_since >= avg_days:
         return f"Bought every ~{avg_days:.0f} days · last shop {days_since} days ago"
@@ -450,6 +504,14 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     if thin:
         confidence = _step_down(confidence)
 
+    # D-11 — a need band Dora *inferred*, against what the user last
+    # recorded, is weaker evidence than a level they set themselves. Belief
+    # can reach "high" on Low/Stocked with only ~3-4 logged purchases and has
+    # no quantity awareness at all (plan §1.3), so a `buy/high` built on top of
+    # one would overclaim. Step down; the reason still reads as a guess.
+    if _need_is_soft_inference(inputs):
+        confidence = _step_down(confidence)
+
     # FU-450 — an inflated markdown on a linked product is an honesty
     # signal, not a need signal. It demotes a *price-driven* `buy` to
     # `wait` (don't celebrate a fake special) but never overrides a genuine
@@ -516,13 +578,9 @@ def _data_used_dto(inputs: _AxisInputs) -> VerdictDataUsedDto:
     if dates:
         days_since = max(0, (inputs.today - dates[-1]).days)
     if len(dates) >= _MIN_UNIQUE_PURCHASE_DATES:
-        gaps = [
-            (dates[i] - dates[i - 1]).days
-            for i in range(1, len(dates))
-            if (dates[i] - dates[i - 1]).days > 0
-        ]
-        if gaps:
-            avg_days = round(sum(gaps) / len(gaps), 1)
+        mean_gap = mean_gap_days(dates)
+        if mean_gap is not None:
+            avg_days = round(mean_gap, 1)
 
     return VerdictDataUsedDto(
         price_samples=len(inputs.price_samples),
@@ -540,8 +598,7 @@ def _data_used_dto(inputs: _AxisInputs) -> VerdictDataUsedDto:
 # ── Data gathering (the only part that touches the repo) ──────────────
 
 
-def _stock_level_band(item: StockItem) -> str:
-    level = item.stock_level
+def _stock_level_band(level: StockLevel | None) -> str:
     if level is None:
         return "unknown"
     if is_out_of_stock(level):
@@ -551,20 +608,38 @@ def _stock_level_band(item: StockItem) -> str:
     return "stocked"
 
 
-def _gather_inputs(
-    repository: SqlAlchemyRepository, item: StockItem,
-) -> _AxisInputs:
+def gather_verdict_inputs_for_items(
+    repository: SqlAlchemyRepository, items: list[StockItem],
+) -> dict[UUID, _AxisInputs]:
+    """Gather composer inputs for many items with a fixed number of queries.
+
+    B6 — every surface that shows more than one verdict used to fetch them a
+    row at a time (`useBuyVerdict` per stock row, `BuyVerdictBadgeInline` per
+    shopping-list line), so a 40-line list meant 40 requests each doing this
+    walk for a single item. Shaped on `gather_beliefs_for_items`.
+
+    The items need no `.include()`: the recorded level is resolved by foreign
+    key (see `_level_access`), not off the relationship.
+    """
+    if not items:
+        return {}
+
     today = household_today(repository)
     tz = household_timezone(repository)
     horizon_start = datetime.combine(
         today - timedelta(days=_HISTORY_WINDOW_DAYS),
         datetime.min.time(), tzinfo=tz,
     )
+    item_ids = [i.id for i in items]
 
-    # Completed-list lines for this item.
+    # Shopping-list lines for every item, bucketed per item.
     lines: list[ShoppingListLine] = repository.get(ShoppingListLine).all(
-        EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(item.id)
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).in_(item_ids)
     )
+    lines_by_item: dict[UUID, list[ShoppingListLine]] = {}
+    for line in lines:
+        lines_by_item.setdefault(line.stock_item_id, []).append(line)
+
     list_ids = list({l.shopping_list_id for l in lines})
     completed_lookup: dict[UUID, datetime | None] = {}
     open_list_ids: set[UUID] = set()
@@ -578,70 +653,95 @@ def _gather_inputs(
             else:
                 open_list_ids.add(l.id)
 
-    samples: list[tuple[float, datetime]] = []
-    for line in lines:
-        completed_at = completed_lookup.get(line.shopping_list_id)
-        if completed_at is None:
-            continue
-        if completed_at < horizon_start:
-            continue
-        price = line_paid_unit_price(line)
-        if price is None:
-            continue
-        samples.append((price, completed_at))
-    samples.sort(key=lambda s: s[1], reverse=True)
-
-    unique_dates = sorted({_local_date(s[1], tz) for s in samples})
-
-    # Waste events over the same window.
+    # Waste events over the same window, counted per item.
     waste_events: list[StockItemWasteEvent] = repository.get(StockItemWasteEvent).all(
-        EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.STOCK_ITEM_ID).eq(item.id)
+        EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.STOCK_ITEM_ID).in_(item_ids)
     )
-    waste_in_window = sum(
-        1 for e in waste_events
-        if e.occurred_at and _as_utc(e.occurred_at) >= horizon_start
-    )
+    waste_in_window_by_item: dict[UUID, int] = {}
+    for e in waste_events:
+        if e.occurred_at and _as_utc(e.occurred_at) >= horizon_start:
+            waste_in_window_by_item[e.stock_item_id] = (
+                waste_in_window_by_item.get(e.stock_item_id, 0) + 1
+            )
 
-    is_on_open_list = any(
-        line.shopping_list_id in open_list_ids for line in lines
-    )
+    # D-11 — the need axis reasons from belief, so gather that in bulk too.
+    beliefs = gather_beliefs_for_items(repository, items)
+    levels_by_item = resolve_levels_by_item(repository, items)
+    fake_markdown_items = _items_with_fake_markdown(repository, item_ids)
 
-    return _AxisInputs(
-        price_samples=samples,
-        unique_purchase_dates=unique_dates,
-        waste_events_12mo=waste_in_window,
-        purchases_12mo=len(unique_dates),
-        stock_level_band=_stock_level_band(item),
-        is_on_open_list=is_on_open_list,
-        today=today,
-        tz=tz,
-        fake_markdown=_item_has_fake_markdown(repository, item.id),
-    )
+    out: dict[UUID, _AxisInputs] = {}
+    for item in items:
+        item_lines = lines_by_item.get(item.id, [])
+        samples: list[tuple[float, datetime]] = []
+        for line in item_lines:
+            completed_at = completed_lookup.get(line.shopping_list_id)
+            if completed_at is None:
+                continue
+            if completed_at < horizon_start:
+                continue
+            price = line_paid_unit_price(line)
+            if price is None:
+                continue
+            samples.append((price, completed_at))
+        samples.sort(key=lambda s: s[1], reverse=True)
+        unique_dates = sorted({_local_date(s[1], tz) for s in samples})
+
+        out[item.id] = _AxisInputs(
+            price_samples=samples,
+            unique_purchase_dates=unique_dates,
+            waste_events_12mo=waste_in_window_by_item.get(item.id, 0),
+            purchases_12mo=len(unique_dates),
+            stock_level_band=_stock_level_band(levels_by_item.get(item.id)),
+            is_on_open_list=any(
+                line.shopping_list_id in open_list_ids for line in item_lines
+            ),
+            today=today,
+            tz=tz,
+            belief=beliefs.get(item.id),
+            fake_markdown=item.id in fake_markdown_items,
+        )
+    return out
 
 
-def _item_has_fake_markdown(
-    repository: SqlAlchemyRepository, stock_item_id: UUID,
-) -> bool:
-    """FU-450 — True when any product linked to this stock item is running
-    an inflated markdown right now. Delegates the per-product judgement to
-    the shared `deal_quality` signal (R-003 — one definition of "fake")."""
+def _gather_inputs(
+    repository: SqlAlchemyRepository, item: StockItem,
+) -> _AxisInputs:
+    """Single-item path (the detail endpoint). Delegates to the bulk gather so
+    there is one definition of what the composer reasons from (R-003)."""
+    return gather_verdict_inputs_for_items(repository, [item])[item.id]
+
+
+def _items_with_fake_markdown(
+    repository: SqlAlchemyRepository, stock_item_ids: list[UUID],
+) -> set[UUID]:
+    """FU-450 — the subset of these items with a linked product running an
+    inflated markdown right now. Delegates the per-product judgement to the
+    shared `deal_quality` signal (R-003 — one definition of "fake"); the
+    per-product answer is memoised because one product can be linked to
+    several stock items."""
     from sqlalchemy import select
     from dora_api.app import db
     from dora_api.features.deals.deal_quality import get_deal_quality
 
+    if not stock_item_ids:
+        return set()
+
     link_table = db.metadata.tables["StockItemProduct"]
-    product_ids = [
-        r[0] for r in db.session.execute(
-            select(link_table.c.product_id).where(
-                link_table.c.stock_item_id == stock_item_id
-            )
-        ).all()
-    ]
-    for pid in product_ids:
-        dq = get_deal_quality(pid, repository)
-        if dq is not None and dq.fake_markdown:
-            return True
-    return False
+    rows = db.session.execute(
+        select(link_table.c.stock_item_id, link_table.c.product_id).where(
+            link_table.c.stock_item_id.in_(stock_item_ids)
+        )
+    ).all()
+
+    fake_by_product: dict[UUID, bool] = {}
+    out: set[UUID] = set()
+    for stock_item_id, product_id in rows:
+        if product_id not in fake_by_product:
+            dq = get_deal_quality(product_id, repository)
+            fake_by_product[product_id] = dq is not None and dq.fake_markdown
+        if fake_by_product[product_id]:
+            out.add(stock_item_id)
+    return out
 
 
 # ── Endpoint ───────────────────────────────────────────────────────────
@@ -650,9 +750,11 @@ def _item_has_fake_markdown(
 @STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/buy-verdict", methods=["GET"])
 def get_buy_verdict(stock_item_id: UUID):
     repo = SqlAlchemyRepository()
-    item: StockItem | None = (
-        repo.get(StockItem).include(StockItem.Fields.STOCK_LEVEL).by_id(stock_item_id)
-    )
+    # No `.include(STOCK_LEVEL)` here: the gather resolves the recorded level
+    # by foreign key (`_level_access`) because the include doesn't reliably
+    # hydrate it, which is what made this endpoint answer `unsure/low` for
+    # every item. Asking for an include we don't read would be theatre.
+    item: StockItem | None = repo.get(StockItem).by_id(stock_item_id)
     if item is None:
         return not_found("StockItem", stock_item_id)
     inputs = _gather_inputs(repo, item)

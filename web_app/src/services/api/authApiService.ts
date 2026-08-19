@@ -52,6 +52,7 @@ export type UpdateMeCommand = {
     /** P8-07 — Zero-Input Pantry opt-out. `false` hides the inferred-level
      *  belief overlay; default `true`. */
     inferred_pantry_enabled?: boolean;
+    buy_verdict_enabled?: boolean;
     /** FU-653 — per-surface belief overlays (recipes / shopping lists / meal
      *  planner). Each defaults false. */
     inference_recipes_enabled?: boolean;

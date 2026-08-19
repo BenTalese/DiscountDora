@@ -26,8 +26,10 @@ class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scanning_enabled: bool | None = None
-    # buy-verdict oracle toggle.
-    buy_verdict_enabled: bool | None = None
+    # `buy_verdict_enabled` left this request on 2026-08-19 (D-12) — it is a
+    # per-user display preference now, patched via PATCH /auth/me. `extra=forbid`
+    # means an old client still sending it here gets a 4xx rather than a silent
+    # no-op, which is the honest failure.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool | None = None
     money_enabled: bool | None = None
@@ -130,8 +132,6 @@ class UpdateAppSettingsHandler:
 
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
-        if "buy_verdict_enabled" in set_fields and request.buy_verdict_enabled is not None:
-            setting.buy_verdict_enabled = request.buy_verdict_enabled
         # C-cross Chunk 1 — install feature flags. Partial-update semantics
         # like every other field above: only fields present in the body
         # change; the rest are left alone.

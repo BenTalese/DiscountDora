@@ -62,7 +62,9 @@ from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
                                           level_for_status)
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
-from dora_api.features.stocktake.cadence import (CadenceBand, ItemHistory,
+from dora_api.features.stocktake.cadence import (AUTO_HISTORY_WINDOW_DAYS,
+                                                 LOW_OUT_BUMP_WINDOW_DAYS,
+                                                 CadenceBand, ItemHistory,
                                                  parse_band, resolve_band)
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
@@ -75,9 +77,11 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 # History-signal windows for the engagement gate + Auto's Low/Out bump.
 # All in one place so the queue, the tests, and any future assistant
 # tool resolve to the same numbers (R-003).
+# The two cadence windows are *imported*, not re-declared — `cadence.py` owns
+# them because it owns the decision they feed (D1/D2 in
+# `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`; the old local copy of the 90-day
+# one even carried a comment admitting it was a mirror).
 _ENGAGEMENT_WINDOW_DAYS = 60
-_LOW_OUT_BUMP_WINDOW_DAYS = 14
-_AUTO_HISTORY_WINDOW_DAYS = 90  # mirrors cadence.py's _AUTO_HISTORY_WINDOW_DAYS
 
 # Push (snooze) window — fixed 3 days per §5 (open-decision resolved).
 _SNOOZE_DAYS = 3
@@ -151,7 +155,7 @@ class _EngagementSignals:
     # self-tuner (`cadence.py::auto_band_from_history`).
     change_timestamps_by_item: dict[UUID, list[datetime]]
     # Per-item flag: any StockLevelChange in the last
-    # _LOW_OUT_BUMP_WINDOW_DAYS whose target level's sequence is ≥
+    # LOW_OUT_BUMP_WINDOW_DAYS whose target level's sequence is ≥
     # LOW_STOCK. Bumps one band faster.
     items_hit_low_or_out_recently: set[UUID]
 
@@ -170,8 +174,8 @@ def _gather_engagement_signals(
     list_table = db.metadata.tables["ShoppingList"]
 
     engagement_cutoff = now - timedelta(days=_ENGAGEMENT_WINDOW_DAYS)
-    auto_history_cutoff = now - timedelta(days=_AUTO_HISTORY_WINDOW_DAYS)
-    low_out_cutoff = now - timedelta(days=_LOW_OUT_BUMP_WINDOW_DAYS)
+    auto_history_cutoff = now - timedelta(days=AUTO_HISTORY_WINDOW_DAYS)
+    low_out_cutoff = now - timedelta(days=LOW_OUT_BUMP_WINDOW_DAYS)
 
     # Level-change rows for the trailing Auto-history window (which is
     # a superset of the engagement window, so one query covers both).

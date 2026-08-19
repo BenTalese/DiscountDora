@@ -2314,3 +2314,20 @@ The menu/dialog choice is user-agent based, so **resizing a desktop browser cann
 - [ ] On a phone, open Cookbook filters → **Difficulty**, **Cuisine**, **Category**, **Time of day**, **Collection**: each should open an ordinary dropdown attached to the field, NOT a full-screen panel.
 - [ ] On a phone, Stock filters → **Any level** / **Any group** / **Sort by**: same, an attached dropdown.
 - [ ] On a phone, Stock filters → **Any location** (typeahead): this one SHOULD still be the full-screen panel — confirm it now shows a title and a close (X), that the X dismisses it, and that **typing still filters the list** (this broke once and was fixed).
+
+## Stock-item detail — buy verdict, first run (2026-08-19) — origin FU-684
+
+The verdict has never actually worked (it answered `unsure/low` for every item);
+the server half is now pinned by e2e, but nobody has seen the card render a real
+answer.
+
+- [ ] Open a stock item you are **out of** — the card reads **Buy**, not "Not sure",
+      and the need reason is present.
+- [ ] Open one Dora *infers* is out while its recorded level says stocked (needs a
+      few logged shops) — the reason reads **"Probably out of stock"** with her
+      cadence explanation beneath it, and the confidence is not "high".
+- [ ] Turn "Should I buy this?" **off** under Settings → Assistant (per-user since
+      Chunk 2) and confirm the card on the item page and the badge on a shopping
+      list both disappear — the *toggle* itself was walked live on 2026-08-19
+      (it writes the per-user field); what's unverified is the two surfaces
+      reacting to it.

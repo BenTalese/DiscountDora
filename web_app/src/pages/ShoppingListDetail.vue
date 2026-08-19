@@ -1296,7 +1296,11 @@
     import PageToolbar from 'src/components/PageToolbar.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
     import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
-    import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
+    import BuyVerdictApiService from 'src/services/api/buyVerdictApiService';
+    import {
+        invalidateBuyVerdict, primeBuyVerdicts,
+    } from 'src/composables/useBuyVerdict';
+    import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useQuasar, type QVirtualScroll } from 'quasar';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
@@ -1348,6 +1352,9 @@
     const stockLevelStore = useStockLevelStore();
     const productStore = useProductStore();
     const { moneyEnabled } = useMoneyEnabled();
+    // Per-user display opt-out (D-12). Gates the bulk verdict prefetch below;
+    // `BuyVerdictBadgeInline` checks it again for the render.
+    const { buyVerdictEnabled } = useBuyVerdictEnabled();
     const { openQuickAdd, isOpen: quickAddOpen } = useQuickAdd();
 
     const listId = computed(() => String(route.params.id ?? ''));
@@ -2134,6 +2141,7 @@
         detail.value = null;
         try {
             detail.value = await api.getDetailAsync(listId.value);
+            primeVerdicts(listId.value);
         } catch (err) {
             loadError.value = `Could not load list: ${describeApiError(err)}`;
         } finally {
@@ -2142,6 +2150,23 @@
         // refresh the trim-to-budget banner state as soon as the
         // list is available. Own try/catch inside; failures never bubble.
         void refreshTrimStatus();
+    }
+
+    // B6 — one request for the whole list's verdicts, marked in-flight before
+    // the lines paint so each `BuyVerdictBadgeInline` reads the shared answer
+    // instead of asking for its own. Called synchronously after `detail` is
+    // assigned (Vue renders on the next tick, so the marks land first).
+    // Fire-and-forget: `primeBuyVerdicts` swallows its own failure, and a list
+    // that can't fetch verdicts still shows its items.
+    function primeVerdicts(shoppingListId: string): void {
+        if (!buyVerdictEnabled.value) return;
+        const ids = (detail.value?.lines ?? [])
+            .map((line) => line.stock_item_id)
+            .filter((id): id is string => !!id);
+        void primeBuyVerdicts(
+            ids,
+            () => new BuyVerdictApiService().getForListAsync(shoppingListId),
+        );
     }
 
     async function refreshAll() {

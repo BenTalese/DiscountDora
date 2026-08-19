@@ -15,6 +15,33 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **The stock list no longer comments on whether to buy things (2026-08-19).** Each row
+  carried a coloured halo around its cart button — green "worth buying", amber "maybe wait",
+  red "probably skip" — on a row that already shows the stock level, whether the item is
+  essential, when it expires and whether it needs attention. Worse, the colours argued with
+  each other: a red stock square means *you need this now*, while a red ring eight pixels
+  away meant *don't buy this*. The verdict is now only where you go to ask for it: the item's
+  own page, and your shopping list. Nothing was lost — the cart button does the same thing
+  it always did, and it stopped fetching a verdict for every row on the page just to decide
+  whether to draw a ring it usually didn't.
+- **"Should I buy this?" is your setting now, not the household's (2026-08-19).** It lived
+  under Settings — Admin — Features, so it was one install-wide switch: whoever turned it off
+  turned it off for everyone. It only changes what the person reading it sees, so it's moved
+  to **Settings — Assistant**, alongside the other "where may Dora share what she thinks"
+  toggles, and each person now decides for themselves. Still on by default.
+- **A shopping list asks about buying once, not once per line (2026-08-19).** Opening a
+  40-line list fired 40 separate requests, one per line's badge, each re-reading the same
+  history for a single item. It's one request for the whole list now.
+- **"Should I buy this?" now uses Dora's own read of your stock, and says when it's a guess
+  (2026-08-19).** The verdict used to work purely off the level you last recorded, while the
+  *"Dora thinks…"* chip beside it worked off your shopping and cooking rhythm — two answers
+  to the same question, from the same data, that could disagree in front of you. The verdict
+  now takes the same inferred read the chip does, so they can't contradict each other. When
+  that read is a **guess** rather than something you recorded, it says so: **"Probably out of
+  stock"** instead of "You're out of stock", it shows her reasoning underneath ("bought 20
+  days ago; your usual ~14-day supply should be gone"), and it holds the verdict's confidence
+  one notch lower than it would for a level you set yourself. A guess she isn't confident
+  about doesn't overrule you at all.
 - **A recipe now opens with one toolbar, and its name beside the back arrow (2026-08-19).** The recipe page had three stacked rows at the top: a back arrow with a "Cookbook › Recipe name" breadcrumb, then the name again as a heading, then a row of buttons — and on a phone the buttons overlapped the name and cut it off. It's now the same single toolbar the stock-item page and the cookbook use: back arrow, recipe name inline beside it, actions on the right, all dropping to icons on a phone with the label kept as the tooltip. The breadcrumb is gone (the back arrow already says where you came from), and so is the **⋮** menu — **New version**, **Delete** and **Favourite** are buttons in the toolbar now, because hiding a common action behind an extra tap only costs you taps. **Import** joined them too, matching the cookbook's own toolbar; it used to be a row buried in a card down the side of the page.
 - **"Mark cooked" and "Log cook…" are gone (2026-08-19).** Recording a cook was something you had to remember to come back and do, which nobody does — and the two things it changed are both reachable anyway: the meals you have prepared are edited directly with the +/− beside them, and "last cooked" now updates from the one moment Dora can actually observe it, which is finishing a cook in **cook mode**. One fewer thing to maintain by hand, and a "last cooked" date you can trust because it isn't a mix of remembered and observed.
 - **The estimated cost of a recipe now shows its working (2026-08-19).** Collapsed, the card says what it always said. Open it and you get the arithmetic per ingredient: how much the recipe calls for, the price it was matched against ("$0.003 per g", "$1.20 each"), and what that ingredient contributes — or, when it couldn't be priced, why not: not linked to a stock item, no price recorded yet, or a measurement the price can't be converted into. The card also appears now when Dora can't price anything at all, saying so, instead of silently not being there.
@@ -40,6 +67,14 @@ semver — major bumps signal schema or breaking-config changes.
 - **A recipe now tells you which ingredient is the one that's expiring (2026-08-17).** Filtering the cookbook to "uses expiring ingredients" told you a recipe qualified, then left you to work out which ingredient made it qualify by comparing the list against your pantry. Open a recipe now and the at-risk ones say so beside the ingredient: an amber **Use soon** chip, or a red **Expired** if it's already past its date, with the date itself on hover. It marks the same ingredients the filter matched on — including optional ones, which the filter's count ignores but which are still worth using up — so a recipe that came back from that filter can never open with nothing marked.
 
 ### Fixed
+- **"Should I buy this?" was answering "Not sure" about everything (2026-08-19).** The
+  card on a stock item's page, and the badge on a shopping list, could never say more than
+  *Not sure — not enough history yet*, even for something you're flatly out of — which
+  should be its single most confident **Buy**. Dora was asking the item what its stock level
+  was and getting no answer back (a loading fault, not missing data), so the "do you need
+  this?" half of the verdict was blank on every item and the other two halves were never
+  enough on their own. She reads the level a different way now. If you'd written the feature
+  off as useless, it's worth another look — it has never actually run.
 - **A two-ingredient recipe no longer costs $1590 (2026-08-19).** Dora was multiplying the amount a recipe calls for by a price without checking what the price was *per*. "200 ml of orange juice" times "$4.20 a bottle" gave $840, and the same mistake on the yoghurt made a breakfast bowl cost $1590. She now converts the amount into the unit the price is measured in — 2 cups of something sold by the litre is half a litre, not two — and where the two genuinely can't be reconciled, because a bottle's size is unknown, that ingredient is **left out and marked as unpriced** rather than guessed at. The "N of M ingredients priced" line already existed to say so. Ingredients counted by the item ("2 tins", "1 onion") are priced per item, which is what they always meant.
 - **The Print button on a recipe works away from a dev machine (2026-08-19).** It opened the print view as a plain link to the server, which carries your session only if the browser volunteers it — it does when the app and the server share a hostname, and it doesn't once they're split across two, or in the phone app, where they never can. The result was a new tab showing an error instead of the recipe. Print now fetches the page the same authenticated way as everything else in the app and hands the finished page to the new tab, and if anything does go wrong it tells you in the app rather than dumping a raw error in a tab. Blocked pop-ups now say so specifically, since that one's fixed by allowing pop-ups, not by reporting a bug.
 - **You can remove a recipe's photo again (2026-08-19).** The Remove button was tied to whether the photo was being *displayed*, so with recipe photos turned off in Settings there was no way to delete one — the recipe still had it, and you couldn't get rid of it. Whether a photo exists and whether you've chosen to look at photos are now separate questions.

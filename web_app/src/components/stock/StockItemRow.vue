@@ -159,15 +159,14 @@
 
             <q-space />
 
-            <!-- 2026-08-15 feedback: the "should I buy this?" verdict is no
-                 longer its own chip competing for row width. It's an
-                 extension of the cart decision, so it rides the cart button
-                 — a verdict-toned ring around it, and the same headline +
-                 reasons on the button's tooltip. See `AddToListButton`'s
-                 `verdict` prop. The one-tap action the chip's popover used
-                 to offer is gone because the button IS that action.
-                 Silent on low-confidence verdicts (Charter P3: don't
-                 dashboard every row) and when the feature flag is off. -->
+            <!-- D-10 (2026-08-19): no buy verdict on this row, in any form.
+                 It was a chip, then a ring on the cart button; both were a
+                 derived signal decorating a row that already carries the
+                 level, the essential marker, the expiry and the attention
+                 outline — and its amber/red vocabulary inverted theirs (red
+                 level square = "buy this now", red cart ring = "don't"). It
+                 survives on the two surfaces the user opens *to ask*: the
+                 stock-item detail card and the shopping list. -->
 
             <!-- "Log a price" (G2: money-gated, left of
                  expiry). Opens the shared PriceEntry dialog. No emit
@@ -303,7 +302,6 @@
             <AddToListButton
                 variant="row"
                 :stock-item-id="item.stock_item_id"
-                :verdict="verdictShouldShow ? verdict : null"
             />
         </q-card-section>
 
@@ -330,8 +328,6 @@
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
-    import { useBuyVerdict } from 'src/composables/useBuyVerdict';
-    import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -374,29 +370,23 @@
         // `go-to-list` retired with the "On N lists" chip.
         // The cart button owns the list interaction now.
         // `verdict-action` retired 2026-08-15 with the standalone verdict
-        // chip: the verdict is now chrome on the cart button, and the cart
-        // button's own click already performs the add/remove the one-tap
-        // action used to offer. The detail page + shopping list still drive
-        // `useBuyVerdictActions` for their richer surfaces.
+        // chip; the ring that replaced it went too (D-10, 2026-08-19). The
+        // detail page + shopping list still drive `useBuyVerdictActions` for
+        // their richer surfaces.
     }>();
 
     const $q = useQuasar();
     const actions = useStockItemActions();
     const { moneyEnabled } = useMoneyEnabled();
-    const { buyVerdictEnabled } = useBuyVerdictEnabled();
-    // fetch the verdict for this row (per-item cache in the
-    // composable keeps re-mounts free). Show only medium/high
-    // confidence: low-confidence noise on every row breaks Charter P3.
-    const { verdict } = useBuyVerdict(props.item.stock_item_id);
+    // B5 (D-10): this row used to call `useBuyVerdict(...)` here, which
+    // fired one request per rendered row — the composable's cache dedupes by
+    // id, so 200 distinct items meant 200 requests, to draw a ring that was
+    // suppressed at low confidence (the common case). The row asks for
+    // nothing now.
     // inferred belief for this row (shared module-level cache;
     // loaded once by the overview). Null when inference is off or absent.
     const { beliefFor } = usePantryBeliefs();
     const belief = computed(() => beliefFor(props.item.stock_item_id));
-    const verdictShouldShow = computed(() =>
-        buyVerdictEnabled.value
-        && verdict.value !== null
-        && verdict.value.confidence !== 'low',
-    );
 
     // Phones drop the location line and the per-row price button — see the
     // template comments. `lt.sm` (xs) matches the 599px CSS breakpoints

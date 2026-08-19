@@ -10,6 +10,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from dora_api.features.stock_items.get_buy_verdict import (
     _AxisInputs, compose_verdict,
 )
+from dora_api.features.stock_items.pantry_belief import PantryBelief
 
 
 def _today() -> date:
@@ -469,3 +470,128 @@ def test__fake_markdown__never_overrides_out_of_stock_need():
 def test__no_fake_markdown__reason_absent():
     verdict = compose_verdict(_rich_history_inputs(stock_level_band="low"))
     assert not any(r.signal == "fake_markdown" for r in verdict.reasons)
+
+
+# -- D-11: the need axis reasons from pantry belief ---------------------
+# `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md` D-11 folded belief into this
+# composer so the two surfaces can't state contradictory versions of the same
+# cadence fact. Belief wins when it has signal; the recorded level is the
+# floor; an inference that disagrees with the recorded level hedges both its
+# wording and the verdict's confidence.
+
+
+def _belief(band: str, confidence_band: str, *, is_inferred: bool = True,
+            reason: str = "~Out — bought 20 days ago; your usual ~14-day supply should be gone.",
+            differs: bool = True) -> PantryBelief:
+    return PantryBelief(
+        believed_sequence={"out": 2, "low": 1, "stocked": 0}[band],
+        believed_band=band,
+        confidence={"high": 0.8, "medium": 0.5, "low": 0.2}[confidence_band],
+        confidence_band=confidence_band,
+        reason=reason,
+        is_inferred=is_inferred,
+        differs_from_recorded=differs,
+    )
+
+
+def test__confident_belief_overrides_the_recorded_level():
+    """Recorded says stocked, belief says out with confidence. The user
+    hasn't logged a level in a while; Dora's evidence is the better answer,
+    so `need` follows it."""
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="stocked",
+        belief=_belief("out", "high"),
+    ))
+    assert any(r.axis == "need" and r.signal == "out_of_stock" for r in verdict.reasons)
+    assert verdict.verdict == "buy"
+
+
+def test__inferred_need__hedges_the_label_and_carries_beliefs_reason():
+    """Charter P3 — "You're out of stock" is an assertion; an inference gets
+    "Probably out of stock" and belief's own explanation as the detail (one
+    voice for the cadence story, not two phrasings of it)."""
+    belief = _belief("out", "high")
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="stocked",
+        belief=belief,
+    ))
+    need = next(r for r in verdict.reasons if r.axis == "need")
+    assert need.label == "Probably out of stock"
+    assert need.detail == belief.reason
+
+
+def test__inferred_need__steps_the_confidence_down():
+    """A recorded out-of-stock is `buy/high`; the same call built on an
+    inference that disagrees with the recorded level is `buy/medium`. Belief
+    has no quantity awareness, so it must not produce the composer's
+    strongest verdict on its own."""
+    recorded = compose_verdict(_rich_history_inputs(stock_level_band="out"))
+    inferred = compose_verdict(_rich_history_inputs(
+        stock_level_band="stocked",
+        belief=_belief("out", "high"),
+    ))
+    assert recorded.confidence == "high"
+    assert inferred.verdict == "buy"
+    assert inferred.confidence == "medium"
+
+
+def test__low_confidence_belief__defers_to_the_recorded_level():
+    """The thin-data / no-history path. A guess Dora wouldn't show the user
+    as a chip has no business overruling a level they set by hand."""
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="stocked",
+        belief=_belief("out", "low"),
+    ))
+    assert any(r.axis == "need" and r.signal == "stocked" for r in verdict.reasons)
+    assert not any(r.label.startswith("Probably") for r in verdict.reasons)
+
+
+def test__belief_echoing_a_fresh_check__is_not_treated_as_an_inference():
+    """`is_inferred=False` is belief repeating a level the user just
+    confirmed. That's the recorded level wearing a different hat — it neither
+    hedges the label nor costs the verdict confidence."""
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="out",
+        belief=_belief("out", "high", is_inferred=False, differs=False,
+                       reason="You confirmed this today."),
+    ))
+    need = next(r for r in verdict.reasons if r.axis == "need")
+    assert need.label == "You're out of stock"
+    assert verdict.confidence == "high"
+
+
+def test__belief_agreeing_with_the_recorded_level__keeps_the_plain_label():
+    """Inferred, confident, and it happens to agree. Nothing to hedge about -
+    but belief's reason is still the better detail."""
+    belief = _belief(
+        "low", "high", differs=False,
+        reason="~Low — bought 12 days ago; you usually finish in about 14 days.",
+    )
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="low",
+        belief=belief,
+    ))
+    need = next(r for r in verdict.reasons if r.axis == "need")
+    assert need.label == "Running low"
+    assert need.detail == belief.reason
+
+
+def test__no_belief__composes_exactly_as_before():
+    """Every pre-D-11 call site (and the gather path before beliefs are
+    available) passes no belief. That must stay a no-op, using the recorded
+    band and this module's own cadence prose."""
+    verdict = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    need = next(r for r in verdict.reasons if r.axis == "need")
+    assert need.label == "Running low"
+    assert need.detail is not None
+    assert "Bought every ~14 days" in need.detail
+
+
+def test__unknown_recorded_band_plus_confident_belief__is_no_longer_thin():
+    """An item with no level at all used to make `need` thin-data outright.
+    With purchase history behind it, belief can still answer."""
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="unknown",
+        belief=_belief("low", "medium"),
+    ))
+    assert any(r.axis == "need" and r.signal == "low_stock" for r in verdict.reasons)

@@ -25,7 +25,7 @@ Resolution order for a single item:
     self-tuner overrides the baseline from the item's recent history
     (see `auto_band_from_history`). Items with no history stay on the
     baseline.
-3.  If the item hit Low or Out in the last `_LOW_OUT_BUMP_DAYS`, bump
+3.  If the item hit Low or Out in the last `LOW_OUT_BUMP_WINDOW_DAYS`, bump
     the resolved band one step faster (Monthly → Fortnightly →
     Weekly). Actively depleting stock should surface sooner.
 4.  If the item is Essential (`is_essential`), bump one more step faster.
@@ -41,6 +41,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Iterable
+
+from dora_api.domain.cadence_math import mean_gap_days
 
 
 class CadenceBand(str, Enum):
@@ -76,11 +78,17 @@ DEFAULT_BAND = CadenceBand.FORTNIGHTLY
 # Read from a trailing window of StockLevelChange rows for the item.
 # Windows/thresholds live here (R-003 single source) so the queue, the
 # tests, and any future assistant tool all resolve to the same number.
+#
+# The two *windows* are public because `stocktake.py` gathers the rows this
+# resolver reasons over, so it has to slice the same span. It used to declare
+# its own copies (one carrying a comment admitting the mirror) — see D1/D2 in
+# `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`.
 
-_AUTO_HISTORY_WINDOW_DAYS = 90
+AUTO_HISTORY_WINDOW_DAYS = 90
+LOW_OUT_BUMP_WINDOW_DAYS = 14      # hit Low/Out in this window → bump
+
 _AUTO_WEEKLY_THRESHOLD_DAYS = 10   # avg gap ≤ 10 days → Weekly
 _AUTO_MONTHLY_THRESHOLD_DAYS = 25  # avg gap ≥ 25 days → Monthly
-_LOW_OUT_BUMP_DAYS = 14            # hit Low/Out in this window → bump
 
 
 def parse_band(raw: str | None) -> CadenceBand:
@@ -116,10 +124,10 @@ class ItemHistory:
     """
     # When change_timestamps has ≥2 entries, the average gap between
     # consecutive changes over the trailing window (see
-    # _AUTO_HISTORY_WINDOW_DAYS) drives Auto. Fewer than 2 → no signal;
+    # AUTO_HISTORY_WINDOW_DAYS) drives Auto. Fewer than 2 → no signal;
     # baseline stands.
     change_timestamps: tuple[datetime, ...]
-    # True if any StockLevelChange within the last _LOW_OUT_BUMP_DAYS
+    # True if any StockLevelChange within the last LOW_OUT_BUMP_WINDOW_DAYS
     # transitioned the item into Low or Out. Bumps one band faster.
     hit_low_or_out_recently: bool
     # `is_essential` on the StockItem — bumps one band faster on top of
@@ -135,18 +143,19 @@ def auto_band_from_history(
     when there isn't enough history to speak (in which case the caller
     keeps the baseline).
 
-    Uses the trailing `_AUTO_HISTORY_WINDOW_DAYS` window. Needs at
-    least 2 changes inside the window to compute an average gap.
+    Uses the trailing `AUTO_HISTORY_WINDOW_DAYS` window. Needs at
+    least 2 changes inside the window, on distinct instants, to compute
+    an average gap.
     """
-    cutoff = now - timedelta(days=_AUTO_HISTORY_WINDOW_DAYS)
-    recent = sorted(t for t in change_timestamps if t >= cutoff)
-    if len(recent) < 2:
+    cutoff = now - timedelta(days=AUTO_HISTORY_WINDOW_DAYS)
+    recent = [t for t in change_timestamps if t >= cutoff]
+    # Shared arithmetic (R-003) — see `domain/cadence_math.py`. It returns
+    # None both for "fewer than two changes" and for "every change landed on
+    # the same instant", which read the same way here: no signal, so the
+    # caller keeps its baseline.
+    avg_gap = mean_gap_days(recent)
+    if avg_gap is None:
         return None
-    gaps = [
-        (recent[i] - recent[i - 1]).total_seconds() / 86400.0
-        for i in range(1, len(recent))
-    ]
-    avg_gap = sum(gaps) / len(gaps)
     if avg_gap <= _AUTO_WEEKLY_THRESHOLD_DAYS:
         return CadenceBand.WEEKLY
     if avg_gap >= _AUTO_MONTHLY_THRESHOLD_DAYS:
@@ -185,8 +194,10 @@ def resolve_band(
 
 # Public constants a caller may want (index, tests, DTOs).
 __all__ = [
+    "AUTO_HISTORY_WINDOW_DAYS",
     "CadenceBand",
     "DEFAULT_BAND",
+    "LOW_OUT_BUMP_WINDOW_DAYS",
     "ItemHistory",
     "auto_band_from_history",
     "parse_band",

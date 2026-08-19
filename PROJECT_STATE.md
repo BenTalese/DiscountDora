@@ -1,6 +1,6 @@
 # Dashy Dora — Project State
 
-**Last reviewed: 2026-08-19 (stock-signal consolidation design session).** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
+**Last reviewed: 2026-08-19 (stock-signal consolidation, Chunks 1–2 landed).** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
 This is the single front door: where every phase and workstream is up
 to, and what needs your attention. For *where things stand* this doc
@@ -97,7 +97,8 @@ UX/UI review** into fix units.
    `severity`, whether the digest email lives. The alerts system was largely
    AI-built from loose ideas and has never been vetted; consolidating onto it
    unassessed would make it harder to change later. It's a conversation, not code.
-   Chunks 1–2 need nothing from you and can land meanwhile. See FU-683.
+   **Chunks 1 and 2 have landed** (2026-08-19), so Step 0 is now the *only* thing
+   holding the rest of the plan — Chunks 3–6 all sit behind it. See FU-683.
 
 0. **Walk the new inference surfaces in a browser.** FU-653 shipped (recipes /
    shopping lists / meal planner, each toggled separately, all three off by
@@ -297,7 +298,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | IMPL_PLAN_STATE_OWNERSHIP | Impl plan | ✅ done | Server-owned derived facts refactor | cookable/missing/allocation SSOT landed |
 | IMPL_PLAN_STOCK_ITEM_DETAIL | Impl plan | ✅ done | Stock-item detail polish (C-1b) | Detail page live |
 | IMPL_PLAN_STOCK_OVERVIEW | Impl plan | ✅ done | Stock overview redesign (C-1) | `StockOverview.vue`/`StockItemRow.vue` |
-| IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION | Impl plan | 🔵 designed-not-built | Collapse the stock row's 9 competing signals → 4; one attention rule, one cadence engine | Written 2026-08-19; 6 chunks, Chunk 3 gated on Step-0 alerts assessment; FU-683 |
+| IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION | Impl plan | 🟡 active | Collapse the stock row's 9 competing signals → 4; one attention rule, one cadence engine | Written 2026-08-19; **Chunks 1–2 landed 2026-08-19** — C1: one cadence engine, D-11 belief→verdict, bulk verdicts endpoint, + the FU-684 bug that made the verdict inert; C2: verdict off the row (D-10), `buy_verdict_enabled` AppSetting→User (D-12/B7, migration `d9f4b2c7e803`), shopping list on the bulk endpoint (B6), all three walked live. Chunks 3–6 open; **Chunk 3 is the Step-0 gate**; FU-683 |
 | IMPL_PLAN_WASTE_MINIMISATION | Impl plan | ✅ done | Waste-minimisation cluster (C-waste) | `wasteApiService.ts` + mark-as-wasted |
 | IMPL_PLAN_YOUR_PRICES | Impl plan | ✅ done | "Your prices" intelligence (Phase F) | "All 8 chunks landed (FU-227/425)" |
 | OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT | Option doc | 🔵 deferred | Parked multi-tenant SaaS / managed-host option | Deferred 2026-07-14; kept parked post-pivot |

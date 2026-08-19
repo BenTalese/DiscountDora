@@ -89,9 +89,9 @@ def _feature_flags(setting) -> dict[str, bool]:
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
         "scanning": False,      # resolved below — off by default
-        # buy-verdict oracle. Defaults on (pure-personal
-        # feature, no external calls); resolved from AppSetting below.
-        "buy_verdict": True,
+        # `buy_verdict` was here until 2026-08-19 (D-12). It is a per-user
+        # display preference now, on `/auth/me` — an install-wide flag would be
+        # answering a personal question with a household answer.
         "multi_user": True,     # register + admin role
         # the install-wide `email` switch, and the two
         # `*_configured` R-014 signals (used by the SPA to reveal-and-disable
@@ -141,7 +141,10 @@ def _feature_flags(setting) -> dict[str, bool]:
         repo = SqlAlchemyRepository()
         if setting is not None:
             flags["scanning"] = bool(setting.scanning_enabled)
-            flags["buy_verdict"] = bool(getattr(setting, "buy_verdict_enabled", True))
+            # `buy_verdict` is no longer a health flag — it went per-user on
+            # 2026-08-19 (D-12), so the SPA reads it off /auth/me with the rest
+            # of the user's display preferences. An install-wide flag here would
+            # have been answering for the wrong scope.
             flags["meal_planning"] = bool(setting.meal_planning_enabled)
             flags["money"] = bool(setting.money_enabled)
             flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)

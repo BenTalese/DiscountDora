@@ -68,4 +68,17 @@ export default class BuyVerdictApiService {
         await this.httpClient.get<BuyVerdict>(
             `/stock-items/${encodeURIComponent(stockItemId)}/buy-verdict`,
         );
+
+    /** B6 — every verdict for one shopping list's lines, in one round-trip.
+     *  A 40-line list asking per line meant 40 requests, each re-walking the
+     *  same tables for a single item. Keyed by stock-item id; lines with no
+     *  stock item behind them are simply absent. */
+    getForListAsync = async (
+        shoppingListId: string,
+    ): Promise<Record<string, BuyVerdict>> => {
+        const response = await this.httpClient.get<{
+            verdicts: Record<string, BuyVerdict>;
+        }>(`/shopping-lists/${encodeURIComponent(shoppingListId)}/buy-verdicts`);
+        return response.verdicts ?? {};
+    };
 }

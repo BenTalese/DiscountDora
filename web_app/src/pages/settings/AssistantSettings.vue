@@ -283,6 +283,20 @@
                     @update:model-value="(v: boolean) => onSurfaceChange('meal_plan', v)"
                 />
             </SettingsRow>
+
+            <!-- D-12 (2026-08-19): moved here from Admin — Features, where it
+                 was an install-wide setting despite only changing what one
+                 person sees. It belongs with the other "Dora's opinions"
+                 toggles above. -->
+            <SettingsRow
+                label='"Should I buy this?"'
+                help="On a stock item and on your shopping list, Dora gives a buy / wait / skip verdict from your own price, cadence and waste history — nothing external, no crowd data. Turn it off to hide it; it's your view only, not the household's."
+            >
+                <q-toggle
+                    :model-value="currentUser.buy_verdict_enabled"
+                    @update:model-value="onBuyVerdictChange"
+                />
+            </SettingsRow>
         </SettingsSection>
     </div>
 </template>
@@ -591,6 +605,17 @@
                 ? 'Dora will infer your stock levels.'
                 : 'Inference off — levels are now manual.',
             () => authStore.updateMeAsync({ inferred_pantry_enabled: value }),
+        );
+    }
+
+    // D-12 — "should I buy this?", per-user since 2026-08-19 (it was an
+    // install-wide AppSetting an admin set for everybody).
+    async function onBuyVerdictChange(value: boolean) {
+        await update(
+            value
+                ? '"Should I buy this?" shown.'
+                : '"Should I buy this?" hidden.',
+            () => authStore.updateMeAsync({ buy_verdict_enabled: value }),
         );
     }
 

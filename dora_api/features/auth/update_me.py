@@ -59,6 +59,7 @@ class UpdateMeRequest(BaseModel):
     # edited via PATCH /app-settings, not here.
     # Zero-Input Pantry opt-out (default True on the entity).
     inferred_pantry_enabled: bool | None = None
+    buy_verdict_enabled: bool | None = None
     # FU-653 — per-surface belief overlays. Same shape as the toggle above.
     inference_recipes_enabled: bool | None = None
     inference_shopping_enabled: bool | None = None
@@ -202,6 +203,12 @@ class UpdateMeHandler:
             and request.inferred_pantry_enabled is not None
         ):
             _User.inferred_pantry_enabled = request.inferred_pantry_enabled
+
+        # D-12 — "should I buy this?" is a per-user display overlay since
+        # 2026-08-19 (it was an install-wide AppSetting; B7). Same
+        # null-is-ignored rule as its neighbour above.
+        if "buy_verdict_enabled" in _SetFields and request.buy_verdict_enabled is not None:
+            _User.buy_verdict_enabled = request.buy_verdict_enabled
 
         # FU-653 — the three per-surface overlays. Same null-is-ignored rule;
         # looped because the handling is identical for all three.

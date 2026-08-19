@@ -220,6 +220,15 @@ class User(BaseEntity):
     # some users want purely manual control, so this toggle switches the
     # belief chip + inference-driven quick-checks off.
     inferred_pantry_enabled: bool = True
+    # D-12 (`IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`) — "should I buy this?"
+    # moved here from `AppSetting.buy_verdict_enabled` on 2026-08-19. It was
+    # household-scoped for a pure per-user *display* overlay, so one person
+    # hiding a badge hid it for everyone (B7; owner confirmed the original
+    # scoping was a mistake). The rule it established: a setting that mutates
+    # shared state is household-scoped; one that only changes what you see is
+    # per-user. Sits beside `inferred_pantry_enabled` because it's the same kind
+    # of thing — one of Dora's opinions, which you may or may not want to read.
+    buy_verdict_enabled: bool = True
     # FU-653 — the same belief, surfaced where stock items *appear* rather
     # than where they're managed: a remark on a recipe whose ingredient Dora
     # thinks has run out, suggestions on a shopping list, a flag on a planned
@@ -319,6 +328,7 @@ class User(BaseEntity):
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
         INFERRED_PANTRY_ENABLED = "inferred_pantry_enabled"
+        BUY_VERDICT_ENABLED = "buy_verdict_enabled"
         INFERENCE_RECIPES_ENABLED = "inference_recipes_enabled"
         INFERENCE_SHOPPING_ENABLED = "inference_shopping_enabled"
         INFERENCE_MEAL_PLAN_ENABLED = "inference_meal_plan_enabled"

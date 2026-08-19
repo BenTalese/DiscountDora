@@ -29,6 +29,38 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-684 — ~20 more `item.stock_level` readers carry the same R-032 exposure the buy verdict just proved live
+- **Raised:** 2026-08-19 (stock-signal consolidation, Chunk 1).
+- **Type:** finding.
+- **What:** `GET /api/stock-items/<id>/buy-verdict` included `STOCK_LEVEL` on its
+  load and *still* read `item.stock_level is None`, so `_stock_level_band` returned
+  `"unknown"`, the `need` axis collapsed to thin-data, and the endpoint answered
+  **`unsure/low` for every item** — including an out-of-stock one, which is its
+  most confident `buy`. That is R-032's identity-map corollary biting with the
+  `.include()` present: the session already tracked the instance with the
+  relationship unset, and `contains_eager` didn't repopulate it. Belief's
+  `recorded_sequence` read the same relationship and had the same exposure (it
+  would have silently fallen through to its no-data path). Both now resolve the
+  level by FK through the new
+  `dora_api/features/stock_items/_level_access.py::resolve_levels_by_item`.
+  **Not swept:** every other reader of the relationship — `alerts/get_alerts.py:215`
+  (the attention engine — a silent `None` there suppresses the out/low alerts
+  Chunk 3 is about to consolidate onto), `domain/recipe_cookability.py:62,109`,
+  `assistant/confirm_actions.py:87,159,661`, `assistant/shopping_actions.py:39`,
+  `assistant/tools.py:1012,1146,1454,1514,1515`, `alerts/act_on_alert.py:78`.
+  Each needs the same question asked: is the instance guaranteed fresh on this
+  query, or could the session hand back a noload-empty one?
+- **Why deferred:** scope. The chunk's job was the cadence/constant consolidation;
+  the verdict bug was found because D-11 made belief read the same field. Sweeping
+  a dozen unrelated features unasked is the drive-by the standards warn against.
+- **Fix shape:** audit the list above; where the read isn't provably safe, resolve
+  by FK (`item._stock_level_id`) via `resolve_levels_by_item` rather than adding
+  more `.include()`s — an include is what failed here. `get_alerts.py` is the
+  highest-value one and Chunk 3 opens that file anyway.
+- **Recommended resolution:** the alerts reader **with Chunk 3** (same file, same
+  rebuild); the rest opportunistically. If several turn out to be live bugs, R-032
+  needs a stronger "don't trust `.include()` alone" clause.
+
 ## [OPEN] FU-683 — stock-surface signal consolidation: 7 live bugs + 5 duplications, plan written, Step 0 gates the main chunk
 - **Raised:** 2026-08-19 (stock overview signal-crossover design session)
 - **Type:** deferred job + findings
@@ -72,8 +104,28 @@ long session summary. Distinct from the other logs:
   such dependency.
 - **Fix shape:** the plan's §3. Chunks 1 (constant + cadence consolidation) and 2
   (verdict off the row + settings scope) can land immediately; 3–6 follow Step 0.
-- **Recommended resolution:** Step 0 **now** (it's a conversation, not code);
-  Chunks 1–2 opportunistically whenever the stock surface is next open.
+- **Progress (2026-08-19):** **Chunk 1 is done** — D1/D2 constants collapsed onto
+  `cadence.py` (now public `AUTO_HISTORY_WINDOW_DAYS` / `LOW_OUT_BUMP_WINDOW_DAYS`);
+  D3 resolved by a shared `domain/cadence_math.py::mean_gap_days` that all three
+  cadence readers now call; **D-11 landed** — the verdict's `need` axis consumes
+  `compute_belief`, hedges its wording when the band is an inference that disagrees
+  with the recorded level, and steps its own confidence down for one; **B6** has its
+  bulk endpoint (`GET /api/shopping-lists/<id>/buy-verdicts`); the misleading
+  `useBuyVerdict.ts` cache comment (B5) is corrected. Landing D-11 also exposed a
+  live bug that made the whole verdict feature inert — see **FU-684**.
+  **Chunk 2 is done (2026-08-19):** D-10 — the verdict ring is off `StockItemRow`
+  and `AddToListButton`'s `verdict` prop, branch, tooltip block and CSS are
+  deleted (it had no other caller); B5 — the overview fires **zero** verdict
+  requests, measured in a browser drive, not inferred; D-12/B7 —
+  `buy_verdict_enabled` moved AppSetting → User (migration `d9f4b2c7e803`,
+  clean drop-and-add, no backfill shim), the toggle moved Admin→Features to
+  Settings→Assistant, the `features.buy_verdict` health flag is gone and
+  `useBuyVerdictEnabled` now reads `/auth/me`; B6 — `ShoppingListDetail`
+  primes the whole list's verdicts through the Chunk-1 endpoint in **one**
+  request (also measured).
+  **Still open:** B1–B4 (Chunk 3, gated on Step 0), then Chunks 4–6.
+- **Recommended resolution:** Step 0 **now** — it is the only thing left that
+  needs the owner, and Chunks 3–6 all sit behind it or behind each other.
 
 ## [OPEN] FU-682 — three more `window.open(apiUrl)` print views still violate R-045
 - **Raised:** 2026-08-19 (recipe view feedback batch)
@@ -524,8 +576,20 @@ long session summary. Distinct from the other logs:
   pattern at the same time.
 - **Why deferred:** owner said "skip this for now" when asked (the other four items in
   the batch were pure UI).
-- **Recommended resolution:** when the buy-verdict surface is next opened — pair it with
-  the N-request cleanup, since they're the same endpoint.
+- **Update (2026-08-19, Chunk 1):** the *endpoint* half exists now, scoped to a list's
+  lines rather than the whole pantry (`GET /api/shopping-lists/<id>/buy-verdicts`, batched
+  queries via `gather_verdict_inputs_for_items`) — that's what B6 needed. The *filter* half
+  is now a live question rather than a deferred one: D-10 takes the verdict off the stock
+  row entirely, and the plan's §5 leaves "is 'scan my pantry for what's worth buying now'
+  a real browse mode?" as the one question deliberately parked for Step 0 (current
+  assumption: the shopping-list flow covers it). A pantry-wide endpoint is only worth
+  building if that answer is yes.
+- **Update (2026-08-19, Chunk 2):** the list-scoped endpoint is now wired — the shopping
+  list primes every line's verdict in one request (verified in a browser drive: 1 bulk call,
+  0 per-line calls), so the N+1 half of this item is closed. Only the pantry-wide filter
+  question remains.
+- **Recommended resolution:** decide it **in Step 0**; build the pantry-wide variant only
+  if the browse mode survives that conversation.
 
 ## [OPEN] FU-652 — Sweep the remaining `secondary` colour uses against D-020
 - **Raised:** 2026-08-16 (stock-overview dark-mode colour fix).

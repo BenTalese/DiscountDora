@@ -96,7 +96,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
         # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
-        Column("buy_verdict_enabled", Boolean, nullable=False, server_default=true()),
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
         Column("money_enabled", Boolean, nullable=False, server_default=false()),
@@ -1111,6 +1110,9 @@ def configure_mappings(db: SQLAlchemy):
         # Zero-Input Pantry opt-out. Default True (inference is the
         # headline experience); users switch it off for purely manual levels.
         Column("inferred_pantry_enabled", Boolean, nullable=False, server_default=true()),
+        # D-12 — moved off AppSetting 2026-08-19 (see the entity comment):
+        # a display-only overlay belongs to the person reading it.
+        Column("buy_verdict_enabled", Boolean, nullable=False, server_default=true()),
         # FU-653 — per-surface belief overlays (recipes / shopping lists / meal
         # planner). Default FALSE: they annotate pages the user opened for
         # another reason, so they're opt-in, unlike the stock overlay above.

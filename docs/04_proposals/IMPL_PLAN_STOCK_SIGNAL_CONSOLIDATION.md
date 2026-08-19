@@ -1,6 +1,11 @@
 # Implementation Plan — Stock Signal Consolidation
 
-**Status:** 🔵 designed-not-built
+**Status:** 🟡 in progress — **Chunks 1 and 2 landed 2026-08-19**; Chunk 3 onwards
+open, and Step 0 (the owner-in-the-loop alerts assessment) is now the only thing
+blocking them. Per-chunk detail in `DORA_WORKLOG.md` (2026-08-19 "later 7"/"later 8")
+and FU-683. Landing Chunk 1 also exposed **FU-684** — the buy verdict had never
+actually worked, because an `.include()`d `stock_level` came back unhydrated and
+collapsed the need axis to thin-data on every item.
 **Raised:** 2026-08-19 (design session, owner-led)
 **Surface:** Stock Overview row + stocktake + alerts + buy verdict
 **Supersedes nothing.** Sits on top of `IMPL_PLAN_STOCK_OVERVIEW.md` (C-1, shipped),

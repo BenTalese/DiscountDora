@@ -1267,7 +1267,11 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `.include` on that same query; any relationship-side `= None` assignment
   used to clear an FK.
 - **Source:** ADR-028; recurrent noload family (cookbook identity-map fix
-  2026-07-10, FU-527, FU-533).
+  2026-07-10, FU-527, FU-533, FU-684). FU-684 is the one to read if you think an
+  `.include()` settles it: `/stock-items/<id>/buy-verdict` *included* the level
+  and still read `None` (the session already tracked the instance with the
+  relationship unset), so every verdict the endpoint ever returned was
+  `unsure/low`. The FK-value corollary above is the fix.
 
 ### R-033 — Entity-id path params use the `uuid` converter; handlers never receive an unvalidated `str` id
 - **Rule:** Flask routes whose path param is an entity UUID declare it with

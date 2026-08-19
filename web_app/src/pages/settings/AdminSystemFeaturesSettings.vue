@@ -64,17 +64,10 @@
                     </div>
                 </q-banner>
 
-                <!-- buy-verdict oracle. Personal-data-only: no
-                     external calls, no crowd data. On by default. -->
-                <SettingsRow
-                    label='"Should I buy?" oracle'
-                    help="Show a personal buy/wait/skip verdict on stock items and shopping-list lines, using only your own price / cadence / waste history. On by default; turn off if the row-level badges feel noisy."
-                >
-                    <q-toggle
-                        :model-value="buyVerdictDraft"
-                        @update:model-value="onBuyVerdictToggle"
-                    />
-                </SettingsRow>
+                <!-- D-12 (2026-08-19): the '"Should I buy?" oracle' toggle left
+                     this page for Settings — Assistant. It only changes what the
+                     person reading it sees, so it had no business being an
+                     install-wide setting one admin decided for everybody. -->
             </SettingsSection>
 
             <!-- Product search URL is part of the products overlay, so it
@@ -121,7 +114,6 @@
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
-    import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
@@ -132,16 +124,16 @@
     // up the new value without a page reload. `products` gates the Product
     // Search URL row (it belongs to the products overlay).
     const { refresh: featureFlags$refresh, products: productsEnabled } = useFeatureFlags();
-    // FU-580 — scanning and buy-verdict have their own dedicated module-level
-    // probe composables (separate from useFeatureFlags), so their toggle
-    // handlers must refresh *those* caches too or the gated UI (Stock Overview
-    // scan button, QR labels, buy-verdict badges) stays stale until a reload.
+    // FU-580 — scanning has its own dedicated module-level probe composable
+    // (separate from useFeatureFlags), so the toggle handler must refresh
+    // *that* cache too or the gated UI (Stock Overview scan button, QR labels)
+    // stays stale until a reload. The buy-verdict half of this pair went
+    // per-user in D-12 and now rides `/auth/me`, so it needs no probe.
     const { refreshScanning } = useScanningEnabled();
     // Same authority the scan overlay consults, so the warning here and the
     // explainer there can't drift apart (R-003). Evaluated once — the page's
     // origin can't change under it.
     const cameraInsecure = cameraBlockedByInsecureContext();
-    const { refreshBuyVerdict } = useBuyVerdictEnabled();
     // Session-wide Product Search URL cache — refreshed after a save so the
     // main-nav "Product Search" entry appears/updates without a page reload.
     const productSearch = useProductSearchUrl();
@@ -152,10 +144,6 @@
 
     // Scanning & QR labels — a real install-wide flag, saved on toggle.
     const scanningDraft = ref(false);
-
-    // buy-verdict oracle install-wide toggle. Defaults on (see
-    // AppSetting entity docstring); the API returns the current value.
-    const buyVerdictDraft = ref(true);
 
     // Product search URL (Phase D / FU-186). `loading` gates the input so the
     // draft is only rendered once the saved value has arrived.
@@ -252,29 +240,6 @@
         }
     }
 
-    async function onBuyVerdictToggle(value: boolean) {
-        try {
-            const result = await api.updateAsync({ buy_verdict_enabled: value });
-            buyVerdictDraft.value = result.buy_verdict_enabled;
-            // FU-580 — re-probe the buy-verdict cache so the row-level badges
-            // appear/disappear without a page reload.
-            await refreshBuyVerdict();
-            $q.notify({
-                type: 'positive', position: 'bottom-right',
-                message: value
-                    ? '"Should I buy?" verdicts enabled.'
-                    : '"Should I buy?" verdicts disabled.',
-            });
-        } catch (err) {
-            buyVerdictDraft.value = !value;
-            $q.notify({
-                type: 'negative', position: 'bottom-right',
-                message: 'Could not save buy-verdict setting.',
-                caption: toastCaption(err),
-            });
-        }
-    }
-
     async function onSaveProductSearchUrl() {
         const trimmed = productSearchUrlDraft.value.trim();
         productSearchUrlError.value = null;
@@ -299,7 +264,6 @@
 
     type LoadedSettings = {
         scanning_enabled: boolean;
-        buy_verdict_enabled?: boolean;
         meal_planning_enabled?: boolean;
         money_enabled?: boolean;
         companion_ingestion_enabled?: boolean;
@@ -311,9 +275,6 @@
         if (s.product_search_url !== undefined) {
             savedProductSearchUrl.value = s.product_search_url;
             productSearchUrlDraft.value = s.product_search_url;
-        }
-        if (s.buy_verdict_enabled !== undefined) {
-            buyVerdictDraft.value = s.buy_verdict_enabled;
         }
         // The feature-flag fields are server-defaulted post-Chunk-1, so they
         // always come through; the optional types keep the frontend tolerant.

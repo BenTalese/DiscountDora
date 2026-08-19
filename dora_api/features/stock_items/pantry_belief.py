@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID
 
+from dora_api.domain.cadence_math import mean_gap_days
 from dora_api.domain.entities.consumption_event import ConsumptionEvent
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
@@ -46,6 +47,7 @@ from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
                                           STOCKED_SEQUENCE)
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.stock_items._level_access import resolve_levels_by_item
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -131,18 +133,6 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def _mean_gap_days(dates: list[date]) -> float | None:
-    """Mean positive gap between consecutive (sorted, unique) dates."""
-    gaps = [
-        (dates[i] - dates[i - 1]).days
-        for i in range(1, len(dates))
-        if (dates[i] - dates[i - 1]).days > 0
-    ]
-    if not gaps:
-        return None
-    return sum(gaps) / len(gaps)
-
-
 def _plural(n: int, unit: str = "day") -> str:
     return f"{n} {unit}{'s' if n != 1 else ''}"
 
@@ -186,7 +176,7 @@ def compute_belief(inputs: BeliefInputs) -> PantryBelief:
     # ── 2. Cadence-based projection (the main inference path) ─────────────
     cadence_days: float | None = None
     if len(inputs.purchase_dates) >= _MIN_PURCHASE_DATES_FOR_CADENCE:
-        cadence_days = _mean_gap_days(inputs.purchase_dates)
+        cadence_days = mean_gap_days(inputs.purchase_dates)
 
     if cadence_days and inputs.purchase_dates:
         last_purchase = inputs.purchase_dates[-1]
@@ -316,6 +306,11 @@ def gather_beliefs_for_items(
         return {}
     today = household_today(repository)
     item_ids = [i.id for i in items]
+    # Resolved by foreign key rather than read off `item.stock_level`: the
+    # relationship is `lazy="noload"` and an `.include()` doesn't reliably
+    # populate it, which read as "this item has no recorded level" and sent
+    # belief down its no-data path. See `_level_access`.
+    levels_by_item = resolve_levels_by_item(repository, items)
 
     # Purchase dates — completed-list lines with a paid price, per item.
     lines: list[ShoppingListLine] = repository.get(ShoppingListLine).all(
@@ -355,7 +350,8 @@ def gather_beliefs_for_items(
     for item in items:
         inputs = BeliefInputs(
             recorded_sequence=(
-                item.stock_level.sequence if item.stock_level is not None else None
+                levels_by_item[item.id].sequence
+                if levels_by_item.get(item.id) is not None else None
             ),
             stock_level_last_updated=_as_date(item.stock_level_last_updated),
             last_checked_at=_as_date(item.last_checked_at),

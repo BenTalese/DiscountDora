@@ -86,6 +86,9 @@ export type AuthenticatedUser = {
     // Zero-Input Pantry opt-out. Default true (inferred stock
     // levels are the headline experience); false hides the belief overlay.
     inferred_pantry_enabled: boolean;
+    /** D-12 — per-user since 2026-08-19; was an install-wide AppSetting
+     *  surfaced as `features.buy_verdict` on /api/health. */
+    buy_verdict_enabled: boolean;
     /** FU-653 — the same belief surfaced on the pages where stock items
      *  *appear*: a remark on a recipe, suggestions beside a shopping list, a
      *  flag on a planned meal. One opt-in each, all **default false**. None of

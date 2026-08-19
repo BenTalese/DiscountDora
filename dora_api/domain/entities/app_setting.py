@@ -56,7 +56,8 @@ class AppSetting(BaseEntity):
     # data, no config required — the composer just needs the user's own
     # shopping-list / waste history. Admin can turn it off if the row-level
     # badges feel noisy on their pantry.
-    buy_verdict_enabled: bool = True
+    # `buy_verdict_enabled` moved to User 2026-08-19 (D-12) — it only
+    # changes what one person sees, so it was never household state.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6). Surface
     # via `/api/health features.*` + admin-only `PATCH /api/admin/feature-
     # flags`. Per-user opt-ins (money, nutrition, image display) layer on
@@ -245,7 +246,6 @@ class AppSetting(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         SCANNING_ENABLED = "scanning_enabled"
-        BUY_VERDICT_ENABLED = "buy_verdict_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"

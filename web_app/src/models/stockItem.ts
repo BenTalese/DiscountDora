@@ -18,6 +18,16 @@ export type StockItem = {
     is_out_of_stock?: boolean;
     is_low_stock?: boolean;
     needs_restock?: boolean;
+    /** Server-owned attention (Chunk 3b, `stock_attention.py`). The single
+     *  rule behind the row outline, the "Needs attention" chip + count, and
+     *  the bell's per-item kinds. **Do not re-derive any of this client-side**
+     *  — the copy that used to live in `useStockFilters.hasAlert` disagreed
+     *  with the server in four separate ways (B1–B4 in the impl plan).
+     *  `attention_severity` orders the outlined band; `attention_kinds` says
+     *  which conditions fired, for chips that narrow to one of them. */
+    needs_attention?: boolean;
+    attention_severity?: 'high' | 'medium' | 'low' | null;
+    attention_kinds?: readonly string[];
     /** C-7 Chunk 2 — count of linked products. Drives the combined
      *  modal decision in `AddToListButton`: 2+ → open QuickAddSheet
      *  (one combined surface) instead of stacking two prompts. */

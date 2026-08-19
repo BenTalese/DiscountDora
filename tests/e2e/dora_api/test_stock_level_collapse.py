@@ -8,7 +8,7 @@ restock *to Stocked* were still untested server-side:
     picked (L876's server half), resolved by status identity via
     `level_for_status`, never by display name.
   - POST /alerts/<key>/action `mark_restocked` — the item's level becomes
-    Stocked (L877); its sibling `acknowledge_stocktake` bumps the freshness
+    Stocked (L877); the retired `acknowledge_stocktake` bumped the freshness
     stamp WITHOUT touching the level (the contrast that proves restock is a
     deliberate level write, not a side effect of acting on an alert).
 
@@ -196,11 +196,11 @@ def test__alert_action__mark_restocked__sets_level_to_stocked(
     assert after["stock_level_last_updated"] is not None
 
 
-def test__alert_action__acknowledge_stocktake__level_untouched(
-    levels_by_sequence, api
-):
-    # The contrast case: acknowledge bumps the freshness stamp only — the
-    # level write in mark_restocked is deliberate, not an action side effect.
+def test__alert_action__acknowledge_stocktake__is_gone(levels_by_sequence, api):
+    # `acknowledge_stocktake` went with the `stocktake_overdue` kind at
+    # Step-0 Q1. Pinned as a rejection rather than deleted outright: it was a
+    # live action an old client may still post, and silently 204-ing an
+    # unknown action would be worse than refusing it.
     resp = requests.post(STOCK_ITEMS, json={
         "name": f"collapse-ack-{uuid4()}",
         "stock_level_id": levels_by_sequence[OUT_OF_STOCK_SEQUENCE],
@@ -214,9 +214,8 @@ def test__alert_action__acknowledge_stocktake__level_untouched(
         f"{BASE}/alerts/{alert_id}/action", json={"action": "acknowledge_stocktake"}
     )
 
-    assert action.status_code == 204, action.text
+    assert action.status_code == 422, action.text
     after = _item_dto(item_id)
     assert after["stock_level_sequence"] == OUT_OF_STOCK_SEQUENCE
-    assert after["stock_level_last_updated"] is not None
 
 #endregion alert actions

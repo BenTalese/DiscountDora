@@ -32,40 +32,41 @@
                  so this page cannot drift from what it documents. -->
             <StockRowLegend :levels="stockLevels" />
 
-            <!-- ── Outlines & dim ─────────────────────────────────── -->
-            <h6 class="q-mt-lg q-mb-sm">Row outline (amber warn / red alert)</h6>
+            <!-- ── Outline & dim ──────────────────────────────────────
+                 One tier, not two. This used to describe an amber "warn"
+                 outline and a red "alert" one; a hedged alarm gets ignored,
+                 and amber sat directly around the amber Low level square.
+                 The copy follows the code (D-7) rather than the code being
+                 left to disagree with the help page. -->
+            <h6 class="q-mt-lg q-mb-sm">Row outline</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
-                The whole-row outline shows when an item needs your
-                attention. Two tiers:
+                An outlined row needs you. There's one outline, and it means
+                one thing — three conditions turn it on:
             </p>
 
             <q-list bordered separator class="rounded-borders">
-                <q-item class="dora-attention-sample dora-attention-sample--warn">
-                    <q-item-section>
-                        <q-item-label class="text-weight-medium text-warning">
-                            Amber — warn
-                        </q-item-label>
-                        <q-item-label caption>
-                            <strong>Essential</strong> item dropped to Low,
-                            <em>or</em> any item expiring within 7 days.
-                            Something's coming.
-                        </q-item-label>
-                    </q-item-section>
-                </q-item>
-
                 <q-item class="dora-attention-sample dora-attention-sample--alert">
                     <q-item-section>
                         <q-item-label class="text-weight-medium text-negative">
-                            Red — alert
+                            Needs attention
                         </q-item-label>
                         <q-item-label caption>
-                            <strong>Essential</strong> item is Out of stock,
-                            <em>or</em> any item has already expired.
-                            Something's broken now.
+                            The item has <strong>expired</strong>, it's
+                            <strong>expiring soon</strong> (your setting decides
+                            how soon), or it's flagged <strong>essential</strong>
+                            and has run low or out.
                         </q-item-label>
                     </q-item-section>
                 </q-item>
             </q-list>
+
+            <p class="text-body2 q-mt-sm dora-text-secondary">
+                That's the same set the <em>Needs attention</em> count and its
+                filter chip use, and the same set the bell counts — one rule,
+                worked out in one place, so the highlighting and the numbers
+                can't tell you different things. Turning a kind off under
+                Alerts turns off its outline too.
+            </p>
 
             <!-- ── Essential ──────────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Essential items</h6>
@@ -73,9 +74,9 @@
                 Items you mark <strong>essential</strong> get a warning-toned
                 stripe on the left edge of the row and a flag icon on the
                 right. Essentials are the ONLY items whose stock level
-                drives an outline — non-essential Low / Out items are
-                silent so Dora isn't noisy about things you didn't say
-                mattered.
+                drives an outline — a non-essential item running Low or Out
+                is silent, because the level square already says so and Dora
+                shouldn't be loud about things you didn't say mattered.
             </p>
             <q-card flat bordered class="dora-attention-essential-sample">
                 <q-card-section class="row items-center">
@@ -243,10 +244,6 @@
     }
     .dora-attention-sample {
         border-left: 4px solid transparent;
-    }
-    .dora-attention-sample--warn {
-        border-left-color: var(--q-warning);
-        box-shadow: inset 0 0 0 1px var(--q-warning);
     }
     .dora-attention-sample--alert {
         border-left-color: var(--q-negative);

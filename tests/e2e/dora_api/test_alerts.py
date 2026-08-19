@@ -142,14 +142,17 @@ def test__alerts__action_endpoint_rejects_non_stock_key(api):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# per-user preferences (enable/disable + tier override) + configurable
-# household thresholds. The count split always equals the per-alert effective
-# `tier`; tests clean up after themselves (prefs are per-user + persistent, and
-# the threshold is household-wide — no per-test DB isolation yet, FU-169).
+# per-user preferences (enable/disable only) + configurable household
+# thresholds. The count split always equals the per-alert `tier`, which is
+# itself derived from severity; tests clean up after themselves (prefs are
+# per-user + persistent, and the threshold is household-wide — no per-test DB
+# isolation yet, FU-169).
 # ─────────────────────────────────────────────────────────────────────────
+# The six survivors of the Step-0 assessment. `out_of_stock`, `low_stock` and
+# `stocktake_overdue` were cut — see `alert_kinds.py`.
 ALL_KINDS = (
-    "expired", "expiring_soon", "out_of_stock",
-    "low_stock", "essential_low", "stocktake_overdue",
+    "expired", "expiring_soon", "essential_low",
+    "no_planned_meals", "shopping_day", "meal_reconcile_overdue",
 )
 
 
@@ -160,7 +163,7 @@ def _prefs() -> dict:
 
 
 def _reset_pref(kind: str) -> None:
-    requests.patch(PREFS, json={"kind": kind, "enabled": True, "tier_override": None})
+    requests.patch(PREFS, json={"kind": kind, "enabled": True})
 
 
 def _assert_count_split_matches_tiers(data: dict) -> None:
@@ -170,18 +173,39 @@ def _assert_count_split_matches_tiers(data: dict) -> None:
     assert data["fyi_count"] == sum(1 for a in data["items"] if a["tier"] == "fyi")
 
 
-def test__alert_prefs__defaults_expose_every_kind_with_sensible_tiers(api):
+def test__alert_prefs__defaults_expose_every_kind_enabled(api):
     prefs = _prefs()
+    assert set(prefs) == set(ALL_KINDS), "prefs must expose exactly the known kinds"
     for kind in ALL_KINDS:
-        assert kind in prefs, f"{kind} missing from prefs"
         assert prefs[kind]["enabled"] is True
-        assert prefs[kind]["tier_override"] is None
-    # PROPOSAL_ALERTS §5 default tiers.
-    assert prefs["expired"]["default_tier"] == "actionable"
-    assert prefs["out_of_stock"]["default_tier"] == "actionable"
-    assert prefs["low_stock"]["default_tier"] == "fyi"
-    assert prefs["stocktake_overdue"]["default_tier"] == "fyi"
-    assert prefs["expired"]["effective_tier"] == "actionable"
+
+
+def test__alert_prefs__tier_is_derived_from_severity_not_stored(api):
+    # Step-0 Q3: severity is the only importance scale; tier is a derived
+    # label. The three per-item kinds are actionable, the three nudges FYI.
+    prefs = _prefs()
+    assert prefs["expired"]["severity"] == "high"
+    assert prefs["expiring_soon"]["severity"] == "medium"
+    assert prefs["essential_low"]["severity"] == "high"
+    for kind in ("expired", "expiring_soon", "essential_low"):
+        assert prefs[kind]["tier"] == "actionable"
+    for kind in ("no_planned_meals", "shopping_day", "meal_reconcile_overdue"):
+        assert prefs[kind]["severity"] == "low"
+        assert prefs[kind]["tier"] == "fyi"
+
+
+def test__alert_prefs__cut_kinds_are_gone(api):
+    # The three Step-0 cuts must not come back as prefs OR as emitted alerts:
+    # a pref row for a kind nothing emits is exactly the dead vocabulary the
+    # assessment removed.
+    prefs = _prefs()
+    for cut in ("out_of_stock", "low_stock", "stocktake_overdue"):
+        assert cut not in prefs, f"{cut} was cut at Step-0 but still has a pref"
+        assert requests.patch(
+            PREFS, json={"kind": cut, "enabled": False},
+        ).status_code == 400, f"{cut} must be rejected as an unknown kind"
+    assert all(a["kind"] not in ("out_of_stock", "low_stock", "stocktake_overdue")
+               for a in _alerts()["items"]), "a cut kind is still being emitted"
 
 
 def test__alert_prefs__disabling_a_kind_removes_it_from_list_and_counts(api):
@@ -199,31 +223,19 @@ def test__alert_prefs__disabling_a_kind_removes_it_from_list_and_counts(api):
     assert _find(_alerts()["items"], name) is not None, "re-enabling restores the alert"
 
 
-def test__alert_prefs__tier_override_moves_kind_between_actionable_and_fyi(api):
-    name = f"alert-pref-tier-{uuid.uuid4().hex[:8]}"
-    _create_expired_item(name)
-    active = _find(_alerts()["items"], name)
-    assert active is not None and active["tier"] == "actionable"  # default for expired
-    try:
-        assert requests.patch(PREFS, json={"kind": "expired", "tier_override": "fyi"}).status_code == 200
-        after = _alerts()
-        moved = _find(after["items"], name)
-        assert moved is not None and moved["tier"] == "fyi", "override moves the kind to FYI"
-        _assert_count_split_matches_tiers(after)
-    finally:
-        _reset_pref("expired")
-    restored = _find(_alerts()["items"], name)
-    assert restored is not None and restored["tier"] == "actionable", "clearing the override restores the default"
+def test__alert_prefs__tier_cannot_be_overridden(api):
+    # Step-0 Q3 deleted `tier_override`. The request model forbids extras, so
+    # an old client sending one is rejected outright rather than silently
+    # ignored — silently ignoring it is how the row/bell disagreement (B2)
+    # would quietly come back.
+    assert requests.patch(
+        PREFS, json={"kind": "expired", "tier_override": "fyi"},
+    ).status_code == 400
 
 
-def test__alert_prefs__rejects_unknown_kind_and_invalid_tier(api):
+def test__alert_prefs__rejects_unknown_kind(api):
     # R-010 — validate the vocabulary on write.
     assert requests.patch(PREFS, json={"kind": "not_a_kind", "enabled": False}).status_code == 400
-    assert requests.patch(PREFS, json={"kind": "expired", "tier_override": "bogus"}).status_code == 400
-    try:
-        assert requests.patch(PREFS, json={"kind": "expired", "tier_override": "actionable"}).status_code == 200
-    finally:
-        _reset_pref("expired")
 
 
 def test__alerts__expiring_soon_window_threshold_re_derives(api):
@@ -368,7 +380,8 @@ def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
     # a not-yet-done list whose planned shop date has already
     # passed should keep nudging (mirrors the in-page banner's overdue
     # state). Severity bumps from low → medium so it sorts above plain
-    # upcoming nudges; tier stays FYI (the kind default).
+    # upcoming nudges — and since Step-0 Q3 made tier derive from severity,
+    # that promotion also puts it on the bell badge.
     today = _household_today()
     created = requests.post(SHOPPING_LISTS, json={
         "name": f"shopping-day-overdue-{uuid.uuid4().hex[:8]}",
@@ -380,9 +393,10 @@ def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
         alert = _find_kind(_alerts(), "shopping_day", target_id=list_id)
         assert alert is not None, "an overdue shop day should still nudge"
         assert alert["alert_id"] == f"list:{list_id}:shopping_day"
-        assert alert["tier"] == "fyi"
         assert alert["severity"] == "medium", \
             "overdue bumps the severity from low to medium so it sorts above upcoming"
+        assert alert["tier"] == "actionable", \
+            "tier follows severity — a bumped nudge counts on the badge"
         assert "2 days ago" in alert["message"], alert["message"]
 
         # Finishing the list clears it (same close condition as the
@@ -395,12 +409,12 @@ def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
         requests.delete(f"{SHOPPING_LISTS}/{list_id}")
 
 
-def test__alert_prefs__exposes_the_new_c94_kinds_as_fyi(api):
+def test__alert_prefs__exposes_the_c94_kinds_as_fyi(api):
     prefs = _prefs()
     for kind in ("no_planned_meals", "shopping_day"):
         assert kind in prefs, f"{kind} missing from prefs"
         assert prefs[kind]["enabled"] is True
-        assert prefs[kind]["default_tier"] == "fyi"
+        assert prefs[kind]["tier"] == "fyi"
 
 
 # ── C-9.6 — Upcoming "this fortnight" timeline (server-owned aggregation) ──

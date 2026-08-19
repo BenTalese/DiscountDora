@@ -363,7 +363,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "type": "object",
                 "properties": {
                     "severity": {"type": "string", "description": "Filter by severity: 'high', 'medium', or 'low'. Omit for all."},
-                    "kind": {"type": "string", "description": "Filter by kind: 'expired', 'expiring_soon', 'out_of_stock', 'low_stock', 'stocktake_overdue', 'essential_low'. Omit for all."},
+                    "kind": {"type": "string", "description": "Filter by kind: 'expired', 'expiring_soon', 'essential_low', 'no_planned_meals', 'shopping_day', 'meal_reconcile_overdue'. Omit for all."},
                 },
                 "required": [],
             },

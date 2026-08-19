@@ -123,9 +123,26 @@ long session summary. Distinct from the other logs:
   `useBuyVerdictEnabled` now reads `/auth/me`; B6 — `ShoppingListDetail`
   primes the whole list's verdicts through the Chunk-1 endpoint in **one**
   request (also measured).
-  **Still open:** B1–B4 (Chunk 3, gated on Step 0), then Chunks 4–6.
-- **Recommended resolution:** Step 0 **now** — it is the only thing left that
-  needs the owner, and Chunks 3–6 all sit behind it or behind each other.
+  **Step 0 is DONE (2026-08-20)** — the owner answered all five questions; the
+  canonical attention rule is written into the plan's §3. Cuts: `out_of_stock`,
+  `low_stock`, `stocktake_overdue` (Q1, wider than the plan proposed); per-user
+  `tier_override` (Q2/Q3, on/off survives); the digest email (Q4). Q5 is
+  superseded — with the kind cut there is nothing to demote, though **D-8's row
+  half still governs Chunk 4**.
+  **Chunk 3 is done (2026-08-20)**, split 3a/3b on size. 3a: the cuts above, plus
+  `acknowledge_stocktake` (the retired kind's only action, now a pinned 422) and
+  migration `e4b1c7a95d20`. 3b: **B1–B4 all closed** by a single server-owned rule
+  in `features/stock_items/stock_attention.py` — `get_alerts.py` emits its three
+  per-item kinds from the same predicates, the stock DTO carries
+  `needs_attention` / `attention_severity` / `attention_kinds`, client `hasAlert`
+  is a read, the hardcoded 7-day window is deleted (B1), disabled kinds now reach
+  the rows (B2), the deep-link and the count run one rule (B3), and non-essential
+  out is no longer "actionable and dimmed" (B4). D-7's single outline landed with
+  it. 15 new unit tests on the rule.
+  **Still open:** Chunks 4–6 (row treatments + sort, queue ranking, runner
+  rebuild). Browser-verify of Chunk 3 is owed — see `DORA_VERIFY.md`.
+- **Recommended resolution:** **Chunk 4 next** — it is unblocked and its input
+  (`attention_severity`) is already on the DTO.
 
 ## [OPEN] FU-682 — three more `window.open(apiUrl)` print views still violate R-045
 - **Raised:** 2026-08-19 (recipe view feedback batch)
@@ -562,34 +579,6 @@ long session summary. Distinct from the other logs:
   component without the test following, not a regression from this unit.
 - **Recommended resolution:** opportunistic — decide which is right (the test looks
   stale against D-001) and fix the losing side.
-
-## [OPEN] FU-649 — Buy-verdict quick filter on Stock Overview needs a bulk verdicts endpoint
-- **Raised:** 2026-08-16 (stock-overview filter feedback — owner deferred).
-- **Type:** deferred job.
-- **What:** the owner asked whether a quick filter for buy-verdict rows is worth adding.
-  It can't be built client-side: `useBuyVerdict` fetches **one verdict per item, lazily,
-  as each row mounts**, so the page only knows verdicts for rows already rendered —
-  filtering on that would silently miss everything below the fold. The honest version is
-  a bulk `GET /api/stock-items/buy-verdicts` (id + verdict + confidence for the pantry,
-  computed with batched queries rather than looping `_gather_inputs`), which would drive
-  the filter *and* pre-warm the row badges — killing the current one-request-per-row
-  pattern at the same time.
-- **Why deferred:** owner said "skip this for now" when asked (the other four items in
-  the batch were pure UI).
-- **Update (2026-08-19, Chunk 1):** the *endpoint* half exists now, scoped to a list's
-  lines rather than the whole pantry (`GET /api/shopping-lists/<id>/buy-verdicts`, batched
-  queries via `gather_verdict_inputs_for_items`) — that's what B6 needed. The *filter* half
-  is now a live question rather than a deferred one: D-10 takes the verdict off the stock
-  row entirely, and the plan's §5 leaves "is 'scan my pantry for what's worth buying now'
-  a real browse mode?" as the one question deliberately parked for Step 0 (current
-  assumption: the shopping-list flow covers it). A pantry-wide endpoint is only worth
-  building if that answer is yes.
-- **Update (2026-08-19, Chunk 2):** the list-scoped endpoint is now wired — the shopping
-  list primes every line's verdict in one request (verified in a browser drive: 1 bulk call,
-  0 per-line calls), so the N+1 half of this item is closed. Only the pantry-wide filter
-  question remains.
-- **Recommended resolution:** decide it **in Step 0**; build the pantry-wide variant only
-  if the browse mode survives that conversation.
 
 ## [OPEN] FU-652 — Sweep the remaining `secondary` colour uses against D-020
 - **Raised:** 2026-08-16 (stock-overview dark-mode colour fix).

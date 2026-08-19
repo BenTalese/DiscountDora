@@ -409,22 +409,62 @@ Give it the count, not the animation.
 
 Each chunk is one reviewable PR. **Step 0 gates Chunk 3.**
 
-### Step 0 — Alerts assessment (owner-in-the-loop) ★ GATES CHUNK 3
+### Step 0 — Alerts assessment (owner-in-the-loop) ★ GATES CHUNK 3 — **DONE 2026-08-20**
 
 No code. Produces the rule content that Chunk 3 implements.
 
-Questions to answer with the owner:
+**Answers, as given.** Governing principle the owner stated: *"these are all fluff
+— we want people to actually pay attention when there's a notification."* Every
+answer below follows from it.
 
-1. Which of the nine kinds are actually wanted? (`low_stock` FYI and
-   `stocktake_overdue` look like AI-generated completeness rather than asks.)
-2. Does per-user `AlertPreference` earn its complexity, or is disabling a kind
-   household-wide enough?
-3. Is actionable/FYI the right split, given `severity` already exists? (D5 — three
-   scales for one idea.)
-4. Does the digest email (`send_alerts_digest.py`) survive?
-5. Confirm D-8 (non-essential out → FYI) as the server-side change.
+| # | Question | Answer |
+|---|---|---|
+| 1 | Which of the nine kinds are wanted? | **Cut three** — `out_of_stock`, `low_stock`, `stocktake_overdue`. Six survive. |
+| 2 | Does per-user `AlertPreference` earn its complexity? | **Keep per-kind on/off** (that's the L441 ask), **drop `tier_override`**. |
+| 3 | Is actionable/FYI right, given `severity`? | **Severity only.** Tier becomes a derived read, not a stored, overridable field. |
+| 4 | Does the digest email survive? | **No.** Cut `send_alerts_digest.py` and its whole lane. |
+| 5 | Confirm D-8 (non-essential out → FYI)? | **Superseded by Q1** — see below. |
 
-Deliverable: the canonical attention rule, written down, as the Chunk 3 target.
+**Q1 supersedes D-8's server half.** D-8 proposed demoting non-essential
+out-of-stock from actionable to FYI. Q1 cut the kind outright, so there is no
+alert to demote — the condition simply stops being an alert. **D-8's row half is
+untouched and still governs Chunk 4**: non-essential + out is still *dimmed and
+sorted to the bottom*, because that treatment reads off the item's stock level,
+not off an alert. The ramp in D-8 stands exactly as written; only its middle
+column's provenance changes.
+
+#### The canonical attention rule (the Chunk 3 target)
+
+An item **needs attention** when, for the requesting user, any enabled kind fires:
+
+| Condition | Kind | Severity |
+|---|---|---|
+| `expiry_date` < today | `expired` | high |
+| 0 ≤ days to expiry ≤ the configurable window | `expiring_soon` | medium |
+| `is_essential` **and** (low **or** out) | `essential_low` | high |
+
+Nothing else. Non-essential low, non-essential out and stocktake-overdue are **not
+attention** — they are visible on the row (level band) or in the runner (queue),
+which is where they belong.
+
+Three forward-looking nudges survive unchanged and are **not** per-item, so they
+never touch a stock row: `no_planned_meals`, `shopping_day`,
+`meal_reconcile_overdue`. Severity `low`.
+
+**Tier is derived, not stored:** `actionable ⇔ severity ∈ {high, medium}`. With the
+cut set that lands cleanly — the three stock kinds are all actionable, the three
+nudges all FYI — so the bell badge counts exactly the per-item attention set plus
+nothing. `AlertPreference.tier_override` is deleted; `enabled` stays.
+
+**The rule is evaluated per requesting user** (a disabled kind stops firing for
+that user everywhere), which is what closes B2: the row outline, the
+"Needs attention" chip + footer count, and the AlertsPage deep-link all consume
+this one server answer instead of three client re-derivations.
+
+**Open decision from §5 also closed:** "is pantry-wide verdict browsing a real
+browse mode?" — **no**. The verdict is off the row (D-10) and the attention rule
+above deliberately excludes buying signals; the shopping-list flow covers it.
+FU-649 can close with that answer.
 
 ### Chunk 1 — Constant + cadence consolidation (backend only, no UI)
 
@@ -443,16 +483,26 @@ Independently valuable, no design dependency, unblocks nothing else. Safe first.
 - `buy_verdict_enabled` AppSetting → User; move the settings UI (D-12, B7).
 - Wire the shopping list to the Chunk-1 bulk endpoint.
 
-### Chunk 3 — One attention rule (GATED ON STEP 0)
+### Chunk 3 — One attention rule (Step 0 answered 2026-08-20)
 
-- Implement the Step-0 rule server-side; expose per-item attention on the
-  stock-item DTO.
+Split in two on size — 3a is the alerts surface, 3b is the stock surface that
+consumes it.
+
+**3a — the Step-0 cuts (server + alerts page)**
+- Delete kinds `out_of_stock`, `low_stock`, `stocktake_overdue` (closes B4 — the
+  condition that was actionable-and-dimmed no longer exists).
+- Tier derived from severity; delete `AlertPreference.tier_override` and the tier
+  segmented control on `AlertsPage`. `enabled` stays.
+- Delete the digest email lane: `send_alerts_digest.py`, its template, its
+  scheduler tick, `User.alerts_email_cadence` and the settings row.
+
+**3b — attention on the stock DTO**
+- Implement the canonical rule server-side, per requesting user; expose per-item
+  attention on the stock-item DTO.
 - Delete client `hasAlert` (D4) — closes B1, B2, B3 at once.
-- Demote non-essential out → FYI (D-8, closes B4).
 - Collapse WARN/ALERT to one outline token (D-7).
 - Delete `AttentionRulesDialog.vue`, or collapse it into whatever documents the
   bell.
-- Reconcile `severity` / `tier` per the Step-0 answer to D5.
 
 ### Chunk 4 — Sort + row treatments
 
@@ -519,10 +569,13 @@ Every fork raised in the session is resolved above. For the record:
 | `buy_verdict_enabled` scope? | **Per-user** — D-12 |
 | Per-item mute survives? | **Yes** — D-13 |
 | Runner edge cases (empty Review / belief-off / last-session state) | Owner deferred to recommendation — D-4 |
+| Which alert kinds survive? | **Six** — `out_of_stock` / `low_stock` / `stocktake_overdue` cut — Step 0 Q1 |
+| Per-user alert prefs? | **On/off yes, tier override no** — Step 0 Q2 |
+| `severity` vs `tier`? | **Severity only, tier derived** — Step 0 Q3 |
+| Digest email? | **Cut** — Step 0 Q4 |
+| Is pantry-wide verdict browsing a real browse mode? | **No** — Step 0; closes FU-649 |
 
-**One question deliberately left for Step 0:** whether "scan my pantry for what's
-worth buying right now" is a real browse mode. If it is, serve it as a sort or
-filter — not 200 rings. Current assumption: the shopping-list flow covers it.
+**Open decisions — closed.** Nothing in this plan is now waiting on an answer.
 
 ---
 

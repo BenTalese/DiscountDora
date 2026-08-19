@@ -611,9 +611,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("read_at", DateTime(timezone=True), nullable=True),
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
         Column("dismissed_at", DateTime(timezone=True), nullable=True),
-        # email-digest delivery dedup (PROPOSAL_ALERTS §4.2).
-        Column("last_emailed_at", DateTime(timezone=True), nullable=True),
-        # web-push delivery dedup; sibling to last_emailed_at.
+        # web-push delivery dedup. (The email-digest sibling
+        # `last_emailed_at` went with the digest itself — Step-0 Q4.)
         Column("last_pushed_at", DateTime(timezone=True), nullable=True),
     )
 
@@ -643,7 +642,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("user_id", UUIDType, nullable=False),
         Column("kind", String(64), nullable=False),
         Column("enabled", Boolean, nullable=False, server_default=true()),
-        Column("tier_override", String(16), nullable=True),
     )
 
     # per-user LLM-provider config. One row per (user_id, provider) —
@@ -1077,7 +1075,7 @@ def configure_mappings(db: SQLAlchemy):
         # it — is a normal, usable account; only an explicit admin action
         # switches it off. See the entity comment for where it's enforced.
         Column("is_active", Boolean, nullable=False, default=True, server_default=true()),
-        # Opt-in, matching `alerts_email_enabled` — a fresh install has no SMTP,
+        # Opt-in — a fresh install has no SMTP,
         # so nobody should land pre-subscribed to mail the server can't send.
         # (Was `true()` to carry pre-existing subscribers over the column's
         # introducing migration; pre-release, that no longer applies.)
@@ -1129,9 +1127,6 @@ def configure_mappings(db: SQLAlchemy):
         # alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
         # Off by default; cadence values 'off' | 'daily' | 'weekly'; day is
         # the weekly send day Mon=0…Sun=6 (ignored on the daily cadence).
-        Column("alerts_email_enabled", Boolean, nullable=False, server_default=false()),
-        Column("alerts_email_cadence", String(16), nullable=False, server_default="off"),
-        Column("alerts_email_day", Integer, nullable=False, server_default="0"),
         # Settings rebuild Phase 4 — profile picture blob, deferred below.
         Column("image", LargeBinary, nullable=True),
         # Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card

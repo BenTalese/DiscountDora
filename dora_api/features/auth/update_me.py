@@ -4,8 +4,7 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
-                                           ALLOWED_FONT_FAMILIES,
+from dora_api.domain.entities.user import (ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES,
                                            ALLOWED_LLM_PROVIDERS,
                                            ALLOWED_THEMES,
@@ -76,9 +75,6 @@ class UpdateMeRequest(BaseModel):
     # carve-out, same shape as `nutrition_mode`). Day is Mon=0 … Sun=6
     # and only consulted on the weekly cadence; saved either way so a
     # cadence flip back to weekly remembers the picked day.
-    alerts_email_enabled: bool | None = None
-    alerts_email_cadence: str | None = None
-    alerts_email_day: int | None = Field(default=None, ge=0, le=6)
     # Settings rebuild Phase 4 (§2.9) — profile picture. Data-URL string to
     # set, `clear_image: true` to remove. Mirrors the Store image contract:
     # `image=None` without the clear flag means "leave untouched". Cap mirrors
@@ -229,21 +225,6 @@ class UpdateMeHandler:
 
         # FU-615 — household headcount moved to AppSetting (install-wide);
         # edited via PATCH /app-settings.
-
-        # alerts email digest. Plain bool + closed-set cadence +
-        # 0–6 day. R-014 (shown-disabled when SMTP unset) is enforced on
-        # the *frontend* via the `email_smtp_configured` feature flag;
-        # the backend accepts the prefs regardless so a self-hosted user
-        # who configures SMTP later doesn't have to re-toggle.
-        if "alerts_email_enabled" in _SetFields and request.alerts_email_enabled is not None:
-            _User.alerts_email_enabled = request.alerts_email_enabled
-        if "alerts_email_cadence" in _SetFields and request.alerts_email_cadence is not None:
-            cadence = request.alerts_email_cadence
-            if cadence not in ALERTS_EMAIL_CADENCE_VALUES:
-                return None, f"Invalid alerts email cadence '{cadence}'."
-            _User.alerts_email_cadence = cadence
-        if "alerts_email_day" in _SetFields and request.alerts_email_day is not None:
-            _User.alerts_email_day = request.alerts_email_day
 
         # Settings rebuild Phase 4 — profile picture. `clear_image` wins over
         # any `image` in the same payload (clear is the primary intent), same

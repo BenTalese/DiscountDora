@@ -1,12 +1,14 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { AlertKind, AlertPref, AlertTier } from 'src/models/alert';
+import type { AlertKind, AlertPref } from 'src/models/alert';
 import AlertApiService from 'src/services/api/alertApiService';
 import { computed, readonly, ref } from 'vue';
 
 const api = new AlertApiService();
 
-// Per-user alert preferences (C-9.2): enable/disable a kind + override its
-// tier (actionable ↔ FYI). Server-owned and server-applied — GET /alerts
+// Per-user alert preferences (C-9.2): enable/disable a kind. That is the whole
+// model — the tier override was cut at Step-0 Q3, since a per-user "is this
+// actionable?" was an answer the stock rows could never see (B2).
+// Server-owned and server-applied — GET /alerts
 // already reflects these, so the badge/list need no client recompute (R-003).
 // This store is the thin cache the (C-9.3) manage panel binds to; it lands
 // here so that chunk is pure UI. Every mutation returns the full refreshed
@@ -35,10 +37,6 @@ export const useAlertPrefsStore = defineStore('alertPrefs', () => {
         prefs.value = (await api.updatePrefAsync({ kind, enabled })).prefs;
     };
 
-    const setTierOverride = async (kind: AlertKind, tier_override: AlertTier | null) => {
-        prefs.value = (await api.updatePrefAsync({ kind, tier_override })).prefs;
-    };
-
     return {
         prefs: readonly(prefs),
         loading: readonly(loading),
@@ -46,7 +44,6 @@ export const useAlertPrefsStore = defineStore('alertPrefs', () => {
         byKind,
         refreshAsync,
         setEnabled,
-        setTierOverride,
     };
 });
 

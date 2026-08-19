@@ -236,8 +236,7 @@ def test__alert_prefs__meal_reconcile_overdue_listed_as_fyi_by_default(api):
     body = resp.json()
     kinds = {p["kind"]: p for p in body.get("prefs", [])}
     assert "meal_reconcile_overdue" in kinds, kinds
-    assert kinds["meal_reconcile_overdue"]["default_tier"] == "fyi"
-    assert kinds["meal_reconcile_overdue"]["effective_tier"] == "fyi"
+    assert kinds["meal_reconcile_overdue"]["tier"] == "fyi"
 
 
 # ── Firing → clearing round-trip ────────────────────────────────────────

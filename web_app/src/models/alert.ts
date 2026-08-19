@@ -7,14 +7,16 @@ export type AlertSeverity = 'high' | 'medium' | 'low';
 // badge, 'fyi' is shown but never counted into it.
 export type AlertTier = 'actionable' | 'fyi';
 
+// Six kinds. `out_of_stock`, `low_stock` and `stocktake_overdue` were cut in
+// the Step-0 alerts assessment (IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md) —
+// they fired constantly on conditions already legible on the stock row or in
+// the stocktake runner.
 export type AlertKind =
+    // per-item — these three ARE the stock-overview attention rule.
     | 'expired'
     | 'expiring_soon'
-    | 'out_of_stock'
-    | 'low_stock'
-    | 'stocktake_overdue'
     | 'essential_low'
-    // forward-looking nudges (no stock item).
+    // household-level nudges (no stock item).
     | 'no_planned_meals'
     | 'shopping_day'
     | 'meal_reconcile_overdue';
@@ -36,8 +38,8 @@ export type Alert = {
     // Per-user interaction overlay (C-9.1, server-derived).
     read: boolean;
     snoozed_until: string | null;
-    // Effective tier for this user (C-9.2): 'actionable' (badge) or 'fyi'.
-    // Per-kind default, overridable via alert prefs — server-derived.
+    // Derived from `severity` server-side: high/medium → 'actionable' (badge),
+    // low → 'fyi'. A label, not a second source — don't recompute it here.
     tier: AlertTier;
 };
 
@@ -57,9 +59,10 @@ export type Alerts = {
 export type AlertPref = {
     kind: AlertKind;
     enabled: boolean;
-    tier_override: AlertTier | null;
-    default_tier: AlertTier;
-    effective_tier: AlertTier;
+    // Read-only context for the manage panel: a kind's weight is fixed by the
+    // server. Only `enabled` is user-settable (Step-0 Q2/Q3).
+    severity: AlertSeverity;
+    tier: AlertTier;
 };
 
 export type AlertPrefs = {
@@ -69,7 +72,6 @@ export type AlertPrefs = {
 export type UpdateAlertPrefCommand = {
     kind: AlertKind;
     enabled?: boolean;
-    tier_override?: AlertTier | null;
 };
 
 // Alert history (C-9.3) — the audit trail of the user's decisions, mirrors
@@ -116,8 +118,7 @@ export type Upcoming = {
 export type AlertAction =
     | 'reset_expiry'
     | 'extend_expiry'
-    | 'mark_restocked'
-    | 'acknowledge_stocktake';
+    | 'mark_restocked';
 
 export type AlertActionOption = { action: AlertAction; label: string; icon: string };
 
@@ -144,21 +145,14 @@ const EXPIRY_ACTIONS: AlertActionOption[] = [
 const RESTOCK_ACTIONS: AlertActionOption[] = [
     { action: 'mark_restocked', label: 'Mark restocked', icon: ICONS.inventory },
 ];
-const STOCKTAKE_ACTIONS: AlertActionOption[] = [
-    { action: 'acknowledge_stocktake', label: 'Looks fine', icon: ICONS.check },
-];
-
 // Colours: some kinds intentionally reuse severity-ladder tokens where the
-// semantic overlaps (expired ⇒ critical, expiring_soon ⇒ medium, low_stock ⇒
-// low, essential_low ⇒ high); the rest have their own categorical accents.
+// semantic overlaps (expired ⇒ critical, expiring_soon ⇒ medium, essential_low
+// ⇒ high); the rest have their own categorical accents.
 // `meal_reconcile_overdue` reuses the FYI-tier low accent (a dedicated token
 // could be added if its visual identity needs one).
 export const ALERT_KIND_META: Record<AlertKind, AlertKindMeta> = {
     expired:                { icon: ICONS.event_busy,           color: 'severity-critical',            theme: 'expired',            actions: EXPIRY_ACTIONS },
     expiring_soon:          { icon: ICONS.schedule,             color: 'severity-medium',              theme: 'expiring soon',      actions: EXPIRY_ACTIONS },
-    out_of_stock:           { icon: ICONS.remove_shopping_cart, color: 'alert-kind-out-of-stock',      theme: 'out of stock',       actions: RESTOCK_ACTIONS },
-    low_stock:              { icon: ICONS.trending_down,        color: 'severity-low',                 theme: 'low stock',          actions: RESTOCK_ACTIONS },
-    stocktake_overdue:      { icon: ICONS.fact_check,           color: 'alert-kind-stocktake-overdue', theme: 'stocktake due',      actions: STOCKTAKE_ACTIONS },
     essential_low:          { icon: ICONS.priority_high,        color: 'severity-high',                theme: 'essential low',      actions: RESTOCK_ACTIONS },
     no_planned_meals:       { icon: ICONS.restaurant,           color: 'alert-kind-no-planned-meals',  theme: 'meals to plan',      actions: [], link: () => '/meal-plans' },
     shopping_day:           { icon: ICONS.shopping_cart,        color: 'alert-kind-shopping-day',      theme: 'shopping day',       actions: [], link: (a) => (a.target_id ? `/shopping-lists/${a.target_id}` : '/shopping-lists') },

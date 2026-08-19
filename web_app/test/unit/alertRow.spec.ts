@@ -165,7 +165,7 @@ describe('AlertRow — kind with inline actions (expired)', () => {
 
 describe('AlertRow — chrome emits and read state', () => {
     it('emits snooze / dismiss / view-in-context from their buttons', async () => {
-        const wrapper = mountRow({ kind: 'low_stock' });
+        const wrapper = mountRow({ kind: 'expiring_soon' });
         const byLabel = (label: string) =>
             wrapper.findAll('button').find((b) => b.text() === label)!;
 
@@ -179,7 +179,7 @@ describe('AlertRow — chrome emits and read state', () => {
     });
 
     it('unread row: bold message, Mark read emits toggle-read true', async () => {
-        const wrapper = mountRow({ kind: 'low_stock', read: false });
+        const wrapper = mountRow({ kind: 'expiring_soon', read: false });
 
         expect(wrapper.find('.q-item').classes()).not.toContain('alert-row--read');
         expect(wrapper.find('.q-item__label').classes())
@@ -192,7 +192,7 @@ describe('AlertRow — chrome emits and read state', () => {
     });
 
     it('read row: receded styling, Unread emits toggle-read false', async () => {
-        const wrapper = mountRow({ kind: 'low_stock', read: true });
+        const wrapper = mountRow({ kind: 'expiring_soon', read: true });
 
         expect(wrapper.find('.q-item').classes()).toContain('alert-row--read');
 
@@ -238,11 +238,13 @@ describe('AlertRow — chrome emits and read state', () => {
  * hand-rolled `kind.replace('_', ' ')`, and `String.replace` with a string
  * pattern swaps only the FIRST match — so `out_of_stock` rendered as
  * "out of_stock" while the manage panel, reading the same kind from
- * ALERT_KIND_META, correctly showed "out of stock".
+ * ALERT_KIND_META, correctly showed "out of stock". `out_of_stock` has since
+ * been retired as a kind, which makes it a good fallback-path fixture below:
+ * stored history outlives the union.
  */
 describe('kindLabel', () => {
     it('reads known kinds from the shared meta, not by munging the key', () => {
-        expect(kindLabel('out_of_stock')).toBe('out of stock');
+        expect(kindLabel('expiring_soon')).toBe('expiring soon');
         expect(kindLabel('essential_low')).toBe('essential low');
         expect(kindLabel('meal_reconcile_overdue')).toBe('meals to reconcile');
         expect(kindLabel('no_planned_meals')).toBe('meals to plan');

@@ -3,11 +3,16 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID
 
-from flask import request
+from flask import request, session
 
+from dora_api.domain.entities.alert_preference import AlertPreference
+from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.stock_status import (is_low_stock, is_out_of_stock,
+from dora_api.domain.stock_status import (effective_expiring_soon_window,
+                                          is_low_stock, is_out_of_stock,
                                           needs_restock)
+from dora_api.features.app_settings.clock import household_today
+from dora_api.features.stock_items.stock_attention import resolve_attention_map
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -38,6 +43,18 @@ class StockItemDto:
     is_open: bool
     opened_on: date | None
     last_checked_at: datetime | None
+    # ── Server-owned attention (Chunk 3b) ──────────────────────────────
+    # The one rule, evaluated for the requesting user: see
+    # `stock_attention.py` for what it says and why it lives there. The
+    # client renders these; it does not re-derive them (that duplication was
+    # B1–B4). `attention_severity` is the worst firing kind's, and is what the
+    # overview sorts on within the outlined band (D-9); None when nothing fires.
+    needs_attention: bool = False
+    attention_severity: str | None = None
+    # Which conditions fired, so a client filter chip ("Expiring soon") can
+    # narrow by one of them without re-deriving the threshold — the last
+    # remaining hardcoded 7-day window on the client was exactly that chip.
+    attention_kinds: tuple[str, ...] = ()
     # count of linked products. Drives the "2+ products →
     # combined choice modal" decision in `AddToListButton`. 0 = generic
     # stock-item line (no offer); 1 = preselect; 2+ = open QuickAddSheet
@@ -91,6 +108,51 @@ class GetStockItemsHandler:
             .include(StockItem.Fields.STOCK_GROUP)
         )
 
+    def _hydrate_attention(
+        self, dtos: list[StockItemDto], entities: list[StockItem]
+    ) -> list[StockItemDto]:
+        """Stamp each DTO with the attention verdict. Bulk by construction —
+        the window, today and the user's disabled kinds are resolved once for
+        the whole page, not per row."""
+        if not dtos:
+            return dtos
+        import dataclasses
+
+        settings: list[AppSetting] = self.repository.get(AppSetting).all()
+        window = effective_expiring_soon_window(settings[0] if settings else None)
+        today = household_today(self.repository)
+        attention = resolve_attention_map(
+            entities,
+            today=today,
+            window_days=window,
+            disabled_kinds=self._disabled_kinds(),
+        )
+        return [
+            dataclasses.replace(
+                d,
+                needs_attention=attention[d.stock_item_id].needs_attention,
+                attention_severity=attention[d.stock_item_id].severity,
+                attention_kinds=attention[d.stock_item_id].kinds,
+            )
+            for d in dtos
+        ]
+
+    def _disabled_kinds(self) -> frozenset[str]:
+        """Kinds the requesting user has switched off. B2: the bell honoured
+        these and the rows did not, so disabling a kind half-worked. One read
+        per request, not per item."""
+        raw = session.get("user_id")
+        if not raw:
+            return frozenset()
+        try:
+            user_id = UUID(raw)
+        except (ValueError, TypeError):
+            return frozenset()
+        rows: list[AlertPreference] = self.repository.get(AlertPreference).all(
+            EntityField(AlertPreference, AlertPreference.Fields.USER_ID).eq(user_id)
+        )
+        return frozenset(r.kind for r in rows if not r.enabled)
+
     def _hydrate_linked_product_count(
         self, dtos: list[StockItemDto]
     ) -> list[StockItemDto]:
@@ -139,10 +201,22 @@ class GetStockItemsHandler:
 
     def handle(self, options) -> Page[StockItemDto]:
         import dataclasses
+        # The entities are needed alongside the DTOs for the attention pass —
+        # it reads `stock_level` / `expiry_date` / `is_essential` off the
+        # entity, and re-deriving them from the DTO would be a third copy of
+        # the same predicates. `paginate` hands back DTOs, so collect the
+        # entities in the projection as it runs.
+        entities: list[StockItem] = []
+
+        def _project(entity: StockItem) -> StockItemDto:
+            entities.append(entity)
+            return StockItemDto.from_entity(entity)
+
         page = self._base_query().paginate(
-            options, StockItemDto.from_entity, field_map=_FIELD_MAP
+            options, _project, field_map=_FIELD_MAP
         )
         items = self._hydrate_linked_product_count(page.items)
+        items = self._hydrate_attention(items, entities)
         return dataclasses.replace(page, items=items)
 
     def handle_by_id(self, stock_item_id: UUID) -> StockItemDto | None:
@@ -150,7 +224,8 @@ class GetStockItemsHandler:
         if entity is None:
             return None
         dto = StockItemDto.from_entity(entity)
-        return self._hydrate_linked_product_count([dto])[0]
+        dto = self._hydrate_linked_product_count([dto])[0]
+        return self._hydrate_attention([dto], [entity])[0]
 
 
 @STOCK_ITEM_ROUTER.route("")

@@ -18,6 +18,230 @@ next.
 
 ---
 
+## 2026-08-20 (later) — Stock signal consolidation: **Step 0 answered + Chunk 3** (3a and 3b)
+**Status:** code-complete. Backend **1889 passed** (+15 new `stock_attention` unit
+tests, net of the digest suite's removal), frontend **484 passed**, vue-tsc 0,
+eslint clean on all touched files. Two DTO snapshots refreshed — both diffs *are*
+the contract change. **Browser-verify owed** (see below).
+
+### Step 0 — the alerts assessment (the thing that gated everything)
+Ran it as a conversation, with the evidence gathered first. The owner's governing
+principle: *"these are all fluff — we want people to actually pay attention when
+there's a notification."* Answers, now written into the plan's §3 Step 0:
+
+| Q | Answer |
+|---|---|
+| 1 — which kinds survive? | **Cut `out_of_stock`, `low_stock`, `stocktake_overdue`.** Six left. |
+| 2 — per-user prefs? | Keep per-kind **on/off** (the L441 ask); **drop `tier_override`**. |
+| 3 — severity vs tier? | **Severity only**; tier is derived, never stored. |
+| 4 — digest email? | **Cut.** |
+| 5 — confirm D-8? | **Superseded by Q1** — the kind is gone, so there's nothing to demote. |
+
+Q1 went further than the plan proposed: it had only suspected `low_stock` and
+`stocktake_overdue`; the owner cut `out_of_stock` too. Q5's supersession matters
+and is recorded in the plan — **D-8's row half still stands** (non-essential + out
+still dims and sinks, Chunk 4), because that's a treatment read off the level, not
+an alert.
+
+### Chunk 3a — the cuts
+- `alert_kinds.py` rewritten around `SEVERITY_BY_KIND` (6 kinds) with
+  `is_actionable(severity)` deriving the tier. `ATTENTION_KINDS` names the three
+  per-item ones so no call site re-derives "has a stock_item_id".
+- `AlertPreference.tier_override` dropped (entity + mapping + the AlertsPage
+  segmented control + the store setter). The panel now *reads* the weight.
+- Digest lane deleted whole: `send_alerts_digest.py`, `alerts_digest.html`, the
+  07:00 scheduler tick, `User.alerts_email_{enabled,cadence,day}`,
+  `AlertInteraction.last_emailed_at`, the settings section, its e2e suite and the
+  `_render_text_digest` unit block.
+- `acknowledge_stocktake` went with `stocktake_overdue` — it was that kind's only
+  action. Pinned as a **422 rejection** rather than silently deleted: an old client
+  may still post it, and quietly succeeding would be worse than refusing.
+- Migration `e4b1c7a95d20`: three clean drops, no backfill shim (pre-release).
+
+### Chunk 3b — one attention rule
+- New `features/stock_items/stock_attention.py` — the canonical rule, with the
+  four B-numbers it kills documented at the top. `get_alerts.py` now emits its
+  three per-item kinds **from these same predicates**, so "one rule" is structural
+  rather than aspirational; the emitter owns only the copy.
+- `needs_attention` / `attention_severity` / `attention_kinds` on the stock DTO,
+  hydrated in one bulk pass (window, today and the user's disabled kinds resolved
+  once per request, not per row).
+- Client `hasAlert` is now `item.needs_attention === true`. The local
+  `isExpiringSoon` / `isExpired` pair — including the hardcoded **7** that was B1 —
+  is deleted; the Expiring-soon chip reads `attention_kinds` instead, so the
+  admin's configurable window governs it too.
+- `StockItemRow` collapsed `isAlertRow`/`isWarnRow` to one `needsAttention` and
+  one `.stock-row--attention` token. `expiryTone` and `isLowStock` became dead with
+  it and were removed.
+- 15 new unit tests on the rule itself; the `useStockFilters` fixtures now state
+  attention **the way the server would**, which is the honest shape now that the
+  client derives nothing.
+
+### Judgement calls
+- **`AttentionRulesDialog.vue` kept, not deleted.** The plan said "delete, or
+  collapse it into whatever documents the bell" — it *is* what documents this, and
+  it hosts the live `StockRowLegend`. Deleting it would have removed the only
+  explanation of a rule this change just rewrote. Its two-tier prose is rewritten
+  to the single tier; the legend rewrite proper belongs to Chunk 4.
+- **An overdue shopping day now counts on the bell badge.** It escalates
+  low → medium severity to sort above upcoming ones, and with tier derived from
+  severity that promotion also makes it actionable. The old code deliberately held
+  it at FYI. Taking the consistent reading — if it's important enough to sort
+  above the others, it's important enough to count — and flagging it: it's a
+  one-line reversal if you'd rather it stayed quiet. Test + comment both state it.
+- **FU-649 can close.** Step 0's parked question ("is pantry-wide verdict browsing
+  a real browse mode?") is answered **no**, recorded in the plan's §5.
+
+### Not verified live
+Same constraint as the earlier unit today: the app is behind a login and I don't
+enter credentials. Everything here is pinned by tests, but the *visual* half —
+one outline instead of two, the manage panel without its segmented control, the
+Notifications page without the digest section — is unseen. Checks are in
+`DORA_VERIFY.md`.
+
+### Standards close-gate
+- **R-003** — this chunk is almost entirely R-003 repayment: one attention rule
+  (was two), one importance scale (was three), one home for the kind vocabulary.
+- **R-005 / distribution posture** — one clean migration, batch-mode alters, no
+  dialect-specific SQL, no auth/config/deployment change.
+- **R-032** — the attention pass adds no relationship reads; it consumes entities
+  the page query already loaded.
+- **R-035 / D-rules** — D-7 (one outline tier) is the design content here. No new
+  tokens; the amber outline's rule was deleted rather than recoloured.
+- **ADR evaluation** — a candidate rule is forming: *"a derived label may be
+  computed from a stored scale, but must never be stored beside it"* (the
+  severity/tier/tier_override tangle, and D-12's scoping rule from Chunk 2 are the
+  same family). Two instances now. Left un-promoted per the plan's own
+  survive-one-more-application bar; promote it if a third appears.
+
+### Next up
+**Chunk 4 — sort + row treatments.** Now unblocked and the natural follow-on: the
+`attention` default sort (D-9) has its input (`attention_severity`) already on the
+DTO, the three-band ramp (D-8), removing the pulse and the belief ring (D-5), the
+stocktake glow (D-14), and the `StockRowLegend` rewrite against the now much
+smaller language.
+
+---
+
+## 2026-08-20 — SortControl direction toggle: stop it eating the field border
+**Status:** code-complete, **browser-verify owed** (see below). CSS-only change to
+one component.
+
+### What happened
+Owner: *"the larger sort direction icon seems to have a button outline and edge/fill
+which is visible sometimes … also it chops off the top of the input border/outline
+when the input doesn't have focus. Worth fixing or revert?"* Neither guess was
+quite it — measured the real DOM instead of eyeballing, and both symptoms have a
+concrete cause:
+
+1. **The toggle never reached the field's right edge.** QSelect renders its dropdown
+   chevron as a *second* `.q-field__append` after any slotted one. The 2026-08-19
+   styling treated the toggle as a split-button trailing half (right-rounded,
+   `border-left` as separator, `margin-right: -10px`), so it actually sat mid-field
+   and the negative margin slid it 10px under the chevron. That collision is the
+   "outline / edge / fill visible sometimes".
+2. **It painted over the top border.** `.q-field__marginal` is a fixed 40px block
+   **top-aligned** in the 44px control, so a full-inner-height opaque chip started
+   exactly on the border line. Quasar paints the resting outline as
+   `.q-field__control:before` (**under** the field's children) and the focus ring as
+   `:after` (**over** them) — hence "only when the input doesn't have focus".
+
+Measured with a throwaway probe page served off the SPA dev server (real
+`quasar.css`, real QSelect DOM, no app auth needed); deleted after. Numbers:
+control `40→84`, toggle `40→80` (top-flush, 4px short at the bottom), chevron
+`222→248` vs toggle `188→232`.
+
+### Shipped — `web_app/src/components/filters/SortControl.vue`
+- Toggle is now an **inset chip**, not a split half: full `--radius-sm` radius, full
+  1px border, no negative margin, height `--filter-control-h - 6px` (38px) so 3px of
+  field border shows above and below. Measures `43→81` in a `40→84` control, and
+  `222` no longer overlaps the chevron.
+- `.q-field__marginal { height: 100% }` on this field — the fixed 40px top-aligned
+  marginal was riding both the chip *and* the chevron 2px high.
+- Invisible `:after` hit-area extension (-3px vertical, -2px horizontal) puts the tap
+  target back at 44×44 (D-004) despite the smaller visual chip. `.q-btn:before` is
+  Quasar's shadow box; `:after` is free.
+- Comment block rewritten to record why it is inset rather than flush, so the
+  split-button treatment isn't re-attempted.
+
+Both call sites (`RecipesOverview.vue`, `StockOverview.vue`) sit in a
+`FilterRow variant="fields"`, so both get the 44px `--filter-control-h`.
+
+### Not verified live — and why
+Couldn't drive the app: it's behind a login and entering credentials isn't something
+I do. Verified geometry instead in the probe harness above, which uses the same
+Quasar CSS and the same generated DOM. `computer{screenshot}` timed out three times
+again — **FU-681**, unchanged; `javascript_tool` measurement worked. Check added to
+`DORA_VERIFY.md`.
+
+### Standards close-gate
+R-003 (height still derived from `--filter-control-h`, not re-stated), R-035/D-004
+(tap target restored to 44×44), tokens only — no literal colours. No new rule
+warranted; this is an instance of "measure the framework's DOM before styling
+against an assumed one", already covered by the explain-in-place discipline.
+
+---
+
+## 2026-08-20 — Essential row stripe: revert the tapered bracket
+**Status:** code-complete, **browser-verify owed** (see below). vue-tsc 0, eslint
+clean on both touched files. Pure CSS; no tests to add.
+
+### What happened
+Owner opened with *"the new essential styling looks horrible on the overview rows
+— looks like there was no nice way to do it except makeshift angles"*. The
+2026-08-17 treatment was a 16px-wide stripe clipped to a bracket via `clip-path`,
+tapering back to 5px over the first/last 14px.
+
+Diagnosed three compounding causes, offered five alternatives as rendered rows
+(inset pill stripe / structural left border / pin on the level square / inline
+glyph / tinted gutter). Owner chose **none of them** — revert to the original
+straight bar, very slightly thicker.
+
+- The shape had no sibling anywhere in the app, so it read as an error, not a motif.
+- The maths left no room for the idea: painted row height is
+  `--stock-row-height (64px) - 8px` = **56px**, and 14px of taper top *and* bottom
+  is 28px — exactly half the element. There was no "5px bar" left to see.
+- Its diagonals crossed the `--warn` / `--alert` ring (border + inset 1px shadow,
+  all four sides) at an angle — the worst-looking case, and the one that matters most.
+
+### Shipped
+- `StockItemRow.vue` — `clip-path` deleted, `width: 16px` → **6px**. Comment block
+  rewritten to record the revert and why, so the taper isn't re-attempted.
+- `StockRowLegend.vue` — swatch `border-left` 5px → 6px, kept in step with the row.
+- Stale "the 5px essential stripe" reference in the mobile-padding comment
+  de-numbered (that padding rationale is unchanged; only the literal was wrong).
+
+### Not verified live — and why
+Couldn't drive it. The backend on :5170 was a **pre-existing process started
+2026-08-17 11:19**, i.e. three days stale — it predates `8073ac04`'s
+`d9f4b2c7e803` migration and the `get_buy_verdict` rework, and was 500ing on
+`GET /api/recipes`, which kills `StockOverview.vue:645` at mount so **zero rows
+render**. Unrelated to this change. Asked rather than assumed; owner said kill it
+and he'd check the styling himself. Process stopped; SPA dev server left up on
+:5174. Checks are in `DORA_VERIFY.md` under a new 2026-08-20 heading.
+
+Note the pane also timed out on `computer{screenshot}` twice here — same
+symptom as **FU-681**. Reading the DOM via `javascript_tool` worked fine.
+
+### Close-gate
+- **ENGINEERING_STANDARDS:** no new violations. Theme-tokens-only holds —
+  `--brand-secondary-strong` unchanged (D-020). No new rule/ADR warranted: this
+  is a taste reversal, not a recurring decision.
+- **DESIGN_STYLE_GUIDE:** UI-affecting, so checked per R-035. No D-rule covers
+  marker *geometry*; D-020 (indicator token) is the only one that touches this
+  stripe and is untouched. Considered promoting "no bespoke `clip-path` shapes
+  without a sibling elsewhere in the language" to a D-rule — **not** written up,
+  as it's a single instance and the standards doc shouldn't grow a rule per
+  reverted experiment. Flagging it here so a second occurrence has a precedent.
+- No new FUs. No feedback-coverage table — this is a direct owner instruction
+  on an existing surface, not a brief or proposal.
+
+### Next up
+Chunk 3 of `docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`, unless
+the owner's look at the stripe sends it back.
+
+---
+
 ## 2026-08-19 (later 8) — Stock signal consolidation, **Chunk 2**
 **Status:** code-complete and **walked live**. Backend **1886 passed** (+4 e2e
 pinning the setting's scope), frontend **484 passed** (+6 pinning the bulk

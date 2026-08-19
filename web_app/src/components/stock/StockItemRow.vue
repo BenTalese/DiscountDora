@@ -333,7 +333,7 @@
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { expiryIndicatorFor } from 'src/helpers/expiryIndicator';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
-    import { isLowStockSequence, isOutOfStockSequence } from 'src/helpers/stockStatus';
+    import { isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -483,43 +483,35 @@
     const locationHasFullDetail = computed(() => locationHasDetail(locationBreadcrumb.value));
 
     // ── Expiry derived state ────────────────────────────────────────────
-    // Drives both the right-cluster button and the row-outline tone
-    // (status → whole-row outline, decision 6).
+    // Drives the right-cluster button only. It no longer feeds the row
+    // outline — that reads the server's `needs_attention` now, so the row's
+    // expiry threshold and the server's can't drift (B1).
     // R-002: tone + icon + colour live in `helpers/expiryIndicator` so the
     // stock-item detail page renders the identical indicator.
     const expiry = computed(() => expiryIndicatorFor(props.item.expiry_date));
-    const expiryTone = computed(() => expiry.value.tone);
 
-    // ── Whole-row outline + dim rules (Model C, round 8) ────────────────
-    // Unified rule with `hasAlert` in useStockFilters so the row outline
-    // and the "Needs attention" footer count + filter chip describe the
-    // SAME set of items:
-    //   • WARN (amber): essential AND Low, OR expiring within 7 days.
-    //   • ALERT (red):  essential AND Out, OR already expired.
-    // Dimming: non-essential Out items only. Essential Out items stay
-    // full opacity so the loudest "go restock" signal isn't quieted by
-    // the fade.
+    // ── Whole-row outline + dim rules ───────────────────────────────────
+    // ONE outline, server-decided (D-7). The row used to carry two —
+    // WARN-amber and ALERT-red, "sort of needs attention" and "really needs
+    // attention" — and a hedged alarm gets ignored. Worse, amber was the
+    // collision case: an essential-low item wore an amber outline wrapped
+    // around an amber level square, two different ambers touching.
+    //
+    // `needs_attention` comes off the DTO; severity still orders the outlined
+    // set in the sort (D-9), which is where a gradient pays off without
+    // spending a second colour.
+    //
+    // Dimming: non-essential Out items only, and it is NOT an attention
+    // signal — it's the bottom of the same ramp (D-8): outlined = needs you,
+    // normal = fine, dim = out but you never flagged it. Essential Out items
+    // stay full opacity so the loudest "go restock" isn't quieted by a fade.
     const isOutOfStock = computed(
         () =>
             props.item.is_out_of_stock ?? isOutOfStockSequence(levelSequence.value),
     );
-    const isLowStock = computed(
-        () =>
-            props.item.is_low_stock ?? isLowStockSequence(levelSequence.value),
-    );
     const isEssential = computed(() => props.item.is_essential === true);
 
-    const isAlertRow = computed(
-        () =>
-            (isEssential.value && isOutOfStock.value) ||
-            expiryTone.value === 'expired',
-    );
-    const isWarnRow = computed(
-        () =>
-            !isAlertRow.value &&
-            ((isEssential.value && isLowStock.value) ||
-                expiryTone.value === 'soon'),
-    );
+    const needsAttention = computed(() => props.item.needs_attention === true);
 
     const rowClasses = computed(() => ({
         'stock-row--dim': isOutOfStock.value && !isEssential.value,
@@ -529,8 +521,7 @@
         // (splitter detail) keeps its own treatment so the two states
         // don't collide.
         'stock-row--selected': !!props.selected,
-        'stock-row--alert': isAlertRow.value,
-        'stock-row--warn': isWarnRow.value,
+        'stock-row--attention': needsAttention.value,
     }));
 
     // restrict the date picker to today + future.
@@ -779,7 +770,7 @@
        width (2026-08-15 feedback). Tighten both the gap between the row's
        sections and the buttons themselves — the price button is already gone
        there (page toolbar owns it), so this is the remaining squeeze.
-       Left padding is the exception and stays at the desktop 12px: the 5px
+       Left padding is the exception and stays at the desktop 12px: the
        essential stripe is absolutely positioned on the row's left edge, so
        the tightened 8px left only 3px between stripe and level button and
        the two read as one squished blob (2026-08-16 feedback). Desktop's
@@ -809,38 +800,28 @@
        2026-08-16 feedback: paints in the indicator-grade secondary, not
        `--q-secondary` — the latter is the toolbar background in every
        dark theme, which left the stripe all but invisible there.
-       2026-08-17 feedback: no longer a straight up-and-down bar. The
-       element is now 16px wide and clipped to a bracket — it runs the
-       full 16px along the row's top and bottom edges, then tapers back
-       to the original 5px over the first/last 14px, so it reads as a
-       tab hooked around the corner rather than a stuck-on strip. The
-       row's `overflow: hidden` + 8px radius rounds the two outer
-       corners for free. Width is clip only: nothing else in the row
-       shifts, since the stripe is absolutely positioned. */
+       2026-08-20 feedback: the 2026-08-17 tapered bracket (16px wide,
+       clipped back to 5px over the first/last 14px) is reverted — at a
+       56px painted row height half the element was taper, so it read as
+       a lopsided hexagon rather than a tab, and its diagonals crossed
+       the warn/alert ring at an angle. Back to the straight bar, one
+       pixel thicker. The row's `overflow: hidden` + 8px radius rounds
+       the two outer corners for free. */
     .stock-row__essential-stripe {
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
-        width: 16px;
+        width: 6px;
         background: var(--brand-secondary-strong);
         pointer-events: none;
-        clip-path: polygon(
-            0 0,
-            100% 0,
-            5px 14px,
-            5px calc(100% - 14px),
-            100% 100%,
-            0 100%
-        );
     }
 
-    /* Status outline-by-status (decision 6). Colours via theme tokens. */
-    .stock-row--warn {
-        border-color: var(--q-warning);
-        box-shadow: inset 0 0 0 1px var(--q-warning);
-    }
-    .stock-row--alert {
+    /* One attention outline, one token (D-7). Amber's gone: it meant "sort
+       of needs attention", and it sat directly around the amber Low level
+       square. An outline firing on 5% of rows works; one firing on 40% is
+       wallpaper, which is what two tiers produced. */
+    .stock-row--attention {
         border-color: var(--q-negative);
         box-shadow: inset 0 0 0 1px var(--q-negative);
     }

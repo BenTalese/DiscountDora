@@ -1,12 +1,13 @@
 """GET /api/alerts — items that need the user's attention right now.
 
 All signals are derived from existing schema (expiry_date, stock_level,
-is_essential, plus the stocktake queue's band-based resolver), so the
-alert *conditions* are never stored — they're recomputed every request
-and so always reflect current pantry state. `stocktake_overdue` alerts
-route through the same `resolve_overdue_map` helper the queue endpoint
-uses, so the bell + the runner surface the identical set of items
-(R-003, single source of truth for "overdue for a check").
+is_essential), so the alert *conditions* are never stored — they're
+recomputed every request and so always reflect current pantry state.
+
+The three per-item kinds emitted here — `expired`, `expiring_soon`,
+`essential_low` — ARE the stock-overview attention rule. `stock_attention.py`
+reads the same evaluator so a row's outline and the bell can't disagree
+(R-003); nothing re-derives "needs attention" client-side.
 
 What *is* persisted (C-9.1) is each user's *decisions* about an alert —
 read / snooze / dismiss — in `AlertInteraction`, keyed by the alert's
@@ -20,14 +21,12 @@ the channels all agree on one definition of "what counts":
 
 The badge counts the **actionable** tier; the **FYI** tier is shown in the
 list but never inflates it — the rule is explicit (`actionable_count` == the
-active actionable-tier list), not a silent exclusion. By default a kind's tier
-follows its severity (high/medium → actionable, low → FYI, PROPOSAL_ALERTS §5),
-but C-9.2 lets each user override a kind's tier (or disable the kind entirely)
-via `AlertPreference`, so the count is computed from the effective per-user tier.
-
-Severity stays one of "high" / "medium" / "low" so the UI can sort/colour
-without having to recompute the weight; `tier` is the (possibly overridden)
-actionable/FYI bucket the counts use.
+active actionable-tier list), not a silent exclusion. Tier is **derived from
+severity** (high/medium → actionable, low → FYI) and is not stored or
+overridable; `AlertPreference` can only disable a kind for a user (Step-0 Q2/Q3,
+`IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`). Severity is therefore the single
+importance scale — the UI sorts and colours off it, and `tier` on the DTO is a
+convenience label, not a second source.
 """
 import logging
 from dataclasses import dataclass, field, replace
@@ -45,14 +44,19 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.stock_status import (effective_expiring_soon_window,
-                                          is_low_stock, is_out_of_stock)
+                                          is_out_of_stock)
 from dora_api.features.alerts.alert_key import (list_alert_key, meal_alert_key,
                                                 stock_alert_key)
-from dora_api.features.alerts.alert_kinds import (TIER_ACTIONABLE,
-                                                  default_tier_for)
+from dora_api.features.alerts.alert_kinds import (SEVERITY_HIGH, SEVERITY_LOW,
+                                                  SEVERITY_MEDIUM,
+                                                  SEVERITY_ORDER,
+                                                  TIER_ACTIONABLE, TIER_FYI,
+                                                  is_actionable)
 from dora_api.features.app_settings.clock import household_today
+from dora_api.features.stock_items.stock_attention import (is_essential_low,
+                                                           is_expired,
+                                                           is_expiring_soon)
 from dora_api.features.routers import ALERT_ROUTER
-from dora_api.features.stocktake.stocktake import resolve_overdue_map
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import pluralize
 from dora_api.persistence.field import EntityField
@@ -60,14 +64,11 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
 
-# Severities are an ordinal scale — the UI sorts high first, then medium,
-# then low. The bell *badge* counts the actionable tier (high+medium); low
-# is FYI and shown but not counted into the badge (PROPOSAL_ALERTS §3.4).
-SEVERITY_HIGH = "high"
-SEVERITY_MEDIUM = "medium"
-SEVERITY_LOW = "low"
-
-_SEVERITY_ORDER = {SEVERITY_HIGH: 0, SEVERITY_MEDIUM: 1, SEVERITY_LOW: 2}
+# Severity is the one importance scale; the UI sorts high first. The bell badge
+# counts the actionable tier, which is now *derived* from severity (high+medium)
+# rather than stored beside it. Both the names and the order live in
+# `alert_kinds.py` (R-003) and are re-exported here only for the emitters below.
+_SEVERITY_ORDER = SEVERITY_ORDER
 
 # how soon a list's planned shop date must be to nudge. A small
 # constant default (not yet admin-tunable — these are FYI nudges, and per-user
@@ -89,8 +90,8 @@ class AlertDto:
     # endpoints. Named `alert_id` for frontend continuity; its *value* is the
     # generalised key (alert_key.py).
     alert_id: str
-    # 'expired' | 'expiring_soon' | 'out_of_stock' | 'low_stock' |
-    # 'stocktake_overdue' | 'essential_low' | 'no_planned_meals' | 'shopping_day'
+    # One of the six in `alert_kinds.SEVERITY_BY_KIND` — don't restate the
+    # list here, it drifted twice before (R-003).
     kind: str
     severity: str
     message: str
@@ -109,8 +110,8 @@ class AlertDto:
     # active (non-snoozed) alert `snoozed_until` is None.
     read: bool = False
     snoozed_until: str | None = None
-    # Effective tier (C-9.2): 'actionable' (counts toward the badge) or 'fyi'.
-    # Per-kind default (§5), overridable per user via AlertPreference.
+    # Derived tier: 'actionable' (counts toward the badge) or 'fyi'. A label
+    # for the client's convenience — `severity` is the authority (Step-0 Q3).
     tier: str = TIER_ACTIONABLE
 
 
@@ -157,10 +158,10 @@ class GetAlertsHandler:
         user_id: UUID | None = None,
         now: datetime | None = None,
     ) -> AlertsDto:
-        # `now` is a test seam (FU-518): snooze-expiry and overdue checks
-        # compare against it, and callers that already carry a tick time
-        # (the alerts digest) pass theirs through so one run evaluates at
-        # one instant. Default preserves the wall-clock behaviour.
+        # `now` is a test seam (FU-518): snooze-expiry checks compare against
+        # it, and callers that already carry a tick time (the push job) pass
+        # theirs through so one run evaluates at one instant. Default
+        # preserves the wall-clock behaviour.
         items: List[StockItem] = (
             self.repository.get(StockItem)
             .include(StockItem.Fields.STOCK_LEVEL)
@@ -180,11 +181,15 @@ class GetAlertsHandler:
         # derived after the per-user interaction + preference overlay).
         raw: List[AlertDto] = []
 
+        # The *conditions* live in `stock_attention.py` — this loop owns only
+        # the copy. Emitting from the same predicates the stock rows read is
+        # what makes "one attention rule" true rather than aspirational (R-003);
+        # the previous arrangement restated the thresholds here and drifted (B1).
         for item in items:
             # ── Expiry ─────────────────────────────────────────────────
             if item.expiry_date is not None:
                 days_remaining = (item.expiry_date - today).days
-                if days_remaining < 0:
+                if is_expired(item, today):
                     raw.append(AlertDto(
                         alert_id = stock_alert_key(item.id, "expired"),
                         kind = "expired",
@@ -195,7 +200,7 @@ class GetAlertsHandler:
                         detail = f"Expired {abs(days_remaining)} {pluralize(days_remaining, 'day')} ago.",
                         related_date = item.expiry_date.isoformat(),
                     ))
-                elif days_remaining <= window:
+                elif is_expiring_soon(item, today, window):
                     raw.append(AlertDto(
                         alert_id = stock_alert_key(item.id, "expiring_soon"),
                         kind = "expiring_soon",
@@ -212,79 +217,45 @@ class GetAlertsHandler:
                     ))
 
             # ── Stock level ────────────────────────────────────────────
-            if item.stock_level is not None:
+            # ONLY essentials. Step-0 Q1 cut `out_of_stock` and `low_stock`:
+            # a non-essential running low is exactly the case the user said he
+            # doesn't want to hear about, and the row's own level band already
+            # says it. Non-essential + out still *dims and sinks* the row
+            # (D-8) — that's a treatment read off the level, not an alert.
+            if is_essential_low(item):
                 if is_out_of_stock(item.stock_level):
-                    # Essential + out-of-stock is the harshest combination,
-                    # so it gets its own kind.
-                    if item.is_essential:
-                        raw.append(AlertDto(
-                            alert_id = stock_alert_key(item.id, "essential_out"),
-                            kind = "essential_low",
-                            severity = SEVERITY_HIGH,
-                            stock_item_id = item.id,
-                            stock_item_name = item.name,
-                            message = f"Essential {item.name} is out of stock",
-                            # DR-4 (FU-578 #17): action-neutral — the bell offers
-                            # both "Mark restocked" (per row) and "Add to list"
-                            # (footer), so the copy shouldn't prescribe one.
-                            detail = "Out of stock and flagged as essential — worth restocking.",
-                            related_date = None,
-                        ))
-                    else:
-                        raw.append(AlertDto(
-                            alert_id = stock_alert_key(item.id, "out_of_stock"),
-                            kind = "out_of_stock",
-                            severity = SEVERITY_MEDIUM,
-                            stock_item_id = item.id,
-                            stock_item_name = item.name,
-                            message = f"{item.name} is out of stock",
-                            detail = None,
-                            related_date = None,
-                        ))
-                elif is_low_stock(item.stock_level):
-                    if item.is_essential:
-                        raw.append(AlertDto(
-                            alert_id = stock_alert_key(item.id, "essential_low"),
-                            kind = "essential_low",
-                            severity = SEVERITY_HIGH,
-                            stock_item_id = item.id,
-                            stock_item_name = item.name,
-                            message = f"Essential {item.name} is low",
-                            detail = "Time to restock — flagged as essential.",
-                            related_date = None,
-                        ))
-                    else:
-                        raw.append(AlertDto(
-                            alert_id = stock_alert_key(item.id, "low_stock"),
-                            kind = "low_stock",
-                            severity = SEVERITY_LOW,
-                            stock_item_id = item.id,
-                            stock_item_name = item.name,
-                            message = f"{item.name} is low",
-                            detail = None,
-                            related_date = None,
-                        ))
+                    raw.append(AlertDto(
+                        alert_id = stock_alert_key(item.id, "essential_out"),
+                        kind = "essential_low",
+                        severity = SEVERITY_HIGH,
+                        stock_item_id = item.id,
+                        stock_item_name = item.name,
+                        message = f"Essential {item.name} is out of stock",
+                        # DR-4 (FU-578 #17): action-neutral — the bell offers
+                        # both "Mark restocked" (per row) and "Add to list"
+                        # (footer), so the copy shouldn't prescribe one.
+                        detail = "Out of stock and flagged as essential — worth restocking.",
+                        related_date = None,
+                    ))
+                else:
+                    raw.append(AlertDto(
+                        alert_id = stock_alert_key(item.id, "essential_low"),
+                        kind = "essential_low",
+                        severity = SEVERITY_HIGH,
+                        stock_item_id = item.id,
+                        stock_item_name = item.name,
+                        message = f"Essential {item.name} is low",
+                        detail = "Time to restock — flagged as essential.",
+                        related_date = None,
+                    ))
 
-        # ── Stocktake overdue ──────────────────────────────────────────
-        # Single authority (R-003) — same resolver the runner queue uses,
-        # so the bell and the runner never surface different sets. The
-        # helper already applies mute + push (snooze) + engagement gate
-        # + band resolution in one bulk pass.
-        overdue_map = resolve_overdue_map(items, now)
-        for item in items:
-            info = overdue_map.get(item.id)
-            if info is None:
-                continue
-            raw.append(AlertDto(
-                alert_id = stock_alert_key(item.id, "stocktake_overdue"),
-                kind = "stocktake_overdue",
-                severity = SEVERITY_LOW,
-                stock_item_id = item.id,
-                stock_item_name = item.name,
-                message = f"{item.name} needs a stocktake",
-                detail = f"Overdue by {info.days} {pluralize(info.days, 'day')}.",
-                related_date = None,
-            ))
+        # ── Stocktake overdue: deliberately NOT an alert ───────────────
+        # Step-0 Q1 cut it. The stocktake runner owns this signal end to end —
+        # it has its own queue, its own overdue resolver and its own toolbar
+        # button. Mirroring it into the bell was one condition shouting from
+        # two places, which is the pattern this plan exists to remove. If the
+        # runner needs to be more discoverable, make the runner louder; don't
+        # re-add a kind here.
 
         # ── Forward-looking nudges (C-9.4) ─────────────────────────────
         # Not per-item, so they sit outside the loop. R-021 — `today` is
@@ -320,13 +291,10 @@ class GetAlertsHandler:
             pref = preferences.get(alert.kind)
             if pref is not None and not pref.enabled:
                 continue
-            # Effective tier = this user's override, else the kind's default
-            # (PROPOSAL_ALERTS §5). Drives the actionable/FYI count split.
-            tier = (
-                pref.tier_override
-                if (pref is not None and pref.tier_override)
-                else default_tier_for(alert.kind)
-            )
+            # Tier is derived from severity, full stop — no stored default, no
+            # per-user override (Step-0 Q3). The count split and the row outline
+            # therefore cannot disagree about what "actionable" means.
+            tier = TIER_ACTIONABLE if is_actionable(alert.severity) else TIER_FYI
 
             interaction = interactions.get(alert.alert_id)
             if interaction is not None and interaction.dismissed_at is not None:
@@ -449,8 +417,12 @@ class GetAlertsHandler:
             if days < 0:
                 # Overdue: planned shop day already passed and the list still
                 # isn't done. Bump severity so it sorts above plain upcoming
-                # nudges; tier stays FYI (per kind default), so the bell badge
-                # isn't inflated by what's still a soft nudge.
+                # nudges. Since Step-0 Q3 that also promotes it to the
+                # actionable tier and onto the bell badge — deliberate, and the
+                # honest consequence of severity being the only importance
+                # scale: if it's important enough to sort above the others, it
+                # is important enough to count. An upcoming shop day stays low
+                # and stays off the badge.
                 overdue = -days
                 when = "yesterday" if overdue == 1 else f"{overdue} days ago"
                 message = f"Shopping day was {when}: {lst.display_name}"

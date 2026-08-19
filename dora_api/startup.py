@@ -109,19 +109,11 @@ def bootstrap(is_test_env: bool = False):
             id="audit_retention",
             replace_existing=True,
         )
-        # alerts email digest. Runs once daily at 07:00; the job
-        # gates per-user cadence + weekly-day internally (PROPOSAL_ALERTS
-        # §3.5). 07:00 sits comfortably between the 03:00 audit sweep and
-        # the typical workday so a "morning digest" lands before the user
-        # opens the app.
-        from dora_api.features.alerts.send_alerts_digest import \
-            send_alerts_digest
-        scheduler.add_job(
-            send_alerts_digest,
-            CronTrigger(hour=7, minute=0),
-            id="alerts_digest",
-            replace_existing=True,
-        )
+        # (No alerts email digest — cut at Step-0 Q4,
+        # `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`. Web push already delivers
+        # the same set instantly and needs no SMTP, and the 19:00 daily brief
+        # covers the "what's coming" digest shape that was actually asked for.)
+
         # Daily prune of elapsed suggestion snoozes. Moved off the
         # GET /api/suggestions read path per FU-513 (2026-07-08); the
         # read filter already ignores expired snoozes for correctness,

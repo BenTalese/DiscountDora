@@ -6,9 +6,10 @@ alert means changing the underlying state so it doesn't re-fire:
   - reset_expiry: clear `expiry_date` on the linked stock item
   - extend_expiry: push `expiry_date` forward by 7 days
   - mark_restocked: set the stock level to "Stocked"
-  - acknowledge_stocktake: bump `stock_level_last_updated` to now without
-    changing the level (the user has "looked at it" but doesn't want to
-    change anything)
+
+(`acknowledge_stocktake` was removed with the `stocktake_overdue` kind at
+Step-0 Q1 — it was that kind's only action, and "I looked at it" belongs in
+the stocktake runner, which owns the freshness stamp.)
 
 The alert_id is the stable scoped key `<scope>:<id>:<kind>` (alert_key.py).
 Only stock-scoped alerts carry actions today; we extract the stock item id
@@ -39,7 +40,6 @@ from dora_api.infrastructure.ports import Repository
 ACTION_RESET_EXPIRY = "reset_expiry"
 ACTION_EXTEND_EXPIRY = "extend_expiry"
 ACTION_MARK_RESTOCKED = "mark_restocked"
-ACTION_ACKNOWLEDGE_STOCKTAKE = "acknowledge_stocktake"
 
 
 class AlertActionRequest(BaseModel):
@@ -76,8 +76,6 @@ class AlertActionHandler:
             )
             if stocked is not None:
                 item.stock_level = stocked
-            item.stock_level_last_updated = datetime.now(timezone.utc)
-        elif action == ACTION_ACKNOWLEDGE_STOCKTAKE:
             item.stock_level_last_updated = datetime.now(timezone.utc)
         else:
             return AlertActionResponse(invalid_action=True)

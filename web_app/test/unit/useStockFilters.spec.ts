@@ -42,19 +42,23 @@ function item(overrides: Partial<StockItem> & Pick<StockItem, 'stock_item_id' | 
     };
 }
 
-// Six items exercising every attention tier:
-//   apple  — stocked, plain                       (no alert)
-//   bread  — essential + low                      (WARN alert)
-//   cheese — essential + out                      (ALERT)
-//   dill   — expiring in 3 days                   (WARN alert)
-//   egg    — already expired                      (ALERT)
-//   flour  — low but NOT essential, currently open (no alert — Model C)
+// Six items exercising the attention rule. `needs_attention` /
+// `attention_kinds` are stated the way the SERVER would state them
+// (`stock_attention.py`) — the client reads them and no longer re-derives
+// anything from level + expiry, so a fixture that only set `expiry_date`
+// would be describing an item the API could never return.
+//   apple  — stocked, plain                        (quiet)
+//   bread  — essential + low                       (essential_low)
+//   cheese — essential + out                       (essential_low)
+//   dill   — expiring in 3 days                    (expiring_soon)
+//   egg    — already expired                       (expired)
+//   flour  — low but NOT essential, currently open (quiet — Step-0 Q1)
 const ITEMS: StockItem[] = [
     item({ stock_item_id: 'si-apple', name: 'Apple', stock_location_id: 'loc-pantry', stock_group_id: 'grp-fresh', stock_level_last_updated: '2026-07-01T00:00:00Z' }),
-    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_essential: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z' }),
-    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_essential: true }),
-    item({ stock_item_id: 'si-dill', name: 'Dill', expiry_date: '2026-07-13', stock_location_id: 'loc-shelf', stock_group_id: 'grp-fresh' }),
-    item({ stock_item_id: 'si-egg', name: 'Egg', expiry_date: '2026-07-01' }),
+    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_essential: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z', needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'] }),
+    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_essential: true, needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'] }),
+    item({ stock_item_id: 'si-dill', name: 'Dill', expiry_date: '2026-07-13', stock_location_id: 'loc-shelf', stock_group_id: 'grp-fresh', needs_attention: true, attention_severity: 'medium', attention_kinds: ['expiring_soon'] }),
+    item({ stock_item_id: 'si-egg', name: 'Egg', expiry_date: '2026-07-01', needs_attention: true, attention_severity: 'high', attention_kinds: ['expired'] }),
     item({ stock_item_id: 'si-flour', name: 'Flour', stock_level_id: 'lv-low', is_open: true, stock_level_last_updated: '2026-07-05T00:00:00Z' }),
 ];
 
@@ -195,10 +199,10 @@ describe('useStockFilters — filtering', () => {
         expect(names(f)).toEqual(['Flour']);
     });
 
-    it('needs-attention = essential low/out OR expired OR expiring ≤7d; non-essential low stays silent (Model C)', () => {
+    it('needs-attention narrows to what the SERVER flagged, nothing re-derived', () => {
         const f = makeFilters();
         f.hasAlertOnly.value = true;
-        // Flour (low, not essential) deliberately absent.
+        // Flour (low, not essential) deliberately absent — Step-0 Q1.
         expect(names(f)).toEqual(['Bread', 'Cheese', 'Dill', 'Egg']);
     });
 
@@ -215,12 +219,12 @@ describe('useStockFilters — filtering', () => {
         expect(names(f)).toEqual(['Egg', 'Flour']);
     });
 
-    it('expiring-soon keeps items expiring ≤7d OR already expired (FU-583 freshness deep-link)', () => {
+    it('expiring-soon keeps the expiry-flagged items (FU-583 freshness deep-link)', () => {
         const f = makeFilters();
         f.expiringSoonOnly.value = true;
-        // Dill expires in 3 days (≤7d), Egg is already expired; nothing else
-        // carries an expiry date. Non-essential and stock-level status are
-        // irrelevant to this filter.
+        // Dill is expiring_soon, Egg is expired; both are the expiry axis.
+        // The chip reads the server's kinds rather than re-measuring days,
+        // so the admin's configurable window governs it too (B1).
         expect(names(f)).toEqual(['Dill', 'Egg']);
         expect(f.activeFilterCount.value).toBe(1);
     });
@@ -260,11 +264,17 @@ describe('useStockFilters — filtering', () => {
         expect(names(f)).toEqual(['Bread']);
     });
 
-    it('server-derived stock booleans win over the client sequence lookup', () => {
-        // Item claims a stocked level but the server says it's low — the
-        // derived boolean must drive the attention rule (R-003 contract).
+    it('attention is the server\'s answer even when the level says otherwise', () => {
+        // The item claims a Stocked level and carries no expiry date, so every
+        // client-side rule that ever existed would call it quiet. The server
+        // says it needs attention, and the server wins — that is the whole
+        // point of Chunk 3b (B1–B4 were all the client disagreeing).
         const overridden: StockItem[] = [
-            item({ stock_item_id: 'si-x', name: 'X', is_essential: true, is_low_stock: true }),
+            item({
+                stock_item_id: 'si-x', name: 'X', is_essential: true,
+                needs_attention: true, attention_severity: 'high',
+                attention_kinds: ['essential_low'],
+            }),
         ];
         const f = useStockFilters({
             stockItems: () => overridden,

@@ -64,54 +64,9 @@
             <hr class="settings-divider" />
         </template>
 
-        <!-- Alerts email digest. SMTP-gated. R-029 carve-out: this screen
-             owns the per-user opt-in, so the disabled toggle + setup card
-             legitimately render here (and only here). Title + toggle only
-             (owner: drop the descriptive blurbs). -->
-        <SettingsSection>
-            <template #title>Alerts email digest</template>
-            <template #actions>
-                <q-toggle
-                    :model-value="currentUser.alerts_email_enabled"
-                    :disable="!emailSmtpConfigured"
-                    aria-label="Email me a digest of my alerts"
-                    @update:model-value="onAlertsEmailEnabledChange"
-                />
-            </template>
-
-            <ChannelSetupNote
-                v-if="!emailSmtpConfigured"
-                channel="email"
-                :is-admin="isAdmin"
-            />
-
-            <template v-if="currentUser.alerts_email_enabled">
-                <SettingsRow label="Cadence">
-                    <DoraSegmented
-                        :model-value="alertsEmailCadenceDraft"
-                        :options="alertsCadenceOptions"
-                        @update:model-value="onAlertsEmailCadenceChange"
-                    />
-                </SettingsRow>
-
-                <SettingsRow v-if="alertsEmailCadenceDraft === 'weekly'" label="Send on">
-                    <q-select
-                        v-model="alertsEmailDayDraft"
-                        :options="dayOptions"
-                        option-value="value"
-                        option-label="label"
-                        emit-value
-                        map-options
-                        outlined
-                        dense
-                        style="min-width: 180px"
-                        @update:model-value="onAlertsEmailDayChange"
-                    />
-                </SettingsRow>
-            </template>
-        </SettingsSection>
-
-        <hr class="settings-divider" />
+        <!-- (No alerts email digest section — the digest was cut at Step-0 Q4,
+             `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`. Alerts reach you in-app
+             and by push; the evening brief is the one scheduled summary.) -->
 
         <!-- Push notifications. VAPID-gated. R-029 carve-out — same
              pattern as the email row above. Title + toggle only
@@ -204,7 +159,6 @@
     import { ICONS } from 'src/style/icons';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import ChannelSetupNote from 'src/components/settings/ChannelSetupNote.vue';
-    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
@@ -215,12 +169,6 @@
     // admin users page (owner feedback).
     const { emailSmtpConfigured, pushVapidConfigured, products: productsEnabled } = useFeatureFlags();
     const isAdmin = computed(() => currentUser.value?.is_admin === true);
-    type AlertsCadence = 'daily' | 'weekly';
-    const alertsCadenceOptions: DoraSegmentedOption<AlertsCadence>[] = [
-        { label: 'Daily', value: 'daily' },
-        { label: 'Weekly', value: 'weekly' },
-    ];
-
     const {
         state: pushState,
         error: pushError,
@@ -242,10 +190,6 @@
     ];
 
     const sendDealsOnDay = ref<number>(currentUser.value?.send_deals_on_day ?? 0);
-    const alertsEmailCadenceDraft = ref<AlertsCadence>(
-        (currentUser.value?.alerts_email_cadence === 'weekly') ? 'weekly' : 'daily'
-    );
-    const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
     const { notifySuccess, notifyError, update } = useSettingsSave();
@@ -253,8 +197,6 @@
     watch(currentUser, (u) => {
         if (!u) return;
         sendDealsOnDay.value = u.send_deals_on_day ?? 0;
-        alertsEmailCadenceDraft.value = u.alerts_email_cadence === 'weekly' ? 'weekly' : 'daily';
-        alertsEmailDayDraft.value = u.alerts_email_day ?? 0;
     });
 
     async function onSendDealsOnDayChange(value: number) {
@@ -278,37 +220,6 @@
         await update('Deals email format updated.', () =>
             authStore.updateMeAsync({ deals_email_compact: value })
         );
-    }
-
-    async function onAlertsEmailEnabledChange(value: boolean) {
-        const cadence = value ? alertsEmailCadenceDraft.value : 'off';
-        await update(
-            value
-                ? 'Subscribed to the alerts email digest.'
-                : 'Unsubscribed from the alerts email digest.',
-            () => authStore.updateMeAsync({
-                alerts_email_enabled: value,
-                alerts_email_cadence: cadence,
-            })
-        );
-    }
-
-    async function onAlertsEmailCadenceChange(value: AlertsCadence) {
-        const previous = alertsEmailCadenceDraft.value;
-        alertsEmailCadenceDraft.value = value;
-        const result = await update('Digest cadence updated.', () =>
-            authStore.updateMeAsync({ alerts_email_cadence: value })
-        );
-        if (result === null) alertsEmailCadenceDraft.value = previous;
-    }
-
-    async function onAlertsEmailDayChange(value: number) {
-        const previous = alertsEmailDayDraft.value;
-        alertsEmailDayDraft.value = value;
-        const result = await update('Digest day updated.', () =>
-            authStore.updateMeAsync({ alerts_email_day: value })
-        );
-        if (result === null) alertsEmailDayDraft.value = previous;
     }
 
     async function onDailyBriefToggle(value: boolean) {

@@ -9,9 +9,7 @@ Covers:
   - `_config()` mapping from `resolved_operational_config()` including the
     DB-unavailable → dry-run fallback,
   - error propagation to callers, and the `try_send` swallow-and-log wrapper
-    the auth flows use,
-  - the pure `_render_text_digest` seam of the alerts digest job (the HTML
-    assembly in `_process_user` is DB-coupled — the e2e layer owns that).
+    the auth flows use.
 
 No network: `smtplib.SMTP` is always replaced before `send_email` runs.
 """
@@ -25,8 +23,8 @@ from email import message_from_string
 from types import SimpleNamespace
 
 # Hazard guard (see tests/e2e/dora_api/conftest.py): parts of this module
-# import `dora_api.app` transitively (auth_helpers, operational_config,
-# send_alerts_digest), and the app resolves its DB connection string from
+# import `dora_api.app` transitively (auth_helpers, operational_config),
+# and the app resolves its DB connection string from
 # the environment at import time. Point it at a throwaway temp path BEFORE
 # any dora_api import so the developer's `.env` dev DB can never be
 # touched. No test here ever opens a DB connection and startup()/seeding
@@ -38,8 +36,6 @@ os.environ["DORA_DB_PATH"] = os.path.join(
 import pytest  # noqa: E402
 import smtplib  # noqa: E402
 
-from dora_api.features.alerts.send_alerts_digest import \
-    _render_text_digest  # noqa: E402
 from dora_api.features.app_settings import operational_config  # noqa: E402
 from dora_api.infrastructure import email_sender  # noqa: E402
 from dora_api.infrastructure.auth_helpers import try_send  # noqa: E402
@@ -340,56 +336,3 @@ def test__config__blank_username__forces_dry_run_even_with_host_set(monkeypatch)
     _patch_resolver(monkeypatch, lambda: _op_config(smtp_username=""))
 
     assert email_sender._config().dry_run is True
-
-
-# ── alerts digest: the pure plain-text seam ─────────────────────────────
-
-class _Alert:
-    """Duck-typed AlertDto — _render_text_digest reads .message/.detail."""
-    def __init__(self, message: str, detail: str | None = None):
-        self.message = message
-        self.detail = detail
-
-
-def test__render_text_digest__actionable_and_fyi__renders_sections_with_counts(monkeypatch):
-    # The digest builds its "Open alerts" link via spa_deep_link (hash-history
-    # deep link — .../#/alerts), which reads public_base_url from auth_helpers;
-    # patch it at that source.
-    import dora_api.infrastructure.auth_helpers as auth_helpers
-    monkeypatch.setattr(
-        auth_helpers, "public_base_url", lambda: "https://dora.example",
-    )
-
-    text = _render_text_digest(
-        "ben", "daily",
-        actionable=[_Alert("Milk is out of stock", "Used by 3 meals")],
-        fyi=[_Alert("Price drop on olive oil")],
-    )
-
-    lines = text.splitlines()
-    assert lines[0] == "Hi ben,"
-    assert "Your daily alerts digest:" in lines
-    assert "NEEDS ACTION (1):" in lines
-    assert "  - Milk is out of stock" in lines
-    assert "      Used by 3 meals" in lines
-    assert "HEADS-UP (1):" in lines
-    assert "  - Price drop on olive oil" in lines
-    assert "Open alerts: https://dora.example/#/alerts" in lines
-    assert lines[-1] == "Manage your channels in Settings → Preferences."
-
-
-def test__render_text_digest__no_fyi__omits_heads_up_section(monkeypatch):
-    import dora_api.infrastructure.auth_helpers as auth_helpers
-    monkeypatch.setattr(
-        auth_helpers, "public_base_url", lambda: "https://dora.example",
-    )
-
-    text = _render_text_digest(
-        "ben", "weekly",
-        actionable=[_Alert("Bread expires tomorrow")],
-        fyi=[],
-    )
-
-    assert "HEADS-UP" not in text
-    assert "NEEDS ACTION (1):" in text
-    assert "Your weekly alerts digest:" in text

@@ -134,8 +134,8 @@
                 <div class="text-subtitle1">Manage your alerts</div>
             </q-card-section>
             <q-card-section class="text-caption dora-text-muted q-pt-xs q-pb-none">
-                Turn a kind off, or move it between <strong>Needs action</strong> (counts on the
-                bell) and <strong>FYI</strong>. These are your personal preferences.
+                Turn off any kind you don't want to hear about. Your choice only affects
+                what <em>you</em> see.
             </q-card-section>
             <q-list separator>
                 <q-item v-for="pref in managePrefs" :key="pref.kind">
@@ -146,24 +146,13 @@
                     </q-item-section>
                     <q-item-section>
                         <q-item-label>{{ kindTheme(pref.kind) }}</q-item-label>
-                        <q-item-label caption class="row items-center q-gutter-x-sm q-mt-xs">
-                            <BaseSegmented
-                                :model-value="pref.effective_tier"
-                                :options="tierOptions"
-                                size="sm"
-                                dense
-                                unelevated
-                                :disable="!pref.enabled || prefBusy.has(pref.kind)"
-                                @update:model-value="(t) => onSetTier(pref, t as AlertTier)"
-                            />
-                            <q-icon :name="ICONS.help_outline" size="14px">
-                                <q-tooltip>
-                                    Choose whether this alert kind lands in
-                                    Needs action, FYI, or is silenced entirely.
-                                    Overrides the app-wide default set in Settings.
-                                </q-tooltip>
-                            </q-icon>
-                            <span v-if="pref.tier_override">· default {{ tierLabel(pref.default_tier) }}</span>
+                        <!-- A kind's weight is fixed by the server (derived from
+                             its severity), so this reads rather than edits. It used
+                             to be an editable Needs-action/FYI segmented control;
+                             that per-user override made "is this actionable?" a
+                             per-user answer the stock rows couldn't see. -->
+                        <q-item-label caption class="q-mt-xs">
+                            {{ tierLabel(pref.tier) }}
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side>
@@ -223,7 +212,6 @@
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import AlertList from 'src/components/AlertList.vue';
     import SubscriptionsPanel from 'src/components/SubscriptionsPanel.vue';
     import UpcomingTimeline from 'src/components/UpcomingTimeline.vue';
@@ -240,7 +228,6 @@
         type AlertHistoryState,
         type AlertKind,
         type AlertPref,
-        type AlertTier,
     } from 'src/models/alert';
     import AlertApiService from 'src/services/api/alertApiService';
     import { useAlertActions } from 'src/composables/useAlertActions';
@@ -275,16 +262,11 @@
 
     const prefBusy = ref<Set<string>>(new Set());
 
-    const tierOptions = [
-        { label: 'Needs action', value: 'actionable' },
-        { label: 'FYI', value: 'fyi' },
-    ];
-
     // ── Summary boxes — per-kind counts over the active set, in a fixed
     // worst-first order so the layout is stable as counts change.
     const SUMMARY_ORDER: AlertKind[] = [
-        'expired', 'essential_low', 'expiring_soon', 'out_of_stock', 'low_stock',
-        'stocktake_overdue', 'shopping_day', 'no_planned_meals',
+        'expired', 'essential_low', 'expiring_soon',
+        'shopping_day', 'no_planned_meals', 'meal_reconcile_overdue',
     ];
     const summaryBoxes = computed(() => {
         const counts = new Map<AlertKind, number>();
@@ -385,20 +367,6 @@
         setPrefBusy(pref.kind, true);
         try {
             await alertPrefsStore.setEnabled(pref.kind, enabled);
-            await alertStore.refreshAsync();
-        } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: toastCaption(err) });
-        } finally {
-            setPrefBusy(pref.kind, false);
-        }
-    }
-
-    async function onSetTier(pref: AlertPref, tier: AlertTier): Promise<void> {
-        setPrefBusy(pref.kind, true);
-        try {
-            // Clear the override when the chosen tier IS the default — keeps the
-            // ledger free of redundant rows (absence = default).
-            await alertPrefsStore.setTierOverride(pref.kind, tier === pref.default_tier ? null : tier);
             await alertStore.refreshAsync();
         } catch (err) {
             $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: toastCaption(err) });

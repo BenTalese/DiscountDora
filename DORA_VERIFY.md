@@ -22,6 +22,28 @@ top-to-bottom.
 
 ---
 
+## Alerts + Stock: Step-0 cuts and the one attention rule (2026-08-20)
+- [ ] Bell/alerts page show only expired, expiring-soon, essential-low + the three nudges.
+- [ ] Manage panel: on/off toggle per kind, no Needs-action/FYI picker, weight shown as text.
+- [ ] Switch a kind off → its stock rows lose their outline too, and the footer count drops.
+- [ ] Change the expiring-soon window in settings → row outlines move with the bell.
+- [ ] Alerts page → view-in-stock lands on a filter whose count matches the number tapped.
+- [ ] One outline colour only; no amber-outline-around-amber-Low-square rows.
+- [ ] Non-essential out-of-stock: dim, no outline, not counted.
+- [ ] Settings → Notifications has no alerts-email-digest section.
+- [ ] An overdue shopping day counts on the bell badge — confirm that's wanted (see worklog).
+
+## Cookbook + Stock: sort-direction toggle inside the field (2026-08-20)
+- [ ] Unfocused sort field: outline is unbroken across the top — no gap behind the arrow chip.
+- [ ] Chip sits clear of the dropdown chevron, vertically centred, no stray edge or fill.
+- [ ] Tapping anywhere on/just around the chip flips the direction (arrow and tooltip change).
+
+## Stock overview: essential stripe back to a straight bar (2026-08-20)
+- [ ] Essential row shows a plain full-height 6px bar, no taper, corners rounded by the row.
+- [ ] On an essential row that's also low/out, the bar and the amber/red outline don't clash.
+- [ ] Bar stays legible in each dark theme (D-020 `--brand-secondary-strong`).
+- [ ] Legend swatch matches the real row.
+
 ## Recipe page: toolbar, cost card, image, meals (2026-08-19)
 *Server half verified live against your seed: Juice Bowl now reports **no
 estimate** with both lines reading "unit_mismatch · $4.20 per ea", Tuna Bake

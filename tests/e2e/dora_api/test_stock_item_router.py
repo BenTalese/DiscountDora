@@ -41,6 +41,9 @@ EXPECTED_KEYS = {
     'is_open',
     'opened_on',
     'last_checked_at',
+    'needs_attention',
+    'attention_severity',
+    'attention_kinds',
     'linked_product_count',
 }
 

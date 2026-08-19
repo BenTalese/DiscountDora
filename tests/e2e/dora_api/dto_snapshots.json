@@ -55,9 +55,6 @@
   },
   "auth_me": {
     "keys": [
-      "alerts_email_cadence",
-      "alerts_email_day",
-      "alerts_email_enabled",
       "assistant_ready",
       "buy_verdict_enabled",
       "daily_brief_enabled",
@@ -328,6 +325,8 @@
       "total"
     ],
     "item_keys": [
+      "attention_kinds",
+      "attention_severity",
       "expiry_date",
       "is_essential",
       "is_low_stock",
@@ -336,6 +335,7 @@
       "last_checked_at",
       "linked_product_count",
       "name",
+      "needs_attention",
       "needs_restock",
       "opened_on",
       "stock_group_id",

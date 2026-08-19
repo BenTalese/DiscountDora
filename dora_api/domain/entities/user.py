@@ -106,22 +106,10 @@ VOICE_ENGINE_BROWSER = "browser"
 VOICE_ENGINE_PIPER = "piper"
 ALLOWED_VOICE_ENGINES = (VOICE_ENGINE_BROWSER, VOICE_ENGINE_PIPER)
 
-# per-user alerts-email cadence (PROPOSAL_ALERTS §4.4). `off` is
-# the absent-feature value (paired with `alerts_email_enabled=False` it's
-# the default for a fresh user — quiet until opted in). R-010 carve-out:
-# closed-set string sentinel, single validation point in `update_me.py`.
-ALERTS_EMAIL_CADENCE_OFF = "off"
-ALERTS_EMAIL_CADENCE_DAILY = "daily"
-ALERTS_EMAIL_CADENCE_WEEKLY = "weekly"
-ALERTS_EMAIL_CADENCE_VALUES = (
-    ALERTS_EMAIL_CADENCE_OFF,
-    ALERTS_EMAIL_CADENCE_DAILY,
-    ALERTS_EMAIL_CADENCE_WEEKLY,
-)
 
 # per-user LLM provider. Closed set validated at the
-# update_me boundary (R-010 carve-out, same shape as nutrition_mode /
-# alerts_email_cadence). Ollama is the local/free path; OpenAI /
+# update_me boundary (R-010 carve-out, same shape as nutrition_mode).
+# Ollama is the local/free path; OpenAI /
 # Anthropic / Gemini are paid API providers that additionally require
 # an encrypted API key.
 LLM_PROVIDER_OLLAMA = "ollama"
@@ -169,8 +157,8 @@ class User(BaseEntity):
     # no real users) and the default was actively wrong: a fresh install has no
     # SMTP, so every new user landed pre-subscribed to an email the server
     # cannot send — and the Notifications toggle is `:disable`d without SMTP, so
-    # they couldn't even turn it off. Now matches its sibling
-    # `alerts_email_enabled` below: email channels are opt-in (P10 Anti-creep).
+    # they couldn't even turn it off. Email channels are opt-in
+    # (P10 Anti-creep); this is now the only one.
     deals_email_enabled: bool = False
     deals_email_compact: bool = False
     theme: str = THEME_SYSTEM
@@ -252,18 +240,10 @@ class User(BaseEntity):
     show_recipe_images: bool = True
     # FU-615 — `household_headcount` moved to AppSetting (install-wide;
     # a household has one headcount). Cook mode reads it via /api/health.
-    # alerts email digest (PROPOSAL_ALERTS §3.5 / §4.4). Off by
-    # default (P10 Anti-creep + the proposal §5 "channels: in-app on; email
-    # off (opt-in)"). When `alerts_email_enabled` is True, the scheduled
-    # digest job (`send_alerts_digest`) runs at the user's `alerts_email_
-    # cadence` ('daily' | 'weekly'; 'off' is the no-feature value paired
-    # with the disabled flag). `alerts_email_day` is the weekly send day
-    # (Mon=0 … Sun=6) and is ignored on the daily cadence. Independent of
-    # the deals-email `send_deals_on_day` so the two channels stay
-    # uncoupled (per-channel cleanliness).
-    alerts_email_enabled: bool = False
-    alerts_email_cadence: str = ALERTS_EMAIL_CADENCE_OFF
-    alerts_email_day: int = 0
+    # (No alerts-email fields — the digest was cut at Step-0 Q4,
+    # `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`. Alerts reach the user
+    # in-app and via web push; `daily_brief_enabled` below is the one
+    # scheduled summary that survives.)
     # Settings rebuild Phase 4 (§2.9) — optional profile picture, stored as a
     # data-URL blob (same convention as Store/StockItem images). Deferred at
     # the ORM layer so list endpoints never drag the bytes per row; the
@@ -333,9 +313,6 @@ class User(BaseEntity):
         INFERENCE_SHOPPING_ENABLED = "inference_shopping_enabled"
         INFERENCE_MEAL_PLAN_ENABLED = "inference_meal_plan_enabled"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
-        ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
-        ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
-        ALERTS_EMAIL_DAY = "alerts_email_day"
         IMAGE = "image"
         DASHBOARD_LAYOUT = "dashboard_layout"
         LLM_ENABLED = "llm_enabled"

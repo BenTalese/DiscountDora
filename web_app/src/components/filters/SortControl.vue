@@ -35,9 +35,8 @@
                  you might not be able to tell you can click it/tap it)".
                  Both fixed here rather than at the call sites: it was `flat`
                  + `round` + `size="sm"`, i.e. a bare glyph at ~24px. It is now
-                 a bordered, tinted, full-inner-height block separated from the
-                 value by its own border — the same treatment a split-button's
-                 trailing half gets, which is exactly what this is. -->
+                 a bordered, tinted chip inset in the field — see the style
+                 block for why it is inset rather than flush to the edge. -->
             <q-btn
                 unelevated
                 dense
@@ -116,32 +115,65 @@
 </script>
 
 <style scoped lang="scss">
-    // The append button sits inside the field, so it owns the field's right
-    // edge: negative margins cancel the padding Quasar puts around append
-    // content, letting the button run the full inner height and butt up
-    // against the border. Its own left border is the separator that makes it
-    // read as a distinct target rather than a decorative glyph.
+    // The toggle is an inset chip inside the field, NOT a split-button half
+    // flush to the field's right edge. It was written as the latter (full
+    // inner height, `margin-right: -10px`, right-rounded, left-border-as-
+    // separator) and both halves of that were wrong against the real DOM
+    // (owner report 2026-08-20, measured):
+    //
+    //  1. It never reached the right edge. QSelect renders its dropdown
+    //     chevron as a SECOND `.q-field__append` after any slotted one, so the
+    //     chip sat mid-field with the chevron to its right — and the -10px
+    //     margin slid it under that chevron. That collision is the "button
+    //     outline / edge / fill visible sometimes, looks odd".
+    //  2. It ate the field's top border. `.q-field__marginal` is a fixed 40px
+    //     top-aligned inside the 44px control, so a full-height opaque chip
+    //     started exactly on the border line — and Quasar paints the resting
+    //     border as `.q-field__control:before`, i.e. UNDER the field's
+    //     children, while the focus ring is `:after`, i.e. over them. Hence
+    //     "chops off the top of the border only when unfocused".
+    //
+    // So: full radius, full border, no negative margin, and 3px of clearance
+    // top and bottom. It still reads as a target — a bordered, tinted block
+    // rather than the bare 24px glyph the 2026-08-19 feedback rejected.
     //
     // Sized off `--filter-control-h` (owned by `FilterRow`) when there is one,
     // so it grows with the row instead of carrying a second copy of the
-    // number (R-003). Standalone uses fall back to 40px.
+    // number (R-003). Standalone uses fall back to 44px.
     .sort-control__dir {
-        --sort-dir-h: calc(var(--filter-control-h, 44px) - 4px);
+        --sort-dir-h: calc(var(--filter-control-h, 44px) - 6px);
         min-height: var(--sort-dir-h);
         height: var(--sort-dir-h);
-        min-width: 44px;
-        margin-right: -10px;
-        border-radius: 0 var(--radius-md) var(--radius-md) 0;
-        border-left: 1px solid var(--border-default);
+        min-width: 40px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
         background: var(--surface-sunken);
         color: var(--text-secondary);
+    }
+    // D-004 wants a 44x44 target; the chip is inset to 38x40 so the field's
+    // border survives around it. This pushes the *hit* area back out to the
+    // full 44 without changing what's drawn. (`.q-btn:before` is Quasar's
+    // shadow box — `:after` is unused on a button, so it's free.)
+    .sort-control__dir:after {
+        content: '';
+        position: absolute;
+        top: -3px;
+        bottom: -3px;
+        left: -2px;
+        right: -2px;
     }
     .sort-control__dir:hover {
         background: color-mix(in srgb, var(--brand-primary) 12%, var(--surface-sunken));
         color: var(--text-primary);
     }
-    // Quasar's ripple/focus helper paints the whole rounded rect; clip it to
-    // the button's own (squared-left) shape.
+    // Quasar's marginal is a fixed 40px block pinned to the top of the (44px)
+    // control, so anything in it rides 2px high. Giving it the control's full
+    // height centres the chip — and the chevron beside it — properly.
+    .sort-control :deep(.q-field__marginal) {
+        height: 100%;
+    }
+    // Quasar's ripple/focus helper paints its own rounded rect; match the
+    // chip's.
     .sort-control__dir :deep(.q-focus-helper) {
         border-radius: inherit;
     }

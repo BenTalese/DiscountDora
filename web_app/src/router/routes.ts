@@ -102,6 +102,13 @@ const routes: RouteRecordRaw[] = [
             // `/recipes/<id>` now hits the 404 page (which is fine).
             { path: 'cookbook', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Cookbook' } },
             { path: 'cookbook/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
+            // 2026-08-20 — the recipe-page redesign, running in parallel with the
+            // original so the two can be compared feature-for-feature on the same
+            // recipe (each page carries a button to the other). The cookbook still
+            // links to the original. **One of these two gets deleted** once the
+            // comparison is settled; see FU-683 — do not build a third consumer of
+            // either until that's decided.
+            { path: 'cookbook/:id/new', component: () => import('pages/RecipeDetailNext.vue'), meta: { title: 'Recipe' } },
             { path: 'cookbook/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook Mode' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal Plans' } },
             // FU-304 closed 2026-07-07 — Direction A won the A/B experiment;

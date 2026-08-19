@@ -10,6 +10,38 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-649 — Buy-verdict quick filter on Stock Overview needs a bulk verdicts endpoint
+- **Raised:** 2026-08-16 (stock-overview filter feedback — owner deferred).
+- **Type:** deferred job.
+- **What:** the owner asked whether a quick filter for buy-verdict rows is worth adding.
+  It can't be built client-side: `useBuyVerdict` fetches **one verdict per item, lazily,
+  as each row mounts**, so the page only knows verdicts for rows already rendered —
+  filtering on that would silently miss everything below the fold. The honest version is
+  a bulk `GET /api/stock-items/buy-verdicts` (id + verdict + confidence for the pantry,
+  computed with batched queries rather than looping `_gather_inputs`), which would drive
+  the filter *and* pre-warm the row badges — killing the current one-request-per-row
+  pattern at the same time.
+- **Why deferred:** owner said "skip this for now" when asked (the other four items in
+  the batch were pure UI).
+- **Update (2026-08-19, Chunk 1):** the *endpoint* half exists now, scoped to a list's
+  lines rather than the whole pantry (`GET /api/shopping-lists/<id>/buy-verdicts`, batched
+  queries via `gather_verdict_inputs_for_items`) — that's what B6 needed. The *filter* half
+  is now a live question rather than a deferred one: D-10 takes the verdict off the stock
+  row entirely, and the plan's §5 leaves "is 'scan my pantry for what's worth buying now'
+  a real browse mode?" as the one question deliberately parked for Step 0 (current
+  assumption: the shopping-list flow covers it). A pantry-wide endpoint is only worth
+  building if that answer is yes.
+- **Update (2026-08-19, Chunk 2):** the list-scoped endpoint is now wired — the shopping
+  list primes every line's verdict in one request (verified in a browser drive: 1 bulk call,
+  0 per-line calls), so the N+1 half of this item is closed. Only the pantry-wide filter
+  question remains.
+- **Resolved (2026-08-20, Step 0):** the answer is **no** — pantry-wide verdict
+  browsing is not a real browse mode. D-10 took the verdict off the row, and the
+  canonical attention rule deliberately excludes buying signals (attention is
+  "this needs you", not "this is worth buying"); the shopping-list flow, which
+  already primes every line in one request, covers the buying case. The
+  pantry-wide endpoint will not be built. Recorded in the plan's §5.
+
 ## [RESOLVED] FU-679 — Import dialog's paste guidance was removed; it has no other home
 - **Raised:** 2026-08-19 (cookbook feedback batch 2)
 - **Type:** finding / design question

@@ -97,12 +97,6 @@ class AuthenticatedUserDto:
     show_recipe_images: bool
     # FU-615 — `household_headcount` moved to AppSetting (install-wide);
     # clients read it via /api/health.cooking_policy.
-    # alerts email digest channel (PROPOSAL_ALERTS §3.5).
-    # `alerts_email_cadence` is 'off' | 'daily' | 'weekly'; `alerts_email_
-    # day` is the weekly send day (Mon=0 … Sun=6, ignored on daily).
-    alerts_email_enabled: bool
-    alerts_email_cadence: str
-    alerts_email_day: int
     # Settings rebuild Phase 4 (§2.9) — whether the user has a profile
     # picture. Bytes never travel inline; the SPA fetches them via
     # `GET /users/<id>/image`. For this single-user projection it's a cheap
@@ -161,9 +155,6 @@ class AuthenticatedUserDto:
             inference_shopping_enabled=bool(user.inference_shopping_enabled),
             inference_meal_plan_enabled=bool(user.inference_meal_plan_enabled),
             show_recipe_images=bool(user.show_recipe_images),
-            alerts_email_enabled=bool(user.alerts_email_enabled),
-            alerts_email_cadence=user.alerts_email_cadence,
-            alerts_email_day=int(user.alerts_email_day),
             has_image=user.image is not None,
             dashboard_layout=user.dashboard_layout,
             llm_enabled=bool(user.llm_enabled),

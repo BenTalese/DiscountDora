@@ -175,30 +175,24 @@ export function useStockFilters(sources: {
         return map;
     });
 
-    // ── Per-item attention check ────────────────────────────────────────
-    // Model C (2026-06-18 round 8): the "Needs attention" count and the
-    // row outline share ONE rule so the user can trust the highlighting
-    // matches the count. Two tiers with unified meaning:
-    //   • WARN (amber): essential AND Low, OR expiring within 7 days.
-    //   • ALERT (red):  essential AND Out, OR already expired.
-    // Anything that hits either tier is "needing attention". Non-essential
-    // Low/Out is intentionally silent — Dora caring about everything is
-    // worse than caring loudly about the things you flagged.
-    function isExpiringSoon(item: StockItem): boolean {
-        if (!item.expiry_date) return false;
-        const days = (new Date(item.expiry_date).getTime() - Date.now()) / 86_400_000;
-        return days > 0 && days <= 7;
-    }
-    function isExpired(item: StockItem): boolean {
-        if (!item.expiry_date) return false;
-        return new Date(item.expiry_date).getTime() < Date.now();
-    }
+    // ── Per-item attention: READ, never derive ──────────────────────────
+    // The rule lives on the server (`features/stock_items/stock_attention.py`)
+    // and arrives on the DTO. This used to be a local `hasAlert` that restated
+    // it — an essential/low/out check plus a hardcoded 7-day expiry window —
+    // and the two copies disagreed four ways (B1–B4): the admin's configurable
+    // window moved the bell and not the rows; a disabled alert kind silenced
+    // the bell and not the rows; the alerts page deep-linked to a filter
+    // running the other rule; and non-essential-out was "act on this" here and
+    // "ignore this" there. Don't reintroduce a local predicate — if a new
+    // condition should count, add it to `stock_attention.py`.
     function hasAlert(item: StockItem): boolean {
-        const seq = levelSequence(item.stock_level_id);
-        const isLow = item.is_low_stock ?? isLowStockSequence(seq);
-        const isOut = item.is_out_of_stock ?? isOutOfStockSequence(seq);
-        const isEssential = item.is_essential === true;
-        return (isEssential && (isLow || isOut)) || isExpired(item) || isExpiringSoon(item);
+        return item.needs_attention === true;
+    }
+    /** Expired or expiring-soon, as the server judged it against the
+     *  household's configured window. */
+    function isExpiryFlagged(item: StockItem): boolean {
+        const kinds = item.attention_kinds ?? [];
+        return kinds.includes('expired') || kinds.includes('expiring_soon');
     }
 
     // ── Dropdown option lists ───────────────────────────────────────────
@@ -304,8 +298,7 @@ export function useStockFilters(sources: {
                 const ids = sources.needsCheckIds?.();
                 if (!ids || !ids.has(item.stock_item_id)) return false;
             }
-            if (expiringSoonOnly.value && !isExpiringSoon(item) && !isExpired(item))
-                return false;
+            if (expiringSoonOnly.value && !isExpiryFlagged(item)) return false;
             if (tokens.length > 0) {
                 const haystack = item.name.toLowerCase();
                 if (!tokens.some((t) => haystack.includes(t))) return false;

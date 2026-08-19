@@ -7,11 +7,11 @@ same source the in-app hub and email digest read), then pushes every
 `AlertInteraction.last_pushed_at`) to every browser the user has
 subscribed.
 
-Per-channel dedup mirrors C-9.7's email pattern: stale-flag cleanup at
-the top of each user's iteration resets `last_pushed_at` for any key
-that's no longer in the user's known set, so a later re-fire pushes
-fresh. The same row's `last_emailed_at` is independently managed by
-the email job — the columns don't interact.
+Dedup: stale-flag cleanup at the top of each user's iteration resets
+`last_pushed_at` for any key that's no longer in the user's known set,
+so a later re-fire pushes fresh. This is now the only delivery channel
+with a dedup column — the email digest and its `last_emailed_at`
+sibling were cut at Step-0 Q4.
 
 When a push fails permanently (HTTP 404/410 — browser unregistered or
 permission revoked), the subscription row is deleted so we don't keep

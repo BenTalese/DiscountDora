@@ -15,6 +15,49 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **Alerts got a lot quieter, and the ones left mean something (2026-08-20).** Dora had
+  nine kinds of alert, and three of them fired constantly on things you could already
+  see: an item running **low**, an item being **out of stock**, and an item being **due
+  for a stocktake**. Your stock list already shows the level on every row, and the
+  stocktake runner already keeps its own queue — so all those did was train you to
+  ignore the bell. They're gone. What's left: something has **expired**, something is
+  **expiring soon**, or something you flagged **essential** has run low or out. Plus the
+  three planning nudges (no meals planned, shopping day, meals to confirm). You can
+  still switch any kind off under Alerts → Manage — and now that actually silences the
+  matching row highlight too, which it never used to.
+- **Highlighted rows and the "Needs attention" count are finally the same thing
+  (2026-08-20).** They were worked out twice — once on the server for the bell, once in
+  the browser for the rows — and the two answers disagreed. Four ways, specifically:
+  changing the **expiring-soon window** in settings moved the bell and left the row
+  outlines on the old 7 days; switching an alert kind **off** silenced the bell but not
+  the rows; tapping the alerts page's "view in stock" landed on a filter counting a
+  *different* set than the number you tapped; and a non-essential out-of-stock item was
+  simultaneously flagged "needs action" and greyed out as ignorable. There's one rule
+  now, worked out in one place, and everything reads it.
+- **One row outline instead of two (2026-08-20).** Rows used to be outlined amber for
+  "sort of needs attention" and red for "really needs attention". A hedged alarm gets
+  ignored, and the amber one was drawn directly around the amber Low square — two
+  different ambers touching. Now a row is either outlined or it isn't. Urgency still
+  orders the list, it just doesn't spend a second colour saying so.
+- **The alerts email digest is gone (2026-08-20).** It needed an SMTP server most
+  people never set up, and it duplicated two things you already have: push
+  notifications, which arrive instantly and need no setup, and the 7pm evening brief.
+  If you had it switched on, nothing else changes — the alerts are all still in the app
+  and on the bell.
+- **The sort-direction button sits cleanly inside its field again (2026-08-20).** The arrow
+  that flips a sort between ascending and descending had been drawn as though it owned the
+  right-hand end of the sort box — full height, hard against the edge. It never actually
+  reached that edge (the dropdown chevron is there), so it overlapped the chevron and, being
+  a solid block starting exactly on the box's top line, it painted over the top of the box's
+  outline whenever the box wasn't focused. It's now a smaller bordered square sitting inside
+  the box with clear space around it, next to the chevron rather than under it. It's still as
+  easy to hit — the tap area is unchanged.
+- **The essential marker on a stock row is a straight bar again (2026-08-20).** It had been
+  reshaped into a tapered bracket — wide at the row's top and bottom corners, narrowing to a
+  thin strip down the middle — meant to read as a tab hooked around the corner. At the real
+  row height it didn't: half the shape was taper, so it looked like a lopsided hexagon, and
+  its diagonals cut across the amber/red outline on rows needing attention. It's back to a
+  plain full-height bar down the left edge, one pixel thicker than it was.
 - **The stock list no longer comments on whether to buy things (2026-08-19).** Each row
   carried a coloured halo around its cart button — green "worth buying", amber "maybe wait",
   red "probably skip" — on a row that already shows the stock level, whether the item is

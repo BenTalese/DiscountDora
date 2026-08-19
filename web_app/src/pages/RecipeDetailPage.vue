@@ -138,6 +138,18 @@
                     >
                         <q-tooltip v-if="compactToolbar">Delete recipe</q-tooltip>
                     </BaseButton>
+                    <!-- Temporary hatch to the redesigned page so the two can
+                         be compared on the same recipe. One of them gets
+                         deleted — see FU-683. -->
+                    <BaseButton
+                        variant="subtle"
+                        :icon="ICONS.auto_awesome"
+                        :label="compactToolbar ? undefined : 'New layout'"
+                        aria-label="Try the new layout"
+                        :to="`/cookbook/${recipeId}/new`"
+                    >
+                        <q-tooltip>Try the new layout for this recipe</q-tooltip>
+                    </BaseButton>
                 </template>
             </PageToolbar>
 

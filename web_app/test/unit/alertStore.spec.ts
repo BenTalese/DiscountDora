@@ -39,7 +39,7 @@ vi.mock('src/services/api/alertApiService', () => ({
 function alert(id: string, overrides: Partial<Alert> = {}): Alert {
     return {
         alert_id: id,
-        kind: 'low_stock',
+        kind: 'essential_low',
         severity: 'medium',
         stock_item_id: 'SI-1',
         stock_item_name: 'Milk',

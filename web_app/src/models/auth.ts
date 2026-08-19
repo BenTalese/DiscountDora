@@ -108,17 +108,6 @@ export type AuthenticatedUser = {
     // FU-615 — `household_headcount` moved to the install-wide AppSetting
     // (read via `useCookingPolicy()`, edited in Settings → System → Cooking).
     // No longer a per-user field.
-    // alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
-    // default; `alerts_email_cadence` is `'off' | 'daily' | 'weekly'` and
-    // `alerts_email_day` is the weekly send day (Mon=0 … Sun=6, ignored on
-    // daily). The toggle is rendered on NotificationsSettings gated on
-    // `features.email_smtp_configured`; that screen is the R-029 carve-out
-    // (it owns the per-user opt-in), so the disabled state legitimately
-    // appears there and only there. No other surface should reference this
-    // field as a disabled affordance — hide the entry point instead.
-    alerts_email_enabled: boolean;
-    alerts_email_cadence: 'off' | 'daily' | 'weekly';
-    alerts_email_day: number;
     // Settings rebuild Phase 4 — whether the user has a profile picture.
     // Bytes are fetched separately via `GET /users/<id>/image`; server-derived
     // so the SPA never keeps its own truth about whether a picture exists.

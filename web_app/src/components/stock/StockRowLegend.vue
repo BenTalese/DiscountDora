@@ -227,7 +227,7 @@
     }
     .stock-row-legend__row-swatch--essential {
         /* left-edge secondary stripe, matching StockItemRow. */
-        border-left: 5px solid var(--brand-secondary-strong);
+        border-left: 6px solid var(--brand-secondary-strong);
     }
     .stock-row-legend__row-swatch--warn {
         border-color: var(--q-warning);

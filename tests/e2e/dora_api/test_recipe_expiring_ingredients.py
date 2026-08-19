@@ -14,6 +14,7 @@ re-derivation would silently disagree.
 """
 from datetime import timedelta
 
+import pytest
 import requests
 
 from dora_api.features.recipes.get_recipes import EXPIRING_HORIZON_DAYS
@@ -49,12 +50,44 @@ def _ingredient(recipe: dict, stock_item_id: str) -> dict:
     return next(i for i in recipe["ingredients"] if i["stock_item_id"] == stock_item_id)
 
 
+# FU-676 — every test in this module PATCHes `expiry_date` onto *seeded* stock
+# items, because the flags under test are only reachable through real expiry
+# dates. Left unrestored those mutations leak forward: in full-suite order they
+# broke `test_update_stock_item_auto_add.py::
+# test__auto_add__already_on_target_draft__does_not_fire`, which passes in
+# isolation. `_set_expiry` snapshots each item's pre-test value the first time
+# it touches it and `_restore_expiries` puts them all back, so the module is
+# self-cleaning however many items a test mutates.
+_ORIGINAL_EXPIRIES: dict[str, str | None] = {}
+
+
 def _set_expiry(stock_item_id: str, expiry) -> None:
+    if stock_item_id not in _ORIGINAL_EXPIRIES:
+        # There is no bare `GET /stock-items/{id}` — `/detail` is the
+        # single-item read, and it carries `expiry_date`.
+        before = requests.get(f"{STOCK_ITEMS}/{stock_item_id}/detail")
+        assert before.status_code == 200, before.text
+        _ORIGINAL_EXPIRIES[stock_item_id] = before.json().get("expiry_date")
     resp = requests.patch(
         f"{STOCK_ITEMS}/{stock_item_id}",
         json={"expiry_date": expiry.isoformat() if expiry else None},
     )
     assert resp.status_code in (200, 204), resp.text
+
+
+@pytest.fixture(autouse=True)
+def _restore_expiries():
+    """Undo this module's expiry mutations after each test (FU-676)."""
+    _ORIGINAL_EXPIRIES.clear()
+    try:
+        yield
+    finally:
+        for stock_item_id, original in _ORIGINAL_EXPIRIES.items():
+            requests.patch(
+                f"{STOCK_ITEMS}/{stock_item_id}",
+                json={"expiry_date": original},
+            )
+        _ORIGINAL_EXPIRIES.clear()
 
 
 def test__recipe_detail__flags_the_ingredient_that_is_expiring(api):

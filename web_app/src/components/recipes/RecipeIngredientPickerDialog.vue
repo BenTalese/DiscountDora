@@ -1,12 +1,21 @@
 <template>
-    <BaseDialog v-model="open" title="Add ingredients to a list" closable card-style="min-width: 420px; max-width: 560px">
+    <!-- Owner feedback 2026-08-19, four changes:
+           - the recipe-name caption and the "N of M selected" counter are gone
+             (you opened this from that recipe; the checkboxes are the count);
+           - the per-row "Out / untracked" / "Low" caption is replaced by the
+             shared stock-level dot, so this list codes level the same way every
+             other stock surface does (R-001/R-003);
+           - Select all / Select missing use the new `subtle` BaseButton variant
+             so they read as buttons, and
+           - they moved into the actions row, left-aligned opposite Cancel/Add.
+         The card was also `min-width: 420px`, which overflowed a small phone. -->
+    <BaseDialog
+        v-model="open"
+        title="Add ingredients to a list"
+        closable
+        card-style="min-width: 0; width: min(560px, 92vw)"
+    >
         <q-card-section>
-            <div class="text-caption dora-text-muted">
-                {{ recipe?.name ?? 'Recipe' }}
-            </div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-none">
             <q-select
                 v-model="targetListId"
                 :options="listOptions"
@@ -20,31 +29,7 @@
 
         <q-separator />
 
-        <q-card-section class="q-pt-sm q-pb-none">
-            <div class="row items-center justify-between q-mb-sm">
-                <div class="text-caption dora-text-muted">
-                    {{ checkedCount }} of {{ pickableCount }} selected
-                </div>
-                <div class="row q-gutter-xs">
-                    <BaseButton
-                        variant="ghost"
-                        dense
-                        size="sm"
-                        label="Select all"
-                        @click="selectAll"
-                    />
-                    <BaseButton
-                        variant="ghost"
-                        dense
-                        size="sm"
-                        label="Select missing"
-                        @click="selectMissing"
-                    />
-                </div>
-            </div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-none ingredient-picker__list">
+        <q-card-section class="q-pt-sm ingredient-picker__list">
             <q-list dense>
                 <template v-for="row in requiredRows" :key="row.stock_item_id">
                     <q-item
@@ -60,11 +45,16 @@
                                 @click.stop
                             />
                         </q-item-section>
+                        <!-- Level dot sits between the checkbox and the name.
+                             Tooltip'd because a bare dot isn't a decodable
+                             signal on its own (D-013). -->
+                        <q-item-section side class="ingredient-picker__dot">
+                            <StockLevelDot :sequence="row.levelSequence" size="12px">
+                                <q-tooltip>{{ row.levelLabel }}</q-tooltip>
+                            </StockLevelDot>
+                        </q-item-section>
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
-                            <q-item-label v-if="row.statusWord" caption>
-                                {{ row.statusWord }}
-                            </q-item-label>
                         </q-item-section>
                     </q-item>
                 </template>
@@ -90,11 +80,16 @@
                                 @click.stop
                             />
                         </q-item-section>
+                        <!-- Level dot sits between the checkbox and the name.
+                             Tooltip'd because a bare dot isn't a decodable
+                             signal on its own (D-013). -->
+                        <q-item-section side class="ingredient-picker__dot">
+                            <StockLevelDot :sequence="row.levelSequence" size="12px">
+                                <q-tooltip>{{ row.levelLabel }}</q-tooltip>
+                            </StockLevelDot>
+                        </q-item-section>
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
-                            <q-item-label v-if="row.statusWord" caption>
-                                {{ row.statusWord }}
-                            </q-item-label>
                         </q-item-section>
                     </q-item>
                 </template>
@@ -108,6 +103,9 @@
         </q-card-section>
 
         <template #actions>
+            <BaseButton variant="subtle" label="Select all" @click="selectAll" />
+            <BaseButton variant="subtle" label="Select missing" @click="selectMissing" />
+            <q-space />
             <BaseButton variant="ghost" label="Cancel" v-close-popup />
             <BaseButton
                 label="Add"
@@ -121,6 +119,7 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
@@ -172,7 +171,13 @@
         // both a required and an optional ingredient row, the *required*
         // commitment wins (we'd rather over-stock than under-stock).
         is_optional: boolean;
-        statusWord: string;
+        /** Canonical stock-level sequence for the dot. `null` = untracked or
+         *  not found, which `colourForSequence` renders as the neutral fill. */
+        levelSequence: number | null;
+        /** The dot's tooltip text (D-013). Prefers the item's real level name
+         *  over a word we'd invent here, so the picker says the same thing the
+         *  stock pages do. */
+        levelLabel: string;
     };
 
     const rows = computed<Row[]>(() => {
@@ -196,11 +201,9 @@
                 is_missing: ing.is_missing,
                 is_low_stock: ing.is_low_stock,
                 is_optional: ing.is_optional ?? false,
-                statusWord: ing.is_missing
-                    ? 'Out / untracked'
-                    : ing.is_low_stock
-                        ? 'Low'
-                        : '',
+                levelSequence: si?.stock_level_sequence ?? null,
+                levelLabel: si?.stock_level_name
+                    ?? (ing.is_missing ? 'Out of stock or untracked' : 'In stock'),
             });
         }
         return Array.from(byId.values()).sort((a, b) => {
@@ -249,7 +252,7 @@
         { immediate: true },
     );
 
-    const pickableCount = computed(() => rows.value.length);
+    // `pickableCount` removed with the "N of M selected" line it fed.
     const checkedCount = computed(
         () => rows.value.filter((r) => selected.value[r.stock_item_id]).length,
     );
@@ -294,5 +297,11 @@
     .ingredient-picker__list {
         max-height: 360px;
         overflow-y: auto;
+    }
+    /* Just wide enough for the dot — `side` sections otherwise reserve a
+       56px avatar track and push the name away from the checkbox. */
+    .ingredient-picker__dot {
+        min-width: 0;
+        padding-right: 8px;
     }
 </style>

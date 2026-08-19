@@ -7,33 +7,41 @@
          error display, and the `importFromContentAsync` call. It emits
          `@imported(dto)` on success and lets the caller decide what to do
          next (build a create payload + navigate, or confirm-then-patch a
-         local form). The caller controls the open state via `v-model`. -->
+         local form). The caller controls the open state via `v-model`.
+
+         Sizing (owner 2026-08-19: "import recipe modal is too large for
+         mobile"): the card was `min-width: 520px`, which on a 375px phone
+         forced it wider than the viewport. `width: min(720px, 92vw)` keeps the
+         desktop size and fits any phone. -->
     <BaseDialog
         v-model="open"
         title="Import a recipe"
         closable
-        card-style="min-width: 520px; max-width: 720px"
+        card-style="min-width: 0; width: min(720px, 92vw)"
     >
-        <q-card-section>
-            <div class="text-caption dora-text-muted q-mt-xs">
-                Open the recipe page in your browser, hit
-                <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong> to copy
-                the whole page, then paste it below. Works well on
-                RecipeTin Eats, AllRecipes, Half Baked Harvest, Sally's
-                Baking, Simply Recipes, Taste, Woolworths, and Smitten
-                Kitchen (among many others).<template v-if="degradedHint">
-                    {{ ' ' }}{{ degradedHint }}</template>
-            </div>
+        <!-- The "hit Ctrl+A then Ctrl+C, works well on <list of sites>"
+             paragraph that used to open this dialog was removed 2026-08-19
+             (owner: "remove explanation text from recipe modal"). The
+             instruction it carried now lives in the paste field's
+             *placeholder* — "Copy the entire recipe webpage text and paste
+             here" — so the guidance survives without a block of prose. The
+             site list was deliberately NOT rehomed anywhere: owner call, "no
+             need to publicly disclose what websites work well" (FU-679).
+             `degradedHint` stays — it's a consequence ("your existing recipe
+             will be overwritten"), not an explanation, and only the detail
+             page passes it. -->
+        <q-card-section v-if="degradedHint" class="q-pb-none">
+            <div class="text-caption dora-text-muted">{{ degradedHint }}</div>
         </q-card-section>
-        <q-card-section class="q-pt-none">
+        <q-card-section>
             <q-input
                 v-model="content"
                 outlined
                 type="textarea"
                 autogrow
                 rows="14"
-                label="Paste the recipe here"
-                placeholder="Ctrl+V (or Cmd+V on Mac)"
+                label="Recipe text"
+                placeholder="Copy the entire recipe webpage text and paste here"
                 :error="!!error"
                 :error-message="error ?? ''"
                 :disable="importing"
@@ -41,14 +49,22 @@
             />
         </q-card-section>
         <q-card-section class="q-pt-none">
+            <!-- Owner 2026-08-19: header above the input, and the "(optional)"
+                 out of the field's own text. The heading is the field's label
+                 (B3 — a placeholder is not a label), wired up with
+                 `aria-labelledby` so it counts as one for a screen reader too.
+                 The "Nothing fetched — just for your records" hint went with
+                 the rest of the explanation text. -->
+            <div id="import-source-url-label" class="text-subtitle2 q-mb-xs">
+                Source URL (optional)
+            </div>
             <q-input
                 v-model="sourceUrl"
                 outlined
                 dense
-                label="Where's this from? (optional)"
                 placeholder="https://example.com/recipes/lasagne"
                 :disable="importing"
-                hint="Saved as the recipe's source URL. Nothing fetched — this is just for your records."
+                aria-labelledby="import-source-url-label"
             />
         </q-card-section>
         <template #actions>

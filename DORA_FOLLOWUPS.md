@@ -29,6 +29,45 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-678 — every `.dora-btn` is 36px tall, under D-004's 44px touch floor
+- **Raised:** 2026-08-19 (cookbook feedback batch 2)
+- **Type:** finding
+- **What:** `BaseButton`'s base rule is `min-height: 36px` for every variant, and
+  the icon variants are 36×36. B1 says "min height **44px** on touch (36px
+  desktop-dense chrome only)" and D-004 sets a 44×44 effective floor "on any
+  surface a finger uses". Dora is a pantry/mobile app, so almost no button
+  qualifies for the desktop-dense allowance. This came up because the filter row's
+  controls **were** raised to 44px this session (in the new shared `FilterRow`,
+  where it's one number), which makes the 36px buttons beside them the outlier.
+- **Why deferred:** it resizes **every button in the app** — toolbars, dialogs,
+  bulk bars, list-row actions — and several of those rows are width-constrained on
+  a phone already. That's a design pass with a real-device walk, not a side effect
+  of a filter-row fix. The new `subtle` variant deliberately matches its siblings
+  at 36px rather than becoming a lone 44px exception (commented in place naming
+  the rule).
+- **Recommended resolution:** later, as its own unit — pairs naturally with the
+  next mobile-UX pass, and with [[FU-675]] since both want a real phone.
+
+## [OPEN] FU-677 — adopt the new `subtle` BaseButton variant at the remaining small-action sites
+- **Raised:** 2026-08-19 (cookbook feedback batch 2)
+- **Type:** deferred job
+- **What:** the owner's report was specific but general in intent — "select all /
+  select missing buttons don't have the appearance of buttons. **I've seen a few of
+  these smaller UI elements pop up (e.g. in settings).** Might be good to
+  componentise to get a consistent look." A `subtle` variant now exists on
+  `BaseButton` (tinted fill + border + radius, quieter than `secondary`) and the
+  ingredient picker uses it. The other sites — the `variant="ghost"` +
+  `dense` + `size="sm"` combination, which renders as bare tinted text — were
+  **not** swept, by agreement, because that's a diff across Settings and other
+  surfaces the owner hasn't reviewed.
+- **Fix shape:** inventory the `ghost` + `dense`/`size="sm"` call sites
+  (`git grep -n 'variant="ghost"' web_app/src | xargs`-style, then filter to ones
+  that also pass `dense` or `size`), decide per site whether it's a genuine
+  tertiary text action (leave as ghost) or a small *control* (flip to `subtle`),
+  and flip the latter. Settings is the surface the owner named.
+- **Recommended resolution:** opportunistic, or as the first half of the next
+  Settings polish unit.
+
 ## [OPEN] FU-NNN — short title
 - **Raised:** YYYY-MM-DD (prompt id / task)
 - **Type:** follow-up | deferred job | leftover | finding
@@ -51,28 +90,6 @@ long session summary. Distinct from the other logs:
 ---
 
 # Open
-
-## [OPEN] FU-676 — ⚠️ HANDOFF BLOCKER: new expiry tests pollute shared seed state
-- **Raised:** 2026-08-19 (cookbook feedback batch) — **start here next session**
-- **Type:** finding (defect I introduced; not yet fixed)
-- **What:** the two tests I added to
-  `tests/e2e/dora_api/test_recipe_expiring_ingredients.py`
-  (`..._reports_the_soonest_expiry_per_recipe`,
-  `..._soonest_date_is_absent_without_the_filter`) PATCH `expiry_date` onto
-  **seeded** stock items and never restore them. Full-suite result is now
-  **1 failed, 1857 passed**, with
-  `tests/e2e/dora_api/test_update_stock_item_auto_add.py::test__auto_add__already_on_target_draft__does_not_fire`
-  failing — **it passes in isolation (12 passed)**, so this is order-dependent
-  cross-test pollution, not a product bug.
-- **Note:** the pre-existing tests in that same file have the same
-  no-cleanup shape, so the pattern predates me — my two just tipped it over by
-  mutating *two* items on a recipe instead of one.
-- **Fix shape:** capture each target's original `expiry_date` and restore it in
-  a fixture/`finally`, or seed a dedicated recipe + stock items for these tests
-  rather than borrowing whatever the seed produced.
-- **Recommended resolution:** **now** — the suite is not green until this is
-  done. Everything else in the batch is green (frontend 455/457 = the two known
-  FU-666 `stockLevelDot` failures only; vue-tsc 0; eslint clean on `src/`).
 
 ## [OPEN] FU-675 — mobile dropdown behaviour: no shared select wrapper to apply a rule through
 - **Raised:** 2026-08-19 (cookbook feedback batch — owner asked for an assessment)
@@ -98,6 +115,13 @@ long session summary. Distinct from the other logs:
   preview can't show the failure mode).
 - **Recommended resolution:** later, as its own unit — pairs naturally with the
   next mobile-UX pass.
+- **Update 2026-08-19** (cookbook feedback batch 2): the *"no shared wrapper"*
+  half is now partly false — `components/filters/BaseFilterField.vue` exists and
+  the three tri-state filters route through it, so a rule could be applied there
+  in one place. But that wrapper hosts a **custom panel**, not an options list:
+  the **72 `q-select`s still have no wrapper**, and nothing about the mobile
+  `behavior` question (menu vs constrained dialog, and the dismissal defect) has
+  been decided or changed. This FU stays open for exactly that.
 
 ## [OPEN] FU-674 — `--text-on-primary` fails the D-002 contrast floor in three themes
 - **Raised:** 2026-08-19 (cookbook feedback batch — segmented-control fix)
@@ -225,19 +249,6 @@ long session summary. Distinct from the other logs:
   and the charter's anti-creep principle says fix the reported defect first.
 - **Recommended resolution:** later — when a cookbook/pantry gets big enough to feel
   it, or opportunistically alongside any other recipes-list work.
-
-## [OPEN] FU-666 — `stockLevelDot.spec.ts` has two failing tests on a clean tree
-- **Raised:** 2026-08-17 (cookbook truncation bug).
-- **Type:** finding.
-- **What:** "colours by canonical sequence" and "falls back to the sunken neutral"
-  both fail. Confirmed **pre-existing** — stashed all of this session's changes and
-  they still fail, so nothing in the recipe work caused them. They're the "known
-  `stockLevelDot` pair" the 2026-08-17 (later 12) worklog entry already counts as
-  expected-red, which means the frontend suite has been shipping 2/449 red for at
-  least a session without anyone deciding whether the component or the spec is wrong.
-- **Why deferred:** unrelated surface; would have been scope creep on a bug fix.
-- **Recommended resolution:** opportunistic, but decide *something* — either fix it or
-  mark it skipped with a reason. A permanently-red suite trains everyone to ignore it.
 
 ## [OPEN] FU-664 — Handler call sites can drift from entity signatures silently
 - **Raised:** 2026-08-17 (first-setup onboarding bug).
@@ -715,22 +726,6 @@ long session summary. Distinct from the other logs:
   them). The 2026-04-30 Foundation release is currently live on the correct host,
   so this is still a future-dated risk rather than a present break, and the 404
   path now has an actionable message pointing at the downloads page.
-
-## [OPEN] FU-634 — `stockLevelDot.spec.ts` fails on 2 assertions (pre-existing, unrelated to locations work)
-- **Raised:** 2026-08-14 (stock-locations settings redesign — hit while running the suite).
-- **Type:** finding.
-- **What:** `npx vitest run` is red: 2 failures in `web_app/test/unit/stockLevelDot.spec.ts`
-  ("falls back to the sunken neutral for out-of-stock and unknown") — the avatar resolves to
-  `bg-negative` where the spec expects `dora-bg-neutral`. Rest of the suite is green
-  (426 passing / 34 files).
-- **Why deferred:** unrelated surface — nothing in this unit touched `StockLevelDot.vue` or
-  its spec (both untouched in the working tree; last commit on them is a3b82644, 2026-07-13).
-  Fixing it blind risks papering over a real D-001 regression: the question is whether
-  out-of-stock is *supposed* to be red now (spec is stale) or neutral (component regressed),
-  and that's a D-001 colour-semantics call, not a test tweak.
-- **Recommended resolution:** now-ish — a red suite masks the next real failure. Decide the
-  D-001 intent first: grey is reserved for *unknown* (D-001), so an out-of-stock level
-  arguably *should* be red and the spec is the stale half.
 
 ## [OPEN] FU-633 — Stock locations has no "not stored anywhere" row (items with no location are invisible)
 - **Raised:** 2026-08-14 (stock-locations settings redesign).

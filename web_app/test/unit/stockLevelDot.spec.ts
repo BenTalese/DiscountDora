@@ -22,18 +22,27 @@ describe('StockLevelDot (picker avatar)', () => {
         });
     }
 
-    it('colours by canonical sequence (stocked → positive, low → negative)', () => {
+    // FU-666: these two pinned the pre-D-001 mapping, where out-of-stock had no
+    // palette colour and "low" borrowed red. `colourForSequence` moved to the
+    // D-001 green→amber→red ramp (its docblock: "Out-of-stock is a *real* level
+    // and now maps to red (negative) … it no longer routes through this null
+    // branch"), so the spec had been failing on a clean tree ever since. The
+    // contract worth pinning is the ramp itself plus the *narrowed* null case.
+    it('colours by canonical sequence along the D-001 ramp', () => {
         expect(mountAvatar({ sequence: 0 }).find('.q-avatar').classes())
             .toContain('bg-positive');
         expect(mountAvatar({ sequence: 1 }).find('.q-avatar').classes())
+            .toContain('bg-warning');
+        expect(mountAvatar({ sequence: 2 }).find('.q-avatar').classes())
             .toContain('bg-negative');
     });
 
-    it('falls back to the sunken neutral for out-of-stock and unknown', () => {
-        // Out-of-stock deliberately maps to no palette colour.
-        expect(mountAvatar({ sequence: 2 }).find('.q-avatar').classes())
-            .toContain('dora-bg-neutral');
+    it('falls back to the sunken neutral only when the level is unknown', () => {
+        // No sequence at all (untracked item), and a custom level beyond the
+        // seeded three — neither has a place on the ramp.
         expect(mountAvatar({ sequence: null }).find('.q-avatar').classes())
+            .toContain('dora-bg-neutral');
+        expect(mountAvatar({ sequence: 7 }).find('.q-avatar').classes())
             .toContain('dora-bg-neutral');
     });
 

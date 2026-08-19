@@ -1,6 +1,6 @@
 # Dashy Dora — Project State
 
-**Last reviewed: 2026-08-17.** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
+**Last reviewed: 2026-08-19.** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
 This is the single front door: where every phase and workstream is up
 to, and what needs your attention. For *where things stand* this doc
@@ -30,6 +30,7 @@ AI master-switch removal, Region & locale merge, Account/Kitchen-setup
 redesigns, cook-batches meal planner, Build-my-week auto-planner) plus test-infra
 hardening. The whole security thread (CSRF + email-change + the residual
 assistant findings) is **closed** — FU-447/515/197/620 all resolved.
+Both test suites are **green** as of 2026-08-19 (backend 1858/0, frontend 469/469) — the long-standing `stockLevelDot` red pair and a same-day handoff blocker were both cleared. The polish stream has since moved onto **cookbook UX**, now on its second feedback batch.
 **Next up:** either a **browser-verify sweep** of the four unverified
 champion/native surfaces, or **Phase 4 open-source release readiness**
 (README/showcase + release process + donation/support stand-up —
@@ -43,7 +44,7 @@ UX/UI review** into fix units.
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
 | **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish only; FU-025/346/609 etc. now closed. |
-| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~95% | Stocktake redesign shipped; **P6 tail FU-450/451/452 all resolved**; **FU-595 planner-freeze fixed**. Residual browser-verify only. Meal-reconcile Chunk 6 (settings row/copy) pending. |
+| **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~95% | Stocktake redesign shipped; **P6 tail FU-450/451/452 all resolved**; **FU-595 planner-freeze fixed**. Residual browser-verify only. Meal-reconcile Chunk 6 (settings row/copy) pending. Cookbook UX is on its second feedback batch (2026-08-19) — filter row now runs off shared `BaseFilterField`/`FilterRow`; verify pending. |
 | **2 — Ingestion API + companion** | `/api/ingest` seam; standalone companion; Merchant→Store rename | ✅ done (backend-green) | Product-surface browser-verify pending (FU-214). |
 | **3 — Champion** | Zero-Input Pantry, buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | Sequence P8-01..P8-10 **fully built**. Only browser/device-verify of P8-07/08/09/10 remains; native FCM push deferred (FU-465). |
 | **4 — Open-source release** (was Commercialize) | README/showcase + release process + support channel (Postgres done) | ⚪ ~0% | **Not sold — donation/OSS/MIT, all free** (billing/tenancy won't-do). Remaining: FU-406 (README+release), FU-608 (donation/OSS infra), FU-557 (support channel). SaaS/hosted parked (OPTIONAL_SAAS). |
@@ -103,16 +104,18 @@ UX/UI review** into fix units.
    offline, changes something, comes back, **and reloads to confirm the server
    kept it**. `DORA_VERIFY.md` → "Offline sync + Retry, end to end".
 
-**Total open backlog is 34 items in `DORA_FOLLOWUPS.md`** (counted
-2026-08-14; the dashboard's previous "20" undercounted). These are the ones wanting a decision or a
+**Total open backlog is 68 items in `DORA_FOLLOWUPS.md`** (counted 2026-08-19;
+the dashboard's previous "34" was a 2026-08-14 count and had drifted badly). These are the ones wanting a decision or a
 running-app check, most important first.
 
-1. **The frontend test suite is red.** 2 pre-existing failures in
-   `stockLevelDot.spec.ts` (out-of-stock resolves to `bg-negative`, spec expects
-   `dora-bg-neutral`) — everything else green (426/34 files). Needs a D-001 intent
-   call: grey is reserved for *unknown*, so out-of-stock arguably *should* be red
-   and the spec is the stale half. A red suite masks the next real failure.
-   [FU-634](DORA_FOLLOWUPS.md)
+1. **Walk the cookbook feedback-batch-2 changes in a browser.** 15 items shipped
+   2026-08-19 — the filter row rebuilt on shared base components, the cook-mode
+   confirm made consistent between the cookbook and the recipe page, and the
+   import / add-ingredients dialogs reworked. The measurable half was measured
+   live (control geometry, caret position, focus paint, mobile dialog width); the
+   **recipe list and recipe detail page don't mount in the preview pane**, so the
+   ingredient-picker dialog and the cook guard *from the cookbook* have never been
+   seen. `DORA_VERIFY.md` → "Cookbook: filter uniformity, cook guard, modals".
 2. **Walk the nutrition complex-mode surfaces against a real USDA import.** The build chunks landed 2026-08-14 (FU-635 closed) and the 2026-08-15 auto-suggest surface was agent-verified live — but on a 20-food scratch catalogue. What's genuinely unknown is **match quality on your own pantry with the real ~7,800-row dataset**, and whether the matching page loads quickly at that size; both are queued in `DORA_VERIFY.md`. That walk is also what should decide **FU-643** (the missing AU/US synonym layer). The recipe nutrition card still hasn't been seen with real data either.
 3. **Continue the UX/UI review remediation (DR units).** A large owner-requested critical-drive bundle (~50 findings), mapped to DR-1..DR-16. **Done: DR-6, DR-4 (copy/leakage), DR-1 muted-contrast ramp** (all 10 themes ≥4.5:1), **DR-1b badges** (alerts + verdict, AA-verified), **DR-2** (level-colour SSOT fix — Low→amber/Out→red, footer derives from the one authority; row legend, live-verified — relocated 2026-08-15 from the filter panel to Help → Guides), **DR-3** (dialog casing sweep + open-toggle glyph/a11y + bulk-bar disabled state; R-039/ADR-035 added), **DR-5** (open-toggle mutation trap — deferred PATCH + 3-outcome dialog, Vitest-pinned). **DR-7** (toast/helper-bubble placement — de-congested the toast corner, tip auto-dismiss, greeting copy; toast-die-on-route carved to FU-624), **DR-8** (loading polish — splash rAF-wedge fix, dashboard skeletons, belief-chip/verdict reflow-free fade-in; #26 warm-splash investigated = dev-only), **DR-9 ➗** (shared PageToolbar wrap — 0 h-scroll@375px / no title-collision@1280px, verified; mobile stock-row 2-line names; toolbar-More-collapse + row-icon-overflow + stranded-cards carved to FU-631), **DR-10 closed** (owner saw a 3-way nav mockup, chose leave-as-is), **DR-14 ➗** (new `useDateFormat` date authority sharing `useMoney`'s household locale; all 26 `toLocale*` date sites migrated → AU format not browser-US; first-boot region derivation #48 + theme-split #7b carved to FU-632), **DR-11** (recipe detail now opens as a read view + explicit Edit toggle; #11 "on hand" contradiction fixed; nested-substep read display a minor follow-up). Remaining DR units: DR-12 (alerts order + calendars), DR-13 (history grouping), DR-15 (micro-motion), DR-16 (onboarding activation — owner call). **A brand-secondary rethink spun out as FU-621** (owner: secondary "feels off" + it's invisible as text on dark themes — wants a visual options board, logged FU-622). [FU-578](DORA_FOLLOWUPS.md)
 4. **Products-overlay Phase-F verify + hard-delete call.** Product surfaces need a running-app walk with real data; L197 hard-delete is still an undecided design call and L205/206 bulk-select is unbuilt — the runbook's Phase-F blocker. [FU-214](DORA_FOLLOWUPS.md)
@@ -126,6 +129,20 @@ running-app check, most important first.
 12. **App-wide colour-usage assessment** (primary vs secondary/accent/info). Needs eyes-on-app judgement, not a code walk. [FU-224](DORA_FOLLOWUPS.md)
 13. **Ops / CI / observability (Phase 4).** Deliberately-disabled CI, backups, staging still unplanned — and CI must not be silently re-enabled; a Phase-4 decision that also unblocks FU-520 (Postgres CI) and FU-404. [FU-405](DORA_FOLLOWUPS.md)
 
+14. **🔴 Pick a lever for `--text-on-primary`.** Three themes (pesto 3.88,
+   blueberry 4.21, midnight 2.86) define it as white over a mid-brightness
+   primary and fail D-002's 4.5:1 floor **app-wide** — anything painting that
+   token over `--brand-primary`, not just the control that exposed it. The fix is
+   either darkening those themes' ink (changes every primary button in three
+   themes) or darkening their `--brand-primary` (changes the brand colour). One
+   decision, then it's mechanical. [FU-674](DORA_FOLLOWUPS.md)
+15. **Two mobile-touch gaps worth one pass together.** Every `.dora-btn` is 36px
+   tall against D-004's 44×44 floor, and no shared wrapper exists for the app's
+   72 `q-select`s (so the menu-vs-dialog behaviour on phones is accidental, and
+   long lists are hard to dismiss). Both want a real phone, and the filter row
+   was already raised to 44px, which makes the buttons beside it the outlier.
+   [FU-678](DORA_FOLLOWUPS.md) · [FU-675](DORA_FOLLOWUPS.md)
+
 **Lower-priority / trigger-gated** (listed for completeness, not urgent):
 FU-520 (Postgres CI — waits on FU-405), FU-404 (compliance — activates
 only when hosting user data), FU-576 (uploads spec — needs a bundled-Chromium
@@ -134,7 +151,14 @@ run), FU-579 (quasar-dev checker overlay — re-test), FU-575
 Aldi data is next needed). *(FU-584 e2e-flake resolved 2026-08-12 — the specs it
 named were deleted in the Playwright cull.)*
 
-> **Cleared since last review:** every item the previous PROJECT_STATE listed
+> **Cleared since last review (2026-08-19):** **both test suites are green** —
+> backend 1858 passed / 0 failed (FU-676, an order-dependent seed-pollution
+> blocker handed off red the same day) and frontend 469/469 (FU-666 / FU-634, the
+> `stockLevelDot` pair that had been red for several sessions: the *spec* held the
+> pre-D-001 mapping, not the component). The "frontend suite is red" item that
+> stood at #1 here is gone.
+>
+> **Cleared at the previous review:** every item that PROJECT_STATE listed
 > under "Needs attention" is now in `DORA_FOLLOWUPS_RESOLVED.md` — FU-595
 > (planner freeze), the whole security thread (FU-447/515/197), FU-620
 > (email-change removal), FU-612/609/346/353/606/085/429/025/549/464/355/383,

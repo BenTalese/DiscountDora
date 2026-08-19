@@ -285,7 +285,11 @@ export const ICONS = {
     // control carries one so the strip scans as a set (D-005).
     sort: 'mdi-sort',
     difficulty: 'mdi-speedometer',
-    ingredientCount: 'mdi-format-list-numbered',
+    // `mdi-format-list-numbered` (used until 2026-08-19) reads as an ordered
+    // list — i.e. recipe *steps*, which is what the owner saw. A count of
+    // ingredients isn't ordered; `mdi-counter` says "how many" without
+    // borrowing the steps metaphor.
+    ingredientCount: 'mdi-counter',
     collection: 'mdi-bookmark-multiple',
     location: 'mdi-map-marker',
     user: 'mdi-account-circle',

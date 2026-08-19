@@ -7,7 +7,7 @@
         drift (R-003).
 
         Left → right:
-          [thumb?]  Name · meta  ·[chips]·  · · ·  [♥] [👨‍🍳] [🛒]
+          Name  ·[chips]·  · · ·  [expiring?] [♥] [👨‍🍳] [🛒]
         Chrome mirrors `StockItemRow`: bordered flat card, 8px radius,
         accent-tinted hover, no lift.
     -->
@@ -24,9 +24,13 @@
                  longer consults `show_recipe_images` (nor renders an initial
                  tile in its place — that was the photo slot's stand-in). -->
 
+            <!-- Name only. The meta line under it (collection · cuisine · …)
+                 was removed 2026-08-19 — owner: "remove the second info line
+                 under the recipe name in compact view, looks too cluttered".
+                 Compact is the scan-a-long-list shape; the same facts are on
+                 the card view and on the recipe's own page. -->
             <div class="recipe-row__name-zone column items-start justify-center">
                 <div class="recipe-row__name">{{ recipe.name }}</div>
-                <div v-if="metaLine" class="recipe-row__meta">{{ metaLine }}</div>
             </div>
 
             <!-- Figures. On phones only the two that change a decision
@@ -67,15 +71,24 @@
                     </span>
                     <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
                 </q-chip>
-                <ExpiringChip
-                    v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
-                    :count="recipe.expiring_ingredient_count ?? 0"
-                    :soonest-date="recipe.expiring_soonest_date"
-                    compact
-                />
             </div>
 
             <q-space />
+
+            <!-- Owner 2026-08-19: "put the expiring ingredients chip with the
+                 buttons on the right, otherwise in compact view it goes all
+                 over the place (not consistently lined up)". It used to sit in
+                 the left-hand `__chips` group, whose width varies with how
+                 many of the other chips a given recipe has — so the one chip
+                 that only appears sometimes never landed in the same place
+                 twice. Anchored to the right edge it's always in one spot. -->
+            <ExpiringChip
+                v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
+                :count="recipe.expiring_ingredient_count ?? 0"
+                :soonest-date="recipe.expiring_soonest_date"
+                compact
+                class="recipe-row__expiring q-mr-xs"
+            />
 
             <BaseButton
                 variant="icon"
@@ -138,8 +151,10 @@
     const $q = useQuasar();
     const compact = computed(() => $q.screen.lt.sm);
 
+    // `metaLine` deliberately not destructured — the compact row no longer
+    // renders a second line (see the template note). RecipeCard still uses it.
     const {
-        totalTime, ingredientCount, kcal, metaLine, missingIds, cookable,
+        totalTime, ingredientCount, kcal, missingIds, cookable,
         cookButtonColor, cookButtonTooltip, addListTooltip, inferenceTooltip,
     } = useRecipeDisplay(() => props.recipe);
 
@@ -181,14 +196,6 @@
     .recipe-row__name {
         font-weight: 600;
         line-height: 1.25;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .recipe-row__meta {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;

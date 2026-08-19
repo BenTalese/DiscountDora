@@ -56,10 +56,11 @@
                 :aria-label="viewMode === 'grid' ? 'Switch to compact rows, without photos' : 'Switch to cards, with photos'"
                 @click="toggleViewMode"
             >
+                <!-- The "· remembered next visit" suffix was dropped
+                     2026-08-19 (owner): the setting IS remembered, but saying
+                     so in a tooltip you read every time is noise. -->
                 <q-tooltip>
-                    {{ viewMode === 'grid'
-                        ? 'Compact rows, no photos · remembered next visit'
-                        : 'Card grid with photos · remembered next visit' }}
+                    {{ viewMode === 'grid' ? 'Compact rows, no photos' : 'Card grid with photos' }}
                 </q-tooltip>
             </BaseButton>
 
@@ -120,7 +121,7 @@
                  or five lines (an open panel was eating the viewport).
                  Same rows, same overflow treatment, same class shape as
                  `stock-quick-filters` / `stock-input-filters`. -->
-            <div class="row items-center no-wrap recipes-quick-filters">
+            <FilterRow>
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
                 Favourites
             </FilterChip>
@@ -131,7 +132,7 @@
                  doesn't gain a stray un-aligned glyph. -->
             <FilterChip v-model="cookableNowOnly" :icon="ICONS.chef_hat" active-color="positive">
                 Cookable now
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs recipes-filter__hint">
+                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
                     <q-tooltip>Recipes where every ingredient is currently in stock.</q-tooltip>
                 </q-icon>
             </FilterChip>
@@ -167,10 +168,10 @@
             <FilterChip v-model="expiringOnly" :icon="ICONS.wasteExpired" active-color="warning">
                 Uses expiring ingredients
             </FilterChip>
-            </div>
+            </FilterRow>
 
             <!-- ── Row 2: input filters ──────────────────────────────── -->
-            <div class="row items-center no-wrap recipes-input-filters">
+            <FilterRow variant="fields">
             <!-- Axis + direction are one control (SortControl) — the direction
                  toggle rides in the select's append slot rather than sitting
                  beside it as a separately-sized button. -->
@@ -178,7 +179,6 @@
                 v-model:sort-by="sortBy"
                 v-model:sort-dir="sortDir"
                 :options="SORT_OPTIONS"
-                class="recipes-filter__sort"
             />
 
             <!-- L235 — cuisine + category are distinct single-select filters,
@@ -190,7 +190,6 @@
             <q-select
                 dense
                 outlined
-                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
@@ -203,7 +202,6 @@
             <q-select
                 dense
                 outlined
-                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
@@ -219,7 +217,6 @@
             <q-select
                 dense
                 outlined
-                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
@@ -234,7 +231,6 @@
             <q-select
                 dense
                 outlined
-                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
@@ -271,7 +267,7 @@
                 outlined
                 type="number"
                 min="0"
-                class="recipes-filter__num"
+                class="filter-row__wide"
                 label="Meals prepared ≥"
                 hide-bottom-space
             >
@@ -283,7 +279,7 @@
                 outlined
                 type="number"
                 min="0"
-                class="recipes-filter__num"
+                class="filter-row__wide"
                 label="Missing ingredients ≤"
                 hide-bottom-space
             >
@@ -295,7 +291,7 @@
                 outlined
                 type="number"
                 min="0"
-                class="recipes-filter__num"
+                class="filter-row__wide"
                 label="Ingredient count ≤"
                 hide-bottom-space
             >
@@ -309,7 +305,7 @@
                 outlined
                 type="number"
                 min="0"
-                class="recipes-filter__num"
+                class="filter-row__wide"
                 label="Kcal ≤"
                 hide-bottom-space
             >
@@ -346,7 +342,6 @@
             <q-select
                 dense
                 outlined
-                class="recipes-filter__select"
                 emit-value
                 map-options
                 clearable
@@ -356,7 +351,7 @@
             >
                 <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
             </q-select>
-            </div>
+            </FilterRow>
             </template>
         </FilterBar>
         <!-- disclaimer surfaced when any dietary filter is on.
@@ -445,6 +440,17 @@
             @updated="onRecipeUpdated"
         />
 
+        <!-- Cook-mode guard. Owner feedback 2026-08-19: starting cook mode
+             from here skipped the "you're missing ingredients" confirm that
+             the recipe page shows. Same component, same predicate — the only
+             difference is that nothing here can be dirty, because the cookbook
+             doesn't edit recipes. -->
+        <CookModeGuardDialog
+            v-model="cookGuardOpen"
+            :recipe="cookGuardRecipe"
+            @start="startCookMode"
+        />
+
         <!-- ── Per-ingredient picker (Chunk B §1.4) ─────────────── -->
         <RecipeIngredientPickerDialog
             ref="pickerRef"
@@ -473,6 +479,8 @@
     import RecipeRow from 'src/components/recipes/RecipeRow.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
+    import FilterRow from 'src/components/filters/FilterRow.vue';
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
     import SortControl, { type SortAxisFor } from 'src/components/filters/SortControl.vue';
     import type {
@@ -493,6 +501,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
+    import { needsCookGuard } from 'src/helpers/cookModeGuard';
     import {
         DEFAULT_MEAL_SLOTS,
         DIFFICULTY_RANK,
@@ -1341,8 +1350,30 @@
         void router.push(`/cookbook/${recipeId}`);
     }
 
+    // Cook-mode entry, guarded the same way `RecipeDetailPage` guards it —
+    // the shared predicate lives in `helpers/cookModeGuard` so the two
+    // surfaces can't answer "should we ask first?" differently (R-003).
+    // `dirty` is never passed: the cookbook has no editable form.
+    const cookGuardOpen = ref(false);
+    const cookGuardRecipe = ref<Recipe | null>(null);
+
     function onCookClick(recipeId: string) {
-        void router.push(`/cookbook/${recipeId}/cook`);
+        const r = recipes.value.find((x) => x.recipe_id === recipeId) ?? null;
+        if (needsCookGuard(r)) {
+            cookGuardRecipe.value = r;
+            cookGuardOpen.value = true;
+            return;
+        }
+        startCookMode(recipeId);
+    }
+
+    /** Navigate in. Called directly on a clean entry, or by the guard's
+     *  "Start anyway", which has no recipe id of its own to hand back. */
+    function startCookMode(recipeId?: string) {
+        const id = recipeId ?? cookGuardRecipe.value?.recipe_id;
+        if (!id) return;
+        cookGuardOpen.value = false;
+        void router.push(`/cookbook/${id}/cook`);
     }
 
     function onToggleFavourite(recipeId: string) {
@@ -1526,79 +1557,12 @@
         }
     }
 
-    /* ── Filter rows ──────────────────────────────────────────────────
-       Quick chips on top, input filters below; both scroll sideways
-       instead of wrapping. The scrollbar is hidden because the controls
-       overflowing IS the affordance. Matches the stock page's
-       `.stock-quick-filters` / `.stock-input-filters` exactly.
-       Unlike stock's uniform 180px track, the widths here are genuinely
-       heterogeneous (a 130px numeric bound next to a 200px collection
-       picker next to an icon-only sort-direction button), so items keep
-       their natural width — `flex: 0 0 auto` is what stops a flex item
-       shrinking past its own `min-width` once the row scrolls. */
-    .recipes-quick-filters,
-    .recipes-input-filters {
-        gap: var(--space-2);
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding-bottom: 2px;
-        scrollbar-width: none;
-    }
-    .recipes-quick-filters::-webkit-scrollbar,
-    .recipes-input-filters::-webkit-scrollbar {
-        display: none;
-    }
-    .recipes-input-filters {
-        margin-top: var(--space-3);
-    }
-    .recipes-input-filters > * {
-        flex: 0 0 auto;
-    }
-
-    /* ── One control scale for the input-filter row ───────────────────
-       Owner feedback 2026-08-18: "dislike the sizing difference between
-       types of filters (vertically and horizontally), particularly the
-       inclusion/exclusion ones like the ingredients filter".
-
-       Measured before the fix, the row ran three heights and six widths:
-       q-field selects/inputs at 40px, the tri-state dropdown buttons
-       (q-btn-dropdown) at 33px, the sort-direction button at 36px; widths
-       78 / 145 / 152 / 180 / 228px. The tri-states looked like a different
-       species of control because they ARE one — a button pretending to be
-       a field.
-
-       So: one height token for everything in the row, and two width
-       tracks — the text-ish controls (selects + tri-state dropdowns) share
-       one, the numeric bounds share a slightly wider one because their
-       labels ("Missing ingredients ≤") are longer than their content. The
-       tri-state buttons additionally borrow the field's border colour,
-       radius and label colour so they sit in the row as peers. */
-    .recipes-input-filters {
-        --filter-control-h: 40px;
-        --filter-control-w: 180px;
-        --filter-control-w-num: 200px;
-        align-items: center;
-    }
-    .recipes-filter__select,
-    .recipes-filter__sort {
-        min-width: var(--filter-control-w);
-        max-width: var(--filter-control-w);
-    }
-    .recipes-filter__num {
-        min-width: var(--filter-control-w-num);
-        max-width: var(--filter-control-w-num);
-    }
-    /* q-field's own inner control is what actually sets the height. */
-    .recipes-input-filters :deep(.q-field--dense .q-field__control) {
-        height: var(--filter-control-h);
-    }
-    /* Tri-state dropdowns: match the fields rather than the buttons. */
-    .recipes-input-filters :deep(.dora-dropdown-btn) {
-        min-height: var(--filter-control-h);
-        min-width: var(--filter-control-w);
-        border-radius: var(--radius-sm);
-    }
-    .recipes-input-filters :deep(.dora-dropdown-btn .q-btn__content) {
-        justify-content: flex-start;
-    }
+    /* The filter rows' scroll behaviour and control scale moved to
+       `components/filters/FilterRow.vue` (2026-08-19). Both this page and
+       StockOverview had grown a copy of the same ~40 lines, which is how they
+       drifted to different control heights; the tri-state dropdown overrides
+       that used to live here are gone entirely now that TriStateFilter renders
+       a real field (see `BaseFilterField`). Only per-control track opt-outs
+       remain, and those are `filter-row__wide` / `filter-row__auto` classes
+       applied at the call site. */
 </style>

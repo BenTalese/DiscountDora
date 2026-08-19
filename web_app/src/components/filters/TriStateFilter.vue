@@ -16,16 +16,22 @@
           dropdown that case-insensitively filters by label. Essential
           for options lists with more than ~30 rows.
 
-        Single component, multiple consumers (R-001). DietaryTagFilter is
-        now a thin wrapper around this one (kept for API stability at
-        call sites; new uses should consume `TriStateFilter` directly).
+        Single component, multiple consumers (R-001).
+
+        2026-08-19 — the trigger is a `BaseFilterField` (a real `q-field`), not
+        the `q-btn-dropdown` it used to be. Owner feedback was that these
+        filters read as a different colour to their `q-select` neighbours, never
+        brightened on focus, and put their caret mid-control instead of at the
+        field's right edge. All three were symptoms of one cause: it was a
+        button sitting in a row of fields. See `BaseFilterField` for why the fix
+        belongs there rather than in each page's style block.
     -->
-    <BaseDropdown
-        :label="buttonLabel"
+    <BaseFilterField
+        :label="label"
         :icon="icon ?? ICONS.tune"
-        outline
-        dense
-        :color="activeCount > 0 ? 'primary' : undefined"
+        :summary="selectionSummary"
+        :active="activeCount > 0"
+        @clear="clearAll"
     >
         <div :style="{ minWidth: '260px', maxWidth: '320px' }">
             <SearchInput
@@ -103,13 +109,13 @@
                 </q-item>
             </q-list>
         </div>
-    </BaseDropdown>
+    </BaseFilterField>
 </template>
 
 <script setup lang="ts">
     import { computed, ref } from 'vue';
     import { ICONS } from 'src/style/icons';
-    import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import BaseFilterField from 'src/components/filters/BaseFilterField.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import SearchInput from 'src/components/SearchInput.vue';
 
@@ -123,7 +129,11 @@
             options: TriStateOption[];
             include: string[];
             exclude: string[];
-            label?: string;
+            /** Required: this renders as a form field's label, and B3 wants a
+             *  label on every field. The old `'Filter'` default was a
+             *  placeholder that said nothing, and every call site already
+             *  passes a real one. */
+            label: string;
             /** Trigger-button glyph. Defaults to the generic `tune` slider;
              *  callers pass the icon their concept carries elsewhere in the
              *  app (ingredients, dietary tags, tools …). */
@@ -134,7 +144,6 @@
             defaultSort?: string;
         }>(),
         {
-            label: 'Filter',
             searchable: false,
             sortOptions: () => [],
         },
@@ -160,9 +169,17 @@
 
     const activeCount = computed(() => props.include.length + props.exclude.length);
 
-    const buttonLabel = computed(() =>
-        activeCount.value > 0 ? `${props.label} (${activeCount.value})` : props.label,
-    );
+    /** The value line under the field's label. Splits include from exclude
+     *  because "2 selected" reads as agreement when one of them is a
+     *  *ban* — the old button label collapsed both into one count. */
+    const selectionSummary = computed(() => {
+        const inc = props.include.length;
+        const exc = props.exclude.length;
+        if (inc > 0 && exc > 0) return `${inc} in · ${exc} out`;
+        if (inc > 0) return `${inc} selected`;
+        if (exc > 0) return `${exc} excluded`;
+        return '';
+    });
 
     const activeSortFn = computed(() => {
         const list = sortOptionsList.value;

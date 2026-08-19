@@ -1716,6 +1716,60 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-048 — A control that sits among framework primitives IS one, not a lookalike
+- **Rule:** When a bespoke control has to live in a row/group alongside a
+  framework primitive (`q-field`/`q-select`/`q-input` in a filter row, `q-item`s
+  in a list, `q-tab`s in a tab bar), build it **on that primitive** and put the
+  bespoke part in the primitive's own slots. Do **not** build it from a different
+  primitive and chase visual parity with CSS. If several pages need the same
+  composition, the primitive-plus-slots wrapper is a shared base component and
+  the pages consume it — the row's *layout* (scroll behaviour, track widths,
+  control height) is likewise one shared component, not a class copied per page.
+- **Why:** Visual parity by CSS is unbounded and silently incomplete. A
+  `q-field` has a resting border, a focused border on a *separate* `::after`
+  layer, a floating label, a stacked-label state, a right-edge append zone, a
+  clear affordance, a disabled state, and a dark-theme variant. A
+  `q-btn-dropdown` styled to look like one reproduces whichever of those the
+  author happened to notice, and the rest surface later as separate bug reports.
+  The cookbook filter row proved this over **three rounds of the same feedback**:
+  round 1 said the sizes differed (patched with a page-level height/width
+  override), round 2 said the colours and focus behaviour differed and the caret
+  was in the wrong place. The page's own comment had already named the cause —
+  "a button pretending to be a field" — while continuing to patch the symptoms.
+  Rebuilding the trigger *as* a `q-field` fixed colour, focus, caret glyph, caret
+  position and clear affordance in one change, and deleted the override CSS
+  instead of adding to it.
+- **Apply:**
+  - Reach for the primitive first. `q-field` (the generic one) exists precisely
+    to host a custom `#control`; `q-select` is `q-field` plus a menu.
+  - Take framework values from the framework: the caret glyph is
+    `$q.iconSet.arrow.dropdown`, the clear glyph is `$q.iconSet.field.clear` —
+    not a similar-looking entry from our own `ICONS` map.
+  - When a state can't be delegated (QField exposes `focused` only as slot
+    scope, never as a prop), paint **the layer the framework paints** — measure
+    it live rather than inventing a treatment.
+  - Extract the row/group layout too. `FilterRow` owns the sideways-scroll, the
+    hidden scrollbar, the control height and the width tracks; `RecipesOverview`
+    and `StockOverview` had each grown a copy, which is how the two rows drifted
+    to different heights in the first place.
+- **Violation signal:**
+  - A page style block contains `:deep()` overrides that force one component to
+    match the height, width, border or label colour of its neighbours.
+  - A comment in the codebase describes a control as "pretending to be" or
+    "matching" another primitive.
+  - The same feedback about one row arrives more than once, each time about a
+    different visual attribute.
+  - Two pages hold near-identical layout CSS for the same kind of control row.
+- **Carve-outs (must be commented, naming the rule):**
+  - A control that is genuinely a *button* and reads as one beside fields
+    (an icon-only action at the end of a row) stays a button — the rule is about
+    controls that are meant to read as peers of the primitive, not about every
+    element that happens to be nearby.
+- **Source:** ADR-044; cookbook filter row, 2026-08-19 (third round of the same
+  report). Fix was `components/filters/BaseFilterField.vue` +
+  `components/filters/FilterRow.vue`; ~4.5kB of page-level override CSS deleted
+  across two pages.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -2921,6 +2975,33 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 - **Promotes rule:** R-047.
 
 ---
+
+### ADR-044 — Match by construction, not by CSS (promotes R-048)
+- **Date / task:** 2026-08-19 (cookbook feedback batch 2)
+- **Status:** accepted
+- **Context:** The cookbook filter row drew the same owner complaint three times
+  in three days — first that the controls were different sizes, then that they
+  were different colours, didn't brighten on focus, and put their dropdown caret
+  in a different place. Every round was patched with more page-level `:deep()`
+  CSS aimed at making a `q-btn-dropdown` resemble a `q-field`. The page's own
+  style comment had already diagnosed it ("a button pretending to be a field")
+  without acting on the diagnosis. The owner's third report asked the right
+  question directly: "can we not achieve uniformity via base components?"
+- **Decision:** When a control must read as a peer of a framework primitive,
+  build it **on** that primitive and use its slots, rather than approximating it.
+  Extract the composition (and the row layout around it) as shared base
+  components. Take framework-owned values (icon-set glyphs, the layer a focused
+  field paints) from the framework rather than re-picking them.
+- **Consequences:** Commits us to preferring a wrapper over per-page CSS even
+  when the wrapper is more upfront work — `BaseFilterField` is ~170 lines against
+  a ~10-line CSS patch, but it retired ~4.5kB of override CSS across two pages
+  and closed four separate reported symptoms at once. It also means bespoke
+  controls inherit framework behaviour changes for free, and that a state the
+  framework won't delegate (QField's `focused` is slot scope only) must be
+  matched by painting the framework's own layer — verified by measurement, not
+  by eye. Rules out "just add a class to make it look the same" as an acceptable
+  answer to a consistency report.
+- **Promotes rule:** R-048.
 
 ## Known fixes / things to try
 

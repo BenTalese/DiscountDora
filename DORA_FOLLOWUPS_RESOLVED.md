@@ -10,6 +10,118 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-679 — Import dialog's paste guidance was removed; it has no other home
+- **Raised:** 2026-08-19 (cookbook feedback batch 2)
+- **Type:** finding / design question
+- **What:** the owner asked to "remove explanation text from recipe modal (top and
+  under the source url input)", and it's gone. What went with it was the only place
+  the app explained the import *mechanic*: "open the recipe page, hit Ctrl+A then
+  Ctrl+C to copy the whole page, then paste it below", plus the list of sites known
+  to parse well (RecipeTin Eats, AllRecipes, Half Baked Harvest, Sally's Baking,
+  Simply Recipes, Taste, Woolworths, Smitten Kitchen). The field label ("Paste the
+  recipe here") and placeholder ("Ctrl+V") still imply it, but a first-time user is
+  no longer told to select-all-copy the source page, and nothing anywhere lists the
+  known-good sites.
+- **Why it's a finding, not a defect:** removing it was an explicit instruction and
+  the dialog is better for it. The risk is only that the guidance now exists
+  nowhere, which shows up as "import didn't work" rather than as a UI complaint.
+- **Recommended resolution:** opportunistic — fold both facts into **Help & Guides**
+  (which already hosts this kind of how-to) and, if wanted, a single small help icon
+  in the dialog title row. Explicitly *not* a return of the paragraph.
+- **RESOLVED 2026-08-19** (owner call, same session it was raised). Split into its
+  two halves rather than rehomed wholesale:
+  - **The mechanic — kept, moved into the placeholder.** The paste field now reads
+    `label="Recipe text"` / `placeholder="Copy the entire recipe webpage text and
+    paste here"` (was `"Paste the recipe here"` / `"Ctrl+V (or Cmd+V on Mac)"`).
+    The old placeholder told you *how to paste*, which nobody needs; the new one
+    tells you **what to paste**, which is the thing the removed paragraph was
+    actually for. The label changed with it so the two aren't redundant — label
+    says what the field holds, placeholder says what to do (B3's split).
+  - **The site list — won't-do.** Owner: *"no need to publicly disclose what
+    websites work well."* It is **not** going into Help & Guides or anywhere else,
+    and this FU's own recommendation to do so is superseded. Reasonable call: it's
+    a list that silently rots as those sites change their markup, and publishing
+    "we parse these eight sites" invites both the inverse question and unwanted
+    attention. If import quality ever needs debugging, that belongs in a
+    maintainer note, not user-facing copy.
+- **Do not reopen** to "restore the helpful site list" — that's the explicitly
+  rejected half, not an oversight.
+
+## [RESOLVED] FU-634 — `stockLevelDot.spec.ts` fails on 2 assertions (pre-existing, unrelated to locations work)
+- **Raised:** 2026-08-14 (stock-locations settings redesign — hit while running the suite).
+- **Type:** finding.
+- **What:** `npx vitest run` is red: 2 failures in `web_app/test/unit/stockLevelDot.spec.ts`
+  ("falls back to the sunken neutral for out-of-stock and unknown") — the avatar resolves to
+  `bg-negative` where the spec expects `dora-bg-neutral`. Rest of the suite is green
+  (426 passing / 34 files).
+- **Why deferred:** unrelated surface — nothing in this unit touched `StockLevelDot.vue` or
+  its spec (both untouched in the working tree; last commit on them is a3b82644, 2026-07-13).
+  Fixing it blind risks papering over a real D-001 regression: the question is whether
+  out-of-stock is *supposed* to be red now (spec is stale) or neutral (component regressed),
+  and that's a D-001 colour-semantics call, not a test tweak.
+- **Recommended resolution:** now-ish — a red suite masks the next real failure. Decide the
+  D-001 intent first: grey is reserved for *unknown* (D-001), so an out-of-stock level
+  arguably *should* be red and the spec is the stale half.
+- **RESOLVED 2026-08-19** (cookbook feedback batch 2): duplicate of [[FU-666]],
+  same two assertions — resolved with it. The D-001 intent call this FU asked for
+  was already recorded in `colourForSequence`'s own docblock ("Out-of-stock is a
+  *real* level and now maps to red (negative) per D-001 … it no longer routes
+  through this null branch"), so the **spec was the stale half**, exactly as this
+  entry's recommendation suspected. Rewritten to pin the green→amber→red ramp plus
+  the narrowed neutral case (no sequence, or a custom level beyond the seeded
+  three). Frontend suite green: 469/469.
+
+## [RESOLVED] FU-676 — ⚠️ HANDOFF BLOCKER: new expiry tests pollute shared seed state
+- **Raised:** 2026-08-19 (cookbook feedback batch) — **start here next session**
+- **Type:** finding (defect I introduced; not yet fixed)
+- **What:** the two tests I added to
+  `tests/e2e/dora_api/test_recipe_expiring_ingredients.py`
+  (`..._reports_the_soonest_expiry_per_recipe`,
+  `..._soonest_date_is_absent_without_the_filter`) PATCH `expiry_date` onto
+  **seeded** stock items and never restore them. Full-suite result is now
+  **1 failed, 1857 passed**, with
+  `tests/e2e/dora_api/test_update_stock_item_auto_add.py::test__auto_add__already_on_target_draft__does_not_fire`
+  failing — **it passes in isolation (12 passed)**, so this is order-dependent
+  cross-test pollution, not a product bug.
+- **Note:** the pre-existing tests in that same file have the same
+  no-cleanup shape, so the pattern predates me — my two just tipped it over by
+  mutating *two* items on a recipe instead of one.
+- **Fix shape:** capture each target's original `expiry_date` and restore it in
+  a fixture/`finally`, or seed a dedicated recipe + stock items for these tests
+  rather than borrowing whatever the seed produced.
+- **Recommended resolution:** **now** — the suite is not green until this is
+  done. Everything else in the batch is green (frontend 455/457 = the two known
+  FU-666 `stockLevelDot` failures only; vue-tsc 0; eslint clean on `src/`).
+- **RESOLVED 2026-08-19** (cookbook feedback batch 2): fixed at the *module* level
+  rather than for my two tests only. `_set_expiry` now snapshots each stock item's
+  pre-test `expiry_date` the first time it touches it (read via
+  `GET /stock-items/{id}/detail` — there is no bare single-item GET), and a new
+  autouse `_restore_expiries` fixture puts them all back after each test. That
+  covers the pre-existing tests in the file too, which had the same no-cleanup
+  shape. Full suite: **1858 passed, 1 skipped, 1 xfailed, 0 failed** (baseline was
+  1857 passed / 1 failed).
+
+## [RESOLVED] FU-666 — `stockLevelDot.spec.ts` has two failing tests on a clean tree
+- **Raised:** 2026-08-17 (cookbook truncation bug).
+- **Type:** finding.
+- **What:** "colours by canonical sequence" and "falls back to the sunken neutral"
+  both fail. Confirmed **pre-existing** — stashed all of this session's changes and
+  they still fail, so nothing in the recipe work caused them. They're the "known
+  `stockLevelDot` pair" the 2026-08-17 (later 12) worklog entry already counts as
+  expected-red, which means the frontend suite has been shipping 2/449 red for at
+  least a session without anyone deciding whether the component or the spec is wrong.
+- **Why deferred:** unrelated surface; would have been scope creep on a bug fix.
+- **Recommended resolution:** opportunistic, but decide *something* — either fix it or
+  mark it skipped with a reason. A permanently-red suite trains everyone to ignore it.
+- **RESOLVED 2026-08-19** (cookbook feedback batch 2): the **spec** was wrong, not
+  the component, and `colourForSequence`'s own docblock said so — "Out-of-stock is
+  a *real* level and now maps to red (negative) per D-001 … it no longer routes
+  through this null branch". The spec still pinned the pre-D-001 mapping
+  (out-of-stock = no colour, low = red). Rewritten to pin the actual contract: the
+  green→amber→red ramp across sequences 0/1/2, plus the *narrowed* neutral case
+  (no sequence at all, or a custom level beyond the seeded three). Frontend suite
+  is now **fully green** for the first time in several sessions.
+
 ## [RESOLVED] FU-665 — Re-run vue-tsc + eslint over `web_app`
 - **Raised:** 2026-08-17 (cookbook collection-folder removal).
 - **Type:** leftover.

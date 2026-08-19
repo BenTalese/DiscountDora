@@ -168,7 +168,7 @@
                  2026-08-15 feedback: the toggle chips and the deep-link
                  chips now live on their own row ABOVE the input filters
                  rather than interleaved with the dropdowns. On phones the
-                 row scrolls horizontally (`stock-quick-filters`) instead of
+                 row scrolls horizontally (`FilterRow`) instead of
                  wrapping to four lines — an open filter panel used to eat
                  half the screen.
                  The (?) info icons that trailed Expiring soon / Essential /
@@ -177,7 +177,7 @@
                  The one genuinely non-obvious rule — what the row colours
                  mean — moved to Help → Guides ("What the colours and
                  outlines mean"), which is where a reference belongs. -->
-            <div class="row items-center no-wrap stock-quick-filters">
+            <FilterRow>
                 <!-- FU-108: chip cluster ordered by usage frequency —
                      highest-signal alert chip leads. -->
                 <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
@@ -231,7 +231,7 @@
                     <q-icon :name="ICONS.menu_book" size="14px" class="q-mr-xs" />
                     {{ recipeFilterChipLabel }}
                 </q-chip>
-            </div>
+            </FilterRow>
 
             <!-- ── Row 2: input filters (level / sort / location / group) ── -->
             <!-- 2026-08-16 feedback: same sideways-scroll treatment as the
@@ -239,7 +239,7 @@
                  two or three lines on a phone, which is the same "open
                  filter panel eats the viewport" problem the chip row was
                  fixed for — the two rows now behave identically. -->
-            <div class="row items-center no-wrap stock-input-filters">
+            <FilterRow variant="fields">
             <!-- single dropdown defaults to "Any level".
                  Per-level chips with count badges retired; counts live in
                  the sticky footer now (PageCountsFooter).
@@ -257,7 +257,6 @@
                 outlined
                 clearable
                 label="Any level"
-                style="min-width: 180px"
             >
                 <template #selected-item="scope">
                     <span class="row items-center no-wrap">
@@ -285,7 +284,6 @@
                 v-model:sort-by="filters.sortBy.value"
                 v-model:sort-dir="filters.sortDir.value"
                 :options="STOCK_SORT_OPTIONS"
-                style="min-width: 180px"
             />
 
             <q-select
@@ -301,7 +299,6 @@
                 input-debounce="200"
                 clearable
                 label="Any location"
-                style="min-width: 180px"
                 @filter="filters.filterLocations"
             />
 
@@ -314,9 +311,8 @@
                 map-options
                 clearable
                 label="Any group"
-                style="min-width: 180px"
             />
-            </div>
+            </FilterRow>
             </template>
         </FilterBar>
 
@@ -608,6 +604,7 @@
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
+    import FilterRow from 'src/components/filters/FilterRow.vue';
     import SortControl from 'src/components/filters/SortControl.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
@@ -1542,36 +1539,12 @@
         }
     }
 
-    /* ── Quick-filter row ─────────────────────────────────────────────
-       Toggle chips sit on their own row above the input filters. On
-       phones they scroll sideways rather than wrapping onto four lines
-       — an open filter panel was taking half the viewport. The
-       scrollbar is hidden because the chips overflowing IS the
-       affordance; a 2px bar under them just adds noise. */
-    .stock-quick-filters,
-    .stock-input-filters {
-        gap: var(--space-2);
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding-bottom: 2px;
-        scrollbar-width: none;
-    }
-    .stock-quick-filters::-webkit-scrollbar,
-    .stock-input-filters::-webkit-scrollbar {
-        display: none;
-    }
-    .stock-input-filters {
-        margin-top: var(--space-3);
-    }
-    /* Sized rather than content-sized. Two reasons: a flex item shrinks
-       past its own `min-width` once the row scrolls, and the Location
-       picker (a `use-input` QSelect) is capped at `width: 100%` globally,
-       which in a scrolling row resolves to the whole visible strip — it
-       came out 311px next to its 180px siblings. Pinning the track width
-       here makes all four read as one row of equal controls. */
-    .stock-input-filters > * {
-        flex: 0 0 180px;
-    }
+    /* The filter rows' scroll behaviour and control scale live in
+       `components/filters/FilterRow.vue` (2026-08-19). This page and
+       RecipesOverview each held a near-identical copy of those ~40 lines,
+       which is how the two rows drifted to different control heights; the
+       shared component is also where the 44px touch height (B3/D-004) is
+       now stated once. */
     .dora-subbar__inner {
         padding: 12px 16px;
     }

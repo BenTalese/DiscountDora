@@ -31,11 +31,17 @@
             <q-icon :name="ICONS.sort" size="18px" />
         </template>
         <template #append>
+            <!-- Owner feedback 2026-08-19: "can the sort direction arrow button
+                 be any bigger … also it doesn't look very button-like (as in
+                 you might not be able to tell you can click it/tap it)".
+                 Both fixed here rather than at the call sites: it was `flat`
+                 + `round` + `size="sm"`, i.e. a bare glyph at ~24px. It is now
+                 a bordered, tinted, full-inner-height block separated from the
+                 value by its own border — the same treatment a split-button's
+                 trailing half gets, which is exactly what this is. -->
             <q-btn
-                flat
+                unelevated
                 dense
-                round
-                size="sm"
                 class="sort-control__dir"
                 :icon="sortDir === 'asc' ? ICONS.arrow_upward : ICONS.arrow_downward"
                 :aria-label="`Sort ${directionLabel.toLowerCase()} — click to reverse`"
@@ -110,9 +116,33 @@
 </script>
 
 <style scoped lang="scss">
-    // The append button sits inside the field; strip the padding Quasar adds
-    // around append content so the field's height is unchanged by it.
+    // The append button sits inside the field, so it owns the field's right
+    // edge: negative margins cancel the padding Quasar puts around append
+    // content, letting the button run the full inner height and butt up
+    // against the border. Its own left border is the separator that makes it
+    // read as a distinct target rather than a decorative glyph.
+    //
+    // Sized off `--filter-control-h` (owned by `FilterRow`) when there is one,
+    // so it grows with the row instead of carrying a second copy of the
+    // number (R-003). Standalone uses fall back to 40px.
     .sort-control__dir {
-        margin-right: -4px;
+        --sort-dir-h: calc(var(--filter-control-h, 44px) - 4px);
+        min-height: var(--sort-dir-h);
+        height: var(--sort-dir-h);
+        min-width: 44px;
+        margin-right: -10px;
+        border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        border-left: 1px solid var(--border-default);
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+    }
+    .sort-control__dir:hover {
+        background: color-mix(in srgb, var(--brand-primary) 12%, var(--surface-sunken));
+        color: var(--text-primary);
+    }
+    // Quasar's ripple/focus helper paints the whole rounded rect; clip it to
+    // the button's own (squared-left) shape.
+    .sort-control__dir :deep(.q-focus-helper) {
+        border-radius: inherit;
     }
 </style>

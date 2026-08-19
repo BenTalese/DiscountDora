@@ -1,9 +1,13 @@
 <template>
+    <!-- Slot exists so a caller can drop a `q-tooltip` in: a bare coloured dot
+         is not a decodable state signal on its own (D-013). -->
     <q-avatar
         :color="colour ?? undefined"
         :class="[{ 'dora-bg-neutral': !colour }, dotClass]"
         :size="size"
-    />
+    >
+        <slot />
+    </q-avatar>
 </template>
 
 <script setup lang="ts">

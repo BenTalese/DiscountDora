@@ -1273,44 +1273,17 @@
                 </template>
         </BaseDialog>
 
-        <!-- Cook-mode guard (L297/L299/L309). Click-out / Esc just closes
-             (BaseDialog v-model), never navigates. -->
-        <BaseDialog v-model="cookGuardOpen" title="Start cook mode?" closable card-style="min-width: 340px; max-width: 460px">
-            <q-card-section>
-                <ul class="q-mt-sm q-mb-none dora-text-secondary">
-                    <li v-if="isDirty">You have unsaved changes.</li>
-                    <li v-if="cookableNow === null">
-                        Cookability is unknown — {{ unlinkedCount }} ingredient{{ unlinkedCount === 1 ? '' : 's' }} still need linking.
-                    </li>
-                    <li v-else-if="cookableNow === false">
-                        This recipe isn't cookable now —
-                        {{ missingIngredients.length }} ingredient{{ missingIngredients.length === 1 ? '' : 's' }} missing.
-                    </li>
-                </ul>
-            </q-card-section>
-            <template #actions>
-                <BaseButton variant="ghost" label="Cancel" @click="cookGuardOpen = false" />
-                <BaseButton
-                    v-if="isDirty"
-                    variant="ghost"
-                    label="Start without saving"
-                    @click="goToCookMode"
-                />
-                <BaseButton
-                    v-if="isDirty"
-                    variant="primary"
-                    label="Save & start"
-                    :loading="saving"
-                    @click="onGuardSaveAndCook"
-                />
-                <BaseButton
-                    v-else
-                    variant="primary"
-                    label="Start anyway"
-                    @click="goToCookMode"
-                />
-            </template>
-        </BaseDialog>
+        <!-- Cook-mode guard (L297/L299/L309). Extracted 2026-08-19 to
+             `CookModeGuardDialog` so the cookbook shows the same confirm this
+             page does — the rule used to live only here. -->
+        <CookModeGuardDialog
+            v-model="cookGuardOpen"
+            :recipe="recipe"
+            :dirty="isDirty"
+            :saving="saving"
+            @start="goToCookMode"
+            @save-and-start="onGuardSaveAndCook"
+        />
     </q-page>
 </template>
 
@@ -1321,6 +1294,8 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
+    import { needsCookGuard } from 'src/helpers/cookModeGuard';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -2277,7 +2252,8 @@
     }
     function onStartCookMode() {
         if (!recipe.value) return;
-        if (isDirty.value || !cookableNow.value) {
+        // Shared predicate (R-003) — the cookbook asks the same question.
+        if (needsCookGuard(recipe.value, isDirty.value)) {
             cookGuardOpen.value = true;
             return;
         }

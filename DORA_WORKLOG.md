@@ -18,6 +18,190 @@ next.
 
 ---
 
+## 2026-08-19 (later 2) — FU-679 closed: import-dialog paste prompt
+**Status:** complete. Trivial follow-on to the cookbook batch above; suites
+unaffected (vue-tsc 0, eslint clean, frontend 469/469 re-run).
+
+Owner resolved FU-679 the same session it was raised, and split it rather than
+taking the recommendation:
+
+- **Site list — won't-do.** *"No need to publicly disclose what websites work
+  well."* Not rehomed to Help & Guides or anywhere else; the FU's own
+  recommendation is superseded and the resolved entry says **do not reopen** to
+  restore it. (Worth noting the reasoning holds independently: such a list rots
+  silently as those sites change markup.)
+- **Mechanic — kept, moved into the placeholder.** The paste field went from
+  `label="Paste the recipe here"` / `placeholder="Ctrl+V (or Cmd+V on Mac)"` to
+  `label="Recipe text"` / `placeholder="Copy the entire recipe webpage text and
+  paste here"`.
+
+The label changed alongside the placeholder because leaving it as "Paste the
+recipe here" would have restated the placeholder word-for-word. The pair now
+splits the way B3 intends — label = what the field holds, placeholder = what to
+do — and the prompt finally says *what* to paste rather than *how* to press
+Ctrl+V, which is what the deleted paragraph was actually for. Flagged to the
+owner as a judgement call beyond the literal ask.
+
+`RecipeDetailPage.vue:848`'s ingredient-paste hint ("Paste the recipe text or type
+freeform — Ctrl+V works.") is a **different** field and was left alone.
+
+### Close-gate
+- **R-035 / B3:** label present and non-redundant with the placeholder.
+- No rule violations; no new FUs. **Resolved:** 679. Open backlog 69 → 68.
+- **ADR:** none — a copy change, no recurring decision.
+
+**Next up:** unchanged — walk the `DORA_VERIFY.md` cookbook section, then
+**FU-674** (`--text-on-primary` lever, still owner's call).
+
+---
+
+## 2026-08-19 (later) — Cookbook feedback batch 2 (15 items): base-component uniformity, cook-guard consistency, modal rework
+**Status:** complete. **Backend 1858 passed / 1 skipped / 1 xfailed / 0 failed**
+(previous handoff was 1857 + 1 failed). **Frontend 469/469 across 40 files —
+fully green for the first time in several sessions.** vue-tsc 0, eslint clean on
+`src` and on the touched test files.
+
+### Cleared the previous handoff's blocker first
+**FU-676 resolved.** Fixed at the module level rather than for the two offending
+tests: `_set_expiry` snapshots each stock item's pre-test `expiry_date` the first
+time it touches it, and a new autouse `_restore_expiries` fixture puts them all
+back. That covers the file's pre-existing tests too, which had the same
+no-cleanup shape. One wrinkle worth knowing: there is **no bare
+`GET /stock-items/{id}`** — `/{id}/detail` is the single-item read.
+
+**FU-666 also resolved** (opportunistically — same file I was touching). The
+**spec** was wrong, not the component, and `colourForSequence`'s own docblock
+already said so: out-of-stock maps to red per D-001 and "no longer routes through
+this null branch". The spec still pinned the pre-D-001 mapping. Rewritten to pin
+the real ramp (0/1/2 → positive/warning/negative) plus the *narrowed* neutral
+case (no sequence, or a custom level beyond the seeded three).
+
+### The through-line: this row had been reported three times
+Rounds 1 and 2 patched the cookbook filter row with page-level `:deep()` CSS to
+force one control to match its neighbours' height, then colour. The page's own
+style comment had already named the cause — **"a button pretending to be a
+field"** — and kept patching symptoms anyway. `TriStateFilter` rendered a
+`q-btn-dropdown` in a row of `q-field`s, so it had a button's resting colour, a
+button's (absent) focus treatment, and a caret trailing the label rather than
+pinned to the right edge. Three separate reported symptoms, one cause.
+
+So the answer to the owner's actual question ("can we not achieve uniformity via
+base components?") is yes, and it's structural:
+
+- **`components/filters/BaseFilterField.vue`** — a real `q-field` with a custom
+  `#control` and a `q-menu` behind it. Border, label ink, stacked label, append
+  zone, clear affordance and dark-theme variant all come from Quasar. The caret
+  glyph is `$q.iconSet.arrow.dropdown` and the clear glyph
+  `$q.iconSet.field.clear` — the framework's own values, not similar-looking
+  entries from our `ICONS` map. **Gotcha:** QField exposes `focused` only as
+  *slot scope*, never as a prop, so `:focused="menuOpen"` was a dead attribute
+  (vue-tsc allows it — it's just a fallthrough attr). Measured what Quasar
+  actually paints for a focused outlined field: a **separate `::after` layer**
+  sitting at 2px/transparent when resting. The open state now paints that layer,
+  so it's the identical treatment rather than an approximation.
+- **`components/filters/FilterRow.vue`** — the row itself. `RecipesOverview` and
+  `StockOverview` each held a copy of the same ~40 lines (scroll, hidden
+  scrollbar, `flex: 0 0 auto`, control height, width tracks), which is precisely
+  how the two rows drifted to different heights. **~4.5kB of page CSS deleted**
+  across the two pages; StockOverview's four inline `min-width: 180px` went too.
+  Note `:deep()` is required throughout — slotted controls carry the *parent
+  page's* scope id, so a plain `.filter-row > *` compiles to a selector that can
+  never match them.
+- Control height went **40px → 44px** while it was one number in one place — B3
+  wants 44px on inputs and D-004 sets a 44×44 touch floor; the 32–36px dense
+  allowance is for desktop-only chrome, which a row that scrolls sideways
+  *because it's used on phones* isn't.
+
+`BaseDropdown` was **not** deleted — ShoppingListDetail and StockItemDetailPage
+use it for genuine menu buttons. Only the tri-state filters moved off it.
+
+### Cook-mode guard (the reported inconsistency)
+The rule lived only in `RecipeDetailPage`; the cookbook's `onCookClick` pushed
+straight to the route. Rather than copy the condition into a second page,
+**`helpers/cookModeGuard.ts`** owns the predicate (`cookGuardReasons` /
+`needsCookGuard` / `missingStockItemIds`) and
+**`components/recipes/CookModeGuardDialog.vue`** owns the rendering, with `dirty`
+as a prop the cookbook simply never passes. Reasons are a typed union so
+"unknown cookability" (`cookable === null`, something unlinked) stays a distinct
+message from "known short" (`cookable === false`).
+
+### Other structure
+- **`BaseButton` gained a `subtle` variant** — tinted fill + border + radius,
+  quieter than `secondary` but unmistakably pressable. The owner's report named
+  the ingredient picker but generalised ("I've seen a few of these smaller UI
+  elements pop up, e.g. in settings"); by agreement the app-wide sweep is
+  **FU-677**, not this unit. Deliberately 36px like its siblings rather than a
+  lone 44px exception — the app-wide button/touch-target gap is **FU-678**.
+- **`StockLevelDot` gained a default slot** so the ingredient picker can hang a
+  tooltip on the dot (D-013: a bare coloured dot isn't a decodable signal).
+- Ingredient-count icon `mdi-format-list-numbered` → **`mdi-counter`**; the
+  numbered list reads as recipe *steps*, and an ingredient count isn't ordered.
+- Deleted a dead `recipes-filter__hint` class (no rule anywhere in the tree).
+
+### Verification — what was measured vs. what was handed over
+Measured live in the preview pane: all 11 filter controls are real `q-field`s at
+180/200 × **44px** with an identical border colour; the caret is the same
+`mdi-menu-down` at an identical **12px** right inset on a q-select and on a
+tri-state filter; the summary cycles `1 selected` → `1 in · 1 out` → `Any` and
+the clear icon resets the active state; the sort-direction button is **44×40**
+with a fill and a left separator; the import dialog is **327px inside a 375px
+viewport with `scrollWidth === 375`** (no horizontal page scroll, D-011);
+StockOverview's row still measures 180×44 on all four controls, with the
+`use-input` location picker *not* blown out to 311px.
+
+**Two environment artefacts cost real time — worth knowing:**
+1. **The pane freezes CSS transitions, not just Vue `<Transition>`.** The focus
+   ring read as transparent and the caret as un-rotated even though both rules
+   were correct — Quasar transitions `border-color` on that layer and we
+   transition `transform` on the caret, and rAF starvation pins both at their
+   start value. Injecting `*{transition:none!important}` proved both paint
+   (`rgb(53,151,102)` = `--brand-primary`; `matrix(-1,0,0,-1,0,0)` = 180°).
+   **Do this first** next time rather than debugging the selector.
+2. **Recipe detail (`#/cookbook/<id>`) does not mount in the pane**, same as
+   stock-item detail. Add it to the known list.
+
+The recipe **list** also doesn't render (the documented `<Transition>` wedge;
+footer counts confirmed 15 recipes present). So `RecipeRow`'s two structural
+changes went to **`test/unit/recipeRowLayout.spec.ts`** instead of an eyeball —
+name zone down to one child, and the expiring chip a *direct* child of the row
+body positioned after `q-space`, which is the actual "lines up every time" fact.
+Added a `recipe-row__expiring` hook class for it. The cook-guard predicate got
+**`test/unit/cookModeGuard.spec.ts`** — pure, stable, and the one place a third
+surface drifting would be invisible. Everything visual went to `DORA_VERIFY.md`,
+including the picker dialog (unreachable here).
+
+**Backend note:** `pytest` reports **56 spurious errors in this environment**
+unless `TMP`/`TEMP`/`TMPDIR` point at a real directory — the session's temp path
+doesn't exist, so `tmp_path` can't create its base dir. Not a product problem:
+`T=C:/temp/dora-pytest-tmp; mkdir -p $T; TMP=$T TEMP=$T TMPDIR=$T pytest`.
+
+### Close-gate
+- **R-001/R-003:** three shared components + one shared helper extracted
+  (`BaseFilterField`, `FilterRow`, `CookModeGuardDialog`, `cookModeGuard.ts`);
+  two pages' duplicate CSS deleted; `TriStateFilter`'s `label` made **required**
+  (its `'Filter'` default was a meaningless label, and B3 wants a real one).
+- **R-002:** the `subtle` variant paints from theme tokens, no palette literal.
+- **R-035 / D-002 / D-004 / D-011 / D-013:** contrast and geometry measured, not
+  eyeballed; filter row raised to the 44px floor; dot tooltip'd; mobile dialog
+  width proven against `scrollWidth`.
+- **Explained-in-place violation:** the `subtle` variant's 36px height (comment
+  names B1/D-004 and points at FU-678).
+- **New FUs:** 677 (subtle sweep), 678 (app-wide 44px button floor), 679 (import
+  guidance now has no home). **Resolved:** 676, 666. **Updated:** 675 — a wrapper
+  pattern now exists for the tri-state filters, but the 72 `q-select`s still have
+  none and the mobile `behavior` question is untouched.
+- **ADR:** **ADR-044 → R-048 — "a control that sits among framework primitives
+  IS one, not a lookalike."** Promoted because this row drew the same report three
+  times and each round patched a different visual attribute; the rule names that
+  repetition as its violation signal.
+
+**Next up:** walk the new `DORA_VERIFY.md` cookbook section (the picker dialog
+and the cook guard from the cookbook are the two that couldn't be checked here),
+then **FU-674** — the owner still owes a decision on which lever to pull for
+`--text-on-primary` in pesto / blueberry / midnight.
+
+---
+
 ## 2026-08-19 — Cookbook feedback batch (15 items): crash fix, filter rework, sort control, expiry urgency
 **Status:** ⚠️ **HANDOFF WITH ONE OPEN BLOCKER — FU-676.** All 15 feedback items
 are built. Frontend **455/457** (the two known FU-666 `stockLevelDot` failures),

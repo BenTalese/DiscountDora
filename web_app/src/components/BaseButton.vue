@@ -29,7 +29,18 @@
         | 'icon'
         | 'danger-icon'
         | 'filled-icon'
-        | 'positive';
+        | 'positive'
+        /* Small secondary actions that sit inside a control group rather than
+         * at the bottom of a form: "Select all" / "Select missing" in the
+         * ingredient picker, the little helper actions in Settings. Owner
+         * feedback 2026-08-19: "select all / select missing buttons don't have
+         * the appearance of buttons. I've seen a few of these smaller UI
+         * elements pop up (e.g. in settings). Might be good to componentise to
+         * get a consistent look." They were `ghost` + `dense` + `size="sm"`,
+         * i.e. bare tinted text — nothing said "target". `subtle` keeps them
+         * visually quieter than `secondary` while still being an obviously
+         * pressable, bordered, filled block. */
+        | 'subtle';
 
     const props = withDefaults(
         defineProps<{
@@ -89,6 +100,11 @@
                     return { unelevated: true, round: true, dense: true, color: 'primary' };
                 case 'positive':
                     return { unelevated: true, color: 'positive' };
+                // No Quasar `color`: the fill and ink are painted from theme
+                // tokens below, because there is no palette entry for
+                // "sunken surface" (R-002 — tokens, not hardcoded colours).
+                case 'subtle':
+                    return { unelevated: true };
                 default:
                     return { unelevated: true, color: 'primary' };
             }
@@ -118,6 +134,25 @@
     .dora-btn--ghost {
         color: var(--text-primary);
     }
+    /* Reads as a button at a glance — a fill, a border and a radius — without
+       competing with the dialog's real primary action. */
+    .dora-btn--subtle {
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        font-size: 0.8125rem;
+        padding: 0 var(--space-3);
+        /* Deliberately shorter than the 44px B1/D-004 floor: it matches the
+           36px every other `.dora-btn` runs at, and pinning one variant taller
+           than its siblings would look like a mistake. The app-wide 44px-on-
+           touch gap is logged as its own follow-up rather than fixed by
+           inventing an exception here. */
+        min-height: 36px;
+    }
+    .dora-btn--subtle:hover {
+        background: color-mix(in srgb, var(--brand-primary) 10%, var(--surface-sunken));
+        border-color: var(--border-strong);
+    }
     /* DR-3 / FU-578 #53 — flat/outline variants hard-set their text to a
        full-strength colour, so Quasar's opacity-only disabled dim left
        them reading near-white on the bulk-bar (indistinguishable from
@@ -126,6 +161,7 @@
        (primary/danger/positive) keep white-on-fill + the opacity dim —
        greying their label would fight the fill — so they're excluded. */
     .dora-btn--ghost.disabled,
+    .dora-btn--subtle.disabled,
     .dora-btn--secondary.disabled,
     .dora-btn--icon.disabled,
     .dora-btn--danger-ghost.disabled,

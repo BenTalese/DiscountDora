@@ -22,6 +22,58 @@ top-to-bottom.
 
 ---
 
+## Cookbook: filter uniformity, cook guard, modals (2026-08-19)
+*Measured live where the pane allowed it: filter-row controls are all real
+`q-field`s at 180/200 × 44px with the same border colour and the same
+`mdi-menu-down` caret at a 12px right inset; the open/focused ring and caret
+rotation paint correctly (confirmed with transitions zeroed — the pane freezes
+CSS transitions); the tri-state summary cycles "1 selected" → "1 in · 1 out" →
+"Any" and its clear icon works; sort-direction button is 44×40 with a fill and a
+left separator; import dialog is 327px inside a 375px viewport with no
+horizontal page scroll. The recipe **list** and the recipe **detail page** don't
+mount in the preview pane (documented `<Transition>` / detail-route artefacts),
+so everything below needs your eyes.*
+
+- [ ] **Cook mode from the cookbook** — tap the chef-hat on a recipe that's
+      missing ingredients (seed: "Cheesy Garlic Bread") → the "Start cook mode?"
+      confirm appears, same as it does from the recipe page. It lists the missing
+      count. Cancel closes without navigating; "Start anyway" goes in. Then do
+      the same on a cookable recipe → **no** confirm, straight into cook mode.
+- [ ] **Cook mode from the recipe page still behaves** — with unsaved edits you
+      get "Start without saving" + "Save & start"; from the cookbook you only
+      ever get "Start anyway" (nothing there can be dirty).
+- [ ] **Filter row reads as one set** — open Cookbook filters: cuisine,
+      category, difficulty, ingredients, dietary tags and tools should all look
+      like the *same kind of control* (same border brightness, same label
+      colour). Tap-and-hold each one → they all brighten. The old complaint was
+      that the Quasar ones looked dull/faded and the custom ones bright white.
+- [ ] **Same on Stock overview** — its filter row now runs off the same shared
+      component; confirm nothing shifted (level / sort / location / group still
+      line up, location picker isn't wider than its siblings).
+- [ ] **Sort direction button** reads as a tappable button, not a decorative
+      arrow, and is comfortable to hit with a thumb on a phone.
+- [ ] **Ingredient-count filter icon** (`mdi-counter`) no longer reads as
+      "steps". Sanity-check it against the recipe-steps icon elsewhere.
+- [ ] **Compact view** — one line per recipe, no second info line under the
+      name. With "Uses expiring ingredients" on, the amber chip sits in the
+      right-hand button cluster and lands in the **same spot on every row**
+      (that was the "goes all over the place" complaint). Check on a phone width.
+- [ ] **View-switch tooltip** no longer says "· remembered next visit".
+- [ ] **Import modal on a real phone** — fits, nothing clipped, no sideways
+      scroll. No paragraph of instructions at the top; the empty paste box prompts
+      "Copy the entire recipe webpage text and paste here" and its label reads
+      "Recipe text"; a bold "Source URL (optional)" heading above the URL input,
+      no hint text under it. Importing still works end-to-end from a pasted page.
+- [ ] **Import modal from the recipe page** — the overwrite warning
+      ("Your existing recipe will be overwritten…") still shows there; it was
+      kept when the rest of the explanatory copy was removed.
+- [ ] **Add-ingredients-to-list modal** — no recipe name line, no "N of M
+      selected" line. Each row shows a coloured stock-level dot between the
+      checkbox and the name, with a tooltip naming the level; "Out / untracked"
+      text is gone. Select all / Select missing sit bottom-**left**, in line with
+      Cancel / Add, and look like buttons. Both still select the right rows
+      (optional ingredients stay unchecked). Fits a phone.
+
 ## Evening brief actually lands (2026-08-17 later 10)
 
 _(Needs VAPID keys + a real push subscription, neither of which the dev

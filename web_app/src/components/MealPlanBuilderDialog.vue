@@ -318,7 +318,7 @@
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseToggleGroup, { type ToggleOption } from 'src/components/BaseToggleGroup.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
-    import type { RecipeTray } from 'src/composables/useMealPlanner';
+    import { buildRecipeTrays } from 'src/helpers/recipeTrays';
     import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
@@ -480,43 +480,12 @@
         return REASON_LABELS[r] ?? 'Added';
     }
 
-    // ── Recipe trays for the add/swap picker (mirrors the planner rail) ─────
+    // ── Recipe trays for the add/swap picker ────────────────────────────────
+    // R-003: shares the planner rail's builder rather than mirroring it. The
+    // two copies had already been edited independently once; the FU-578 #47
+    // one-instance-per-recipe dedupe lives in that one module.
     const recipeSearch = ref('');
-    const TRAY_CAP = 10;
-    const filteredRecipes = computed(() => {
-        const q = recipeSearch.value?.trim().toLowerCase() ?? '';
-        if (!q) return props.recipes;
-        return props.recipes.filter((r) => r.name.toLowerCase().includes(q));
-    });
-    const trays = computed<RecipeTray[]>(() => {
-        if (recipeSearch.value?.trim()) {
-            return [{
-                key: 'results',
-                title: `Results (${filteredRecipes.value.length})`,
-                recipes: filteredRecipes.value,
-                defaultOpen: true,
-            }];
-        }
-        const all = props.recipes;
-        const out: RecipeTray[] = [];
-        const favs = all.filter((r) => r.is_favourite);
-        if (favs.length) out.push({ key: 'fav', title: 'Favourites', recipes: favs, defaultOpen: true });
-        const stale = all
-            .filter((r) => r.not_made_recently)
-            .sort((a, b) => madeMs(a) - madeMs(b))
-            .slice(0, TRAY_CAP);
-        if (stale.length) out.push({ key: 'stale', title: "Haven't had in a while", recipes: stale, defaultOpen: false });
-        const freq = all
-            .filter((r) => r.plan_count > 0)
-            .sort((a, b) => b.plan_count - a.plan_count)
-            .slice(0, TRAY_CAP);
-        if (freq.length) out.push({ key: 'freq', title: 'Frequently planned', recipes: freq, defaultOpen: false });
-        out.push({ key: 'all', title: `All recipes (${all.length})`, recipes: all, defaultOpen: true });
-        return out;
-    });
-    function madeMs(r: Recipe): number {
-        return r.last_made_on ? new Date(r.last_made_on).getTime() : 0;
-    }
+    const trays = computed(() => buildRecipeTrays(props.recipes, recipeSearch.value));
 
     // ── Ingredient preview (aggregate demand) ───────────────────────────────
     const needToBuyCount = computed(

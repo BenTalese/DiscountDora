@@ -358,7 +358,9 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
 # Part C — D-rules (the enforceable checklist)
 
 > D-001…D-015 numbering is stable — R-035, ADR-031 and the remediation plan
-> reference it. New rules append as D-016+.
+> reference it. New rules append as D-016+. A retired *clause* is struck from
+> its rule in place with the reason (see D-015); a retired *rule* keeps its
+> number and is marked retired, so nothing renumbers.
 
 ### D-001 — Stock-level colour semantics: green → amber → red; grey = unknown only
 - **Rule:** Level/status colour escalates with urgency: Stocked =
@@ -493,11 +495,22 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
 ### D-015 — Pattern reuse: one anatomy per job
 - **Rule:** new surfaces reuse the established pattern rather than inventing a
   sibling: **card-runner** (stocktake/reconcile) for queue-walking; **colour-dot
-  level picker** for level selection; **labelled sidebar** for section nav;
-  **read-view + explicit edit mode** for detail pages (never an always-editable
-  form as "detail"). Diverging is a recorded design decision.
-- **Why:** the runner reuse is the app's consistency high-water mark; the
-  recipe-detail form-as-page is the counterexample (critique §8.1).
+  level picker** for level selection; **labelled sidebar** for section nav.
+  Diverging is a recorded design decision.
+- **Why:** the runner reuse is the app's consistency high-water mark.
+- **Retired clause (owner, 2026-08-20):** this rule used to include
+  "**read-view + explicit edit mode** for detail pages (never an
+  always-editable form as 'detail')". That clause existed for exactly one
+  surface — `RecipeDetailPage.vue`, the form-as-page from critique §8.1 — and
+  that page has been replaced by the redesigned recipe detail
+  (`RecipeDetailNext.vue`), which reads as a document and edits in place. The
+  clause was **deleted rather than carved out**: keeping a rule whose only
+  named counterexample no longer exists, and whose only flagship consumer
+  contradicts it, teaches the next task to check its work against nothing.
+  The three surviving clauses are about genuinely reused anatomies and are
+  unaffected. **What still holds** for a detail page: an explicit commit
+  (D-019's carve-out — inline edit is fine, silent autosave is not) and a
+  reading surface that isn't a wall of inputs. See ADR-045.
 
 ### D-016 — Interactive states are all defined and distinct
 - **Rule:** every interactive element defines **all** of: default, hover

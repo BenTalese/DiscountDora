@@ -33,6 +33,14 @@
        like a settle, not a fly-in. */
     --motion-slide-distance: 12px;
     --motion-scale-from: 0.96;
+
+    /* DR-15 / D-010 micro-feedback amplitudes. Deliberately tiny: these fire
+       on the app's most-repeated gestures, so anything you can consciously
+       *watch* becomes lag the tenth time you do it. Tokens (not literals) so
+       the reduced-motion block below flattens them to 1 = no movement. */
+    --motion-settle-from: 0.88;
+    --motion-bump-to: 1.16;
+    --motion-press-to: 0.94;
 }
 
 /*
@@ -59,6 +67,76 @@
 }
 
 /*
+ * ── Micro-feedback utilities (DR-15, D-010) ──────────────────────────────
+ *
+ * D-010 asks the four most-repeated gestures — stock-level change, tick,
+ * add-to-list, chip toggle — to answer within `--motion-fast` (120ms). These
+ * three classes are the whole vocabulary; every site uses one of them rather
+ * than hand-rolling a keyframe, so the app's feedback reads as one system and
+ * a future retune lands in one place (R-001/R-003).
+ *
+ *   .dora-press    persistent — scales down while the pointer is held. Pure
+ *                  CSS :active, no state needed. Use on things you *press*
+ *                  (chips, tick targets).
+ *   .dora-settle   one-shot — the element scales up into place. Use when a
+ *                  value the element *displays* has just changed (the level
+ *                  square after picking a new level).
+ *   .dora-bump     one-shot — a quick over-and-back. Use when a count or an
+ *                  on/off state has just flipped (the cart icon, a chip
+ *                  becoming active).
+ *
+ * The one-shot pair are applied for a single animation cycle by
+ * `useMicroFeedback()` (composables/useMicroFeedback.ts) — do not toggle them
+ * by hand, and do not use them on a *persistent* condition: an animation that
+ * repeats on its own becomes wallpaper (the retired stocktake row pulse is the
+ * cautionary tale; see StockItemRow.vue).
+ *
+ * `transform` only — no layout properties — so none of these can reflow a
+ * list row mid-gesture. Under `prefers-reduced-motion` the amplitude tokens
+ * above collapse to 1, so each of these resolves to no visible movement while
+ * still firing animationend/transitionend for anything awaiting it.
+ */
+.dora-press {
+    transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.dora-press:active {
+    transform: scale(var(--motion-press-to));
+}
+
+.dora-settle {
+    animation: dora-settle var(--motion-fast) var(--motion-ease-out);
+}
+
+@keyframes dora-settle {
+    from {
+        transform: scale(var(--motion-settle-from));
+    }
+
+    to {
+        transform: scale(1);
+    }
+}
+
+.dora-bump {
+    animation: dora-bump var(--motion-fast) var(--motion-ease);
+}
+
+@keyframes dora-bump {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(var(--motion-bump-to));
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/*
  * Accessibility kill-switch. When the OS requests reduced motion we collapse
  * every duration to a near-zero value (not 0 — Vue's <transition> needs a
  * non-zero transitionend/animationend to fire its done hooks) and neutralise
@@ -74,6 +152,9 @@
         --motion-slow: 0.01ms;
         --motion-slide-distance: 0px;
         --motion-scale-from: 1;
+        --motion-settle-from: 1;
+        --motion-bump-to: 1;
+        --motion-press-to: 1;
     }
 
     *,

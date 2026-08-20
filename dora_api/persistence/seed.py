@@ -444,7 +444,10 @@ def seed_dev_data(
         ),
     )
     icecream_bowl = make_recipe(
-        name="Vanilla Ice Cream Bowl", collection=to_try, category="Dessert",
+        # No `category`: "Dessert" is a time of day, and it is already on
+        # `time_of_day`. Carrying it on both facets is what put meal-slot names
+        # in the cookbook's Category filter (owner feedback 2026-08-20).
+        name="Vanilla Ice Cream Bowl", collection=to_try,
         difficulty="Easy", cook=0, prep=2, servings=1, time_of_day="Dessert",
         ingredients=[ingredient(icecream, 2, "scoops", notes="for serving")],
         instructions="1. Scoop the Vanilla Ice Cream into a bowl.\n2. Enjoy.",
@@ -876,7 +879,9 @@ def seed_dev_data(
         instructions="Cook the pasta. Stir the tuna through. Bake.",
     )
     make_recipe(
-        name="Belief demo: Juice Bowl", collection=weeknight, category="Breakfast",
+        # `category` dropped — see the ice-cream recipe above; "Breakfast"
+        # is a time of day, which `time_of_day` already says.
+        name="Belief demo: Juice Bowl", collection=weeknight,
         cook=0, prep=5, servings=1, time_of_day="Breakfast",
         ingredients=[
             ingredient(b_oj, 200, "ml"),

@@ -94,6 +94,7 @@
          every other row-cluster button without copy-paste drift. -->
     <RowActionButton
         v-else
+        :class="cartFeedback"
         :icon="iconFor"
         :color="iconColour ?? undefined"
         :loading="busy"
@@ -127,6 +128,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
     import { ICONS } from 'src/style/icons';
+    import { useMicroFeedback } from 'src/composables/useMicroFeedback';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -204,6 +206,19 @@
         if (!props.stockItemId) return 'none' as const;
         return cartStateFor(props.stockItemId, membership.value);
     });
+
+    /* DR-15 / D-010 — the on/off-list flip is one of the four high-frequency
+       gestures, and the only signal was the icon glyph swapping between
+       `add_shopping_cart` and `shopping_cart`, which is easy to miss on a
+       dense row. A 120ms bump on the button says "that landed" without
+       another toast (the toast budget is D-009's problem, and the row variant
+       fires dozens of times a shop).
+
+       Row variant only. The toolbar/menu variants sit on a labelled button
+       next to a text label, where a 16% scale on the whole control reads as a
+       twitch rather than an acknowledgement — and those are once-per-page
+       actions, not high-frequency ones, so D-010 doesn't ask for them. */
+    const cartFeedback = useMicroFeedback(() => cartState.value, 'bump');
 
     // List of unticked lists this stock item sits on (for the multi popover).
     const onLists = computed<ActiveListInfo[]>(() => {

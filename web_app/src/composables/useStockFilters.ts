@@ -22,13 +22,22 @@ import type { SortAxisFor } from 'src/components/filters/SortControl.vue';
  * direction toggle made three across the app. Owner feedback 2026-08-18:
  * direction is always the attached toggle (`SortControl`), never an option.
  */
-export type StockSortKey = 'name' | 'level' | 'updated' | 'expiry';
+export type StockSortKey = 'attention' | 'name' | 'level' | 'updated' | 'expiry';
 
 export type StockSortDir = 'asc' | 'desc';
 
 export type StockCartFilter = 'all' | 'on_list' | 'off_list';
 
 export const STOCK_SORT_OPTIONS: SortAxisFor<StockSortKey>[] = [
+    // D-9 (Chunk 4) — the default. Sorts on the SAME three-band ramp the row
+    // treatments paint (D-8), so position and appearance agree instead of
+    // arguing: outlined rows on top, ordinary rows next, dimmed
+    // "out-but-you-never-flagged-it" rows at the bottom.
+    {
+        value: 'attention', label: 'Needs attention',
+        ascLabel: 'Most urgent first', descLabel: 'Least urgent first',
+        defaultDir: 'asc',
+    },
     {
         value: 'name', label: 'Name',
         ascLabel: 'A → Z', descLabel: 'Z → A', defaultDir: 'asc',
@@ -70,7 +79,29 @@ export function migrateStockSort(
         const axis = STOCK_SORT_OPTIONS.find((o) => o.value === stored)!;
         return { sortBy: stored as StockSortKey, sortDir: axis.defaultDir ?? 'desc' };
     }
-    return { sortBy: 'name', sortDir: 'asc' };
+    // D-9: junk or nothing stored lands on the new default, not Name.
+    return { sortBy: 'attention', sortDir: 'asc' };
+}
+
+/**
+ * The three-band treatment ramp (D-8), as a sortable number. One function so
+ * the row's CSS classes and this comparator cannot disagree about which band
+ * an item is in — the whole point of the ramp is that position and appearance
+ * say the same thing.
+ *
+ *   0 — outlined: the server's attention rule fired. Needs you.
+ *   1 — normal: fine.
+ *   2 — dimmed: out of stock, but never flagged essential. FYI only.
+ */
+const ATTENTION_SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+export function attentionBand(
+    item: { needs_attention?: boolean; is_essential?: boolean },
+    outOfStock: boolean,
+): 0 | 1 | 2 {
+    if (item.needs_attention === true) return 0;
+    if (outOfStock && item.is_essential !== true) return 2;
+    return 1;
 }
 
 /**
@@ -120,7 +151,8 @@ export function useStockFilters(sources: {
             cartFilter: ref<StockCartFilter>('all'),
             // Deep-link from stock-item detail page's "Recipes using this".
             recipeFilter: ref<string | null>(null),
-            sortBy: ref<StockSortKey>('name'),
+            // D-9 — "Needs attention" is the default axis (was Name).
+            sortBy: ref<StockSortKey>('attention'),
             sortDir: ref<StockSortDir>('asc'),
         }))
         : {
@@ -135,7 +167,8 @@ export function useStockFilters(sources: {
             expiringSoonOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
-            sortBy: ref<StockSortKey>('name'),
+            // D-9 — "Needs attention" is the default axis (was Name).
+            sortBy: ref<StockSortKey>('attention'),
             sortDir: ref<StockSortDir>('asc'),
         };
     const {
@@ -325,8 +358,29 @@ export function useStockFilters(sources: {
         // "Ascending" per axis means: name A→Z · stock level lowest-first ·
         // last-updated least-recent-first · expiry soonest-first.
         const dir = sortDir.value === 'asc' ? 1 : -1;
+        const outOfStock = (item: DeepReadonly<StockItem>): boolean =>
+            item.is_out_of_stock
+            ?? isOutOfStockSequence(
+                item.stock_level_sequence ?? levelSequence(item.stock_level_id),
+            );
         sorted.sort((a, b) => {
             switch (sortBy.value) {
+                case 'attention': {
+                    // D-9. Primary: the three-band ramp (D-8). Secondary:
+                    // severity, but ONLY inside the outlined band — severity is
+                    // null everywhere else, so comparing it across bands would
+                    // be comparing nothing. Tiebreak: name, so the list is
+                    // stable and doesn't reshuffle as levels change under it.
+                    const ab = attentionBand(a, outOfStock(a));
+                    const bb = attentionBand(b, outOfStock(b));
+                    if (ab !== bb) return dir * (ab - bb);
+                    if (ab === 0) {
+                        const as = ATTENTION_SEVERITY_RANK[a.attention_severity ?? ''] ?? 9;
+                        const bs = ATTENTION_SEVERITY_RANK[b.attention_severity ?? ''] ?? 9;
+                        if (as !== bs) return dir * (as - bs);
+                    }
+                    return collator.compare(a.name, b.name);
+                }
                 case 'level':
                     // levelSequence runs high→low as stock increases, so the
                     // ascending ("lowest first") sense subtracts b from a.

@@ -39,6 +39,13 @@ export type AppSettings = {
     // 2026-07-04 cleanup.
     stocktake_default_cadence_band: CadenceBand;
     stocktake_auto_tuning_enabled: boolean;
+    // 2026-08-20 owner feedback — install-wide stocktake master switch, and
+    // the opt-in default new items are born with. `stocktake_enabled` false
+    // hides the whole surface (overview button, Needs-check filter, per-item
+    // toggle) and empties the server-side overdue map; it rides
+    // `/api/health features.stocktake` for non-admin clients.
+    stocktake_enabled: boolean;
+    stocktake_new_items_opt_in: boolean;
     /** FU-511 — install-wide auto-add mode. Replaces the retired per-item
      *  `StockItem.auto_add_when_low` toggle. Auto-add fires per the mode:
      *    'off'            — never.

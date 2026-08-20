@@ -172,6 +172,14 @@
 
             <!-- ── Row 2: input filters ──────────────────────────────── -->
             <FilterRow variant="fields">
+            <!-- Order — owner feedback 2026-08-20: "Collection and dietary
+                 tags filters should be near the front." They were dead last
+                 and second-to-last, behind six facets and four numeric
+                 bounds. Now: sort · Collection · Dietary tags (the two he
+                 reaches for) · the recipe's own facets · numeric bounds ·
+                 Tools (genuinely occasional). The earlier FU-108 ordering was
+                 by *guessed* frequency; this is by reported use. -->
+
             <!-- Axis + direction are one control (SortControl) — the direction
                  toggle rides in the select's append slot rather than sitting
                  beside it as a separately-sized button. -->
@@ -181,6 +189,30 @@
                 :options="SORT_OPTIONS"
             />
 
+            <BaseSelect
+                emit-value
+                map-options
+                clearable
+                v-model="collectionFilter"
+                :options="collectionOptionsWithNone"
+                label="Collection"
+            >
+                <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
+            </BaseSelect>
+            <!-- L237 — one tri-state dietary filter (must-have / must-not /
+                 neutral) replacing the old two include/exclude selects.
+                 These were `DietaryTagFilter`, a wrapper whose only remaining
+                 job was defaulting the label; its own docblock said new uses
+                 should consume TriStateFilter directly, so with icons to plumb
+                 through as well it was collapsed rather than widened (R-001). -->
+            <TriStateFilter
+                label="Dietary tags"
+                :icon="ICONS.eco"
+                :options="dietaryTagOptions"
+                v-model:include="dietaryTagsInclude"
+                v-model:exclude="dietaryTagsExclude"
+            />
+
             <!-- L235 — cuisine + category are distinct single-select filters,
                  no longer lumped together as one "tags" multi-select.
                  Icons match the matching Settings → Kitchen setup pages
@@ -188,7 +220,7 @@
                  tools = blender, dietary tags = leaf) so the same concept
                  carries the same glyph wherever it appears. -->
             <BaseSelect
-                                emit-value
+                emit-value
                 map-options
                 clearable
                 v-model="cuisineFilter"
@@ -198,7 +230,7 @@
                 <template #prepend><q-icon :name="ICONS.public" size="18px" /></template>
             </BaseSelect>
             <BaseSelect
-                                emit-value
+                emit-value
                 map-options
                 clearable
                 v-model="categoryFilter"
@@ -207,11 +239,16 @@
             >
                 <template #prepend><q-icon :name="ICONS.category" size="18px" /></template>
             </BaseSelect>
-            <!-- time-of-day single-select. §1.12: vocabulary
-                 sourced from DEFAULT_MEAL_SLOTS (shared with meal-plans
-                 PROPOSAL_MEAL_PLANS.md §4). -->
+            <!-- time-of-day single-select. §1.12: vocabulary sourced from the
+                 household MealSlot table (DEFAULT_MEAL_SLOTS is only the
+                 pre-first-load fallback).
+                 Keeps the clock glyph — it matches Settings → Meal slots. The
+                 crossover the owner reported ran the other way: the *duration*
+                 chips on the cookbook card/row were also on a clock, and are
+                 now on `timer`. Clock = a time of day, timer = a length of
+                 time; one glyph each. -->
             <BaseSelect
-                                emit-value
+                emit-value
                 map-options
                 clearable
                 v-model="timeOfDayFilter"
@@ -221,9 +258,11 @@
                 <template #prepend><q-icon :name="ICONS.schedule" size="18px" /></template>
             </BaseSelect>
             <!-- §1.7 — difficulty single-select. Closed vocabulary
-                 (Easy / Medium / Hard). -->
+                 (Easy / Medium / Hard). The card's difficulty chip was on
+                 `star_outline`, which reads as a *rating*; it now shares this
+                 speedometer (owner feedback 2026-08-20). -->
             <BaseSelect
-                                emit-value
+                emit-value
                 map-options
                 clearable
                 v-model="difficultyFilter"
@@ -247,35 +286,29 @@
                 v-model:include="usesStockItemIds"
                 v-model:exclude="excludesStockItemIds"
             />
-            <!-- :hint removed; the under-input copy was just
-                 padding out the filter row's height and offsetting
-                 alignment without adding info. Every numeric bound carries the
-                 same icon as its sort axis / the surface it counts, so the row
-                 scans as a set rather than a mix of iconned and bare fields. -->
+
+            <!-- Numeric bounds. :hint removed; the under-input copy was just
+                 padding out the filter row's height and offsetting alignment
+                 without adding info. Every bound carries the same icon as its
+                 sort axis / the surface it counts, so the row scans as a set
+                 rather than a mix of iconned and bare fields. -->
+            <!-- "Serves ≥" — owner feedback 2026-08-20 ("missing filter for #
+                 of serves"). A lower bound, not a range: the intent is "I'm
+                 cooking for five tonight", and a recipe that serves more than
+                 that just leaves leftovers. A recipe with no servings recorded
+                 fails a set bound — same intent rule as the facets above
+                 ("show me things that feed 5", not "…or that might"). -->
             <q-input
-                v-if="batchEnabled"
-                v-model.number="mealCountMin"
+                v-model.number="servesMin"
                 dense
                 outlined
                 type="number"
                 min="0"
                 class="filter-row__wide"
-                label="Meals prepared ≥"
+                label="Serves ≥"
                 hide-bottom-space
             >
-                <template #prepend><q-icon :name="ICONS.mealsPrepared" size="18px" /></template>
-            </q-input>
-            <q-input
-                v-model.number="missingMax"
-                dense
-                outlined
-                type="number"
-                min="0"
-                class="filter-row__wide"
-                label="Missing ingredients ≤"
-                hide-bottom-space
-            >
-                <template #prepend><q-icon :name="ICONS.cartRemove" size="18px" /></template>
+                <template #prepend><q-icon :name="ICONS.people" size="18px" /></template>
             </q-input>
             <q-input
                 v-model.number="ingredientsMax"
@@ -303,19 +336,20 @@
             >
                 <template #prepend><q-icon :name="ICONS.local_fire_department" size="18px" /></template>
             </q-input>
-            <!-- L237 — one tri-state dietary filter (must-have / must-not /
-                 neutral) replacing the old two include/exclude selects.
-                 These were `DietaryTagFilter`, a wrapper whose only remaining
-                 job was defaulting the label; its own docblock said new uses
-                 should consume TriStateFilter directly, so with icons to plumb
-                 through as well it was collapsed rather than widened (R-001). -->
-            <TriStateFilter
-                label="Dietary tags"
-                :icon="ICONS.eco"
-                :options="dietaryTagOptions"
-                v-model:include="dietaryTagsInclude"
-                v-model:exclude="dietaryTagsExclude"
-            />
+            <q-input
+                v-if="batchEnabled"
+                v-model.number="mealCountMin"
+                dense
+                outlined
+                type="number"
+                min="0"
+                class="filter-row__wide"
+                label="Meals prepared ≥"
+                hide-bottom-space
+            >
+                <template #prepend><q-icon :name="ICONS.mealsPrepared" size="18px" /></template>
+            </q-input>
+
             <!-- L310 — tools inclusion/exclusion filter (same tri-state control). -->
             <TriStateFilter
                 label="Tools"
@@ -324,23 +358,14 @@
                 v-model:include="toolsInclude"
                 v-model:exclude="toolsExclude"
             />
-            <!-- old "Free from ingredient(s)" free-text input
-                 removed; its concern is now covered by the "Doesn't use"
-                 stock-item picker above (paired with "Uses ingredients" as a
-                 +/- filter on the same option source). Untracked-name
-                 exclusion can be added back behind a more discoverable
-                 control if real usage demands it; the text-match was a
-                 source of false negatives. -->
-            <BaseSelect
-                                emit-value
-                map-options
-                clearable
-                v-model="collectionFilter"
-                :options="collectionOptionsWithNone"
-                label="Collection"
-            >
-                <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
-            </BaseSelect>
+            <!-- Two filters used to live here and no longer do:
+                 • "Missing ingredients ≤" — removed 2026-08-20 (owner: "feels
+                   a bit useless?"). The zero case IS the "Cookable now" chip,
+                   nothing sorted by it, and every card/row already shows what
+                   the recipe is short of. Its `missingMax` state went with it.
+                 • "Free from ingredient(s)" free-text — its concern is covered
+                   by the "Doesn't use" side of the Ingredients picker above;
+                   the text-match was a source of false negatives. -->
             </FilterRow>
             </template>
         </FilterBar>
@@ -356,6 +381,16 @@
         </div>
 
         <!-- ── Grid grouped by collection ─────────────────────────── -->
+        <!-- Owner feedback 2026-08-20: "filter area needs a little gap between
+             itself and page content, just like stock overview has". FilterBar
+             only pads itself 4px; on StockOverview the separation comes from
+             the bulk-action bar's own `q-py-xs` wrapper sitting between the
+             panel and the list. This page has no bulk bar, so the list started
+             flush against the filter panel. Own the gap here rather than
+             adding bottom margin to FilterBar — that would move every other
+             surface that uses it, and StockOverview's spacing is already
+             right. -->
+        <div class="recipes-content">
         <FadeTransition mode="out-in">
         <div v-if="loading && recipes.length === 0" key="rec-loading" class="text-center q-py-xl">
             <AppSpinner size="48px" />
@@ -419,6 +454,7 @@
             </div>
         </div>
         </FadeTransition>
+        </div>
 
         <PageCountsFooter v-if="recipes.length > 0" :counts="footerCounts" />
 
@@ -566,8 +602,8 @@
     const loading = ref(false);
 
     // ── Filter state ────────────────────────────────────────────────
-    // expanded state persisted per-page (mobile always starts hidden).
-    const filtersExpanded = useFilterPanelExpanded('cookbook-overview');
+    // (the filter panel's expanded state is declared below, once
+    // `activeFilterCount` exists — it's what decides whether the panel opens.)
     // A8 §3 nav-state — filters/search/sort survive navigation within the
     // session and reset on full reload. Non-persisted (fetch-in-flight,
     // fetched-data caches) stay as their own refs below.
@@ -584,10 +620,11 @@
         // expiring-within-14-days in-stock ingredient AND force-sorts by
         // count desc.
         expiringOnly: ref(false),
-        // `null` means "no upper bound". Cleared inputs land as NaN via
+        // `null` means "no bound". Cleared inputs land as NaN via
         // v-model.number; predicates guard on Number.isFinite.
-        missingMax: ref<number | null>(null),
         mealCountMin: ref<number | null>(null),
+        // "Serves ≥" lower bound (owner feedback 2026-08-20).
+        servesMin: ref<number | null>(null),
         // "Kcal ≤" filter (only renders when nutrition opt-in
         // is on). Recipes with no kcal value pass through.
         kcalMax: ref<number | null>(null),
@@ -608,7 +645,7 @@
     }));
     const {
         searchText, favouritesOnly, cookableNowOnly, inStockOnly,
-        plannedFilterState, expiringOnly, missingMax, mealCountMin, kcalMax,
+        plannedFilterState, expiringOnly, mealCountMin, servesMin, kcalMax,
         collectionFilter, cuisineFilter, categoryFilter, timeOfDayFilter,
         difficultyFilter, ingredientsMax, usesStockItemIds, excludesStockItemIds,
     } = cookbookState;
@@ -802,10 +839,20 @@
     );
 
     // Sort axes for the ingredient filter. Name is the default
-    // (alphabetical is more browsable than level when scanning); the
-    // user can flip to "Stock level" to surface low/out items first
-    // when planning around what needs using up. Level sort: low/out
-    // (higher sequence number per `stock_status.py`) first.
+    // (alphabetical is more browsable than level when scanning); "Stock
+    // level" is the secondary axis.
+    //
+    // Level sort runs **stocked first** (owner feedback 2026-08-20: "doesn't
+    // let you change sort direction — if we aren't doing that then level sort
+    // should be stocked first, not out of stock first"). A direction toggle
+    // was the other option and was rejected: this is a picker inside a
+    // dropdown inside a filter panel, and a third control in there costs more
+    // than the one direction it would add. Stocked-first is also the right
+    // single direction — the dominant use of "Uses ingredients" is picking
+    // something you actually have. Ascending sequence = in-stock first per
+    // `stock_status.py`; untracked items (null sequence) sink to the bottom
+    // rather than riding at the top, which is what a -1 sentinel would do
+    // under ascending order.
     const ingredientSortOptions: TriStateSort[] = [
         {
             value: 'name',
@@ -816,10 +863,11 @@
             value: 'level',
             label: 'Stock level',
             compare: (a, b) => {
-                const aSeq = (a.meta?.levelSequence as number | null | undefined) ?? -1;
-                const bSeq = (b.meta?.levelSequence as number | null | undefined) ?? -1;
+                const UNTRACKED = Number.MAX_SAFE_INTEGER;
+                const aSeq = (a.meta?.levelSequence as number | null | undefined) ?? UNTRACKED;
+                const bSeq = (b.meta?.levelSequence as number | null | undefined) ?? UNTRACKED;
                 if (aSeq === bSeq) return a.label.localeCompare(b.label);
-                return bSeq - aSeq;
+                return aSeq - bSeq;
             },
         },
     ];
@@ -858,10 +906,13 @@
             ) {
                 return false;
             }
+            // "Serves ≥" lower bound. A recipe with no servings recorded
+            // fails a set bound rather than passing through — the user asked
+            // for something that feeds N, and "unknown" isn't an answer.
             if (
-                missingMax.value !== null
-                && Number.isFinite(missingMax.value)
-                && r.missing_count > missingMax.value
+                servesMin.value !== null
+                && Number.isFinite(servesMin.value)
+                && (r.servings ?? 0) < servesMin.value
             ) {
                 return false;
             }
@@ -1078,7 +1129,7 @@
             || plannedFilterState.value !== 'off'
             || expiringOnly.value
             || (mealCountMin.value !== null && Number.isFinite(mealCountMin.value))
-            || (missingMax.value !== null && Number.isFinite(missingMax.value))
+            || (servesMin.value !== null && Number.isFinite(servesMin.value))
             || (kcalMax.value !== null && Number.isFinite(kcalMax.value))
             || collectionFilter.value !== null
             || cuisineFilter.value !== null
@@ -1105,7 +1156,7 @@
         if (plannedFilterState.value !== 'off') n++;
         if (expiringOnly.value) n++;
         if (mealCountMin.value !== null && Number.isFinite(mealCountMin.value)) n++;
-        if (missingMax.value !== null && Number.isFinite(missingMax.value)) n++;
+        if (servesMin.value !== null && Number.isFinite(servesMin.value)) n++;
         if (kcalMax.value !== null && Number.isFinite(kcalMax.value)) n++;
         if (collectionFilter.value !== null) n++;
         if (cuisineFilter.value !== null) n++;
@@ -1121,6 +1172,16 @@
         if (toolsExclude.value.length > 0) n++;
         return n;
     });
+
+    // 2026-08-20 owner call — the panel opens iff something is filtered, and
+    // that state is not remembered across visits. Adopted here from Stock
+    // overview, which is where the owner met the behaviour and preferred it.
+    // Declared here rather than up with the rest of the filter state because
+    // it reads `activeFilterCount`, which is defined just above.
+    const filtersExpanded = useFilterPanelExpanded(
+        'cookbook-overview',
+        () => activeFilterCount.value > 0,
+    );
 
     // if the user had Kcal as their sort axis and then the
     // nutrition mode leaves simple (off, or complex where the figure is
@@ -1194,7 +1255,7 @@
         plannedFilterState.value = 'off';
         expiringOnly.value = false;
         mealCountMin.value = null;
-        missingMax.value = null;
+        servesMin.value = null;
         kcalMax.value = null;
         collectionFilter.value = null;
         cuisineFilter.value = null;
@@ -1546,6 +1607,13 @@
             flex-basis: 100%;
             min-width: 0;
         }
+    }
+
+    /* Separation between the filter panel and the list — see the
+       template note above the wrapper. Matches the gap StockOverview gets
+       incidentally from its bulk-bar wrapper. */
+    .recipes-content {
+        margin-top: var(--space-3);
     }
 
     /* The filter rows' scroll behaviour and control scale moved to

@@ -1,4 +1,4 @@
-"""X1 — Stocktake / Focused Review backend.
+﻿"""X1 — Stocktake / Focused Review backend.
 
   GET  /api/stocktake/queue?limit=50          — items needing a check
   POST /api/stock-items/<id>/check            — bump last_checked_at only
@@ -39,6 +39,13 @@ design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
     Push (snooze) filters out items whose `snoozed_until > now`;
     Mute is unchanged (`stocktake_alerts_are_enabled=False` still
     excludes).
+
+Chunk 5 of `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md` (**D-1**) split the two
+halves of "what should I check?": **cadence decides membership, belief decides
+order.** Everything above still governs who is in the queue; the *ordering*
+moved out to `queue_ranking.py`. The queue is no longer "most-overdue first" —
+it's least-certain first, with most-overdue as the fallback for items belief
+knows nothing about and for users who have inference switched off.
 """
 import logging
 from dataclasses import dataclass
@@ -62,6 +69,12 @@ from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
                                           level_for_status)
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
+from dora_api.features.stock_items.inference_overlay import (SURFACE_STOCK,
+                                                             current_user,
+                                                             surface_enabled)
+from dora_api.features.stock_items.pantry_belief import (PantryBelief,
+                                                         gather_beliefs_for_items)
+from dora_api.features.stocktake.queue_ranking import rank_queue
 from dora_api.features.stocktake.cadence import (AUTO_HISTORY_WINDOW_DAYS,
                                                  LOW_OUT_BUMP_WINDOW_DAYS,
                                                  CadenceBand, ItemHistory,
@@ -81,7 +94,10 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 # them because it owns the decision they feed (D1/D2 in
 # `IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md`; the old local copy of the 90-day
 # one even carried a comment admitting it was a mirror).
-_ENGAGEMENT_WINDOW_DAYS = 60
+# Public because Chunk 6's Sweep phase dates each drop-out as
+# "last activity + this window" — deriving the departure from the same number
+# the gate expires on is what stops the two disagreeing (`sweep.py`).
+ENGAGEMENT_WINDOW_DAYS = 60
 
 # Push (snooze) window — fixed 3 days per §5 (open-decision resolved).
 _SNOOZE_DAYS = 3
@@ -104,6 +120,23 @@ class StocktakeQueueItemDto:
     cadence_days: int
     last_checked_at: str | None
     overdue_days: int
+    # Owner call 2026-08-20: the Stocktake button's glow was removed as
+    # noise (D-14) and reinstated **gated on essentials** — "glow only if
+    # something I flagged as mattering is due". The queue already resolves
+    # `is_essential` when it picks a cadence band, so the flag rides the DTO
+    # rather than the client fetching stock items to look it up (R-003).
+    is_essential: bool
+    # ── Chunk 5 / D-1 — why this item is where it is in the list ──────
+    # `check_rank` is 'uncertain' | 'overdue' | 'confident' (see
+    # `queue_ranking.py`). The runner shows the belief's own words when the
+    # rank is belief-derived, so the order is explicable rather than a
+    # mystery reshuffle — D-1 forbids a toggle, which makes explaining it in
+    # place the only honest option left.
+    # All four are `None`/'overdue' when the user has stock inference off.
+    check_rank: str
+    belief_band: str | None
+    belief_confidence: str | None
+    belief_reason: str | None
 
 
 # ── Overdue baseline ───────────────────────────────────────────────────
@@ -173,7 +206,7 @@ def _gather_engagement_signals(
     line_table = db.metadata.tables["ShoppingListLine"]
     list_table = db.metadata.tables["ShoppingList"]
 
-    engagement_cutoff = now - timedelta(days=_ENGAGEMENT_WINDOW_DAYS)
+    engagement_cutoff = now - timedelta(days=ENGAGEMENT_WINDOW_DAYS)
     auto_history_cutoff = now - timedelta(days=AUTO_HISTORY_WINDOW_DAYS)
     low_out_cutoff = now - timedelta(days=LOW_OUT_BUMP_WINDOW_DAYS)
 
@@ -271,6 +304,31 @@ def _is_engaged(item: StockItem, signals: _EngagementSignals) -> bool:
     return False
 
 
+def resolve_unengaged_items(
+    items: list[StockItem],
+    now: datetime | None = None,
+) -> list[StockItem]:
+    """Items currently failing the engagement gate — the Sweep phase's pool.
+
+    The mirror image of `resolve_overdue_map`, and deliberately built on the
+    same `_is_engaged` call rather than a second set of conditions: "out of
+    rotation" has to mean exactly "not in rotation", or the Sweep would announce
+    departures the queue doesn't believe in (Chunk 6 / D-4).
+
+    **Muted items are excluded.** Mute already says "don't nag me about
+    stocktake for this one", so telling its owner that Dora has stopped
+    tracking it is both redundant and slightly insulting — they said so first.
+    """
+    if not items:
+        return []
+    now_ = now or datetime.now(UTC)
+    signals = _gather_engagement_signals([item.id for item in items], now_)
+    return [
+        item for item in items
+        if item.stocktake_alerts_are_enabled and not _is_engaged(item, signals)
+    ]
+
+
 # ── Shared overdue resolver ────────────────────────────────────────────
 # The single authority for "is this item currently overdue for a
 # stocktake, and by how much?" — used by the queue endpoint below AND
@@ -308,6 +366,13 @@ def resolve_overdue_map(
         return {}
     repo = SqlAlchemyRepository()
     app_setting = get_or_create_app_setting(repo)
+    # 2026-08-20 — install-wide master switch. Off ⇒ nothing is ever overdue.
+    # Enforced here rather than at each caller because this is the single
+    # overdue authority (R-003): the queue endpoint, the Stock-overview count
+    # and the alerts bell all read it, and each of them checking the flag for
+    # itself is how the bell ends up nagging about a hidden surface.
+    if not bool(getattr(app_setting, "stocktake_enabled", True)):
+        return {}
     default_band = parse_band(
         getattr(app_setting, "stocktake_default_cadence_band", None)
     )
@@ -382,16 +447,33 @@ def get_stocktake_queue():
         if (info := overdue_map.get(item.id)) is not None
     ]
 
-    overdue.sort(key=lambda triple: (
-        -triple[0],
-        _overdue_baseline(triple[2]) or datetime.min.replace(tzinfo=UTC),
-        triple[2].name.lower(),
-    ))
-    total = len(overdue)
-    page = overdue[:limit]
+    # ── D-1 ordering (Chunk 5) ──────────────────────────────────────────
+    # Belief ranks the queue when the user has stock inference on; cadence is
+    # the floor and the fallback. Beliefs are gathered for the **overdue set
+    # only**, not the whole pantry — this endpoint is polled by the overview
+    # on every load, and the items that aren't due can't be reordered.
+    beliefs: dict[UUID, PantryBelief] = {}
+    user = current_user(repo)
+    belief_ranked = surface_enabled(user, SURFACE_STOCK)
+    if belief_ranked and overdue:
+        beliefs = gather_beliefs_for_items(repo, [item for _, _, item in overdue])
+
+    band_by_item = {item.id: band for _, band, item in overdue}
+    ranked = rank_queue([(days, item) for days, _, item in overdue], beliefs)
+    total = len(ranked)
+    # Counted over the WHOLE overdue set, not the page: the caller uses this
+    # to decide whether the Stocktake button glows, and a household with more
+    # than `limit` overdue items would otherwise stop glowing exactly when it
+    # matters most.
+    essential_total = sum(1 for _, _, item in overdue if item.is_essential)
+    days_by_item = {item.id: days for days, _, item in overdue}
+    page = ranked[:limit]
 
     dtos: List[StocktakeQueueItemDto] = []
-    for days, band, item in page:
+    for item, verdict in page:
+        band = band_by_item[item.id]
+        days = days_by_item[item.id]
+        belief = verdict.belief
         dtos.append(StocktakeQueueItemDto(
             stock_item_id=item.id,
             name=item.name,
@@ -406,8 +488,23 @@ def get_stocktake_queue():
                 if item.last_checked_at is not None else None
             ),
             overdue_days=days,
+            is_essential=bool(item.is_essential),
+            check_rank=verdict.rank,
+            belief_band=belief.believed_band if belief else None,
+            belief_confidence=belief.confidence_band if belief else None,
+            belief_reason=belief.reason if belief else None,
         ))
-    return ok({"items": dtos, "total": total})
+    return ok({
+        "items": dtos,
+        "total": total,
+        "essential_total": essential_total,
+        # Which engine ordered the list. The runner words its own "how this
+        # works" copy off this rather than guessing from the rows — with
+        # inference off every row is `overdue`, which is indistinguishable
+        # from "inference on, but nothing has evidence yet", and those two
+        # deserve different explanations.
+        "ranked_by": "belief" if belief_ranked else "cadence",
+    })
 
 
 # ── /check (single) ────────────────────────────────────────────────────

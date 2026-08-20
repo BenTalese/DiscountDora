@@ -17,7 +17,7 @@
 //
 // ⚠️ `RecipeDetailPage.vue` still carries its own inline copy. That is
 // deliberate and temporary: it is the comparison baseline for the redesign and
-// one of the two pages is going to be deleted (FU-683). Collapsing the old
+// one of the two pages is going to be deleted (FU-688). Collapsing the old
 // page onto this composable is wasted work if it's the one that goes — but if
 // it survives, that collapse is the first thing to do.
 
@@ -33,6 +33,21 @@ import type {
 } from 'src/services/api/recipeApiService';
 
 export type IngredientForm = CreateRecipeIngredientCommand;
+
+/** The editable subset of one ingredient row — everything
+ *  `RecipeIngredientRowEditor` can change. `client_id` is the row's identity
+ *  and is deliberately absent: an edit never re-identifies a row, because the
+ *  id is what lets an unchanged row round-trip and keeps a structured step's
+ *  `ingredient_client_ids` pointing at the right thing. */
+export type IngredientPatch = {
+    stock_item_id: string | null;
+    raw_text: string | null;
+    quantity: number | null;
+    unit: string | null;
+    notes: string | null;
+    section_client_id: string | null;
+    is_optional: boolean;
+};
 
 export type SectionForm = {
     client_id: string;

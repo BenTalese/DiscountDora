@@ -145,6 +145,13 @@ def configure_mappings(db: SQLAlchemy):
         # the movement-history self-tuner ("auto = speed"), on by default.
         Column("stocktake_default_cadence_band", String(16), nullable=False, server_default="fortnightly"),
         Column("stocktake_auto_tuning_enabled", Boolean, nullable=False, server_default=true()),
+        # 2026-08-20 owner feedback — the install-wide stocktake master switch
+        # plus the default it hands new items. `stocktake_enabled` False hides
+        # the whole surface (overview button, per-item mute toggle, queue) and
+        # makes the server resolve an empty overdue map, so the bell can't
+        # nag about a feature nobody can open.
+        Column("stocktake_enabled", Boolean, nullable=False, server_default=true()),
+        Column("stocktake_new_items_opt_in", Boolean, nullable=False, server_default=true()),
         # FU-317 — install-wide meal-plan reconcile posture (D5 install-wide,
         # FU-517 resolved 2026-07-09). Default TRUE keeps today's silent
         # auto-drain; FALSE flips the sweep to write receipts but leave
@@ -1146,6 +1153,10 @@ def configure_mappings(db: SQLAlchemy):
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
         Column("daily_brief_enabled", Boolean, nullable=False, server_default=false()),
+        # Chunk 6 / D-4 — per-user watermark for the stocktake Sweep phase.
+        # Nullable: NULL means "never run a session", which the Sweep reads as
+        # "show nothing" rather than "show everything ever excluded".
+        Column("stocktake_last_session_at", DateTime(timezone=True), nullable=True),
     )
 
     # admin-minted bearer credential for `POST /api/ingest`. The

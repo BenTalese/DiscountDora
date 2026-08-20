@@ -593,8 +593,15 @@
                                         />
                                     </q-item-section>
                                     <q-item-section side top>
-                                        <!-- Bigger tap target mid-shop (M3). -->
+                                        <!-- Bigger tap target mid-shop (M3).
+                                             DR-15 / D-010: `dora-press` answers
+                                             the tap on the tick itself — the
+                                             most-repeated gesture on this page
+                                             — while the ticked row's fade is
+                                             transitioned below rather than
+                                             snapping. -->
                                         <q-checkbox
+                                            class="dora-press"
                                             :model-value="line.is_ticked"
                                             :disable="detail.status === 'done'"
                                             :size="detail.status === 'shopping' ? 'lg' : undefined"
@@ -3167,6 +3174,16 @@
     }
     .shopping-line-ticked-content {
         opacity: 0.6;
+    }
+    /* DR-15 / D-010: ticking a line used to snap straight to the dimmed state.
+       The fade is what makes a tick feel like the line was *put away* rather
+       than redrawn, and it reads both directions (untick fades back up). Only
+       opacity is transitioned — `text-strike` is a text-decoration, which is
+       not usefully animatable, and transitioning layout on a list this long
+       would cost more than the polish is worth. */
+    .shopping-line-ticked-content,
+    .shopping-line-name {
+        transition: opacity var(--motion-fast) var(--motion-ease);
     }
     /* C-7 Chunk 3 — nested product line sits indented under its
      * stock-item parent, with a left rail so the relationship reads at

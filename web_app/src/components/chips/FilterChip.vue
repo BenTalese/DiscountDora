@@ -1,7 +1,13 @@
 <template>
+    <!-- DR-15 / D-010: a filter chip is one of the four high-frequency
+         gestures. `dora-press` answers the touch itself; the bump fires when
+         the chip's *state* flips, which is the bit that matters on a filter bar
+         where several chips look similar and only the tone tells them apart.
+         Both ride motion.scss tokens, so reduced-motion flattens them. -->
     <q-chip
         clickable
         outline
+        :class="['dora-press', toggleFeedback]"
         :selected="modelValue"
         :style="modelValue ? { color: activeToneColour } : undefined"
         @click="emit('update:modelValue', !modelValue)"
@@ -12,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+    import { useMicroFeedback } from 'src/composables/useMicroFeedback';
     import { computed } from 'vue';
 
     type ActiveTone =
@@ -51,4 +58,6 @@
     const activeToneColour = computed(
         () => TONE_COLOURS[props.activeColor ?? 'primary'],
     );
+
+    const toggleFeedback = useMicroFeedback(() => props.modelValue, 'bump');
 </script>

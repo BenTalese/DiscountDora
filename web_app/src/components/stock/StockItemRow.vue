@@ -62,10 +62,8 @@
                 :class="[
                     'stock-row__level-btn',
                     levelButtonClass,
-                    {
-                        'stock-row__level-btn--needs-check': needsCheck,
-                        'stock-row__level-btn--belief': hasBelief,
-                    },
+                    levelFeedback,
+                    { 'stock-row__level-btn--uncertain': levelUncertain },
                 ]"
                 :style="levelButtonStyle"
                 :aria-label="levelButtonAriaLabel"
@@ -73,9 +71,9 @@
             >
                 <q-tooltip>
                     {{ levelName ? `Level: ${levelName}` : 'Set stock level' }}
-                    <template v-if="belief && hasBelief">
+                    <template v-if="levelUncertain">
                         <br />
-                        Dora thinks {{ beliefBandWord }} — {{ belief.reason }}
+                        {{ uncertaintyTooltip }}
                     </template>
                 </q-tooltip>
                 <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
@@ -83,18 +81,31 @@
                         <!-- 2026-08-15 feedback: the belief hint used to be a
                              separate "Dora thinks…" pill sitting in the row,
                              which is a second element saying something about
-                             the level the picker already owns. It now rides
-                             the picker itself: an offset ring on the button,
-                             and this header — which was a redundant "Set
-                             level" caption — carrying what she thinks and
-                             why. Falls back to "Set level" when she has
-                             nothing to add. -->
+                             the level the picker already owns. It rides the
+                             picker itself instead, and this header — which was
+                             a redundant "Set level" caption — carries the
+                             reasoning.
+                             D-5 (Chunk 4): the button now wears ONE dashed
+                             marker for "this number might be wrong", whichever
+                             of the two reasons fired, so the popover is the
+                             only place that says *which* reason. Falls back to
+                             "Set level" when nothing is uncertain. -->
                         <q-item-label v-if="hasBelief" header class="stock-row__belief-header">
                             <div class="row items-center no-wrap">
                                 <q-icon :name="ICONS.inferred_hunch" size="16px" class="q-mr-xs" />
                                 Dora thinks {{ beliefBandWord }}
                             </div>
                             <div class="stock-row__belief-reason">{{ belief?.reason }}</div>
+                        </q-item-label>
+                        <q-item-label v-else-if="needsCheck" header class="stock-row__belief-header">
+                            <div class="row items-center no-wrap">
+                                <q-icon :name="ICONS.fact_check" size="16px" class="q-mr-xs" />
+                                Due for a stocktake check
+                            </div>
+                            <div class="stock-row__belief-reason">
+                                It's been a while since this was counted — set it here, or
+                                walk the stocktake.
+                            </div>
                         </q-item-label>
                         <q-item-label v-else header>Set level</q-item-label>
                         <q-item
@@ -183,13 +194,23 @@
             />
 
             <!-- ──────────────────────────────────────────────────────
-                 Right cluster — expiry / essential / open / cart.
+                 Right cluster — expiry / open / cart.
                  Feedback 2026-06-18 (round 2): every button is `flat dense
-                 round size="md"` so they read as a uniform cluster
-                 (previously expiry was round, open was a square, cart was
-                 sm — three different visual languages). The essential
-                 flag is now interactive (toggles `is_essential`) and
-                 rendered alongside the others.
+                 round size="md"` so they read as a uniform cluster.
+
+                 2026-08-20: Chunk 4 briefly merged these two controls into
+                 one — icon = open/sealed, colour = expiry — and it was
+                 **reverted on owner challenge**, correctly. Worth recording so
+                 nobody re-does it: the plan's §0.2 channel count treats
+                 "expiry text (+ open marker)" as **one** channel both before
+                 *and* after the consolidation, so merging the two *controls*
+                 bought **zero** channel reduction. What it cost was real: a
+                 one-tap toggle became a two-tap menu trip, and one glyph was
+                 made to carry two unrelated meanings in two encodings (shape
+                 for open, colour for expiry) — which is precisely the
+                 overloading this whole plan exists to remove. "Fold the open
+                 marker into the expiry line" meant *don't state open twice*,
+                 not *delete the button*.
             ────────────────────────────────────────────────────────── -->
             <RowActionButton
                 :icon="expiry.icon"
@@ -295,6 +316,7 @@
                 </q-tooltip>
             </RowActionButton>
 
+
             <!-- Cart button — unified AddToListButton (C-7 Chunk 1).
                  Owns the state-aware render + already-on-list toggle
                  (popover when on multiple lists); kills the row's
@@ -329,6 +351,7 @@
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useMicroFeedback } from 'src/composables/useMicroFeedback';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { expiryIndicatorFor } from 'src/helpers/expiryIndicator';
@@ -352,10 +375,11 @@
         /**
          * PROPOSAL_STOCKTAKE_MODE §7 — passes the "this item is currently
          * in the stocktake queue" signal down from the page (the page
-         * owns the server round-trip; the row just draws the outline).
-         * When true, the stock-level button gets a pulsing outline that
-         * matches the toolbar's Stocktake attention glow so overdue rows
-         * are discoverable without opening the runner.
+         * owns the server round-trip; the row just draws the marker).
+         * When true the level box goes dashed — the same marker a
+         * disagreeing belief draws (D-5), because to the user both mean the
+         * one thing: *this number might be wrong*. Which of the two fired is
+         * said in words in the picker popover, not in a second decoration.
          */
         needsCheck?: boolean;
     }>();
@@ -416,11 +440,38 @@
         if (!band) return '';
         return BELIEF_BAND_WORD[band] ?? band;
     });
+
+    // ── One uncertainty marker (D-5) ────────────────────────────────────────
+    // The level box used to carry TWO decorations meaning the same thing to a
+    // user — a pulsing accent ring for "due a stocktake" and an offset amber
+    // ring for "Dora disagrees". Same widget, two vocabularies, one meaning.
+    // Collapsed to a single dashed treatment: dashed keeps the level's own
+    // colour readable (a hollow box would spend the hue channel on metadata
+    // *about* the hue) and it doesn't move, which the pulse did — animation is
+    // the loudest channel in a UI and it was being spent on "go count
+    // something sometime this fortnight".
+    //
+    // Belief wins the *wording* when both fire: it's the more specific claim.
+    const levelUncertain = computed(() => hasBelief.value || !!props.needsCheck);
+
+    // ── DR-15 / D-010 — micro-feedback on the level change ──────────────────
+    // Setting a level from the picker is the single most-repeated gesture in
+    // the app and had no acknowledgement at all: the square silently changed
+    // colour, and on a long list you could lose which row you'd just touched.
+    // A 120ms settle on the square answers the tap where the tap happened.
+    //
+    // This is NOT the retired row pulse (see the style block below). That was
+    // an *ambient* animation keyed off a standing condition — every overdue row
+    // pulsing forever, which is how it became wallpaper. This fires once, on a
+    // change the user just caused, and the class is gone 160ms later.
+    const levelFeedback = useMicroFeedback(() => props.item.stock_level_id, 'settle');
+    const uncertaintyTooltip = computed(() => {
+        if (hasBelief.value) return `Dora thinks ${beliefBandWord.value}`;
+        return 'Due for a stocktake check';
+    });
     const levelButtonAriaLabel = computed(() => {
         const base = `Stock level: ${levelName.value || 'unset'}`;
-        return hasBelief.value
-            ? `${base}. Dora thinks ${beliefBandWord.value}`
-            : base;
+        return levelUncertain.value ? `${base}. ${uncertaintyTooltip.value}` : base;
     });
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
@@ -457,10 +508,15 @@
     });
     const levelButtonStyle = computed(() => {
         // Empty-level fallback — dashed outline + page surface so the
-        // button reads as "unset" without competing with a colour.
+        // button reads as "unset" without competing with a colour. When the
+        // level is ALSO uncertain the class's 2px dashed border owns the edge
+        // instead: an inline border would win the cascade and quietly render
+        // the uncertainty marker one pixel thinner than everywhere else.
         if (levelSequence.value === null) {
+            const surface = { background: 'var(--surface-component)' };
+            if (levelUncertain.value) return surface;
             return {
-                background: 'var(--surface-component)',
+                ...surface,
                 border: '1px dashed color-mix(in srgb, var(--text-primary) 24%, transparent)',
             };
         }
@@ -489,6 +545,9 @@
     // R-002: tone + icon + colour live in `helpers/expiryIndicator` so the
     // stock-item detail page renders the identical indicator.
     const expiry = computed(() => expiryIndicatorFor(props.item.expiry_date));
+    // The `freshnessIcon` / `freshnessTooltip` / `freshnessAriaLabel` trio that
+    // briefly lived here belonged to the merged expiry+open control, reverted
+    // 2026-08-20 — see the template comment on the right cluster for why.
 
     // ── Whole-row outline + dim rules ───────────────────────────────────
     // ONE outline, server-decided (D-7). The row used to carry two —
@@ -514,7 +573,13 @@
     const needsAttention = computed(() => props.item.needs_attention === true);
 
     const rowClasses = computed(() => ({
-        'stock-row--dim': isOutOfStock.value && !isEssential.value,
+        // The bands are EXCLUSIVE (D-8) — an item is outlined, plain or
+        // dimmed, never two of them. Before Chunk 4 an expired non-essential
+        // out-of-stock row got the attention outline *and* the fade: "act on
+        // this" and "ignore this" painted on the same row, which is the same
+        // contradiction B4 called out one layer down.
+        'stock-row--dim':
+            !needsAttention.value && isOutOfStock.value && !isEssential.value,
         'stock-row--peeking': props.peeking,
         'stock-row--focused': props.focused,
         // Selection (bulk-mode tick) fills the row — L91. "peeking"
@@ -852,64 +917,41 @@
         min-height: 32px;
         border-radius: var(--radius-sm, 4px);
         padding: 0;
-        /* Needed so the pulse box-shadow doesn't get clipped by any
-           overflow parent — the shadow radiates outside the 32px box. */
         position: relative;
     }
 
-    /* PROPOSAL_STOCKTAKE_MODE §7 — passive discovery outline for items
-       currently in the stocktake queue. Same "brand-accent pulse" the
-       toolbar's Stocktake attention glow uses (see BaseButton
-       `dora-btn--attention`), scoped to the tiny 32px level button.
-       Users notice a due item on the Overview without having to open
-       the runner.
+    /* ── One uncertainty marker (D-5) ───────────────────────────────────────
+       Replaces BOTH the stocktake pulse and the belief ring. Inset so it
+       reads as part of the box rather than a halo around it, and dashed
+       rather than hollow so the level's own colour still carries the level.
+       No animation, at any preference — there is nothing to honour under
+       `prefers-reduced-motion` because nothing moves. */
+    .stock-row__level-btn--uncertain {
+        box-shadow: inset 0 0 0 1px var(--surface-component);
+        border: 2px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
+    }
 
-       2026-08-15 feedback: the original pulse was a ring expanding from 0 to
-       6px while fading to nothing — at a 32px button that is a faint halo
-       most people never notice. Strengthened rather than replaced (the user
-       asked for more of the same effect, not a different one): the ring now
-       *rests* at a visible 2px hold and expands to 7px, the accent mix runs
-       85% → 20% instead of 55% → 0%, and the button itself breathes a hair
-       (scale 1.06) so the movement registers in peripheral vision. It's a
-       slow 2.2s ease so it reads as a heartbeat, not a blink — the thing
-       that makes a pulse annoying is frequency, not amplitude. */
-    .stock-row__level-btn--needs-check {
-        animation: stock-row__level-needs-check-pulse 2.2s ease-in-out infinite;
-    }
-    @keyframes stock-row__level-needs-check-pulse {
-        0%, 100% {
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-accent) 85%, transparent);
-            transform: scale(1);
-        }
-        50% {
-            box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand-accent) 20%, transparent);
-            transform: scale(1.06);
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .stock-row__level-btn--needs-check {
-            animation: none;
-            transform: none;
-            box-shadow: 0 0 0 2px var(--brand-accent);
-        }
-    }
+    /* The stocktake pulse (PROPOSAL_STOCKTAKE_MODE §7) and the belief ring
+       both lived here. Both are gone — the one dashed marker above replaces
+       the pair (D-5, Chunk 4).
+
+       Do not reintroduce an animation *per row*. The toolbar's Stocktake
+       button did get its glow back (owner call 2026-08-20) but **gated on
+       essentials**, and the gate is the whole point: it fires on a handful of
+       items, once, in one place. A row-level pulse can't be gated the same way
+       — it fires on every overdue row at once, which is how it became
+       wallpaper the first time. One quiet marker per row, one loud signal at
+       the top. */
 
     /* ── "Dora thinks" on the picker (2026-08-15 feedback) ───────────────
-       The user's own sketch: border the picker with a GAP between the line
-       and the box edge. Two stacked rings do that with one box-shadow — the
-       inner ring paints the page surface as the gap, the outer is the amber
-       line. Amber matches the pill this replaced, and the same
-       `--semantic-warning` the belief hint used, so the meaning carries over.
-       Loses to the stocktake pulse when both apply: that one is an
-       instruction ("check this"), this one is an observation. */
-    .stock-row__level-btn--belief:not(.stock-row__level-btn--needs-check) {
-        box-shadow:
-            0 0 0 2px var(--surface-component),
-            0 0 0 4px var(--semantic-warning);
-    }
+       The amber offset ring this class drew is retired with the pulse: two
+       decorations for "the level might be wrong" was the tightest duplication
+       on the row. The reasoning it hinted at now lives only in words, in the
+       picker popover below. */
 
-    /* Belief header inside the level menu — replaces the redundant "Set
-       level" caption when Dora has something to say. */
+    /* Uncertainty header inside the level menu — replaces the redundant "Set
+       level" caption, and is the only place that says WHICH reason (Dora
+       disagrees / due a count) put the dashed box on the level. */
     .stock-row__belief-header {
         color: var(--text-primary);
         font-weight: 600;

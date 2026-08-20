@@ -15,6 +15,164 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **Stock overview, seven small things (2026-08-20).** The **filter panel now opens when
+  something is actually filtered** and stays shut when nothing is — leaving a page and
+  coming back no longer loses the panel that was explaining why the list is short, and no
+  longer opens an empty one. The cookbook and My products picked up the same rule.
+  **"Deselect all" now leaves bulk select**, the same way unticking the last item already
+  did. The **Stocktake button carries its due count as a chip** instead of the words
+  "(3 due)". The **toolbar's action row scrolls sideways on a phone** instead of wrapping
+  onto a second line. The **stock level, location and group filters carry icons** like the
+  cookbook's do. And on a phone the **Location filter opens like every other dropdown** —
+  a mid-screen dialog, no keyboard springing up and shoving it to the top of the screen
+  (typing to narrow a location list is a desktop convenience; scrolling it is faster with
+  a thumb).
+- **Stocktake can be switched off for the whole install (2026-08-20).** Settings → System →
+  Stocktake has an **Enabled** switch. Off means the feature isn't there: no Stocktake
+  button on the stock overview, no "Needs check" filter, no per-item Stocktake toggle on an
+  item's page, no stocktake nudges from the bell, and `/stocktake` says so plainly if you
+  reach it from a bookmark. Nothing is deleted — switch it back on and the queue is exactly
+  where it was. Alongside it, **New items** decides whether an item you add joins the
+  rotation straight away (on, as before) or waits for you to opt it in from its own page.
+
+- **The things you tap most now answer you (2026-08-20).** Setting a stock level, ticking
+  something off, adding to a list and flipping a filter chip are the four gestures you make
+  dozens of times a day, and none of them acknowledged the tap: the square silently changed
+  colour, the cart icon swapped glyph, the chip changed tone. Each now gives a **120ms**
+  response at the point you touched it — the level square settles into its new colour, the
+  cart button gives a small bump as it goes on or off your list, a filter chip presses in
+  under your finger and bumps as it takes effect, and a ticked shopping-list line **fades**
+  into its dimmed state instead of snapping. Every row-cluster button (expiry, open/sealed,
+  price, cart) picks up the same press response. It's deliberately small enough that you
+  notice it's *there* rather than watching it happen — and it all switches off completely if
+  your device asks for reduced motion. Dashboard count-ups are a touch quicker to settle for
+  the same reason.
+- **The planner's recipe picker stops offering the same recipe twice (2026-08-20).** A
+  favourite appeared under **Favourites** *and* again in the full list below, each with its
+  own checkbox, so the step-by-step planner looked like it was asking about one recipe in two
+  places. Every recipe now appears exactly **once**, in the most useful group it belongs to,
+  and the bottom group is named **"Everything else"** so the counts make sense. Nothing can
+  hide: a recipe pushed out of a capped group falls through to the one below, and searching
+  still looks across your whole cookbook at once.
+
+- **Cookbook filters, tidied to how they're actually used (2026-08-20).** **Collection**
+  and **dietary tags** now sit right after the sort control instead of at the far end of
+  the row — they were the two you reach for and the two you had to scroll past everything
+  else to find. There's a new **Serves ≥** filter, so "I'm cooking for five tonight"
+  is one number rather than a hunt. **Missing ingredients ≤** is gone: the only case it
+  really answered was "nothing missing", which is the **Cookable now** chip, and every
+  recipe already shows you what it's short of. The **Ingredients** picker's *Stock level*
+  sort now puts what you **have** at the top rather than what you've run out of (it has one
+  direction on purpose — a third control inside a dropdown inside a filter panel costs
+  more than it gives). And the filter panel no longer sits flush against the list —
+  there's a gap, the same as on the stock list.
+- **Recipe categories are dish types again, not times of day (2026-08-20).** The category
+  list shipped with **Breakfast**, **Dessert** and **Snack** in it — which are meal-slot
+  names, so the Category dropdown read like a second time-of-day picker and a recipe could
+  carry the same word twice. Those three are gone, replaced by **Curry**, **Bake** and
+  **Bread**. Nothing is lost: a dessert still says so under **Time of day**, which is where
+  that fact belongs. Recipes that had been filed under one of the removed categories simply
+  show no category now.
+- **Compact cookbook rows read like stock rows (2026-08-20).** The recipe name was a step
+  smaller than a stock item's name on an otherwise identical row — same size and weight
+  now. On desktop, a recipe's **cook time** and **ingredient count** moved to a second line
+  under the name, where they start at the same place on every row; in the chip cluster their
+  position shifted with however many other chips a recipe happened to have. Phones are
+  unchanged (one line, no room for more).
+- **One glyph, one meaning, across the cookbook (2026-08-20).** A recipe card's **cook
+  time** was on a clock — the same clock the **Time of day** filter uses — so the two
+  read as the same thing. Cook time is a stopwatch now and the clock means a time of day.
+  **Difficulty** was a star (which says *rating*) and now matches its filter, **servings**
+  moved off the plate icon that stands for "a meal" everywhere else and onto a people icon
+  matching the new Serves filter, and the **ingredient count** now shares the counter glyph
+  with the *Ingredient count* filter rather than the "which ingredients" one.
+- **Stocktake is three parts now: agree, walk, tidy (2026-08-20).** It used to be one
+  long list of items to walk to. Now a run opens with **anything Dora is fairly sure
+  about** — worked out from your shopping and cooking, so you can agree from wherever
+  you're sitting. Each one shows its name, the level she thinks it's at, and her
+  reason, all pre-ticked: agreeing with the lot is one tap, and **unticking anything
+  sends it to the walk** so you can look at it properly. Then comes the walk itself,
+  now a shorter list. At the end, a **tidy-up**: items that have quietly dropped out of
+  the stocktake rotation since your last run, because nothing's happened to them in a
+  while. You can say **"I still keep this"** (which asks what's on the shelf — the
+  honest way to bring it back), **mute** it, or **delete** it. Or leave them be; doing
+  nothing is a fine answer. **Any part with nothing in it is skipped without comment**
+  — and there'll be no "fairly sure about" list at all until Dora has watched your
+  shopping for a while, or if you've got her inferred levels switched off. The tidy-up
+  only ever shows what changed **since your last run**, so it doesn't nag you about the
+  same forgotten tin every time.
+- **Stocktake now starts with what Dora can't work out for herself (2026-08-20).** It
+  used to walk you through the most-overdue item first, which sounds right and isn't: a
+  stocktake is only worth the walk if looking tells you something you didn't already
+  know. So the order is now **least certain first**. Items Dora has worked out from your
+  shopping and cooking — she'll say so, in the same words as everywhere else — wait until
+  the end. Items she has no evidence about sit in the middle, ordered by how overdue they
+  are, exactly as before. Nothing has changed about *which* items come up, only their
+  order, and each one tells you why it came up when it did. **There's no setting** — if
+  you've got Dora's inferred levels switched off (Settings → Assistant), the order is the
+  plain most-overdue-first one it always was.
+- **There's a new recipe layout to try, next to the old one (2026-08-20).** A recipe page
+  now has a **New layout** button, and the redesigned page has one back the other way, so
+  you can flip between the two on the same recipe and see which you prefer. The new one
+  has **no edit mode**: tap any value — the name, a quantity, a step — and it becomes an
+  input right there. The heavier jobs (reordering steps, linking ingredients to steps,
+  managing photos) live in one section under the method instead of being spread through
+  the page. **This is temporary** — the two exist side by side only so one can be chosen,
+  and then the other goes.
+- **The new recipe layout has a Save button again (2026-08-20).** It used to save by
+  itself a moment after every edit, which sounds convenient and wasn't: it could
+  quietly drop an edit if you moved straight on to the next field, one half-finished
+  ingredient would block *every* other change you made, and if you left the page at the
+  wrong moment a failure had nowhere to appear. So editing still happens in place, but
+  now the page tells you there are **Unsaved changes** and gives you **Save** and
+  **Discard**. Leaving with unsaved work asks first, whether you use the back arrow or
+  close the tab, and starting cook mode offers to save first — cooking reads the saved
+  recipe, so it should be the one you just wrote.
+- **The new recipe layout does everything the old one did (2026-08-20).** Working through
+  what was still missing from it:
+  **substitutes are back, and better** — a missing ingredient now carries its own chip
+  saying what you could use instead, and, crucially, *whether you have it* ("Use
+  passata"), with the swap ratio and your note; the "Right now" panel says how many of
+  the missing things you already have a substitute for, which is usually the difference
+  between cooking tonight and not. Anything the substitute itself is short of can go
+  straight on a list. As before, swapping is a **cooking-time** decision — it happens in
+  cook mode and never rewrites your recipe.
+  **Ingredients have their full editor back** — tap an ingredient's name and you get
+  its pantry item (or **free text**, for something you don't track), quantity and unit,
+  which **section** it belongs to, whether it's **optional**, and a **note**. Those last
+  four were in your recipes but unreachable from the new page.
+  **Sections work properly** — you can create, rename, reorder and delete them under
+  **Organise ingredients**, an empty one says so instead of vanishing, and an ingredient
+  can actually be put in one. Ingredient order is yours to set there too.
+  **"When" is back** on the recipe's facts, so a recipe can be a breakfast again.
+  And every editable value is now reachable by keyboard and announces what it edits.
+- **Your stock list now opens on what needs you (2026-08-20).** It used to open
+  alphabetically, which is a fine way to find a thing you already have in mind and a
+  useless way to answer "what should I deal with?". The new default sort puts the rows
+  that need you at the top, most urgent first, ordinary rows in the middle, and things
+  that are out of stock but never marked essential at the bottom — the same three
+  groups the row colours already show, so **where a row sits and how it looks now say
+  the same thing**. Name, Stock level, Last updated and Expiry are all still there in
+  the sort box, and if you'd picked one it's remembered as before.
+- **Nothing on a stock row pulses any more (2026-08-20).** The level box used to
+  breathe when an item was due a stocktake, and wear an amber ring when Dora thought
+  the level was wrong — two moving/ringed decorations that, to anyone reading the row,
+  meant the same thing: *this number might be out of date*. They're now one **dashed
+  edge** on the level box, and the level picker tells you which of the two it is and
+  why. Animation is the loudest thing a screen can do, and it was being spent on "go
+  count something sometime this fortnight".
+- **The Stocktake button glows only when an essential is due (2026-08-20).** It used
+  to glow whenever *anything* was due a count — which, once you've got a pantry of any
+  size, is always, so it stopped meaning anything (and the complaint about it was that
+  it wasn't noticeable enough, which is what a permanent glow feels like). Now it
+  glows when one of the items due is something you've flagged **essential**, and waits
+  quietly with its count the rest of the time. The number due is always on the button
+  either way.
+- **A row can't be highlighted and greyed out at the same time (2026-08-20).** An item
+  that had expired *and* was out of stock *and* wasn't marked essential got both the
+  "needs attention" outline and the faded "nothing to do here" treatment — the two
+  opposite instructions on one row. Attention wins; the fade is for items with nothing
+  to act on.
 - **Alerts got a lot quieter, and the ones left mean something (2026-08-20).** Dora had
   nine kinds of alert, and three of them fired constantly on things you could already
   see: an item running **low**, an item being **out of stock**, and an item being **due

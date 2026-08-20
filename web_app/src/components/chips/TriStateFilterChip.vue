@@ -1,7 +1,12 @@
 <template>
+    <!-- DR-15 / D-010: same micro-feedback pair as FilterChip, and this
+         control needs it more — one click can move between three states whose
+         only difference is a fill colour and a label, so the bump is what
+         confirms the cycle advanced rather than the click missing. -->
     <q-chip
         clickable
         outline
+        :class="['dora-press', cycleFeedback]"
         :selected="modelValue !== 'off'"
         :color="chipColour"
         :text-color="modelValue !== 'off' ? 'white' : undefined"
@@ -26,6 +31,7 @@
      *   the "not X" mode. The label and icon can swap in this mode so the
      *   user reads the negation directly.
      */
+    import { useMicroFeedback } from 'src/composables/useMicroFeedback';
     import { computed } from 'vue';
 
     export type TriState = 'off' | 'include' | 'exclude';
@@ -63,6 +69,8 @@
         if (props.modelValue === 'exclude') return props.excludeColor;
         return undefined;
     });
+
+    const cycleFeedback = useMicroFeedback(() => props.modelValue, 'bump');
 
     function onCycle(): void {
         const next: TriState =

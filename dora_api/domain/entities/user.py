@@ -286,6 +286,19 @@ class User(BaseEntity):
     # up, and evening is the only hour where the brief is *actionable* (you
     # can still defrost something or fill a gap in the plan).
     daily_brief_enabled: bool = False
+    # Chunk 6 / D-4 — when this user last finished a stocktake session. The
+    # Sweep phase needs it: it shows items that dropped out of rotation *since
+    # your last run*, not the full excluded set (the tin you stopped buying two
+    # years ago is supposed to stay invisible — surfacing it every session is
+    # exactly the nagging this plan removes). "Newly excluded" is therefore an
+    # event relative to a per-user watermark.
+    #
+    # **Per-user, not household**, deliberately: a stocktake is a shared
+    # activity but "what changed since *I* last looked" is a personal question,
+    # and two people sharing a pantry would otherwise blank each other's Sweep.
+    # NULL = never run one; the Sweep phase stays empty on a first session
+    # rather than dumping every long-dead item into it.
+    stocktake_last_session_at: datetime | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -319,3 +332,4 @@ class User(BaseEntity):
         LLM_PROVIDER = "llm_provider"
         SHOW_ASSISTANT = "show_assistant"
         DAILY_BRIEF_ENABLED = "daily_brief_enabled"
+        STOCKTAKE_LAST_SESSION_AT = "stocktake_last_session_at"

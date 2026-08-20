@@ -1774,6 +1774,43 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `components/filters/FilterRow.vue`; ~4.5kB of page-level override CSS deleted
   across two pages.
 
+### R-049 — An always-editable surface owns its commit
+- **Rule:** A surface that edits values in place (no read/edit mode) must
+  provide **all four** of: a dirty flag; an explicit **Save** the user presses,
+  plus a way to discard; a **navigation and unload guard** while dirty; and
+  cleanup, on unmount, of every timer or listener it started. **Debounced
+  autosave is banned** on such a surface. Never re-hydrate the edit model from
+  the server except on a load or on a save the user asked for — a background
+  refresh landing mid-edit rebinds open editors to orphaned objects and drops
+  the edit with no error. Validation that can refuse the save must also mark the
+  **specific row or field** responsible, not just report a count.
+- **Why:** all four came off one page (`RecipeDetailNext.vue`, ADR-045), where
+  the missing pieces produced three distinct silent-data-loss paths. Autosave
+  looks like the user-friendly option and is the opposite: it makes every save
+  failure a notification the user may not be looking at, and every unrelated
+  edit hostage to the one incomplete row. Pairs with **D-019** — that rule says
+  don't inert the fields while saving; this one says the save must therefore be
+  something the user chose.
+
+### R-050 — Never sequence app state behind a paint callback
+- **Rule:** `requestAnimationFrame` may only *drive* an animation, never gate a
+  state change, a class write, a cleanup, or an unmount. Anything that must
+  still happen when the tab is backgrounded, throttled, or never composited goes
+  on `nextTick` / `setTimeout` / an event. The same applies to waiting on
+  `transitionend` / `animationend` as the *only* path out of a state — pair it
+  with a timeout, or drive the unmount from the timer and let the transition be
+  decoration. A rule of thumb: if the code would leave the user stuck, or leave a
+  class stuck on, when no frame is ever painted, it's wrong.
+- **Why:** it has now bitten twice from opposite directions. The boot splash was
+  dismissed by a `<Transition>` whose `done` hook assumed paint, so a throttled
+  tab wedged full-screen behind a z-9000 overlay (DR-8, FU-578 #23/26). Then
+  DR-15's micro-feedback composable scheduled its class write inside `rAF`,
+  where the failure is silent instead of fatal — the feedback simply never
+  happens and nothing says so. Fatal or silent, the cause is the same
+  assumption, and rAF genuinely does not fire in a backgrounded tab or in the
+  verify pane. Extends D-007/B10, which state the same thing for *dismissal* of
+  a blocking surface; this rule generalises it to all state.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -3006,6 +3043,65 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   by eye. Rules out "just add a class to make it look the same" as an acceptable
   answer to a consistency report.
 - **Promotes rule:** R-048.
+
+### ADR-045 — Inline editing needs an explicit commit; retires D-015's read-view clause (promotes R-049)
+- **Date / task:** 2026-08-20 (recipe-view redesign, parity pass)
+- **Status:** accepted
+- **Context:** The redesigned recipe page (`RecipeDetailNext.vue`) replaced the
+  read-view/edit-mode detail pattern with values that edit in place, and paired
+  it with a **500 ms debounced autosave** behind every commit — no Save button,
+  a transient pill as the only feedback. Three defects followed from the
+  autosave, not from the inline editing: (1) each save ended in a re-fetch that
+  re-hydrated the form, so a save firing while a second popup-edit was open
+  rebound that popup to an orphaned row object and silently dropped the edit;
+  (2) a newly-added ingredient row failed the server's anchor check, which
+  refused *every unrelated* save until it was filled — with no button to retry
+  from; (3) navigating inside the debounce window sent the PATCH from a
+  component that was being torn down, so a failure had nowhere to report. The
+  page also had no `onUnmounted`, no route guard and no dirty flag. Separately,
+  **D-015** forbade always-editable detail pages — a clause written against the
+  *old* recipe page, which this one replaces.
+- **Decision:** Inline editing is an accepted detail-page anatomy. The
+  **commit** is not optional: an editable surface owns a dirty flag, an explicit
+  Save (and a Discard), a route/unload guard, and cleanup of any timer it
+  starts. Never re-hydrate a form from the server except at a moment the user
+  asked for — a load, or a save they pressed. Validation that can refuse a save
+  is reported **on the offending row**, not only as a count in a message.
+  D-015's read-view clause is retired (deleted, not carved out) because its only
+  named counterexample no longer exists.
+- **Consequences:** Costs a visible Save button on a surface whose pitch was
+  "no modes" — accepted, because the alternative was a page that could lose an
+  edit without saying so. Makes D-019's ban on autosave-plus-disabled-fields the
+  general case rather than a field-level footnote: if the fields can't be
+  inerted mid-edit, the commit has to be a deliberate act. Any future
+  inline-edit surface inherits the same four obligations, which is what R-049
+  makes checkable.
+- **Promotes rule:** R-049.
+
+### ADR-046 — Paint is decoration, never a step in a sequence (promotes R-050)
+- **Date / task:** 2026-08-20 (DR-15 micro-motion pass)
+- **Status:** accepted
+- **Context:** DR-15 added a composable that applies a one-shot CSS class for a
+  single animation cycle. Its first draft cleared and re-applied the class
+  across a `requestAnimationFrame` — the textbook trick for restarting a CSS
+  animation. Verifying it exposed the flaw: rAF never fires in a backgrounded or
+  throttled tab (nor in the verify pane, which doesn't composite), so the class
+  was scheduled and never written. Unlike the DR-8 splash wedge — the same
+  assumption, but fatal and therefore found immediately — this failure is
+  invisible: motion is polish, so nothing breaks, nothing logs, and the feature
+  is just quietly absent for some users forever.
+- **Decision:** rAF drives animation frames and nothing else. State writes,
+  class writes, cleanups and unmounts sequence on `nextTick`, `setTimeout`, or a
+  user event. Where a transition/animation end event is the natural signal, it
+  gets a timeout fallback, or the timer owns the transition and the event is
+  ignored.
+- **Consequences:** Gives up the exact-frame animation restart, so a second
+  change landing inside one 120ms cycle may not restart the animation — accepted:
+  the cost is one missed polish frame, against a whole feature silently not
+  running. Every future motion helper inherits the constraint, which is what
+  R-050 makes checkable. Does not change the reduced-motion kill-switch, which
+  is already CSS-only and paint-independent.
+- **Promotes rule:** R-050.
 
 ## Known fixes / things to try
 

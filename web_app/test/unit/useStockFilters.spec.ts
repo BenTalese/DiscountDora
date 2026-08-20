@@ -114,8 +114,27 @@ const MEMBERSHIP: Membership = {
     ],
 };
 
-/** Build the composable over the standard fixture set. */
+/**
+ * Build the composable over the standard fixture set, pinned to NAME-ascending.
+ *
+ * The composable's own default axis is `attention` (D-9, Chunk 4) — asserted
+ * separately below. Every filtering test here is about *which* items survive a
+ * predicate, and reading those assertions is far easier against alphabetical
+ * order than against an urgency ramp that shifts whenever a fixture's
+ * attention state changes. Sorting tests set their own axis anyway.
+ */
 function makeFilters(overrides: {
+    membership?: Membership | null;
+    needsCheckIds?: () => ReadonlySet<string>;
+} = {}) {
+    const filters = makeFiltersOnDefaultSort(overrides);
+    filters.sortBy.value = 'name';
+    filters.sortDir.value = 'asc';
+    return filters;
+}
+
+/** Same fixtures, sort left exactly as the composable ships it. */
+function makeFiltersOnDefaultSort(overrides: {
     membership?: Membership | null;
     needsCheckIds?: () => ReadonlySet<string>;
 } = {}) {
@@ -297,6 +316,53 @@ describe('useStockFilters — sorting', () => {
     // orderings are unchanged from the six-combined-key era on purpose —
     // that's what makes them a regression check on the rewrite, not just a
     // restatement of the new code.
+    // ── The default axis (D-9, Chunk 4) ─────────────────────────────────
+    // Three bands, and they must be the SAME three the row paints (D-8):
+    // outlined on top, plain in the middle, dimmed at the bottom. If these
+    // two ever disagree the page tells the user one thing with position and
+    // the opposite with colour, which is the defect the whole chunk exists
+    // to remove.
+    it('defaults to the attention axis, most urgent first', () => {
+        const f = makeFiltersOnDefaultSort();
+        expect(f.sortBy.value).toBe('attention');
+        expect(f.sortDir.value).toBe('asc');
+        // Band 0, severity then name: Bread/Cheese/Egg are high, Dill medium.
+        // Band 1: Apple, Flour (low but not essential — Step-0 Q1 says quiet).
+        expect(names(f)).toEqual(['Bread', 'Cheese', 'Egg', 'Dill', 'Apple', 'Flour']);
+    });
+
+    it('sinks out-of-stock non-essentials below ordinary rows, and flips whole', () => {
+        // Needs its own fixture set: the shared one has no band-2 item, and
+        // adding one there would move every count assertion in this file.
+        const items: StockItem[] = [
+            item({ stock_item_id: 'si-1', name: 'Quiet', stock_level_id: 'lv-stocked' }),
+            item({
+                stock_item_id: 'si-2', name: 'Ignorable', stock_level_id: 'lv-out',
+                is_out_of_stock: true,
+            }),
+            item({
+                stock_item_id: 'si-3', name: 'Urgent', stock_level_id: 'lv-out',
+                is_out_of_stock: true, is_essential: true,
+                needs_attention: true, attention_severity: 'high',
+                attention_kinds: ['essential_low'],
+            }),
+        ];
+        const f = useStockFilters({
+            stockItems: () => items,
+            stockLevels: () => LEVELS,
+            locationTree: () => [],
+            recipes: () => [],
+            stockGroups: () => [],
+            membership: () => null,
+        });
+        expect(names(f)).toEqual(['Urgent', 'Quiet', 'Ignorable']);
+        // Descending reverses the ramp end to end — it does NOT hold the
+        // dimmed band at the bottom (unlike the expiry axis's nulls, which
+        // are a property of the data rather than of urgency).
+        f.sortDir.value = 'desc';
+        expect(names(f)).toEqual(['Ignorable', 'Quiet', 'Urgent']);
+    });
+
     it('name descending reverses the alphabetical order', () => {
         const f = makeFilters();
         f.sortBy.value = 'name';
@@ -363,9 +429,13 @@ describe('migrateStockSort — persisted sorts survive the axis/direction split'
         expect(migrateStockSort('updated')).toEqual({ sortBy: 'updated', sortDir: 'desc' });
     });
 
-    it('falls back to name ascending for junk or missing values', () => {
-        expect(migrateStockSort(null)).toEqual({ sortBy: 'name', sortDir: 'asc' });
-        expect(migrateStockSort('nonsense')).toEqual({ sortBy: 'name', sortDir: 'asc' });
+    it('falls back to the DEFAULT axis (attention) for junk or missing values', () => {
+        // D-9 moved the default off Name. A stored 'name' is still honoured —
+        // that's a choice someone made — but nothing stored means the new
+        // default, not the old one.
+        expect(migrateStockSort(null)).toEqual({ sortBy: 'attention', sortDir: 'asc' });
+        expect(migrateStockSort('nonsense')).toEqual({ sortBy: 'attention', sortDir: 'asc' });
+        expect(migrateStockSort('name')).toEqual({ sortBy: 'name', sortDir: 'asc' });
     });
 });
 

@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 /**
- * Compact cookbook row layout — the two structural changes from the owner's
- * 2026-08-19 feedback:
+ * Compact cookbook row layout — the structural changes from the owner's
+ * 2026-08-19 and 2026-08-20 feedback:
  *
- *   - "Remove the second info line under the recipe name in compact view,
- *      looks too cluttered."
+ *   - 2026-08-19: "Remove the second info line under the recipe name in compact
+ *      view, looks too cluttered." (The line held five facts: collection ·
+ *      cuisine · category · time · count.)
+ *   - 2026-08-20: "In compact view, in desktop view put time and ingredient
+ *      count right or underneath of recipe name." So the second line is back —
+ *      as exactly two facts, desktop only. These two supersede each other on
+ *      the *contents* of the line, not on the principle: the assertions below
+ *      pin the line to those two facts so it cannot re-accumulate the other
+ *      three.
  *   - "Put the expiring ingredients chip with the buttons on the right,
  *      otherwise in compact view it goes all over the place (not consistently
  *      lined up)."
@@ -39,6 +46,8 @@ function recipeOf(overrides: Partial<Recipe> = {}): Recipe {
         ingredients: [],
         collection_name: 'Weeknights',
         cuisine_name: 'Italian',
+        prep_time_minutes: 15,
+        cook_time_minutes: 30,
         total_time_minutes: 45,
         expiring_ingredient_count: 0,
         expiring_soonest_date: null,
@@ -62,18 +71,42 @@ beforeEach(() => {
 });
 
 describe('RecipeRow — compact layout', () => {
-    it('renders the recipe name and no second info line', () => {
-        const wrapper = mountRow(recipeOf());
+    it('renders the recipe name', () => {
+        expect(mountRow(recipeOf()).find('.recipe-row__name').text()).toBe('Lasagne');
+    });
 
-        expect(wrapper.find('.recipe-row__name').text()).toBe('Lasagne');
+    it('puts time and ingredient count under the name, and only those two', () => {
+        // jsdom reports a desktop viewport, so `compact` is false — the branch
+        // the owner's note is about.
+        const wrapper = mountRow(recipeOf({
+            ingredients: [{ stock_item_id: 's1' }, { stock_item_id: 's2' }],
+        } as Partial<Recipe>));
+
+        const facts = wrapper.findAll('.recipe-row__meta .recipe-row__fact');
+        expect(facts.map((f) => f.text())).toEqual(['45m', '2']);
+    });
+
+    it('drops the whole line when neither fact has a value', () => {
+        // Not an empty band: the row falls back to one line, as it does on a
+        // phone. `total_time_minutes: null` + no ingredients = nothing to say.
+        const wrapper = mountRow(recipeOf({
+            prep_time_minutes: null,
+            cook_time_minutes: null,
+        } as Partial<Recipe>));
         expect(wrapper.find('.recipe-row__meta').exists()).toBe(false);
     });
 
-    it('keeps the name zone to a single child, so nothing re-grows under it', () => {
-        // Guards the shape rather than one class name: the clutter complaint was
-        // about a *second line*, whatever it ends up being called.
-        const zone = mountRow(recipeOf()).find('.recipe-row__name-zone');
-        expect(zone.element.children).toHaveLength(1);
+    it('keeps the second line to the name zone, not the chip cluster', () => {
+        // The 2026-08-19 clutter complaint in its durable form: whatever the
+        // line holds, it belongs under the name (fixed left edge) and the chip
+        // cluster keeps only the opinion chips.
+        const wrapper = mountRow(recipeOf({
+            ingredients: [{ stock_item_id: 's1' }],
+        } as Partial<Recipe>));
+
+        expect(wrapper.find('.recipe-row__name-zone .recipe-row__meta').exists())
+            .toBe(true);
+        expect(wrapper.findAll('.recipe-row__chips .recipe-row__fact')).toHaveLength(0);
     });
 
     it('omits the expiring chip unless the cookbook asked for it', () => {

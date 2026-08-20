@@ -157,6 +157,19 @@ class AppSetting(BaseEntity):
     # call) — on by default so a fresh install "just works".
     stocktake_default_cadence_band: str = "fortnightly"
     stocktake_auto_tuning_enabled: bool = True
+    # 2026-08-20 owner feedback — the install-wide stocktake master switch and
+    # the opt-in default it hands new items.
+    # `stocktake_enabled` False = the feature doesn't exist for this install:
+    # the Stock-overview button, the "Needs check" filter, the per-item mute
+    # toggle and the queue all disappear, and `resolve_overdue_map` (the single
+    # overdue authority, R-003) returns an empty map so the alerts bell can't
+    # nag about a surface nobody can open.
+    # `stocktake_new_items_opt_in` is what `create_stock_item` seeds
+    # `StockItem.stocktake_alerts_are_enabled` with — True keeps the 2026-08-17
+    # "an item you bothered to add is one you want checked" default; False lets
+    # an install opt items in by hand instead.
+    stocktake_enabled: bool = True
+    stocktake_new_items_opt_in: bool = True
     # FU-317 (D5 install-wide, FU-517) — household-shared posture for the
     # daily meal-plan reconcile sweep. TRUE (default) keeps today's silent
     # `reconcile_consumed_meals` drain plus a new receipt the user can
@@ -265,6 +278,8 @@ class AppSetting(BaseEntity):
         IMAGE_MAX_DIMENSION = "image_max_dimension"
         STOCKTAKE_DEFAULT_CADENCE_BAND = "stocktake_default_cadence_band"
         STOCKTAKE_AUTO_TUNING_ENABLED = "stocktake_auto_tuning_enabled"
+        STOCKTAKE_ENABLED = "stocktake_enabled"
+        STOCKTAKE_NEW_ITEMS_OPT_IN = "stocktake_new_items_opt_in"
         AUTO_DRAIN_PAST_MEALS = "auto_drain_past_meals"
         AUTO_ADD_MODE = "auto_add_mode"
         HOUSEHOLD_HEADCOUNT = "household_headcount"

@@ -44,6 +44,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.auth.admin_gate import require_admin
 from dora_api.features.data.uploads import staged_path
 from dora_api.features.routers import DATA_ROUTER
@@ -388,6 +389,15 @@ class CommitSpreadsheetHandler:
         if not rows:
             return f"Sheet '{request.sheet}' is empty."
 
+        # 2026-08-20 — same install-wide default `create_stock_item` uses, read
+        # once for the whole import rather than per row (R-003: one authority
+        # for "does a new item join the stocktake rotation").
+        stocktake_opt_in = bool(getattr(
+            get_or_create_app_setting(self.repository),
+            "stocktake_new_items_opt_in",
+            True,
+        ))
+
         header = [str(h) if h is not None else "" for h in rows[0]]
         # name is mandatory; if the user mapped no Name column we can't
         # do anything useful — fail before touching the DB.
@@ -503,9 +513,10 @@ class CommitSpreadsheetHandler:
                     id=uuid4(),
                     name=row_name,
                     notes=None,
-                    # Matches the hand-created default (2026-08-17) — an
+                    # Matches the hand-created default (2026-08-17, now the
+                    # install-wide `stocktake_new_items_opt_in` setting) — an
                     # imported item is still one the user chose to track.
-                    stocktake_alerts_are_enabled=True,
+                    stocktake_alerts_are_enabled=stocktake_opt_in,
                     stock_level_id=stock_level_id,
                     stock_location_id=stock_location_id,
                     stock_group_id=stock_group_id,

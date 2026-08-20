@@ -140,7 +140,7 @@
                     </BaseButton>
                     <!-- Temporary hatch to the redesigned page so the two can
                          be compared on the same recipe. One of them gets
-                         deleted — see FU-683. -->
+                         deleted — see FU-688. -->
                     <BaseButton
                         variant="subtle"
                         :icon="ICONS.auto_awesome"

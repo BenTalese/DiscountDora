@@ -22,17 +22,31 @@
 
         <q-card-section class="q-pt-none q-pb-xs">
             <div class="row q-gutter-xs items-center">
-                <q-chip v-if="totalTime !== null" dense :icon="ICONS.schedule">
+                <!-- Icon set matched to the filter row (owner feedback
+                     2026-08-20). `timer` = a length of time; `schedule`
+                     (clock) is reserved for a time OF day, i.e. the meal-slot
+                     facet — the two were sharing a clock. -->
+                <q-chip v-if="totalTime !== null" dense :icon="ICONS.timer">
                     {{ totalTime }}m
                 </q-chip>
-                <q-chip v-if="recipe.servings" dense :icon="ICONS.restaurant">
+                <!-- `restaurant` (fork-and-knife) is the app-wide glyph for
+                     "a meal" — dashboard, alerts, meal plans, help. Servings
+                     is a count of people, and now says so; it also matches
+                     the new "Serves ≥" filter. -->
+                <q-chip v-if="recipe.servings" dense :icon="ICONS.people">
                     Serves {{ recipe.servings }}
                 </q-chip>
-                <q-chip v-if="ingredientCount > 0" dense :icon="ICONS.ingredients">
+                <!-- A count, so `ingredientCount` (counter) — the same glyph
+                     as the "Ingredient count ≤" filter. `ingredients`
+                     (food-variant) stays on the Ingredients *picker*, which is
+                     about which items, not how many. -->
+                <q-chip v-if="ingredientCount > 0" dense :icon="ICONS.ingredientCount">
                     {{ ingredientCount }}
                     {{ ingredientCount === 1 ? 'ingredient' : 'ingredients' }}
                 </q-chip>
-                <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
+                <!-- Was `star_outline`, which reads as a rating. Difficulty
+                     has its own glyph and the filter already used it. -->
+                <q-chip v-if="recipe.difficulty" dense :icon="ICONS.difficulty">
                     {{ recipe.difficulty }}
                 </q-chip>
                 <!-- FU-637 — kcal per serving while you're choosing, which is

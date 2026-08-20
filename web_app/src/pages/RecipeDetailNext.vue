@@ -24,13 +24,12 @@
                  toolbar row, hero image and 11-field meta card. -->
             <div class="rn__masthead">
                 <ImageEditTile
-                    v-if="hasPhoto || photoBusy"
+                    v-if="hasPhoto"
                     class="rn__photo"
                     label="Change the recipe photo"
                     shape="rounded"
                     :width="0"
                     :height="0"
-                    :busy="photoBusy"
                     @pick="onPickPhoto"
                 >
                     <img v-if="photoUrl" :src="photoUrl" alt="" class="rn__photoimg" />
@@ -56,14 +55,14 @@
                             aria-label="Back to cookbook"
                         />
                         <h1 class="rn__title">
-                            <span class="rn__edit" tabindex="0">
+                            <InlineEditTarget class="rn__edit" label="Edit the recipe name">
                                 {{ form.name || 'Untitled recipe' }}
                                 <q-popup-edit
                                     v-model="form.name"
                                     v-slot="scope"
                                     auto-save
                                     :validate="(v) => !!(v || '').trim()"
-                                    @save="onFieldSaved"
+                                    @save="markDirty"
                                 >
                                     <q-input
                                         v-model="scope.value"
@@ -75,14 +74,14 @@
                                         @keyup.enter="scope.set"
                                     />
                                 </q-popup-edit>
-                            </span>
+                            </InlineEditTarget>
                         </h1>
                     </div>
 
                     <div class="rn__eyebrow">
-                        <span class="rn__edit" tabindex="0">
+                        <InlineEditTarget class="rn__edit" label="Edit the collection">
                             {{ collectionName || 'No collection' }}
-                            <q-popup-edit v-model="form.recipe_collection_id" v-slot="scope" @save="onFieldSaved">
+                            <q-popup-edit v-model="form.recipe_collection_id" v-slot="scope" @save="markDirty">
                                 <BaseSelect
                                     v-model="scope.value"
                                     label="Collection"
@@ -94,11 +93,11 @@
                                     @update:model-value="scope.set"
                                 />
                             </q-popup-edit>
-                        </span>
+                        </InlineEditTarget>
                         <span class="rn__dot">·</span>
-                        <span class="rn__edit" tabindex="0">
+                        <InlineEditTarget class="rn__edit" label="Edit the cuisine">
                             {{ cuisineName || 'Any cuisine' }}
-                            <q-popup-edit v-model="form.cuisine_id" v-slot="scope" @save="onFieldSaved">
+                            <q-popup-edit v-model="form.cuisine_id" v-slot="scope" @save="markDirty">
                                 <BaseSelect
                                     v-model="scope.value"
                                     label="Cuisine"
@@ -110,11 +109,11 @@
                                     @update:model-value="scope.set"
                                 />
                             </q-popup-edit>
-                        </span>
+                        </InlineEditTarget>
                         <span class="rn__dot">·</span>
-                        <span class="rn__edit" tabindex="0">
+                        <InlineEditTarget class="rn__edit" label="Edit the category">
                             {{ categoryName || 'No category' }}
-                            <q-popup-edit v-model="form.category_id" v-slot="scope" @save="onFieldSaved">
+                            <q-popup-edit v-model="form.category_id" v-slot="scope" @save="markDirty">
                                 <BaseSelect
                                     v-model="scope.value"
                                     label="Category"
@@ -126,36 +125,36 @@
                                     @update:model-value="scope.set"
                                 />
                             </q-popup-edit>
-                        </span>
+                        </InlineEditTarget>
                     </div>
 
                     <div class="rn__facts">
                         <div class="rn__fact">
                             <span class="rn__factk">Serves</span>
-                            <span class="rn__factv rn__edit" tabindex="0">
+                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the number of servings">
                                 {{ form.servings ?? '—' }}
-                                <q-popup-edit v-model.number="form.servings" v-slot="scope" auto-save @save="onFieldSaved">
+                                <q-popup-edit v-model.number="form.servings" v-slot="scope" auto-save @save="markDirty">
                                     <q-input v-model.number="scope.value" type="number" min="1" dense autofocus label="Servings" @keyup.enter="scope.set" />
                                 </q-popup-edit>
-                            </span>
+                            </InlineEditTarget>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Prep</span>
-                            <span class="rn__factv rn__edit" tabindex="0">
+                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the prep time">
                                 {{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '—' }}
-                                <q-popup-edit v-model.number="form.prep_time_minutes" v-slot="scope" auto-save @save="onFieldSaved">
+                                <q-popup-edit v-model.number="form.prep_time_minutes" v-slot="scope" auto-save @save="markDirty">
                                     <q-input v-model.number="scope.value" type="number" min="0" dense autofocus label="Prep (min)" @keyup.enter="scope.set" />
                                 </q-popup-edit>
-                            </span>
+                            </InlineEditTarget>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Cook</span>
-                            <span class="rn__factv rn__edit" tabindex="0">
+                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the cook time">
                                 {{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '—' }}
-                                <q-popup-edit v-model.number="form.cook_time_minutes" v-slot="scope" auto-save @save="onFieldSaved">
+                                <q-popup-edit v-model.number="form.cook_time_minutes" v-slot="scope" auto-save @save="markDirty">
                                     <q-input v-model.number="scope.value" type="number" min="0" dense autofocus label="Cook (min)" @keyup.enter="scope.set" />
                                 </q-popup-edit>
-                            </span>
+                            </InlineEditTarget>
                         </div>
                         <div v-if="totalMinutes !== null" class="rn__fact">
                             <span class="rn__factk">Total</span>
@@ -163,9 +162,9 @@
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Difficulty</span>
-                            <span class="rn__factv rn__edit" tabindex="0">
+                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the difficulty">
                                 {{ form.difficulty || '—' }}
-                                <q-popup-edit v-model="form.difficulty" v-slot="scope" @save="onFieldSaved">
+                                <q-popup-edit v-model="form.difficulty" v-slot="scope" @save="markDirty">
                                     <BaseSelect
                                         v-model="scope.value"
                                         label="Difficulty"
@@ -175,8 +174,25 @@
                                         @update:model-value="scope.set"
                                     />
                                 </q-popup-edit>
-                            </span>
+                            </InlineEditTarget>
                         </div>
+                        <div class="rn__fact">
+                            <span class="rn__factk">When</span>
+                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the meal this suits">
+                                {{ form.time_of_day || '—' }}
+                                <q-popup-edit v-model="form.time_of_day" v-slot="scope" @save="markDirty">
+                                    <BaseSelect
+                                        v-model="scope.value"
+                                        label="Time of day"
+                                        :options="timeOfDayOptions"
+                                        clearable
+                                        autofocus
+                                        @update:model-value="scope.set"
+                                    />
+                                </q-popup-edit>
+                            </InlineEditTarget>
+                        </div>
+
                         <div v-if="headlineKcal !== null" class="rn__fact">
                             <span class="rn__factk">Per serving</span>
                             <span class="rn__factv">{{ headlineKcal }} kcal</span>
@@ -185,10 +201,35 @@
                 </div>
             </div>
 
-            <!-- ═══ Actions — their own full-width row ═══════════════════ -->
+            <!-- ═══ Actions — their own full-width row ═══════════════════
+                 Save and Discard only exist while there is something to save,
+                 so a recipe being *read* still leads with Cook mode. While
+                 they're present Save is the primary and Cook mode steps back —
+                 two primaries in one row is no primary at all. -->
             <div class="rn__actions">
                 <BaseButton
+                    v-if="dirty"
                     variant="primary"
+                    :icon="ICONS.save"
+                    label="Save"
+                    aria-label="Save changes"
+                    :loading="saveState === 'saving'"
+                    :disable="!canSave"
+                    @click="onSave"
+                />
+                <BaseButton
+                    v-if="dirty"
+                    variant="ghost"
+                    :icon="ICONS.undo"
+                    :label="compact ? undefined : 'Discard'"
+                    aria-label="Discard changes"
+                    :disable="saveState === 'saving'"
+                    @click="onDiscard"
+                >
+                    <q-tooltip v-if="compact">Discard changes</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    :variant="dirty ? 'secondary' : 'primary'"
                     :icon="ICONS.restaurant_menu"
                     :label="compact ? undefined : 'Cook mode'"
                     aria-label="Cook mode"
@@ -248,6 +289,14 @@
                 >
                     <span class="rn__cellk">Right now</span>
                     <span class="rn__cellv">{{ cookableHeadline }}</span>
+                    <!-- "You're missing two things, but you have a substitute
+                         for one" is a different answer to "you're missing two
+                         things", so it belongs in the cell that answers it. -->
+                    <span v-if="coverableCount > 0" class="rn__cellsub">
+                        {{ coverableCount === 1
+                            ? '1 has a substitute you already have'
+                            : `${coverableCount} have substitutes you already have` }}
+                    </span>
                     <button
                         v-if="missingIngredients.length > 0"
                         type="button"
@@ -314,38 +363,59 @@
                                         :key="row.client_id"
                                         :class="{ 'rn__ing--lit': litIngredients.has(String(row.client_id)) }"
                                     >
-                                        <span class="rn__qty rn__edit" tabindex="0">
+                                        <InlineEditTarget
+                                            class="rn__qty rn__edit"
+                                            :label="`Edit how much ${ingredientLabel(row)}`"
+                                        >
                                             {{ formatQuantity(row.quantity, row.unit) || '—' }}
-                                            <q-popup-edit v-model="row.quantity" v-slot="scope" auto-save @save="onFieldSaved">
+                                            <q-popup-edit v-model="row.quantity" v-slot="scope" auto-save @save="markDirty">
                                                 <div class="row q-gutter-sm items-center">
                                                     <q-input v-model.number="scope.value" type="number" min="0" step="any" dense autofocus label="Qty" style="width: 90px" @keyup.enter="scope.set" />
-                                                    <q-input v-model="row.unit" dense label="Unit" style="width: 110px" @update:model-value="onFieldSaved" />
+                                                    <q-input v-model="row.unit" dense label="Unit" style="width: 110px" @update:model-value="markDirty" />
                                                 </div>
                                             </q-popup-edit>
-                                        </span>
+                                        </InlineEditTarget>
                                         <span class="rn__ingname">
-                                            <span class="rn__edit" tabindex="0">
+                                            <!-- Opens the whole row's editor rather
+                                                 than a bare stock-item picker: an
+                                                 ingredient also carries a free-text
+                                                 anchor, a section, an optional flag
+                                                 and a note, and all four were
+                                                 unreachable from this page. -->
+                                            <button
+                                                type="button"
+                                                class="rn__edit rn__ingbtn"
+                                                :aria-label="`Edit ${ingredientLabel(row)}`"
+                                                @click="openRowEditor(String(row.client_id))"
+                                            >
                                                 {{ ingredientLabel(row) }}
-                                                <q-popup-edit v-model="row.stock_item_id" v-slot="scope" @save="onFieldSaved">
-                                                    <BaseSelect
-                                                        v-model="scope.value"
-                                                        label="Stock item"
-                                                        :options="stockItemOptions"
-                                                        emit-value
-                                                        map-options
-                                                        use-input
-                                                        autofocus
-                                                        @update:model-value="scope.set"
-                                                    />
-                                                </q-popup-edit>
-                                            </span>
+                                            </button>
                                             <q-chip v-if="row.is_optional" dense square size="sm" class="rn__chip">Optional</q-chip>
+                                            <!-- A row with neither an item nor text is
+                                                 the one thing that can refuse the save,
+                                                 so it says so on the row instead of only
+                                                 in the save message. -->
                                             <q-chip
-                                                v-if="!row.stock_item_id"
+                                                v-if="isHalfBuilt(row)"
+                                                dense square size="sm"
+                                                color="warning"
+                                                text-color="dark"
+                                                class="rn__chip"
+                                                clickable
+                                                @click="openRowEditor(String(row.client_id))"
+                                            >
+                                                Needs an item
+                                            </q-chip>
+                                            <q-chip
+                                                v-else-if="!row.stock_item_id"
                                                 dense square size="sm"
                                                 class="rn__chip rn__chip--unlinked"
                                             >
-                                                Not linked
+                                                Free text
+                                                <q-tooltip>
+                                                    Not linked to a pantry item, so Dora
+                                                    can't tell whether you have it.
+                                                </q-tooltip>
                                             </q-chip>
                                             <q-chip
                                                 v-else-if="isMissingItem(row.stock_item_id)"
@@ -367,6 +437,10 @@
                                                 {{ expiringChipFor(row.stock_item_id)!.label }}
                                                 <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
                                             </q-chip>
+                                            <RecipeIngredientSubstitutes
+                                                :entries="substitutesForRow(row)"
+                                                :ingredient-name="ingredientLabel(row)"
+                                            />
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
                                         <!-- Per-row quick action, revealed on hover/focus. -->
@@ -385,6 +459,13 @@
                                         </span>
                                     </li>
                                 </ul>
+                                <!-- A section you just created has nothing in it
+                                     yet, and saying so is what makes it obvious
+                                     where the ingredients go. -->
+                                <p v-if="group.rows.length === 0" class="rn__ingsecempty">
+                                    Nothing in this section yet — open an ingredient
+                                    and set its section.
+                                </p>
                             </template>
 
                             <p v-if="form.ingredients.length === 0" class="rn__empty">
@@ -415,7 +496,7 @@
                                 { label: 'Text', value: 'freeform' },
                                 { label: 'Photos', value: 'image' },
                             ]"
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                     </div>
 
@@ -425,22 +506,30 @@
                              stores the link. -->
                         <template v-if="form.steps_mode === 'structured'">
                             <ol v-if="topLevelSteps.length > 0" class="rn__steps">
+                                <!-- The `li` was focusable purely to drive the
+                                     ingredient highlight, which put two tab
+                                     stops on every step and named neither. The
+                                     edit target is the stop now, and focus/
+                                     hover on it lights the same rail rows. -->
                                 <li
                                     v-for="step in topLevelSteps"
                                     :key="step.client_id"
-                                    tabindex="0"
                                     :class="{ 'rn__step--lit': litStep === step.client_id }"
                                     @mouseenter="litStep = step.client_id"
                                     @mouseleave="litStep = null"
-                                    @focusin="litStep = step.client_id"
-                                    @focusout="litStep = null"
                                 >
-                                    <p class="rn__edit" tabindex="0">
+                                    <InlineEditTarget
+                                        tag="p"
+                                        class="rn__edit"
+                                        :label="`Edit step ${step.sequence + 1}`"
+                                        @focusin="litStep = step.client_id"
+                                        @focusout="litStep = null"
+                                    >
                                         {{ step.text || 'Empty step' }}
-                                        <q-popup-edit v-model="step.text" v-slot="scope" auto-save @save="onFieldSaved">
+                                        <q-popup-edit v-model="step.text" v-slot="scope" auto-save @save="markDirty">
                                             <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Step" />
                                         </q-popup-edit>
-                                    </p>
+                                    </InlineEditTarget>
                                     <span v-if="step.hint" class="rn__hint">{{ step.hint }}</span>
                                     <span v-if="usesLabel(step)" class="rn__uses">Uses {{ usesLabel(step) }}</span>
                                     <ol v-if="subStepsOf(step).length > 0" class="rn__substeps">
@@ -453,18 +542,28 @@
 
                         <!-- Freeform — one editable block of text. -->
                         <template v-else-if="form.steps_mode === 'freeform'">
-                            <div v-if="freeformLines.length > 0" class="rn__free rn__edit" tabindex="0">
+                            <InlineEditTarget
+                                v-if="freeformLines.length > 0"
+                                tag="div"
+                                class="rn__free rn__edit"
+                                label="Edit the instructions"
+                            >
                                 <p v-for="(line, i) in freeformLines" :key="`f-${i}`">{{ line }}</p>
-                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="onFieldSaved">
+                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="markDirty">
                                     <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Instructions" style="min-width: 320px" />
                                 </q-popup-edit>
-                            </div>
-                            <p v-else class="rn__empty rn__edit" tabindex="0">
+                            </InlineEditTarget>
+                            <InlineEditTarget
+                                v-else
+                                tag="p"
+                                class="rn__empty rn__edit"
+                                label="Add instructions"
+                            >
                                 No instructions yet.
-                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="onFieldSaved">
+                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="markDirty">
                                     <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Instructions" style="min-width: 320px" />
                                 </q-popup-edit>
-                            </p>
+                            </InlineEditTarget>
                         </template>
 
                         <!-- Photo steps. -->
@@ -515,31 +614,59 @@
                             :options="dietaryTagOptions"
                             emit-value map-options multiple use-chips clearable
                             class="q-mb-sm"
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                         <BaseSelect
                             v-model="form.tool_ids"
                             label="Tools"
                             :options="toolSelectOptions"
                             emit-value map-options multiple use-chips clearable
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                     </div>
                 </q-expansion-item>
 
-                <q-expansion-item v-model="detailOpen.sections" dense-toggle label="Ingredient sections" :caption="sectionsCaption">
+                <!-- ── Organise ─────────────────────────────────────────
+                     The shape of the list, in the same place the method keeps
+                     the shape of its steps. Deliberately not drag-and-drop:
+                     the old page's handles doubled as drag-into-a-section, on
+                     the surface most likely to be used one-handed at a bench.
+                     ↑/↓ are keyboard-operable for free and can't fire by
+                     accident while scrolling. -->
+                <q-expansion-item
+                    v-model="detailOpen.sections"
+                    dense-toggle
+                    label="Organise ingredients"
+                    :caption="organiseCaption"
+                >
                     <div class="rn__disc">
                         <p class="rn__hintblock">
-                            Groups the ingredient list under headings — "For the sauce", "To serve".
-                            A recipe with no sections shows one flat list.
+                            Sections group the list under headings — "For the sauce",
+                            "To serve". A recipe with no sections shows one flat list.
                         </p>
-                        <div v-for="(sec, i) in form.sections" :key="sec.client_id" class="row items-center q-gutter-sm q-mb-sm">
+
+                        <div v-for="(sec, i) in orderedSections" :key="sec.client_id" class="rn__secrow">
                             <q-input
                                 v-model="sec.name"
                                 dense outlined
                                 class="col"
+                                placeholder="For the sauce"
                                 label="Section name"
-                                @update:model-value="onFieldSaved"
+                                @update:model-value="markDirty"
+                            />
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.arrow_upward"
+                                :disable="i === 0"
+                                :aria-label="`Move section ${sec.name || i + 1} up`"
+                                @click="moveSection(sec.client_id, -1)"
+                            />
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.arrow_downward"
+                                :disable="i === orderedSections.length - 1"
+                                :aria-label="`Move section ${sec.name || i + 1} down`"
+                                @click="moveSection(sec.client_id, 1)"
                             />
                             <BaseButton
                                 variant="danger-icon"
@@ -548,7 +675,42 @@
                                 @click="removeSection(sec.client_id)"
                             />
                         </div>
-                        <BaseButton variant="subtle" :icon="ICONS.add" label="Add section" @click="addSection" />
+                        <BaseButton
+                            variant="subtle"
+                            :icon="ICONS.add"
+                            label="Add section"
+                            @click="addSection"
+                        />
+
+                        <template v-if="form.ingredients.length > 1">
+                            <div class="rn__discsub">Order</div>
+                            <ol class="rn__order">
+                                <li v-for="(entry, i) in orderedIngredients" :key="entry.row.client_id">
+                                    <span class="rn__ordername">
+                                        {{ ingredientLabel(entry.row) }}
+                                        <span v-if="entry.section" class="rn__ordersec">{{ entry.section }}</span>
+                                    </span>
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.arrow_upward"
+                                        :disable="i === 0"
+                                        :aria-label="`Move ${ingredientLabel(entry.row)} up`"
+                                        @click="moveIngredient(String(entry.row.client_id), -1)"
+                                    />
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.arrow_downward"
+                                        :disable="i === orderedIngredients.length - 1"
+                                        :aria-label="`Move ${ingredientLabel(entry.row)} down`"
+                                        @click="moveIngredient(String(entry.row.client_id), 1)"
+                                    />
+                                </li>
+                            </ol>
+                            <p class="rn__hintblock">
+                                Which section an ingredient belongs to is set on the
+                                ingredient itself — tap its name in the list above.
+                            </p>
+                        </template>
                     </div>
                 </q-expansion-item>
 
@@ -603,13 +765,13 @@
                             dense outlined clearable
                             class="q-mb-sm"
                             label="Source URL"
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                         <q-input
                             v-model="form.notes"
                             dense outlined type="textarea" autogrow
                             label="Notes"
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                     </div>
                 </q-expansion-item>
@@ -627,7 +789,7 @@
                             dense outlined type="number" min="0"
                             label="kcal per serving"
                             style="max-width: 220px"
-                            @update:model-value="onFieldSaved"
+                            @update:model-value="markDirty"
                         />
                     </div>
                 </q-expansion-item>
@@ -672,7 +834,7 @@
                 </q-expansion-item>
             </div>
 
-            <!-- The comparison hatch. Temporary — see FU-683. -->
+            <!-- The comparison hatch. Temporary — see FU-688. -->
             <div class="rn__flip">
                 <BaseButton
                     variant="ghost"
@@ -683,8 +845,16 @@
             </div>
         </template>
 
-        <!-- Save indicator. With no Save button, this is the only thing that
-             tells you a change landed — so it names failures loudly. -->
+        <!-- Two different jobs, deliberately not merged. The dirty pill is a
+             standing statement of fact ("there is unsaved work here") and has
+             to survive until it stops being true; the bar below is a transient
+             outcome. One element doing both is how the old autosave indicator
+             ended up being the only feedback channel for either. -->
+        <div v-if="dirty && saveState !== 'saving'" class="rn__dirty" role="status">
+            <q-icon :name="ICONS.edit" size="14px" />
+            <span>Unsaved changes</span>
+        </div>
+
         <div v-if="saveState !== 'idle'" class="rn__savebar" :class="`rn__savebar--${saveState}`" role="status">
             <q-spinner v-if="saveState === 'saving'" size="16px" />
             <q-icon v-else-if="saveState === 'saved'" :name="ICONS.check" />
@@ -692,13 +862,23 @@
             <span>{{ saveMessage }}</span>
         </div>
 
+        <!-- With an explicit save there is a real answer to "you have unsaved
+             changes, cook anyway?", so the guard is wired to it instead of the
+             hardcoded `false` the autosave version had to pass. -->
         <CookModeGuardDialog
             v-model="cookGuardOpen"
             :recipe="recipe"
-            :dirty="false"
-            :saving="false"
+            :dirty="dirty"
+            :saving="saveState === 'saving'"
             @start="goToCookMode"
-            @save-and-start="goToCookMode"
+            @save-and-start="onSaveAndCook"
+        />
+
+        <RecipeIngredientRowEditor
+            v-model="rowEditorOpen"
+            :row="rowEditorRow"
+            :sections="form.sections"
+            @save="onRowEditorSave"
         />
 
         <RecipeIngredientPickerDialog
@@ -730,19 +910,25 @@
      *
      * Runs in parallel with `RecipeDetailPage.vue` at `/cookbook/:id/new` so the
      * two can be compared on the same recipe; each carries a button to the
-     * other. **One of them is going to be deleted** (FU-683).
+     * other. **This is the page that survives** — the owner's call, 2026-08-20,
+     * conditional on feature parity, which is what the gap-closing pass below
+     * was for. The old page and both hatch buttons go once the route swap
+     * lands (FU-688); Import is deliberately *not* migrated (FU-689 closed
+     * won't-do — importing over an existing recipe was never wanted here).
      *
      * Three things make it different from the old page:
      *
-     * 1. **No modes.** The owner's call: the read/edit toggle and its Edit/Done
-     *    buttons are gone. Values render as text and edit in place via
-     *    `q-popup-edit`, committing on close. This is a deliberate, recorded
-     *    departure from **D-015** ("read-view + explicit edit mode for detail
-     *    pages, never an always-editable form") — the rule exists *because of*
-     *    this page, so reversing it needed to be a decision, not a drift. What
-     *    the rule was protecting against is a wall of form inputs; inline
-     *    editing keeps the page reading as a recipe, which is the rule's
-     *    intent even where it breaks its letter.
+     * 1. **No modes, but an explicit save.** The read/edit toggle is gone —
+     *    values render as text and edit in place via `q-popup-edit`. What is
+     *    *not* gone is the commit: edits mark the form dirty and a Save button
+     *    appears. The first cut autosaved on a 500ms debounce and the owner
+     *    reversed it; see the save block below for the three ways that failed.
+     *    D-015's "read-view + explicit edit mode for detail pages" clause was
+     *    retired when this page won the comparison (FU-688) — it had been
+     *    written against the old page's form-as-detail, which no longer
+     *    exists, and it was the only clause of that rule about detail pages.
+     *    Inline editing keeps the page reading as a recipe, which is what the
+     *    clause was actually protecting.
      * 2. **Structural edits stay behind a disclosure.** Reordering steps,
      *    linking ingredients to steps, managing photos — the things that need a
      *    real editor — live in one expansion under the method, not inline.
@@ -754,8 +940,8 @@
      * All three step modes are supported. Only `structured` can highlight the
      * ingredients a step uses, because it's the only mode that stores the link.
      */
-    import { computed, onMounted, reactive, ref, watch } from 'vue';
-    import { useRoute, useRouter } from 'vue-router';
+    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+    import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
 
@@ -764,6 +950,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
+    import InlineEditTarget from 'src/components/InlineEditTarget.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
@@ -773,6 +960,8 @@
     import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
+    import RecipeIngredientSubstitutes from 'src/components/recipes/RecipeIngredientSubstitutes.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
 
     import { ICONS } from 'src/style/icons';
@@ -786,6 +975,7 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
+    import { DEFAULT_MEAL_SLOTS, DIFFICULTY_VALUES } from 'src/helpers/recipeVocabulary';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import {
         buildUpdateCommand,
@@ -793,18 +983,25 @@
         newClientId,
         useRecipeForm,
         type IngredientForm,
+        type IngredientPatch,
     } from 'src/composables/useRecipeEditor';
 
     import RecipeApiService, { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
     import type { Recipe, RecipeCostLine } from 'src/models/recipe';
+    import type { SubstituteOption } from 'src/components/recipes/recipeSubstituteTypes';
     import type { EditableStep } from 'src/components/recipes/recipeStepEditorTypes';
     import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
 
-    const DIFFICULTY_OPTIONS = ['Easy', 'Medium', 'Hard'];
+    // Domain vocabulary, not a page constant: the same three values rank
+    // recipes in the cookbook's sort. R-003 — one home, four readers.
+    const DIFFICULTY_OPTIONS = [...DIFFICULTY_VALUES];
 
     const $q = useQuasar();
     const route = useRoute();
@@ -814,10 +1011,14 @@
     const stockItemStore = useStockItemStore();
     const recipeVocabStore = useRecipeVocabStore();
     const shoppingListStore = useShoppingListStore();
+    const mealSlotStore = useMealSlotStore();
+    const stockLevelStore = useStockLevelStore();
     const recipeApi = new RecipeApiService();
+    const stockItemApi = new StockItemApiService();
     const { stockItems } = storeToRefs(stockItemStore);
     const { recipeCollections } = storeToRefs(recipeStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
 
     const { moneyEnabled } = useMoneyEnabled();
     const { nutritionEnabled, isComplex } = useNutritionMode();
@@ -837,7 +1038,6 @@
     const newVersionLoading = ref(false);
     const cookGuardOpen = ref(false);
     const photoDialogOpen = ref(false);
-    const photoBusy = ref(false);
     const imageDirty = ref(false);
     const stepImagesDirty = ref(false);
     const imageVersion = ref(0);
@@ -847,34 +1047,64 @@
         nutrition: false, notes: false, kcal: false, versions: false, photo: false,
     });
 
-    // ── Save: no button, so the indicator is the whole feedback channel ──
+    // ── Save ────────────────────────────────────────────────────────────
+    // Inline editing, explicit commit. The page shipped with a 500ms debounced
+    // autosave behind every popup-edit, which had three failure modes the
+    // owner reversed it over: (1) each save ended in `loadRecipe()`, which
+    // re-hydrates `form` — so a save firing while a second popup was open
+    // rebound that popup to an orphaned row object and dropped the edit;
+    // (2) a fresh, not-yet-linked ingredient row failed the anchor check, so
+    // every *unrelated* save was refused until it was filled or deleted, with
+    // no button to retry from; (3) navigating inside the debounce window sent
+    // the PATCH into a torn-down component, so a failure had nowhere to show.
+    // An explicit Save fixes all three by construction: nothing re-hydrates
+    // mid-edit, validation is reported when the user asks to commit, and the
+    // dirty flag is what the route guard reads.
+    //
+    // D-019 is why the *fields* are never disabled while saving — only the
+    // Save button is, which is that rule's stated carve-out.
     type SaveState = 'idle' | 'saving' | 'saved' | 'error';
     const saveState = ref<SaveState>('idle');
     const saveMessage = ref('');
-    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const dirty = ref(false);
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-    /** Every inline commit lands here. Debounced so a burst of edits (a
-     *  popup-edit that fires per keystroke, a multi-select) is one PATCH. */
-    function onFieldSaved() {
-        if (saveTimer) clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => { void save(); }, 500);
+    /** Every edit path lands here. It records that there is something to
+     *  save; it never saves. */
+    function markDirty() {
+        dirty.value = true;
+        // A previous failure is no longer describing the current form.
+        if (saveState.value === 'error') saveState.value = 'idle';
     }
 
-    async function save() {
-        const src = recipe.value;
-        if (!src) return;
-        if (!form.name.trim()) {
-            saveState.value = 'error';
-            saveMessage.value = 'A recipe needs a name — not saved.';
-            return;
+    /** Mirrors the server's `recipe_ingredient_anchor` CHECK and the name
+     *  requirement, as human sentences. Empty = safe to send. */
+    const saveBlockers = computed(() => {
+        const out: string[] = [];
+        if (!form.name.trim()) out.push('the recipe needs a name');
+        const halfBuilt = form.ingredients.filter((i) => !i.stock_item_id && !i.raw_text).length;
+        if (halfBuilt > 0) {
+            out.push(halfBuilt === 1
+                ? '1 ingredient has no item or text yet'
+                : `${halfBuilt} ingredients have no item or text yet`);
         }
-        // The old page blocks a save on any ingredient without a stock item.
-        // Same rule here: an unlinked row is legal on load (imported recipes
-        // have them) but must not be *sent* half-built.
-        if (form.ingredients.some((i) => !i.stock_item_id && !i.raw_text)) {
+        return out;
+    });
+
+    /** True for a row that would block the save — used to point at the row
+     *  rather than only naming a count in the message. */
+    function isHalfBuilt(row: IngredientForm): boolean {
+        return !row.stock_item_id && !row.raw_text;
+    }
+
+    const canSave = computed(() => dirty.value && saveState.value !== 'saving');
+
+    async function onSave() {
+        const src = recipe.value;
+        if (!src || saveState.value === 'saving') return;
+        if (saveBlockers.value.length > 0) {
             saveState.value = 'error';
-            saveMessage.value = 'Every ingredient needs an item — not saved.';
+            saveMessage.value = `Not saved — ${saveBlockers.value.join(', and ')}.`;
             return;
         }
         saveState.value = 'saving';
@@ -886,8 +1116,13 @@
             });
             const didImageChange = imageDirty.value;
             await recipeStore.updateRecipeAsync(command);
+            // Safe to re-hydrate here in a way autosave never was: the user
+            // asked to commit, so nothing is mid-edit. This is what picks up
+            // the server-derived values the page reads (cost, cookability,
+            // per-ingredient expiry) rather than recomputing them.
             await loadRecipe();
             if (didImageChange) imageVersion.value++;
+            dirty.value = false;
             saveState.value = 'saved';
             saveMessage.value = 'Saved';
             if (idleTimer) clearTimeout(idleTimer);
@@ -896,6 +1131,25 @@
             saveState.value = 'error';
             saveMessage.value = `Couldn't save. ${toastCaption(err)}`;
         }
+    }
+
+    /** Discard: re-hydrate from the last loaded recipe. No refetch — the point
+     *  is to undo local edits, and `recipe.value` is what they departed from. */
+    function onDiscard() {
+        const src = recipe.value;
+        if (!src) return;
+        $q.dialog({
+            title: 'Discard changes',
+            message: 'Throw away every change you’ve made since the last save?',
+            cancel: true,
+            ok: { label: 'Discard', color: 'negative' },
+        }).onOk(() => {
+            hydrateRecipeForm(form, src);
+            imageDirty.value = false;
+            stepImagesDirty.value = false;
+            dirty.value = false;
+            saveState.value = 'idle';
+        });
     }
 
     async function loadRecipe() {
@@ -912,6 +1166,10 @@
         } finally {
             loading.value = false;
         }
+        // After the form is hydrated, so `missingIngredients` is current.
+        // Deliberately not awaited by callers: the page is fully usable while
+        // the chips fill in.
+        void loadSubstitutes();
     }
 
     // ── Derived display ─────────────────────────────────────────────────
@@ -927,8 +1185,11 @@
     const categoryOptions = computed(() => categories.value.map((c) => ({ label: c.name, value: c.category_id })));
     const dietaryTagOptions = computed(() => dietaryTags.value.map((t) => ({ label: t.name, value: t.dietary_tag_id })));
     const toolSelectOptions = computed(() => tools.value.map((t) => ({ label: t.name, value: t.tool_id })));
-    const stockItemOptions = computed(() =>
-        stockItems.value.map((s) => ({ label: s.name, value: s.stock_item_id })));
+
+    // `time_of_day` reads the household's own meal-slot names; the seed
+    // constant is only the pre-first-load fallback.
+    const timeOfDayOptions = computed(() =>
+        (mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS]));
 
     const totalMinutes = computed(() => {
         const p = form.prep_time_minutes ?? 0;
@@ -960,17 +1221,69 @@
     }
 
     /** Ingredients bucketed by section, in section order, with the unsectioned
-     *  rows first under no heading — matching how the list reads on paper. */
+     *  rows first under no heading — matching how the list reads on paper.
+     *
+     *  Sections with no rows are rendered too. Skipping them (which this page
+     *  shipped doing) made a brand-new section invisible the moment it was
+     *  created, so there was no visible place to move anything into and the
+     *  feature read as broken. An empty section shows its own hint instead. */
     const ingredientGroups = computed(() => {
         const flat = form.ingredients.filter((i) => !i.section_client_id);
         const groups: { key: string; name: string; rows: IngredientForm[] }[] = [];
         if (flat.length > 0) groups.push({ key: 'main', name: '', rows: flat });
         for (const sec of [...form.sections].sort((a, b) => a.sequence - b.sequence)) {
-            const rows = form.ingredients.filter((i) => i.section_client_id === sec.client_id);
-            if (rows.length > 0) groups.push({ key: sec.client_id, name: sec.name, rows });
+            groups.push({
+                key: sec.client_id,
+                name: sec.name || 'Untitled section',
+                rows: form.ingredients.filter((i) => i.section_client_id === sec.client_id),
+            });
         }
         return groups;
     });
+
+    // ── Substitutes ─────────────────────────────────────────────────────
+    // Fetched per missing ingredient, because "what could I use instead" is
+    // only a question when something is actually absent. N is the number of
+    // missing rows — small, and the fan-out is the same shape the old page
+    // used for its bulk dialog.
+    const substitutesFor = ref(new Map<string, SubstituteOption[]>());
+
+    async function loadSubstitutes() {
+        const targets = missingIngredients.value.map((i) => i.stock_item_id);
+        if (targets.length === 0) {
+            substitutesFor.value = new Map();
+            return;
+        }
+        const next = new Map<string, SubstituteOption[]>();
+        const results = await Promise.allSettled(
+            targets.map((id) => stockItemApi.getDetailAsync(id)),
+        );
+        results.forEach((res, i) => {
+            const id = targets[i]!;
+            // A single failed lookup shouldn't cost the others their chip, and
+            // it isn't worth a toast: substitutes are an enhancement to a row
+            // that already reads "Missing" correctly without them.
+            if (res.status !== 'fulfilled') return;
+            const entries = (res.value.substitutes ?? []).map((sub) => ({
+                sub,
+                inStock: !isMissingItem(sub.stock_item_id),
+            }));
+            if (entries.length > 0) next.set(id, entries);
+        });
+        substitutesFor.value = next;
+    }
+
+    function substitutesForRow(row: IngredientForm): SubstituteOption[] {
+        if (!row.stock_item_id) return [];
+        return substitutesFor.value.get(row.stock_item_id) ?? [];
+    }
+
+    /** Missing rows that a substitute you already have would cover. This is
+     *  the fact that changes tonight's answer, so the status strip says it. */
+    const coverableCount = computed(() =>
+        missingIngredients.value.filter(
+            (i) => (substitutesFor.value.get(i.stock_item_id) ?? []).some((e) => e.inStock),
+        ).length);
 
     function isMissingItem(stockItemId: string | null | undefined): boolean {
         if (!stockItemId) return false;
@@ -1092,12 +1405,12 @@
 
     function onStepsChanged(steps: EditableStep[]) {
         form.steps = steps;
-        onFieldSaved();
+        markDirty();
     }
     function onStepImagesChanged(images: EditableStepImage[]) {
         form.step_images = images;
         stepImagesDirty.value = true;
-        onFieldSaved();
+        markDirty();
     }
 
     // ── Captions for the collapsed Details rows ─────────────────────────
@@ -1108,8 +1421,13 @@
         ].filter(Boolean);
         return names.length > 0 ? names.join(' · ') : 'None';
     });
-    const sectionsCaption = computed(() =>
-        form.sections.length > 0 ? form.sections.map((s) => s.name).join(' · ') : 'One flat list');
+    const orderedSections = computed(() =>
+        [...form.sections].sort((a, b) => a.sequence - b.sequence));
+
+    const organiseCaption = computed(() => {
+        if (form.sections.length === 0) return 'One flat list';
+        return orderedSections.value.map((s) => s.name || 'Untitled').join(' · ');
+    });
     const costCaption = computed(() => {
         const r = recipe.value;
         if (!r) return '';
@@ -1144,16 +1462,68 @@
             section_client_id: null,
             is_optional: false,
         } as IngredientForm);
+        markDirty();
+        // A fresh row has no anchor yet, so open the editor on it straight
+        // away rather than leaving a blank line the user has to discover is
+        // clickable — and which would block the save if they didn't.
+        const added = form.ingredients[form.ingredients.length - 1];
+        if (added?.client_id) openRowEditor(String(added.client_id));
     }
     function removeIngredient(clientId: string) {
         const idx = form.ingredients.findIndex((i) => i.client_id === clientId);
-        if (idx >= 0) {
-            form.ingredients.splice(idx, 1);
-            onFieldSaved();
+        if (idx < 0) return;
+        form.ingredients.splice(idx, 1);
+        // A step that pointed at this row would otherwise keep a dangling
+        // reference, which survives the PATCH as a step that "uses" nothing.
+        for (const step of form.steps) {
+            step.ingredient_client_ids = step.ingredient_client_ids.filter((id) => id !== clientId);
         }
+        markDirty();
+    }
+
+    /** Ingredient order is array order — there is no `sequence` on the wire,
+     *  and arrays are sent with replace semantics — so a move is a splice. */
+    function moveIngredient(clientId: string, delta: -1 | 1) {
+        const from = form.ingredients.findIndex((i) => i.client_id === clientId);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= form.ingredients.length) return;
+        const [row] = form.ingredients.splice(from, 1);
+        if (row) form.ingredients.splice(to, 0, row);
+        markDirty();
+    }
+
+    // ── The row editor ──────────────────────────────────────────────────
+    const rowEditorOpen = ref(false);
+    const rowEditorFor = ref<string | null>(null);
+    const rowEditorRow = computed(
+        () => form.ingredients.find((i) => i.client_id === rowEditorFor.value) ?? null);
+
+    function openRowEditor(clientId: string) {
+        rowEditorFor.value = clientId;
+        rowEditorOpen.value = true;
+    }
+
+    /** The editor hands back a whole patch rather than mutating the row, so
+     *  Cancel is a real cancel (R-006 safe mutations). */
+    function onRowEditorSave(patch: IngredientPatch) {
+        const row = form.ingredients.find((i) => i.client_id === rowEditorFor.value);
+        if (!row) return;
+        Object.assign(row, patch);
+        markDirty();
+    }
+
+    // ── Sections ────────────────────────────────────────────────────────
+    /** `sequence` is what the server sorts on, so it is kept dense and
+     *  0-based after every structural change rather than left with gaps. */
+    function resequenceSections() {
+        [...form.sections]
+            .sort((a, b) => a.sequence - b.sequence)
+            .forEach((sec, i) => { sec.sequence = i; });
     }
     function addSection() {
         form.sections.push({ client_id: newClientId(), sequence: form.sections.length, name: '' });
+        resequenceSections();
+        markDirty();
     }
     function removeSection(clientId: string) {
         const idx = form.sections.findIndex((s) => s.client_id === clientId);
@@ -1164,26 +1534,46 @@
         for (const ing of form.ingredients) {
             if (ing.section_client_id === clientId) ing.section_client_id = null;
         }
-        onFieldSaved();
+        // Steps carry a section reference too (C-4 Chunk 10), and a stale one
+        // would point at a section the PATCH no longer contains.
+        for (const step of form.steps) {
+            if (step.section_client_id === clientId) step.section_client_id = null;
+        }
+        resequenceSections();
+        markDirty();
+    }
+    function moveSection(clientId: string, delta: -1 | 1) {
+        const ordered = [...form.sections].sort((a, b) => a.sequence - b.sequence);
+        const from = ordered.findIndex((s) => s.client_id === clientId);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= ordered.length) return;
+        const [sec] = ordered.splice(from, 1);
+        if (sec) ordered.splice(to, 0, sec);
+        ordered.forEach((s, i) => { s.sequence = i; });
+        markDirty();
     }
 
+    /** The flat, ordered ingredient list the organise disclosure walks —
+     *  reading order, so ↑/↓ mean what they look like they mean. */
+    const orderedIngredients = computed(() =>
+        ingredientGroups.value.flatMap((g) =>
+            g.rows.map((row) => ({ row, section: g.name }))));
+
     // ── Photo ───────────────────────────────────────────────────────────
-    async function onPickPhoto(image: { dataUrl: string }) {
-        photoBusy.value = true;
+    function onPickPhoto(image: { dataUrl: string }) {
         form.image = image.dataUrl;
         imageDirty.value = true;
-        await save();
-        photoBusy.value = false;
+        markDirty();
     }
     function onPickPhotoDataUrl(dataUrl: string) {
         form.image = dataUrl;
         imageDirty.value = true;
-        onFieldSaved();
+        markDirty();
     }
     function onClearPhoto() {
         form.image = null;
         imageDirty.value = true;
-        onFieldSaved();
+        markDirty();
     }
 
     // ── Actions ─────────────────────────────────────────────────────────
@@ -1199,7 +1589,9 @@
 
     function onStartCookMode() {
         if (!recipe.value) return;
-        if (needsCookGuard(recipe.value, false)) {
+        // `dirty` is a real guard reason now — the shared helper has always
+        // taken it, and the autosave page had nothing truthful to pass.
+        if (needsCookGuard(recipe.value, dirty.value)) {
             cookGuardOpen.value = true;
             return;
         }
@@ -1207,6 +1599,13 @@
     }
     function goToCookMode() {
         void router.push(`/cookbook/${recipeId.value}/cook`);
+    }
+    /** The guard's "save and start" branch. Cook mode reads the *server's*
+     *  recipe, so starting without committing would cook the old version. */
+    async function onSaveAndCook() {
+        await onSave();
+        if (saveState.value === 'error') return;
+        goToCookMode();
     }
 
     function onPrint() {
@@ -1311,17 +1710,60 @@
         void router.push(`/cookbook/${id}/new`);
     }
 
-    // ── Mount ───────────────────────────────────────────────────────────
+    // ── Mount / unmount / leaving ───────────────────────────────────────
     onMounted(async () => {
         await Promise.all([
             recipeStore.ensureCollectionsLoadedAsync(),
             stockItemStore.ensureLoadedAsync(),
+            stockLevelStore.ensureLoadedAsync(),
             recipeVocabStore.ensureLoadedAsync(),
             shoppingListStore.ensureLoadedAsync(),
+            mealSlotStore.ensureLoadedAsync(),
         ]);
         await loadRecipe();
+        window.addEventListener('beforeunload', onBeforeUnload);
     });
-    watch(recipeId, () => { void loadRecipe(); });
+
+    onBeforeUnmount(() => {
+        // The page shipped with neither of these. The autosave timer it had
+        // outlived the component, so a PATCH could land with nothing mounted
+        // to report its failure to.
+        if (idleTimer) clearTimeout(idleTimer);
+        window.removeEventListener('beforeunload', onBeforeUnload);
+    });
+
+    /** Tab close / reload. The browser shows its own generic prompt; the
+     *  string is ignored by every current engine but `preventDefault` is what
+     *  actually arms it. */
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+        if (!dirty.value) return;
+        e.preventDefault();
+        e.returnValue = '';
+    }
+
+    // In-app navigation — the Back arrow, a sibling version, cook mode.
+    onBeforeRouteLeave((_to, _from, next) => {
+        if (!dirty.value) {
+            next();
+            return;
+        }
+        $q.dialog({
+            title: 'Unsaved changes',
+            message: 'You have changes that haven’t been saved yet.',
+            cancel: { label: 'Stay', flat: true, noCaps: true },
+            ok: { label: 'Leave without saving', color: 'negative', noCaps: true },
+        })
+            .onOk(() => { next(); })
+            .onCancel(() => { next(false); });
+    });
+
+    // Switching recipes in place (a sibling version) is a fresh load; the
+    // guard above has already dealt with any unsaved work.
+    watch(recipeId, () => {
+        dirty.value = false;
+        saveState.value = 'idle';
+        void loadRecipe();
+    });
 </script>
 
 <style scoped lang="scss">
@@ -1599,6 +2041,73 @@
         color: var(--text-secondary);
     }
     .rn__savebar--error { border-color: var(--semantic-negative); color: var(--semantic-negative); }
+
+    /* The standing "there is unsaved work" statement. Sits above the transient
+       savebar's slot so the two never occupy the same space. */
+    .rn__dirty {
+        position: fixed; bottom: var(--space-5, 20px); left: 50%;
+        transform: translateX(-50%); z-index: 6000;
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        padding: var(--space-2, 8px) var(--space-4, 16px);
+        border-radius: var(--radius-pill, 999px);
+        background: var(--surface-elevated);
+        border: 1px solid var(--semantic-warning);
+        box-shadow: 0 2px 10px var(--overlay-dim);
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    /* The ingredient name is a real <button> (it opens the row editor), so it
+       has to be talked back out of looking like one — the row reads as a
+       recipe, not a form. `.rn__edit` supplies the hover/focus affordance. */
+    .rn__ingbtn {
+        appearance: none;
+        background: none;
+        border: 0;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+    }
+
+    .rn__ingsecempty {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        margin: 0;
+        padding: var(--space-2, 8px);
+    }
+
+    .rn__secrow {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
+        margin-bottom: var(--space-2, 8px);
+    }
+
+    .rn__discsub {
+        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin: var(--space-5, 20px) 0 var(--space-2, 8px);
+    }
+
+    .rn__order {
+        list-style: none;
+        margin: 0 0 var(--space-3, 12px);
+        padding: 0;
+    }
+    .rn__order li {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
+        padding: var(--space-1, 4px) 0;
+        border-bottom: 1px solid var(--divider);
+    }
+    .rn__ordername { flex: 1; min-width: 0; }
+    .rn__ordersec {
+        margin-left: var(--space-2, 8px);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
 
     /* ── Phone ────────────────────────────────────────────────────────── */
     @media (max-width: 1023px) {

@@ -89,6 +89,11 @@ def _feature_flags(setting) -> dict[str, bool]:
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
         "scanning": False,      # resolved below — off by default
+        # 2026-08-20 — install-wide stocktake master switch. Default TRUE:
+        # the feature ships on, and an install has to switch it off. If the
+        # AppSetting fetch failed we'd rather show the surface than silently
+        # hide a feature the household uses.
+        "stocktake": True,
         # `buy_verdict` was here until 2026-08-19 (D-12). It is a per-user
         # display preference now, on `/auth/me` — an install-wide flag would be
         # answering a personal question with a household answer.
@@ -141,6 +146,9 @@ def _feature_flags(setting) -> dict[str, bool]:
         repo = SqlAlchemyRepository()
         if setting is not None:
             flags["scanning"] = bool(setting.scanning_enabled)
+            flags["stocktake"] = bool(
+                getattr(setting, "stocktake_enabled", True)
+            )
             # `buy_verdict` is no longer a health flag — it went per-user on
             # 2026-08-19 (D-12), so the SPA reads it off /auth/me with the rest
             # of the user's display preferences. An install-wide flag here would

@@ -7,9 +7,11 @@
         drift (R-003).
 
         Left → right:
-          Name  ·[chips]·  · · ·  [expiring?] [♥] [👨‍🍳] [🛒]
+          Name              · · ·  [chips] [expiring?] [♥] [👨‍🍳] [🛒]
+          ⏱ 25m · 🔢 8
         Chrome mirrors `StockItemRow`: bordered flat card, 8px radius,
-        accent-tinted hover, no lift.
+        accent-tinted hover, no lift — and, from 2026-08-20, the same
+        name type size and the same name-plus-second-line shape.
     -->
     <q-card
         bordered
@@ -24,26 +26,44 @@
                  longer consults `show_recipe_images` (nor renders an initial
                  tile in its place — that was the photo slot's stand-in). -->
 
-            <!-- Name only. The meta line under it (collection · cuisine · …)
-                 was removed 2026-08-19 — owner: "remove the second info line
-                 under the recipe name in compact view, looks too cluttered".
-                 Compact is the scan-a-long-list shape; the same facts are on
-                 the card view and on the recipe's own page. -->
+            <!-- The old meta line (collection · cuisine · category · …) was
+                 removed 2026-08-19 — owner: "remove the second info line under
+                 the recipe name in compact view, looks too cluttered". It is
+                 back on 2026-08-20, but as two facts rather than five:
+                 "in desktop view put time and ingredient count right or
+                 underneath of recipe name". Underneath, because the chip
+                 cluster's width varies with how many chips a given recipe has,
+                 so anything in it never lands twice in the same place (the
+                 same reasoning that moved the expiring chip to the right edge)
+                 — whereas a second line under the name starts at a fixed x.
+                 Desktop only: on a phone these were already suppressed for
+                 width, and that hasn't changed.
+                 Icons: `timer` for a duration, `ingredientCount` for a count —
+                 see the filter row for why each. -->
             <div class="recipe-row__name-zone column items-start justify-center">
                 <div class="recipe-row__name">{{ recipe.name }}</div>
+                <div
+                    v-if="!compact && (totalTime !== null || ingredientCount > 0)"
+                    class="recipe-row__meta row items-center no-wrap"
+                >
+                    <span v-if="totalTime !== null" class="recipe-row__fact">
+                        <q-icon :name="ICONS.timer" size="14px" />{{ totalTime }}m
+                    </span>
+                    <span v-if="ingredientCount > 0" class="recipe-row__fact">
+                        <q-icon :name="ICONS.ingredientCount" size="14px" />{{ ingredientCount }}
+                    </span>
+                </div>
             </div>
 
             <!-- Figures. On phones only the two that change a decision
                  survive (time, and the belief/expiring flags) — the rest
                  would take width the row hasn't got, and they're all on the
                  recipe's own page a tap away. -->
+            <!-- What's left in the cluster: the two chips that are opinions
+                 rather than plain facts (a kcal figure that may be partial,
+                 and Dora's belief). Time + ingredient count moved under the
+                 name — see above. -->
             <div class="row items-center no-wrap recipe-row__chips">
-                <q-chip v-if="totalTime !== null && !compact" dense :icon="ICONS.schedule">
-                    {{ totalTime }}m
-                </q-chip>
-                <q-chip v-if="ingredientCount > 0 && !compact" dense :icon="ICONS.ingredients">
-                    {{ ingredientCount }}
-                </q-chip>
                 <q-chip
                     v-if="kcal.value !== null && !compact"
                     dense
@@ -193,12 +213,44 @@
         min-width: 0;
         flex: 1 1 auto;
     }
+    /* Owner feedback 2026-08-20: "in compact view, recipe name should be
+       same font style as stock item name". Values copied from
+       `StockItemRow.vue`'s `.stock-row__name`; the only difference was the
+       missing font-size, which left the recipe name a step smaller than the
+       stock one on the same-shaped row.
+
+       D-003 carve-out: `1.05rem` is a raw size, and the rule says use the
+       `--font-size-*` ratios. It is deliberately raw here because the request
+       was *parity with the stock row*, and that row is 1.05rem — a value with
+       no token (md = 1, lg = 1.125). Tokenising one of the pair would break
+       the parity this line exists to create, and tokenising both changes the
+       Stock Overview type the owner signed off on last week. Logged as FU-693
+       to move the pair together. */
     .recipe-row__name {
         font-weight: 600;
+        font-size: 1.05rem;
         line-height: 1.25;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* Second line under the name. Plain text + inline icons rather than
+       chips: chip chrome at this size is heavier than the facts warrant, and
+       the old chip version is what read as cluttered. */
+    .recipe-row__meta {
+        gap: 10px;
+        margin-top: 2px;
+        /* D-003: `--font-size-sm` (14), not the 12 caption floor — cook time
+           and ingredient count are values you act on ("can I make this
+           tonight?"), and the rule reserves 12 for non-actionable captions. */
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
+    }
+    .recipe-row__fact {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
         white-space: nowrap;
     }
     .recipe-row__chips {

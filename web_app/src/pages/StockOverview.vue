@@ -9,6 +9,14 @@
              own second row where the search can actually fill the width,
              instead of being crushed onto the end of the action row. -->
         <div class="row items-center q-gutter-sm stock-toolbar">
+            <!-- 2026-08-20 feedback: "does the top row of toolbar buttons
+                 scroll on mobile? It should". It didn't — the row wrapped, so
+                 an install with Scan + Log price + Stocktake all on pushed
+                 Export onto a second line and the toolbar ate the viewport
+                 again. Same treatment the two filter rows already have
+                 (`FilterRow`): one no-wrap band that scrolls sideways, the
+                 controls running off the edge being the affordance. -->
+            <div class="row items-center no-wrap stock-toolbar__actions">
             <BaseButton
                 variant="primary"
                 :icon="ICONS.add"
@@ -33,17 +41,40 @@
             >
                 <q-tooltip v-if="compactToolbar">Scan</q-tooltip>
             </BaseButton>
+            <!-- Gated on the install-wide stocktake switch (2026-08-20
+                 feedback) — off ⇒ the household doesn't use stocktake and
+                 this button, the "Needs check" filter and the queue fetch
+                 below all go away. -->
             <BaseButton
+                v-if="stocktakeEnabled"
                 variant="secondary"
                 :icon="ICONS.fact_check"
                 :label="stocktakeLabel"
                 :aria-label="stocktakeAriaLabel"
-                :attention="stocktakeOverdue > 0"
+                :attention="stocktakeEssentialOverdue > 0"
                 to="/stocktake"
             >
-                <!-- Compact mode drops the label but NOT the overdue count —
-                     that number is the whole reason the button glows. -->
-                <q-badge v-if="compactToolbar && stocktakeOverdue > 0" color="primary" floating>
+                <!-- The glow, **gated on essentials** (owner call 2026-08-20,
+                     amending D-14). D-14 had removed it outright as motion
+                     spent on the least urgent thing on the page. The owner's
+                     amendment is better than either extreme: the problem was
+                     never the glow, it was the *condition* — "something is due
+                     a count" is true in any real pantry, so a glow on it is
+                     wallpaper, and feedback L103 ("I almost didn't see it") is
+                     what wallpaper feels like from the inside. Gated on items
+                     you flagged essential it fires rarely, which is the only
+                     way an interruption keeps working.
+                     The count still rides the label (or this badge when the
+                     label is dropped) whether or not it glows, and the aria
+                     label names the essential count so the glow's reason is
+                     available to a screen reader too. -->
+                <!-- 2026-08-20 feedback: "instead of text '(# due)' … just
+                     put a number in a chip". Inline rather than `floating`:
+                     the actions row scrolls now, and a floating badge hangs
+                     outside the button box where the scroller clips it. Same
+                     chip at every width — the label above is what drops on a
+                     phone, not the count. -->
+                <q-badge v-if="stocktakeOverdue > 0" color="primary" class="q-ml-xs">
                     {{ stocktakeOverdue }}
                 </q-badge>
                 <q-tooltip v-if="compactToolbar">{{ stocktakeAriaLabel }}</q-tooltip>
@@ -117,6 +148,8 @@
                     </q-list>
                 </q-menu>
             </BaseButton>
+
+            </div>
 
             <!-- Desktop keeps the filter toggle + search on this same row,
                  pushed right. On phones `stock-toolbar__find` wraps to its
@@ -196,7 +229,14 @@
                     Open / in-use
                 </FilterChip>
 
-                <FilterChip v-model="filters.needsCheckOnly.value" :icon="ICONS.fact_check" active-color="warning">
+                <!-- "Needs check" IS the stocktake queue, so it follows the
+                     install-wide switch with the button above. -->
+                <FilterChip
+                    v-if="stocktakeEnabled"
+                    v-model="filters.needsCheckOnly.value"
+                    :icon="ICONS.fact_check"
+                    active-color="warning"
+                >
                     Needs check
                 </FilterChip>
 
@@ -257,6 +297,13 @@
                 label="Any level"
                 dialog-title="Stock level"
             >
+                <!-- 2026-08-20 feedback: "icons for stock level, group and
+                     location filters too? Can use same as what is used
+                     elsewhere". Same glyphs Settings uses for the two
+                     taxonomies, and the same D-005 rule the cookbook filter
+                     strip follows — every control carries one so the row
+                     scans as a set. -->
+                <template #prepend><q-icon :name="ICONS.stockLevel" size="18px" /></template>
                 <template #selected-item="scope">
                     <span class="row items-center no-wrap">
                         <StockLevelDot
@@ -298,7 +345,9 @@
                 label="Any location"
                 dialog-title="Location"
                 @filter="filters.filterLocations"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.place" size="18px" /></template>
+            </BaseSelect>
 
             <BaseSelect
                 v-model="filters.groupFilter.value"
@@ -308,7 +357,9 @@
                 clearable
                 label="Any group"
                 dialog-title="Stock group"
-            />
+            >
+                <template #prepend><q-icon :name="ICONS.tag_multiple" size="18px" /></template>
+            </BaseSelect>
             </FilterRow>
             </template>
         </FilterBar>
@@ -625,6 +676,7 @@
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useLogPrice } from 'src/composables/useLogPrice';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
@@ -657,6 +709,9 @@
 
     const $q = useQuasar();
     const { scanningEnabled } = useScanningEnabled();
+    // 2026-08-20 — install-wide stocktake switch. Gates the toolbar button,
+    // the "Needs check" filter chip and the queue fetch below.
+    const { stocktake: stocktakeEnabled } = useFeatureFlags();
     const { moneyEnabled } = useMoneyEnabled();
     // FU-300's sheet, reused verbatim — the dashboard's "Log a price"
     // quick-action moved here (2026-08-15 feedback) rather than being
@@ -673,37 +728,68 @@
     const overviewExport = useStockOverviewExport();
     const stocktakeApi = new StocktakeApiService();
     const stocktakeOverdue = ref(0);
+    /**
+     * How many overdue items are flagged **essential**, server-counted.
+     *
+     * This is the glow's whole condition (owner call 2026-08-20). D-14 had
+     * removed the glow as noise, and the reason it *was* noise is that it fired
+     * on "anything is due a count" — which, in a pantry of any size, is always.
+     * Gated on essentials it fires on "something you said matters is due", which
+     * is rare enough to be worth an interruption. The count is read, never
+     * derived from `items` (R-003, and the page is capped at 500 anyway).
+     */
+    const stocktakeEssentialOverdue = ref(0);
     // PROPOSAL_STOCKTAKE_MODE §7 — the server-owned set of "needs check"
-    // ids. Drives the row pulse outline + the "Needs check" filter chip
+    // ids. Drives the level box's dashed marker + the "Needs check" filter chip
     // (R-003 — SPA never re-derives). Kept as a Set so hasId lookups
     // are O(1) inside the filter predicate and the row renderer.
     const needsCheckIds = ref<Set<string>>(new Set());
 
     async function loadStocktakeCount() {
+        // Off ⇒ nothing consumes the answer (button, chip and needs-check
+        // marker are all gated) and the server resolves an empty overdue map
+        // anyway — so don't spend the request.
+        if (!stocktakeEnabled.value) {
+            stocktakeOverdue.value = 0;
+            stocktakeEssentialOverdue.value = 0;
+            needsCheckIds.value = new Set();
+            return;
+        }
         try {
             // Bumped from limit=1 → 500 so we get the ids alongside the
             // count. 500 is the server's cap; a household with more
             // than that overdue is a pathological state.
             const result = await stocktakeApi.queueAsync(500);
             stocktakeOverdue.value = result.total;
+            stocktakeEssentialOverdue.value = result.essential_total;
             needsCheckIds.value = new Set(
                 result.items.map((i) => i.stock_item_id),
             );
         } catch {
             stocktakeOverdue.value = 0;
+            stocktakeEssentialOverdue.value = 0;
             needsCheckIds.value = new Set();
         }
     }
 
     // Compact mode shows the count as a floating badge instead, so the
     // label goes bare and the full sentence lives on the tooltip/aria.
-    const stocktakeAriaLabel = computed(() =>
-        stocktakeOverdue.value > 0
-            ? `Stocktake (${stocktakeOverdue.value} due)`
-            : 'Stocktake',
-    );
+    // The essential count is named in the aria/tooltip when it's what's making
+    // the button glow — a glow with no stated reason is the thing that made the
+    // old one ignorable.
+    const stocktakeAriaLabel = computed(() => {
+        if (stocktakeOverdue.value === 0) return 'Stocktake';
+        const essential = stocktakeEssentialOverdue.value;
+        return essential > 0
+            ? `Stocktake (${stocktakeOverdue.value} due, ${essential} essential)`
+            : `Stocktake (${stocktakeOverdue.value} due)`;
+    });
+    // 2026-08-20 feedback — the count left the label for a chip, so the label
+    // is just the button's name. The full sentence still rides the aria label
+    // and the tooltip, which is where a screen reader (and the glow's reason)
+    // needs it.
     const stocktakeLabel = computed(() =>
-        compactToolbar.value ? undefined : stocktakeAriaLabel.value,
+        compactToolbar.value ? undefined : 'Stocktake',
     );
 
     const router = useRouter();
@@ -770,10 +856,15 @@
     }, { persistScope: 'stock-overview' });
 
     // Filter panel expanded state — shared between the toolbar's
-    // FilterToggleButton and the FilterBar's collapsible panel.
-    // persisted per-page across reloads (mobile always starts
-    // hidden regardless of saved state).
-    const filtersExpanded = useFilterPanelExpanded('stock-overview');
+    // FilterToggleButton and the FilterBar's collapsible panel. Open iff
+    // something is actually filtered (2026-08-20 owner call; see
+    // `useFilterPanelExpanded`) — and this page's filters persist across
+    // navigation, so coming back to a filtered list comes back to an open
+    // panel that says why the list is short.
+    const filtersExpanded = useFilterPanelExpanded(
+        'stock-overview',
+        () => filters.activeFilterCount.value > 0,
+    );
 
     // ── Recipe-ingredients deep-link filter ─────────────────────────────
     // Triggered by the "filter to this recipe's ingredients" action on
@@ -933,9 +1024,10 @@
         // 2026-08-15 feedback: unticking the last item leaves bulk mode
         // running with an empty selection and every action disabled —
         // a dead-end bar the user then has to dismiss by hand. Treat
-        // "deselected the last one" as backing out of the mode. Only the
-        // untick path does this: `deselectAll` is an explicit "clear but
-        // stay in bulk mode" action and keeps its own behaviour.
+        // "deselected the last one" as backing out of the mode — and
+        // 2026-08-20 feedback extended that to `deselectAll` below, which
+        // reaches the same empty selection by a different route and so
+        // shouldn't leave the user in a different state.
         if (wasSelected && bulkSelection.value.size === 0) bulkMode.value = false;
     }
     function selectVisible() {
@@ -949,7 +1041,13 @@
         bulkSelection.value = new Set();
     }
     function deselectAll() {
-        bulkSelection.value = new Set();
+        // 2026-08-20 feedback: "for mobile we made it so deselecting the last
+        // item would stop bulk select. I would expect the same for using the
+        // deselect all button." Same end state either way — an empty selection
+        // with the bar still up is a dead end whichever button emptied it.
+        // (That makes this equivalent to Cancel; it stays because on a phone
+        // the bulk bar is what's on screen, not the toolbar's Cancel.)
+        cancelBulk();
     }
 
     async function bulkAddToPrimary() {
@@ -1525,6 +1623,26 @@
        `q-space.gt-xs` is hidden there so nothing pushes against it. */
     .stock-toolbar {
         margin-bottom: var(--space-4);
+    }
+    /* 2026-08-20 feedback — the action band scrolls sideways instead of
+       wrapping, same rule (and same reasoning) as `FilterRow`: the buttons
+       running off the edge IS the affordance, so the 2px scrollbar under them
+       is noise. `gap` rather than `q-gutter-sm` because the gutter's negative
+       margins fight `overflow-x`. Children can't shrink past their own width,
+       or the row would compress the labels instead of scrolling. */
+    .stock-toolbar__actions {
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-width: 0;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .stock-toolbar__actions::-webkit-scrollbar {
+        display: none;
+    }
+    .stock-toolbar__actions > * {
+        flex: 0 0 auto;
     }
     .stock-toolbar__find {
         flex: 1 1 auto;

@@ -46,6 +46,8 @@
       "smtp_username",
       "stocktake_auto_tuning_enabled",
       "stocktake_default_cadence_band",
+      "stocktake_enabled",
+      "stocktake_new_items_opt_in",
       "timezone",
       "unit_pricing_locale",
       "vapid_private_key_configured",

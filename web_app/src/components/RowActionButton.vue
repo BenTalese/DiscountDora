@@ -7,6 +7,12 @@
         being copy-pasted four times across stock-row + cart and drifted
         the first time someone forgot one of the props.
 
+        DR-15 / D-010: `dora-press` (motion.scss) gives every row-cluster
+        button the same 120ms press response. It belongs here rather than on
+        each caller for the same reason the q-btn props do — one definition, no
+        drift, and the cluster keeps reading as one set. Transform-only, so it
+        can't reflow the row it sits in.
+
         Slots: tooltip goes in the default slot. Use `v-slot="{ menu }"`
         via the standard q-menu pattern by nesting a q-menu / q-popup-proxy
         inside the default slot if a menu is needed.
@@ -14,6 +20,7 @@
     <BaseButton
         variant="icon"
         size="md"
+        class="dora-press"
         :icon="icon"
         :color="color"
         :loading="loading"

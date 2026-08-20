@@ -10,6 +10,107 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-681 — the recipe detail page never leaves its loading skeleton in the agent preview pane
+- **Raised:** 2026-08-19 (recipe view feedback batch)
+- **Type:** finding
+- **What:** `/#/cookbook/<id>` mounts, `GET /api/recipes/<id>` returns **200**, no
+  console errors — and the page stays on the `FadeTransition` loading branch with
+  the content `v-else-if` never mounting (the fade sits at `opacity: 0`). Same
+  family as [[FU-638]] (rAF starvation in the pane); injecting
+  `*{transition:none}` did **not** clear it this time, so the existing workaround
+  is insufficient for `mode="out-in"`.
+- **Why deferred:** it blocked visual verification of this session's toolbar rebuild,
+  but it is an **agent-pane artefact, not a user-facing bug** — the same route renders
+  for the owner. Chasing it is its own investigation.
+- **Recommended resolution:** opportunistic, but worth doing before the next
+  recipe-page unit — two sessions in a row have now shipped recipe-page changes that
+  couldn't be seen. Likely the same root cause as FU-638; fix them together.
+- **State note:** 2026-08-20 — **not a page bug; it was the missing backend.** With
+  `.claude/launch.json` restored (FU-687) the recipe page renders fully in the pane in
+  ~2s — masthead, facts, status strip, ingredient rows with their chips, method, all
+  disclosures. It sat in the skeleton because `loadRecipe()` was 401ing against an API
+  that wasn't running. The real, narrower limitation: the pane **doesn't composite**, so
+  screenshots time out and `getBoundingClientRect` returns degenerate coordinates —
+  pointer-driven Quasar popups/dialogs therefore can't be exercised. JS probes,
+  `read_page`'s accessibility tree, and synthetic keyboard events on real elements all
+  work, which is enough to verify structure, labelling and keyboard paths.
+
+## [RESOLVED] FU-687 — `.claude/launch.json` lost its backend + SPA dev-verify configs, so no session can drive the running app
+- **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
+- **Type:** finding.
+- **What:** `.claude/launch.json` now holds a single `web` entry (`npx quasar dev
+  --port 5174`) and **no backend entry**. It previously had `dora-verify-backend`
+  (booted the API on 5170 *and* seeded ~40 bulk stock items) and `dora-spa`. The
+  file was rewritten in commit `24ca1786`. Consequence: `preview_start` brings up
+  the SPA with nothing to talk to, so every authenticated view 401s and a live
+  verify walk is impossible — which is why Chunk 4's visual half went to
+  `DORA_VERIFY.md` unwalked rather than being checked here. The old recipe is
+  documented in the session-memory note `reference-dev-verify-browser-login`,
+  which is now partly stale as a result.
+- **Why deferred:** restoring a dev-tooling config the owner may have deliberately
+  trimmed is his call, not a drive-by edit in a UI chunk.
+- **Recommended resolution:** **now**, if you want agents to keep verifying their
+  own work in the browser — it's a two-entry paste. Otherwise say so and every
+  visual check lands in `DORA_VERIFY.md` for you by default.
+- **State note:** 2026-08-20 — restored from `git show 24ca1786^:.claude/launch.json`,
+  merging the seven dropped configs (`dora-backend`, the four `dora-verify-backend*`
+  variants, `dora-spa`) back alongside the surviving `web` entry rather than replacing it.
+  Verified by booting `dora-verify-backend` + `web` and driving the recipe page live, which
+  is what this FU existed to unblock. **Side effect: FU-681 is stale** — recipe detail does
+  leave its loading skeleton; it never got the chance to before because the SPA had no API
+  to talk to. What the pane genuinely can't do is *composite*, so `getBoundingClientRect`
+  returns degenerate coordinates and pointer-driven Quasar popups can't be exercised — JS
+  probes and the accessibility tree work fine.
+
+## [RESOLVED] FU-690 — the redesigned recipe page diverges from D-015, and the divergence is only recorded in a code comment
+- **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
+- **Type:** finding.
+- **What:** `RecipeDetailNext.vue` deliberately drops the read-view + explicit
+  edit-mode pattern — values render as text and edit in place via `q-popup-edit`,
+  committing on close. **D-015** names exactly that shape ("**read-view + explicit
+  edit mode** for detail pages (never an always-editable form as 'detail')") and says
+  "Diverging is a recorded design decision". The page's docblock argues the case
+  honestly and names the rule, which satisfies the explain-in-place option — but
+  `DESIGN_STYLE_GUIDE.md` and the ADR log say nothing, and **D-015's own "why" cites
+  this very page** as the counterexample it was written against. So the next UI task
+  will check its work against a rule the flagship detail page now contradicts, with no
+  way to tell that was intended.
+- **Why deferred:** it's the owner's call, and it shouldn't be recorded until
+  FU-688 picks a winner — if the old page survives, there's nothing to record.
+- **Recommended resolution:** **with FU-688.** If the new page wins, D-015 needs
+  either a carve-out ("inline-edit is acceptable where the page must keep reading as
+  the document") or a rewrite, plus an ADR — this is the app's pattern rule, so it
+  can't just quietly lose.
+- **State note:** 2026-08-20 — resolved by **deleting the clause**, not carving it out.
+  The owner's call: the read-view/edit-mode requirement existed for the sole purpose of
+  the recipe screen that has now been replaced, so `DESIGN_STYLE_GUIDE.md` D-015 keeps its
+  three reused-anatomy clauses and records the retirement in place. What replaces it is
+  narrower and actually enforceable: **ADR-045 + R-049** (an always-editable surface owns
+  its commit — dirty flag, explicit Save, nav guard, timer cleanup; autosave banned).
+
+## [RESOLVED] FU-689 — the redesigned recipe page has no Import action, which blocks deleting the old one
+- **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
+- **Type:** finding.
+- **What:** `RecipeDetailPage.vue` carries an Import-from-URL action —
+  `RecipeImportDialog` with a `degraded-hint` warning that the existing recipe gets
+  **overwritten**, plus the confirm-then-PATCH flow in `onRecipeImported`.
+  `RecipeDetailNext.vue` has no import at all (no dialog, no toolbar button). Its
+  toolbar is Cook mode · Favourite · New version · Print · Delete. That's a
+  regression against the 2026-08-19 batch, which had *deliberately promoted* Import
+  out of a sidebar card row and into that toolbar.
+- **Why deferred:** it's a gap in unfinished parallel work, not a live bug — the old
+  page is still the default route, so nobody has lost the feature.
+- **Recommended resolution:** **before the old page is deleted** (FU-688). If the
+  new page wins, this is the first thing it needs; the dialog is already shared, so
+  it's a toolbar button plus the `@imported` handler.
+- **State note:** 2026-08-20 — **won't-do (owner).** Import-from-URL "doesn't belong"
+  on the recipe detail page; overwriting an existing recipe with a scraped one was never
+  the wanted behaviour. The redesigned page's missing Import is therefore intended, not a
+  regression, and the 2026-08-19 batch's promotion of Import into that toolbar is
+  superseded. Import remains available where it makes sense: the cookbook overview,
+  creating a *new* recipe. Recorded in `RecipeDetailNext.vue`'s docblock so the gap isn't
+  re-filed as a bug.
+
 ## [RESOLVED] FU-649 — Buy-verdict quick filter on Stock Overview needs a bulk verdicts endpoint
 - **Raised:** 2026-08-16 (stock-overview filter feedback — owner deferred).
 - **Type:** deferred job.

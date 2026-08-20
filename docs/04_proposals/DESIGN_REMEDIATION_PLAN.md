@@ -344,10 +344,67 @@ reload; pick one authority. Both are separable units (onboarding+backend, and th
 (reconcile-queue date vs meal-grid date) is now resolved in passing — both routes go through
 `useDateFormat`.
 
-### DR-15 · Micro-motion pass (D-010) — P3
+### DR-15 · Micro-motion pass (D-010) — ➗ DONE-with-carve-out 2026-08-20
 `--motion-fast` feedback on level change / tick / add-to-list / chip toggles;
 meal-planner wizard dedupe (one selectable instance per recipe, FU-578 #47) can
 ride along. **Refs:** critique §6.
+**Shipped.** One shared vocabulary rather than per-site keyframes (R-001/R-003):
+three utilities in `motion.scss` — `.dora-press` (persistent `:active` scale),
+`.dora-settle` and `.dora-bump` (one-shot) — plus three amplitude tokens
+(`--motion-settle-from/-bump-to/-press-to`) that the reduced-motion block
+flattens to `1`, so the kill-switch covers them for free. The one-shot pair are
+applied for a single cycle by a new **`useMicroFeedback()`** composable, which
+reads its own timer length from `--motion-fast` (no literal `ms` anywhere) and
+**removes the class again** — a class left on re-fires the animation on every
+re-render, which is how a one-shot acknowledgement turns into the ambient
+wallpaper D-010 warns about.
+Wired at all four gestures: **level change** → settle on the stock-row level
+square; **add-to-list** → bump on the row cart button when cart state flips
+(row variant only — a 16% scale on a labelled toolbar button reads as a twitch,
+and those aren't high-frequency); **chip toggle** → press + bump on `FilterChip`
+*and* `TriStateFilterChip`; **tick** → press on the shopping-list and stocktake
+checkboxes, and the ticked line now *fades* to its dimmed state instead of
+snapping. `RowActionButton` carries the press for the whole row cluster, so
+expiry / open-sealed / price / cart answer uniformly. `AnimatedNumber`'s
+hardcoded `600ms` also went — it now reads `--motion-slow` (D-010's no-literal
+clause; count-ups settle a little quicker as a result).
+**FU-578 #47 (the ride-along) is fixed, and R-003'd on the way:** the tray
+builder existed **twice, character-for-character** (`useMealPlanner.ts` and
+`MealPlanBuilderDialog.vue`), so a dedupe in one would have left the two pickers
+disagreeing. Both now call `helpers/recipeTrays.ts`, where each recipe is
+claimed by exactly **one** tray (Favourites → stale → frequently-planned →
+"Everything else"). Caps apply *before* the claim so an over-cap recipe falls
+through rather than vanishing, and search still flattens across the whole
+cookbook.
+**Verified:** 3 of the 4 gestures walked **live in the running app** —
+level-change settle (`dora-settle` applied on a real level set, animation
+`dora-settle 0.12s`, class gone after), cart bump (`none → on_other`,
+`dora-bump 0.12s`), chip press+bump (all 5 stock filter chips carry
+`.dora-press`; a real click showed the bump apply and clear). Also probed live:
+all three amplitude tokens resolve, both keyframes are in the compiled sheet,
+`.dora-press` resolves to `transform 0.12s cubic-bezier(0.4,0,0.2,1)`, and the
+reduced-motion block carries all three new amplitudes → `1`. Frontend **504
+passed** (was 488: +6 tray specs, +10 micro-feedback/token-parse specs),
+vue-tsc 0, eslint clean.
+**Carve-out — the critique §6 *transition* bullets, deliberately not built.**
+§6 also asked for route-change transitions and a dashboard loading→content
+crossfade. The crossfade is largely moot (DR-8 replaced those "Loading…" text
+swaps with the shared skeletons), and the belief chip's reflow was already fixed
+in DR-8 with a fade into reserved space. **Route transitions are left alone on
+purpose:** this unit's own R-050 finding is that the app has twice been bitten by
+sequencing state behind paint, and a page-level transition is exactly where that
+goes fatal rather than silent (the DR-8 splash wedge). D-010's scope is
+high-frequency *gestures*, which are all now covered; a route transition is a
+separate, riskier piece of work. Logged as [[FU-694]].
+**New rule:** **R-050 + ADR-046** — never sequence app state behind a paint
+callback. The composable's first draft used `requestAnimationFrame` to restart
+the animation; rAF doesn't fire in a backgrounded/throttled tab, so the class
+write was scheduled and silently never happened. Same assumption as the DR-8
+splash wedge, opposite failure mode.
+**Verify:** the tick fade + tray dedupe walk is queued in `DORA_VERIFY.md` —
+the shopping-list detail and the planner rail don't render in the verify pane
+(route transitions wedge there, and the rail is behind the pane's forced-mobile
+`$q.screen` branch).
 
 ### DR-16 · Onboarding activation step — P3, needs owner product call
 A "get food in" step (add first items / import / start with the starter list)
@@ -383,10 +440,10 @@ along. **Refs:** FU-578 #37/39.
 | 33, 44 (level colours/legend) | DR-2 | |
 | 36, 42, 45, 46, 54 (keep-as-is / cross-refs) | — | protected exemplars |
 | 37, 39 (register validation, activation) | DR-16 | |
-| 47 (wizard dupes) | DR-15 | |
+| 47 (wizard dupes) | DR-15 | ✅ done — one tray claims each recipe |
 | 49 (missing route alias) | DR-4 | one-line ride-along |
 | FU-582 (finish pickers) | DR-6 | ✅ closed — cut confirmed, do not build |
-| Critique §6 (micro-motion) | DR-15 | |
+| Critique §6 (micro-motion) | DR-15 | ✅ gestures done; route transitions → FU-688 |
 | Critique §8.1 (recipe detail) | DR-11 | |
 
 **Open decisions — spawned, not dangling:** DR-6 scope (build vs cut), DR-10

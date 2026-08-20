@@ -44,9 +44,15 @@ CUISINE_NAMES: list[str] = [
     "Mexican", "Mediterranean", "American", "French", "Middle Eastern",
     "Other",
 ]
+# Category is a **dish type** and nothing else. It used to include
+# "Breakfast", "Dessert" and "Snack", which are MEAL_SLOT_NAMES values below —
+# so the cookbook's Category dropdown read as a second time-of-day picker and a
+# recipe could carry the same word on both facets. Owner feedback 2026-08-20;
+# swapped for three dish types by migration c8b3e5f0a712, whose _CATEGORIES_AFTER
+# must stay identical to this list (same names, same order).
 CATEGORY_NAMES: list[str] = [
-    "Main", "Pasta", "Rice", "Stir fry", "Soup", "Salad", "Side",
-    "Breakfast", "Dessert", "Snack", "Drink", "Sauce",
+    "Main", "Pasta", "Rice", "Stir fry", "Curry", "Soup", "Salad", "Side",
+    "Bake", "Bread", "Drink", "Sauce",
 ]
 DIETARY_TAGS: list[tuple[str, str]] = [
     ("Vegetarian", "Dietary pattern"), ("Vegan", "Dietary pattern"),

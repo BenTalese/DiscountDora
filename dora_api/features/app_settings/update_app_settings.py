@@ -78,6 +78,10 @@ class UpdateAppSettingsRequest(BaseModel):
     # degrade the queue.
     stocktake_default_cadence_band: str | None = Field(default=None, max_length=16)
     stocktake_auto_tuning_enabled: bool | None = None
+    # 2026-08-20 — install-wide master switch + the opt-in default new items
+    # are born with. Plain bools; no validation beyond pydantic.
+    stocktake_enabled: bool | None = None
+    stocktake_new_items_opt_in: bool | None = None
     # FU-511 — install-wide auto-add mode. Validated against
     # `_VALID_AUTO_ADD_MODES` in the handler so a typo can't silently
     # degrade behaviour to the seeded default.
@@ -275,6 +279,16 @@ class UpdateAppSettingsHandler:
             and request.stocktake_auto_tuning_enabled is not None
         ):
             setting.stocktake_auto_tuning_enabled = request.stocktake_auto_tuning_enabled
+        if (
+            "stocktake_enabled" in set_fields
+            and request.stocktake_enabled is not None
+        ):
+            setting.stocktake_enabled = request.stocktake_enabled
+        if (
+            "stocktake_new_items_opt_in" in set_fields
+            and request.stocktake_new_items_opt_in is not None
+        ):
+            setting.stocktake_new_items_opt_in = request.stocktake_new_items_opt_in
 
         # FU-317 — meal-plan reconcile posture. Plain bool; no validation
         # beyond pydantic. Flip takes effect on the next

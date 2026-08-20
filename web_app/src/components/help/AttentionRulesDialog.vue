@@ -8,10 +8,13 @@
     >
         <q-card-section class="dora-attention-help">
             <p class="text-body2 q-mb-md">
-                Dora uses three signals on every stock item — the
-                <strong>level dot/picker</strong>, the <strong>row outline</strong>,
-                and the <strong>row opacity</strong> — to tell you what needs
-                acting on. The same rules also drive the
+                A stock row speaks four things, and only four: the
+                <strong>level box</strong> (its colour, and whether its edge is
+                dashed), the <strong>row treatment</strong> (outlined, plain or
+                dimmed — one scale, not three signals), the
+                <strong>essential edge stripe</strong>, and the
+                <strong>expiry button</strong> (with the open/sealed toggle
+                beside it). The same rules also drive the
                 "<em>Needs attention</em>" count in the footer and its
                 matching filter chip, so what you see highlighted is
                 exactly what the count is counting.
@@ -71,16 +74,17 @@
             <!-- ── Essential ──────────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Essential items</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
-                Items you mark <strong>essential</strong> get a warning-toned
-                stripe on the left edge of the row and a flag icon on the
-                right. Essentials are the ONLY items whose stock level
+                Items you mark <strong>essential</strong> get a stripe down the
+                left edge of the row. (There's no flag button on the row —
+                essential is set-and-forget, on the item's own page.)
+                Essentials are the ONLY items whose stock level
                 drives an outline — a non-essential item running Low or Out
                 is silent, because the level square already says so and Dora
                 shouldn't be loud about things you didn't say mattered.
             </p>
             <q-card flat bordered class="dora-attention-essential-sample">
                 <q-card-section class="row items-center">
-                    <q-icon :name="ICONS.flag" color="warning" size="20px" class="q-mr-sm" />
+                    <q-icon :name="ICONS.flag" color="secondary" size="20px" class="q-mr-sm" />
                     <span class="text-body2">A flagged item, full opacity, with the left stripe.</span>
                 </q-card-section>
             </q-card>
@@ -96,16 +100,22 @@
                 isn't quieted by the fade.
             </p>
 
-            <!-- ── Rings (2026-08-15) ─────────────────────────────────
-                 These two indicators used to be chips with their own words
-                 sitting beside the buttons. They're now rings ON those
-                 buttons, so the words have to live somewhere — here, next to
-                 the other row-language rules, and in the legend above. -->
-            <h6 class="q-mt-lg q-mb-sm">Rings around the buttons</h6>
+            <!-- ── The dashed level box (D-5) ─────────────────────────
+                 This section used to describe THREE ring indicators: an
+                 amber ring for Dora's belief, a pulsing accent ring for
+                 "due a count", and a green/amber/red ring on the cart for
+                 the buy verdict. The verdict came off the row entirely
+                 (D-10) and the other two collapsed into one dashed edge
+                 (D-5) — because to a reader they said the same thing, and a
+                 row can't carry three ring vocabularies and stay
+                 readable. -->
+            <h6 class="q-mt-lg q-mb-sm">A dashed level box</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
-                A ring means something is being said about the button it
-                surrounds — not about the item as a whole. There are two, and
-                they never mean the same thing:
+                One marker, one meaning: <strong>this number might be out of
+                date</strong>. The level's colour still tells you what's
+                recorded — the dashes only say don't bet the week on it. Open
+                the picker and its header says which of the two reasons
+                applies:
             </p>
             <q-list bordered separator class="rounded-borders">
                 <q-item>
@@ -114,16 +124,13 @@
                     </q-item-section>
                     <q-item-section>
                         <q-item-label class="text-weight-medium">
-                            Amber ring on the level box — "Dora thinks…"
+                            "Dora thinks…" — she disagrees with the level
                         </q-item-label>
                         <q-item-label caption>
                             Dora works out what you probably have from your
                             purchases, how often you rebuy, and what you've
-                            cooked. When that <strong>disagrees</strong> with the
-                            level you recorded, the level box gets an amber ring.
-                            Open the picker and its header tells you what she
-                            thinks and why. She never changes your recorded level
-                            — that stays the source of truth — and when she
+                            cooked. She never changes your recorded level —
+                            that stays the source of truth — and when she
                             agrees with you she says nothing at all. Turn the
                             hint off in Settings → Assistant.
                         </q-item-label>
@@ -131,27 +138,35 @@
                 </q-item>
                 <q-item>
                     <q-item-section avatar>
-                        <q-icon :name="ICONS.shopping_cart" color="positive" size="22px" />
+                        <q-icon :name="ICONS.fact_check" color="warning" size="22px" />
                     </q-item-section>
                     <q-item-section>
                         <q-item-label class="text-weight-medium">
-                            Coloured ring on the cart button — should you buy it?
+                            Due for a stocktake check
                         </q-item-label>
                         <q-item-label caption>
-                            Green means <strong>worth buying now</strong>, amber
-                            <strong>might be worth waiting</strong>, red
-                            <strong>probably skip</strong>. It's worked out from
-                            your own price history, how fast you get through the
-                            item, and what you've thrown away — no outside data.
-                            Hover the button for the headline, the reasons, and
-                            how confident she is; there's no ring at all when
-                            she isn't confident enough to be useful. Turn it off
-                            in Settings → Admin → System ("Should I buy?"
-                            oracle).
+                            It's been long enough since this item was counted
+                            that the recorded level is a guess. Set it from the
+                            picker, or walk the whole queue from the Stocktake
+                            button, which carries the number due. That button
+                            <strong>glows only when one of the items due is
+                            flagged essential</strong> — otherwise it waits
+                            quietly with its count.
                         </q-item-label>
                     </q-item-section>
                 </q-item>
             </q-list>
+
+            <!-- ── Expiry + open (Chunk 4) ────────────────────────────── -->
+            <h6 class="q-mt-lg q-mb-sm">The expiry button</h6>
+            <p class="text-body2 q-mb-sm dora-text-secondary">
+                Its <strong>colour</strong> is the expiry date — green fine,
+                amber soon, red gone, grey none set. Tap it to set a date, push
+                one by a day or a fortnight, clear it, or log the item as
+                waste. Next to it, the <strong>open / in-use</strong> toggle:
+                marking something open asks you for a revised date, because an
+                opened jar and a sealed one don't keep for the same time.
+            </p>
 
             <!-- ── Cheat sheet ────────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Cheat sheet</h6>
@@ -159,35 +174,27 @@
                 <thead>
                     <tr>
                         <th>State</th>
-                        <th>Outline</th>
+                        <th>Row treatment</th>
                         <th>Counts as "Needs attention"</th>
-                        <th>Dimmed</th>
+                        <th>Where it sorts</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="r in cheatRows" :key="r.state">
                         <td>{{ r.state }}</td>
                         <td>
-                            <span v-if="r.outline === 'warn'" class="text-warning text-weight-medium">amber</span>
-                            <span v-else-if="r.outline === 'alert'" class="text-negative text-weight-medium">red</span>
-                            <span v-else class="dora-text-muted">—</span>
+                            <span v-if="r.band === 0" class="text-negative text-weight-medium">outlined</span>
+                            <span v-else-if="r.band === 2" class="dora-text-muted">dimmed</span>
+                            <span v-else class="dora-text-muted">plain</span>
                         </td>
                         <td>
                             <q-icon
-                                :name="r.attention ? ICONS.check : ICONS.close"
-                                :color="r.attention ? 'positive' : undefined"
+                                :name="r.band === 0 ? ICONS.check : ICONS.close"
+                                :color="r.band === 0 ? 'positive' : undefined"
                                 size="18px"
                             />
                         </td>
-                        <td>
-                            <q-icon
-                                v-if="r.dim"
-                                :name="ICONS.check"
-                                color="positive"
-                                size="18px"
-                            />
-                            <span v-else class="dora-text-muted">—</span>
-                        </td>
+                        <td class="dora-text-muted">{{ BAND_POSITION[r.band] }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -220,21 +227,29 @@
         void stockLevelStore.ensureLoadedAsync();
     });
 
-    type CheatRow = {
-        state: string;
-        outline: 'none' | 'warn' | 'alert';
-        attention: boolean;
-        dim: boolean;
-    };
+    /**
+     * One column, not three (D-8). The table used to carry an Outline
+     * column with two tiers and a separate Dimmed column, which let it
+     * describe combinations the row can't actually render — the treatments
+     * are bands on ONE scale, so an item is in exactly one of them. `band`
+     * mirrors `attentionBand()` in `useStockFilters`: 0 outlined, 1 plain,
+     * 2 dimmed. Position in the default sort is a property of the band,
+     * which is the whole point of the scale.
+     */
+    const BAND_POSITION = ['top', 'middle', 'bottom'] as const;
+
+    type CheatRow = { state: string; band: 0 | 1 | 2 };
     const cheatRows: CheatRow[] = [
-        { state: 'Stocked, no expiry issue', outline: 'none', attention: false, dim: false },
-        { state: 'Low — not essential', outline: 'none', attention: false, dim: false },
-        { state: 'Low — essential', outline: 'warn', attention: true, dim: false },
-        { state: 'Out — not essential', outline: 'none', attention: false, dim: true },
-        { state: 'Out — essential', outline: 'alert', attention: true, dim: false },
-        { state: 'Expiring within 7 days (any)', outline: 'warn', attention: true, dim: false },
-        { state: 'Expired (any)', outline: 'alert', attention: true, dim: false },
-        { state: 'Expired + Out, not essential', outline: 'alert', attention: true, dim: true },
+        { state: 'Stocked, no expiry issue', band: 1 },
+        { state: 'Low — not essential', band: 1 },
+        { state: 'Low — essential', band: 0 },
+        { state: 'Out — not essential', band: 2 },
+        { state: 'Out — essential', band: 0 },
+        { state: 'Expiring inside your window (any item)', band: 0 },
+        { state: 'Expired (any item)', band: 0 },
+        // Attention wins over the dim: expired is something to act on, so
+        // the row is outlined and full opacity even though it's also out.
+        { state: 'Expired + Out, not essential', band: 0 },
     ];
 </script>
 
@@ -259,8 +274,11 @@
         top: 0;
         bottom: 0;
         left: 0;
-        width: 3px;
-        background: var(--q-warning);
+        /* Matches StockItemRow's real stripe — 6px, secondary-toned. It was
+           3px and warning-amber here, i.e. a different width in a colour the
+           row stopped using when essential moved onto the secondary tone. */
+        width: 6px;
+        background: var(--brand-secondary-strong);
     }
     .dora-attention-table {
         width: 100%;

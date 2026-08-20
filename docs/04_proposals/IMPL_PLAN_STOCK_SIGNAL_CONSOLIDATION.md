@@ -1,9 +1,19 @@
-# Implementation Plan — Stock Signal Consolidation
+﻿# Implementation Plan — Stock Signal Consolidation
 
-**Status:** 🟡 in progress — **Chunks 1 and 2 landed 2026-08-19**; Chunk 3 onwards
-open, and Step 0 (the owner-in-the-loop alerts assessment) is now the only thing
-blocking them. Per-chunk detail in `DORA_WORKLOG.md` (2026-08-19 "later 7"/"later 8")
-and FU-683. Landing Chunk 1 also exposed **FU-684** — the buy verdict had never
+**Status:** ➗ **code-complete — all six chunks landed**, browser-verify owed on the
+whole surface. (1 + 2 on 2026-08-19; Step 0, 3, 4, 5 and 6 on 2026-08-20.) The row
+carries the four channels §0.2 asked for; the queue is belief-ranked; the runner is
+three phases. Nothing is waiting on an owner answer.
+
+Two decisions were **owner-amended after landing**, both recorded in place: D-14's
+glow removal became *glow gated on essentials*, and Chunk 4's merge of the expiry
+and open/in-use controls was **reverted** (§0.2 counts them as one channel either
+way, so it bought nothing). Per-chunk detail in `DORA_WORKLOG.md` (2026-08-19
+"later 7"/"later 8"; 2026-08-20 ×5) and FU-683.
+
+**What's left is verification, not construction** — nothing on this surface has been
+seen in a browser (FU-687 removed the dev-verify config), and the checks are queued
+in `DORA_VERIFY.md`. Landing Chunk 1 also exposed **FU-684** — the buy verdict had never
 actually worked, because an `.include()`d `stock_level` came back unhydrated and
 collapsed the need axis to thin-data on every item.
 **Raised:** 2026-08-19 (design session, owner-led)
@@ -389,7 +399,37 @@ heavily afterwards, the ranking is still wrong.
 Phase-3 sweep surfaces the same concern at the right moment, and a filter that
 would hardly ever be used is exactly the overview chrome this plan removes.
 
-### D-14. Stocktake toolbar button loses its glow
+### D-14. Stocktake toolbar button loses its glow — **AMENDED 2026-08-20: the glow stays, gated on essentials**
+
+> **Owner amendment, superseding the removal below.** *"I want the stocktake
+> button glow — don't remove that, but maybe only make it glow if there's
+> essential items needing stocktake?"*
+>
+> This is a better answer than either the old behaviour or D-14's removal, and
+> it reframes the diagnosis: **the problem was never the glow, it was the
+> condition.** "Something is due a count" is true in any real pantry at any
+> time, so a glow on it is permanent, and a permanent glow is wallpaper — which
+> is exactly what feedback **L103** ("the glow is not obvious enough, I almost
+> didn't see it") feels like from the inside. Making it louder, as the
+> 2026-08-15 change tried, can't fix a signal that never turns off. Gating it on
+> `is_essential` does: it now fires on a handful of items, rarely, which is the
+> only condition under which an interruption keeps working.
+>
+> **This also resolves the L103 contradiction** that D-14 had to record as
+> deliberate — L103 is now *answered* rather than overridden.
+>
+> Implemented 2026-08-20: `essential_total` on `GET /api/stocktake/queue`
+> (counted over the whole overdue set, not the returned page — a household past
+> the 500 cap must not stop glowing exactly when it matters most) plus
+> `is_essential` per queue item; `:attention="stocktakeEssentialOverdue > 0"`.
+> The count still rides the label whether or not it glows, and the aria label
+> names the essential count so the glow's *reason* is available non-visually.
+>
+> **The row-level pulse stays deleted** (D-5). That one can't be gated the same
+> way — it fires on every overdue row simultaneously, so it has no rare state.
+> One quiet marker per row, one loud signal at the top.
+
+The original reasoning, kept for the record:
 
 `StockOverview.vue:41` sets `:attention="stocktakeOverdue > 0"`, triggering
 `dora-btn--attention` — a 2-second infinite pulsing glow. Same argument as D-5.
@@ -504,26 +544,139 @@ consumes it.
 - Delete `AttentionRulesDialog.vue`, or collapse it into whatever documents the
   bell.
 
-### Chunk 4 — Sort + row treatments
+### Chunk 4 — Sort + row treatments — **DONE 2026-08-20**
 
-- New default sort (D-9).
-- Three-band treatment scale: outline / normal / dim (D-8).
-- One dashed uncertainty marker; remove the pulse and the belief ring (D-5).
-- Remove the stocktake button glow (D-14).
-- Fold the open/in-use marker into the expiry line.
-- Rewrite `StockRowLegend.vue` against the reduced language — it should shrink
-  dramatically. If it doesn't, the encoding is still too dense.
+- ✅ New default sort (D-9). `attention` is first in `STOCK_SORT_OPTIONS` and the
+  default axis; `migrateStockSort` falls back to it instead of Name (a stored
+  `name` is still honoured — that was a choice someone made).
+- ✅ Three-band treatment scale (D-8), as one exported `attentionBand()` the
+  comparator and the row both read. **This found a live bug:** the bands weren't
+  exclusive — an expired, out-of-stock, non-essential row got the attention
+  outline *and* the dim, i.e. "act on this" and "ignore this" on one row, the
+  same contradiction B4 named one layer down. `stock-row--dim` now requires
+  `!needsAttention`.
+- ✅ One dashed uncertainty marker (D-5). The stocktake pulse and the belief ring
+  are both deleted — keyframes, reduced-motion block and all — replaced by
+  `--uncertain` (2px dashed, no motion). Belief wins the *wording* when both
+  fire; the picker popover is the only place that says which reason it was, and
+  it gained a stocktake header for the cadence case.
+- ➗ Stocktake button glow — removed, then **restored gated on essentials** on
+  owner challenge the same day. See the D-14 amendment above; the gate *is* the
+  design, and it answers L103 rather than overriding it.
+- ❌ **Open/in-use folded into the expiry control — built, then REVERTED on owner
+  challenge** (*"do you mean expiry and open buttons were merged? that feels like
+  the wrong move somehow"*). He was right, and this plan's own numbers say so:
+  **§0.2 counts "expiry text (+ open marker)" as ONE channel in both the
+  before (9) and the after (4) list** — so merging the two *controls* reduced the
+  channel count by **zero**. The costs were real: a one-tap toggle became a
+  two-tap menu trip, and one glyph was made to carry two unrelated meanings in
+  two encodings (shape = open, colour = expiry), which is the exact overloading
+  this plan exists to remove. The bullet meant *don't state "open" twice on the
+  row*, not *delete the button* — and the row already satisfied it. Both controls
+  are back as they were, with the reasoning recorded in the template so nobody
+  re-does the merge from reading the bullet literally.
+- ✅ `StockRowLegend.vue` rewritten and it did shrink: **9 documented channels →
+  4**. Gone entirely (not reworded): the amber warn tier, three cart-verdict
+  rings, the belief ring, the pulse.
+- ➕ Not in the chunk list, found while doing it: `AttentionRulesDialog.vue` was
+  still documenting the two-tier outline, the cart verdict rings (removed by
+  D-10 in **Chunk 2**) and an essential stripe in the wrong colour and width. Its
+  cheat sheet also had separate Outline and Dimmed columns, which let it describe
+  band combinations the row cannot render. Rewritten to the one three-band
+  column + where each band sorts.
 
-### Chunk 5 — Queue ranking
+### Chunk 5 — Queue ranking — **DONE 2026-08-20**
 
-- Belief becomes the ranking input; cadence the floor + fallback (D-1).
-- No toggle, no selector.
+- ✅ Belief ranks the queue; cadence is the floor and the fallback (D-1). The rule
+  lives in its own pure module, `features/stocktake/queue_ranking.py`, the way Chunk
+  3's attention rule does — membership stays entirely `resolve_overdue_map`'s job, so
+  nothing about *who* is due changed.
+- ✅ No toggle, no selector. Which meant the order had to explain itself instead:
+  see the two copy changes below.
+- **Three ranks, not two.** D-1 names the two ends (least-certain first, most-overdue
+  as fallback); implementing it needed a decision about where "no evidence" sits
+  relative to "Dora is confident", and the answer is **in between**:
+  `uncertain` → `overdue` → `confident`. Not knowing whether we know is a better
+  reason to walk than knowing. Recorded because it's a real choice D-1 didn't make.
+- **`confident` sinks, it does not leave the queue.** Tempting and wrong: belief has
+  no quantity awareness (§1.3) and reaches "high" off ~3 logged purchases, so it's a
+  good ranking signal and a bad authority. Cadence still says these are due.
+  Conveniently, that rank *is* Chunk 6's Review set (D-3/D-4) — which is why the rank
+  is a named, exposed field rather than an anonymous sort key.
+- **`medium` confidence counts as uncertain**, even though `inference_overlay` will
+  happily remark on a medium belief. Remarking is cheap and reversible; ranking an
+  item *down* the walk on a medium hunch risks never reaching it. Bias toward walking.
+- **A non-inferred belief is not signal.** `is_inferred == False` means the belief is
+  echoing a level the user confirmed recently — that says the *record* is fresh, not
+  that the shelf was counted, so those rank `overdue` and sort by the calendar.
+- **Gated on the user's stock-inference opt-in** (`inference_overlay.SURFACE_STOCK`,
+  reusing `current_user` + `surface_enabled` rather than adding an 18th copy of the
+  session→user dance — FU-654 tracks that sweep). Inference off ⇒ pure cadence order,
+  pinned by a test as byte-for-byte the old ordering. Ranking a list by an inference
+  the user opted out of, on a screen that then can't explain itself, is worse than not
+  ranking it.
+- ✅ Queue DTO gained `check_rank` + `belief_band` / `belief_confidence` /
+  `belief_reason`, and the response gained **`ranked_by`** (`belief` | `cadence`).
+  `ranked_by` exists because "every row is `overdue`" is ambiguous — it means both
+  "inference is off" and "inference is on but nothing has evidence yet", and those
+  deserve different explanations.
+- ✅ Runner copy: the item card now carries *"Dora's not sure about this one — …"* in
+  belief's own words when belief is why that row came up, and the help dialog explains
+  least-certain-first instead of claiming most-overdue-first. Beliefs are gathered for
+  the **overdue set only** — the overview polls this endpoint on every load.
+- 12 new unit tests on the rule; queue shape assertions updated.
 
-### Chunk 6 — Runner three-phase rebuild
+### Chunk 6 — Runner three-phase rebuild — **DONE 2026-08-20**
 
-- Review (D-3) → Walk → Sweep (D-4).
-- "Last session" timestamp for newly-excluded computation.
-- Verify the re-entry wiring flagged in D-4.
+- ✅ **Review → Walk → Sweep**, one read (`GET /api/stocktake/session`) and a
+  phase machine in `StocktakeRunner.vue`. Each phase is **skipped silently** when
+  empty, per D-4's edge cases: an empty Review is the normal case for months on a
+  young install, and announcing "0 items to review" is a screen whose only content
+  is its own absence. Review and Sweep are their own components
+  (`components/stocktake/`), leaving the page as the phase machine plus the walk.
+- ✅ **`User.stocktake_last_session_at`** (migration `f2a6d4b8c917`), the watermark
+  the Sweep needs. **Per-user, not household** — a stocktake is a shared activity
+  but "what changed since *I* last looked" is personal, and household scoping
+  would have two people blanking each other's Sweep. **NULL ⇒ empty Sweep**, so
+  the phase's debut can't dump every long-dead item into it.
+- ✅ **The Sweep dates departures rather than storing them.** Both of the
+  engagement gate's time-windowed signals expire on a schedule, so
+  `dropped_out_at = last_activity + ENGAGEMENT_WINDOW`, and "newly" is that
+  instant falling after the watermark. No history table, no nightly job, and it
+  can't drift from the gate because it reads the same two events. Items with *no*
+  activity at all are excluded — never tracked, rather than newly untracked.
+  Muted items are excluded too: mute already said "don't nag me about this", so
+  reporting it back is telling the user something they said first.
+- ✅ **Review is a scan-and-exception screen, not "Confirm all (12)"** (D-3's
+  critical constraint). Real names, believed level, and Dora's one-line reason per
+  row; everything pre-ticked; the button counts what it will write. Unticked rows
+  are **prepended** to the walk, not appended — the user just said "I want to look
+  at this myself", and making them walk the whole queue first would punish exactly
+  the disagreement the screen exists to make cheap.
+- ✅ **`POST /api/stocktake/session/complete`** stamps the watermark, called once
+  when the run reaches its summary — never per phase, never on abandon. Once the
+  watermark passes a departure that item is indistinguishable from the long-dead
+  ones, so a run backed out of must not swallow a Sweep list nobody saw. A failed
+  stamp is deliberately silent (cost: seeing the same tidy-up list next time).
+
+#### The D-4 wiring risk — **CONFIRMED, and the plan's fallback was right**
+> *"A plain check bumps `last_checked_at`, which may **not** be one of those
+> signals — so 'I still keep this' might not actually re-enter the item."*
+
+Verified in code: `_is_engaged` keys off in-stock / `opened_on` / a
+`StockLevelChange` in 60d / a shopping-list appearance in 60d, and
+`POST /stock-items/<id>/check` writes `last_checked_at` and `snoozed_until` only.
+So wiring that button to a check **would have looked like it worked and changed
+nothing** — the item would have reappeared in the next Sweep. Taking the plan's
+recommended fallback: **"I still keep this" opens the level picker**, and setting
+a level writes a `StockLevelChange` (and for anything in stock satisfies the gate
+outright). No force-include column was added; as the plan predicted, it would
+have been mute's inverse. It's also the truthful action — the reason Dora lost
+track is that nobody has said what's on the shelf.
+
+- 8 new unit tests on the Sweep rule (including both boundary cases: a departure
+  exactly *at* the watermark counts as already-seen, and a not-yet-elapsed window
+  is never announced early), 4 new e2e on the session endpoints.
 
 **Suggested order:** 1 → 2 → (Step 0) → 3 → 4 → 5 → 6. Chunks 1 and 2 can land
 while Step 0 is still being decided.

@@ -1,4 +1,4 @@
-# Dora Follow-ups Ledger — Open
+﻿# Dora Follow-ups Ledger — Open
 
 Stateful backlog of **open follow-ups, deferred jobs, leftovers, and findings**
 surfaced while running prompts — the stuff that's easy for the user to miss in a
@@ -29,6 +29,282 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-NNN — short title
+- **Raised:** YYYY-MM-DD (prompt id / task)
+- **Type:** follow-up | deferred job | leftover | finding
+- **What:** one or two lines.
+- **Why deferred:** the reason it wasn't done in-line.
+- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
+```
+
+---
+
+Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
+
+```
+## [RESOLVED] FU-NNN — short title
+- **Raised:** YYYY-MM-DD (prompt id / task)
+- **Type:** follow-up | deferred job | leftover | finding
+- **What:** one or two lines.
+- **Why deferred:** the reason it wasn't done in-line.
+- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
+- **State note:** (filled in when resolved — date + how)
+```
+
+---
+
+# Open
+
+## [OPEN] FU-700 — the stocktake install switch isn't gated on the dashboard / help copy
+- **Raised:** 2026-08-20 (stock-overview feedback batch).
+- **Type:** leftover.
+- **What:** `AppSetting.stocktake_enabled` now hides the Stock-overview button,
+  the "Needs check" filter, the per-item mute toggle and the runner, and empties
+  the server-side overdue map. Three surfaces still speak as if the feature is
+  always on: `DoraScoreCard`'s "Do a stocktake" action (`/stock?stocktake=1`),
+  `AttentionRulesDialog` + `StockRowLegend` ("due for a stocktake check"), and
+  `AlertsPage`'s copy about the default stocktake reminder.
+- **Why deferred:** the reported items were the overview and the per-item
+  toggle; the Dora-Score action in particular needs a call on whether the score
+  should still *carry* a staleness component when stocktake is off (server-side
+  question), not just whether to hide a link.
+- **Recommended resolution:** later, alongside FU-182's app-wide feature-gate
+  sweep — or now if the owner intends to actually run with stocktake off.
+
+## [OPEN] FU-699 — full backend suite not run for the stocktake-switch change
+- **Raised:** 2026-08-20 (stock-overview feedback batch).
+- **Type:** finding.
+- **What:** the session was cut short mid-verification. What did run and pass:
+  240 backend tests matching `stocktake or app_setting or settings or stock_item
+  or health`, the refreshed `dto_snapshots.json` contract test (27 passed), the
+  full frontend suite (504), `vue-tsc` (0 errors) and eslint on every touched
+  file. The **whole** `pytest tests` run did not.
+- **Why deferred:** out of session time.
+- **Recommended resolution:** now — one `pytest tests -q` before this lands.
+
+## [OPEN] FU-698 — "Deselect all" and "Cancel bulk select" are now the same action
+- **Raised:** 2026-08-20 (stock-overview feedback batch).
+- **Type:** design question.
+- **What:** per owner feedback, Deselect-all now exits bulk mode (matching what
+  unticking the last item already did), which makes it behaviourally identical
+  to the toolbar's Cancel. It was kept because on a phone the bulk bar is what's
+  on screen and the toolbar Cancel may be scrolled away — but two buttons doing
+  one thing is the kind of thing D-rules exist to catch.
+- **Why deferred:** removing a button the owner didn't ask to remove is his call.
+- **Recommended resolution:** opportunistic — next time the bulk bar is touched.
+
+## [OPEN] FU-697 — I destroyed the tail of the "later 8" worklog entry; partial reconstruction is in place
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** finding.
+- **What:** while appending this session's worklog entry I first wrote it with
+  PowerShell `Get-Content`/`Set-Content`, which in PS 5.1 reads as ANSI and
+  mangled every em-dash in the file. Reaching for `git checkout --
+  DORA_WORKLOG.md` to undo that was the actual mistake: `DORA_WORKLOG.md` had
+  **uncommitted** changes (the *later 8* Cookbook-feedback-batch-3 entry), and
+  the checkout took them with the corruption. I reconstructed that entry verbatim
+  from a read taken at session start, which covered it down to the "Serves filter
+  added" bullet; **anything it said past that point is gone.** The entry now
+  carries a banner marking the truncation. Nothing else was affected — only
+  `DORA_WORKLOG.md` was checked out, the code changes and every other modified
+  file are intact, and the product-level record of that work survives in
+  `CHANGELOG.md`.
+- **Why deferred:** it can't be fixed by me — only the owner (or the session that
+  wrote it) knows what the missing tail said. Filed so the gap is on the record
+  rather than looking like the entry simply ended there.
+- **Recommended resolution:** now, if the owner remembers what the batch-3 entry
+  covered after the Serves filter (likely: the verify/close-gate sections); then
+  delete the banner. Otherwise leave the banner and close.
+- **Process note for the next session:** in this repo, edit these UTF-8 markdown
+  logs with Python (`encoding='utf-8'`) or the Write/Edit tools — never PS 5.1
+  `Get-Content`/`Set-Content` without `-Encoding utf8`. And never `git checkout
+  --` a file that `git status` shows as modified; the logs are append-mostly and
+  routinely carry uncommitted work.
+
+## [OPEN] FU-696 — stray editor temp file committed-adjacent in `web_app/src/pages`
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** finding.
+- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87`
+  is sitting in the pages directory — an editor/tool crash artefact, not source.
+  It's a full stale copy of the page (it still references `PantryBeliefChip`,
+  which the live page no longer imports), so it will confuse the next grep for
+  anything on that surface, and Vite/vue-tsc ignore it only because of the
+  extension suffix.
+- **Why deferred:** out of DR-15's scope, and deleting a file I didn't create in
+  a pass about motion is the kind of unrelated change the scope rule (R-013)
+  exists to stop. Trivially safe to remove once confirmed it isn't something the
+  owner parked deliberately.
+- **Recommended resolution:** now (one `rm`, owner to confirm it's an artefact).
+
+## [OPEN] FU-695 — `PantryBeliefChip.vue` is orphaned; nothing imports it
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** finding.
+- **What:** `components/stock/PantryBeliefChip.vue` has **no importer left** in
+  `web_app/src` — only comments in `PantryBeliefCard.vue`, `StockItemRow.vue`
+  and `StockItemDetailPage.vue` still refer to it. The row-level belief hint it
+  rendered was folded into the level picker (ring + menu header) during the
+  2026-08-15 Chunk-4 work, and the chip was left behind. Note it *did* receive a
+  real fix afterwards (the DR-8 fade-in) — i.e. dead code that is still being
+  maintained, which is the expensive kind.
+- **Why deferred:** deciding between "delete it" and "it's the intended
+  component for a surface that hasn't been rebuilt yet" is a product call, and
+  the three comments referencing it need rewording either way — more than a
+  ride-along on a motion pass.
+- **Recommended resolution:** now (a delete + three comment edits, if the owner
+  confirms the row-level chip isn't coming back).
+
+## [OPEN] FU-694 — route-change transitions: the last critique §6 bullet, deliberately deferred
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** deferred job.
+- **What:** the UX critique §6 asked for route changes to stop being instant
+  swaps. DR-15 covered everything else in that section — the four
+  high-frequency gestures (D-010), and DR-8 had already handled the belief-chip
+  reflow and the dashboard loading→content swap via the shared skeletons — but
+  page-level transitions are not built.
+- **Why deferred:** the app has now been bitten **twice** by sequencing state
+  behind paint (the DR-8 splash wedge; DR-15's own first-draft rAF class write),
+  which is what R-050/ADR-046 were written for this session. A route transition
+  is precisely where that failure goes fatal rather than silent — a wedged
+  `<Transition>` leaves the user on a blank or half-left page. It also has to
+  co-exist with scroll restoration and the per-page skeletons. That's its own
+  unit with its own risk, not a ride-along on a 120ms-feedback pass. (The verify
+  pane already demonstrates the failure: its route transitions wedge in
+  `dora-fade-leave-active` and never complete.)
+- **Recommended resolution:** opportunistic — and only with a non-paint timeout
+  driving the unmount (R-050), never `transitionend` alone.
+
+## [OPEN] FU-693 — the two compact-list row names sit off the D-003 type scale
+- **Raised:** 2026-08-20 (cookbook feedback batch 3).
+- **Type:** finding.
+- **What:** `StockItemRow.vue`'s `.stock-row__name` is `font-size: 1.05rem` — a
+  raw size, not one of the `--font-size-*` ratios D-003 requires (`md` = 1,
+  `lg` = 1.125; 1.05 is neither). `RecipeRow.vue`'s `.recipe-row__name` now
+  carries the same raw value, because the owner's ask this session was
+  explicitly *parity with the stock row* and the only way to match a
+  tokenless value is to repeat it. Carve-out is commented in place in
+  `RecipeRow.vue` naming the rule.
+- **Why deferred:** it has to be done as a **pair or not at all** — tokenising
+  one breaks the parity the request created, and tokenising both moves the Stock
+  Overview name type the owner signed off on days ago (24ca1786 / 8073ac04). So
+  it's a small deliberate design call, not a mechanical sweep.
+- **Fix shape:** decide whether a list-row name is `--font-size-md` (16, back
+  down a step) or earns a new `--font-size-md-plus` ratio, then change both
+  declarations in the same commit. Check any other `.…__name` in a list row for
+  the same value while there.
+- **Recommended resolution:** opportunistic — pairs with the next design-
+  remediation chunk, or with [[FU-691]] since both are D-rule type/token drift.
+
+## [OPEN] FU-692 — `ICONS.restaurant` means four different things
+- **Raised:** 2026-08-20 (cookbook feedback batch 3 — icon crossover item).
+- **Type:** finding.
+- **What:** the owner's report was "inconsistent and crossover icons between
+  filters and recipe cards", naming difficulty and cook-time/time-of-day. Those
+  three are fixed. Auditing them turned up a fourth, wider one that was **not**
+  in scope: `ICONS.restaurant` (fork-and-knife) currently stands for *a meal*
+  (meal-plan chips/cards, the `no_planned_meals` alert, the dashboard,
+  `UpcomingTimeline`, onboarding, Help), *the admin Cooking settings page*,
+  *the About page*, and — the actual crossover — **recipe tools** in
+  `RecipeDetailPage.vue:208`, where the cookbook's own Tools filter uses
+  `ICONS.blender`. Servings was a fifth meaning until this session moved it to
+  `ICONS.people`.
+- **Why deferred:** it spans meal plans, dashboard, alerts, settings, help and
+  onboarding — six surfaces the owner hasn't reviewed — and the fix is a
+  glossary decision ("what is the one thing fork-and-knife means?") before it's
+  an edit. Doing it as a side effect of a cookbook fix is how you get a diff
+  nobody can review. `RecipeDetailPage.vue` is also slated for deletion by
+  [[FU-688]], so its tools crossover may resolve itself.
+- **Fix shape:** pin `restaurant` = "a meal / an occasion of eating" (its
+  dominant use), then repoint the outliers: tools → `blender`, the admin
+  Cooking page and About row → something that isn't a plate.
+- **Recommended resolution:** opportunistic, or as part of the next icon/design
+  pass — worth doing before the icon set gets a sixth meaning.
+
+## [OPEN] FU-691 — `RecipeDetailNext.vue`'s stylesheet is off-token throughout (D-017)
+- **Raised:** 2026-08-20 (recipe-view parity pass).
+- **Type:** finding.
+- **What:** the page's ~350-line `<style scoped>` block predates any D-017 check
+  on it. Two patterns, both throughout: **token fallbacks**
+  (`var(--space-2, 8px)` — ~40 occurrences, so the literal is what a missing
+  token would actually render) and **off-scale literals** for font-size
+  (`0.8125rem`, `0.75rem`, `0.875rem` where `--font-size-xs/sm` exist), padding
+  (`padding: 0 3px`) and shadow (`0 2px 10px var(--overlay-dim)` against
+  `--elevation-*`). D-017 bans exactly these. The new CSS added in this pass
+  matches the file's existing style deliberately rather than leaving two
+  conventions in one stylesheet — flagged here instead, per the explain-or-flag
+  rule, because a half-converted stylesheet is worse than either end state.
+- **Why deferred:** it is a mechanical sweep of one file with no behaviour
+  change, and it should happen *after* the old page is deleted and the masthead
+  question is settled (FU-688) — converting CSS that may be restructured is
+  wasted work.
+- **Recommended resolution:** **with FU-688's swap pass**, as the tidy step.
+
+## [OPEN] FU-688 — the redesigned recipe page won; the old page, the duplicate form model and both hatch buttons still have to go
+- **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
+- **Type:** deferred job.
+- **What:** **Decided 2026-08-20 — `RecipeDetailNext.vue` is the page that
+  survives**, conditional on feature parity, which the same-day gap-closing pass
+  delivered (substitutes, time-of-day, per-ingredient optional/notes/free-text,
+  section assignment + ordering, explicit save; Import deliberately dropped, see
+  FU-689). The *decision* is closed. What is still open is the mechanical
+  swap, which the owner has not yet greenlit because he wants to live with the
+  new layout first — in particular the bespoke masthead, which is the one piece
+  he has explicitly reserved judgement on:
+  - Point `/cookbook/:id` at the new page and delete `RecipeDetailPage.vue`
+    (2,727 lines) and the `/cookbook/:id/new` route.
+  - Delete **both hatch buttons** ("New layout" / "Back to the old layout") —
+    they are user-visible and only exist for the comparison.
+  - Delete the old page's **duplicate inline form model**, now that
+    `useRecipeEditor` is the only copy that matters. The composable's header
+    comment says this is the first job once the old page goes — do it in the
+    same pass or the note goes stale.
+  - Re-point `goToSibling` / `onNewVersion`, which currently keep the user on
+    `/new` so a comparison session isn't kicked out.
+  - **Decide the masthead vs. shared `PageToolbar` question.** The new page
+    hand-rolls its back-arrow row and action row; every other detail page uses
+    `PageToolbar`, and the 2026-08-19 batch deliberately moved the *old* recipe
+    page onto it. Owner is assessing; if `PageToolbar` wins, the masthead's
+    identity block stays and only the controls move.
+- **Why deferred:** the owner wants time on the new layout before the old one is
+  destroyed — a one-way door while the masthead is still under review.
+- **Recommended resolution:** **when the owner confirms the masthead**, and in
+  one pass — a half-done swap leaves two live pages and a stale comment.
+## [OPEN] FU-686 — `PantryBeliefChip.vue` is orphaned and still described everywhere as the live row form
+- **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
+- **Type:** finding.
+- **What:** `components/stock/PantryBeliefChip.vue` is imported by **nothing**. The
+  row stopped using it on 2026-08-15 when the belief hint moved onto the level picker,
+  and Chunk 4 removed the ring that replaced it. Its own header comment plus comments
+  in `PantryBeliefCard.vue` and `StockItemDetailPage.vue` still describe it as the
+  live *row* form of the belief chip, which will mislead the next reader into thinking
+  the row still shows one.
+  **Correction to this entry (2026-08-20, same day):** it originally also listed
+  `BaseButton`'s `attention` prop as dead. That was true for about an hour — the
+  owner then reinstated the Stocktake glow gated on essentials, so
+  `StockOverview.vue` calls it again and the prop, `dora-btn--attention` and its
+  keyframes are all **live**. Do not delete them. Recorded rather than quietly edited
+  out, because "nothing glows any more" was the wrong conclusion, not just a stale
+  fact — the design landed on *gate the condition*, not *remove the channel*.
+- **Why deferred:** the chip is named by three planning docs, so deleting a component
+  they reference deserves its own line rather than vanishing inside a UI chunk.
+- **Recommended resolution:** opportunistic. Deleting it is a two-line job (the file
+  plus the three stale comments); it carries no behaviour.
+
+## [OPEN] FU-685 — the row's expiry "soon" band is still a client-side 7 days while the outline reads the server's window
+- **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
+- **Type:** finding.
+- **What:** `helpers/expiryIndicator.ts` keeps its own `SOON_WINDOW_DAYS = 7` and
+  colours the row's expiry button amber off it. Chunk 3 killed the *other* copy of
+  that 7 (B1) by having the outline read the server's configurable window — so an
+  install that sets the expiring-soon window to, say, 14 days now gets a row that is
+  **outlined** for an item whose expiry button is still **green**. The file documents
+  the literal as display-only and that reading is defensible, but the two are visibly
+  on one row and B1 was exactly this shape.
+- **Why deferred:** it needs a call, not a fix: either the window rides the DTO to
+  the client (the honest one-rule answer, and `attention_kinds` already carries
+  `expiring_soon`, so the button could just read that) or the button's colour is
+  deliberately a fixed-scale "how close is the date" and the mismatch is intended.
+- **Recommended resolution:** **now-ish** — one decision, and if the answer is
+  "read `attention_kinds`" the fix is ~5 lines in `StockItemRow.vue`.
+
 ## [OPEN] FU-684 — ~20 more `item.stock_level` readers carry the same R-032 exposure the buy verdict just proved live
 - **Raised:** 2026-08-19 (stock-signal consolidation, Chunk 1).
 - **Type:** finding.
@@ -167,22 +443,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** now-ish — it's a known-broken class with a proven fix
   sitting next to it. Otherwise opportunistically, whenever each page is next open.
 
-## [OPEN] FU-681 — the recipe detail page never leaves its loading skeleton in the agent preview pane
-- **Raised:** 2026-08-19 (recipe view feedback batch)
-- **Type:** finding
-- **What:** `/#/cookbook/<id>` mounts, `GET /api/recipes/<id>` returns **200**, no
-  console errors — and the page stays on the `FadeTransition` loading branch with
-  the content `v-else-if` never mounting (the fade sits at `opacity: 0`). Same
-  family as [[FU-638]] (rAF starvation in the pane); injecting
-  `*{transition:none}` did **not** clear it this time, so the existing workaround
-  is insufficient for `mode="out-in"`.
-- **Why deferred:** it blocked visual verification of this session's toolbar rebuild,
-  but it is an **agent-pane artefact, not a user-facing bug** — the same route renders
-  for the owner. Chasing it is its own investigation.
-- **Recommended resolution:** opportunistic, but worth doing before the next
-  recipe-page unit — two sessions in a row have now shipped recipe-page changes that
-  couldn't be seen. Likely the same root cause as FU-638; fix them together.
-
 ## [OPEN] FU-680 — the ingredient-unit reconciliation has no density bridge
 - **Raised:** 2026-08-19 (recipe view feedback batch)
 - **Type:** follow-up
@@ -241,28 +501,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic, or as the first half of the next
   Settings polish unit.
 
-## [OPEN] FU-NNN — short title
-- **Raised:** YYYY-MM-DD (prompt id / task)
-- **Type:** follow-up | deferred job | leftover | finding
-- **What:** one or two lines.
-- **Why deferred:** the reason it wasn't done in-line.
-- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
-```
-
----
-
-## [OPEN] FU-NNN — short title
-- **Raised:** YYYY-MM-DD (prompt id / task)
-- **Type:** follow-up | deferred job | leftover | finding
-- **What:** one or two lines.
-- **Why deferred:** the reason it wasn't done in-line.
-- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
-- **State note:** (filled in when resolved — date + how)
-```
-
----
-
-# Open
 
 ## [OPEN] FU-675 — migrate the remaining ~64 `q-select`s onto `BaseSelect`
 - **Raised:** 2026-08-19; **substantially delivered 2026-08-19 (later 3)** —

@@ -450,11 +450,11 @@
                         <q-item-section>
                             <q-item-label>{{ opt.name }}</q-item-label>
                             <q-item-label
-                                v-if="substituteRatioText(opt)"
+                                v-if="formatSubstituteRatio(opt)"
                                 caption
                                 class="dora-text-secondary"
                             >
-                                {{ substituteRatioText(opt) }}
+                                {{ formatSubstituteRatio(opt) }}
                             </q-item-label>
                             <q-item-label v-if="opt.notes" caption class="dora-text-muted">
                                 {{ opt.notes }}
@@ -571,6 +571,7 @@
     import { useCookingPolicy } from 'src/composables/useCookingPolicy';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { formatQuantity } from 'src/helpers/formatQuantity';
+    import { formatSubstituteRatio } from 'src/helpers/substituteRatio';
     import { scaleQuantity } from 'src/helpers/scaleQuantity';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import {
@@ -958,19 +959,6 @@
     const swapForName = ref('');
     const swapOptions = ref<Substitute[]>([]);
     const loadingSwapOptions = ref(false);
-
-    /** FU-034 — compact "1 tsp → 1 tsp" caption for a substitute in the
-     *  swap picker. Same shape as the stock-item detail page's substitute
-     *  list so the user reads the swap the same way in both places. */
-    function substituteRatioText(sub: Substitute): string | null {
-        if (sub.ratio_quantity_in == null || sub.ratio_unit_in == null
-            || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
-            return null;
-        }
-        const from = formatQuantity(sub.ratio_quantity_in, sub.ratio_unit_in);
-        const to = formatQuantity(sub.ratio_quantity_out, sub.ratio_unit_out);
-        return `${from} → ${to}`;
-    }
 
     async function openSwapPicker(stockItemId: string, name: string) {
         swapForId.value = stockItemId;

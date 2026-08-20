@@ -12,6 +12,7 @@ from dora_api.domain.entities.stock_item_expiry_event import (
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.get_stock_items import get_stock_items
@@ -96,14 +97,22 @@ class CreateStockItemHandler:
         if _ExistingStockItem:
             return CreateStockItemResponse(stock_item_already_exists=True)
 
+        # 2026-08-20 — install-wide default for the per-item mute flag.
+        _StocktakeOptIn = bool(getattr(
+            get_or_create_app_setting(self.repository),
+            "stocktake_new_items_opt_in",
+            True,
+        ))
+
         # PROPOSAL_STOCKTAKE_MODE — per-item cadence is no longer a stored
         # field; the queue resolves it from the household default band +
         # Auto self-tuning (R-003, single authority in
         # `features/stocktake/cadence.py`). The per-item flag below is the
         # *mute*: a new item joins the rotation by default (owner call
         # 2026-08-17 — an item you bothered to add is one you want checked;
-        # opting each one in by hand was the wrong default), and the
-        # engagement gate still decides when it actually surfaces.
+        # opting each one in by hand was the wrong default) unless the install
+        # says otherwise, and the engagement gate still decides when it
+        # actually surfaces.
         _NewStockItem = StockItem(
             name = request.name,
             notes = None,
@@ -113,7 +122,11 @@ class CreateStockItemHandler:
             # is preserved on serialisation via DoraJSONProvider.
             stock_level_last_updated = datetime.now(timezone.utc),
             stock_location = _StockLocation,
-            stocktake_alerts_are_enabled = True,
+            # 2026-08-20 — the default is now an install-wide setting
+            # (`AppSetting.stocktake_new_items_opt_in`, default True) rather
+            # than a hardcoded True, so an install that counts only a handful
+            # of things can opt items in by hand instead.
+            stocktake_alerts_are_enabled = _StocktakeOptIn,
             expiry_date = request.expiry_date,
             is_essential = request.is_essential,
             is_open = request.is_open,

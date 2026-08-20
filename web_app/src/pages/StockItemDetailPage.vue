@@ -588,7 +588,11 @@
                                      control. This row is that control — and
                                      the only place the flag can be turned
                                      back on. -->
-                                <q-item>
+                                <!-- 2026-08-20 feedback: gone entirely when
+                                     the install has stocktake switched off —
+                                     a per-item opt-in to a feature that
+                                     doesn't exist is just a confusing switch. -->
+                                <q-item v-if="stocktakeEnabled">
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Stocktake</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
@@ -1011,8 +1015,8 @@
                                      notes; cook-mode picker mirrors this
                                      same layout so the user reads the
                                      swap the same way in both places. -->
-                                <q-item-label v-if="substituteRatioText(sub)" caption class="dora-text-secondary">
-                                    {{ substituteRatioText(sub) }}
+                                <q-item-label v-if="formatSubstituteRatio(sub)" caption class="dora-text-secondary">
+                                    {{ formatSubstituteRatio(sub) }}
                                 </q-item-label>
                                 <q-item-label v-if="sub.notes" caption class="dora-text-muted">
                                     {{ sub.notes }}
@@ -1318,7 +1322,7 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
-    import { formatQuantity } from 'src/helpers/formatQuantity';
+    import { formatSubstituteRatio } from 'src/helpers/substituteRatio';
     import { relativeTime } from 'src/helpers/relativeTime';
     import { humaniseWasteReason } from 'src/helpers/wasteReasons';
     import { useBuyVerdict } from 'src/composables/useBuyVerdict';
@@ -1426,7 +1430,9 @@
     // when `products` is off the Products tab + per-product
     // surfaces disappear entirely; FU-182 owns the app-wide sweep, this
     // page just consumes the flag.
-    const { products: productsEnabled } = useFeatureFlags();
+    // 2026-08-20 — install-wide stocktake switch; hides the per-item mute
+    // toggle when the household doesn't use stocktake at all.
+    const { products: productsEnabled, stocktake: stocktakeEnabled } = useFeatureFlags();
     const { moneyEnabled } = useMoneyEnabled();
     // Only complex mode gives stock items a food to link; simple mode's kcal
     // is typed on the recipe, so the row is hidden entirely below that (R-029).
@@ -2102,18 +2108,6 @@
         } finally {
             substituteMetadataSaving.value = false;
         }
-    }
-    /** FU-034 — compact "1 tsp → 1 tsp" caption for the substitute list.
-     *  Mirrors the cook-mode swap picker's layout so the user reads the
-     *  same shape in both places. Returns null when no ratio is set. */
-    function substituteRatioText(sub: Substitute): string | null {
-        if (sub.ratio_quantity_in == null || sub.ratio_unit_in == null
-            || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
-            return null;
-        }
-        const from = formatQuantity(sub.ratio_quantity_in, sub.ratio_unit_in);
-        const to = formatQuantity(sub.ratio_quantity_out, sub.ratio_unit_out);
-        return `${from} → ${to}`;
     }
 
     // ── FU-056: barcode add / remove ────────────────────────────────────

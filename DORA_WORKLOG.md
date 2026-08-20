@@ -18,6 +18,295 @@ next.
 
 ---
 
+## 2026-08-20 (later 10) — **Stock overview feedback batch (7 items) — CUT SHORT**
+**Status:** code complete for all seven, **verification incomplete** — the owner ended the
+session mid-test-run. Green: frontend 504/504, `vue-tsc` 0, eslint clean on every touched
+file, 240 backend tests matching `stocktake|app_setting|settings|stock_item|health`, and
+the refreshed DTO contract snapshot (27 passed). **Not run:** the full `pytest tests`
+sweep (FU-699) and any browser pass (all of it is on `DORA_VERIFY.md`).
+
+### The seven items and what each became
+1. **Filter-panel open state.** The owner's update supersedes his first bullet: he'd met
+   the behaviour on stock overview, preferred it, and asked to adopt it elsewhere — *open
+   iff filters are active, not remembered across visits*. `useFilterPanelExpanded` was
+   rewritten to that rule (it used to persist a desktop-only preference in localStorage)
+   and now takes a `hasActiveFilters` getter. Adopted on **cookbook** and **My products**
+   too. The watcher only ever *opens* — clearing the last filter happens inside the open
+   panel, and shutting it under the user's cursor is the one thing neither variant wanted.
+   *Note for whoever touches these pages:* on RecipesOverview/MyProducts the composable
+   call had to **move below** `activeFilterCount` (TDZ — the getter is read at setup).
+2. **Deselect all exits bulk mode.** One-line change to `deselectAll` → `cancelBulk()`.
+   It's now behaviourally identical to the toolbar's Cancel — kept anyway because the bulk
+   bar is what's on screen on a phone, but logged as **FU-698** for a call.
+3. **Install-wide stocktake switch + new-item opt-in default.** The big one; see below.
+4. **Due count → chip.** Label is just "Stocktake" now; the count is a `q-badge`, **inline
+   rather than floating** because the actions row scrolls and a floating badge gets clipped.
+   Same chip at every width. The full "(n due, m essential)" sentence still rides the
+   aria-label + tooltip, so the glow's reason stays available.
+5. **Toolbar scrolls on mobile.** Action buttons moved into a `.stock-toolbar__actions`
+   band with the same rule `FilterRow` uses (no-wrap + `overflow-x` + hidden scrollbar +
+   `flex: 0 0 auto`); `gap` not `q-gutter-sm`, whose negative margins fight `overflow-x`.
+6. **Filter icons.** `#prepend` icons on level/location/group, reusing Settings' glyphs
+   (`place`, `tag_multiple`) + a new `stockLevel: 'mdi-gauge'` alias.
+7. **Location dropdown opened at the top with a keyboard.** Root cause was `use-input`:
+   QSelect auto-focuses the dialog's input, the keyboard comes up, Quasar pins the dialog
+   top. Fixed **in `BaseSelect`, once** — typeahead is desktop-only now
+   (`resolvedUseInput`), and `hide-selected` / `fill-input` are stripped from `$attrs` when
+   the input is dropped or the trigger would render blank with a value selected. The list
+   is still a dialog (unbounded), just without the input. Location options are populated
+   independently of the filter callback, so nothing is lost.
+
+### The stocktake switch (item 3) — shape
+Two `AppSetting` columns, both default TRUE (migration **`a7d4e91c3f28`**, now the single
+alembic head): `stocktake_enabled` + `stocktake_new_items_opt_in`.
+- **Server owns the off-state**, not each client gate: `resolve_overdue_map` — the one
+  overdue authority (R-003), shared by the queue endpoint, the overview count and the
+  alerts bell — returns `{}` when the switch is off. That's what stops the bell nagging
+  about a hidden surface.
+- Published as `/api/health features.stocktake`. It's the app's first **default-ON** flag,
+  so `useFeatureFlags` gained `readFlagDefaultOn` — plain `readFlag` reads false on an
+  unresolved map, which would blink the button out on every page load.
+- Gated: overview button, "Needs check" chip, the queue fetch (skipped entirely), the
+  per-item toggle on the detail page, and the runner (its own off-state card, not a
+  misleading "you're all caught up").
+- `stocktake_new_items_opt_in` is read by **`create_stock_item`** and by the spreadsheet
+  import (one read per import, not per row).
+- Settings → System → Stocktake owns both toggles and stays visible/rendered when the
+  feature is off — it's the only way back on. Cadence + Auto sections hide while it's off.
+  Flipping it refreshes the `useFeatureFlags` cache (the FU-580 lesson).
+
+### Close-gate
+- **R-003** carried the design (one overdue authority, one typeahead rule in `BaseSelect`,
+  one filter-panel rule); **R-005** batch_alter_table in the migration; **D-005** for the
+  filter icons. No known unexplained violations introduced.
+- **ADR:** none promoted. The one candidate — "install-wide feature flags whose default is
+  ON need a different reader" — is a single instance so far; promote it if a second
+  default-on flag appears.
+- `dto_snapshots.json` regenerated: the diff is exactly the two new keys.
+
+**Next up (in order):**
+1. `pytest tests -q` in full (**FU-699**) — nothing else should land before this.
+2. Walk `DORA_VERIFY.md` → "Stock overview: feedback batch (2026-08-20)". The **phone**
+   items (toolbar scroll, Location dialog) need a real device or a mobile user-agent —
+   `BaseSelect`'s behaviour is `$q.platform.is.mobile`, so narrowing a desktop window
+   proves nothing.
+3. Run the migration against a real DB once (last verify bullet).
+4. **FU-700** — Dora-Score's "Do a stocktake" action, `AttentionRulesDialog` /
+   `StockRowLegend` / `AlertsPage` copy are still un-gated on the new switch.
+
+**Open questions for user:** FU-698 (keep or drop the now-duplicate "Deselect all"?).
+
+---
+
+## 2026-08-20 (later 9) — **DR-15: micro-motion pass (D-010) + the wizard dedupe**
+**Status:** complete, one deliberate carve-out. Frontend **504 passed** (was 488 — +6
+`recipeTrays.spec.ts`, +10 `useMicroFeedback.spec.ts`), vue-tsc 0, eslint clean on every
+touched file. Three of the four gestures walked **live** in the browser pane; the rest is
+on `DORA_VERIFY.md`. Backend untouched.
+
+### What DR-15 actually was
+The 2026-07-18 critique rated `motion.scss` "textbook" and then noted nothing used it:
+observed motion was Quasar stock, the two bespoke touches were invisible in normal use,
+and the four most-repeated gestures — level change, tick, add-to-list, chip toggle — had
+**zero** feedback. So this was never "add animations"; it was "spend the token layer we
+already built at the four places D-010 names".
+
+### The shape I chose, and why
+**One shared vocabulary, not per-site keyframes** (R-001/R-003). Three utilities in
+`motion.scss` — `.dora-press` (persistent `:active` scale), `.dora-settle`, `.dora-bump`
+(one-shot) — plus three amplitude tokens (`--motion-settle-from` / `-bump-to` /
+`-press-to`). Putting the amplitudes in tokens means the existing reduced-motion block
+flattens them to `1` and the kill-switch covers the new work **for free**, rather than
+each site needing its own `prefers-reduced-motion` guard.
+
+New **`useMicroFeedback()`** composable applies the one-shot pair for a single cycle. Two
+things in it matter more than they look:
+- **It removes the class again.** A class left on re-fires its animation on every
+  subsequent re-render — that's how a one-shot acknowledgement becomes the ambient
+  wallpaper D-010 exists to prevent (the retired stocktake row pulse).
+- **It reads its own timer length from `--motion-fast`** rather than hardcoding 120 — so
+  D-010's no-literal-`ms` clause holds in TS as well as CSS, and reduced-motion shortens
+  the timer too.
+
+### Wiring
+- **Level change** → settle on `.stock-row__level-btn`. Note the stern comment already in
+  that file forbidding a row-level animation: that was about an *ambient* pulse keyed off
+  a standing condition (every overdue row, forever). This fires once, on a change the user
+  just caused, and is gone 160ms later — I added a comment drawing the distinction so it
+  doesn't read as a reversal.
+- **Add-to-list** → bump on the **row** cart button when cart state flips. Toolbar/menu
+  variants deliberately excluded: a 16% scale on a labelled button next to text reads as a
+  twitch, and those are once-per-page actions, so D-010 doesn't ask for them.
+- **Chip toggle** → press + bump on `FilterChip` **and** `TriStateFilterChip` (the
+  tri-state needed it more — three states whose only difference is a fill colour).
+- **Tick** → press on the shopping-list and stocktake-review checkboxes, and
+  `.shopping-line-ticked-content` now **transitions** its opacity instead of snapping.
+  Only opacity: `text-strike` is a text-decoration and layout transitions on a list that
+  long cost more than the polish.
+- `RowActionButton` carries `.dora-press` for the **whole** row cluster — one definition,
+  same reasoning as the q-btn props it already pins.
+- **`AnimatedNumber`'s hardcoded `600ms`** was a standing D-010 violation sitting right
+  next to this work; now reads `--motion-slow`. Behaviour change worth flagging: count-ups
+  settle in 320ms rather than 600ms.
+
+### The ride-along got bigger than expected (FU-578 #47)
+The tray builder existed **twice, character-for-character** — `useMealPlanner.ts` and
+`MealPlanBuilderDialog.vue`, both feeding the same `MealPlanRecipePicker`. So the dedupe
+could not have been done once; the R-003 extraction (`helpers/recipeTrays.ts`) was a
+precondition, not a tidy-up. In the merged builder each recipe is claimed by exactly one
+tray (Favourites → stale → frequently-planned → "Everything else"). Two details that took
+thought: **caps apply before the claim**, so an over-cap recipe falls through rather than
+being consumed by a tray that won't show it; and the last tray is only retitled
+"Everything else" when a shortcut tray actually took something — on a cookbook with no
+favourites and no history it *is* the whole list, and "Everything else (12)" over a
+complete list reads as a subset.
+
+### Deliberately NOT built — and it's the interesting part
+Critique §6 also asked for **route-change transitions**. Left alone → [[FU-694]]. The
+reason came out of this unit's own bug: my first draft restarted the animation across a
+`requestAnimationFrame`, the textbook trick — and rAF **doesn't fire in a backgrounded or
+throttled tab**, so the class write was scheduled and silently never happened. That's the
+same assumption as the DR-8 splash wedge, just silent instead of fatal. A route
+transition is exactly where it goes fatal again. Promoted to **R-050 + ADR-046** (never
+sequence app state behind a paint callback). The other §6 bullets were already dead: DR-8
+replaced the dashboard loading→content text swaps with skeletons, and gave the belief chip
+its fade into reserved space.
+
+### Verification — and an accidental unblock worth knowing about
+The pane can't paint, so I expected to verify nothing. Then `preview_logs` showed the real
+reason routes "won't mount" in this environment: **`@fontsource-variable/fraunces` was
+declared in `package.json` but missing from `node_modules`**, so `boot/fonts.ts` 500'd and
+the whole boot chain died at the splash. One `npm install` + a Vite restart and the app
+renders properly — stock rows, filter panel, menus, dialogs, toasts. **Several "route won't
+mount in the pane" notes in memory were this, not rAF starvation.** Route *transitions*
+still wedge (that part is real), so a route change mid-session leaves stale content and
+the shopping-list detail lines never appear.
+
+What that bought: level-change settle (real level set → `dora-settle`, computed
+`animation: dora-settle 0.12s`, class cleared after), cart bump (`none → on_other`,
+`dora-bump 0.12s`, toast "Added to This week"), chip press+bump (all 5 stock filter chips
+carry `.dora-press`; a real click showed the bump apply then clear via a MutationObserver).
+Plus: all three amplitude tokens resolve, both keyframes are in the compiled sheet,
+`.dora-press` computes to `transform 0.12s cubic-bezier(0.4,0,0.2,1)`, and the
+reduced-motion block carries all three new amplitudes → `1`.
+
+### Tests
+Two specs, both pinning **stable, low-churn contracts** per the lean stance — not
+screenshots of motion. `recipeTrays.spec.ts` (6) pins the one-instance invariant, the
+priority order, cap-fallthrough, the title switch, search flattening, empty cookbook.
+`useMicroFeedback.spec.ts` (10) pins the part that fails *silently* and can't be seen in a
+screenshot: the class appears only on a real change and **is removed again**, plus the
+token parse (`ms` / `0.01ms` / `s` / fallback).
+
+### Findings logged
+- **[[FU-694]]** — route transitions, deferred with the R-050 reasoning.
+- **[[FU-695]]** — `PantryBeliefChip.vue` is **orphaned**; no importer left in `src`. It
+  even received a real fix after going dead (DR-8's fade-in) — maintained dead code.
+- **[[FU-696]]** — `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87`,
+  a stale editor artefact that will misdirect the next grep on that surface.
+
+### Standards close-gate
+Checked against `ENGINEERING_STANDARDS.md`. R-001/R-003 satisfied by construction (one
+motion vocabulary; the duplicated tray builder merged rather than edited twice). R-002:
+all new CSS rides tokens, no literals. R-013 scope: the two artefacts I found were logged,
+not fixed. D-010 now satisfied at all four named gestures; its no-literal-`ms` clause is
+satisfied app-wide for the first time (`AnimatedNumber` was the last offender). New rule
+added: **R-050 / ADR-046**.
+
+### One thing I broke, and it's a process trap worth naming — [[FU-697]]
+Appending this entry, I first wrote it via PowerShell `Get-Content`/`Set-Content`, which in
+**PS 5.1 reads as ANSI** and mangled every em-dash in this file. Then I reached for `git
+checkout -- DORA_WORKLOG.md` to undo the corruption — and that was the real mistake: this
+file had **uncommitted** changes, so the checkout took the *later 8* Cookbook-batch-3 entry
+with it. I rebuilt that entry verbatim from a session-start read, which covered it down to
+the "Serves filter added" bullet; **the tail past that is lost** and the entry now carries a
+banner saying so. Only `DORA_WORKLOG.md` was touched — all code changes and every other
+modified file are intact, and `CHANGELOG.md` still holds the product record of that work.
+**Two rules for the next session:** edit these UTF-8 logs with Python (`encoding='utf-8'`)
+or the Write/Edit tools, never PS 5.1 `Set-Content` without `-Encoding utf8`; and never `git
+checkout --` a file `git status` shows as modified — these logs routinely carry uncommitted
+work.
+
+**Next up:** DR-12 (alerts page order + calendar diet) is the largest remaining
+user-facing DR unit; FU-621 (brand-secondary rethink) if the owner wants a design turn
+instead, since it's also the vehicle for FU-224 and FU-010.
+
+---
+
+## 2026-08-20 (later 8) — **Cookbook feedback batch 3: filters, compact row, icon glossary, category vocabulary**
+
+> ⚠️ **PARTIALLY RECOVERED ENTRY (reconstructed 2026-08-20, later 9).** The next
+> session destroyed this entry with a `git checkout -- DORA_WORKLOG.md` while trying
+> to undo an encoding mishap of its own — the file had uncommitted changes and the
+> checkout took them. What follows is verbatim from a read taken at that session's
+> start, which covered the entry down to the "Serves filter added" bullet and no
+> further. **Anything this entry said after that point is lost.** The product-level
+> record of the same work is intact in `CHANGELOG.md` (the three 2026-08-20 cookbook
+> entries), and the code is unaffected — only the process narrative was truncated.
+
+**Status:** complete. Frontend **488 passed** (was 486 — `recipeRowLayout.spec.ts` gained
+two cases), vue-tsc 0, eslint clean on every touched file. Backend **1914 passed**
+(unchanged) with the new migration in the chain. Verified live in the browser pane for
+everything the pane can reach; the rest is on `DORA_VERIFY.md`.
+
+### Two forks the owner closed before I built
+1. **"Missing ingredients ≤ feels a bit useless?" → remove it.** The zero case *is* the
+   Cookable-now chip, nothing sorted by it, and every card/row already shows what a recipe
+   is short of. The "nearly cookable" intent goes away with it; he took that trade over a
+   new chip.
+2. **Time-of-day names in the Category vocabulary → remove all three, add replacements.**
+   `Breakfast` / `Dessert` / `Snack` deleted; `Curry` / `Bake` / `Bread` added, so the list
+   is the same length.
+
+The ingredient-sort fork he had already answered in the report itself ("if we aren't doing
+that then level sort should be stocked first"), so it wasn't asked.
+
+### What changed, by his bullet
+- **Ingredients filter has no sort direction.** Kept it directionless and **flipped level
+  sort to stocked-first**. It's a picker inside a dropdown inside a filter panel; a third
+  control in there costs more than the one direction it adds, and stocked-first is the
+  right single direction because the dominant use of "Uses ingredients" is picking
+  something you actually have. Untracked items (null sequence) had to move from a `-1`
+  sentinel to `MAX_SAFE_INTEGER` — under ascending order `-1` would have put them on top.
+- **Collection + dietary tags near the front.** Row 2 is now sort · Collection · Dietary
+  tags · the recipe's own facets · numeric bounds · Tools. The old order was FU-108's
+  *guessed* frequency; this is reported use.
+- **Missing ingredients ≤ removed** — state, predicate, count and clear all gone, with a
+  comment in place saying what left and why so it isn't re-added as a "gap".
+- **Time-of-day in category data.** Both the default vocabulary (`seed_builders.py`) and
+  the dev seed were carrying it — `seed.py` had two recipes with `category="Dessert"` /
+  `"Breakfast"` **alongside** the same value on `time_of_day`, which is exactly what he saw.
+  New migration **`c8b3e5f0a712`**: NULLs affected `Recipe.category_id` explicitly before
+  deleting (SQLite won't honour `ondelete='SET NULL'` without the pragma), inserts
+  by-name-if-missing, then resequences the whole canonical list — so it's idempotent and
+  repairs a hand-edited list too. Starter packs were checked and are clean: they seed
+  *stock items* from `starter_packs.json`, never recipe categories.
+- **Gap between filter area and content.** Own `.recipes-content` wrapper at
+  `--space-3`. Not added to `FilterBar` — StockOverview's spacing is already right (it gets
+  it incidentally from the bulk-bar's `q-py-xs` wrapper, which this page has no equivalent
+  of), so a bottom margin there would have moved every other consumer.
+- **Compact recipe name = stock item name.** `.recipe-row__name` was missing the
+  `font-size` half of the declaration; copied from `.stock-row__name`.
+- **Time + ingredient count under the name (desktop).** Chose *underneath* over *right*:
+  the chip cluster's width varies with how many chips a recipe has, so anything in it never
+  lands twice in the same place — the same reasoning that moved the expiring chip to the
+  right edge on 2026-08-19. A second line under the name starts at a fixed x. Rendered as
+  text + inline icons, not chips: chip chrome at that size is what read as clutter when the
+  old five-fact meta line was removed.
+- **Icon crossovers.** Fixed the reported two and one more found next to them:
+  `schedule` (clock) is now **only** a time of day (the meal-slot facet, matching Settings →
+  Meal slots) and duration is `timer`; difficulty left `star_outline` (which says *rating*)
+  for the `difficulty` speedometer its filter already used; ingredient **count** left
+  `ingredients` (food-variant, which is about *which* items) for `ingredientCount`
+  (counter), matching its own filter; servings left `restaurant` for `people`.
+- **Serves filter added.** `Serves ≥`, a lower bound not a range — the intent is "cooking
+  for five tonight" and a bigger recipe just leaves leftovers. A recipe with no servings
+  recorded fails a set bound, matching the intent rule the other facets already use.
+
+*(Entry truncated here by the loss described above — see FU-697.)*
+
+---
+
 ## 2026-08-20 (later) — Stock signal consolidation: **Step 0 answered + Chunk 3** (3a and 3b)
 **Status:** code-complete. Backend **1889 passed** (+15 new `stock_attention` unit
 tests, net of the digest suite's removal), frontend **484 passed**, vue-tsc 0,

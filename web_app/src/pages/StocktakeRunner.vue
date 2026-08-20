@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <!-- FU-609 / R-036 — app-shell root: <q-page :style-fn> so the full-bleed
          runner fills the viewport below the header without a hardcoded offset. -->
     <q-page class="runner-shell" :style-fn="pageStyleFn">
@@ -14,16 +14,23 @@
                 :to="'/stock'"
                 aria-label="Close stocktake"
             />
+            <!-- The bar tracks the WALK only. Review and Sweep are single
+                 screens with their own "how many" in their own copy, and a
+                 progress bar that jumped backwards on entering a new phase
+                 would read as a bug. They get a phase name instead. -->
             <q-linear-progress
-                v-if="hasQueue"
+                v-if="phase === 'walk' && hasQueue"
                 :value="progress"
                 rounded
                 size="6px"
                 color="warning"
                 class="col q-mx-md"
             />
+            <div v-else-if="phaseLabel" class="col text-center text-caption dora-text-muted-3">
+                {{ phaseLabel }}
+            </div>
             <div v-else class="col" />
-            <div v-if="hasQueue" class="text-caption dora-text-muted-3 q-mr-sm">
+            <div v-if="phase === 'walk' && hasQueue" class="text-caption dora-text-muted-3 q-mr-sm">
                 {{ reviewedCount }} / {{ session.length }}
             </div>
             <BaseButton
@@ -40,8 +47,29 @@
             <q-spinner color="warning" size="42px" />
         </div>
 
-        <!-- ── Empty queue (was the old landing card) ─────────────── -->
-        <div v-else-if="session.length === 0" class="runner-card-wrap">
+        <!-- ── Switched off install-wide (2026-08-20) ──────────────────
+             Nothing links here when the flag is off, so this is the stale
+             bookmark / typed-URL case. It gets its own state rather than
+             falling through to "you're all caught up", which would be a
+             comforting lie about a feature that isn't running. -->
+        <div v-else-if="!stocktakeEnabled" class="runner-card-wrap">
+            <q-card class="runner-card" flat>
+                <q-card-section class="text-center q-pt-lg">
+                    <q-icon :name="ICONS.fact_check" size="64px" class="dora-text-muted-7" />
+                    <div class="text-h5 q-mt-sm">Stocktake is turned off.</div>
+                    <div class="text-caption dora-text-muted-7 q-mt-xs">
+                        An admin can turn it back on in Settings → System →
+                        Stocktake.
+                    </div>
+                </q-card-section>
+                <q-card-actions align="center" class="q-pb-lg">
+                    <BaseButton label="Back to Stock" :to="'/stock'" />
+                </q-card-actions>
+            </q-card>
+        </div>
+
+        <!-- ── Nothing to do at all ────────────────────────────────── -->
+        <div v-else-if="nothingToDo" class="runner-card-wrap">
             <q-card class="runner-card" flat>
                 <q-card-section class="text-center q-pt-lg">
                     <q-icon :name="ICONS.check_circle" color="positive" size="64px" />
@@ -57,7 +85,32 @@
             </q-card>
         </div>
 
-        <!-- ── Current item card ──────────────────────────────────── -->
+        <!-- ── Phase 1: Review (D-3) ───────────────────────────────────
+             A desk screen, so it comes before the walk: agreeing with
+             evidence-derived guesses doesn't need you in the pantry, and
+             clearing them first means you walk in with a shorter list.
+             Absent entirely when there's nothing confident to review —
+             the normal case on a young install, and always for a user
+             with inference switched off. -->
+        <StocktakeReviewPhase
+            v-else-if="phase === 'review'"
+            :items="reviewItems"
+            :busy="busy"
+            @confirm="onReviewConfirm"
+        />
+
+        <!-- ── Phase 3: Sweep (D-4) ────────────────────────────────── -->
+        <StocktakeSweepPhase
+            v-else-if="phase === 'sweep'"
+            :items="sweepItems"
+            :busy="busy"
+            @keep="onSweepKeep"
+            @mute="onSweepMute"
+            @remove="onSweepDelete"
+            @finish="onSweepFinish"
+        />
+
+        <!-- ── Phase 2: Walk — the current item card ───────────────── -->
         <div v-else-if="current" class="runner-card-wrap">
             <q-card class="runner-card" flat>
                 <q-card-section class="text-center">
@@ -76,6 +129,23 @@
                                 globally in Settings or per-item on the detail page.
                             </q-tooltip>
                         </q-icon>
+                    </div>
+
+                    <!-- Chunk 5 / D-1: the queue is ordered least-certain
+                         first, and D-1 explicitly rules out a toggle or a sort
+                         selector to explain that. So the *item* explains it:
+                         when belief is why this row came up when it did, it
+                         says so, in belief's own words (server-owned copy, so
+                         it's the same sentence the level picker shows).
+                         `confident` rows get nothing — they're at the bottom
+                         of the walk and "Dora already knows this" is not a
+                         reason to look harder. -->
+                    <div
+                        v-if="current.check_rank === 'uncertain' && current.belief_reason"
+                        class="runner-belief q-mt-sm"
+                    >
+                        <q-icon :name="ICONS.inferred_hunch" size="14px" class="q-mr-xs" />
+                        Dora's not sure about this one — {{ current.belief_reason }}
                     </div>
                 </q-card-section>
 
@@ -243,7 +313,28 @@
         <!-- ── (?) help dialog — plain-English "how it works" -->
         <BaseDialog v-model="helpOpen" title="How stocktake works" closable card-style="min-width: 320px; max-width: 480px">
             <q-card-section class="runner-help">
-                <p>
+                <p v-if="rankedBy === 'belief'">
+                    Dora walks you through the items she thinks need a
+                    check — one at a time, <strong>least certain first</strong>.
+                    Checking something she's already worked out from your
+                    shopping and cooking tells you nothing new, so those wait
+                    until the end; the ones she can't call come first. Items
+                    she has no evidence about sit in the middle, ordered by how
+                    overdue they are. For each, you have five options:
+                </p>
+                <!-- Chunk 6 / D-4 — the three phases, explained where the
+                     runner already explains itself. Each phase is skipped
+                     silently when empty, so this describes the full shape
+                     rather than what this particular run happens to show. -->
+                <p v-if="rankedBy === 'belief'">
+                    A run has up to three parts. First, anything Dora is
+                    <strong>fairly sure about</strong> — agree in one tap from
+                    where you're sitting, or untick it to look yourself. Then the
+                    <strong>walk</strong>, below. Last, a
+                    <strong>tidy-up</strong> of anything that's dropped out of
+                    the rotation since your last run.
+                </p>
+                <p v-else>
                     Dora walks you through the items she thinks need a
                     check — one at a time, most-overdue first. For each,
                     you have five options:
@@ -285,13 +376,16 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import StocktakeReviewPhase from 'src/components/stocktake/StocktakeReviewPhase.vue';
+    import StocktakeSweepPhase from 'src/components/stocktake/StocktakeSweepPhase.vue';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
     import { computed, onMounted, reactive, ref } from 'vue';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService, {
         type CadenceBand,
-        type StocktakeQueueItem,
+        type StocktakeSessionItem,
+        type StocktakeSweptItem,
     } from 'src/services/api/stocktakeApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -302,8 +396,12 @@
         OUT_OF_STOCK_SEQUENCE,
     } from 'src/helpers/stockStatus';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
 
     const $q = useQuasar();
+    // 2026-08-20 — install-wide stocktake switch. Off ⇒ the runner shows its
+    // own off-state above (the server already resolves an empty queue).
+    const { stocktake: stocktakeEnabled } = useFeatureFlags();
     const api = new StocktakeApiService();
     const stockApi = new StockItemApiService();
 
@@ -321,11 +419,53 @@
     const { addItems } = useShoppingListActions();
 
     const loading = ref(true);
-    const session = ref<StocktakeQueueItem[]>([]);
+    const session = ref<StocktakeSessionItem[]>([]);
     const index = ref(0);
     const busy = ref(false);
     const changeOpen = ref(false);
     const helpOpen = ref(false);
+    /** Which engine ordered the queue (Chunk 5 / D-1). Only used for copy —
+     *  the order itself is the server's and is never re-derived here. */
+    const rankedBy = ref<'belief' | 'cadence'>('cadence');
+
+    // ── Three phases: shrink → work → tidy (Chunk 6 / D-4) ──────────────────
+    // `done` is the existing summary card. Every phase can be empty and is then
+    // skipped **silently** — an install younger than a few months has no
+    // confident items at all (high confidence needs ~3 logged purchases), and a
+    // user with inference off never has a Review phase by design. Announcing
+    // "0 items to review" would be a screen whose only content is its own
+    // absence.
+    type Phase = 'review' | 'walk' | 'sweep' | 'done';
+    const phase = ref<Phase>('walk');
+    const reviewItems = ref<StocktakeSessionItem[]>([]);
+    const sweepItems = ref<StocktakeSweptItem[]>([]);
+    /** Set while the shared level picker is open on behalf of a Sweep row
+     *  rather than the walk's current item. */
+    const sweepKeepId = ref<string | null>(null);
+
+    const PHASE_LABELS: Record<Phase, string> = {
+        review: 'Reviewing',
+        walk: '',
+        sweep: 'Tidying up',
+        done: '',
+    };
+    const phaseLabel = computed(() => PHASE_LABELS[phase.value]);
+
+    /** No review, no walk, no sweep — the "all caught up" card. Distinct from
+     *  `done`, which is the summary of work actually performed. */
+    const nothingToDo = computed(() =>
+        reviewItems.value.length === 0
+        && session.value.length === 0
+        && sweepItems.value.length === 0,
+    );
+
+    /** The first phase with anything in it, in fixed order. */
+    function firstNonEmptyPhase(): Phase {
+        if (reviewItems.value.length > 0) return 'review';
+        if (session.value.length > 0) return 'walk';
+        if (sweepItems.value.length > 0) return 'sweep';
+        return 'done';
+    }
 
     /** Five-counter summary powering the completion screen. */
     const summary = reactive({
@@ -348,7 +488,7 @@
     const restockDone = ref(false);
 
     const hasQueue = computed(() => session.value.length > 0 && index.value < session.value.length);
-    const current = computed<StocktakeQueueItem | null>(() =>
+    const current = computed<StocktakeSessionItem | null>(() =>
         index.value < session.value.length ? session.value[index.value]! : null,
     );
     const reviewedCount = computed(() => index.value);
@@ -375,6 +515,40 @@
 
     function advance() {
         index.value += 1;
+        // Walk finished → tidy up, or straight to the summary. Doing this here
+        // rather than in each of the five walk actions means a new action can't
+        // forget to hand over.
+        if (index.value >= session.value.length) {
+            leaveWalk();
+        }
+    }
+
+    function leaveWalk() {
+        if (sweepItems.value.length > 0) {
+            phase.value = 'sweep';
+            return;
+        }
+        void finish();
+    }
+
+    /**
+     * Enter the summary and stamp the Sweep watermark.
+     *
+     * The stamp happens **here and nowhere else** — not per phase, not on
+     * abandon. Once the watermark passes a departure, that item is
+     * indistinguishable from the long-dead ones forever, so a run the user
+     * backed out of must not silently swallow a Sweep list they never saw.
+     * A failed stamp is deliberately silent: the cost is seeing the same tidy-up
+     * list next time, which is a great deal better than a red toast on the
+     * "you're done" screen.
+     */
+    async function finish() {
+        phase.value = 'done';
+        try {
+            await api.completeSessionAsync();
+        } catch {
+            // intentionally quiet — see above.
+        }
     }
 
     async function onStillCorrect() {
@@ -399,6 +573,31 @@
         sequence: number,
         levelName: string,
     ) {
+        // Two callers now: the walk card's "Change level", and the Sweep
+        // phase's "I still keep this" (which is a level-set by design — see
+        // `onSweepKeep`). `sweepKeepId` says which, and is cleared either way
+        // so a later walk pick can't be misattributed.
+        if (sweepKeepId.value) {
+            const stockItemId = sweepKeepId.value;
+            sweepKeepId.value = null;
+            busy.value = true;
+            try {
+                await stockApi.updateAsync({
+                    stock_item_id: stockItemId,
+                    stock_level_id: levelId,
+                });
+                summary.changed += 1;
+                dropFromSweep(stockItemId);
+            } catch (err) {
+                $q.notify({
+                    type: 'negative',
+                    position: 'top',
+                    message: 'Could not update.',
+                    caption: toastCaption(err),
+                });
+            } finally { busy.value = false; }
+            return;
+        }
         if (!current.value) return;
         const stockItemId = current.value.stock_item_id;
         const itemName = current.value.name;
@@ -501,6 +700,135 @@
         });
     }
 
+    // ── Phase 1 — Review (D-3) ──────────────────────────────────────────────
+
+    /**
+     * Ticked rows get one bulk check; unticked rows join the walk.
+     *
+     * The unticked items are **prepended**, not appended: the user has just
+     * said "I want to look at this one myself", and making them walk the whole
+     * queue before getting to it would punish the disagreement this screen is
+     * built to make cheap.
+     */
+    async function onReviewConfirm(payload: {
+        checked: string[];
+        unchecked: StocktakeSessionItem[];
+    }) {
+        busy.value = true;
+        try {
+            if (payload.checked.length > 0) {
+                await api.bulkCheckAsync(payload.checked);
+                summary.checked += payload.checked.length;
+            }
+            if (payload.unchecked.length > 0) {
+                session.value = [...payload.unchecked, ...session.value];
+            }
+            reviewItems.value = [];
+            phase.value = 'walk';
+            // An empty walk means `advance()` will never fire, so hand over to
+            // the next phase here instead.
+            if (session.value.length === 0) leaveWalk();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'top',
+                message: 'Could not save those checks.',
+                caption: toastCaption(err),
+            });
+        } finally { busy.value = false; }
+    }
+
+    // ── Phase 3 — Sweep (D-4) ───────────────────────────────────────────────
+
+    function dropFromSweep(stockItemId: string) {
+        sweepItems.value = sweepItems.value.filter(
+            (i) => i.stock_item_id !== stockItemId,
+        );
+        // Clearing the list is finishing the phase — there's nothing left to
+        // leave be.
+        if (sweepItems.value.length === 0) void finish();
+    }
+
+    /**
+     * "I still keep this" → open the level picker.
+     *
+     * **Not a check.** The plan flagged this as a wiring risk and it was
+     * confirmed at implementation: the engagement gate keys off in-stock /
+     * ever-opened / level-adjusted-in-60d / on-a-list-in-60d, while
+     * `POST /check` writes only `last_checked_at`. Wiring this button to a check
+     * would have looked like it worked and left the item out of rotation.
+     * Setting a level writes a `StockLevelChange` (and, for anything in stock,
+     * satisfies the gate outright) — and it's the truthful action anyway, since
+     * the reason Dora lost track is that nobody has said what's on the shelf.
+     */
+    function onSweepKeep(item: StocktakeSweptItem) {
+        sweepKeepId.value = item.stock_item_id;
+        changeOpen.value = true;
+    }
+
+    function onSweepMute(item: StocktakeSweptItem) {
+        $q.dialog({
+            title: `Mute ${item.name}?`,
+            message:
+                "Dora will stop asking about this item entirely. You can un-mute it later from the item's detail page.",
+            cancel: { noCaps: true },
+            persistent: false,
+            ok: { label: 'Mute', color: 'negative', unelevated: true },
+        }).onOk(() => {
+            void (async () => {
+                busy.value = true;
+                try {
+                    await stockApi.updateAsync({
+                        stock_item_id: item.stock_item_id,
+                        stocktake_alerts_are_enabled: false,
+                    });
+                    summary.muted += 1;
+                    dropFromSweep(item.stock_item_id);
+                } catch (err) {
+                    $q.notify({
+                        type: 'negative',
+                        position: 'top',
+                        message: 'Could not mute.',
+                        caption: toastCaption(err),
+                    });
+                } finally { busy.value = false; }
+            })();
+        });
+    }
+
+    function onSweepDelete(item: StocktakeSweptItem) {
+        // Deletion is the one irreversible action in the runner, and it's being
+        // offered about an item the user may simply have forgotten they own —
+        // so the confirm names it and says what goes with it.
+        $q.dialog({
+            title: `Delete ${item.name}?`,
+            message:
+                'This removes the item and its history for good. If you just want Dora to stop asking about it, mute it instead.',
+            cancel: { noCaps: true },
+            persistent: false,
+            ok: { label: 'Delete', color: 'negative', unelevated: true },
+        }).onOk(() => {
+            void (async () => {
+                busy.value = true;
+                try {
+                    await stockApi.deleteAsync(item.stock_item_id);
+                    dropFromSweep(item.stock_item_id);
+                } catch (err) {
+                    $q.notify({
+                        type: 'negative',
+                        position: 'top',
+                        message: 'Could not delete.',
+                        caption: toastCaption(err),
+                    });
+                } finally { busy.value = false; }
+            })();
+        });
+    }
+
+    function onSweepFinish() {
+        void finish();
+    }
+
     async function onBatchAddToList() {
         if (restockNeeded.value.length === 0 || restockBusy.value || restockDone.value) return;
         const listId = await pickActiveListId();
@@ -555,8 +883,18 @@
         try {
             await stockLevelStore.ensureLoadedAsync();
             await shoppingListStore.refreshAsync();
-            const result = await api.queueAsync(100);
-            session.value = result.items;
+            // Chunk 6 — one read for all three phases. Chunk 5's note still
+            // holds: the walk arrives already ordered (least-certain first, or
+            // most-overdue first when there's no evidence) and must NOT be
+            // re-sorted here. The ranking rule is server-owned; a second
+            // opinion on the client is exactly the two-engines problem Chunk 3
+            // spent itself removing. `ranked_by` only picks help-dialog wording.
+            const result = await api.sessionAsync();
+            reviewItems.value = result.review;
+            session.value = result.walk;
+            sweepItems.value = result.sweep;
+            rankedBy.value = result.ranked_by;
+            phase.value = firstNonEmptyPhase();
         } finally {
             loading.value = false;
         }
@@ -586,6 +924,20 @@
         max-width: 480px; width: 100%;
         background: var(--surface-component); color: var(--text-primary);
         border-radius: 12px;
+    }
+
+    /* Why-this-item-first line (Chunk 5 / D-1). Warning-toned to match the
+       "Dora thinks" vocabulary everywhere else it appears (the level picker's
+       header, the dashed level box), and deliberately quiet: it explains the
+       order, it isn't an instruction. */
+    .runner-belief {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        line-height: 1.35;
+        color: var(--semantic-warning);
+        text-align: left;
+        background: color-mix(in srgb, var(--semantic-warning) 10%, transparent);
+        border-radius: var(--radius-sm, 4px);
+        padding: 6px 8px;
     }
 
     /* Two big primary buttons side-by-side. gap comes from `q-gutter-*`

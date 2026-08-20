@@ -63,6 +63,10 @@ def _get_or_create(repository: SqlAlchemyRepository) -> AppSetting:
         # Auto-on so the queue "just works" without a Settings visit.
         stocktake_default_cadence_band="fortnightly",
         stocktake_auto_tuning_enabled=True,
+        # 2026-08-20 — stocktake is on for a fresh install, and new items join
+        # the rotation by default.
+        stocktake_enabled=True,
+        stocktake_new_items_opt_in=True,
     )
     repository.add(setting)
     repository.save_changes()

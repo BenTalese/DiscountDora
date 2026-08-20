@@ -1,10 +1,10 @@
 <template>
     <q-select
-        v-bind="$attrs"
+        v-bind="forwardedAttrs"
         :model-value="modelValue"
         :options="options"
         :behavior="resolvedBehavior"
-        :use-input="useInput"
+        :use-input="resolvedUseInput"
         outlined
         dense
         @update:model-value="(v: TValue) => emit('update:modelValue', v)"
@@ -64,7 +64,7 @@
      * into an anchored menu on a phone would trade a mild annoyance for a
      * genuinely cramped one.
      */
-    import { computed, useSlots } from 'vue';
+    import { computed, useAttrs, useSlots } from 'vue';
     import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -121,6 +121,45 @@
         () => resolvedBehavior.value !== 'menu'
             && ($q.platform.is.mobile === true || resolvedBehavior.value === 'dialog'),
     );
+
+    /**
+     * Typeahead is desktop-only.
+     *
+     * Owner report 2026-08-20: *"all dropdown filters here open as mid-screen
+     * modals except for location which opens at the top. Only difference I can
+     * see is that the keyboard also opens up for this one."* Exactly that —
+     * `use-input` makes QSelect's dialog auto-focus its input, the software
+     * keyboard comes up, and Quasar pins the dialog to the top of the viewport
+     * to keep it clear. One picker behaving unlike its four neighbours, for a
+     * feature that isn't worth much on a phone anyway: filtering a location
+     * list by thumb-typing is slower than scrolling it, and the keyboard eats
+     * the room the list was given.
+     *
+     * The list is still a dialog rather than an anchored menu — `useInput`
+     * keeps driving `resolvedBehavior` above, because a typeahead list is
+     * unbounded by definition and needs the room. Only the input is dropped.
+     */
+    const resolvedUseInput = computed(
+        () => props.useInput && $q.platform.is.mobile !== true,
+    );
+
+    /**
+     * `$attrs`, minus the two props that only make sense alongside the
+     * typeahead. `hide-selected` + `fill-input` are how a `use-input` select
+     * shows the chosen option *in* its input; leave them on when the input is
+     * gone (see `resolvedUseInput`) and the trigger renders blank with a
+     * value selected. Both spellings are stripped — a template may pass
+     * either, and Vue hands them through verbatim.
+     */
+    const attrs = useAttrs();
+    const forwardedAttrs = computed(() => {
+        if (resolvedUseInput.value) return attrs;
+        const out: Record<string, unknown> = { ...attrs };
+        for (const key of ['hide-selected', 'hideSelected', 'fill-input', 'fillInput']) {
+            delete out[key];
+        }
+        return out;
+    });
 
     /** Forward every slot the caller gave us EXCEPT the one we own. */
     const passthroughSlots = computed(() => {

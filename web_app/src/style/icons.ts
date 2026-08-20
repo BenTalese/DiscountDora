@@ -292,6 +292,10 @@ export const ICONS = {
     ingredientCount: 'mdi-counter',
     collection: 'mdi-bookmark-multiple',
     location: 'mdi-map-marker',
+    // 2026-08-20 — the stock-level filter's glyph (D-005: every control in a
+    // filter row carries one). A gauge reads as "how much is left", which is
+    // what a level is; `inventory` is already the item itself.
+    stockLevel: 'mdi-gauge',
     user: 'mdi-account-circle',
     scan: 'mdi-qrcode-scan',
     alert: 'mdi-bell',

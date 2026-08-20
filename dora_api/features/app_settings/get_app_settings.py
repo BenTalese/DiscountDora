@@ -51,6 +51,10 @@ class AppSettingsDto:
     # PROPOSAL_STOCKTAKE_MODE §4 + §8 — global cadence band + Auto toggle.
     stocktake_default_cadence_band: str
     stocktake_auto_tuning_enabled: bool
+    # 2026-08-20 — install-wide stocktake master switch + the opt-in default
+    # handed to new items.
+    stocktake_enabled: bool
+    stocktake_new_items_opt_in: bool
     # FU-511 — install-wide auto-add mode. 'off' | 'essential_only' | 'all'.
     auto_add_mode: str
     # FU-615 — household cooking config, install-wide (moved off User).
@@ -110,6 +114,10 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         ),
         stocktake_auto_tuning_enabled=bool(
             getattr(setting, "stocktake_auto_tuning_enabled", True)
+        ),
+        stocktake_enabled=bool(getattr(setting, "stocktake_enabled", True)),
+        stocktake_new_items_opt_in=bool(
+            getattr(setting, "stocktake_new_items_opt_in", True)
         ),
         auto_add_mode=(getattr(setting, "auto_add_mode", None) or "essential_only"),
         household_headcount=(

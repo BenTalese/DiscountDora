@@ -8,18 +8,31 @@
     // (jumps straight to the target) and falls back to an instant set if the
     // browser can't run rAF. Formatting (decimals, prefix/suffix) is applied
     // to the in-flight tweened value so currency/counts read correctly.
-    import { onBeforeUnmount, ref, watch } from 'vue';
+    import { motionDurationMs } from 'src/composables/useMicroFeedback';
+    import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
     const props = withDefaults(
         defineProps<{
             value: number;
             decimals?: number;
+            /** Override the tween length. Leave unset to ride the motion
+             *  tokens — see `duration` below. */
             durationMs?: number;
             prefix?: string;
             suffix?: string;
         }>(),
-        { decimals: 0, durationMs: 600, prefix: '', suffix: '' },
+        { decimals: 0, prefix: '', suffix: '' },
     );
+
+    /* DR-15 / D-010 — "all animation reads --motion-* tokens, no literal ms".
+       This is a JS tween rather than a CSS transition, but the rule is about
+       the app having one set of durations, not about the mechanism: a
+       hardcoded 600ms here is exactly the drift the tokens exist to prevent.
+       A count-up is a *large surface* settle, so it takes --motion-slow, read
+       at call time so the reduced-motion rewrite (~0ms) applies here too —
+       which is also why the rAF path keeps its own prefers-reduced-motion
+       shortcut below: at 0.01ms the tween would still run for one frame. */
+    const duration = computed(() => props.durationMs ?? motionDurationMs('--motion-slow'));
 
     const current = ref(props.value);
     const display = ref(format(props.value));
@@ -52,7 +65,7 @@
         const start = performance.now();
 
         const step = (now: number): void => {
-            const t = Math.min(1, (now - start) / props.durationMs);
+            const t = Math.min(1, (now - start) / duration.value);
             const v = from + delta * easeOut(t);
             current.value = v;
             display.value = format(v);

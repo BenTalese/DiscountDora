@@ -675,8 +675,8 @@
     }
 
     // ── Filters ─────────────────────────────────────────────────────
-    // expanded state persisted per-page (mobile always starts hidden).
-    const filtersExpanded = useFilterPanelExpanded('my-products');
+    // (the filter panel's expanded state is declared below, once
+    // `activeFilterCount` exists — it's what decides whether the panel opens.)
     // A8 §3 nav-state — filters/search survive navigation within the
     // session and reset on full reload.
     const myProductsState = useListState('my-products', () => ({
@@ -789,6 +789,12 @@
         if (linkedStockItemFilter.value !== null) n++;
         return n;
     });
+    // 2026-08-20 owner call — open iff something is filtered; not remembered
+    // across visits. See `useFilterPanelExpanded`.
+    const filtersExpanded = useFilterPanelExpanded(
+        'my-products',
+        () => activeFilterCount.value > 0,
+    );
     function clearFilters() {
         searchText.value = '';
         onDealOnly.value = false;

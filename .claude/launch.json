@@ -1,12 +1,108 @@
 {
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "web",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["quasar", "dev", "--port", "5174"],
-      "cwd": "web_app",
-      "port": 5174
-    }
-  ]
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "dora-backend",
+            "runtimeExecutable": "python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170
+        },
+        {
+            "name": "dora-backend-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170
+        },
+        {
+            "name": "dora-verify-backend",
+            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING"
+            }
+        },
+        {
+            "name": "dora-verify-backend-money",
+            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_MONEY_ON": "true"
+            }
+        },
+        {
+            "name": "dora-verify-backend-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING"
+            }
+        },
+        {
+            "name": "dora-verify-backend-money-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_MONEY_ON": "true"
+            }
+        },
+        {
+            "name": "dora-spa",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": [
+                "--prefix",
+                "web_app",
+                "run",
+                "dev"
+            ],
+            "port": 5174
+        },
+        {
+            "name": "web",
+            "runtimeExecutable": "npx",
+            "runtimeArgs": [
+                "quasar",
+                "dev",
+                "--port",
+                "5174"
+            ],
+            "cwd": "web_app",
+            "port": 5174
+        }
+    ]
 }

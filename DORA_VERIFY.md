@@ -22,6 +22,196 @@ top-to-bottom.
 
 ---
 
+## Stock overview: feedback batch (2026-08-20) — the seven items
+Nothing here was walked live — the session ended before the browser pass.
+
+- [ ] Filter panel opens on landing **only** when a filter is active — stock
+      overview, cookbook and My products all behave the same now; navigate away
+      and back with filters set (panel open) and with none set (panel closed).
+- [ ] Clearing the last filter from inside the open panel does **not** slam the
+      panel shut under you.
+- [ ] Bulk select → "Deselect all" leaves bulk mode entirely (same as unticking
+      the last item).
+- [ ] Stocktake button shows the due count as a **chip**, not "(n due)" — at
+      desktop and phone width; the glow still only fires on essentials.
+- [ ] The toolbar's action row **scrolls sideways** on a phone instead of
+      wrapping (turn on Scan + Money to get enough buttons to overflow).
+- [ ] Stock level / location / group filters each carry a leading icon and the
+      row still reads as one set.
+- [ ] On a **real phone** (not a narrowed desktop — the behaviour is
+      user-agent-gated), the Location filter opens as a mid-screen dialog like
+      its neighbours, with no keyboard and no top-pinning, and the selected
+      location is still visible in the field afterwards.
+- [ ] Settings → System → Stocktake: switch Stocktake **off** → the overview
+      button, the "Needs check" chip, the per-item Stocktake toggle on an item's
+      detail page and the alerts-bell stocktake nudges all disappear **without a
+      reload**; `/stocktake` by URL shows "Stocktake is turned off."; switch back
+      on and everything returns.
+- [ ] With Stocktake on, flip **New items** off, add an item, and confirm its
+      detail page shows the Stocktake toggle **off** (and on again with the
+      setting on).
+- [ ] **Operator:** boot against an existing DB and confirm migration
+      `a7d4e91c3f28` applies cleanly (adds `AppSetting.stocktake_enabled` +
+      `stocktake_new_items_opt_in`, both defaulting true) — it has not been run
+      against a real database yet, only exercised through the test schema.
+
+## Micro-motion on the four repeated gestures (2026-08-20) — DR-15
+Three of the four were walked live in the agent's pane and are **not** listed
+here: the level-square settle, the cart-button bump, and the filter-chip
+press+bump (plus the token/keyframe/reduced-motion plumbing). What's left needs
+surfaces the pane can't render — its route transitions wedge, and the planner
+rail is behind the forced-mobile `$q.screen` branch. All of it should read as a
+*flicker you notice is there*, not something you watch happen — if you can
+follow the movement, say so and the amplitude tokens come down.
+- [ ] Tick a shopping-list line mid-shop: the checkbox presses in under your
+      finger, and the line **fades** to its dimmed/struck state rather than
+      snapping. Untick — it fades back up.
+- [ ] Same press response on the stocktake **Review** phase checkboxes, ticking
+      down a list quickly.
+- [ ] The row cluster on a stock row (expiry, open/sealed, price, cart) all
+      press identically — no odd one out.
+- [ ] Turn on the OS "reduce motion" setting and re-tap all of the above:
+      **nothing moves at all**, and nothing gets stuck part-way or leaves a
+      control mid-scale.
+- [ ] Dashboard stat count-ups now settle on `--motion-slow` (320ms, was a
+      hardcoded 600ms) — confirm they don't now read as a snap.
+
+## Planner recipe picker: one instance per recipe (2026-08-20) — DR-15 / FU-578 #47
+Logic is pinned by 6 unit specs; this is the eyes-on pass. Needs a real desktop
+browser — the rail doesn't render in the agent's pane.
+- [ ] Open the **step-by-step** meal-plan builder with a cookbook that has
+      favourites: a favourite appears under **Favourites** and **nowhere else**
+      — no second checkbox for it further down.
+- [ ] The bottom tray reads **"Everything else (N)"** when a shortcut tray took
+      something, and **"All recipes (N)"** on a cookbook with no favourites and
+      no cook history. The counts across all trays add up to your total.
+- [ ] Search: typing collapses everything to one flat **Results (N)** tray that
+      finds recipes regardless of which tray they'd otherwise sit in.
+- [ ] Same behaviour in the **meal-planner page's left rail** (it shares the
+      builder now — they used to be separate copies).
+
+## Cookbook: filters, compact row, icons (2026-08-20) — feedback batch 3
+Most of this batch was verified live in the agent's browser pane (filter order,
+the removed "Missing ingredients ≤", "Serves ≥" narrowing 15 → 4, the 12px gap
+above the list, the card's four re-pointed chip icons, the category vocabulary).
+What's left needs a viewport the pane can't give (it reports 0×0, so Quasar
+pins `$q.screen` to `xs` and the desktop branch never renders) or a pointer
+(Quasar popups don't open there).
+- [ ] **Desktop, compact view:** cook time + ingredient count render on a second
+      line under the recipe name — not in the chip cluster — and line up down the
+      list. Pinned by `recipeRowLayout.spec.ts`, but the *look* is the question.
+- [ ] **Desktop, compact view:** recipe name reads at the same size/weight as a
+      stock item name. Put the two lists side by side.
+- [ ] **Phone, compact view:** still one line, no second line, nothing clipped.
+- [ ] **Ingredients filter → Sort by → Stock level:** in-stock items come
+      **first** now (it was out-of-stock first), untracked items last. There is
+      still no direction toggle — that was the decision, not an omission.
+- [ ] **Category filter** offers no time-of-day names (no Breakfast / Dessert /
+      Snack) and does offer Curry / Bake / Bread. Confirm on a DB that was
+      **migrated** rather than freshly seeded — the seed path is verified, the
+      migration's effect on existing rows is not. A recipe that had been
+      categorised "Dessert" should now show no category and keep its
+      time-of-day.
+
+## Stocktake: three phases — Review / Walk / Sweep (2026-08-20) — Chunk 6
+The whole runner changed shape. Note the Review phase **won't appear** until Dora has
+~3 logged purchases for something, so an early install legitimately shows only Walk.
+- [ ] Run opens on the Review list when there's a confident item: name, believed level,
+      Dora's reason, all pre-ticked.
+- [ ] Confirm button counts what it will write; untick one and it says "1 will join the walk".
+- [ ] Untick an item, confirm → **that item is the first thing in the walk**, not the last.
+- [ ] The ticked ones are actually checked (their overdue clock resets — check the stock row).
+- [ ] Walk behaves as before (Still correct / Change level / Skip / Push / Mute).
+- [ ] After the walk, the tidy-up (Sweep) appears **only if** something dropped out of
+      rotation since your last run — likely empty on the first run after this update, and
+      that's correct, not a bug.
+- [ ] Sweep row shows "Last activity <date>" so you can see what it's based on.
+- [ ] **"I still keep this"** opens the level picker (not a silent check). Set a level →
+      the row leaves the list, and the item is back in rotation next run.
+- [ ] Mute and Delete both confirm first; Delete's dialog offers mute as the alternative.
+- [ ] "Leave them be" → summary screen. Re-run the stocktake: the same items are **not**
+      in the tidy-up again.
+- [ ] Empty everything → the old "You're all caught up" card, unchanged.
+- [ ] Help (?) describes the three parts, and the phase name shows in the top bar
+      (no progress bar outside the walk).
+
+## Stocktake: least-certain-first queue (2026-08-20) — Chunk 5
+- [ ] Runner opens on an item Dora is unsure about, not the most-overdue one.
+- [ ] That item shows **"Dora's not sure about this one — <reason>"** under the cadence line.
+- [ ] Items she's confident about come **last** in the walk — and are still there, not dropped.
+- [ ] Help dialog (?) says "least certain first", not "most-overdue first".
+- [ ] Turn off Settings → Assistant → inferred pantry levels, reopen: order is plain
+      most-overdue-first again, no belief line, and the help text reverts to the old wording.
+- [ ] Order is stable — leave and re-enter the runner on unchanged data, same sequence.
+
+## ⚠️ Recipe page (new layout): the parity pass (2026-08-20) — origin FU-688
+The layout decision is made — the new page wins. This is now about whether the
+gap-closing pass actually works. Open any recipe, tap **New layout**.
+
+_Confirmed live by the session that built it (2026-08-20): the page renders (FU-681 was
+stale), **When** shows and holds `Dinner`, **Organise ingredients** is present, all 15
+editable values are focusable with a name saying what they edit and **Enter opens the
+editor**, and the row editor opens with Pantry item / Quantity / Unit / Required / Note
+(Section hidden correctly on a section-less recipe). Poking the page saved nothing, which
+is the explicit-save change working. Everything below needs real pointer input, which the
+agent pane can't provide — it doesn't composite, so click coordinates are degenerate._
+
+**Save, and not losing work** (this replaced a debounced autosave):
+- [ ] Edit any value; an **Unsaved changes** pill appears and **Save** + **Discard** show up
+      in the action row, with Cook mode stepping back from primary.
+- [ ] Edit two values in a row without pausing — both survive. (The autosave used to drop
+      the second one.)
+- [ ] **Discard** asks, then puts every field back to the last saved state.
+- [ ] Tap the back arrow while dirty → asked before leaving; **Stay** really stays.
+- [ ] Reload/close the tab while dirty → the browser's own "leave site?" prompt fires.
+- [ ] Start **Cook mode** while dirty → guard offers to save first, and cooking shows the
+      saved version.
+- [ ] Clear the recipe name and hit Save → refused with a reason, nothing lost.
+
+**Ingredients:**
+- [ ] In the row editor (opened by tapping an ingredient's **name**), Cancel really cancels
+      — no dirty pill afterwards.
+- [ ] In that editor, type a name that doesn't exist → **Create "…" in my pantry** and
+      **Use "…" as free text** both offered; both work, and free text shows a **Free text**
+      chip on the row.
+- [ ] **Add ingredient** opens the editor straight away on the new row; a row left without
+      an item shows a **Needs an item** chip and Save says so (it no longer blocks silently).
+- [ ] Tap the **quantity** → qty + unit inline, as before.
+- [ ] A missing ingredient with recorded substitutes shows a chip: **"Use <name>"** when you
+      have one, **"N substitutes"** when you don't. Open it — in-stock ones first, ratio and
+      note shown, out-of-stock ones offer add-to-list, and the footer says swapping happens
+      in cook mode.
+- [ ] **Right now** cell adds "N has/have a substitute you already have" when that's true.
+
+**Sections & order** (under **Organise ingredients**):
+- [ ] Add a section → it appears in the ingredient list immediately, with "Nothing in this
+      section yet". (It used to be invisible until something was in it — which was nothing.)
+- [ ] Put an ingredient in it via the row editor; reorder sections with ↑/↓; delete a
+      section and its ingredients fall back to the main list.
+- [ ] Reorder ingredients with ↑/↓ and Save — the order sticks after a reload.
+
+**The rest:**
+- [ ] All three step modes still render; only structured highlights the ingredients a step uses.
+- [ ] Both hatch buttons still work ("New layout" / "Back to the old layout") until the swap.
+- [ ] Phone width: the action row wraps sanely with Save + Discard present.
+
+## Stock overview: default sort + the four row channels (2026-08-20) — Chunk 4
+- [ ] Stock opens sorted **Needs attention · Most urgent first** (fresh session, no saved sort).
+- [ ] Top of the list is outlined rows, then plain, then dimmed — no dimmed row above a plain one.
+- [ ] A previously-saved sort (e.g. Name) still comes back as you left it.
+- [ ] No row animates any more: no pulsing level box, no rings on the level box or cart.
+- [ ] **Stocktake button glows when an essential is due, and only then.** Flag an overdue
+      item essential → it glows; unflag → it stops, but keeps its count.
+- [ ] Stocktake button shows the number due either way (badge when the label is dropped);
+      tooltip/aria adds "N essential" when that's what's making it glow.
+- [ ] An item due a count, and one Dora disagrees with, both show **one dashed level box**.
+- [ ] Level picker header says which reason it is — "Dora thinks…" or "Due for a stocktake check".
+- [ ] Expiry and open/in-use are still **two separate buttons** (the brief merge was reverted).
+      Open is one tap, and marking something open still prompts for a revised date.
+- [ ] An expired, out-of-stock, non-essential row is outlined and **not** faded (was both).
+- [ ] Help → Guides → "What the colours and outlines mean": no cart-verdict rings, no amber
+      warn tier, cheat sheet has one Row-treatment column, essential swatch matches the row.
+
 ## Alerts + Stock: Step-0 cuts and the one attention rule (2026-08-20)
 - [ ] Bell/alerts page show only expired, expiring-soon, essential-low + the three nudges.
 - [ ] Manage panel: on/off toggle per kind, no Needs-action/FYI picker, weight shown as text.

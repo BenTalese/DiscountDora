@@ -8,7 +8,6 @@ import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
 import type { MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
-import type { Recipe } from 'src/models/recipe';
 import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -21,16 +20,15 @@ import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import { useStockItemStore } from 'src/stores/stockItemStore';
 import { useStockLevelStore } from 'src/stores/stockLevelStore';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { buildRecipeTrays } from 'src/helpers/recipeTrays';
 import { useRoute, useRouter } from 'vue-router';
 
-const RECIPE_TRAY_CAP = 10;
-
-export type RecipeTray = {
-    key: string;
-    title: string;
-    recipes: Recipe[];
-    defaultOpen: boolean;
-};
+/* R-003 — the tray builder + its `RecipeTray` type moved to
+   `helpers/recipeTrays.ts` when the FU-578 #47 dedupe landed: the identical
+   logic also lived in MealPlanBuilderDialog.vue, and a dedupe written in one
+   place only would have left the two pickers disagreeing. Re-exported here
+   because three components import the type from this module. */
+export type { RecipeTray } from 'src/helpers/recipeTrays';
 
 export type WeekDay = { label: string; iso: string };
 
@@ -151,40 +149,10 @@ export function useMealPlanner() {
     });
 
     // ── Recipe trays (C-2.I) ───────────────────────────────────────────────
-    const filteredRecipes = computed(() => {
-        const q = recipeSearch.value?.trim().toLowerCase() ?? '';
-        if (!q) return recipes.value;
-        return recipes.value.filter((r) => r.name.toLowerCase().includes(q));
-    });
-    const trays = computed<RecipeTray[]>(() => {
-        if (recipeSearch.value?.trim()) {
-            return [{
-                key: 'results',
-                title: `Results (${filteredRecipes.value.length})`,
-                recipes: filteredRecipes.value,
-                defaultOpen: true,
-            }];
-        }
-        const all = recipes.value;
-        const out: RecipeTray[] = [];
-        const favs = all.filter((r) => r.is_favourite);
-        if (favs.length) out.push({ key: 'fav', title: 'Favourites', recipes: favs, defaultOpen: true });
-        const stale = all
-            .filter((r) => r.not_made_recently)
-            .sort((a, b) => madeMs(a) - madeMs(b))
-            .slice(0, RECIPE_TRAY_CAP);
-        if (stale.length) out.push({ key: 'stale', title: "Haven't had in a while", recipes: stale, defaultOpen: false });
-        const freq = all
-            .filter((r) => r.plan_count > 0)
-            .sort((a, b) => b.plan_count - a.plan_count)
-            .slice(0, RECIPE_TRAY_CAP);
-        if (freq.length) out.push({ key: 'freq', title: 'Frequently planned', recipes: freq, defaultOpen: false });
-        out.push({ key: 'all', title: `All recipes (${all.length})`, recipes: all, defaultOpen: true });
-        return out;
-    });
-    function madeMs(r: Recipe): number {
-        return r.last_made_on ? new Date(r.last_made_on).getTime() : 0;
-    }
+    // The search filter moved into `buildRecipeTrays` with the R-003 merge —
+    // it only ever fed the trays' `Results` case, and keeping a second copy of
+    // the name match out here is how the two pickers drifted apart before.
+    const trays = computed(() => buildRecipeTrays(recipes.value, recipeSearch.value ?? ''));
 
     // ── Tap-to-add: focus a slot, then pick a recipe ───────────────────────
     const focusedTarget = ref<{ dayIso: string; slot: string } | null>(null);

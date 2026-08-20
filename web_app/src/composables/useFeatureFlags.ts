@@ -45,6 +45,15 @@ function readFlag(name: string): boolean {
     return !!flagsRaw.value[name];
 }
 
+/** For the rare flag whose server-side default is ON. `readFlag` can't serve
+ *  those: the map is empty until the probe resolves, so a default-on surface
+ *  would blink out of existence on every page load and stay hidden if the
+ *  probe ever failed. Absent key ⇒ true; present key ⇒ whatever it says. */
+function readFlagDefaultOn(name: string): boolean {
+    const raw = flagsRaw.value[name];
+    return raw === undefined ? true : !!raw;
+}
+
 export function useFeatureFlags() {
     void load();
     function refresh(): Promise<void> {
@@ -60,6 +69,11 @@ export function useFeatureFlags() {
         auth: computed(() => readFlag('auth')),
         audit: computed(() => readFlag('audit')),
         scanning: computed(() => readFlag('scanning')),
+        // 2026-08-20 — install-wide stocktake master switch. Unlike most
+        // flags here this one defaults ON server-side, so a failed probe (or
+        // the moment before the probe lands) leaves the surface visible
+        // rather than blinking a feature the household uses in and out.
+        stocktake: computed(() => readFlagDefaultOn('stocktake')),
         multiUser: computed(() => readFlag('multi_user')),
         email: computed(() => readFlag('email')),
         // No `assistant` flag — AI mode has no install-wide gate (per-user

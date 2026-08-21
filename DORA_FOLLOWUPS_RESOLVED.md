@@ -10,6 +10,35 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-696 — stray editor temp file committed-adjacent in `web_app/src/pages`
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** finding.
+- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87`
+  is sitting in the pages directory — an editor/tool crash artefact, not source.
+  It's a full stale copy of the page (it still references `PantryBeliefChip`,
+  which the live page no longer imports), so it will confuse the next grep for
+  anything on that surface, and Vite/vue-tsc ignore it only because of the
+  extension suffix.
+- **Why deferred:** out of DR-15's scope, and deleting a file I didn't create in
+  a pass about motion is the kind of unrelated change the scope rule (R-013)
+  exists to stop. Trivially safe to remove once confirmed it isn't something the
+  owner parked deliberately.
+- **Recommended resolution:** now (one `rm`, owner to confirm it's an artefact).
+- **State note:** 2026-08-21 — **RESOLVED.** `git rm`'d. Confirmed nothing references it first (`grep -r 1272799` and the full filename hit only the ledgers, never source). `.gitignore` gained `*.tmp.*` so the pattern can't be committed again. Duplicate of [[FU-651]], resolved together.
+
+## [RESOLVED] FU-651 — Stray editor temp file committed-adjacent in `web_app/src/pages/`
+- **Raised:** 2026-08-16 (stock-overview filter feedback).
+- **Type:** leftover.
+- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87` (138KB,
+  untracked, dated 2026-08-16 16:56) is sitting next to the real page — an editor/agent
+  temp file from the previous unit that never got cleaned up. It is not imported, but it
+  IS inside the SPA source tree.
+- **Why deferred:** not mine to delete unreviewed — it may be a copy the owner kept
+  deliberately, and it's 138KB of page source, not scratch.
+- **Recommended resolution:** now — confirm it's junk and `rm` it (it's untracked, so
+  nothing is lost from git either way).
+- **State note:** 2026-08-21 — **RESOLVED** with [[FU-696]] (same file, logged twice four days apart). One correction to the entry above: by the time it was removed the file was **tracked**, not untracked — it had been committed in the interim, so this was a `git rm`, not an `rm`.
+
 ## [RESOLVED] FU-681 — the recipe detail page never leaves its loading skeleton in the agent preview pane
 - **Raised:** 2026-08-19 (recipe view feedback batch)
 - **Type:** finding

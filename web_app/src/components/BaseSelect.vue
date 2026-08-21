@@ -5,6 +5,8 @@
         :options="options"
         :behavior="resolvedBehavior"
         :use-input="resolvedUseInput"
+        :display-value="resolvedDisplayValue"
+        :stack-label="emptyText ? true : undefined"
         outlined
         dense
         @update:model-value="(v: TValue) => emit('update:modelValue', v)"
@@ -89,6 +91,23 @@
             behavior?: 'default' | 'menu' | 'dialog';
             /** Heading shown beside the close button in the dialog case. */
             dialogTitle?: string;
+            /**
+             * What the field reads when nothing is picked, e.g. "Any level".
+             *
+             * Owner feedback 2026-08-21: *"some filters have placeholder text
+             * that turns into the title of the filter when input is added…
+             * it then looks really odd with a filter value of 'Stocked'
+             * selected and above it says 'Any level'."* Exactly right — those
+             * call sites passed the empty-state sentence as `label`, and a
+             * Quasar label doesn't disappear when a value arrives, it floats
+             * up and becomes the field's *title*. So the field ended up
+             * captioned with a statement that was no longer true.
+             *
+             * Passing this splits the two jobs properly: `label` is the field's
+             * name and stays put (stacked, so it never sits over the value),
+             * and this is the value shown while the model is empty.
+             */
+            emptyText?: string;
         }>(),
         { useInput: false, dialogTitle: 'Choose an option' },
     );
@@ -153,7 +172,11 @@
      */
     const attrs = useAttrs();
     const forwardedAttrs = computed(() => {
-        if (resolvedUseInput.value) return attrs;
+        // A caller-supplied placeholder always wins over the empty-state one.
+        const placeholder = attrs.placeholder ?? resolvedPlaceholder.value;
+        if (resolvedUseInput.value) {
+            return placeholder === undefined ? attrs : { ...attrs, placeholder };
+        }
         const out: Record<string, unknown> = { ...attrs };
         for (const key of ['hide-selected', 'hideSelected', 'fill-input', 'fillInput']) {
             delete out[key];
@@ -161,11 +184,47 @@
         return out;
     });
 
-    /** Forward every slot the caller gave us EXCEPT the one we own. */
+    /** Nothing picked — `null`, `undefined`, `''`, or an empty multi-select. */
+    const isEmpty = computed(() => {
+        const v = props.modelValue;
+        if (Array.isArray(v)) return v.length === 0;
+        return v === null || v === undefined || v === '';
+    });
+
+    /**
+     * Empty state, two renderings — because QSelect has two.
+     *
+     * A `use-input` select renders a real <input> and (with `hide-selected`)
+     * returns NOTHING from its selection renderer, so `display-value` is dead
+     * there: the field would just come out blank. The input's own
+     * `placeholder` is the right channel — and it reaches the input, because
+     * QSelect spreads `$attrs` onto it (`getInput`). Every other select has no
+     * input, so `display-value` is the only channel it has.
+     */
+    const resolvedDisplayValue = computed(
+        () => (props.emptyText && isEmpty.value && !resolvedUseInput.value
+            ? props.emptyText
+            : undefined),
+    );
+    const resolvedPlaceholder = computed(
+        () => (props.emptyText && isEmpty.value && resolvedUseInput.value
+            ? props.emptyText
+            : undefined),
+    );
+
+    /** Forward every slot the caller gave us EXCEPT the one we own.
+     *
+     *  `selected-item` is also withheld while the empty text is showing:
+     *  QSelect prefers that slot over `display-value` whenever the slot
+     *  exists, and with nothing selected it renders no rows — so the field
+     *  would come out blank rather than saying "Any level". Withholding it
+     *  costs nothing, because a `selected-item` slot has nothing to render
+     *  when there is no selection. */
     const passthroughSlots = computed(() => {
         const out: Record<string, true> = {};
         for (const name of Object.keys(slots)) {
             if (name === 'before-options') continue;
+            if (name === 'selected-item' && resolvedDisplayValue.value !== undefined) continue;
             out[name] = true;
         }
         return out;
@@ -173,6 +232,30 @@
 </script>
 
 <style scoped lang="scss">
+    /* Selected text truncates, never wraps.
+       Owner feedback 2026-08-21: *"if text is too large it [should] trail off
+       'like this…'. Definitely visible on mobile for stock level filter with a
+       value selected — the text comes out of the input area because of word
+       wrap."* QSelect's value div is a flex item with no width constraint of
+       its own, so a long option wrapped to a second line inside a fixed-height
+       control and spilled out of it. Applied here rather than per page so
+       every select in the app truncates the same way.
+       No `display` override: QSelect's value spans are already flex items of
+       `.q-field__native` and so are blockified, which is what makes
+       `text-overflow` apply. Setting it explicitly would flatten a
+       `#selected-item` slot that renders a `.row` (the level filter's colour
+       dot + name). A `use-input` typeahead's real <input> is a sibling and is
+       untouched — it scrolls its own overflow and must keep doing so. */
+    :deep(.q-field__native) {
+        flex-wrap: nowrap;
+    }
+    :deep(.q-field__native > span) {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
     .base-select__dialog-bar {
         position: sticky;
         top: 0;

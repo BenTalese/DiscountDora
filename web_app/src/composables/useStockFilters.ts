@@ -83,6 +83,11 @@ export function migrateStockSort(
     return { sortBy: 'attention', sortDir: 'asc' };
 }
 
+/** Mirrors `RANK_NONE` in `stock_attention.py` — "nothing fired", sorting
+ *  below every real rank. Only used as the fallback for a DTO from an older
+ *  server that predates the field. */
+export const ATTENTION_RANK_NONE = 9;
+
 /**
  * The three-band treatment ramp (D-8), as a sortable number. One function so
  * the row's CSS classes and this comparator cannot disagree about which band
@@ -93,8 +98,6 @@ export function migrateStockSort(
  *   1 — normal: fine.
  *   2 — dimmed: out of stock, but never flagged essential. FYI only.
  */
-const ATTENTION_SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
-
 export function attentionBand(
     item: { needs_attention?: boolean; is_essential?: boolean },
     outOfStock: boolean,
@@ -122,14 +125,9 @@ export function useStockFilters(sources: {
     recipes: () => ReadList<Recipe>;
     stockGroups: () => ReadList<StockGroup>;
     membership: () => Membership | null;
-    /**
-     * PROPOSAL_STOCKTAKE_MODE §7 — the set of stock-item ids currently
-     * in the stocktake queue (server-owned overdue set; R-003). Absent
-     * or empty → the "Needs check" filter matches nothing, which is
-     * the correct behaviour when the caller hasn't wired the signal
-     * yet. Read on every predicate call so it stays reactive.
-     */
-    needsCheckIds?: () => ReadonlySet<string>;
+    // `needsCheckIds` (the stocktake queue) was a source here only to back the
+    // retired "Needs check" chip. The queue is still fetched by StockOverview
+    // for the row's dashed marker — it just isn't a filter axis any more.
 }, options: { persistScope?: string } = {}) {
     // ── Raw filter state ────────────────────────────────────────────────
     // Wrapped via useListState so filters/search/sort survive nav-away
@@ -143,8 +141,6 @@ export function useStockFilters(sources: {
             essentialsOnly: ref(false),
             openOnly: ref(false),
             hasAlertOnly: ref(false),
-            // PROPOSAL_STOCKTAKE_MODE §7 — "in the stocktake queue right now".
-            needsCheckOnly: ref(false),
             // "Expiring soon or already expired" — the Dora Score freshness
             // action deep-links here via ?expiring=1 (FU-583).
             expiringSoonOnly: ref(false),
@@ -163,7 +159,6 @@ export function useStockFilters(sources: {
             essentialsOnly: ref(false),
             openOnly: ref(false),
             hasAlertOnly: ref(false),
-            needsCheckOnly: ref(false),
             expiringSoonOnly: ref(false),
             cartFilter: ref<StockCartFilter>('all'),
             recipeFilter: ref<string | null>(null),
@@ -173,7 +168,7 @@ export function useStockFilters(sources: {
         };
     const {
         searchText, levelFilter, locationFilter, groupFilter, essentialsOnly,
-        openOnly, hasAlertOnly, needsCheckOnly, expiringSoonOnly, cartFilter,
+        openOnly, hasAlertOnly, expiringSoonOnly, cartFilter,
         recipeFilter, sortBy, sortDir,
     } = state;
 
@@ -327,10 +322,6 @@ export function useStockFilters(sources: {
             if (essentialsOnly.value && !item.is_essential) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
-            if (needsCheckOnly.value) {
-                const ids = sources.needsCheckIds?.();
-                if (!ids || !ids.has(item.stock_item_id)) return false;
-            }
             if (expiringSoonOnly.value && !isExpiryFlagged(item)) return false;
             if (tokens.length > 0) {
                 const haystack = item.name.toLowerCase();
@@ -367,17 +358,35 @@ export function useStockFilters(sources: {
             switch (sortBy.value) {
                 case 'attention': {
                     // D-9. Primary: the three-band ramp (D-8). Secondary:
-                    // severity, but ONLY inside the outlined band — severity is
-                    // null everywhere else, so comparing it across bands would
-                    // be comparing nothing. Tiebreak: name, so the list is
-                    // stable and doesn't reshuffle as levels change under it.
+                    // the server's urgency RANK, but ONLY inside the outlined
+                    // band — rank is 9 everywhere else, so comparing it across
+                    // bands would be comparing nothing.
+                    //
+                    // Rank, not severity (owner, 2026-08-21: "what is the
+                    // ordering within attention sort? seems a bit random").
+                    // It was: severity, then name. But `expired` and
+                    // `essential_low` are both severity `high`, so the band
+                    // sorted alphabetically in practice and an expired jar
+                    // could sit below an essential that was merely low.
+                    // `attention_rank` orders expired → essential-out →
+                    // expiring-soon → essential-low; the meaning lives in
+                    // `stock_attention.py` (R-003) and this only compares ints.
+                    //
+                    // Tiebreak inside a rank: soonest expiry first, so a
+                    // fortnight of expiring-soon items reads as a countdown
+                    // rather than an alphabet. Then name, so the list is stable
+                    // and doesn't reshuffle as levels change under it.
                     const ab = attentionBand(a, outOfStock(a));
                     const bb = attentionBand(b, outOfStock(b));
                     if (ab !== bb) return dir * (ab - bb);
                     if (ab === 0) {
-                        const as = ATTENTION_SEVERITY_RANK[a.attention_severity ?? ''] ?? 9;
-                        const bs = ATTENTION_SEVERITY_RANK[b.attention_severity ?? ''] ?? 9;
-                        if (as !== bs) return dir * (as - bs);
+                        const ar = a.attention_rank ?? ATTENTION_RANK_NONE;
+                        const br = b.attention_rank ?? ATTENTION_RANK_NONE;
+                        if (ar !== br) return dir * (ar - br);
+                        const ae = a.expiry_date ?? '';
+                        const be = b.expiry_date ?? '';
+                        if (ae !== be && ae && be) return dir * ae.localeCompare(be);
+                        if (ae !== be) return ae ? -1 : 1;
                     }
                     return collator.compare(a.name, b.name);
                 }
@@ -429,11 +438,6 @@ export function useStockFilters(sources: {
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
         if (expiringSoonOnly.value) n++;
-        // `needsCheckOnly` narrows the list exactly like its siblings, so it
-        // has to count here and clear below — omitting it left the toolbar
-        // badge at 0 and suppressed the "Clear filters" button while the
-        // list was visibly filtered.
-        if (needsCheckOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
         if (recipeFilter.value !== null) n++;
         return n;
@@ -523,7 +527,6 @@ export function useStockFilters(sources: {
         openOnly.value = false;
         hasAlertOnly.value = false;
         expiringSoonOnly.value = false;
-        needsCheckOnly.value = false;
         cartFilter.value = 'all';
         recipeFilter.value = null;
     }
@@ -537,7 +540,6 @@ export function useStockFilters(sources: {
         essentialsOnly,
         openOnly,
         hasAlertOnly,
-        needsCheckOnly,
         expiringSoonOnly,
         cartFilter,
         recipeFilter,

@@ -8,7 +8,20 @@
         @cancel="resetForm"
     >
             <q-card-section>
-                <q-form @submit.prevent="onSubmit" class="q-gutter-md">
+                <!-- 2026-08-21 feedback: "location input is too wide on the
+                     right (possibly same issue we faced on the stock item
+                     details page?)". Same issue, same cause. This was
+                     `q-gutter-md`, which spaces children by putting a -16px
+                     margin on the container and +16px on each child — so the
+                     container's content box is 16px WIDER than the card. Every
+                     child that sizes to content is fine with that; the location
+                     picker is the one that doesn't, because a `use-input`
+                     QSelect carries `width: 100%` (see the `.q-select--with-input`
+                     rule in app.scss), and 100% of the over-wide container
+                     overhangs the card by exactly one gutter on the right.
+                     A flex column with `gap` spaces the same way without
+                     negative margins, so 100% means 100% of the card. -->
+                <q-form @submit.prevent="onSubmit" class="create-stock-item__fields">
                     <FormErrorSummary :message="generalError" />
 
                     <!-- barcode-to-add suggestion banner. Shown when
@@ -138,12 +151,20 @@
                     <div class="row items-center q-gutter-sm">
                         <q-toggle v-model="form.is_essential" label="Essential" />
                         <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                            <!-- 2026-08-21, owner-approved copy. The old text
+                                 ("shows up in 'essentials' auto-generate
+                                 sources… different from auto-add…") explained
+                                 the flag by naming two internal mechanisms and
+                                 never mentioned the thing the user actually
+                                 sees: an essential is what makes a row raise
+                                 attention when it runs low (`stock_attention.py`,
+                                 kind `essential_low`). D-014 — say what it does
+                                 for you, not what it does in the code. Kept
+                                 word-identical to the detail page's copy. -->
                             <q-tooltip max-width="320px">
-                                Flagged as an essential — shows up in
-                                "essentials" auto-generate sources even when
-                                it's stocked. Different from auto-add: this only
-                                matters when you run auto-generate, not on every
-                                stock change.
+                                Something you always want in the house. Dora
+                                chases it up as soon as it runs low, instead of
+                                waiting until it's gone.
                             </q-tooltip>
                         </q-icon>
                     </div>
@@ -344,6 +365,16 @@
 </script>
 
 <style scoped>
+    /* Replaces `q-gutter-md` on the form — same 16px rhythm, but with `gap`
+       instead of the gutter's negative container margin, which made the form
+       16px wider than its card and pushed any `width: 100%` child (the
+       location picker) off the right edge. */
+    .create-stock-item__fields {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4, 16px);
+    }
+
     /* P8-02 — scan-driven prefill banner. Uses the same sunken-well
        treatment as FU-012 filter sub-bars so the "this data came from
        elsewhere" affordance reads consistently across surfaces. */

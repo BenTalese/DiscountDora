@@ -10,7 +10,6 @@
 // DETERMINISM: the clock is pinned (expiry math uses Date.now); sorting uses
 // an explicit 'en' collator inside the composable, so no machine-locale drift.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ref } from 'vue';
 
 import { clearAllListState } from 'src/composables/useListState';
 import { migrateStockSort, useStockFilters } from 'src/composables/useStockFilters';
@@ -48,17 +47,20 @@ function item(overrides: Partial<StockItem> & Pick<StockItem, 'stock_item_id' | 
 // anything from level + expiry, so a fixture that only set `expiry_date`
 // would be describing an item the API could never return.
 //   apple  — stocked, plain                        (quiet)
-//   bread  — essential + low                       (essential_low)
-//   cheese — essential + out                       (essential_low)
-//   dill   — expiring in 3 days                    (expiring_soon)
-//   egg    — already expired                       (expired)
+//   bread  — essential + low                       (essential_low, rank 3)
+//   cheese — essential + out                       (essential_low, rank 1)
+//   dill   — expiring in 3 days                    (expiring_soon,  rank 2)
+//   egg    — already expired                       (expired,        rank 0)
 //   flour  — low but NOT essential, currently open (quiet — Step-0 Q1)
+// `attention_rank` is the server's urgency ORDER (stock_attention.py):
+// expired → essential-out → expiring-soon → essential-low. Note cheese and
+// bread share a kind and a severity but not a rank — out is worse than low.
 const ITEMS: StockItem[] = [
     item({ stock_item_id: 'si-apple', name: 'Apple', stock_location_id: 'loc-pantry', stock_group_id: 'grp-fresh', stock_level_last_updated: '2026-07-01T00:00:00Z' }),
-    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_essential: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z', needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'] }),
-    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_essential: true, needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'] }),
-    item({ stock_item_id: 'si-dill', name: 'Dill', expiry_date: '2026-07-13', stock_location_id: 'loc-shelf', stock_group_id: 'grp-fresh', needs_attention: true, attention_severity: 'medium', attention_kinds: ['expiring_soon'] }),
-    item({ stock_item_id: 'si-egg', name: 'Egg', expiry_date: '2026-07-01', needs_attention: true, attention_severity: 'high', attention_kinds: ['expired'] }),
+    item({ stock_item_id: 'si-bread', name: 'Bread', stock_level_id: 'lv-low', is_essential: true, stock_location_id: 'loc-pantry', stock_level_last_updated: '2026-07-09T00:00:00Z', needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'], attention_rank: 3 }),
+    item({ stock_item_id: 'si-cheese', name: 'Cheese', stock_level_id: 'lv-out', is_essential: true, needs_attention: true, attention_severity: 'high', attention_kinds: ['essential_low'], attention_rank: 1 }),
+    item({ stock_item_id: 'si-dill', name: 'Dill', expiry_date: '2026-07-13', stock_location_id: 'loc-shelf', stock_group_id: 'grp-fresh', needs_attention: true, attention_severity: 'medium', attention_kinds: ['expiring_soon'], attention_rank: 2 }),
+    item({ stock_item_id: 'si-egg', name: 'Egg', expiry_date: '2026-07-01', needs_attention: true, attention_severity: 'high', attention_kinds: ['expired'], attention_rank: 0 }),
     item({ stock_item_id: 'si-flour', name: 'Flour', stock_level_id: 'lv-low', is_open: true, stock_level_last_updated: '2026-07-05T00:00:00Z' }),
 ];
 
@@ -125,7 +127,6 @@ const MEMBERSHIP: Membership = {
  */
 function makeFilters(overrides: {
     membership?: Membership | null;
-    needsCheckIds?: () => ReadonlySet<string>;
 } = {}) {
     const filters = makeFiltersOnDefaultSort(overrides);
     filters.sortBy.value = 'name';
@@ -136,7 +137,6 @@ function makeFilters(overrides: {
 /** Same fixtures, sort left exactly as the composable ships it. */
 function makeFiltersOnDefaultSort(overrides: {
     membership?: Membership | null;
-    needsCheckIds?: () => ReadonlySet<string>;
 } = {}) {
     return useStockFilters({
         stockItems: () => ITEMS,
@@ -145,7 +145,6 @@ function makeFiltersOnDefaultSort(overrides: {
         recipes: () => RECIPES,
         stockGroups: () => GROUPS,
         membership: () => ('membership' in overrides ? overrides.membership ?? null : MEMBERSHIP),
-        ...(overrides.needsCheckIds ? { needsCheckIds: overrides.needsCheckIds } : {}),
     });
 }
 
@@ -225,18 +224,9 @@ describe('useStockFilters — filtering', () => {
         expect(names(f)).toEqual(['Bread', 'Cheese', 'Dill', 'Egg']);
     });
 
-    it('needs-check matches nothing when the caller has not wired the signal', () => {
-        const f = makeFilters();
-        f.needsCheckOnly.value = true;
-        expect(names(f)).toEqual([]);
-    });
-
-    it('needs-check narrows to the server-owned stocktake queue when wired', () => {
-        const queue = ref(new Set(['si-flour', 'si-egg']));
-        const f = makeFilters({ needsCheckIds: () => queue.value });
-        f.needsCheckOnly.value = true;
-        expect(names(f)).toEqual(['Egg', 'Flour']);
-    });
+    // The two "needs-check" cases were deleted 2026-08-21 with the chip: the
+    // stocktake queue is no longer a filter axis here (it still paints the
+    // row's dashed marker, which StockOverview owns).
 
     it('expiring-soon keeps the expiry-flagged items (FU-583 freshness deep-link)', () => {
         const f = makeFilters();
@@ -326,9 +316,13 @@ describe('useStockFilters — sorting', () => {
         const f = makeFiltersOnDefaultSort();
         expect(f.sortBy.value).toBe('attention');
         expect(f.sortDir.value).toBe('asc');
-        // Band 0, severity then name: Bread/Cheese/Egg are high, Dill medium.
+        // Band 0, by the server's urgency rank (2026-08-21): Egg is expired,
+        // Cheese is an essential that's OUT, Dill is expiring soon, Bread is an
+        // essential merely LOW. This used to be severity-then-name, which tied
+        // Egg with Bread and Cheese (all `high`) and fell through to the
+        // alphabet — the "seems a bit random" the owner reported.
         // Band 1: Apple, Flour (low but not essential — Step-0 Q1 says quiet).
-        expect(names(f)).toEqual(['Bread', 'Cheese', 'Egg', 'Dill', 'Apple', 'Flour']);
+        expect(names(f)).toEqual(['Egg', 'Cheese', 'Dill', 'Bread', 'Apple', 'Flour']);
     });
 
     it('sinks out-of-stock non-essentials below ordinary rows, and flips whole', () => {

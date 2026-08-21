@@ -43,8 +43,8 @@
             </BaseButton>
             <!-- Gated on the install-wide stocktake switch (2026-08-20
                  feedback) — off ⇒ the household doesn't use stocktake and
-                 this button, the "Needs check" filter and the queue fetch
-                 below all go away. -->
+                 this button, the row's needs-check marker and the queue
+                 fetch below all go away. -->
             <BaseButton
                 v-if="stocktakeEnabled"
                 variant="secondary"
@@ -205,7 +205,7 @@
                  wrapping to four lines — an open filter panel used to eat
                  half the screen.
                  The (?) info icons that trailed Expiring soon / Essential /
-                 Open / Needs check are gone: each chip says what it does,
+                 Open are gone: each chip says what it does,
                  and the tooltips were repeating the label back at the user.
                  The one genuinely non-obvious rule — what the row colours
                  mean — moved to Help → Guides ("What the colours and
@@ -229,16 +229,13 @@
                     Open / in-use
                 </FilterChip>
 
-                <!-- "Needs check" IS the stocktake queue, so it follows the
-                     install-wide switch with the button above. -->
-                <FilterChip
-                    v-if="stocktakeEnabled"
-                    v-model="filters.needsCheckOnly.value"
-                    :icon="ICONS.fact_check"
-                    active-color="warning"
-                >
-                    Needs check
-                </FilterChip>
+                <!-- The "Needs check" chip was retired 2026-08-21 (owner call).
+                     It sat in a row of *pantry-state* filters while describing
+                     *data staleness*, on a different axis and a different data
+                     source from its neighbours — and the surface that already
+                     owns "what's due a count" is the Stocktake page the toolbar
+                     button goes to. The queue ids still load: they paint the
+                     row's dashed needs-check marker. Don't re-add the chip. -->
 
                 <!-- "Used in a recipe" filter removed
                      (low signal; the recipe pages own that view). -->
@@ -280,7 +277,11 @@
                  filter panel eats the viewport" problem the chip row was
                  fixed for — the two rows now behave identically. -->
             <FilterRow variant="fields">
-            <!-- single dropdown defaults to "Any level".
+            <!-- single dropdown defaults to "Any level". The field is
+                 *titled* "Stock level" and *reads* "Any level" until you pick
+                 one (`empty-text`) — writing the empty state as the label made
+                 it float up and caption the field with "Any level" while the
+                 value beneath said "Stocked" (2026-08-21 feedback).
                  Per-level chips with count badges retired; counts live in
                  the sticky footer now (PageCountsFooter).
                  Feedback (2026-06-30): the option list and trigger both
@@ -294,7 +295,8 @@
                 emit-value
                 map-options
                 clearable
-                label="Any level"
+                label="Stock level"
+                empty-text="Any level"
                 dialog-title="Stock level"
             >
                 <!-- 2026-08-20 feedback: "icons for stock level, group and
@@ -342,7 +344,8 @@
                 hide-selected
                 input-debounce="200"
                 clearable
-                label="Any location"
+                label="Location"
+                empty-text="Any location"
                 dialog-title="Location"
                 @filter="filters.filterLocations"
             >
@@ -355,7 +358,8 @@
                 emit-value
                 map-options
                 clearable
-                label="Any group"
+                label="Stock group"
+                empty-text="Any group"
                 dialog-title="Stock group"
             >
                 <template #prepend><q-icon :name="ICONS.tag_multiple" size="18px" /></template>
@@ -710,7 +714,7 @@
     const $q = useQuasar();
     const { scanningEnabled } = useScanningEnabled();
     // 2026-08-20 — install-wide stocktake switch. Gates the toolbar button,
-    // the "Needs check" filter chip and the queue fetch below.
+    // the row's needs-check marker and the queue fetch below.
     const { stocktake: stocktakeEnabled } = useFeatureFlags();
     const { moneyEnabled } = useMoneyEnabled();
     // FU-300's sheet, reused verbatim — the dashboard's "Log a price"
@@ -740,14 +744,13 @@
      */
     const stocktakeEssentialOverdue = ref(0);
     // PROPOSAL_STOCKTAKE_MODE §7 — the server-owned set of "needs check"
-    // ids. Drives the level box's dashed marker + the "Needs check" filter chip
-    // (R-003 — SPA never re-derives). Kept as a Set so hasId lookups
-    // are O(1) inside the filter predicate and the row renderer.
+    // ids. Drives the level box's dashed marker (R-003 — SPA never re-derives).
+    // Kept as a Set so hasId lookups are O(1) inside the row renderer.
     const needsCheckIds = ref<Set<string>>(new Set());
 
     async function loadStocktakeCount() {
-        // Off ⇒ nothing consumes the answer (button, chip and needs-check
-        // marker are all gated) and the server resolves an empty overdue map
+        // Off ⇒ nothing consumes the answer (button and needs-check marker
+        // are both gated) and the server resolves an empty overdue map
         // anyway — so don't spend the request.
         if (!stocktakeEnabled.value) {
             stocktakeOverdue.value = 0;
@@ -852,7 +855,6 @@
         recipes: () => recipes.value,
         stockGroups: () => stockGroups.value,
         membership: () => shoppingListStore.membership as Membership | null,
-        needsCheckIds: () => needsCheckIds.value,
     }, { persistScope: 'stock-overview' });
 
     // Filter panel expanded state — shared between the toolbar's
@@ -1547,14 +1549,13 @@
         if (typeof q.level_id === 'string' && q.level_id) {
             filters.levelFilter.value = q.level_id;
         }
-        // FU-583 — the Dora Score freshness/stocktake actions deep-link here.
-        // `expiring=1` narrows to expiring-soon / expired; `stocktake=1` opens
-        // the existing "Needs check" (stocktake-queue) filter.
+        // FU-583 — the Dora Score freshness action deep-links here with
+        // `expiring=1` to narrow to expiring-soon / expired.
+        // `?stocktake=1` was the twin of this, opening the "Needs check"
+        // filter; with that chip retired (2026-08-21) the Dora Score action
+        // points at `/stocktake` itself, so there is nothing to read here.
         if (q.expiring === 'true' || q.expiring === '1') {
             filters.expiringSoonOnly.value = true;
-        }
-        if (q.stocktake === 'true' || q.stocktake === '1') {
-            filters.needsCheckOnly.value = true;
         }
     }
 
@@ -1564,7 +1565,6 @@
             route.query.attention,
             route.query.level_id,
             route.query.expiring,
-            route.query.stocktake,
         ],
         applyQueryFilters,
     );
@@ -1733,11 +1733,26 @@
     .stock-peek {
         min-height: 0;
     }
+    /* The sticky header has to paint an opaque background or the content
+       scrolls through it — but it must paint *exactly* what the page behind
+       it paints, or the band reads as a deliberate coloured header (2026-08-21
+       feedback: "an odd dark green that was added"). In light themes the body
+       is `--q-page` (= `--surface-page`); in dark themes Quasar's own
+       `body.body--dark { background: var(--q-dark-page) }` out-specifies our
+       `body { … }` rule, so the body is Quasar's dark page grey while
+       `--surface-page` is the theme's authored page colour — in Pesto Dark,
+       a dark green. Matching each mode's real body colour makes the header
+       invisible, which is the ask: no visual separation here.
+       (The deeper finding — every dark theme's authored `--surface-page` is
+       currently dead — is logged as FU-709 for the owner's call.) */
     .stock-peek :deep(.stock-detail__header) {
         position: sticky;
         top: 0;
         z-index: 3;
-        background: var(--surface-page);
+        background: var(--q-page);
+    }
+    body.body--dark .stock-peek :deep(.stock-detail__header) {
+        background: var(--q-dark-page);
     }
     /* Left pane. Fills the splitter panel and hands the scroll to whichever
        list branch is mounted. */

@@ -45,6 +45,23 @@ export function describeQrFailure(error: unknown): string {
             return "Couldn't reach the server for this QR code. Check the connection and try again.";
         }
         const ref = error.correlationId ? ` · Ref: ${error.correlationId.slice(0, 8)}` : '';
+        // FU-648 round 4: a bare "(error 404)" was still ambiguous, and 404 is
+        // the status the owner keeps reporting. There are exactly two of them
+        // and they mean opposite things, so say which one it was. The server
+        // spells the difference out in the problem-detail `title`: a route miss
+        // answers "Endpoint was not found." (middleware / SPA catch-all), an
+        // item miss answers "Entity was not found." Both endpoints proven green
+        // over real HTTP on 2026-08-21 — so a route miss here means the running
+        // API doesn't carry `features/data/barcodes`, i.e. the server process is
+        // older than this page.
+        if (error.status === 404) {
+            const detail = error.details as { title?: string } | null;
+            const title = typeof detail?.title === 'string' ? detail.title : '';
+            if (title.toLowerCase().startsWith('endpoint')) {
+                return `This server has no QR endpoint at ${error.url} (404) — its API is older than this page. Restart or update the Dora server${ref}.`;
+            }
+            return `That stock item no longer exists on the server (404)${ref}.`;
+        }
         return `Couldn't load this item's QR code (error ${error.status})${ref}.`;
     }
     return "Couldn't load this item's QR code.";

@@ -61,14 +61,18 @@
 
             <!-- Step 2 — the shared entry form. -->
             <template v-else>
+                <!-- 2026-08-21 feedback: "mentions stock item name twice".
+                     It did — here and in the dialog title. The title is the
+                     canonical place for what the dialog is about, so this row
+                     is now just the way back to the picker. -->
                 <div class="row items-center q-mb-sm">
                     <BaseButton
-                        variant="icon"
+                        variant="ghost"
+                        dense
                         :icon="ICONS.arrow_back"
-                        aria-label="Back to item picker"
+                        label="Pick a different item"
                         @click="backToPicker"
                     />
-                    <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
                 </div>
                 <AppSpinner v-if="prefillLoading" />
                 <PriceEntry

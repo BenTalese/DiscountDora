@@ -7,12 +7,11 @@
           • (chunk 5) the shopping-line at /finish (harvest mode)
 
         Modes (§6a):
-          • shelf  → "I SAW $X for size Y at maybe store Z". Default form
-                     is three inputs (price, size, unit) + optional store.
-                     The multipack disclosure adds an optional "Count"
-                     field (4×125g) — when set, "Size" becomes "Size each"
-                     and the form computes total_measure = count × size
-                     for the server.
+          • shelf  → "I SAW $X for size Y at maybe store Z". The form is
+                     three inputs (price, size, unit) over two optional ones
+                     (pack count, store). Fill pack count for a multipack
+                     (4×125g) — "Size" then reads "Size each" and the form
+                     computes total_measure = count × size for the server.
           • harvest → "I BOUGHT N for total $X". Used at /finish to map a
                       line into an observation. Count is read from the line.
 
@@ -57,52 +56,44 @@
             />
         </div>
 
-        <!-- Multipack disclosure. Hidden by default — the common case is
-             single-pack / free-weight. When the user buys "4 × 125g yoghurt",
-             they tick this open + enter 4; the form computes total_measure
-             server-side (`count × per_pack_size`) and persists pack_count so
-             the obs list can later render "4 × 125g". -->
-        <div v-if="mode === 'shelf'">
-            <BaseButton
-                v-if="!packCountVisible"
-                variant="ghost"
-                dense size="sm"
-                :icon="ICONS.add"
-                label="Add pack count (multipack)"
-                @click="packCountVisible = true"
+        <!-- Pack count + store, one row of two equal halves.
+             2026-08-21 feedback: pack count was behind an "Add pack count
+             (multipack)" disclosure and is now always visible. The disclosure
+             cost a tap, hid a field people were looking for, and — because it
+             swapped a button for an input — made the form change height and
+             re-flow the moment you engaged with it. Leaving it empty means
+             exactly what the collapsed state meant, so nothing is lost.
+             Sizing (same feedback): the three fields above are `col` thirds of
+             the full width; these two are `col` halves of it, so every row in
+             the form starts and ends on the same two edges and the two fields
+             here match each other. `hide-bottom-space` on both, like the row
+             above, so the rows keep one height. -->
+        <div v-if="mode === 'shelf'" class="row q-gutter-sm items-start">
+            <q-input
+                v-model.number="packCount"
+                dense outlined type="number"
+                class="col"
+                label="Pack count"
+                :rules="[(v) => v == null || v > 0 || 'Must be > 0']"
+                hide-bottom-space
             >
                 <q-tooltip>
-                    For multipacks (e.g. 4 × 125g yoghurt), open this and enter
-                    the pack count so Dora computes the right per-unit price
-                    and remembers the pack shape for next time.
+                    For multipacks — e.g. 4 for a 4-pack of yoghurt. Dora then
+                    reads "Size each" per pack, works out the real per-unit
+                    price, and remembers the pack shape for next time. Leave it
+                    empty for a single pack or free weight.
                 </q-tooltip>
-            </BaseButton>
-            <div v-else class="row q-gutter-sm items-start">
-                <q-input
-                    v-model.number="packCount"
-                    dense outlined type="number"
-                    class="col"
-                    label="Count (packs)"
-                    hint="e.g. 4 for a 4-pack of yoghurt"
-                    :rules="[(v) => v == null || v > 0 || 'Must be > 0']"
-                    hide-bottom-space
-                />
-                <BaseButton
-                    variant="icon"
-                    :icon="ICONS.close"
-                    aria-label="Clear pack count"
-                    @click="clearPackCount"
-                />
-            </div>
+            </q-input>
+            <q-select
+                v-if="storeOptions.length > 0"
+                v-model="storeId"
+                :options="storeOptions"
+                dense outlined emit-value map-options clearable
+                class="col"
+                label="Store (optional)"
+                hide-bottom-space
+            />
         </div>
-
-        <q-select
-            v-if="mode === 'shelf' && storeOptions.length > 0"
-            v-model="storeId"
-            :options="storeOptions"
-            dense outlined emit-value map-options clearable
-            label="Store (optional)"
-        />
 
         <!-- Live preview: $X.XX per Y. For multipacks, also surface the
              total ("4 × 125g = 500g total") so the user can sanity-check. -->
@@ -176,13 +167,12 @@
     // `count × perPackSize` at submit time. When multipack is null, it IS
     // the total_measure. Keeping the field single-purpose in the UI but
     // dual-semantic under the hood matches the FU-227 §6a observation
-    // that "shelf-price mode never carried a count concept" — the form's
-    // empty state stays one number, multipack is a disclosure.
+    // that "shelf-price mode never carried a count concept" — an empty pack
+    // count means one pack, so the common case is still one number.
     const perPackSize = ref<number | null>(props.prefill?.total_measure ?? null);
     const unit = ref<string>(props.prefill?.unit ?? '');
     const storeId = ref<string | null>(props.prefill?.store_id ?? null);
     const packCount = ref<number | null>(null);
-    const packCountVisible = ref(false);
 
     // Re-seed when the prefill arrives lazily (row-button case: fetched
     // after the dialog opens). Don't overwrite user typing — only seed if
@@ -195,7 +185,9 @@
         if (storeId.value == null) storeId.value = p.store_id;
     });
 
-    const isMultipack = computed(() => packCountVisible.value && packCount.value != null && packCount.value > 1);
+    // A pack count of 1 (or empty) is a single pack — same thing the collapsed
+    // disclosure used to mean before the field went always-visible.
+    const isMultipack = computed(() => packCount.value != null && packCount.value > 1);
 
     // flat list grouped by dimension. The canonical strings come from
     // the generated table (single source of truth — chunk 1 / R-003), so
@@ -209,7 +201,13 @@
         const out: { value: string; label: string }[] = [];
         for (const dim of order) {
             for (const opt of (groups[dim] ?? [])) {
-                out.push({ value: opt.canonical, label: `${dim} — ${opt.label}` });
+                // 2026-08-21 feedback: the label used to read "volume — L".
+                // The dimension is metadata about the option, and prefixing it
+                // meant the field spent its width on the word "volume" and
+                // clipped the one character that matters. Options stay grouped
+                // by dimension through the `order` walk above, which is what
+                // the prefix was really for.
+                out.push({ value: opt.canonical, label: opt.label });
             }
         }
         return out;
@@ -257,10 +255,5 @@
 
     function onCancel() {
         emit('cancel');
-    }
-
-    function clearPackCount() {
-        packCount.value = null;
-        packCountVisible.value = false;
     }
 </script>

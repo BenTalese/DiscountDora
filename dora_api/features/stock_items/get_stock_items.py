@@ -12,7 +12,8 @@ from dora_api.domain.stock_status import (effective_expiring_soon_window,
                                           is_low_stock, is_out_of_stock,
                                           needs_restock)
 from dora_api.features.app_settings.clock import household_today
-from dora_api.features.stock_items.stock_attention import resolve_attention_map
+from dora_api.features.stock_items.stock_attention import (RANK_NONE,
+                                                          resolve_attention_map)
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -55,6 +56,12 @@ class StockItemDto:
     # narrow by one of them without re-deriving the threshold — the last
     # remaining hardcoded 7-day window on the client was exactly that chip.
     attention_kinds: tuple[str, ...] = ()
+    # Urgency ORDER within the outlined band, most urgent first (0 expired,
+    # 1 essential-out, 2 expiring-soon, 3 essential-low; 9 = nothing fired).
+    # Severity can't do this job — expired and essential_low are both "high",
+    # so the overview's sort fell through to alphabetical and read as random
+    # (owner, 2026-08-21). See `stock_attention.py` for the full ordering.
+    attention_rank: int = RANK_NONE
     # count of linked products. Drives the "2+ products →
     # combined choice modal" decision in `AddToListButton`. 0 = generic
     # stock-item line (no offer); 1 = preselect; 2+ = open QuickAddSheet
@@ -133,6 +140,7 @@ class GetStockItemsHandler:
                 needs_attention=attention[d.stock_item_id].needs_attention,
                 attention_severity=attention[d.stock_item_id].severity,
                 attention_kinds=attention[d.stock_item_id].kinds,
+                attention_rank=attention[d.stock_item_id].rank,
             )
             for d in dtos
         ]

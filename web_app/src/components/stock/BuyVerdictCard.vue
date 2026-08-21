@@ -2,45 +2,54 @@
     <!-- Feedback 2026-08-16: collapsed by default. The header alone answers
          the question ("Worth buying now") with the one action worth taking;
          the reasons, the wait hint and the data-provenance footer are the
-         "why", and only open when asked for. -->
-    <div v-if="verdict" class="dora-buy-verdict-card">
-        <div :class="['dora-buy-verdict-card__header', `is-${verdict.verdict}`]">
-            <!-- Was a stock-level-coloured dot, which read as a stock level.
-                 A money/cart glyph says "this is about buying". -->
-            <q-icon
-                :name="verdictIcon"
-                size="20px"
-                :class="['dora-buy-verdict-card__icon', `is-${verdict.verdict}`]"
-            />
+         "why", and only open when asked for.
+         Feedback 2026-08-21: this used to be a card-inside-a-card — an
+         elevated shell wrapping a tinted header block. It now wears the same
+         single-surface shape as `PantryBeliefCard` (the "Dora thinks" card it
+         sits under): the verdict tint lives on the card itself, the summary
+         line is the disclosure, and the one-tap action is an icon-only button
+         sitting to the RIGHT of the caret, exactly where the belief card's
+         chevron ends. Two cards, one idiom. -->
+    <div v-if="verdict" :class="['dora-buy-verdict-card', `is-${verdict.verdict}`]">
+        <div class="dora-buy-verdict-card__header">
             <button
                 type="button"
-                class="dora-buy-verdict-card__summary col"
+                class="dora-buy-verdict-card__summary"
                 :aria-expanded="expanded"
                 @click="expanded = !expanded"
             >
+                <!-- Always the dollar glyph. A per-verdict icon meant `unsure`
+                     drew a question-mark bubble, which read as an info chip
+                     rather than as "this card is about money". -->
+                <q-icon
+                    :name="ICONS.currency_usd"
+                    size="18px"
+                    class="dora-buy-verdict-card__icon"
+                />
                 <span class="dora-buy-verdict-card__headline">{{ headline }}</span>
+                <q-space />
                 <q-icon
                     :name="expanded ? ICONS.collapse : ICONS.expand"
                     size="18px"
                     class="dora-text-muted"
                 />
             </button>
-            <!-- The `buy` action used to read "Add to primary list", which
-                 named a list the user never picked and left them wondering
-                 which one it meant. It's the same cart action the overview
-                 row offers, so it says so and wears the cart icon; the
-                 target is still resolved by the shared add-to-list flow. -->
+            <!-- Icon-only, and outside the disclosure button so a tap on the
+                 action can't toggle the card. The name survives as the tooltip
+                 + aria-label (D-rule: icon-only controls are still named). -->
             <BaseButton
                 v-if="verdict.one_tap_action.kind !== 'none'"
                 variant="primary"
-                :icon="verdict.one_tap_action.kind === 'add_to_list'
-                    ? ICONS.add_shopping_cart : undefined"
-                :label="actionLabel"
+                dense
+                :icon="actionIcon"
+                :aria-label="actionLabel"
                 @click="onActionClick"
-            />
+            >
+                <q-tooltip>{{ actionLabel }}</q-tooltip>
+            </BaseButton>
         </div>
 
-        <template v-if="expanded">
+        <div v-if="expanded" class="dora-buy-verdict-card__body">
         <div class="text-caption dora-text-muted">
             {{ verdict.confidence }} confidence
         </div>
@@ -103,7 +112,7 @@
             </template>
             (last 12 months).
         </div>
-        </template>
+        </div>
     </div>
 </template>
 
@@ -120,14 +129,6 @@
 
     const expanded = ref(false);
 
-    // Money/cart language, not the stock-level dot this card used to draw.
-    const verdictIcon = computed(() => {
-        if (!props.verdict) return ICONS.help_outline;
-        if (props.verdict.verdict === 'buy') return ICONS.add_shopping_cart;
-        if (props.verdict.verdict === 'wait') return ICONS.schedule;
-        if (props.verdict.verdict === 'skip') return ICONS.remove_shopping_cart;
-        return ICONS.help_outline;
-    });
     const emit = defineEmits<{
         (e: 'action', kind: BuyVerdict['one_tap_action']['kind']): void;
     }>();
@@ -138,12 +139,26 @@
             : (props.verdict?.one_tap_action.label ?? ''),
     );
 
+    // The action is icon-only now, so every kind needs a glyph. `add_to_list`
+    // keeps the cart the overview row uses, so the same action reads the same
+    // in both places.
+    const ACTION_ICONS: Record<BuyVerdict['one_tap_action']['kind'], string> = {
+        add_to_list: ICONS.add_shopping_cart,
+        mark_stocked: ICONS.inventory_2,
+        remove_from_list: ICONS.playlist_remove,
+        skip: ICONS.close,
+        none: ICONS.check,
+    };
+    const actionIcon = computed(
+        () => ACTION_ICONS[props.verdict?.one_tap_action.kind ?? 'none'],
+    );
+
     const headline = computed(() => {
         if (!props.verdict) return '';
         if (props.verdict.verdict === 'buy') return 'Worth buying now';
         if (props.verdict.verdict === 'wait') return 'Might be worth waiting';
         if (props.verdict.verdict === 'skip') return 'Probably skip';
-        return 'No strong signal';
+        return 'No strong buy signal';
     });
 
     // Friendly relative-date headline for the P8-06 wait-hint. The full
@@ -177,31 +192,41 @@
 </script>
 
 <style scoped>
+    /* Deliberately the same geometry + token set as `PantryBeliefCard`:
+       one surface, 8px radius, 10px/12px padding, tint in the fill and the
+       border only (never in the text ink — full-strength semantic ink on a
+       soft fill is the D-002 contrast fail). */
     .dora-buy-verdict-card {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 16px;
-        background: var(--surface-elevated);
-        border: 1px solid var(--surface-sunken);
         border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-strong);
+        color: var(--text-primary);
+    }
+    .dora-buy-verdict-card.is-buy {
+        background: var(--semantic-positive-soft);
+        border-color: var(--semantic-positive);
+    }
+    .dora-buy-verdict-card.is-wait {
+        background: var(--semantic-warning-soft);
+        border-color: var(--semantic-warning);
+    }
+    .dora-buy-verdict-card.is-skip {
+        background: var(--semantic-negative-soft);
+        border-color: var(--semantic-negative);
     }
     .dora-buy-verdict-card__header {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 12px;
-        border-radius: 6px;
-        background: var(--surface-sunken);
+        gap: 8px;
     }
-    .dora-buy-verdict-card__header.is-buy {
-        background: var(--semantic-positive-soft);
-    }
-    .dora-buy-verdict-card__header.is-wait {
-        background: var(--semantic-warning-soft);
-    }
-    .dora-buy-verdict-card__header.is-skip {
-        background: var(--semantic-negative-soft);
+    .dora-buy-verdict-card__body {
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 0.8125rem;
+        line-height: 1.45;
     }
     .dora-buy-verdict-card__headline {
         font-weight: 600;
@@ -213,8 +238,10 @@
     .dora-buy-verdict-card__summary {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
+        gap: 6px;
+        /* Takes the row; the action button keeps its intrinsic width. */
+        flex: 1 1 auto;
+        min-width: 0;
         min-height: 44px;
         padding: 0;
         border: none;
@@ -231,18 +258,22 @@
     }
     .dora-buy-verdict-card__icon {
         flex-shrink: 0;
+        color: var(--text-secondary);
     }
-    .dora-buy-verdict-card__icon.is-buy    { color: var(--semantic-positive); }
-    .dora-buy-verdict-card__icon.is-wait   { color: var(--semantic-warning); }
-    .dora-buy-verdict-card__icon.is-skip   { color: var(--semantic-negative); }
-    .dora-buy-verdict-card__icon.is-unsure { color: var(--text-muted); }
+    /* Graphical (non-text) glyph, so the semantic hue is legible here in the
+       same way the belief card tints its own icon. */
+    .dora-buy-verdict-card.is-buy  .dora-buy-verdict-card__icon { color: var(--semantic-positive); }
+    .dora-buy-verdict-card.is-wait .dora-buy-verdict-card__icon { color: var(--semantic-warning); }
+    .dora-buy-verdict-card.is-skip .dora-buy-verdict-card__icon { color: var(--semantic-negative); }
 
-    /* P8-06 — the wait-hint block sits between header and reasons.
-       Warm tint matches the wait-verdict header colour. */
+    /* P8-06 — the wait-hint block sits between header and reasons. It used
+       to carry its own warm fill, which on a now-already-warm `wait` card was
+       both invisible and one more nested box — the exact "card inside a card"
+       the 2026-08-21 feedback called out. A rule down the left edge marks it
+       out instead. */
     .dora-buy-verdict-card__wait-hint {
-        padding: 10px 12px;
-        border-radius: 6px;
-        background: var(--semantic-warning-soft);
+        padding-left: 8px;
+        border-left: 3px solid var(--semantic-warning);
     }
 
     .dora-buy-verdict-card__reasons {

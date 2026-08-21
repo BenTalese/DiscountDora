@@ -504,9 +504,22 @@
                                             >
                                                 <q-tooltip>{{ expiryIndicator.tooltip }}</q-tooltip>
                                             </BaseButton>
-                                            <span class="dora-text-primary">
+                                            <!-- Feedback 2026-08-21: the date (or the
+                                                 dash standing in for it) is the thing the
+                                                 eye lands on, so it opens the same picker
+                                                 the glyph button does rather than being
+                                                 dead text next to a live icon. A real
+                                                 <button>, so it's keyboard-reachable and
+                                                 named — styled to stay reading as text. -->
+                                            <button
+                                                type="button"
+                                                class="stock-detail__expiry-text dora-text-primary"
+                                                :disabled="busy"
+                                                aria-label="Set expiry date"
+                                                @click="expiryDialogOpen = true"
+                                            >
                                                 {{ detail.expiry_date || '—' }}
-                                            </span>
+                                            </button>
                                             <q-space />
                                             <!-- Feedback 2026-08-08: Clear sits at the left
                                                  edge of the right-aligned cluster so showing/
@@ -531,7 +544,11 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Open / in-use</q-item-section>
+                                    <!-- Feedback 2026-08-21: "Open / in-use" plus a
+                                         tooltip that opened on what opening *doesn't*
+                                         do read as a puzzle. One word for the row, one
+                                         sentence for the note (owner-picked wording). -->
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Opened</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
@@ -544,12 +561,10 @@
                                             </span>
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
                                                 <q-tooltip max-width="320px">
-                                                    Opening an item doesn't
-                                                    change its expiry date —
-                                                    but for perishables it's
-                                                    the cue to set or shorten
-                                                    one. Use the expiry row
-                                                    above to do that.
+                                                    Flags this packet as
+                                                    opened. Set a shorter
+                                                    expiry above if it's
+                                                    perishable.
                                                 </q-tooltip>
                                             </q-icon>
                                         </div>
@@ -566,15 +581,17 @@
                                                 @update:model-value="onToggleFlagged"
                                             />
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                                                <!-- Word-identical to the add-item
+                                                     dialog's copy (2026-08-21,
+                                                     owner-approved) — one
+                                                     explanation of Essential,
+                                                     not two. -->
                                                 <q-tooltip max-width="320px">
-                                                    Flagged items show up in
-                                                    "essentials" auto-generate
-                                                    sources even when they're
-                                                    stocked. Different
-                                                    from auto-add: this one
-                                                    only matters when you run
-                                                    auto-generate, not on
-                                                    every stock change.
+                                                    Something you always want in
+                                                    the house. Dora chases it up
+                                                    as soon as it runs low,
+                                                    instead of waiting until
+                                                    it's gone.
                                                 </q-tooltip>
                                             </q-icon>
                                         </div>
@@ -1066,14 +1083,22 @@
                         @save="onSaveSubstituteMetadata"
                     />
 
-                    <!-- Barcodes section. Gated on the install-wide
-                         scanning flag (R-029: when off, the surface stays
-                         hidden — scanning isn't an active capability on
-                         this install). Shows direct registrations +
-                         via-Product derivations; Add/Remove available for
-                         direct rows only (via-Product live on the
-                         Product). -->
-                    <div v-if="scanningEnabled" class="q-mt-lg">
+                </q-tab-panel>
+
+                <!-- ── Barcodes ─────────────────────────────────────────
+                     Feedback 2026-08-21: this used to live at the bottom of
+                     the Substitutes tab, where nobody would look for it and
+                     nothing explained what to type. It's its own tab now, and
+                     it says where the number comes from.
+                     Still gated on the install-wide scanning flag (R-029:
+                     when off, the surface stays hidden — scanning isn't an
+                     active capability on this install). The tab itself is
+                     hidden by the same flag, so this panel only renders when
+                     scanning is on. Shows direct registrations + via-Product
+                     derivations; Add/Remove available for direct rows only
+                     (via-Product live on the Product). -->
+                <q-tab-panel name="barcodes" class="q-pa-md">
+                    <div>
                         <div class="row items-center q-mb-sm">
                             <div class="text-subtitle1">Barcodes</div>
                             <q-space />
@@ -1085,12 +1110,27 @@
                                 @click="onAddBarcodeClick"
                             />
                         </div>
+                        <!-- The "what do I even type here?" answer, on the
+                             surface rather than in a tooltip: the number is
+                             printed under the barcode on the packet, and Dora
+                             never looks it up anywhere — it's a shortcut key
+                             for opening this item. -->
+                        <div class="dora-text-secondary text-caption q-mb-md">
+                            A barcode here is the product's real
+                            <strong>EAN-13</strong> or <strong>UPC-A</strong> —
+                            the 13 or 12 digits printed underneath the barcode
+                            on the packet. Type it in, or hit
+                            <strong>Scan</strong> on the Stock page and point
+                            the camera at the packet. Scanning a registered code
+                            then opens this item. Dora never looks the number up
+                            online, so any code you can read off a packet works,
+                            and one code belongs to one item.
+                        </div>
                         <div
                             v-if="detail.barcodes.length === 0"
                             class="dora-text-muted text-caption q-pa-md"
                         >
-                            No barcodes yet. Add an EAN/UPC to make this item
-                            open when you scan that code.
+                            No barcodes yet.
                         </div>
                         <q-list v-else separator>
                             <q-item
@@ -1275,10 +1315,23 @@
                 </q-card-section>
                 <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
                     <q-list separator>
+                        <!-- Feedback 2026-08-21: no leading box glyph — every row
+                             in a stock-item picker is a stock item, so the icon
+                             said nothing and just indented the names. The action
+                             is a link, not an addition: the green chain reads as
+                             "tie this to that". -->
                         <q-item v-for="si in substituteCandidates" :key="si.stock_item_id" clickable @click="onAddSubstitute(si.stock_item_id)">
-                            <q-item-section avatar><q-icon name="inventory_2" /></q-item-section>
                             <q-item-section>{{ si.name }}</q-item-section>
-                            <q-item-section side><BaseButton variant="icon" :icon="ICONS.add" color="primary" /></q-item-section>
+                            <q-item-section side>
+                                <BaseButton
+                                    variant="icon"
+                                    :icon="ICONS.add_link"
+                                    color="positive"
+                                    :aria-label="`Link ${si.name} as a substitute`"
+                                >
+                                    <q-tooltip>Link as a substitute</q-tooltip>
+                                </BaseButton>
+                            </q-item-section>
                         </q-item>
                         <q-item v-if="substituteCandidates.length === 0">
                             <q-item-section class="dora-text-muted">No matching items.</q-item-section>
@@ -1415,10 +1468,15 @@
     // buy-verdict oracle (row/line badges elsewhere; the full
     // card renders on the overview tab, per FU-437). The composable
     // fetches on mount, caches for 5 min, and yields a computed we can
-    // v-if in the template. `.value` at wire time so the string overload
-    // fires — the id is stable for the page's lifetime.
+    // v-if in the template.
+    // 2026-08-21 feedback ("the verdicts don't update when switching between
+    // items in desktop view"): this used to pass `stockItemId.value` — a
+    // snapshot taken at setup. The id is NOT stable for the page's lifetime:
+    // the Stock Overview peek swaps `idOverride` on a mounted instance, so the
+    // card kept rendering the first item's verdict. Pass the ref itself and the
+    // composable's own watcher re-fetches per id.
     const { verdict: buyVerdict, invalidate: buyVerdictInvalidate } =
-        useBuyVerdict(stockItemId.value);
+        useBuyVerdict(stockItemId);
 
     const detail = ref<StockItemDetail | null>(null);
     const loading = ref(false);
@@ -1493,6 +1551,14 @@
         [productsEnabled, tab],
         ([enabled, current]) => {
             if (!enabled && current === 'products') tab.value = 'overview';
+        },
+        { immediate: true },
+    );
+    // Same guard for the Barcodes tab, which is gated on the scanning flag.
+    watch(
+        [scanningEnabled, tab],
+        ([enabled, current]) => {
+            if (!enabled && current === 'barcodes') tab.value = 'overview';
         },
         { immediate: true },
     );
@@ -2138,11 +2204,32 @@
                 message: 'Barcode added.',
             });
         } catch (err) {
-            addBarcodeError.value = describeApiError(err) || 'Could not add barcode.';
+            // 2026-08-21 feedback: pasting an EAN answered "endpoint was not
+            // found", which reads as our bug in the barcode itself. It isn't a
+            // validation failure at all — it's the API not carrying
+            // POST /api/data/barcodes, which is registered in the same module
+            // as the QR endpoint the owner also gets a 404 from. Both were
+            // proven green over real HTTP on 2026-08-21 (including the exact
+            // ISBN-13 he tried), so translate the route miss into the thing he
+            // can act on instead of echoing the server's wording.
+            addBarcodeError.value = describeBarcodeFailure(err);
         } finally {
             addBarcodeSaving.value = false;
         }
     }
+    /** Route-miss 404s get named as such; everything else keeps the server's
+     *  own message (already friendly — duplicates, blank values, …). */
+    function describeBarcodeFailure(err: unknown): string {
+        if (err instanceof NormalisedApiError && err.status === 404) {
+            const detail = err.details as { title?: string } | null;
+            const title = typeof detail?.title === 'string' ? detail.title : '';
+            if (title.toLowerCase().startsWith('endpoint')) {
+                return `This server has no barcode endpoint at ${err.url} — its API is older than this page. Restart or update the Dora server.`;
+            }
+        }
+        return describeApiError(err) || 'Could not add barcode.';
+    }
+
     async function onRemoveBarcode(barcodeId: string) {
         try {
             await withBusyReload(() => barcodeApi.deleteAsync(barcodeId));
@@ -2201,6 +2288,12 @@
         }
         out.push({ name: 'recipes', label: `Recipes (${d?.recipes.length ?? 0})`, icon: ICONS.menu_book });
         out.push({ name: 'substitutes', label: `Substitutes (${d?.substitutes.length ?? 0})`, icon: ICONS.swap_horiz });
+        // Feedback 2026-08-21: barcodes were buried at the bottom of the
+        // Substitutes tab. Own tab, same install-wide gate as the rest of the
+        // scanning surface.
+        if (scanningEnabled.value) {
+            out.push({ name: 'barcodes', label: `Barcodes (${d?.barcodes.length ?? 0})`, icon: ICONS.barcode });
+        }
         out.push({ name: 'lists', label: `Lists (${onLists.value.length})`, icon: ICONS.shopping_cart });
         out.push({ name: 'history', label: 'History', icon: ICONS.history });
         return out;
@@ -2600,6 +2693,31 @@
     .dora-level-picker:hover,
     .dora-level-picker:focus-within {
         border-color: var(--brand-primary);
+    }
+
+    /* The expiry date reads as text but behaves as the picker trigger
+       (2026-08-21 feedback). Chrome stripped back to the row; the hover
+       underline is the only affordance it needs sitting beside a button that
+       does the same thing. Padding rather than a min-height so it doesn't
+       stretch the row it shares with the +Nd shortcuts. */
+    .stock-detail__expiry-text {
+        padding: 6px 4px;
+        border: none;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+    .stock-detail__expiry-text:hover:not(:disabled) {
+        text-decoration: underline;
+    }
+    .stock-detail__expiry-text:disabled {
+        cursor: default;
+    }
+    .stock-detail__expiry-text:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: 4px;
     }
 
     /* Feedback 2026-08-08: recipe cards reflow by column count rather than

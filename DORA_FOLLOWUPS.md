@@ -55,6 +55,213 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
+## [OPEN] FU-711 — "open / in-use" wording is now split across surfaces
+- **Raised:** 2026-08-21 (stock-item detail feedback batch)
+- **Type:** finding.
+- **What:** the detail page's row is now labelled **Opened** (owner-picked), but
+  `StockItemRow.vue` still says "Mark as open / in-use" (aria-label + tooltip) and
+  `components/help/AttentionRulesDialog.vue` still explains "the open / in-use toggle".
+  Same control, two names.
+- **Why deferred:** the feedback was scoped to the detail page; renaming the row's
+  aria-label + the help copy touches the attention-rules explainer, which has its own
+  wording review.
+- **Recommended resolution:** opportunistic — next time either surface is touched, or
+  as part of a copy sweep. One word, three call sites.
+
+## [OPEN] FU-710 — Barcode register POSTs 404 on the owner's install (same module as the QR 404)
+- **Raised:** 2026-08-21 (stock-item detail feedback batch)
+- **Type:** finding.
+- **What:** pasting an EAN into Add-barcode answered **"Endpoint was not found."** —
+  the body Flask returns when *no route matched* (`middleware.handle_incoming_request` /
+  the SPA catch-all), not a validation failure. Proven green here on 2026-08-21 against
+  a real HTTP server (`POST /api/data/barcodes` with the owner's exact ISBN-13
+  `9788817071673` → 200 + a `barcode_id`), and `GET /api/stock-items/<id>/qr?size=512`
+  → 200 `image/png` in the same session. Both endpoints live in **one module**
+  (`dora_api/features/data/barcodes.py`), and it is the *only* module whose endpoints
+  the owner reports 404s from — so the running API almost certainly doesn't carry that
+  module's routes, i.e. the server process is older than the SPA build talking to it.
+- **Why deferred:** not reproducible from here; it's install state, not code.
+- **Recommended resolution:** **confirm in browser** on the owner's install. Two
+  one-minute checks: (a) open `<host>/api/data/barcodes/lookup?value=x` — a
+  *third* endpoint in the same module — if that 404s too, the module isn't registered
+  and restarting the backend fixes it; (b) the Add-barcode dialog now names a route
+  miss explicitly ("This server has no barcode endpoint at … — its API is older than
+  this page"), so the next attempt self-diagnoses. Paired with FU-648.
+
+## [OPEN] FU-709 — Every dark theme's authored `--surface-page` never actually paints
+- **Raised:** 2026-08-21 (stock-item detail feedback batch — chased the "odd dark green" header)
+- **Type:** finding.
+- **What:** `css/app.scss` sets `body { background-color: var(--q-page) }` and
+  `themeService` syncs `--q-page` from `--surface-page`. Quasar ships
+  `body.body--dark { background: var(--q-dark-page) }` — a **class** selector, so it
+  out-specifies ours, and nothing ever sets `--q-dark-page` (it stays
+  `quasar.variables.scss`'s `$dark-page: #14171a`). Result: in *every* dark theme the
+  page paints Quasar's grey, and each theme's hand-authored page colour (Pesto Dark
+  `#00120B`, Cherry Cola `#2E0014`, "dark crust", …) is dead code. It only became
+  visible because the peek's sticky header *did* paint `--surface-page` — reading as
+  a deliberate dark-green band (the reported complaint).
+- **Why deferred:** the fix is one line (`page`→`dark-page` in the palette sync, or a
+  `body.body--dark` override), but it changes the page background of the whole app in
+  all four dark themes. That's an owner-visible design call, not a bug fix to slip in
+  during a detail-page feedback batch — and the same owner just said he did *not* want
+  more dark green on screen.
+- **Recommended resolution:** **needs a decision.** Either (a) honour the authored
+  colours (sync `--q-dark-page` too) and re-check card/row contrast in all four dark
+  themes, or (b) declare Quasar's grey the intended dark page and delete the unused
+  `--surface-page` values from the dark theme blocks so the next reader isn't misled.
+
+## [OPEN] FU-703 — Decide the fate of the product price axis (`/price-history`, My Products)
+- **Raised:** 2026-08-21 (prices-surface UX investigation — `docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md`)
+- **Type:** follow-up (structural decision)
+- **What:** Products were demoted to a push-your-own-data niche, but **all** the
+  price *reading* capability — compare up to 5, range control (30d/90d/1y/all),
+  alerts — still lives on the product axis, on `/price-history`, which has **no
+  nav entry at all** (reachable only from a My Products overflow item, a
+  `SubscriptionsPanel` link, and the onboarding tour that calls it "Prices").
+  The everyday user's own data (stock-item observations) gets a single-item
+  modal with no range and no compare, so *"which of my items got more
+  expensive?"* has no surface. Three options were put to the owner: absorb +
+  retire the product surfaces; keep `/price-history` as an explicitly advanced
+  page; or keep both and just fix nav + naming. Owner leans **option 3
+  (keep both, fix nav + naming)** but wants more thought before committing.
+  Answered in the same session and **not** part of this fork: the everyday user's
+  jobs (all four — triage / lookup / capture / trend), placement (a **price lens
+  on Stock overview** + a **trend section in Reports**; no new top-level nav
+  entry), and alerts (**advanced-only, hide cleanly** — they need an inbound feed,
+  so no stock-item watchlist). Those three are recorded as D2/D3/D4 in the memo.
+- **Why deferred:** owner's call; it decides whether FU-704…708 are polish on a
+  surviving page or throwaway work on one that gets retired.
+- **Recommended resolution:** now-ish, before any of FU-704…708 — it sets their scope.
+
+## [OPEN] FU-704 — `PriceEntry` is desktop-shaped, and all its help is hover-only
+- **Raised:** 2026-08-21 (prices-surface UX investigation)
+- **Type:** finding
+- **What:** The log-a-price form is the one screen used standing in a supermarket
+  aisle on a phone, and it has no responsive treatment: **Price / Size / Unit
+  three-across** in a bare `row q-gutter-sm` with no `col-12 col-sm-*`
+  (`PriceEntry.vue:36`) — ~105px per field at 375px. `type="number"` with no
+  `inputmode="decimal"`, so wrong keypad plus spinner arrows eating width. And
+  every explanation is a `q-tooltip`, i.e. **hover-only and invisible on touch** —
+  including the pack-count help (the most confusing field) and the two
+  `help_outline` tooltips that *define* "usually" / "above usual", so the
+  trust-critical copy is desktop-only. Also: the store select vanishes entirely
+  when no stores exist (`v-if="storeOptions.length > 0"`) with no "add a store"
+  path, silently removing the dimension that makes "where is this cheapest"
+  answerable.
+- **Why deferred:** out of scope of the read-only investigation; wants a single
+  pass over the form rather than piecemeal edits.
+- **Recommended resolution:** now — independent of FU-703; the form survives
+  whichever way that decision goes.
+
+## [OPEN] FU-705 — `PriceHistoryChart` has no touch interaction
+- **Raised:** 2026-08-21 (prices-surface UX investigation)
+- **Type:** finding
+- **What:** The chart binds `@mousemove` / `@mouseleave` only
+  (`PriceHistoryChart.vue:2`), so on a phone it is a static picture — the
+  crosshair and value tooltip are unreachable and no number can be read off it.
+  Fix is pointer events (`@pointerdown` / `@pointermove`) or an explicit
+  "no chart below `sm`" decision. Same component, secondary issues: no y-axis
+  unit label (nothing stops $/L and $/kg sharing one axis), 5 series draw 5
+  dashed baselines in the same faint style with 5 labels stacked in the same
+  right gutter, and `preserveAspectRatio="none"` will distort if the SVG is ever
+  CSS-scaled.
+- **Why deferred:** read-only investigation.
+- **Recommended resolution:** now — it is shared by the widget sheet and the page,
+  so it pays off under either FU-703 outcome.
+
+## [OPEN] FU-706 — Logged prices can be deleted but never edited, and delete has no confirm
+- **Raised:** 2026-08-21 (prices-surface UX investigation)
+- **Type:** finding
+- **What:** `deleteObservation` (`StockItemDetailPage.vue:1829`) fires straight
+  through — no confirm, no undo — and there is **no edit path at all**. A
+  fat-fingered `1250` for `12.50` poisons the median it feeds and can only be
+  fixed by delete + retype. There is also no date field anywhere in
+  `PriceEntry`: `observed_at` is server-set, so a receipt from yesterday cannot
+  be entered. And the raw observation list under the widget is untitled,
+  uncapped and ungrouped (no store/dimension grouping, no "show more") — it will
+  run to hundreds of rows mid-Overview-tab for a frequently-logged item, in
+  contrast to the History tab which does honest truncation.
+- **Why deferred:** read-only investigation; edit needs a PATCH endpoint that
+  does not exist yet.
+- **Recommended resolution:** now-ish — the no-edit path is a data-quality hole in
+  the dataset the whole feature exists to build.
+
+## [OPEN] FU-707 — "Your prices" signal: only bad news, no confidence, four phrasings, silent dimension flip
+- **Raised:** 2026-08-21 (prices-surface UX investigation)
+- **Type:** finding
+- **What:** `your_prices.py` is clean and correctly server-owned (R-003); the
+  *presentation* has four problems. (1) **Only bad news gets a chip** —
+  above-usual renders a warning chip, below-usual a muted `· about average` text
+  fragment, so a money-saving app nags on overpay and stays silent on a win.
+  (2) The **warning colour** implies user error when the fact is shelf inflation
+  (D-rule colour semantics). (3) **Confidence is invisible** — 3 samples and 40
+  render identically, with `Based on N prices` demoted to a caption under a
+  full-strength conclusion. (4) **Four phrasings of one number** across surfaces:
+  `Usually $X` / `Your usual: $X` / `Usually $X/L` / `above usual` vs
+  `paying more than usual`. Separately: baselines are per-dimension and "the most
+  recent dimension wins for the headline", so a single count-based log (`1 ea`)
+  can move a mass-based item's headline baseline with **zero** UI signal.
+- **Why deferred:** read-only investigation; the dimension-flip fix needs a
+  server-side signal on the DTO, not just copy.
+- **Recommended resolution:** now-ish. If it lands as described, run the ADR
+  evaluation on the candidate rule noted in the memo §9 — *a domain signal must
+  not be presented as a warning when the user did not cause it*.
+
+## [OPEN] FU-708 — `/price-history` copy + affordance bugs (incl. 6 unresolved PRODUCT HISTORY feedback bullets)
+- **Raised:** 2026-08-21 (prices-surface UX investigation)
+- **Type:** finding
+- **What:** **Mis-parented tooltip** — `All-time low: $X · currently N% above`
+  (`PriceHistoryPage.vue:147`) carries a tooltip saying *"You're paying more than
+  your own usual price… Not a comparison to the all-time-low"*, which contradicts
+  the label it is attached to; that copy belongs on the "Your usual" line below,
+  which already has its own. **"Manage alerts" cannot create an alert** — the
+  modal only lists and deletes, so the prominent affordance is the incomplete
+  one. On mobile the `col-12 col-md-3` picker rail stacks a 360px scrolling list
+  *above* the chart on every visit, and the chart empty state still reads *"Pick
+  one or more products on the left."* Also carries the still-open PRODUCT HISTORY
+  feedback bullets PH3–PH9: squished card / clipped notify-under placeholder, no
+  decimal formatting on the price input, tiny %-off text, %-off chip not using the
+  shared deal chip (R-001), the graph not reaching the box edge (real — reserved
+  right padding for baseline labels), and **PH7 "hover bubble not theme-aware,
+  white on white in dark mode" — not reproduced in the static read, so per the
+  mandatory rule it stays open and needs confirming in the browser.**
+- **Why deferred:** read-only investigation, and the whole page's future is FU-703.
+- **Recommended resolution:** after FU-703 — don't polish a page that may be
+  retired. Exception: PH7 can be confirmed in the browser at any time.
+
+## [OPEN] FU-702 — "Expiring soon" chip is coupled to the notifications system
+- **Raised:** 2026-08-21 (stock-overview quick-filter review)
+- **Type:** finding
+- **What:** `isExpiryFlagged` reads `item.attention_kinds`, and the server filters
+  those by the requesting user's `AlertPreference` (`get_stock_items.py:140`). So a
+  user who mutes expiry *notifications* silently loses the **Expiring soon**
+  *filter* — the chip stays on screen, tappable, and matches nothing. Owner's
+  reaction: it's weird that a filter is tied to the notification system at all.
+  Whether an item is near its expiry date is a fact about the item; whether Dora
+  pings you about it is a preference. Suggested fix: carry an unfiltered expiry
+  state on the DTO (computed from the household window, prefs not applied) and
+  have the chip read that; leave `needs_attention` / the bell as the pref-aware
+  pair. Same class of dead-control risk applies to **Needs attention** when a
+  user mutes every kind.
+- **Why deferred:** needs a DTO/contract change + a call on whether
+  `needs_attention` should also stop honouring per-user mutes.
+- **Recommended resolution:** now-ish — it's a live wrong-behaviour path, and the
+  chip rename below wants to land in the same pass.
+
+## [OPEN] FU-701 — "Expiring soon" wording + its overlap with "Needs attention"
+- **Raised:** 2026-08-21 (stock-overview quick-filter review)
+- **Type:** follow-up
+- **What:** two things about the same chip. (a) The label says "Expiring soon" but
+  the predicate also matches **already expired** items. (b) Its set is a strict
+  subset of **Needs attention** (`expired ∪ expiring_soon` vs
+  `expired ∪ expiring_soon ∪ essential_low`), so the row shows A∪B beside B as
+  visual peers, and the only slice of A they don't share is roughly what the
+  **Essential** chip gets you. Recommendation on the table: rename to a
+  freshness-axis label that honestly covers both states, and decide whether the
+  two chips collapse into one alert chip + a reason control.
+- **Why deferred:** owner is choosing the wording.
+- **Recommended resolution:** now — pairs with FU-702.
+
 ## [OPEN] FU-700 — the stocktake install switch isn't gated on the dashboard / help copy
 - **Raised:** 2026-08-20 (stock-overview feedback batch).
 - **Type:** leftover.
@@ -119,21 +326,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   `Get-Content`/`Set-Content` without `-Encoding utf8`. And never `git checkout
   --` a file that `git status` shows as modified; the logs are append-mostly and
   routinely carry uncommitted work.
-
-## [OPEN] FU-696 — stray editor temp file committed-adjacent in `web_app/src/pages`
-- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
-- **Type:** finding.
-- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87`
-  is sitting in the pages directory — an editor/tool crash artefact, not source.
-  It's a full stale copy of the page (it still references `PantryBeliefChip`,
-  which the live page no longer imports), so it will confuse the next grep for
-  anything on that surface, and Vite/vue-tsc ignore it only because of the
-  extension suffix.
-- **Why deferred:** out of DR-15's scope, and deleting a file I didn't create in
-  a pass about motion is the kind of unrelated change the scope rule (R-013)
-  exists to stop. Trivially safe to remove once confirmed it isn't something the
-  owner parked deliberately.
-- **Recommended resolution:** now (one `rm`, owner to confirm it's an artefact).
 
 ## [OPEN] FU-695 — `PantryBeliefChip.vue` is orphaned; nothing imports it
 - **Raised:** 2026-08-20 (DR-15 micro-motion pass).
@@ -793,18 +985,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** opportunistic — next time something is being changed across
   those features anyway (a natural pairing with the FU-512 unit-of-work sweep).
 
-## [OPEN] FU-651 — Stray editor temp file committed-adjacent in `web_app/src/pages/`
-- **Raised:** 2026-08-16 (stock-overview filter feedback).
-- **Type:** leftover.
-- **What:** `web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87` (138KB,
-  untracked, dated 2026-08-16 16:56) is sitting next to the real page — an editor/agent
-  temp file from the previous unit that never got cleaned up. It is not imported, but it
-  IS inside the SPA source tree.
-- **Why deferred:** not mine to delete unreviewed — it may be a copy the owner kept
-  deliberately, and it's 138KB of page source, not scratch.
-- **Recommended resolution:** now — confirm it's junk and `rm` it (it's untracked, so
-  nothing is lost from git either way).
-
 ## [OPEN] FU-650 — Two `stockLevelDot` unit tests fail on `main`-as-of-this-branch
 - **Raised:** 2026-08-16 (stock-overview filter feedback).
 - **Type:** finding.
@@ -863,6 +1043,22 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** confirm in browser on the owner's actual install. If the
   dialog still fails, **the message now names the cause** — quote it verbatim (status +
   `Ref:` prefix) and this closes in one pass. If it works, close. See DORA_VERIFY → Stock.
+- **Round 4 (2026-08-21) — re-reported as "still getting 'Couldn't load this item's QR
+  code (error 404)'". Two findings, both fixed; the cause is now named on screen:**
+  - **The instrumentation was blind.** `getBlob` sets `responseType: 'blob'`, which
+    applies to the *error* body too — so the server's problem-detail JSON arrived as a
+    Blob, `isCustomApiErrorResponse` rejected it, and `details`/`title` were always
+    empty. That is why three rounds of "the message will tell us next time" told us
+    nothing. `AxiosHttpClient.getBlob` now reads the Blob back into JSON before
+    normalising (all blob endpoints benefit).
+  - **A 404 has two meanings and the copy conflated them.** `describeQrFailure` now
+    splits them on the server's `title`: *route* miss ("This server has no QR endpoint
+    at … — its API is older than this page. Restart or update the Dora server") vs
+    *entity* miss ("That stock item no longer exists"). Server re-proven green over
+    real HTTP the same day (200 + `image/png` at `size=512`).
+  - **Now paired with FU-710** (the barcode POST in the same module 404s too on the
+    same install) — one shared explanation is far more likely than two: the running API
+    doesn't carry `features/data/barcodes`. Next step is the FU-710 lookup-URL check.
 
 ## [OPEN] FU-647 — `print-view` and the CSV export still build API URLs by hand (R-045)
 - **Raised:** 2026-08-16 (QR fix — noticed in the same composable).

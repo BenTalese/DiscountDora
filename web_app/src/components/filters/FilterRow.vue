@@ -74,8 +74,17 @@
            which this isn't. Holding one number rather than a breakpoint pair
            also keeps the sort-direction toggle inside it above the floor. */
         --filter-control-h: 44px;
-        --filter-control-w: 180px;
-        --filter-control-w-num: 200px;
+        /* 210px, up from 180 (owner, 2026-08-21: "in some cases it can be too
+           small… you hardly see anything of the selected value"). 180 was set
+           when these fields showed a bare label; they now carry a leading icon
+           (D-005), a clear button and a chevron, which between them spend
+           ~90px before a single character of the value is drawn. */
+        --filter-control-w: 210px;
+        --filter-control-w-num: 230px;
+        /* The sort control spends another ~46px on the direction chip inside
+           the same field, so it gets its own track rather than making every
+           neighbour as wide as its widest member. */
+        --filter-control-w-sort: 250px;
     }
     /* q-field's inner control is what actually sets the height — the outer
        element just wraps it. */
@@ -93,5 +102,9 @@
     .filter-row--fields > :deep(.filter-row__wide) {
         min-width: var(--filter-control-w-num);
         max-width: var(--filter-control-w-num);
+    }
+    .filter-row--fields > :deep(.sort-control) {
+        min-width: var(--filter-control-w-sort);
+        max-width: var(--filter-control-w-sort);
     }
 </style>

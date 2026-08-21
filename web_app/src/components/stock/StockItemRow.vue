@@ -509,7 +509,7 @@
     const levelButtonStyle = computed(() => {
         // Empty-level fallback — dashed outline + page surface so the
         // button reads as "unset" without competing with a colour. When the
-        // level is ALSO uncertain the class's 2px dashed border owns the edge
+        // level is ALSO uncertain the class's 3px dashed border owns the edge
         // instead: an inline border would win the cascade and quietly render
         // the uncertainty marker one pixel thinner than everywhere else.
         if (levelSequence.value === null) {
@@ -874,10 +874,20 @@
        the two outer corners for free. */
     .stock-row__essential-stripe {
         position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: 6px;
+        /* Negative insets, not 0 (2026-08-21 feedback: "doesn't cleanly extend
+           to the edge of the row outline at the top — I can see a rounded edge
+           there instead of it going straight to the edge").
+           An absolutely-positioned box is laid out against its ancestor's
+           PADDING box, so `top/bottom/left: 0` started the stripe one border
+           inside the row and left it to meet the row's 8px corner curve at a
+           tangent — a sliver of border and background showing past the stripe's
+           square end. Pulling it out over the 1px border lets the row's own
+           `overflow: hidden` do the rounding, so both ends terminate on the
+           border-box edge and match each other. */
+        top: -1px;
+        bottom: -1px;
+        left: -1px;
+        width: 7px;
         background: var(--brand-secondary-strong);
         pointer-events: none;
     }
@@ -925,10 +935,27 @@
        reads as part of the box rather than a halo around it, and dashed
        rather than hollow so the level's own colour still carries the level.
        No animation, at any preference — there is nothing to honour under
-       `prefers-reduced-motion` because nothing moves. */
+       `prefers-reduced-motion` because nothing moves.
+
+       2026-08-21 feedback: "the dashed effect looks a bit meh — bigger gaps,
+       1px thicker dashes, and the in-between should be transparent (currently
+       looks white or light blue)". Two of the three are just this rule:
+
+         • **thicker + bigger gaps** — 2px → 3px. The browser derives both dash
+           length and gap from the border width (Chrome: dash ≈ 2× width, gap ≈
+           1× width), so one number moves both together. What it will NOT do is
+           let you set the dash:gap RATIO independently — that needs the border
+           replaced by a gradient overlay on an extra element, which was built,
+           measured, and then reverted on the owner's call: not worth an extra
+           DOM node per row and a shared mixin for a decorative marker. If the
+           proportions are ever genuinely wrong, that's the trade to reopen.
+         • **transparent in-between** — nothing to do with the border. The pale
+           colour was a separate `box-shadow: inset 0 0 0 1px
+           var(--surface-component)` on this rule, drawing a surface-toned ring
+           just inside the dashes. It's deleted, so the gaps show the level's
+           own colour, which is what the D-5 note above wanted all along. */
     .stock-row__level-btn--uncertain {
-        box-shadow: inset 0 0 0 1px var(--surface-component);
-        border: 2px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
+        border: 3px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
     }
 
     /* The stocktake pulse (PROPOSAL_STOCKTAKE_MODE §7) and the belief ring

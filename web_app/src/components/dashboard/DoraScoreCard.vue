@@ -171,8 +171,11 @@
                 // buys land — the answer to "fewer surprise run-outs".
                 return { to: '/shopping-lists', label: 'Shopping lists' };
             case 'stocktake':
-                // Stock overview's stocktake mode (?stocktake=1).
-                return { to: '/stock?stocktake=1', label: 'Do a stocktake' };
+                // The stocktake page IS the queue. This used to deep-link to
+                // the stock overview's "Needs check" chip (?stocktake=1);
+                // that chip was retired 2026-08-21, and pointing straight at
+                // /stocktake was always the shorter path to the same work.
+                return { to: '/stocktake', label: 'Do a stocktake' };
             default:
                 return null;
         }

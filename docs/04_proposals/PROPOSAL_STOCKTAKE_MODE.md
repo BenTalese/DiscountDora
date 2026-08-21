@@ -256,8 +256,11 @@ surface duplicates it. This keeps stocktake calm and single-purpose.
 **Stock Overview (`R-003` display):**
 - Overdue in-play rows get a **pulsing outline around the stock-level button**,
   matching the stocktake attention glow.
-- A **"Needs check" quick-filter** chip. Both read the server's overdue flag —
-  no client-side re-derivation of "overdue".
+- ~~A **"Needs check" quick-filter** chip.~~ **Built, then retired 2026-08-21**
+  (owner call): it sat among *pantry-state* chips while describing *data
+  staleness*, on its own axis and its own data source, and the Stocktake page
+  already is that queue. The outline marker stays. Both read/read the server's
+  overdue flag — no client-side re-derivation of "overdue".
 
 **R-005:** all repository-routed, Postgres+SQLite portable; new settings are
 config-driven, not hardcoded.

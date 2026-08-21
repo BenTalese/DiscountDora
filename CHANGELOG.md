@@ -15,6 +15,57 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **The stock item page, ten small things (2026-08-21).** The **buy verdict** card now
+  wears the same shape as the "Dora thinks" card above it — one surface instead of a card
+  inside a card, tinted by the verdict, with the summary line as the disclosure and the
+  action as an icon-only button to the right of the arrow. It always leads with a **dollar
+  sign** (it used to draw a question mark in a bubble when it had no strong opinion, which
+  read as an info chip), and that state now says **"No strong buy signal"** rather than
+  "No strong signal". The **expiry date** — or the dash standing in for it — is clickable,
+  opening the same picker the glyph beside it does. The **Opened** row is called that now,
+  and its note simply says what the switch does. **Barcodes have their own tab** instead
+  of sitting at the bottom of Substitutes, and the tab explains what to type: the 12–13
+  digits printed under the barcode on the packet, which Dora uses only as a shortcut for
+  opening the item — she never looks it up online. In the **Add substitute** picker, the
+  box icon in front of every name is gone and the green **+** is a green **chain link**,
+  which is what the action actually does.
+- **Switching items in the desktop peek updates the buy verdict (2026-08-21).** Opening a
+  second item in the side panel left the previous item's verdict card on screen — the panel
+  swaps items in place, and the verdict was fetched once for whichever item you opened
+  first. It now follows the panel.
+- **A failed QR code or barcode add says what went wrong (2026-08-21).** Both could only
+  ever report a bare "error 404", which covers two opposite situations: the item no longer
+  exists, or the server has no such endpoint (its API being older than the page asking).
+  They now name which one it was — and errors on any binary download (QR images, print
+  sheets) can be read at all now, where before the server's explanation was discarded
+  unread.
+- **Stock overview + Log a price, ten small things (2026-08-21).** The **dashed "might be
+  wrong" marker** on a stock-level square is thicker, with correspondingly wider gaps, and
+  the gaps now show the level's own colour instead of a pale ring. The **essential
+  stripe** runs the full height of its row instead of stopping short at the top corner.
+  In **Log a price**: pack count is always visible rather than hidden behind "Add pack
+  count", the fields line up in two even rows, the unit picker shows just the unit ("L",
+  not "volume — L"), and the item's name appears once instead of twice. The **filters**
+  are wider, truncate with an "…" instead of wrapping out of the box, and are **titled by
+  what they filter** — a stock-level filter set to "Stocked" is now captioned "Stock
+  level", where before it was captioned "Any level" over a value that said otherwise.
+  Sort keeps a wider box of its own, since the direction button lives inside it. The
+  **Add stock item** dialog's location field no longer overhangs the dialog's right edge.
+- **"Needs attention" sort is ordered by urgency, not the alphabet (2026-08-21).** Sorting
+  by Needs attention put expired items, essentials you've run out of, and essentials
+  merely running low into one bucket and then sorted that bucket by name — so an expired
+  jar could sit below a half-full box of pasta. The order is now: **expired → an essential
+  you're out of → expiring soon → an essential that's low**, and within each, whatever
+  expires soonest comes first. Nothing about which items are flagged has changed, only the
+  order they arrive in.
+- **The stock overview's "Needs check" quick filter is gone (2026-08-21).** It sat in a row
+  of chips that describe *what's in your pantry* — needs attention, expiring, essential,
+  open — while describing something else entirely: which items Dora hasn't counted in a
+  while. That's a question the **Stocktake** page exists to answer, and it's one tap away in
+  the same toolbar. Rows still carry their dashed **needs-check** marker, so you can still
+  see at a glance what's due while you're looking at the list. The dashboard's "Do a
+  stocktake" action now goes straight to the stocktake page rather than filtering the stock
+  list behind the scenes.
 - **Stock overview, seven small things (2026-08-20).** The **filter panel now opens when
   something is actually filtered** and stays shut when nothing is — leaving a page and
   coming back no longer loses the panel that was explaining why the list is short, and no
@@ -29,7 +80,7 @@ semver — major bumps signal schema or breaking-config changes.
   a thumb).
 - **Stocktake can be switched off for the whole install (2026-08-20).** Settings → System →
   Stocktake has an **Enabled** switch. Off means the feature isn't there: no Stocktake
-  button on the stock overview, no "Needs check" filter, no per-item Stocktake toggle on an
+  button on the stock overview, no needs-check marker on a row, no per-item Stocktake toggle on an
   item's page, no stocktake nudges from the bell, and `/stocktake` says so plainly if you
   reach it from a bookmark. Nothing is deleted — switch it back on and the queue is exactly
   where it was. Alongside it, **New items** decides whether an item you add joins the

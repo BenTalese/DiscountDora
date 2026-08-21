@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-08-20 (stock-signal consolidation code-complete — all six chunks; recipe-view redesign won the comparison and its feature gaps are closed; cookbook feedback batch 3 shipped; DR-15 micro-motion done — 3 of 4 DR units left).** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
+**Last reviewed: 2026-08-21 (stock-item detail feedback batch shipped — 10 of 12 items, two left as install-state findings FU-648/FU-710; a dark-theme page-colour decision is now open, FU-709; prices-surface UX investigation — the product/stock price-axis split is now a live owner decision, FU-703; stock-overview feedback batch of 10 shipped; stock-signal consolidation code-complete — all six chunks; recipe-view redesign won the comparison and its feature gaps are closed; cookbook feedback batch 3 shipped; DR-15 micro-motion done — 3 of 4 DR units left).** Milestone-progress front door — phase board, workstreams, and what needs your attention. This is *not* a changelog; shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
 This is the single front door: where every phase and workstream is up
 to, and what needs your attention. For *where things stand* this doc
@@ -89,6 +89,25 @@ UX/UI review** into fix units.
 ---
 
 ## ⚠️ Needs your attention now
+
+00000. **Decide the fate of the product price axis (FU-703).** You asked what I thought
+   of the "my prices" / price-history areas, then named the cause yourself: products got
+   demoted to a push-your-own-data niche while the stock item was upgraded to carry
+   everyday price functionality, and the half-built surface got torn the other way. The
+   investigation confirms it —
+   [PRICES_SURFACE_UX_ASSESSMENT](docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md).
+   **All** the price *reading* capability (compare up to 5, 30d/90d/1y/all range, alerts)
+   sits on the product axis at `/price-history`, which has **no nav entry** — reachable
+   only from a My Products overflow item, a `SubscriptionsPanel` link, and the onboarding
+   tour that calls it "Prices". The everyday user's own data gets one single-item modal
+   with no range and no compare, so *"which of my items got more expensive?"* has no
+   surface. Alerts are product-keyed and scrape-fired, so with no products there is no
+   feed to fire them. You leaned "keep both, fix nav + naming" but wanted more thought
+   first — that call gates FU-708. Already settled this session: all four everyday jobs
+   are in scope, placement is a **price lens on Stock overview** + a **trend section in
+   Reports** (no new nav slot), and alerts go **advanced-only, hidden cleanly**.
+   FU-704/705/706/707 (mobile form, chart touch, observation edit, signal tone) are
+   independent of the decision and can start whenever. [FU-703](DORA_FOLLOWUPS.md)
 
 0000. **Live with the new recipe layout, then say the word on the masthead (FU-688).**
    You picked the redesigned page, so it's now the one that gets finished — its feature
@@ -342,7 +361,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | IMPL_PLAN_STOCK_OVERVIEW | Impl plan | ✅ done | Stock overview redesign (C-1) | `StockOverview.vue`/`StockItemRow.vue` |
 | IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION | Impl plan | 🟡 active | Collapse the stock row's 9 competing signals → 4; one attention rule, one cadence engine | Written 2026-08-19; **Chunks 1–4 landed** — C1: one cadence engine, D-11 belief→verdict, bulk verdicts endpoint, + the FU-684 bug that made the verdict inert; C2: verdict off the row (D-10), `buy_verdict_enabled` AppSetting→User (D-12/B7, migration `d9f4b2c7e803`), shopping list on the bulk endpoint (B6), all three walked live; C3: Step-0 cuts (3 alert kinds + the digest lane, migration `e4b1c7a95d20`) and one server-owned attention rule; C4: sort + row treatments, 9 channels → 4. **Chunks 5–6 open** (queue ranking, runner rebuild), neither blocked; FU-683 |
 | IMPL_PLAN_WASTE_MINIMISATION | Impl plan | ✅ done | Waste-minimisation cluster (C-waste) | `wasteApiService.ts` + mark-as-wasted |
-| IMPL_PLAN_YOUR_PRICES | Impl plan | ✅ done | "Your prices" intelligence (Phase F) | "All 8 chunks landed (FU-227/425)" |
+| IMPL_PLAN_YOUR_PRICES | Impl plan | ➗ done-with-carve-outs | "Your prices" intelligence (Phase F) | All 8 chunks landed (FU-227/425) — but the **reading** side never grew a stock-item twin: PRICES_SURFACE_UX_ASSESSMENT (2026-08-21) found compare/range/alerts still product-only; FU-703 |
 | OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT | Option doc | 🔵 deferred | Parked multi-tenant SaaS / managed-host option | Deferred 2026-07-14; kept parked post-pivot |
 | PLAY_STORE_LISTING | Listing draft | 🔵 designed | Play Store copy + screenshot plan | "Draft copy; no submission yet" |
 | PRODUCTS_OVERLAY_RUNBOOK | Runbook/status | 🟡 active | Drive products-overlay end-to-end | Phases 0–E done, Phase F in progress |
@@ -398,6 +417,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | RECIPE_COMPARISON_ASSESSMENT (INV-6) | INV memo | ✅ closed-actioned | Compare tool — verdict CUT | Comparison UI gone from RecipesOverview; §4 cut |
 | COMMAND_PALETTE_ASSESSMENT (INV-9) | INV memo | ✅ closed-actioned | Ctrl-K palette — SHRINK→CUT | Palette/registry/recents removed (FU-029) |
 | CROWD_PRICES_ASSESSMENT (INV-11) | INV memo | ✅ closed-actioned | P8-04 crowd price graph — verdict CUT | RECONCILED §7 Decision 6; unblocked FU-438 |
+| PRICES_SURFACE_UX_ASSESSMENT | INV memo | 🔴 needs-a-decision | "My prices" + price-history UX; the product/stock axis split | 2026-08-21; D2/D3/D4 answered, D1 open as FU-703; defects FU-704..708 |
 | MAGIC_BEHAVIOUR_AUDIT (FU-092) | Audit | ✅ closed-actioned | All implicit "magic" behaviours; spun FU-315..319 | "Complete; verdicts gathered 2026-06-28" |
 | ORPHANED_FIELDS_AUDIT (INV-1) | Audit | ➗ closed-with-carve-outs | Fields set-but-unread; delta-checked FU-416 | Feeds DATA_MODEL_SANITY_SWEEP |
 | STOCK_OVERVIEW_PERF (INV-2) | INV memo | ➗ closed-with-carve-outs | Mount cost + latent page-1-only fetch bug (logged FU) | Broader scale cleared by FU-388 |

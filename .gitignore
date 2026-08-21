@@ -34,6 +34,9 @@ __pycache__
 *.sln
 *.suo
 *.sw?
+# Editor/tool crash artefacts alongside real source (a full stale copy of
+# StockItemDetailPage.vue was committed this way — FU-696 / FU-651).
+*.tmp.*
 **/__pycache__
 **/.buildozer
 **/*.db

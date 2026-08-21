@@ -155,13 +155,18 @@ export function clearBuyVerdictCache(): void {
 }
 
 
-export function useBuyVerdict(stockItemId: Ref<string | null> | string) {
+export function useBuyVerdict(
+    stockItemId: Ref<string | null> | ComputedRef<string | null> | ComputedRef<string> | string,
+) {
     const { buyVerdictEnabled } = useBuyVerdictEnabled();
 
     // Accept either a plain string (row on Stock Overview, id known
-    // and stable) or a reactive ref (detail page router param).
-    const idRef: Ref<string | null> =
-        typeof stockItemId === 'string' ? ref(stockItemId) : stockItemId;
+    // and stable) or a reactive ref/computed (detail page router param,
+    // or the peek panel's `idOverride` prop — which swaps in place while
+    // the page component stays mounted, so a snapshot string there
+    // leaves the card showing the previous item's verdict).
+    const idRef: Ref<string | null> | ComputedRef<string | null> =
+        typeof stockItemId === 'string' ? ref<string | null>(stockItemId) : stockItemId;
 
     function fetchIfNeeded(id: string | null): void {
         if (!buyVerdictEnabled.value) return;

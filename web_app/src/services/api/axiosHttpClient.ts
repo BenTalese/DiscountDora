@@ -292,7 +292,27 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.get<Blob>(path, { responseType: 'blob' })).data;
         } catch (error) {
+            // `responseType: 'blob'` applies to the ERROR body too, so a
+            // problem-detail JSON arrives here as a Blob and every downstream
+            // reader (`details.title`, the notify caption) saw nothing. Read it
+            // back into JSON before normalising — this is why a failed QR fetch
+            // could only ever report its status (FU-648).
+            await this.parseBlobErrorBody(error as AxiosError);
             return this.handleError(error as AxiosError, 'GET', path);
+        }
+    }
+
+    /** Best-effort: swap a JSON error body delivered as a Blob for the parsed
+     *  object, in place. Silent on anything that isn't JSON — a binary endpoint
+     *  is entitled to fail with a non-JSON body. */
+    private async parseBlobErrorBody(error: AxiosError): Promise<void> {
+        const response = error.response;
+        if (!response || !(response.data instanceof Blob)) return;
+        try {
+            const text = await response.data.text();
+            response.data = JSON.parse(text) as unknown;
+        } catch {
+            // Leave the Blob in place; handleError falls back to the status.
         }
     }
 

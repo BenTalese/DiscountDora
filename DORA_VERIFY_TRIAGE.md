@@ -131,6 +131,56 @@ device packs for hardware items.
 
 ---
 
+## Verified live — stock-overview feedback batch (2026-08-21)
+
+Walked in the Browser pane (`dora-verify-backend` + `dora-spa`, user `dora`),
+measured with `javascript_tool` probes; these lines never reached
+`DORA_VERIFY.md` as open items:
+
+- **Dashed uncertainty marker.** Re-measured after the overlay implementation
+  was reverted to the built-in border (owner's call): the marked buttons compute
+  `border-top: 3px dashed color(srgb … / 0.65)` with `box-shadow: none` — so the
+  dashes are thicker, their gaps widen with them, the pale
+  `--surface-component` ring is gone, and no overlay elements remain in the DOM
+  (2 marked rows, 0 `.stock-row__level-dashes`). Button still 32×32.
+- **Essential stripe.** Stripe top/bottom now equal the row's own top/bottom
+  (462.9/530.9 against the row's 462.9/530.9) and its left equals the row's
+  left, width 7px — it was inset by the row's 1px border before, which is what
+  left the corner showing.
+- **Filter labels.** With a level selected the field is captioned **"Stock
+  level"** and reads **"Out of Stock"**; empty it reads "Any level" under the
+  same caption. Location (a `use-input` select, where `display-value` is dead)
+  carries "Any location" as its input placeholder instead.
+- **Filter widths.** 210 / 210 / 210 with Sort by at 250. Value spans carry
+  Quasar's `ellipsis` with `overflow: hidden` + `white-space: nowrap`.
+- **Attention rank, live.** `/api/stock-items` returns `attention_rank`;
+  "Sourdough Bread" (essential, OUT) = 1 and "Load item 0028" (essential, LOW)
+  = 3 — same kind, same severity, different urgency, which is precisely the
+  distinction the old severity-only sort could not make.
+
+Not verified here: both dialogs (Add stock item, Log a price) — a `q-dialog`
+mounts in this pane but lays out at zero size, so field geometry can't be
+measured; and Log a price needs the Money feature on, which this seed has off.
+Both left on `DORA_VERIFY.md`.
+
+## Verified live — "Needs check" chip retirement (2026-08-21)
+
+Walked in the Browser pane (`dora-verify-backend` + `dora-spa`, user `dora`),
+two lines deleted from `DORA_VERIFY.md`:
+
+- **Quick-filter row is four chips.** `#/stock` → Filters → `.q-chip` reads
+  `["Needs attention","Expiring soon","Essential","Open / in-use"]`. Proof the
+  removal is real and not the `v-if`: `/api/health` reports
+  `"stocktake": true`, and the toolbar still carries
+  `Stocktake (6 due, 1 essential)` → `#/stocktake`.
+- **Dead `?stocktake=1` bookmark is harmless.** `#/stock?stocktake=1` loads the
+  unfiltered list, Filters button shows no count badge and no "Clear filters"
+  button appears (active-filter count 0). No console errors beyond the known
+  cross-origin 401 and my own probe 404s.
+
+Left open (pane can't show them): the row's dashed needs-check marker
+(virtualised rows don't paint here) and the Dora Score "Do a stocktake" action.
+
 ## Verified live — Stock-overview filter feedback (2026-08-16)
 
 Four owner-reported items, all walked on a scratch install (own backend on :5185 with

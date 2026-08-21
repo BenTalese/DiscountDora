@@ -30,6 +30,11 @@ export const ICONS = {
     subdirectory_arrow_right: 'mdi-subdirectory-arrow-right',
     notes: 'mdi-note-text-outline',
     payments: 'mdi-cash',
+    // A bare dollar glyph. The buy-verdict card leads with this in every
+    // state (2026-08-21 feedback) — a per-verdict glyph put a question
+    // mark in a bubble on `unsure`, which read as an info chip rather
+    // than as "this card is about money".
+    currency_usd: 'mdi-currency-usd',
     language: 'mdi-translate',
     record_voice_over: 'mdi-microphone-message',
     auto_awesome: 'mdi-auto-fix',

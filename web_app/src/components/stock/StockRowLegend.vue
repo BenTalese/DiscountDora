@@ -170,7 +170,9 @@
     }
     /* Same recipe as `.stock-row__level-btn--uncertain`, at legend scale, on
        a stocked-green fill so it's clear the marker rides an ordinary level
-       rather than replacing it. */
+       rather than replacing it. Stays at 2px where the row went to 3px: the
+       swatch is 16px against the row's 32px, and a 3px dashed border on a
+       16px box is nearly solid. */
     .stock-row-legend__swatch--uncertain {
         background: var(--q-positive);
         border: 2px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);

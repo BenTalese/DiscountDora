@@ -13,8 +13,8 @@
         <template v-else-if="!loading">
             <!-- 2026-08-20 owner feedback — the install-wide master switch.
                  Off hides the whole surface: the Stock-overview button, the
-                 "Needs check" filter, the per-item toggle on an item's detail
-                 page, and the queue itself (the server stops resolving an
+                 row's needs-check marker, the per-item toggle on an item's
+                 detail page, and the queue itself (the server stops resolving an
                  overdue set, so the alerts bell goes quiet too). This page is
                  the only way back on, which is why it stays in the nav and
                  keeps rendering when the feature is off. -->

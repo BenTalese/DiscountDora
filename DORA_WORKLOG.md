@@ -18,6 +18,333 @@ next.
 
 ---
 
+## 2026-08-21 (later 4) — **Tidy-up: removed the committed editor temp file**
+**Status:** complete.
+
+**What changed:**
+- `git rm web_app/src/pages/StockItemDetailPage.vue.tmp.1272799.ae577f7b1f87` — a
+  144KB stale copy of the stock-item detail page (dated 2026-08-17) that had been
+  committed by accident. It still imported `PantryBeliefChip`, which the live page
+  dropped, so it was actively misleading to grep.
+- `.gitignore` gained `*.tmp.*` (with a comment naming the two FUs) so the same
+  artefact can't be committed again.
+
+**Decisions made:** resolved **FU-696** and **FU-651** together — the same file was
+logged twice, four days apart, by two sessions that each declined to delete a file
+they hadn't created. FU-651 described it as untracked; it had since been committed,
+so this was a `git rm`.
+
+**Files touched:** `.gitignore`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`,
+this file; one deletion.
+
+**Verification:** `grep -r 1272799` and a search for the full filename across the
+repo (excluding `node_modules`/`.git`) hit only `DORA_FOLLOWUPS.md` and
+`DORA_WORKLOG.md` — no source, config, or test reference. `git ls-files` shows no
+other tracked `.tmp.`/`.bak`/`~` artefacts. Nothing else was touched, so the
+previous unit's green checks (vue-tsc, eslint, 502 vitest, `quasar build`) still
+stand.
+
+**Engineering-standards close-gate:** R-013 (scope) — deletion only, no behaviour
+change; the file was named in an open FU with recommended resolution "now". No new
+rule/ADR: "don't commit editor temp files" is now enforced mechanically by the
+ignore rule rather than by a written standard.
+
+**Next up:** unchanged — owner walks `DORA_VERIFY.md` → "Stock item detail feedback
+batch (2026-08-21)", then FU-710's lookup-URL check (which should also close FU-648).
+
+**Open questions for user:** none from this unit. FU-709 (dark-theme page colour)
+is still open from the previous one.
+
+---
+
+## 2026-08-21 (later 3) — **Stock-item detail feedback batch (12 items)**
+**Status:** complete for 10 of 12; 2 are install-state findings that can't be
+reproduced here (FU-648 / FU-710) and are instrumented instead.
+
+**Trigger:** owner feedback list on the stock-item detail page (heading band,
+verdict reactivity, verdict-card styling, wording, expiry affordance, barcodes
+tab + guidance, substitute picker, QR 404).
+
+**What changed:**
+- **Peek header band** (`StockOverview.vue`): the sticky embedded-detail header
+  painted `--surface-page`; in dark themes the body actually paints Quasar's
+  `--q-dark-page`, so the header showed as a deliberate dark-green strip. Now
+  matches the real body colour per mode. Root cause logged as **FU-709** (below).
+- **Verdict didn't follow the peek** (`StockItemDetailPage.vue`,
+  `useBuyVerdict.ts`): the page passed `stockItemId.value` — a setup-time
+  snapshot — so a peek that swaps `idOverride` in place kept the first item's
+  verdict. Passes the ref now; composable signature widened to accept a
+  `ComputedRef`. **Audited the rest of the page for the same class of bug**:
+  everything else is either a computed off `detail`/`stockItemId`, reset in the
+  `watch(stockItemId)` (QR blob + error), or reloaded by `loadDetail()`. The
+  verdict was the only one.
+- **`BuyVerdictCard` restyled to `PantryBeliefCard`'s shape** — single surface,
+  verdict tint on the card, summary line as the disclosure, action icon-only to
+  the right of the caret. Always leads with a dollar glyph (new
+  `ICONS.currency_usd`); `unsure` no longer draws a help bubble. Wait-hint is a
+  left rule rather than a nested tinted box. "No strong signal" →
+  "No strong buy signal" (also in `BuyVerdictBadge` — one phrase, one verdict).
+- **Expiry date is a real `<button>`** styled as text; same picker as the glyph.
+- **"Open / in-use" row → "Opened"**, tooltip "Flags this packet as opened. Set a
+  shorter expiry above if it's perishable." (owner picked option 3 of 3.)
+- **Barcodes moved out of the Substitutes tab** into its own `barcodes` tab,
+  gated on the scanning flag (same fallback watch as Products), with a paragraph
+  saying what an EAN/UPC is, where it's printed, and that Dora never looks it up.
+- **Add-substitute picker**: dropped the `inventory_2` avatar, `+` → green
+  `add_link` (chain), named + tooltipped.
+- **Blob error bodies are readable** (`axiosHttpClient.getBlob`): `responseType:
+  'blob'` applied to error responses too, so problem-detail JSON arrived as a
+  Blob and every reader of `details.title` saw nothing — this is why three prior
+  rounds of QR instrumentation reported nothing useful. Parsed back to JSON now.
+- **404s are disambiguated** in the QR dialog and the add-barcode dialog: route
+  miss ("this server has no … endpoint at <url> — its API is older than this
+  page") vs entity miss.
+
+**Decisions made:**
+- The barcode-modal "stock group" item was withdrawn by the owner (mistaken) —
+  no such field exists in that dialog.
+- Did **not** fix FU-709 app-wide (dark themes' authored page colours never
+  paint). One line, but it changes the page background of all four dark themes —
+  owner call, and he had just said he wants *less* dark green on screen.
+- Did **not** rename "open / in-use" in `StockItemRow` / `AttentionRulesDialog`
+  (scope; logged as FU-711).
+
+**Files touched:** `web_app/src/pages/StockItemDetailPage.vue`,
+`web_app/src/pages/StockOverview.vue`,
+`web_app/src/components/stock/BuyVerdictCard.vue`,
+`web_app/src/components/stock/BuyVerdictBadge.vue`,
+`web_app/src/composables/useBuyVerdict.ts`,
+`web_app/src/composables/useQrLabels.ts`,
+`web_app/src/services/api/axiosHttpClient.ts`, `web_app/src/style/icons.ts`,
+plus `CHANGELOG.md` / `DORA_FOLLOWUPS.md` / `DORA_VERIFY.md` / this file.
+
+**Verification:**
+- `vue-tsc --noEmit` clean; `eslint` clean; `vitest run` **502 passed / 44 files**;
+  `quasar build -m pwa` succeeded.
+- **Server side of the two 404s proven green over real HTTP** (booted
+  `dora_api.startup` on :5170, logged in as `dora`, CSRF double-submit):
+  `GET /api/stock-items/<id>/qr?size=512` → **200 image/png**;
+  `POST /api/data/barcodes` with the owner's exact ISBN-13 `9788817071673` →
+  **200** + a `barcode_id`. `app.url_map` carries all five routes from
+  `features/data/barcodes.py`. So the code is not the problem — see FU-710.
+- **Not** verified in a browser: the agent pane can't mount `#/stock/<id>`, and
+  the peek is desktop-only (`$q.screen.width` reads 0 there → mobile branch).
+  Every visual item is queued in `DORA_VERIFY.md` under
+  "Stock item detail feedback batch (2026-08-21)".
+
+**Engineering-standards close-gate:** R-001 (no new duplication — verdict card
+reuses the belief card's idiom rather than a third one), R-002 (theme tokens only;
+the one Quasar var `--q-dark-page` is used deliberately and commented, since it's
+what the body actually paints), R-003 (no domain logic moved clientward),
+R-035/D-rules (icon-only controls carry `aria-label` + tooltip; tint stays in
+fill/border, never in text ink; the summary button keeps its 44px target; the new
+text button has a focus ring). No ADR needed — the "pass the ref, not
+`ref.value`, to a composable" trap is already covered by R-003's state-ownership
+framing, and the dark-page finding is a decision (FU-709), not yet a rule.
+
+**Next up:** owner walks `DORA_VERIFY.md` → "Stock item detail feedback batch";
+then FU-710's one-minute lookup-URL check, which should close FU-648 too.
+
+**Open questions for user:** FU-709 (should dark themes paint their own authored
+page colour, or should the unused values be deleted?).
+
+---
+
+## 2026-08-21 (later 2) — **Prices-surface UX investigation (read-only)**
+**Status:** complete. No code changed. Output:
+`docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md` + FU-703…FU-708.
+
+**Trigger:** owner asked, open-ended, what I thought of the UX of the "my prices"
+and price-history areas, then supplied the root cause himself: products started as
+a first-class entity, got pulled out into a push-your-own-data niche, and the
+stock-item entity was upgraded to carry everyday-user price functionality — a
+half-built surface torn in the other direction. His constraint: don't confuse the
+majority who have no offer data, but maximise usefulness to them.
+
+**The finding, in one line:** the capability is on the wrong axis. Compare (up to
+5), range control (30d/90d/1y/all) and alerts all live on the **product** axis at
+`/price-history`, which has **no nav entry** — reachable only from a My Products
+overflow item, a `SubscriptionsPanel` link, and the onboarding tour that
+advertises it as "Prices". The everyday user's own data is on the **stock-item**
+axis and gets one single-item modal with no range and no compare, so *"which of my
+items got more expensive?"* has no surface at all. `PriceAlert` is product-keyed
+and fired by the scrape pipeline, so for a no-products install alerting is not
+merely hidden — there is no feed to fire it. Capture is strong (four entry points,
+one shared `PriceEntry`, R-001 clean); reading is close to absent.
+
+**Archaeology that confirms it:** every price Feature Note in the original spec
+lives under `Feature Boards/Products.md`; `Feature Boards/Stock Items.md` has
+**zero** price intent. "Your prices" on stock items is entirely post-charter, which
+is exactly why the reading-side capability never grew a stock-item twin.
+
+**Also found:** three things called "history" on one page (lifecycle tab, "Full
+history" price sheet, untitled raw observation list), two sharing `ICONS.history`;
+the chart is `@mousemove`-only so it's a static picture on a phone; `PriceEntry` is
+three-across with no breakpoints and all its help is hover-only tooltips —
+including the copy that *defines* "usually"; observations can be deleted with no
+confirm and never edited; and a mis-parented tooltip on `/price-history` actively
+tells the user the wrong thing.
+
+**Decisions taken (owner, this session):**
+- **D1 — product-axis fate: DEFERRED**, leaning "keep both, fix nav + naming" over
+  absorb-and-retire. → **FU-703**. This gates FU-708.
+- **D2 — everyday-user jobs: all four in scope** (triage / lookup / capture /
+  trend), not narrowed.
+- **D3 — placement:** a **price lens on Stock overview** *and* a **trend section in
+  Reports**. A dedicated top-level "Prices" nav entry was rejected. Consequence
+  worth flagging: all-four-jobs + no-nav-entry means the jobs get *distributed*,
+  and making that coherent rather than scattered is the real work in FU-703.
+- **D4 — alerts: advanced-only, hide cleanly.** No stock-item watchlist, no nightly
+  baseline check; copy stops implying the feature exists when products are off.
+
+**Close-gate:** read-only, so no R-rule was introduced or touched; the memo §9
+records which rules the findings cite (R-001, R-003, R-035/D-rules). One ADR
+candidate deliberately **not** promoted because it depends on D1 — *"a domain
+signal must not be presented as a warning when the user did not cause it"*
+(the warning-coloured "paying more than usual" chip). Promote if FU-707 lands.
+Feedback coverage table done: all ten PRODUCT HISTORY bullets mapped, PH2 already
+fixed by FU-605, PH7 (dark-mode tooltip) kept **open** as a
+didn't-reproduce-in-static-read finding needing browser confirmation.
+
+**Next up:** FU-703 is the owner's call and gates FU-708. FU-704 (mobile
+`PriceEntry`), FU-705 (chart touch), FU-706 (observation edit/confirm/date) and
+FU-707 (signal tone/confidence/copy) are all independent of it and can start now.
+
+---
+
+## 2026-08-21 (later) — **Stock-overview feedback batch (10 items)**
+**Status:** all ten code-complete. Item 8 (the Essential info-chip rewording) was put to
+the owner mid-session and his pick — the short version — is applied to both call sites.
+Green: `vue-tsc` 0,
+eslint clean on every touched file, frontend **502/502**, `quasar build` clean, backend 215 passed on the `attention|stock_item|dto|alert` slice
+including 5 new rank tests, DTO contract snapshot refreshed (27 passed).
+
+### The ten items
+1. **Dashed marker "looks a bit meh".** Landed as a **2px → 3px `border: dashed`**, i.e.
+   the built-in control. The browser derives dash length AND gap from the width (Chrome:
+   dash ≈ 2×, gap ≈ 1×), so one number moves both — what CSS won't give you is the
+   dash:gap *ratio*. The pale "in-between" was never the border at all: it was a separate
+   `box-shadow: inset 0 0 0 1px var(--surface-component)` on the same rule, now deleted, so
+   the gaps show the level's own colour. Legend swatch stays at 2px (16px box — 3px dashes
+   on it read as nearly solid).
+   **Built and reverted:** a gradient-overlay implementation (overlay `<span>` + four
+   `repeating-linear-gradient` edges + a shared `src/css/_mixins.scss`) that DID give
+   independent dash/gap control and was verified live. Owner's call: *"if the thickness is
+   not possible without doing hacks, just keep to how it is using the built in border
+   controls."* It cost an extra DOM node per uncertain row and a new shared file for a
+   decorative marker. Note for anyone reopening it: it must be an overlay child, because
+   Quasar's `bg-positive` &co. set the `background` shorthand `!important` and would blow
+   away a `background-image` set on the button itself.
+2. **Essential stripe's top corner.** It was `top/bottom/left: 0`, and an absolutely
+   positioned box lays out against the ancestor's *padding* box — so it started one border
+   inside and met the 8px corner curve at a tangent. Now `-1px` on three sides + 7px wide;
+   the row's own `overflow: hidden` does the rounding, so both ends terminate identically.
+3–5. **Log a price.** Pack count is always visible (the disclosure cost a tap, hid a field
+   people look for, and re-flowed the form on engage); pack count + store are `col` halves
+   under the three `col` thirds, so every row shares two edges; unit options dropped the
+   `"${dimension} — "` prefix (the dimension is still what orders the list); and the item
+   name is now only in the dialog title — the back-to-picker row says what it does instead.
+6. **Attention sort "seems a bit random".** It was: band → severity → name. `expired` and
+   `essential_low` are BOTH severity `high`, so the outlined band sorted alphabetically.
+   Added a server-owned `attention_rank` (`stock_attention.py` + DTO): **0 expired ·
+   1 essential-OUT · 2 expiring-soon · 3 essential-LOW**, worst-of-firing-kinds, honouring
+   muted kinds like severity does. Client tiebreaks on soonest expiry, then name. The
+   out/low split is why this can't be derived from the kind — one kind, two urgencies.
+   This is the owner's own proposed order; flag if he wants expiring-soon above
+   essential-out.
+7. **Add-item dialog location field overhang.** `q-form class="q-gutter-md"` — the gutter
+   spaces children with a **-16px container margin**, so the form's content box is 16px
+   wider than the card, and the one child with `width: 100%` (a `use-input` QSelect, per
+   the `.q-select--with-input` rule in app.scss) overhung by exactly one gutter. Swapped
+   for a flex column with `gap`.
+8. **Essential info chip wording.** Old copy explained the flag by naming two internal
+   mechanisms ("shows up in 'essentials' auto-generate sources… different from auto-add…")
+   and never mentioned what the user actually sees — that an essential is what makes a row
+   raise attention when it runs low (kind `essential_low`). Owner picked the short form:
+   *"Something you always want in the house. Dora chases it up as soon as it runs low,
+   instead of waiting until it's gone."* Word-identical in both places
+   (`CreateStockItemDialog.vue`, `StockItemDetailPage.vue`) — one explanation, not two.
+9. **"Any level" becomes the field's title once a value is picked.** A Quasar `label`
+   doesn't vanish when a value arrives, it floats up and becomes the caption — so writing
+   the empty state as the label captioned the field with a statement that was no longer
+   true. `BaseSelect` gained **`emptyText`**: `label` is the field's name (stacked), and
+   the empty sentence renders as `display-value` — or, for a `use-input` select where
+   `hide-selected` makes `getSelection()` return `[]` and `display-value` dead, as the
+   input's `placeholder`. Applied to the three stock filters; the cookbook's already
+   used field-name labels.
+10. **Filters too narrow / value wraps out of the box.** Track 180 → **210px**, numeric
+   200 → 230, and a new **250px** track for `.sort-control` (its direction chip eats ~46px
+   inside the same field). Truncation belt-and-braces in `BaseSelect`
+   (`flex-wrap: nowrap` on `.q-field__native`, `min-width: 0` + ellipsis on its spans) —
+   Quasar's own span already carries `.ellipsis`, but the `#selected-item` slot case
+   didn't.
+
+### Standards close-gate
+R-003 honoured on the one new piece of shared logic: the urgency order is a derived domain
+fact and lives server-side, with the client comparing ints only. The row marker and the
+legend swatch now each carry their own one-line `border: … dashed` — two copies of a
+declaration, which is where they were before this session and is under the threshold that
+made the mixin worth having; the deleted `_mixins.scss` went with the reverted overlay.
+No new ADR: nothing here decided a recurring policy the
+standards doc doesn't already cover (R-001/R-003/D-005).
+
+### Next up
+Still open from earlier today: **FU-702** (the expiry chip reading a notification preference) and
+**FU-701** (the "Expiring soon" rename + its overlap with "Needs attention").
+
+---
+
+## 2026-08-21 — **Quick-filter review + "Needs check" chip retired**
+**Status:** code complete, verified green: `vue-tsc` 0, eslint clean on every touched
+file, frontend **502/502** (was 504 — the two needs-check filter specs were deleted with
+the feature). No backend change. **Browser-walked** (pane): the quick-filter row is four chips with
+`stocktake: true` on `/api/health`, and `#/stock?stocktake=1` loads clean with an
+active-filter count of 0 — both lines deleted from `DORA_VERIFY.md`, evidence in
+`DORA_VERIFY_TRIAGE.md`. Two lines stay open there (the row's dashed marker + the Dora
+Score action) because the pane can't paint virtualised rows.
+
+### What was asked
+Owner asked for an opinion on the three quick filters after the 2026-08-20 stock-overview
+work, then made one call — **remove "Needs check" entirely** — and asked what wording I'd
+pick over "Expiring soon".
+
+### The review (for the record)
+Good: `hasAlertOnly` now reads `item.needs_attention` off the DTO instead of restating
+the rule, so chip / bell / row outline / footer count / default sort describe one set —
+the B1–B4 defect class is dead. Still wrong: (a) **Expiring soon ⊂ Needs attention**, the
+two shown as peers; (b) both expiry chips die silently when a user mutes the expiry alert
+kinds, because `attention_kinds` is pref-filtered server-side; (c) the label says
+"Expiring soon" but matches already-expired; (d) **Needs check** was on a different axis
+(data staleness, separate endpoint) wearing `warning`, the colour D-001 gives Low stock;
+(e) 500-item silent truncation + a `catch` that empties the needs-check set, both
+producing a chip that matches nothing with no signal. (a)–(c) are logged as **FU-701** /
+**FU-702**; (d)/(e) died with the chip.
+
+### What changed
+- **Chip removed** from `StockOverview.vue`, and `needsCheckOnly` + the `needsCheckIds`
+  source removed from `useStockFilters.ts` (predicate, activeFilterCount, clearFilters,
+  return). `needsCheckIds` **stays** in the page — it still paints the row's dashed marker.
+- **`?stocktake=1` deep link retired.** It had no target once the chip went, so
+  `DoraScoreCard`'s "Do a stocktake" action now points at **`/stocktake`** — which is the
+  queue, and was always the shorter path. `applyQueryFilters` + its watcher no longer read
+  the param; an old bookmark now just loads the unfiltered list.
+- Comments/doc mentions swept: `AdminSystemStocktakeSettings.vue`,
+  `PROPOSAL_STOCKTAKE_MODE.md` §7 (struck in place with the reason), CHANGELOG.
+
+### Standards close-gate
+No R-rule violations introduced. R-003 unaffected — the removed path was a *read* of a
+server-owned set; the set is still read, never re-derived. FU-702 is a standing R-003-ish
+smell (one server field serving two different questions: "is this near expiry?" and
+"should we notify this user?") but it pre-dates this unit and is logged, not fixed. No new
+ADR — this is a scope-discipline call, already covered by R-007/D-015.
+
+### Next up
+Owner to pick the **Expiring soon** wording (my pick: **"Use soon"**; conservative
+alternative "Expiring"; strictly-accurate "Expiring or expired"), then FU-702's DTO fix so
+the chip stops reading a notification preference.
+
+---
+
 ## 2026-08-20 (later 10) — **Stock overview feedback batch (7 items) — CUT SHORT**
 **Status:** code complete for all seven, **verification incomplete** — the owner ended the
 session mid-test-run. Green: frontend 504/504, `vue-tsc` 0, eslint clean on every touched

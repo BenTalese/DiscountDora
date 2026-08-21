@@ -328,6 +328,7 @@
     ],
     "item_keys": [
       "attention_kinds",
+      "attention_rank",
       "attention_severity",
       "expiry_date",
       "is_essential",

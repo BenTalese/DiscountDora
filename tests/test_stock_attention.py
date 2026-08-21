@@ -16,7 +16,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from dora_api.domain.entities.stock_level import StockLevel
-from dora_api.features.stock_items.stock_attention import (attention_for,
+from dora_api.features.stock_items.stock_attention import (RANK_ESSENTIAL_LOW,
+                                                           RANK_ESSENTIAL_OUT,
+                                                           RANK_EXPIRED,
+                                                           RANK_EXPIRING_SOON,
+                                                           RANK_NONE,
+                                                           attention_for,
                                                            resolve_attention_map)
 
 TODAY = date(2026, 8, 20)
@@ -156,3 +161,55 @@ def test__resolve_attention_map__keys_every_item_including_the_quiet_ones():
     assert set(result) == {quiet.id, loud.id}
     assert result[quiet.id].needs_attention is False
     assert result[loud.id].needs_attention is True
+
+
+# ── urgency rank ────────────────────────────────────────────────────────
+#
+# Added 2026-08-21. Severity ties `expired` with `essential_low` (both "high"),
+# so the overview's "Needs attention" sort fell through to the alphabet and
+# read as random. `rank` is what orders the outlined band.
+
+def test__rank__orders_most_urgent_first():
+    """The whole ordering, in one assertion, because the ORDER is the contract
+    — any one rank in isolation says nothing."""
+    expired = _attention(_item(expiry=TODAY - timedelta(days=1)))
+    essential_out = _attention(_item(level=OUT, essential=True))
+    expiring = _attention(_item(expiry=TODAY + timedelta(days=2)))
+    essential_low = _attention(_item(level=LOW, essential=True))
+
+    assert [
+        expired.rank, essential_out.rank, expiring.rank, essential_low.rank,
+    ] == [RANK_EXPIRED, RANK_ESSENTIAL_OUT, RANK_EXPIRING_SOON, RANK_ESSENTIAL_LOW]
+    assert expired.rank < essential_out.rank < expiring.rank < essential_low.rank
+
+
+def test__rank__splits_essential_low_by_out_vs_low():
+    """One kind, two urgencies: `essential_low` covers both bands, and an
+    essential you have NONE of is worse than one you're merely low on. This is
+    why the rank can't be derived from the kind alone."""
+    out = _attention(_item(level=OUT, essential=True))
+    low = _attention(_item(level=LOW, essential=True))
+    assert out.kinds == low.kinds == ("essential_low",)
+    assert out.rank < low.rank
+
+
+def test__rank__is_the_worst_of_several_firing_kinds():
+    item = _item(level=LOW, essential=True, expiry=TODAY - timedelta(days=1))
+    a = _attention(item)
+    assert set(a.kinds) == {"expired", "essential_low"}
+    assert a.rank == RANK_EXPIRED
+
+
+def test__rank__ignores_a_kind_the_user_disabled():
+    """Same rule as severity: a muted kind isn't allowed to set the order of a
+    row it no longer contributes to."""
+    item = _item(level=LOW, essential=True, expiry=TODAY - timedelta(days=1))
+    a = _attention(item, disabled=frozenset({"expired"}))
+    assert a.rank == RANK_ESSENTIAL_LOW
+
+
+def test__rank__sorts_quiet_items_below_every_firing_rank():
+    a = _attention(_item())
+    assert a.needs_attention is False
+    assert a.rank == RANK_NONE
+    assert RANK_NONE > RANK_ESSENTIAL_LOW

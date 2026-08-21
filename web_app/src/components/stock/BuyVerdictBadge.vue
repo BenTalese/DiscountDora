@@ -107,7 +107,9 @@
         if (props.verdict.verdict === 'buy') return 'Worth buying now';
         if (props.verdict.verdict === 'wait') return 'Might be worth waiting';
         if (props.verdict.verdict === 'skip') return 'Probably skip';
-        return 'No strong signal';
+        // Same wording as BuyVerdictCard — one phrase for one verdict
+        // (2026-08-21 feedback: name the signal it's about).
+        return 'No strong buy signal';
     });
 
     const confidenceLabel = computed(() =>

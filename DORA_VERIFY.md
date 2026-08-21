@@ -22,6 +22,66 @@ top-to-bottom.
 
 ---
 
+## Stock item detail feedback batch (2026-08-21)
+Everything here is a desktop / running-app observation — the agent's pane can't
+mount `#/stock/<id>` at all, and the peek is desktop-only (`$q.screen` reads 0
+in the pane), so none of it could be walked live.
+
+- [ ] **Peek header (desktop, a dark theme — Pesto Dark especially):** the item
+      name / QR / Delete band no longer paints a coloured strip. It should read as
+      the same background as everything around it, and still stay put when the
+      panel scrolls.
+- [ ] **Switch items in the peek:** click a second stock item in the list — the
+      buy-verdict card must repaint for the new item (headline, reasons, action),
+      not keep the first item's answer. Same for the QR dialog's image.
+- [ ] **Buy verdict card:** one surface (no inner box), tinted by verdict, dollar
+      sign on the left in all four states, "No strong buy signal" when unsure, and
+      the action as an icon-only button *after* the chevron. Compare side-by-side
+      with "Dora thinks" above it — they should read as the same component family.
+      Check a `wait` verdict too: the wait-hint block should show as a left-edge
+      rule, not a nested tinted box.
+- [ ] **Expiry row:** clicking the date (and clicking the "—" when there's no
+      date) opens the picker; tab to it and press Enter/Space too.
+- [ ] **Barcodes tab** (needs scanning on): the tab exists next to Substitutes with
+      a count, the guidance paragraph reads sensibly, and adding a real EAN works.
+      If it fails, quote the message verbatim — see FU-710.
+- [ ] **QR button:** if it still errors, quote the message verbatim — it now names
+      either "no QR endpoint at …" or "that stock item no longer exists" (FU-648).
+- [ ] **Add substitute dialog:** no box icon before the names; the right-hand
+      button is a green chain link.
+
+## Price history: reported dark-mode tooltip — origin FU-708
+Reported in the PRODUCT HISTORY feedback (PH7) and **not reproduced in a static
+read**, so it needs eyes on the running thing.
+
+- [ ] On a dark theme, open `/price-history`, pick a product and hover the chart:
+      confirm the value bubble is theme-aware (not white text on white).
+
+## Stock overview + Log a price feedback batch (2026-08-21)
+Row treatments and the filter row were walked live and deleted from this list.
+What's left needs a real browser (dialogs don't lay out in the agent's pane) or
+a feature this seed has switched off.
+
+- [ ] **Log a price** (needs Money on): pack count is visible without opening a
+      disclosure; the three top fields span the same width as the two below;
+      pack count and store are equal halves; the unit field shows "L" / "kg",
+      not "volume — L"; the item's name appears once (dialog title only).
+- [ ] **Add stock item**: the Location field's right edge lines up with Name /
+      Stock level / Stock group, and doesn't overhang the dialog.
+- [ ] The **Essential** info chip (add-item modal *and* the detail page) reads
+      "Something you always want in the house. Dora chases it up as soon as it
+      runs low, instead of waiting until it's gone." — same words in both.
+- [ ] **Mobile**: a stock-level filter with a long value truncates with "…"
+      instead of wrapping out of the box; Sort by shows a usable amount of the
+      selected axis next to its direction button.
+
+## Stock overview: "Needs check" chip retired (2026-08-21)
+Chip absence + the dead `?stocktake=1` bookmark were walked live and deleted.
+
+- [ ] Rows still show the dashed needs-check marker on the level box.
+      (Virtualised rows don't paint in the agent pane — needs a real browser.)
+- [ ] Dashboard → Dora Score → "Do a stocktake" lands on `/stocktake`.
+
 ## Stock overview: feedback batch (2026-08-20) — the seven items
 Nothing here was walked live — the session ended before the browser pass.
 

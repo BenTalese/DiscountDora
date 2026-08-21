@@ -44,6 +44,7 @@ EXPECTED_KEYS = {
     'needs_attention',
     'attention_severity',
     'attention_kinds',
+    'attention_rank',
     'linked_product_count',
 }
 

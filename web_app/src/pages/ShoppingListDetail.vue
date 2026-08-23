@@ -28,7 +28,7 @@
                              live in More. Only Quick add, More and the one
                              lifecycle CTA stay inline. -->
                         <BaseButton
-                            v-if="detail && detail.lines.length > 0 && detail.status !== 'done'"
+                            v-if="planFace && detail && detail.lines.length > 0"
                             variant="ghost"
                             :icon="ICONS.checklist"
                             :label="bulkMode ? 'Done selecting' : 'Select'"
@@ -45,6 +45,19 @@
                             :icon="ICONS.more_horiz"
                         >
                             <q-list dense style="min-width: 230px">
+                                <!-- The run face hides the lists rail, so this
+                                     is the only way to another list mid-shop.
+                                     It appears exactly when the rail is gone,
+                                     rather than duplicating it. -->
+                                <q-item
+                                    v-if="runFace"
+                                    clickable
+                                    v-close-popup
+                                    @click="switchListOpen = true"
+                                >
+                                    <q-item-section avatar><q-icon :name="ICONS.list_alt" /></q-item-section>
+                                    <q-item-section>Switch list</q-item-section>
+                                </q-item>
                                 <q-item
                                     clickable
                                     v-close-popup
@@ -58,7 +71,7 @@
                                     </q-item-section>
                                 </q-item>
                                 <q-item
-                                    v-if="detail && detail.lines.length > 0 && detail.status !== 'done'"
+                                    v-if="planFace && detail && detail.lines.length > 0"
                                     clickable
                                     v-close-popup
                                     class="lt-sm"
@@ -164,6 +177,23 @@
                                 first.
                             </q-tooltip>
                         </BaseButton>
+                        <!-- A finished list is a record, so correcting it is an
+                             explicit mode rather than the default state. The
+                             amend also rewrites the harvested price observation
+                             server-side (FU-726), so a fixed typo stops
+                             poisoning every future estimate for that item. -->
+                        <BaseButton
+                            v-if="receiptFace"
+                            :variant="amending ? 'secondary' : 'ghost'"
+                            :icon="ICONS.edit"
+                            :label="amending ? 'Done amending' : 'Amend'"
+                            @click="amending = !amending"
+                        >
+                            <q-tooltip>
+                                Correct the price, store or quantity on a line.
+                                Your pantry isn't restocked again.
+                            </q-tooltip>
+                        </BaseButton>
                         <BaseButton
                             v-if="detail && detail.status === 'done'"
                             variant="primary"
@@ -190,6 +220,7 @@
                      continuum as the desktop rail, as a dropdown at the top
                      of the page. -->
                 <BaseDropdown
+                    v-if="!runFace"
                     class="lt-md full-width q-mb-md"
                     outline
                     :icon="ICONS.list_alt"
@@ -302,8 +333,11 @@
                     <!-- Trip card + store card. These replace the old
                          stranded doughnut-and-three-money-lines cluster that
                          floated top-right with no container (D-011) and
-                         vanished at zero lines. -->
-                    <div class="column q-gutter-sm q-mb-md">
+                         vanished at zero lines. Plan face only: mid-shop the
+                         same two numbers live in the sticky footer where a
+                         thumb can reach them, and the receipt face carries its
+                         own past-tense store split. -->
+                    <div v-if="planFace" class="column q-gutter-sm q-mb-md">
                         <TripCard
                             :line-count="detail.lines.length"
                             :ticked-count="tickedCount"
@@ -324,7 +358,7 @@
                     <!-- Bulk-select action bar — only while selecting. The
                          entry point is the toolbar "Select" button. -->
                     <q-banner
-                        v-if="bulkMode"
+                        v-if="planFace && bulkMode"
                         class="q-mb-sm bulk-bar bulk-bar-active"
                         dense
                         rounded
@@ -361,7 +395,7 @@
                          date. Never mutates on load; every mutation is a user
                          tap. -->
                     <q-banner
-                        v-if="trimBanner.visible"
+                        v-if="planFace && trimBanner.visible"
                         class="q-mb-sm dora-bg-warning-soft"
                         rounded
                         dense
@@ -423,7 +457,7 @@
 
                     <!-- Preview: which lines would go, each with a "Keep" opt-out. -->
                     <q-card
-                        v-if="trimBanner.state === 'previewed' && trimBanner.previewLines.length > 0"
+                        v-if="planFace && trimBanner.state === 'previewed' && trimBanner.previewLines.length > 0"
                         flat
                         bordered
                         class="q-mb-sm"
@@ -468,7 +502,7 @@
                          absent) unless the user opted the shopping surface in.
                     -->
                     <q-card
-                        v-if="visibleSuggestions.length > 0"
+                        v-if="planFace && visibleSuggestions.length > 0"
                         flat
                         bordered
                         class="q-mb-md inferred-suggestions"
@@ -508,8 +542,20 @@
                         </q-card-section>
                     </q-card>
 
-                    <!-- Lines -->
-                    <q-card v-if="detail.lines.length === 0" flat bordered>
+                    <!-- One list, three faces. "Start shopping" changes the
+                         page's *composition*, not just its status — that was
+                         the structural defect the redesign set out to fix
+                         ("shopping mode is a costume"; "DONE is DRAFT with
+                         everything disabled"). The run and receipt faces are
+                         their own components rather than more branches in this
+                         template: they share the list, the sectioning and the
+                         mutations, and nothing else.
+
+                         Below is the plan face. Curating a list is the only
+                         thing this composition is for, so every affordance on
+                         a row (drag, delete, steppers, buy hints, offers,
+                         provenance) belongs to it and to no other face. -->
+                    <q-card v-if="planFace && detail.lines.length === 0" flat bordered>
                         <q-card-section class="text-center dora-text-muted">
                             No items yet. Use <strong>Quick add</strong> in the toolbar, or
                             <router-link to="/stock" class="text-primary">
@@ -518,7 +564,7 @@
                         </q-card-section>
                     </q-card>
 
-                    <template v-else>
+                    <template v-else-if="planFace">
                         <!-- Ordering control. Lives on the list header, not the
                              page toolbar — it belongs to the sections it
                              reorders, and it was the widest offender in the
@@ -1016,6 +1062,24 @@
                         </div>
                     </template>
 
+                    <ShoppingListRunFace
+                        v-else-if="runFace"
+                        :lines="baseLines"
+                        :mode="groupBy"
+                        @update:mode="groupBy = $event"
+                        @tick="onRunTick"
+                        @capture-price="openPriceSheet"
+                    />
+                    <ShoppingListReceiptFace
+                        v-else-if="receiptFace"
+                        :detail="detail"
+                        :amending="amending"
+                        :completed-label="completedLabel"
+                        @stop-amend="amending = false"
+                        @edit-price="openPriceSheet"
+                        @adjust-quantity="onAdjustQuantity"
+                    />
+
                     <!-- Deferred-to-fit-budget section
                          (PROPOSAL_BUDGET_AWARE_LISTS §6.3). Renders when the
                          list has any lines with `deferred_by_budget=true`.
@@ -1023,7 +1087,7 @@
                          and a one-tap "Add back" that flips the flag off
                          via PATCH /lines/<id>. -->
                     <q-expansion-item
-                        v-if="deferredLines.length > 0"
+                        v-if="planFace && deferredLines.length > 0"
                         id="deferred-by-budget"
                         :label="`Deferred to fit budget (${deferredLines.length})`"
                         :caption="`${fmtMoney(deferredTotal)} saved`"
@@ -1149,7 +1213,10 @@
                             <div class="text-body2 text-weight-medium">
                                 Picked {{ tickedCount }} of {{ detail.lines.length }}
                             </div>
-                            <div class="text-caption dora-text-muted">
+                            <!-- Money is an install-wide opt-in; this line was
+                                 rendering dollars on installs that have it
+                                 off. -->
+                            <div v-if="moneyEnabled" class="text-caption dora-text-muted">
                                 Remaining {{ formatMoney(remainingTotal) }}
                             </div>
                         </div>
@@ -1190,7 +1257,11 @@
                  one continuum ordered by effective date (server-owned order),
                  virtualised because it accretes forever, auto-scrolled to the
                  selection. -->
-            <div class="col-auto gt-sm">
+            <!-- Hidden mid-shop: switching lists is not something you do in an
+                 aisle, and the rail is the widest thing competing with the run
+                 face for a phone's screen. It stays reachable from More →
+                 "Switch list". -->
+            <div v-if="!runFace" class="col-auto gt-sm">
                 <div class="sld-rail column">
                     <BaseButton
                         variant="ghost"
@@ -1283,6 +1354,79 @@
             </template>
         </BaseDialog>
 
+        <!-- Price capture for the run and receipt faces. A bottom sheet, not
+             the plan face's popover: mid-shop the phone is one-handed and the
+             keyboard eats the top half of the screen, so the field has to sit
+             where a thumb already is. One editor, both faces — the receipt's
+             Amend reuses it rather than growing a second price form. -->
+        <BaseDialog
+            v-model="priceSheetOpen"
+            position="bottom"
+            card-class="sld-price-sheet"
+            card-style="width: 100%; max-width: 520px"
+            :title="priceSheetLine?.stock_item_name ?? 'Price'"
+            closable
+        >
+            <q-card-section class="q-pt-none">
+                <q-input
+                    v-model.number="priceEditorDraft.price"
+                    autofocus
+                    outlined
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    min="0"
+                    label="Price per unit"
+                    :prefix="currencySymbol"
+                    input-class="sld-price-sheet-input"
+                    @keydown.enter.prevent="savePriceSheet"
+                />
+                <div
+                    v-if="priceSheetLine && priceSheetLine.actual_unit_price == null && priceSheetLine.prefill_source_label"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    <q-icon :name="ICONS.info" size="14px" class="q-mr-xs" />
+                    Prefilled {{ priceSheetLine.prefill_source_label }}
+                </div>
+                <q-select
+                    v-if="priceSheetLine && storeOptionsFor(priceSheetLine).length > 0"
+                    v-model="priceEditorDraft.store_id"
+                    :options="storeOptionsFor(priceSheetLine)"
+                    outlined
+                    emit-value
+                    map-options
+                    clearable
+                    label="Bought from"
+                    class="q-mt-sm"
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton
+                    v-if="priceSheetLine && priceSheetLine.actual_unit_price != null"
+                    variant="danger-ghost"
+                    label="Clear"
+                    @click="clearPriceSheet"
+                />
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton variant="primary" label="Save" @click="savePriceSheet" />
+            </template>
+        </BaseDialog>
+
+        <!-- Mid-shop escape hatch for the hidden rail. -->
+        <BaseDialog v-model="switchListOpen" title="Switch list" closable>
+            <q-list dense class="scroll" style="max-height: 60vh">
+                <ShoppingListRailItem
+                    v-for="s in railEntries"
+                    :key="s.shopping_list_id"
+                    :summary="s"
+                    :active="s.shopping_list_id === listId"
+                    @select="switchListOpen = false; switchToList(s.shopping_list_id)"
+                    @copy="(include) => copySummary(s, include)"
+                    @delete="deleteSummary(s)"
+                />
+            </q-list>
+        </BaseDialog>
+
         <!-- UX-v2 M12 — restock review. One-click "Restock & finish" with
              every ticked item listed and individually adjustable (default
              Stocked). Replaces the old text-only confirm dialog. -->
@@ -1340,9 +1484,11 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import TripCard from 'src/components/shoppingList/TripCard.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
+    import ShoppingListRunFace from 'src/components/shoppingList/ShoppingListRunFace.vue';
+    import ShoppingListReceiptFace from 'src/components/shoppingList/ShoppingListReceiptFace.vue';
     import {
         SECTION_MODES, SECTION_MODE_LABELS, useLineSections, isNestedChild,
-        isProductOnly, type SectionMode,
+        isProductOnly, sectionIconFor, type SectionMode,
     } from 'src/composables/useLineSections';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
@@ -1418,6 +1564,20 @@
     // mode toggles the lock without any explicit acquire/release call.
     const shopModeActive = computed(() => detail.value?.status === 'shopping');
     useWakeLock(shopModeActive);
+
+    // Which face is on screen. Named rather than compared inline because the
+    // three compositions gate a couple of dozen blocks between them, and
+    // `status === 'draft'` scattered through the template reads as an
+    // implementation detail where "the plan face" reads as the design.
+    const planFace = computed(() => detail.value?.status === 'draft');
+    const runFace = computed(() => detail.value?.status === 'shopping');
+    const receiptFace = computed(() => detail.value?.status === 'done');
+
+    // Amend is off every time the receipt is opened — a historical record
+    // should never come up already unlocked, and the mode must not survive a
+    // switch to a different list.
+    const amending = ref(false);
+    watch([listId, receiptFace], () => { amending.value = false; });
     // Starts true: the first painted frame must be the skeleton, never the
     // "list isn't available" fallback (the S6 flash) — onMounted's load()
     // hasn't had a chance to set it yet on that first frame.
@@ -1452,6 +1612,10 @@
     const togglingProgress = ref(false);
 
     async function onStartShopping() {
+        // The bulk bar is plan-face only, so a selection left running would go
+        // invisible *and* unreachable — and `canReorder` would keep reading it
+        // after the shop ends.
+        exitBulkMode();
         togglingProgress.value = true;
         try {
             await api.startShoppingAsync(listId.value);
@@ -1951,6 +2115,13 @@
         return diff > 0 ? diff : 0;
     }
 
+    /** The receipt's dateline. Null on a list that somehow finished without a
+     *  timestamp rather than rendering "Shopped —". */
+    const completedLabel = computed(() => {
+        const iso = detail.value?.completed_at;
+        return iso ? `Shopped ${formatDate(iso)}` : null;
+    });
+
     function formatDate(iso: string): string {
         try {
             return formatLocaleDate(iso) || iso;
@@ -2007,14 +2178,7 @@
         baseLines.value.filter((l) => l.estimate_source === 'historic').length
     );
 
-    const sectionIcon = computed(() => {
-        switch (effectiveMode.value) {
-            case 'location': return ICONS.place;
-            case 'store': return ICONS.storefront;
-            case 'group': return ICONS.category;
-            default: return ICONS.list;
-        }
-    });
+    const sectionIcon = computed(() => sectionIconFor(effectiveMode.value));
 
     function openPlannedDateEditor() {
         plannedDateDraft.value = detail.value?.planned_shop_date ?? null;
@@ -2060,6 +2224,8 @@
     // client renders the payload order verbatim.
     const newListOpen = ref(false);
     const putAwayOpen = ref(false);
+    // Only reachable from More while the run face has the rail hidden.
+    const switchListOpen = ref(false);
     const railEntries = computed(() => store.summaries);
     const currentSummary = computed(() =>
         store.summaries.find((s) => s.shopping_list_id === listId.value) ?? null,
@@ -2168,6 +2334,24 @@
         // refresh the trim-to-budget banner state as soon as the
         // list is available. Own try/catch inside; failures never bubble.
         void refreshTrimStatus();
+    }
+
+    /** Re-read the list without blanking the page.
+     *
+     *  `load()` deliberately nulls `detail` so switching lists shows a skeleton
+     *  rather than the previous list's rows — right for a navigation, wrong for
+     *  a refresh: mid-shop it would flash the whole page to a skeleton on every
+     *  tick. This exists for the "I already painted the change optimistically,
+     *  now reconcile the server-owned aggregates" case, and it stays silent on
+     *  failure because the optimistic state is still the user's best guess and
+     *  the next action will re-read anyway. */
+    async function refreshDetailQuietly(): Promise<void> {
+        if (!listId.value) return;
+        try {
+            detail.value = await api.getDetailAsync(listId.value);
+        } catch {
+            // Intentionally silent — see above.
+        }
     }
 
     // B6 — one request for the whole list's verdicts, marked in-flight before
@@ -2432,7 +2616,9 @@
         }
     }
 
-    async function onToggleTicked(lineId: string, value: boolean) {
+    /** @returns whether the tick reached the server — the run face only
+     *  promises an undo for a change that actually landed. */
+    async function onToggleTicked(lineId: string, value: boolean): Promise<boolean> {
         // Optimistic flip so the checkbox feels instant; if the request
         // fails we re-load the canonical state. Offline is read-only
         // (2026-08-23), so a network failure is a plain failure here — the
@@ -2443,6 +2629,13 @@
         if (value) recentTickStack.value.push(lineId);
         try {
             await api.updateLineAsync(listId.value, lineId, { is_ticked: value });
+            // The counts are ours to flip optimistically, but the money isn't:
+            // `remaining_price` and the store breakdown are server-owned
+            // aggregates (R-003), and the run face's footer puts "Remaining"
+            // in front of the user on every single tick. Re-read rather than
+            // re-derive — the optimistic flip above already paid for the feel.
+            await refreshDetailQuietly();
+            return true;
         } catch (err) {
             await load();
             $q.notify({
@@ -2451,7 +2644,34 @@
                 message: 'Could not update line.',
                 caption: toastCaption(err),
             });
+            return false;
         }
+    }
+
+    /** Run-face tick. One gesture, and the row leaves the list — so the undo
+     *  has to travel with it. The toast is the only place a mis-tap is
+     *  recoverable now that the row is gone from the section, and it reuses
+     *  the same untick path as the `u` shortcut rather than a second one.
+     *
+     *  It waits for the tick to land before offering the undo: on a failure
+     *  `onToggleTicked` reloads and says so, and a cheerful "Picked X · UNDO"
+     *  sitting next to "Could not update line" would be offering to undo
+     *  something that never happened. */
+    async function onRunTick(line: ShoppingListLine) {
+        if (line.is_ticked) return;
+        const ok = await onToggleTicked(line.line_id, true);
+        if (!ok) return;
+        $q.notify({
+            type: 'positive',
+            position: 'bottom',
+            timeout: 4000,
+            message: `Picked ${line.stock_item_name}`,
+            actions: [{
+                label: 'Undo',
+                color: 'white',
+                handler: () => { void onToggleTicked(line.line_id, false); },
+            }],
+        });
     }
 
     // ── P2-02: actual price + merchant override ─────────────────────────
@@ -2476,20 +2696,34 @@
             priceEditorDraft.price =
                 line.prefill_unit_price ?? chosenOfferFor(line)?.price_now ?? null;
         }
-        if (line.purchased_store_id) {
-            priceEditorDraft.store_id = line.purchased_store_id;
-        } else {
-            const offer = chosenOfferFor(line);
-            priceEditorDraft.store_id = offer?.store_id ?? null;
-        }
+        // Seed from the server-resolved store, not just the offer's: since the
+        // picker below widened to the resolved / last-paid stores, seeding only
+        // from an offer left a products-free user looking at an option list with
+        // nothing selected.
+        priceEditorDraft.store_id =
+            line.purchased_store_id
+            ?? line.resolved_store_id
+            ?? chosenOfferFor(line)?.store_id
+            ?? null;
     }
 
     function storeOptionsFor(line: ShoppingListLine) {
         const seen = new Map<string, string>();
-        for (const offer of line.offers) {
-            if (!seen.has(offer.store_id)) {
-                seen.set(offer.store_id, offer.store_name);
-            }
+        // Offers are the power-user case. Someone who has never linked a
+        // product still has a resolved store (their usual, or where they last
+        // bought it), and without these the picker was empty for them — which
+        // made "Bought from" invisible on exactly the installs the money ladder
+        // was rebuilt to serve.
+        const candidates: [string | null, string | null][] = [
+            [line.purchased_store_id, line.purchased_store_name],
+            [line.resolved_store_id, line.resolved_store_name],
+            [line.last_paid_store_id, line.last_paid_store_name],
+            ...line.offers.map(
+                (o) => [o.store_id, o.store_name] as [string | null, string | null]
+            ),
+        ];
+        for (const [id, name] of candidates) {
+            if (id && name && !seen.has(id)) seen.set(id, name);
         }
         return Array.from(seen, ([value, label]) => ({ value, label }));
     }
@@ -2530,6 +2764,37 @@
                 caption: toastCaption(err),
             });
         }
+    }
+
+    // ── Price capture sheet (run + receipt faces) ───────────────────────
+    // Same draft and the same save path as the plan face's popover — only the
+    // container differs, because the ergonomics do. Both faces then reload:
+    // the money ladder and the store breakdown are server-owned (R-003), so
+    // after a price lands the client asks for the new numbers rather than
+    // guessing which rung the server would now pick.
+    const priceSheetLine = ref<ShoppingListLine | null>(null);
+    const priceSheetOpen = ref(false);
+
+    function openPriceSheet(line: ShoppingListLine) {
+        onOpenPriceEditor(line);
+        priceSheetLine.value = line;
+        priceSheetOpen.value = true;
+    }
+
+    async function savePriceSheet() {
+        const line = priceSheetLine.value;
+        if (!line) return;
+        priceSheetOpen.value = false;
+        await savePriceEditor(line);
+        await refreshDetailQuietly();
+    }
+
+    async function clearPriceSheet() {
+        const line = priceSheetLine.value;
+        if (!line) return;
+        priceSheetOpen.value = false;
+        await clearPriceOverride(line);
+        await refreshDetailQuietly();
     }
 
     async function clearPriceOverride(line: ShoppingListLine) {
@@ -2579,6 +2844,10 @@
         const current = line.quantity ?? 0;
         const next = Math.max(0, current + delta);
         await setLineQuantity(line, next);
+        // On the receipt face the quantity is part of the money: it multiplies
+        // the line total, the store split and the harvested observation the
+        // server has just rewritten. Re-read rather than re-derive (R-003).
+        if (receiptFace.value) await refreshDetailQuietly();
     }
 
     function onQuantityBlur(line: ShoppingListLine, event: Event) {

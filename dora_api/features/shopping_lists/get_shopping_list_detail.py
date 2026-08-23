@@ -13,7 +13,8 @@ from uuid import UUID
 
 from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.stock_item import StockItem
@@ -212,13 +213,25 @@ def _line_savings(line: 'ShoppingListLineDto') -> float:
     return diff * (line.quantity or 1)
 
 
-def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotalsDto:
+def compute_list_totals(
+    lines: List['ShoppingListLineDto'],
+    *,
+    spent_only: bool = False,
+) -> ShoppingListTotalsDto:
     """Aggregate the per-line price/savings into list-level totals. Single source
     for the dashboard's primary-list stats (it reads these instead of summing).
 
     FU-448 — lines with `deferred_by_budget=True` are not part of the active
     list; they render under the Deferred section and don't count toward
-    projected total, savings, or ticked/unticked counts."""
+    projected total, savings, or ticked/unticked counts.
+
+    ``spent_only`` switches the *money* from projection to record, and is set for
+    a **done** list. While a list is being planned or shopped, an unticked line is
+    money you are still expected to spend, so it belongs in the total. Once the
+    shop is finished that line is something you decided not to buy — counting it
+    would make the receipt claim money that never left the account, and would put
+    unbought items in the "Where you spent it" split. The *counts* are unaffected:
+    the receipt still needs to know how many lines it skipped."""
     total_price = 0.0
     remaining_price = 0.0
     total_savings = 0.0
@@ -231,11 +244,15 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
             continue
         active_line_count += 1
         price = _line_price(line)
-        total_price += price
-        total_savings += _line_savings(line)
         if not line.is_ticked:
             remaining_price += price
             unticked += 1
+        # On a finished list an unticked line is money that was never spent, so
+        # it drops out of the total, the savings and the store split alike.
+        if spent_only and not line.is_ticked:
+            continue
+        total_price += price
+        total_savings += _line_savings(line)
         _Key = line.resolved_store_id
         _Bucket = _Buckets.get(_Key)
         if _Bucket is None:
@@ -655,7 +672,11 @@ class GetShoppingListDetailHandler:
             created_at = _List.created_at,
             completed_at = _List.completed_at,
             planned_shop_date = _List.planned_shop_date,
-            totals = compute_list_totals(_LineDtos),
+            # A finished list's money is a record of what was spent, not a
+            # projection of what might be (see `spent_only`).
+            totals = compute_list_totals(
+                _LineDtos, spent_only = _List.status == SHOPPING_LIST_STATUS_DONE,
+            ),
             lines = _LineDtos,
             attachments = _Attachments,
         )

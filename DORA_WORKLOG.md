@@ -18,6 +18,125 @@ next.
 
 ---
 
+## 2026-08-23 — **Shopping-list redesign: run face + receipt face (FU-727), and the amend/observation loop closed (FU-726)**
+**Status:** both remaining faces built, green, and driven live. FU-727 and FU-726
+resolved. Real-device walk owed (FU-729).
+
+**Trigger:** continuing the active workstream — the plan face landed last session
+and FU-727 was the named next job.
+
+**What shipped — frontend.** Two new components, because the redesign's whole
+premise is that a phase change is a change of *composition*:
+- **`ShoppingListRunFace.vue`** — the whole row is the tap target (60px, one
+  gesture); ticking pops an **Undo toast** and the row leaves its section; a
+  cleared section collapses to a single **"Aldi — all 1 picked"** line rather
+  than vanishing; price capture is a **bottom sheet**, not an inline field; the
+  Order-by bar stays (aisle order is the most useful control in a shop) and
+  everything else — drag handles, delete, quantity steppers, buy-hint pickers,
+  offer chips, provenance, suggestions, the budget banner — is gone. The lists
+  rail is hidden and reachable at **More → Switch list**.
+- **`ShoppingListReceiptFace.vue`** — read-only itemised receipt (line total, "$X
+  each" when qty > 1, store, `~` on anything estimated), the store split reused
+  from the plan face in past tense, a **"Didn't buy"** tail of unticked lines, and
+  corrections behind an explicit **Amend** mode whose banner states the restock is
+  *not* re-applied.
+
+The page keeps the plan face, owns every mutation, and passes lines down; the
+faces are presentational. `sectionIconFor` moved into `useLineSections` so the two
+faces can't drift on iconography.
+
+**What shipped — backend (FU-726).** `_harvest_observations` was lifted out of the
+`/finish` handler into `_observation_sync.sync_line_observations`, and the line
+PATCH now calls it with `overwrite_existing=True` when price / store / quantity
+change on a **done** list and the line is ticked. Clearing the price **removes**
+the observation — a stale number is worse than none when it feeds the money
+ladder's historic rung. Four e2e cases added to `test_finish_harvest.py`.
+
+**Three things found while building, worth keeping:**
+- **`useLineSections`'s `hideTicked` can't produce the run face's collapsed
+  sections** — it filters before bucketing, so an emptied section stops existing.
+  The run face therefore sections over *all* lines and filters per section, which
+  is also what makes `sectionProgress` (written last session, until now unused)
+  meaningful. `hideTicked` is still used by the page for keyboard focus order.
+- **`load()` blanks the page by design** (it nulls `detail` so switching lists
+  can't show the previous list's rows) — correct for navigation, wrong for a
+  refresh. The run face's footer shows "Remaining" and needs the server-owned
+  total after *every* tick, so a `refreshDetailQuietly()` was added: re-read, no
+  blanking, silent on failure because the optimistic paint still stands.
+- **The sticky footer was rendering dollars on money-off installs** —
+  pre-existing, gated now (R-029, respect the off-state). Found only because the
+  seeded instance ships with `money: false`, which is worth remembering when
+  driving: flip it via `PATCH /api/app-settings`, header `X-CSRF-Token` from the
+  `dora_csrf` cookie.
+
+`storeOptionsFor` was also widened past offers to the purchased / resolved /
+last-paid stores — the picker was empty for exactly the products-free user the
+money ladder was rebuilt to serve, which made "Bought from" invisible to them.
+
+**Close-gate — standards.** Checked against R-001 (two components rather than more
+branches), R-002 (tokens only; `--border-subtle` didn't exist and became
+`--border-default`), R-003/R-053 (no ladder re-derived client-side; the faces read
+`estimated_unit_price` + `estimate_source`, and every mutation re-reads the
+server-owned aggregates), R-029, R-041 (the receipt's total ships its
+unpriced count), D-016 (60px rows). **New: R-054 + ADR-050** — *a lifecycle phase
+that changes what the user does gets its own composition, not the same surface
+with controls disabled*. Cook mode and Stocktake are the other two candidates,
+logged as FU-728 rather than swept now.
+
+**Verification:** `vue-tsc` clean, eslint clean, **494 vitest**, **1947 pytest**
+(1 skipped, 1 xfailed — both pre-existing). Driven live at 430×900 with money on:
+run-face sections showing `0/1`, whole-row tick → toast → "Aldi — all 1 picked",
+price sheet `~$7.99 → $7.25` with the footer total following ($41.49 → $40.75 →
+$33.50 after a tick); receipt lines summing to its $10.50 header and its store
+split reconciling; Amend unlocking exactly price/store/quantity; and an amend of
+$1.30 → $99.95 rewriting the **single** observation in place, keeping its line FK
+and its 500 g measure.
+
+**Note for the next agent:** `npm run build` failed on a missing
+`@fontsource-variable/fraunces` until `npm install` was re-run — the lockfile was
+ahead of `node_modules` on this box. Nothing to do with the change.
+
+**Post-build review (same unit) — seven things found and fixed.** Worth recording
+because two of them were mine and one was a real money bug:
+1. **`onToggleTicked` was still calling `load()`.** A scripted edit had silently
+   missed, so every tick blanked the page to a skeleton — the exact failure
+   `refreshDetailQuietly()` was written to prevent. Now verified by polling for
+   `.q-skeleton` across a tick: none.
+2. **The receipt counted money that was never spent.** `compute_list_totals`
+   summed *all* active lines, so a finished list with an unticked line showed a
+   header total and a "Where you spent it" split that included it. Fixed
+   server-side with `spent_only` (set for `done` lists) — the money becomes a
+   record while the *counts* stay whole-list, since the receipt still has to say
+   what it skipped. Three unit cases; verified live ($10.50 → $7.30 and the
+   unbought store bucket disappearing when one line was unticked).
+3. **The undo toast fired before the tick landed** — a failed PATCH showed
+   "Picked X · UNDO" beside "Could not update line". `onToggleTicked` now returns
+   whether it reached the server and the toast waits on it.
+4. **The run-face checkbox double-emitted** (`@click.stop` *and*
+   `@update:model-value`, saved only by the `is_ticked` guard). It is a
+   decorative `q-icon` now — the row is the control, and the `q-item` is
+   `clickable` so keyboard activation is unaffected. One PATCH per tap, counted.
+5. **No empty state** when every line is deferred-by-budget — a blank run face.
+6. **`bulkMode` could get stuck**: start shopping while selecting and the bar goes
+   invisible *and* unreachable. `onStartShopping` exits it.
+7. **The widened store picker wasn't seeded to match** — a products-free user got
+   an option list with nothing selected. Seeds `purchased → resolved → offer` now.
+
+Also: the receipt filters `deferred_by_budget` lines the way the server's totals
+do, and `runSections` derives remaining/progress in one pass instead of calling
+`sectionProgress` three times per section per render.
+
+**Next up:** FU-729 (real-device walk of both faces) is the owner's; the largest
+remaining code item on this surface is nothing — the three-face redesign is
+complete. Phase-1's last unbuilt item is still **meal-reconcile Chunk 6**.
+
+**Open questions for owner:** none blocking. One judgement call worth flagging:
+the receipt's Amend does not let you add, remove or re-order lines, only correct
+the three agreed fields — if you want "I forgot to scan something" to be
+amendable too, that's a different feature (it would have to restock).
+
+---
+
 ## 2026-08-23 — **Shopping-list redesign: critique, agreed three-face design, plan face built**
 **Status:** design agreed and recorded; **plan face built, green, and driven in a
 browser**. Run face and receipt face deferred as **FU-727** (the active next job).

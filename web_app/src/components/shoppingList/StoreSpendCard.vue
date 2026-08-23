@@ -5,7 +5,7 @@
     <q-card v-if="buckets.length > 0" flat bordered class="sl-store-card">
         <q-card-section class="q-pb-none row items-center no-wrap q-gutter-x-sm">
             <q-icon :name="ICONS.storefront" size="18px" class="dora-text-secondary" />
-            <span class="text-subtitle2">Where you'll spend it</span>
+            <span class="text-subtitle2">{{ title }}</span>
             <q-space />
             <!-- Mobile collapses this to the one-line summary below; desktop
                  has the room, so it stays open (D-011 — don't stack blocks
@@ -101,7 +101,9 @@
         buckets: StoreSpend[];
         /** Mobile passes true so the card starts as a one-line summary. */
         collapsible?: boolean;
-    }>(), { collapsible: false });
+        /** Past tense on the receipt face; the plan-face default otherwise. */
+        title?: string;
+    }>(), { collapsible: false, title: "Where you'll spend it" });
 
     const { moneyEnabled } = useMoneyEnabled();
 

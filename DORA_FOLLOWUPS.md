@@ -55,44 +55,32 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
-## [OPEN] FU-727 — Shopping-list redesign: run face and receipt face still to build
-- **Raised:** 2026-08-23 (shopping-list redesign, plan face landed)
-- **Type:** deferred job.
-- **What:** the agreed three-face redesign is one face in. **Plan face is
-  done and driven in a browser.** Still to build:
-  - **Run face** (`shopping`): dedicated big-tap-target rows with the whole row
-    as the target, an **undo toast** on tick, cleared sections collapsing to a
-    single "✓ all 4 picked" line, the rail hidden (reachable from ⋮), the
-    thumb-height price-capture sheet, and the remaining plan-face chrome
-    (drag handles, delete, buy hints, quantity steppers) stripped out. What
-    already works: ticked lines leave their section, the sticky footer, and
-    shared sectioning. Owner decided: **no budget banner, no suggestions, no
-    over-budget indicator** mid-shop.
-  - **Receipt face** (`done`): read-only itemised receipt with the store split,
-    photos and print, replacing today's disabled-plan-face rendering. **Amend**
-    button unlocks price / store / quantity only, with a banner stating the
-    restock is *not* re-applied.
-- **Why it stopped here:** the plan face is the surface users spend most time on
-  and it's independently shippable; the other two are separate compositions with
-  no shared blocking work left (the DTO and sectioning groundwork is in).
-- **Recommended resolution:** now / next session — this is the active workstream.
-- **Spec:** the agreed design + wireframes artifact (rev 3), and the decisions
-  recorded in the worklog entry for 2026-08-23.
+## [OPEN] FU-729 — Run/receipt faces have never been walked on a real phone
+- **Raised:** 2026-08-23 (FU-727 build)
+- **Type:** follow-up.
+- **What:** both new faces were driven in a 430×900 headless Chrome and behave
+  correctly, but the run face is the one surface in the app explicitly designed
+  for a thumb in a supermarket — 60px rows, whole-row tap target, a bottom sheet
+  under a real on-screen keyboard, and a sticky footer that must not cover the
+  last row. None of that is proven by a headless viewport.
+- **Why deferred:** it needs the owner's own device.
+- **Recommended resolution:** now-ish — see the Shopping list section of
+  `DORA_VERIFY.md`.
 
-## [OPEN] FU-726 — Amending a finished list must also correct the harvested price observation
-- **Raised:** 2026-08-23 (shopping-list redesign)
-- **Type:** finding / design constraint for the receipt face.
-- **What:** finishing a list harvests a `StockItemPriceObservation` per line,
-  joined back by `shopping_list_line_id` (partial UNIQUE on that FK makes the
-  harvest idempotent). The agreed **Amend** flow lets the user correct a price
-  after the fact — but if it only writes `actual_unit_price` on the line, the
-  observation keeps the wrong number.
-- **Why it matters:** observations are now load-bearing, not just a "Your prices"
-  widget — they feed the money ladder's `historic` rung, every future line
-  estimate for that item, and the store card. A typo'd `$110.00` corrected on the
-  receipt would otherwise keep poisoning estimates indefinitely.
-- **Recommended resolution:** build it as part of the receipt face (FU-727) —
-  the amend handler updates the joined observation in the same unit of work.
+## [OPEN] FU-728 — Cook mode and Stocktake are the other two surfaces R-054 applies to
+- **Raised:** 2026-08-23 (FU-727 / ADR-050)
+- **Type:** finding.
+- **What:** R-054 ("a lifecycle phase that changes what the user *does* gets its
+  own composition") was established from the shopping list, but two other
+  surfaces have the same shape: cook mode (planning vs cooking) and Stocktake's
+  three-phase runner (review / walk / sweep). Neither was inspected in this unit.
+- **Why it matters:** the rule's whole point is that the wrong shape is invisible
+  — nobody notices a missing surface when something is already rendering. If
+  either of those is a disabled-copy-of-one-surface, the same hidden-feature cost
+  applies.
+- **Recommended resolution:** opportunistic — next time either surface is
+  touched, read it against R-054 before adding to it. Not worth a sweep of its
+  own.
 
 ## [OPEN] FU-725 — Line-price ladder has no e2e coverage of the historic rung
 - **Raised:** 2026-08-23 (shopping-list redesign)

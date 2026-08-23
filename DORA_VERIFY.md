@@ -22,6 +22,39 @@ top-to-bottom.
 
 ---
 
+## Shopping list — run face and receipt face (2026-08-23) — origin FU-729
+Agent drove both faces in a 430×900 browser with money on and confirmed: run-face
+sections with per-section `0/1` progress, whole-row tick, the Undo toast, a
+cleared section collapsing to "Aldi — all 1 picked", the price sheet writing
+`~$7.99 → $7.25` and the footer total following it live, the receipt's itemised
+lines / store split / totals reconciling ($1.30 + $6.00 + $3.20 = $10.50), Amend
+unlocking exactly the three fields, and an amended price rewriting the harvested
+observation in place. These are the parts a headless viewport can't prove.
+- [ ] **Run face on your actual phone, in a shop or a decent imitation:** rows are
+      comfortably tappable one-handed while moving, and you don't mis-tap the
+      price button when you meant the row.
+- [ ] **The price sheet with a real on-screen keyboard up:** the amount field and
+      the Save button are both still visible and reachable — that's the whole
+      reason it's a bottom sheet rather than the plan face's popover.
+- [ ] **Sticky footer vs the last row:** scrolled to the bottom of a long list,
+      the footer isn't covering the final item or the Receipts block.
+- [ ] **Undo toast:** it lasts long enough to actually hit, and tapping Undo puts
+      the row back in its section (not at the end of the list).
+- [ ] **Screen stays awake** across a few minutes of the run face (the wake lock
+      is real-device-only).
+- [ ] **More → Switch list** mid-shop: it's there, it lists every list, and
+      picking one leaves shop mode cleanly.
+- [ ] **Receipt in the dark themes** (Pesto Dark, Cherry Cola Dark): the amber
+      Amend banner, the receipt card and the "Didn't buy" chips all read.
+- [ ] **A receipt where nothing was priced:** the header total and the store card
+      should be honest about it rather than showing a confident `$0.00`.
+- [ ] **Finish a shop with something left unticked:** the receipt total and the
+      store split must cover only what you bought, and the item you skipped shows
+      under "Didn't buy". (Agent verified this against seeded data — worth one
+      pass on a list you built yourself.)
+- [ ] **Money off (Settings → install-wide):** the run face shows no prices and
+      the footer shows no "Remaining"; the receipt shows counts, no dollars.
+
 ## Shopping list — plan face redesign (2026-08-23)
 Agent drove the draft + mid-shop lists in a live browser and confirmed: trip
 card, store card, all four ordering modes, Unsorted placement, offer chips

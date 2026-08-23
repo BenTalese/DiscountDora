@@ -1930,6 +1930,42 @@ exceptions, which still must be commented) · **Source** (where it was establish
   which is exactly the kind of decision that cannot survive being re-derived in a
   second place. See ADR-049.
 
+### R-054 — A lifecycle phase that changes what the user *does* gets its own composition, not the same surface with controls disabled
+- **Rule:** when an entity has phases (draft / shopping / done, planning / cooking,
+  review / walk / sweep) and the user's **task** differs per phase, render a
+  different component per phase. Do not render one all-purpose surface and reach
+  for `:disable`, `v-if` on individual controls, or a size/colour swap to
+  approximate the others. A phase that only changes *policy* (who may edit) and
+  not *task* is not covered by this rule — that is what `:disable` is for.
+- **Why:** disabling is a statement about permission; a phase change is a statement
+  about purpose. Conflating them produces the two defects this rule was written
+  from. A "shopping mode" that only enlarged the checkbox and added a footer was a
+  **costume**: eleven interactive zones per row survived into an aisle where the
+  user has one hand and one intention. And a finished list rendered as the plan
+  face with everything greyed out showed a screen full of inert steppers, drag
+  handles and delete buttons — it read as broken, and it *hid a real feature*,
+  because the data for a proper receipt (what was bought, what it cost, where
+  from, what was skipped) was already on the DTO and simply never rendered. The
+  cost of the wrong shape is not just clutter: it is that nobody notices the
+  missing surface, because something is already there.
+- **Violation signal:**
+  - `:disable="status === 'x'"` appearing on more than a handful of controls in
+    one template, or bound to the same status expression throughout.
+  - A phase branch that changes only `size`, `color` or a class, while the set of
+    affordances stays identical.
+  - A read-only phase that renders editing chrome at all.
+  - One component whose template length is dominated by phase branching.
+- **Carve-outs (must be commented, naming the rule):**
+  - **Shared, phase-agnostic machinery stays shared.** Sectioning, the money
+    ladder, the mutations and the page chrome are the *same* in every face; only
+    the composition differs. Duplicating those per face trades one problem for a
+    worse one.
+  - **A destructive or historical phase may still expose a narrow edit mode** —
+    but as an explicit, announced mode (an "Amend" toggle with a banner saying
+    what it does *not* do), never as the default state.
+- **Established by:** the shopping-list three-face redesign (plan / run / receipt),
+  2026-08-23. See ADR-050.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -3334,8 +3370,41 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   Adding a rung later (a recency guard on history, say) is now a one-file change
   with no call-site churn. **Amending a finished list must also update the
   harvested observation** (joined by `shopping_list_line_id`) or a corrected typo
-  keeps poisoning every future estimate — tracked as FU-726.
+  keeps poisoning every future estimate — done 2026-08-23 (FU-726, resolved): the
+  line PATCH re-syncs the joined observation whenever price / store / quantity
+  change on a `done` list, and removes it if the price is cleared.
 - **Promotes rule:** R-053.
+
+### ADR-050 — A lifecycle phase is a change of composition, not a disabled copy of one surface
+- **Date / task:** 2026-08-23 (shopping-list run + receipt faces, FU-727)
+- **Status:** accepted
+- **Context:** `ShoppingListDetail.vue` rendered all three phases of a list from
+  one template. "Start shopping" enlarged the checkbox and added a sticky footer
+  and changed nothing else, so a row still carried eleven interactive zones in an
+  aisle; and `done` rendered the same editing surface with `:disable` on every
+  control, which both looked broken and quietly hid a receipt the DTO could
+  already have supplied. Both defects have the same cause: status was being used
+  as a permission flag when it is really a statement about what the user is
+  trying to do.
+- **Decision:** Each phase gets its own component. `ShoppingListRunFace` renders
+  whole-row tap targets, per-section progress, a collapsed "all N picked" line
+  and a thumb-height price sheet, with every curation affordance removed.
+  `ShoppingListReceiptFace` renders a read-only itemised receipt with the store
+  split and a "didn't buy" tail, and puts corrections behind an explicit **Amend**
+  mode that states the restock is not re-applied. The page keeps the plan face,
+  owns every mutation, and passes lines down — the faces are presentational.
+  Sectioning, the money ladder and the section iconography stay shared
+  (`useLineSections`, now also exporting `sectionIconFor`).
+- **Consequences:** Adding an affordance to one face no longer leaks into the
+  others, and the run face can be tuned for a thumb without arguing with the plan
+  face's density. The cost is a prop/emit seam per face, and a discipline: shared
+  *behaviour* must go into the composable rather than being copied into the second
+  face. Two adjacent surfaces already fit this shape — cook mode and Stocktake's
+  three phases — and should be read against it when next touched. The reload
+  discipline also surfaced `refreshDetailQuietly()`: `load()` blanks the page by
+  design (right for navigation, wrong for the run face's per-tick reconcile of
+  server-owned totals).
+- **Promotes rule:** R-054.
 
 ## Known fixes / things to try
 

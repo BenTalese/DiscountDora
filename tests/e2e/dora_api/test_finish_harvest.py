@@ -127,3 +127,66 @@ def test__patch_status_shopping__still_allowed(api):
     resp = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "shopping"})
     assert resp.status_code == 204, resp.text
     assert requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["status"] == "shopping"
+
+
+# ───── FU-726 — amending a finished list corrects the harvested observation ──
+# Observations feed the money ladder's `historic` rung, so a price corrected on
+# the receipt face has to reach the observation too — otherwise the typo keeps
+# driving every future estimate for that item.
+
+def test__amend_price_on_done_list__rewrites_the_observation(api):
+    item = _new_stock_item()
+    list_id, line_id = _list_with_priced_ticked_line(item, price=110.00)
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    assert _detail(item)["price_observations"][0]["total_price"] == 110.00
+
+    # The user spots the misplaced decimal on the receipt and amends it.
+    assert requests.patch(
+        f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}",
+        json={"actual_unit_price": 11.00},
+    ).status_code == 204
+
+    obs = _detail(item)["price_observations"]
+    assert len(obs) == 1, "amend must correct in place, never add a second point"
+    assert obs[0]["total_price"] == 11.00
+    assert obs[0]["shopping_list_line_id"] == line_id
+
+
+def test__amend_quantity_on_done_list__rescales_the_observation(api):
+    item = _new_stock_item()
+    list_id, line_id = _list_with_priced_ticked_line(item, price=4.00)
+    requests.patch(f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}", json={"quantity": 1})
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    assert _detail(item)["price_observations"][0]["total_price"] == 4.00
+
+    assert requests.patch(
+        f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}", json={"quantity": 3}
+    ).status_code == 204
+
+    obs = _detail(item)["price_observations"]
+    assert len(obs) == 1
+    # Sizeless line → count observation: 3 × $4.00 for 3 ea.
+    assert obs[0]["total_price"] == 12.00 and obs[0]["total_measure"] == 3.0
+
+
+def test__clearing_the_price_on_a_done_list__removes_the_observation(api):
+    item = _new_stock_item()
+    list_id, line_id = _list_with_priced_ticked_line(item, price=6.50)
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    assert len(_detail(item)["price_observations"]) == 1
+
+    assert requests.patch(
+        f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}",
+        json={"clear_actual_unit_price": True},
+    ).status_code == 204
+
+    # A stale number is worse than no number when it drives future estimates.
+    assert _detail(item)["price_observations"] == []
+
+
+def test__amending_a_draft_line__writes_no_observation(api):
+    """Only a finished list has observations to correct — editing a price while
+    still planning must not invent purchase history."""
+    item = _new_stock_item()
+    _list_with_priced_ticked_line(item, price=9.99)
+    assert _detail(item)["price_observations"] == []

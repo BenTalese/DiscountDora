@@ -1,4 +1,5 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
+import { ICONS } from 'src/style/icons';
 import type { ShoppingListLine } from 'src/models/shoppingList';
 
 /**
@@ -28,6 +29,18 @@ export const SECTION_MODE_LABELS: Record<SectionMode, string> = {
     store: 'Store',
     manual: 'Manual',
 };
+
+/** The glyph that names what a section header is grouping by. Lives here
+ *  rather than on each face so the plan and run faces can't drift into using
+ *  different icons for the same mode (D-003 one-glyph-one-meaning). */
+export function sectionIconFor(mode: SectionMode): string {
+    switch (mode) {
+        case 'location': return ICONS.place;
+        case 'store': return ICONS.storefront;
+        case 'group': return ICONS.category;
+        case 'manual': return ICONS.list;
+    }
+}
 
 export type LineSection = {
     key: string;

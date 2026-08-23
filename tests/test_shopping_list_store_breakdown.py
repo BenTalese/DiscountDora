@@ -129,3 +129,39 @@ def test_ticked_lines_leave_remaining_but_stay_in_the_store_total():
     assert totals.by_store[0].subtotal == 12.00, (
         "the store card answers 'what is this shop worth', not 'what is left'"
     )
+
+
+
+# ───── A finished list's money is a record, not a projection ─────────────────
+# The receipt face reads these numbers, so an unticked line on a done list must
+# not appear in the total or the store split — it is money that was never spent.
+
+def _pair():
+    aldi, coles = uuid4(), uuid4()
+    return [
+        _line(price = 4.00, store_id = aldi, store_name = "Aldi", ticked = True),
+        _line(price = 10.00, store_id = coles, store_name = "Coles", ticked = False),
+    ]
+
+
+def test__spent_only__excludes_unticked_lines_from_the_total():
+    totals = compute_list_totals(_pair(), spent_only = True)
+    assert totals.total_price == 4.00
+    # The counts still describe the whole list — the receipt needs to be able to
+    # say what it skipped.
+    assert totals.line_count == 2 and totals.unticked_count == 1
+
+
+def test__spent_only__keeps_unbought_stores_out_of_the_breakdown():
+    totals = compute_list_totals(_pair(), spent_only = True)
+    assert [(b.store_name, b.subtotal, b.line_count) for b in totals.by_store] == [
+        ("Aldi", 4.00, 1),
+    ]
+
+
+def test__without_spent_only__an_unticked_line_still_counts():
+    # A draft or in-progress list is a projection: the unticked line is money
+    # you are still expected to spend.
+    totals = compute_list_totals(_pair())
+    assert totals.total_price == 14.00
+    assert len(totals.by_store) == 2

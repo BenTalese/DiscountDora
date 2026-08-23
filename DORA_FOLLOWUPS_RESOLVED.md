@@ -10,6 +10,62 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-727 — Shopping-list redesign: run face and receipt face still to build
+- **Raised:** 2026-08-23 (shopping-list redesign, plan face landed)
+- **Type:** deferred job.
+- **What:** the agreed three-face redesign is one face in. **Plan face is
+  done and driven in a browser.** Still to build:
+  - **Run face** (`shopping`): dedicated big-tap-target rows with the whole row
+    as the target, an **undo toast** on tick, cleared sections collapsing to a
+    single "✓ all 4 picked" line, the rail hidden (reachable from ⋮), the
+    thumb-height price-capture sheet, and the remaining plan-face chrome
+    (drag handles, delete, buy hints, quantity steppers) stripped out. What
+    already works: ticked lines leave their section, the sticky footer, and
+    shared sectioning. Owner decided: **no budget banner, no suggestions, no
+    over-budget indicator** mid-shop.
+  - **Receipt face** (`done`): read-only itemised receipt with the store split,
+    photos and print, replacing today's disabled-plan-face rendering. **Amend**
+    button unlocks price / store / quantity only, with a banner stating the
+    restock is *not* re-applied.
+- **Why it stopped here:** the plan face is the surface users spend most time on
+  and it's independently shippable; the other two are separate compositions with
+  no shared blocking work left (the DTO and sectioning groundwork is in).
+- **Recommended resolution:** now / next session — this is the active workstream.
+- **Spec:** the agreed design + wireframes artifact (rev 3), and the decisions
+  recorded in the worklog entry for 2026-08-23.
+- **State note:** 2026-08-23 — both faces built, green and driven live.
+  `ShoppingListRunFace.vue` (whole-row tap target, per-section progress, cleared
+  sections collapsed to "all N picked", undo toast on tick, thumb-height price
+  sheet, rail moved to More → Switch list, all curation chrome removed) and
+  `ShoppingListReceiptFace.vue` (read-only itemised receipt + store split +
+  "Didn't buy" tail, corrections behind an announced Amend mode). Section
+  iconography moved into `useLineSections.sectionIconFor` so the two faces can't
+  drift apart. Promoted to R-054 / ADR-050. Real-device walk is FU-729.
+
+## [RESOLVED] FU-726 — Amending a finished list must also correct the harvested price observation
+- **Raised:** 2026-08-23 (shopping-list redesign)
+- **Type:** finding / design constraint for the receipt face.
+- **What:** finishing a list harvests a `StockItemPriceObservation` per line,
+  joined back by `shopping_list_line_id` (partial UNIQUE on that FK makes the
+  harvest idempotent). The agreed **Amend** flow lets the user correct a price
+  after the fact — but if it only writes `actual_unit_price` on the line, the
+  observation keeps the wrong number.
+- **Why it matters:** observations are now load-bearing, not just a "Your prices"
+  widget — they feed the money ladder's `historic` rung, every future line
+  estimate for that item, and the store card. A typo'd `$110.00` corrected on the
+  receipt would otherwise keep poisoning estimates indefinitely.
+- **Recommended resolution:** build it as part of the receipt face (FU-727) —
+  the amend handler updates the joined observation in the same unit of work.
+- **State note:** 2026-08-23 — `PATCH /lines/<id>` now re-syncs the joined
+  observation whenever price / store / quantity change on a **done** list and the
+  line is ticked; clearing the price removes the observation rather than leaving a
+  stale one. Harvest and re-sync share one definition in the new
+  `_observation_sync.sync_line_observations` (the `/finish` handler's private
+  `_harvest_observations` was lifted into it), differing only in
+  `overwrite_existing`. Four e2e cases in `test_finish_harvest.py`, plus verified
+  live: amending $1.30 → $99.95 rewrote the single observation in place, keeping
+  its line FK and its 500 g measure.
+
 ## [RESOLVED] FU-718 — widen the offline queue so "most actions" really do work offline
 - **Raised:** 2026-08-23 (owner misc feedback)
 - **Type:** follow-up (needs a design proposal before any code).

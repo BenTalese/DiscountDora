@@ -28,6 +28,8 @@ from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._observation_sync import (
+    sync_line_observations)
 from dora_api.features.shopping_lists.primary_target_resolver import (
     PrimaryTargetCandidate, resolve_primary_target)
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
@@ -304,6 +306,35 @@ class UpdateLineHandler:
 
         if user_edited and line.added_via != ADDED_VIA_MANUAL:
             line.added_via = ADDED_VIA_MANUAL
+
+        # FU-726 — amending a *finished* list (the receipt face) edits the very
+        # fields the harvested price observation was built from. The FK is
+        # provenance, not a sync link (LC-4), so nothing corrects it on our
+        # behalf: without this, a typo'd $110.00 fixed on the receipt would keep
+        # feeding the money ladder's historic rung — and therefore every future
+        # estimate for that item — forever. Only the observation-shaping fields
+        # trigger it, and only once the list is done: before that no observation
+        # exists yet and /finish will build it from the final values anyway.
+        observation_fields_touched = bool(
+            {"actual_unit_price", "purchased_store_id", "quantity"} & set(set_fields)
+            or request.clear_actual_unit_price
+            or request.clear_purchased_store
+        )
+        if observation_fields_touched:
+            parent: ShoppingList | None = self.repository.get(ShoppingList).by_id(
+                line.shopping_list_id
+            )
+            if (
+                parent is not None
+                and parent.status == SHOPPING_LIST_STATUS_DONE
+                # Only bought lines ever produced an observation, so only bought
+                # lines get one corrected — pricing something you didn't buy
+                # must not invent purchase history.
+                and line.is_ticked
+            ):
+                sync_line_observations(
+                    self.repository, [line], overwrite_existing=True
+                )
 
         self.repository.save_changes()
         return UpdateLineResponse()

@@ -15,15 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.shopping_list import (
     SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
     SHOPPING_LIST_STATUS_VALUES, ShoppingList, ShoppingListLine)
-from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.entities.stock_item_price_observation import \
-    StockItemPriceObservation
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
-from dora_api.features.shopping_lists._line_price import (
-    harvest_observation_fields, line_paid_unit_price)
+from dora_api.features.shopping_lists._observation_sync import (
+    sync_line_observations)
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
@@ -262,82 +259,13 @@ class FinishShoppingListHandler:
         # prices"). After the snapshot loop above so the picked-offer fallback
         # is populated; before the status flip so the harvest shares the single
         # save_changes transaction below.
-        self._harvest_observations(ticked_lines)
+        sync_line_observations(self.repository, ticked_lines)
 
         lst.status = SHOPPING_LIST_STATUS_DONE
         lst.completed_at = datetime.now(timezone.utc)
 
         self.repository.save_changes()
         return FinishShoppingListResponse(ticked_lines=updated)
-
-    def _harvest_observations(self, ticked_lines: list[ShoppingListLine]) -> None:
-        """Turn each priced, item-anchored ticked line into one
-        ``StockItemPriceObservation`` (A1 folded shape; E4 measure-vs-count).
-
-        Idempotent under finish-button double-taps: a partial UNIQUE on
-        ``shopping_list_line_id`` (LC-1) backs the pre-check here, so a second
-        ``/finish`` writes nothing new. The FK is provenance only, not a sync
-        link (LC-4) — later edits to the observation don't touch the line.
-        """
-        harvestable = [
-            l for l in ticked_lines
-            if l.stock_item_id is not None and line_paid_unit_price(l) is not None
-        ]
-        if not harvestable:
-            return
-
-        # Idempotency: skip any line that already produced an observation.
-        line_ids = [l.id for l in harvestable]
-        already_harvested = {
-            o.shopping_list_line_id
-            for o in self.repository.get(StockItemPriceObservation).all(
-                EntityField(
-                    StockItemPriceObservation,
-                    StockItemPriceObservation.Fields.SHOPPING_LIST_LINE_ID,
-                ).in_(line_ids)
-            )
-        }
-
-        # Bulk-load selected products for their pack size (E4 — a sized product
-        # yields a measure observation; a sizeless line a count observation).
-        product_ids = [l.selected_product_id for l in harvestable if l.selected_product_id]
-        products_by_id: dict[UUID, Product] = {}
-        if product_ids:
-            products_by_id = {
-                p.id: p for p in self.repository.get(Product).all(
-                    EntityField(Product, "id").in_(product_ids)
-                )
-            }
-
-        now = datetime.now(timezone.utc)
-        for line in harvestable:
-            if line.id in already_harvested:
-                continue
-            unit_price = line_paid_unit_price(line)
-            if unit_price is None:    # narrowed above; keep readers honest
-                continue
-            product = (
-                products_by_id.get(line.selected_product_id)
-                if line.selected_product_id else None
-            )
-            total_price, total_measure, unit, pack_count = harvest_observation_fields(
-                unit_price=unit_price,
-                quantity=line.quantity,
-                size_value=product.size_value if product else None,
-                size_unit=product.size_unit if product else None,
-                product_pack_count=product.pack_count if product else None,
-            )
-            self.repository.add(StockItemPriceObservation(
-                stock_item_id=line.stock_item_id,
-                total_price=total_price,
-                total_measure=total_measure,
-                unit=unit,
-                observed_at=now,
-                store_id=line.purchased_store_id,
-                shopping_list_line_id=line.id,
-                created_at=now,
-                pack_count=pack_count,
-            ))
 
 
 @SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/finish", methods=["POST"])

@@ -15,6 +15,40 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **Shopping mode is now an actual mode (2026-08-23).** "Start shopping" used to
+  make the tick boxes bigger and add a footer, and that was the whole of it — the
+  same eleven buttons per row you use to *build* a list came shopping with you.
+  The list now becomes a different page in the aisle: **the whole row is the
+  tap target**, one gesture, nothing else competing for it. Tick something and it
+  leaves the list with an **Undo** toast in case that was your elbow; when an
+  aisle is done its whole section collapses to a single **"Dairy — all 4
+  picked"** line, so the list shrinks as you go without pretending the work never
+  happened. Prices are captured through a **sheet at the bottom of the screen**
+  where your thumb already is, rather than a field a jostled trolley can edit by
+  accident. Sections still follow whichever order you picked (location, group,
+  store or your own), and the lists sidebar gets out of the way — it's under
+  **More → Switch list** if you need it. Deliberately absent, because none of it
+  is something you do one-handed in a shop: drag handles, delete, quantity
+  steppers, buy-hint pickers, budget banners and suggestions.
+- **A finished list is now a receipt, not a greyed-out list (2026-08-23).** A
+  completed shop used to render the full editing page with every control
+  disabled — a screen of dead buttons that looked broken and told you nothing.
+  It's now an itemised **receipt**: what you bought, what each line cost (and
+  what it cost *each*, when you bought more than one), where from, the total, a
+  **"Where you spent it"** breakdown by store, and a short **"Didn't buy"** list
+  of what you skipped. The money on a finished list is **what you actually
+  spent** — anything left unticked drops out of the total and out of the store
+  breakdown rather than being counted as money that left your account. (While a
+  list is still being planned or shopped it works the other way round, as
+  before: an unticked line is spend still to come.) It's read-only on purpose. If you typed $110.00 when you
+  meant $11.00, **Amend** unlocks price, store and quantity — and says plainly
+  that your pantry isn't restocked a second time.
+- **Correcting a price on a finished shop now actually corrects it (2026-08-23).**
+  Dora records what you paid each time you finish a list, and those records are
+  what she prices your *next* list from. Fixing a typo on the receipt used to
+  change the line and leave the record behind it untouched, so a mistyped $110
+  went on quietly inflating that item's estimate forever. Amending now updates
+  both — and clearing a price removes the record rather than leaving a wrong one.
 - **Shopping lists know what things actually cost you (2026-08-23).** A list's
   prices used to come from linked product offers, so unless you'd gone to the
   trouble of loading product data your totals were mostly zero. Dora already
